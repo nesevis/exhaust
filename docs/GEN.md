@@ -128,7 +128,7 @@ Types the synthesiser cannot handle (non-`CaseIterable` enums, types with hand-w
 Synthesised generators are forward-only. Reflection is not supported, so `reflecting:` cannot decompose a concrete value backward through a synthesised generator. Reduction still works because the reducer operates on the generator's choices, not output values.
 
 > [!Note]
-> Synthesised generators are at least three times slower per iteration than hand-written generators, because each value is reconstructed through `init(from: Decoder)`. More importantly, they have no knowledge of domain constraints, like valid ranges, inter-field relationships, or other invariants that the type's consumers rely on. 
+> Synthesised generators are approximately twice as slow per iteration as hand-written generators, because each value is reconstructed through `init(from: Decoder)`. More importantly, they have no knowledge of domain constraints, like valid ranges, inter-field relationships, or other invariants that the type's consumers rely on. 
 >
 > A hand-written generator encodes these constraints directly, producing values that exercise the interesting parts of the domain rather than all possible values. Treat synthesised generators as a starting point, not a replacement for domain-aware generators on types that matter.
 
