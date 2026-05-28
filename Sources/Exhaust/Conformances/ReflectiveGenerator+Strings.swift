@@ -9,6 +9,8 @@ import Foundation
 public extension ReflectiveGenerator {
     /// Generates a random Unicode character, optionally within the given range.
     ///
+    /// When no range is specified, characters are drawn from all valid Unicode scalars except illegal characters and Private Use Areas. When a range is specified, only scalars within that range are used.
+    ///
     /// ```swift
     /// let gen = #gen(.character(in: "a"..."z"))
     /// ```
@@ -30,6 +32,12 @@ public extension ReflectiveGenerator {
 
     /// Generates a random Unicode string with size-scaled or fixed length.
     ///
+    /// Characters are drawn from all valid Unicode scalars except illegal characters (surrogates, non-characters) and the three Private Use Areas (U+E000–U+F8FF, U+F0000–U+FFFFD, U+100000–U+10FFFD). The remaining space includes assigned characters from all scripts plus unassigned-but-legal code points in the supplementary planes.
+    ///
+    /// When no length is specified, string length scales with the size parameter from 0 to 100 characters.
+    ///
+    /// For ASCII-only strings, use ``asciiString(length:scaling:)``. For a specific character set, use ``string(from:length:scaling:)``.
+    ///
     /// ```swift
     /// let gen = #gen(.string(length: 1...20))
     /// ```
@@ -40,7 +48,9 @@ public extension ReflectiveGenerator {
         stringGenerator(from: defaultScalarRangeSet, length: length, scaling: scaling)
     }
 
-    /// Generates a random printable ASCII string (U+0020--U+007E) with size-scaled or fixed length.
+    /// Generates a random printable ASCII string (U+0020–U+007E) with size-scaled or fixed length.
+    ///
+    /// When no length is specified, string length scales with the size parameter from 0 to 100 characters.
     ///
     /// ```swift
     /// let gen = #gen(.asciiString(length: 1...20))
@@ -222,9 +232,27 @@ private func stringGenerator(
 
 // MARK: - Pre-computed ScalarRangeSets
 
-/// All assigned Unicode scalars minus illegals. Reduces toward space (U+0020).
-private let defaultScalarRangeSet: ScalarRangeSet =
-    CharacterSet.illegalCharacters.inverted.scalarRangeSet(bottomCodepoint: " ")
+/// All assigned Unicode scalars minus illegals and Private Use Areas. Reduces toward space (U+0020).
+private let defaultScalarRangeSet: ScalarRangeSet = CharacterSet.illegalCharacters.inverted
+    .removingPrivateUseAreas()
+    .scalarRangeSet(bottomCodepoint: " ")
+
+// MARK: - CharacterSet Extensions
+
+private extension CharacterSet {
+    /// Returns a copy with the three Unicode Private Use Areas removed.
+    ///
+    /// - BMP PUA: U+E000–U+F8FF (6,400 code points)
+    /// - Supplementary PUA-A (Plane 15): U+F0000–U+FFFFD (65,534 code points)
+    /// - Supplementary PUA-B (Plane 16): U+100000–U+10FFFD (65,534 code points)
+    func removingPrivateUseAreas() -> CharacterSet {
+        var result = self
+        result.remove(charactersIn: Unicode.Scalar(0xE000)! ... Unicode.Scalar(0xF8FF)!)
+        result.remove(charactersIn: Unicode.Scalar(0xF0000)! ... Unicode.Scalar(0xFFFFD)!)
+        result.remove(charactersIn: Unicode.Scalar(0x100000)! ... Unicode.Scalar(0x10FFFD)!)
+        return result
+    }
+}
 
 /// Printable ASCII (U+0020–U+007E). Space is naturally at index 0; no bottom codepoint needed.
 private let asciiScalarRangeSet: ScalarRangeSet =
