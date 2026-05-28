@@ -208,8 +208,8 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
     }
 
     private func decodeValue<T: Decodable>(_ type: T.Type, from jsonValue: Any, key: Key) throws -> T {
-        if type is any ExhaustGenerable.Type {
-            return try decodePrimitive(type, from: jsonValue)
+        if type is any ExhaustGenerable.Type, let primitive = try? decodePrimitive(type, from: jsonValue) {
+            return primitive
         }
         let nested = DiscoveryDecoder(jsonValue: jsonValue, codingPath: codingPath + [key])
         return try T(from: nested)

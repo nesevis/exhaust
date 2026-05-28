@@ -155,6 +155,52 @@ struct GeneratorSynthesizerTests {
         #expect(report.passed)
         #expect(report.pinnedFieldCount == 1)
     }
+
+    @Test("Array field varies in length")
+    func arrayConformance() throws {
+        let gen = try #gen(ArrayOnly.self, from: """
+        {"tags": ["a", "b"]}
+        """)
+        let values = #example(gen, count: 50)
+        #expect(Set(values.map(\.tags.count)).count > 1)
+    }
+
+    @Test("Dictionary field varies in size")
+    func dictionaryConformance() throws {
+        let gen = try #gen(DictionaryOnly.self, from: """
+        {"scores": {"alice": 10, "bob": 20}}
+        """)
+        let values = #example(gen, count: 50)
+        #expect(Set(values.map(\.scores.count)).count > 1)
+    }
+
+    @Test("Set field varies in size")
+    func setConformance() throws {
+        let gen = try #gen(SetOnly.self, from: """
+        {"ids": [1, 2, 3]}
+        """)
+        let values = #example(gen, count: 50)
+        #expect(Set(values.map(\.ids.count)).count > 1)
+    }
+
+    @Test("Nested Dictionary<String, [Int]> varies in size")
+    func nestedDictionaryConformance() throws {
+        let gen = try #gen(NestedDictionaryOnly.self, from: """
+        {"metadata": {"key": [1, 2]}}
+        """)
+        let values = #example(gen, count: 50)
+        #expect(Set(values.map(\.metadata.count)).count > 1)
+    }
+
+    @Test("Optional array produces both nil and non-nil")
+    func optionalArrayConformance() throws {
+        let gen = try #gen(OptionalArrayOnly.self, from: """
+        {"tags": ["x"]}
+        """)
+        let values = #example(gen, count: 50)
+        #expect(values.contains(where: { $0.tags == nil }))
+        #expect(values.contains(where: { $0.tags != nil }))
+    }
 }
 
 // MARK: - Supporting Types
@@ -204,4 +250,24 @@ private struct WithDictionary: Codable {
 private struct WithOptional: Codable {
     let name: String
     let nickname: String?
+}
+
+private struct ArrayOnly: Codable {
+    let tags: [String]
+}
+
+private struct DictionaryOnly: Codable {
+    let scores: [String: Int]
+}
+
+private struct SetOnly: Codable {
+    let ids: Set<Int>
+}
+
+private struct NestedDictionaryOnly: Codable {
+    let metadata: [String: [Int]]
+}
+
+private struct OptionalArrayOnly: Codable {
+    let tags: [String]?
 }
