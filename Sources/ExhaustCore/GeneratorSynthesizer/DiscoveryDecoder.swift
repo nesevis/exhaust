@@ -394,33 +394,44 @@ package protocol SynthesizableCollection {
 }
 
 extension Array: SynthesizableCollection {
-    /// Returns ``Gen/arrayOf(_:)`` with the element's default generator, or `nil` if `Element` is not ``ExhaustGenerable``.
+    /// Returns ``Gen/arrayOf(_:)`` with the element's default generator, or `nil` if `Element` has no generator.
     package static var synthesizedGenerator: AnyGenerator? {
-        guard let elementType = Element.self as? ExhaustGenerable.Type else { return nil }
-        let typed: Generator<Element> = elementType.defaultGenerator.map { $0 as! Element }
+        guard let elementGen = resolveGenerator(for: Element.self) else { return nil }
+        let typed: Generator<Element> = elementGen.map { $0 as! Element }
         return Gen.arrayOf(typed).erase()
     }
 }
 
 extension Dictionary: SynthesizableCollection {
-    /// Returns ``Gen/dictionaryOf(_:_:)`` with the key and value default generators, or `nil` if either is not ``ExhaustGenerable``.
+    /// Returns ``Gen/dictionaryOf(_:_:)`` with the key and value default generators, or `nil` if either has no generator.
     package static var synthesizedGenerator: AnyGenerator? {
-        guard let keyType = Key.self as? ExhaustGenerable.Type,
-              let valueType = Value.self as? ExhaustGenerable.Type
+        guard let keyGen = resolveGenerator(for: Key.self),
+              let valueGen = resolveGenerator(for: Value.self)
         else { return nil }
-        let typedKey: Generator<Key> = keyType.defaultGenerator.map { $0 as! Key }
-        let typedValue: Generator<Value> = valueType.defaultGenerator.map { $0 as! Value }
+        let typedKey: Generator<Key> = keyGen.map { $0 as! Key }
+        let typedValue: Generator<Value> = valueGen.map { $0 as! Value }
         return Gen.dictionaryOf(typedKey, typedValue).erase()
     }
 }
 
 extension Set: SynthesizableCollection {
-    /// Returns ``Gen/setOf(_:)`` with the element's default generator, or `nil` if `Element` is not ``ExhaustGenerable``.
+    /// Returns ``Gen/setOf(_:)`` with the element's default generator, or `nil` if `Element` has no generator.
     package static var synthesizedGenerator: AnyGenerator? {
-        guard let elementType = Element.self as? ExhaustGenerable.Type else { return nil }
-        let typed: Generator<Element> = elementType.defaultGenerator.map { $0 as! Element }
+        guard let elementGen = resolveGenerator(for: Element.self) else { return nil }
+        let typed: Generator<Element> = elementGen.map { $0 as! Element }
         return Gen.setOf(typed).erase()
     }
+}
+
+/// Resolves a generator for any type, trying ``ExhaustGenerable`` first and ``SynthesizableCollection`` as a fallback for collection types whose conditional conformances may not survive xcframework linking.
+private func resolveGenerator(for type: Any.Type) -> AnyGenerator? {
+    if let generable = type as? ExhaustGenerable.Type {
+        return generable.defaultGenerator
+    }
+    if let collection = type as? SynthesizableCollection.Type {
+        return collection.synthesizedGenerator
+    }
+    return nil
 }
 
 private func makeCollectionGenerator(for type: (some Any).Type) -> AnyGenerator? {

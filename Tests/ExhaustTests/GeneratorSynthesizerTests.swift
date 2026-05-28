@@ -192,6 +192,15 @@ struct GeneratorSynthesizerTests {
         #expect(Set(values.map(\.metadata.count)).count > 1)
     }
 
+    @Test("Doubly nested Dictionary<String, [String: [Int]]> varies in size")
+    func doublyNestedDictionaryConformance() throws {
+        let gen = try #gen(DoublyNestedDictionaryOnly.self, from: """
+        {"deep": {"outer": {"inner": [1, 2]}}}
+        """)
+        let values = #example(gen, count: 50)
+        #expect(Set(values.map(\.deep.count)).count > 1)
+    }
+
     @Test("Optional array produces both nil and non-nil")
     func optionalArrayConformance() throws {
         let gen = try #gen(OptionalArrayOnly.self, from: """
@@ -266,6 +275,10 @@ private struct SetOnly: Codable {
 
 private struct NestedDictionaryOnly: Codable {
     let metadata: [String: [Int]]
+}
+
+private struct DoublyNestedDictionaryOnly: Codable {
+    let deep: [String: [String: [Int]]]
 }
 
 private struct OptionalArrayOnly: Codable {
