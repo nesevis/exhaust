@@ -1,8 +1,10 @@
+// MARK: - Academic Background
+
 // Density-based pairwise covering array generator with dynamic factor ordering.
 //
-// The standard density algorithm fills columns left-to-right in a fixed order. This starves later parameters under partial budgets: with three parameters at budget 200, the first two reach 100% value coverage while the third sits at 5%.
+// The standard Density (Bryce & Colbourn, 2009) algorithm fills columns left-to-right in a fixed order. This starves later parameters under partial budgets: with three parameters with equal domains at budget 200, the first two reach 100% value coverage while the third sits at 5%.
 //
-// This generator addresses the starvation by choosing which parameter to fill next based on the density signal itself — the parameter whose best candidate covers the most new pairs goes first. When multiple parameters have equal gain (common with equal-sized domains), a cycled start offset rotates which parameter wins the tie, ensuring each parameter gets equal opportunity to be filled first across successive rows.
+// This generator addresses the starvation by choosing which parameter to fill next based on the density signal itself: the parameter whose best candidate covers the most new pairs goes first. When multiple parameters have equal gain (common with equal-sized domains), a cycled start offset rotates which parameter wins the tie, ensuring each parameter gets equal opportunity to be filled first across successive rows.
 //
 // The coverage state is shared across all rows: each row's greedy choices see every pair covered by prior rows, so no effort is wasted on duplicates.
 
