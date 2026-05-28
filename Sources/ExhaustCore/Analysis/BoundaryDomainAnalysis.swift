@@ -45,10 +45,11 @@ package enum BoundaryParameterKind: @unchecked Sendable {
 
     /// A composite sequence parameter encoding `(length, [element values])` tuples into a single flat domain.
     ///
-    /// The domain enumerates all valid configurations: empty (if allowed), single-element, and optionally two-element boundary combinations. During replay, the composite index is decomposed via ``SequenceLengthSlot`` lookup and mixed-radix arithmetic back into a length and per-element boundary value indices.
+    /// The domain enumerates all valid configurations: empty (if allowed), single-element, and optionally two-element boundary combinations. During replay, the composite index is decomposed via ``SequenceLengthSlot`` lookup and mixed-radix arithmetic back into a length and per-element boundary value indices. When `halvedPairs` is true, length-2 slots split each element's boundary values between positions so that position 0 uses the first half and position 1 uses the second half. Length ≤1 slots always use the full boundary set.
     case compositeSequence(
         lengthRange: ClosedRange<UInt64>,
         elementSlotParams: [[BoundaryParameter]],
+        halvedPairs: Bool,
         lengthSlots: [SequenceLengthSlot]
     )
 }
