@@ -26,6 +26,10 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     public let replayDeterminismSuccesses: Int?
     /// Number of distinct choice sequences observed across all generated values. A value of 1 means every sample produced the same output.
     public let uniqueChoiceSequences: Int
+    /// Whether the reflection round-trip check was skipped because the generator is synthesized (forward-only by design).
+    public let reflectionSkipped: Bool
+    /// Number of `.just` (pinned constant) nodes found in a synthesized generator tree. These are fields the synthesizer could not build a full generator for.
+    public let pinnedFieldCount: Int
     /// All validation failures detected during the run. Empty when the generator is healthy.
     public let failures: [ExamineFailure]
     /// Wall-clock time spent generating values, in seconds. Does not include correctness checks.
@@ -97,7 +101,16 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
         let perSampleMs = averageTimePerSample * 1000
         lines.append("#examine: \(valuesGenerated) samples, \(String(format: "%.3f", perSampleMs))ms/sample")
 
-        if let replayDeterminismSuccesses {
+        if reflectionSkipped {
+            if let replayDeterminismSuccesses {
+                lines.append("  Correctness: reflection skipped (synthesized generator), \(replayDeterminismSuccesses)/\(valuesGenerated) replay")
+            } else {
+                lines.append("  Correctness: reflection skipped (synthesized generator)")
+            }
+            if pinnedFieldCount > 0 {
+                lines.append("  Pinned fields: \(pinnedFieldCount) field\(pinnedFieldCount == 1 ? "" : "s") could not be synthesized (constant value from example JSON)")
+            }
+        } else if let replayDeterminismSuccesses {
             lines.append("  Correctness: \(reflectionRoundTripSuccesses)/\(valuesGenerated) reflection, \(replayDeterminismSuccesses)/\(valuesGenerated) replay")
         } else {
             lines.append("  Correctness: \(reflectionRoundTripSuccesses)/\(valuesGenerated) reflection")
@@ -244,6 +257,7 @@ package extension Generator where Operation == ReflectiveOperation {
     func validate(
         samples: Int = 200,
         seed: UInt64? = nil,
+        skipReflection: Bool = false,
         replayCheck: ((Any, Any) -> Bool)? = nil,
         reporting: ExamineReportingConfiguration? = nil,
         fileID: StaticString = #fileID,
@@ -254,6 +268,7 @@ package extension Generator where Operation == ReflectiveOperation {
         _validate(
             samples: samples,
             seed: seed,
+            skipReflection: skipReflection,
             replayCheck: replayCheck,
             reporting: reporting,
             fileID: fileID,
@@ -274,6 +289,7 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
     /// - Parameters:
     ///   - samples: Number of values to generate and test. Defaults to 200.
     ///   - seed: Optional seed for deterministic validation runs.
+    ///   - skipReflection: When `true`, skips the reflection round-trip check entirely. Used for synthesized generators that are forward-only by design.
     ///   - replayCheck: Optional closure comparing two replayed values for equivalence. When provided, each sample is replayed twice and the closure is called with both values. A `false` return records a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure.
     ///   - reporting: Optional per-check severity configuration. When `nil`, all failures are reported at ``ExamineSeverity/error`` severity.
     /// - Returns: An ``ExamineReport`` summarizing the results.
@@ -281,6 +297,7 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
     func validate(
         samples: Int = 200,
         seed: UInt64? = nil,
+        skipReflection: Bool = false,
         replayCheck: ((Any, Any) -> Bool)? = nil,
         reporting: ExamineReportingConfiguration? = nil,
         fileID: StaticString = #fileID,
@@ -291,6 +308,7 @@ package extension Generator where Operation == ReflectiveOperation, Value: Equat
         _validate(
             samples: samples,
             seed: seed,
+            skipReflection: skipReflection,
             replayCheck: replayCheck,
             reporting: reporting,
             fileID: fileID,
@@ -308,6 +326,7 @@ private extension Generator where Operation == ReflectiveOperation {
     func _validate(
         samples: Int,
         seed: UInt64?,
+        skipReflection: Bool = false,
         replayCheck: ((Any, Any) -> Bool)?,
         reporting: ExamineReportingConfiguration?,
         fileID: StaticString,
@@ -317,7 +336,7 @@ private extension Generator where Operation == ReflectiveOperation {
     ) -> ExamineReport {
         let maxFailures = 20
         var failures: [ExamineFailure] = []
-        var forwardOnlyDetected = false
+        var forwardOnlyDetected = skipReflection
         var valuesGenerated = 0
         var roundTripSuccesses = 0
         var replaySuccesses = 0
@@ -394,6 +413,8 @@ private extension Generator where Operation == ReflectiveOperation {
             reflectionRoundTripSuccesses: roundTripSuccesses,
             replayDeterminismSuccesses: replayCheck != nil ? replaySuccesses : nil,
             uniqueChoiceSequences: uniqueSequences.count,
+            reflectionSkipped: skipReflection,
+            pinnedFieldCount: skipReflection ? (storedTrees.first?.justNodeCount ?? 0) : 0,
             failures: failures,
             generationTime: generationSeconds,
             elapsedTime: elapsedSeconds,
@@ -560,4 +581,20 @@ func localizedErrorMessage(_ error: any Error) -> String {
     return [localized.errorDescription, localized.recoverySuggestion]
         .compactMap(\.self)
         .joined(separator: "\n\n")
+}
+
+// MARK: - ChoiceTree Pinned Field Count
+
+private extension ChoiceTree {
+    var justNodeCount: Int {
+        switch self {
+            case .just: 1
+            case .choice, .getSize: 0
+            case let .sequence(_, elements, _): elements.reduce(0) { $0 + $1.justNodeCount }
+            case let .branch(b): b.choice.justNodeCount
+            case let .group(array, _): array.reduce(0) { $0 + $1.justNodeCount }
+            case let .bind(_, inner, bound): inner.justNodeCount + bound.justNodeCount
+            case let .resize(_, choices): choices.reduce(0) { $0 + $1.justNodeCount }
+        }
+    }
 }
