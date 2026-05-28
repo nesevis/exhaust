@@ -5,7 +5,7 @@
 
     @Suite(
         "#exhaust macro expansion tests",
-        .macros(["exhaust": ExhaustTestMacro.self], record: .failed)
+        .macros(["exhaust": ExhaustTestMacro.self])
     )
     struct ExhaustMacroTests {
         @Test("Basic exhaust with trailing closure captures source")
@@ -280,7 +280,7 @@
             } diagnostics: {
                 """
                 #exhaust(gen) { value in
-                              ╰─ 🛑 Closure has no failure mechanism (throw, try, #expect, #require, or Issue.record); test will always pass
+                              ╰─ 🛑 Closure has no failure mechanism; return a Bool or throw an error to signal failure
                     let box = ThreadSafeBox(0)
                     box.put(value)
                     box.get() == value
@@ -301,7 +301,7 @@
             } diagnostics: {
                 """
                 #exhaust(gen) { value in
-                              ╰─ 🛑 Closure has no failure mechanism (throw, try, #expect, #require, or Issue.record); test will always pass
+                              ╰─ 🛑 Closure has no failure mechanism; return a Bool or throw an error to signal failure
                     doSomething()
                     doSomethingElse(value)
                 }
@@ -355,7 +355,7 @@
             } diagnostics: {
                 """
                 #exhaust(gen) { value in
-                              ╰─ 🛑 Closure has no failure mechanism (throw, try, #expect, #require, or Issue.record); test will always pass
+                              ╰─ 🛑 Closure has no failure mechanism; return a Bool or throw an error to signal failure
                     let result = try? compute(value)
                     use(result)
                 }
