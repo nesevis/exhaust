@@ -79,9 +79,16 @@ jobs:
                   total = m.group(1)
                   break
 
+          errors = [l.rstrip() for l in lines if re.search(r'\berror:', l)]
+
           with open(summary_path, 'a') as f:
               if total == '?':
                   f.write("### Test report unavailable\n\nCould not find test summary line in output.\n")
+                  if errors:
+                      f.write(f"\n**Build errors ({len(errors)}):**\n```\n")
+                      for line in errors:
+                          f.write(line + '\n')
+                      f.write("```\n")
                   f.write(f"\nLast 20 lines of output:\n```\n")
                   for line in lines[-20:]:
                       f.write(line)
