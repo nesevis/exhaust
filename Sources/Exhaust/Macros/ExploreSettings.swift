@@ -14,55 +14,10 @@
 // ```
 import ExhaustCore
 
-/// Controls the per-direction hit target and attempt budget for `#explore`.
-///
-/// | Preset | K (hits per direction) | Max attempts per direction |
-/// |---|---|---|
-/// | `.quick` | 10 | 100 |
-/// | `.standard` | 30 | 300 |
-/// | `.thorough` | 100 | 1000 |
-/// | `.extensive` | 300 | 3000 |
-///
-/// Use `.standard` (the default) when 30 hits per direction is enough to confirm reachability. Use `.quick` for a fast smoke test. Use `.thorough` when direction predicates are sparse (less than 10 percent acceptance rate) and need more attempts to accumulate hits. Use `.extensive` for statistical coverage reporting where confidence intervals matter.
-public enum ExploreBudget: Sendable {
-    /// 10 hits, 100 max attempts per direction.
-    case quick
-    /// 30 hits, 300 max attempts per direction.
-    case standard
-    /// 100 hits, 1000 max attempts per direction.
-    case thorough
-    /// 300 hits, 3000 max attempts per direction.
-    case extensive
-    /// Explicit values for both budget aspects.
-    case custom(hitsPerDirection: Int, maxAttemptsPerDirection: Int)
-
-    /// The number of matching samples each direction must accumulate before it is considered covered.
-    public var hitsPerDirection: Int {
-        switch self {
-            case .quick: 10
-            case .standard: 30
-            case .thorough: 100
-            case .extensive: 300
-            case let .custom(hitsPerDirection, _): hitsPerDirection
-        }
-    }
-
-    /// The per-direction contribution to the shared attempt pool.
-    public var maxAttemptsPerDirection: Int {
-        switch self {
-            case .quick: 100
-            case .standard: 300
-            case .thorough: 1000
-            case .extensive: 3000
-            case let .custom(_, maxAttemptsPerDirection): maxAttemptsPerDirection
-        }
-    }
-}
-
 /// Controls test behavior for `#explore` classification tests, passed as variadic arguments.
 public enum ExploreSettings: Sendable {
-    /// Controls per-direction hit targets and attempt budgets. Defaults to `.standard` (30 hits per direction, 300 max attempts per direction).
-    case budget(ExploreBudget)
+    /// Controls per-direction hit targets and attempt budgets. Defaults to `.standard` (30 hits per direction, 300 max attempts per direction). See ``ExhaustBudget`` for the per-preset explore interpretation.
+    case budget(ExhaustBudget)
 
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
     ///

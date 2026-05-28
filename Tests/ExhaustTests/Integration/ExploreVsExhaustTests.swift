@@ -8,7 +8,7 @@ struct ExploreMacroIntegrationTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [
                 ("low", { $0 < 50 }),
@@ -29,7 +29,7 @@ struct ExploreMacroIntegrationTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 30, maxAttemptsPerDirection: 500)),
+            .budget(.custom(coverage: 30, sampling: 500)),
             .suppress(.all),
             directions: [
                 ("any", { _ in true }),
@@ -49,7 +49,7 @@ struct ExploreMacroIntegrationTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [
                 ("positive", { $0 > 0 }),
@@ -67,7 +67,7 @@ struct ExploreMacroIntegrationTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report1 = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .replay(42),
             .suppress(.all),
             directions: [
@@ -78,7 +78,7 @@ struct ExploreMacroIntegrationTests {
         }
         let report2 = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .replay(42),
             .suppress(.all),
             directions: [

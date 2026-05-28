@@ -3,7 +3,7 @@ import Testing
 
 @Suite("Parallel explore", .serialized)
 struct ParallelExploreTests {
-    private static let budget = ExploreBudget.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)
+    private static let budget = ExhaustBudget.custom(coverage: 10, sampling: 200)
 
     @Test("Passing property with .parallel reaches coverage for all directions")
     func passingPropertyWithParallelReachesCoverageForAllDirections() {
@@ -52,7 +52,7 @@ struct ParallelExploreTests {
         let gen = #gen(.int(in: 0 ... 10000))
         let report = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 100, maxAttemptsPerDirection: 2000)),
+            .budget(.custom(coverage: 100, sampling: 2000)),
             .parallel,
             .suppress(.all),
             directions: [
@@ -153,7 +153,7 @@ struct ParallelExploreTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 20, maxAttemptsPerDirection: 400)),
+            .budget(.custom(coverage: 20, sampling: 400)),
             .parallel,
             .suppress(.all),
             directions: [

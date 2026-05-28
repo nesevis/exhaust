@@ -25,7 +25,7 @@ public extension __ExhaustRuntime {
         property: @Sendable @escaping (Output) -> Bool
     ) -> ExploreReport<Output> {
         let gen = refGen.gen
-        var budget: ExploreBudget = .standard
+        var budget: ExhaustBudget = .standard
         var seed: UInt64?
         var suppressIssueReporting = false
         var suppressLogs = false
@@ -74,6 +74,15 @@ public extension __ExhaustRuntime {
                     shouldParallelize = true
             }
         }
+
+        #if canImport(Testing)
+            if let traitConfig = ExhaustTraitConfiguration.current {
+                let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
+                if hasInlineBudget == false, let traitBudget = traitConfig.budget {
+                    budget = traitBudget
+                }
+            }
+        #endif
 
         let namedDirections = directions.map { direction in
             (name: direction.0, predicate: { (value: Output) in direction.1(value) })
@@ -282,17 +291,27 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) async throws -> Bool
     ) async -> ExploreReport<Output> {
         let syncProperty = bridgeAsyncProperty(property)
+        #if canImport(Testing)
+            let traitConfig = ExhaustTraitConfiguration.current
+        #endif
         return await dispatchToGCD {
-            __explore(
-                refGen,
-                settings: settings,
-                directions: directions,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column,
-                property: syncProperty
-            )
+            let run = {
+                __explore(
+                    refGen,
+                    settings: settings,
+                    directions: directions,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    property: syncProperty
+                )
+            }
+            #if canImport(Testing)
+                return ExhaustTraitConfiguration.$current.withValue(traitConfig, operation: run)
+            #else
+                return run()
+            #endif
         }
     }
 
@@ -313,24 +332,29 @@ public extension __ExhaustRuntime {
         detection: @escaping @Sendable (Output) throws -> Void
     ) async -> ExploreReport<Output> {
         let boolProperty = wrapDetectionProperty(detection)
+        #if canImport(Testing)
+            let traitConfig = ExhaustTraitConfiguration.current
+        #endif
 
         return await withCheckedContinuation { continuation in
             DispatchQueue.global().async {
                 nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
                 // withExpectedIssue cannot be used on a GCD thread because Test.current is nil, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
                 #if canImport(Testing)
-                    withKnownIssue(isIntermittent: true) {
-                        pipelineResult = __explore(
-                            refGen,
-                            settings: settings + [.suppress(.issueReporting)],
-                            directions: directions,
+                    ExhaustTraitConfiguration.$current.withValue(traitConfig) {
+                        withKnownIssue(isIntermittent: true) {
+                            pipelineResult = __explore(
+                                refGen,
+                                settings: settings + [.suppress(.issueReporting)],
+                                directions: directions,
 
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column,
-                            property: boolProperty
-                        )
+                                fileID: fileID,
+                                filePath: filePath,
+                                line: line,
+                                column: column,
+                                property: boolProperty
+                            )
+                        }
                     }
                 #else
                     pipelineResult = __explore(

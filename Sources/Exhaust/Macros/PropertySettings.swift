@@ -32,6 +32,17 @@ public enum SuppressOption: Sendable, Equatable {
 /// Use `.standard` (the default) for development — sufficient for generators with fewer than 50 independent parameters. Use `.quick` when iteration speed matters more than coverage depth. Use `.thorough` when the generator has high combinatorial complexity (many picks, nested sequences) and you want stronger coverage guarantees. Use `.extensive` when counterexamples are rare or you want broad coverage; expect roughly 10x the runtime of `.standard`.
 ///
 /// Scale any preset with arithmetic: `.thorough * 3` produces a custom budget of 1800/1800, and `.standard / 2` produces 100/100.
+///
+/// When used with `#explore`, the same presets map to per-direction budgets:
+///
+/// | Preset | Hits per direction | Max attempts per direction |
+/// |---|---|---|
+/// | `.quick` | 10 | 100 |
+/// | `.standard` | 30 | 300 |
+/// | `.thorough` | 100 | 1000 |
+/// | `.extensive` | 300 | 3000 |
+///
+/// For `.custom(coverage:sampling:)`, `coverage` maps to hits per direction and `sampling` maps to max attempts per direction.
 public enum ExhaustBudget: Sendable {
     /// Faster than default. Use when iteration speed matters more than coverage depth.
     case quick
@@ -64,6 +75,28 @@ public enum ExhaustBudget: Sendable {
             case .extensive: 2000
             case let .custom(_, sampling):
                 sampling
+        }
+    }
+
+    /// The number of matching samples each direction must accumulate before it is considered covered. Used by `#explore`.
+    public var hitsPerDirection: Int {
+        switch self {
+            case .quick: 10
+            case .standard: 30
+            case .thorough: 100
+            case .extensive: 300
+            case let .custom(coverage, _): Int(coverage)
+        }
+    }
+
+    /// The per-direction contribution to the shared attempt pool. Used by `#explore`.
+    public var maxAttemptsPerDirection: Int {
+        switch self {
+            case .quick: 100
+            case .standard: 300
+            case .thorough: 1000
+            case .extensive: 3000
+            case let .custom(_, sampling): Int(sampling)
         }
     }
 

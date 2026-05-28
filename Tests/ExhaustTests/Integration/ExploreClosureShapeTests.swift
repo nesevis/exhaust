@@ -3,7 +3,7 @@ import Testing
 
 @Suite("#explore closure shapes")
 struct ExploreClosureShapeTests {
-    private static let budget = ExploreBudget.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)
+    private static let budget = ExhaustBudget.custom(coverage: 10, sampling: 200)
     private static let directions: [(String, @Sendable (Int) -> Bool)] = [
         ("any", { _ in true }),
     ]
@@ -15,7 +15,7 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [("any", { (_: Int) in true })]
         ) { value in
@@ -30,7 +30,7 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [("any", { (_: Int) in true })]
         ) { value in
@@ -47,7 +47,7 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [("any", { (_: Int) in true })]
         ) { value in
@@ -62,7 +62,7 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [("any", { (_: Int) in true })]
         ) { value in
@@ -77,7 +77,7 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [("any", { (_: Int) in true })]
         ) { value in
@@ -94,7 +94,7 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [("any", { (_: Int) in true })]
         ) { value in
@@ -112,7 +112,7 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = await #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [("any", { (_: Int) in true })]
         ) { value async in
@@ -127,7 +127,7 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = await #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [("any", { (_: Int) in true })]
         ) { value async in
@@ -144,7 +144,7 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = await #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [("any", { (_: Int) in true })]
         ) { value async in
@@ -159,7 +159,7 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = await #explore(
             gen,
-            .budget(.custom(hitsPerDirection: 10, maxAttemptsPerDirection: 200)),
+            .budget(.custom(coverage: 10, sampling: 200)),
             .suppress(.all),
             directions: [("any", { (_: Int) in true })]
         ) { value async in
