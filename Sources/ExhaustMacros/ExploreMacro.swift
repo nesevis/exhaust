@@ -22,10 +22,20 @@ public struct ExploreMacro: ExpressionMacro {
         if let trailingClosure = node.trailingClosure {
             let isVoid = closureIsVoidReturning(trailingClosure)
             if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
+                let diagnostic: ExhaustMacroDiagnostic = enclosingFunctionHasTestAttribute(context)
+                    ? .closureCannotFail
+                    : .closureCannotFailXCTest
                 context.diagnose(Diagnostic(
                     node: Syntax(trailingClosure),
-                    message: ExhaustMacroDiagnostic.closureCannotFail
+                    message: diagnostic
                 ))
+            }
+            for site in xcTestCallSites(trailingClosure) {
+                let diagnostic: ExhaustMacroDiagnostic = switch site.kind {
+                    case .unwrap: .xcTestUnwrapInPropertyClosure
+                    case .assert: .xcTestAssertInPropertyClosure
+                }
+                context.diagnose(Diagnostic(node: site.node, message: diagnostic))
             }
             let runtimeFunction = isVoid ? "__exploreExpect" : "__explore"
             return try expandExplore(
@@ -52,10 +62,20 @@ public struct ExploreAsyncMacro: ExpressionMacro {
         if let trailingClosure = node.trailingClosure {
             let isVoid = closureIsVoidReturning(trailingClosure)
             if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
+                let diagnostic: ExhaustMacroDiagnostic = enclosingFunctionHasTestAttribute(context)
+                    ? .closureCannotFail
+                    : .closureCannotFailXCTest
                 context.diagnose(Diagnostic(
                     node: Syntax(trailingClosure),
-                    message: ExhaustMacroDiagnostic.closureCannotFail
+                    message: diagnostic
                 ))
+            }
+            for site in xcTestCallSites(trailingClosure) {
+                let diagnostic: ExhaustMacroDiagnostic = switch site.kind {
+                    case .unwrap: .xcTestUnwrapInPropertyClosure
+                    case .assert: .xcTestAssertInPropertyClosure
+                }
+                context.diagnose(Diagnostic(node: site.node, message: diagnostic))
             }
             let runtimeFunction = isVoid ? "__exploreExpectAsync" : "__exploreAsync"
             return try expandExplore(

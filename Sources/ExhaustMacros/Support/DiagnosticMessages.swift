@@ -17,6 +17,9 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case examineMissingGenerator = "#examine requires a generator as its first argument"
     case exhaustContractMissingSpec = "#exhaust requires a spec type argument"
     case closureCannotFail = "Closure has no failure mechanism (throw, try, #expect, #require, or Issue.record); test will always pass"
+    case closureCannotFailXCTest = "Closure has no failure mechanism; return a Bool or throw an error to signal failure"
+    case xcTestUnwrapInPropertyClosure = "XCTUnwrap is expensive on failure (several hundred milliseconds per call); prefer a guard or throwing an explicit error"
+    case xcTestAssertInPropertyClosure = "XCTAssert failures are invisible to Exhaust and will not trigger reduction; return a Bool or throw an error instead"
 
     var message: String {
         rawValue
@@ -33,7 +36,9 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
                  .forwardOnlyNotFunctionCall,
                  .forwardOnlyUnlabeledArguments,
                  .forwardOnlyComplexArguments,
-                 .forwardOnlyParamMismatch:
+                 .forwardOnlyParamMismatch,
+                 .xcTestUnwrapInPropertyClosure,
+                 .xcTestAssertInPropertyClosure:
                 .warning
             case .noGeneratorArguments,
                  .exhaustMissingProperty,
@@ -44,7 +49,8 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
                  .exampleMissingGenerator,
                  .examineMissingGenerator,
                  .exhaustContractMissingSpec,
-                 .closureCannotFail:
+                 .closureCannotFail,
+                 .closureCannotFailXCTest:
                 .error
         }
     }

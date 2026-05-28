@@ -22,10 +22,20 @@ public struct ExhaustTestMacro: ExpressionMacro {
         if let trailingClosure = node.trailingClosure {
             let isVoid = closureIsVoidReturning(trailingClosure)
             if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
+                let diagnostic: ExhaustMacroDiagnostic = enclosingFunctionHasTestAttribute(context)
+                    ? .closureCannotFail
+                    : .closureCannotFailXCTest
                 context.diagnose(Diagnostic(
                     node: Syntax(trailingClosure),
-                    message: ExhaustMacroDiagnostic.closureCannotFail
+                    message: diagnostic
                 ))
+            }
+            for site in xcTestCallSites(trailingClosure) {
+                let diagnostic: ExhaustMacroDiagnostic = switch site.kind {
+                    case .unwrap: .xcTestUnwrapInPropertyClosure
+                    case .assert: .xcTestAssertInPropertyClosure
+                }
+                context.diagnose(Diagnostic(node: site.node, message: diagnostic))
             }
             let runtimeFunction = isVoid ? "__exhaustExpect" : "__exhaust"
             return try expandExhaust(
@@ -111,6 +121,20 @@ func closureIsVoidReturning(_ closure: ClosureExprSyntax) -> Bool {
 
     // Issue.record(...)
     if let call = item.as(FunctionCallExprSyntax.self), isIssueRecordCall(call) {
+        return true
+    }
+
+    // XCTAssert*, XCTFail, XCTUnwrap — all return Void (XCTUnwrap returns T, but
+    // it's not Bool, so the Bool path would produce a type error regardless).
+    if let call = item.as(FunctionCallExprSyntax.self),
+       let ref = call.calledExpression.as(DeclReferenceExprSyntax.self),
+       ref.baseName.text.hasPrefix("XCTAssert") || ref.baseName.text == "XCTFail" || ref.baseName.text == "XCTUnwrap"
+    {
+        return true
+    }
+
+    // Declarations (let, var, func, etc.) never produce a value.
+    if item.as(DeclSyntax.self) != nil {
         return true
     }
 
@@ -206,12 +230,9 @@ func voidClosureLacksFailureMechanism(_ closure: ClosureExprSyntax) -> Bool {
 
 /// Recursively walks statements looking for any construct that can signal test failure.
 private func containsFailureMechanism(_ statements: CodeBlockItemListSyntax) -> Bool {
-    for statement in statements {
-        if containsFailureMechanismRecursive(Syntax(statement.item)) {
-            return true
-        }
-    }
-    return false
+    statements.contains(where: {
+        containsFailureMechanismRecursive(Syntax($0.item))
+    })
 }
 
 private func containsFailureMechanismRecursive(_ node: Syntax) -> Bool {
@@ -245,6 +266,64 @@ private func containsFailureMechanismRecursive(_ node: Syntax) -> Bool {
         }
         if containsFailureMechanismRecursive(child) {
             return true
+        }
+    }
+    return false
+}
+
+// MARK: - XCTest API Detection
+
+enum XCTestCallKind {
+    case unwrap
+    case assert
+}
+
+struct XCTestCallSite {
+    let node: Syntax
+    let kind: XCTestCallKind
+}
+
+/// Returns call sites of `XCTUnwrap` and `XCTAssert*`/`XCTFail` in the closure body (not in nested closures).
+func xcTestCallSites(_ closure: ClosureExprSyntax) -> [XCTestCallSite] {
+    var sites: [XCTestCallSite] = []
+    collectXCTestCalls(Syntax(closure.statements), depth: 0, into: &sites)
+    return sites
+}
+
+private func collectXCTestCalls(_ node: Syntax, depth: Int, into sites: inout [XCTestCallSite]) {
+    if node.is(ClosureExprSyntax.self), depth > 0 {
+        return
+    }
+    if let call = node.as(FunctionCallExprSyntax.self),
+       let ref = call.calledExpression.as(DeclReferenceExprSyntax.self)
+    {
+        let name = ref.baseName.text
+        if name == "XCTUnwrap" {
+            sites.append(XCTestCallSite(node: Syntax(call), kind: .unwrap))
+        } else if name.hasPrefix("XCTAssert") || name == "XCTFail" {
+            sites.append(XCTestCallSite(node: Syntax(call), kind: .assert))
+        }
+    }
+    let nextDepth = node.is(ClosureExprSyntax.self) ? depth + 1 : depth
+    for child in node.children(viewMode: .sourceAccurate) {
+        collectXCTestCalls(child, depth: nextDepth, into: &sites)
+    }
+}
+
+// MARK: - Test Framework Detection
+
+/// Returns `true` when the enclosing function has a `@Test` attribute, indicating Swift Testing context.
+func enclosingFunctionHasTestAttribute(_ context: some MacroExpansionContext) -> Bool {
+    for enclosing in context.lexicalContext {
+        if let funcDecl = enclosing.as(FunctionDeclSyntax.self) {
+            for attribute in funcDecl.attributes {
+                if let attr = attribute.as(AttributeSyntax.self),
+                   let identifier = attr.attributeName.as(IdentifierTypeSyntax.self),
+                   identifier.name.text == "Test"
+                {
+                    return true
+                }
+            }
         }
     }
     return false
@@ -549,10 +628,20 @@ public struct ExhaustAsyncTestMacro: ExpressionMacro {
         if let trailingClosure = node.trailingClosure {
             let isVoid = closureIsVoidReturning(trailingClosure)
             if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
+                let diagnostic: ExhaustMacroDiagnostic = enclosingFunctionHasTestAttribute(context)
+                    ? .closureCannotFail
+                    : .closureCannotFailXCTest
                 context.diagnose(Diagnostic(
                     node: Syntax(trailingClosure),
-                    message: ExhaustMacroDiagnostic.closureCannotFail
+                    message: diagnostic
                 ))
+            }
+            for site in xcTestCallSites(trailingClosure) {
+                let diagnostic: ExhaustMacroDiagnostic = switch site.kind {
+                    case .unwrap: .xcTestUnwrapInPropertyClosure
+                    case .assert: .xcTestAssertInPropertyClosure
+                }
+                context.diagnose(Diagnostic(node: site.node, message: diagnostic))
             }
             let runtimeFunction = isVoid ? "__exhaustExpectAsync" : "__exhaustAsync"
             return try expandExhaust(
