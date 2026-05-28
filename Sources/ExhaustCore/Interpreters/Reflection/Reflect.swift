@@ -7,10 +7,10 @@
 
 import Foundation
 
-// MARK: - Academic Provenance
+// MARK: - Academic Background
 
 //
-// Implements the `reflect` interpretation (Goldstein §4.3.3, Fig 4.4). Backward pass that extracts choice sequences from concrete values by trying all possible decompositions. Exhaust extends reflection to handle six additional operations not in the dissertation: sequence, zip, just, filter, classify, and unique.
+// Implements the `reflect` interpretation (Goldstein section 4.3.3, Fig 4.4). Backward pass that extracts choice sequences from concrete values by trying all possible decompositions. Exhaust extends reflection to handle six additional operations not in the dissertation: sequence, zip, just, filter, classify, and unique.
 
 extension Interpreters {
     // MARK: - Public-Facing Reflect Function

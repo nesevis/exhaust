@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 27/7/2025.
 //
 
-// MARK: - Academic Provenance
+// MARK: - Academic Background
 
 //
-// Implements the `generate` interpretation G⟦·⟧ (Goldstein §3.3.3, Fig 4.3 for the reflective version). Pure forward pass that consumes PRNG entropy to produce values — no randomness capture.
+// Implements the `generate` interpretation G⟦·⟧ (Goldstein section 3.3.3, Fig 4.3 for the reflective version). Pure forward pass that consumes PRNG entropy to produce values — no randomness capture.
 
 /// Produces only a value (no ``ChoiceTree``), used by ``ValueAndChoiceTreeInterpreter/nextValueOnly()`` for tree-free sampling when only the output is needed.
 ///

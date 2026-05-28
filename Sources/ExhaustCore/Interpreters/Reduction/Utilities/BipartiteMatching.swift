@@ -3,16 +3,10 @@
 //  Exhaust
 //
 
-// MARK: - Academic Provenance
+// MARK: - Academic Background
 
 //
-// Hopcroft-Karp maximum bipartite matching: Hopcroft & Karp, "An n^(5/2)
-// Algorithm for Maximum Matchings in Bipartite Graphs" (SIAM J. Computing, 1973). O(E sqrt(V)) worst case.
-//
-// Konig's theorem (minimum vertex cover = maximum matching in bipartite graphs): Konig, "Graphen und Matrizen" (Mathematikai es Fizikai Lapok, 1931). The constructive proof via alternating-path reachability from free nodes is from the standard textbook treatment (Lovasz & Plummer, "Matching Theory", 1986, Chapter 1).
-//
-// Dilworth's theorem (maximum antichain = minimum chain cover = n - maximum matching on the reachability bipartite graph): Dilworth, "A Decomposition Theorem for Partially Ordered Sets" (Annals of Mathematics, 1950). The reduction to bipartite matching is from Mirsky, "A Dual of Dilworth's Decomposition Theorem" (American Mathematical Monthly, 1971).
-//
+// Maximum antichain via Dilworth's theorem (Dilworth, "A Decomposition Theorem for Partially Ordered Sets", Annals of Mathematics, 1950): maximum antichain = n - maximum matching on the reachability bipartite graph. The reduction to bipartite matching follows Mirsky (American Mathematical Monthly, 1971). Matching uses Hopcroft-Karp, O(E sqrt(V)).
 
 // MARK: - Bipartite Matching
 

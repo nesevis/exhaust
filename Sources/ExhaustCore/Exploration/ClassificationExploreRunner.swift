@@ -1,11 +1,7 @@
-// MARK: - Academic Provenance
+// MARK: - Academic Background
 
 //
-// The design synthesizes three traditions. Ostrand and Balcer's Category-Partition Method (CACM 1988) introduced systematic partitioning of the input space into named categories and choices; each direction here corresponds to one of their category–choice pairs. Claessen and Hughes's QuickCheck classify/cover (ICFP 2000) added post-hoc distribution reporting over random samples but cannot steer the sampler — coverage is observed, not guaranteed. This runner closes the gap: per-direction CGS tuning produces a stratum-specific distribution for each direction, guaranteeing K hits per stratum rather than reporting whatever the generator happened to produce.
-//
-// The detection-probability advantage of partition-style testing under rate uncertainty is an instance of Gutjahr's theorem (IEEE TSE 25(5), 1999), the testing-adapted analogue of Cochran's variance-reduction bound from survey sampling. Rule-of-three bounds on per-direction failure rates follow Hanley and Lippman-Hand (JAMA 249(13), 1983). CGS tuning uses the online derivative-sampling algorithm from Goldstein (Ch. 3, Fig 3.3) with offline weight baking from Tjoa et al. (OOPSLA2, 2025).
-//
-// Direction-preserving reduction composes cleanly with the choice-sequence reducer because the reducer is greedy under shortlex order against an arbitrary predicate — no `valid t ==>` guards that weaken shrinks (contrast Hughes, "How to Specify It!", TFP 2019).
+// Hamlet and Taylor (IEEE TSE 16(12), 1990) show that passive partition testing — dividing the input domain and sampling uniformly from each class — barely outperforms random testing. The advantage only appears when partitions concentrate sampling where failures are likely. Here, the user supplies the partitions as directions based on their domain knowledge, so partition quality reflects the tester's insight rather than a systematic method trying to be exhaustive. Per-direction CGS tuning then exceeds Hamlet and Taylor's condition by actively reshaping each direction's sampling distribution (see ``ChoiceGradientTuner`` and ``OnlineCGSInterpreter`` for the CGS algorithm provenance).
 
 /// Classification-aware exploration runner that steers sampling toward each declared direction via per-direction CGS tuning.
 ///
@@ -18,22 +14,25 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
     private let directions: [(name: String, predicate: (Output) -> Bool)]
     private let hitsPerDirection: Int
     private let maxAttemptsPerDirection: Int
+    private let regressionSeeds: [UInt64]
     private var prng: Xoshiro256
 
-    /// Creates a runner with the given generator, property, directions, budget parameters, and optional fixed seed.
+    /// Creates a runner with the given generator, property, directions, budget parameters, optional fixed seed, and regression seeds to replay after tuning.
     package init(
         gen: Generator<Output>,
         property: @escaping (Output) -> Bool,
         directions: [(name: String, predicate: (Output) -> Bool)],
         hitsPerDirection: Int,
         maxAttemptsPerDirection: Int,
-        seed: UInt64? = nil
+        seed: UInt64? = nil,
+        regressionSeeds: [UInt64] = []
     ) {
         self.gen = gen
         self.property = property
         self.directions = directions
         self.hitsPerDirection = hitsPerDirection
         self.maxAttemptsPerDirection = maxAttemptsPerDirection
+        self.regressionSeeds = regressionSeeds
         if let seed {
             prng = Xoshiro256(seed: seed)
         } else {
@@ -113,12 +112,34 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             }
         }
 
-        // MARK: Direction ordering and tuning passes
+        // MARK: Direction ordering
 
         var coveredDirections = Set<Int>()
         for directionIndex in 0 ..< directionCount where state.hits[directionIndex] >= hitsPerDirection {
             coveredDirections.insert(directionIndex)
         }
+
+        // MARK: CGS tuning and regression seeds
+
+        var tunedGenerators: [Int: Generator<Output>] = [:]
+
+        if regressionSeeds.isEmpty == false {
+            for directionIndex in 0 ..< directionCount where coveredDirections.contains(directionIndex) == false {
+                if let tunedGen = tuneDirection(directionIndex) {
+                    tunedGenerators[directionIndex] = tunedGen
+                }
+            }
+
+            if let regressionFailure = try runRegressionPhase(
+                tunedGenerators: tunedGenerators,
+                state: &state,
+                stopwatch: runStopwatch
+            ) {
+                return regressionFailure
+            }
+        }
+
+        // MARK: Per-direction sampling passes
 
         while coveredDirections.count < directionCount, state.remainingPool > 0 {
             let nextDirection = (0 ..< directionCount)
@@ -130,7 +151,19 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             let passBudget = min(maxAttemptsPerDirection, state.remainingPool)
             guard passBudget > 0 else { break }
 
-            if let failureResult = try runTuningPass(
+            let tunedGen: Generator<Output>
+            if let existing = tunedGenerators[targetDirection] {
+                tunedGen = existing
+            } else if let freshlyTuned = tuneDirection(targetDirection) {
+                tunedGen = freshlyTuned
+                tunedGenerators[targetDirection] = freshlyTuned
+            } else {
+                coveredDirections.insert(targetDirection)
+                continue
+            }
+
+            if let failureResult = try sampleTunedDirection(
+                tunedGen: tunedGen,
                 targetDirection: targetDirection,
                 passBudget: passBudget,
                 directionCount: directionCount,
@@ -159,28 +192,20 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         )
     }
 
-    // MARK: - Tuning pass
+    // MARK: - CGS tuning
 
-    // swiftlint:disable:next function_body_length
-    private mutating func runTuningPass(
-        targetDirection: Int,
-        passBudget: Int,
-        directionCount: Int,
-        state: inout RunState,
-        stopwatch: Stopwatch
-    ) throws -> ClassificationExploreResult<Output>? {
-        let tunedGen: Generator<Output>
+    private mutating func tuneDirection(_ directionIndex: Int) -> Generator<Output>? {
+        let directionName = directions[directionIndex].name
         do {
-            tunedGen = try ChoiceGradientTuner.tune(
+            return try ChoiceGradientTuner.tune(
                 gen,
-                predicate: directions[targetDirection].predicate,
+                predicate: directions[directionIndex].predicate,
                 warmupRuns: 400,
                 sampleCount: 20,
-                seed: Xoshiro256.deriveSeed(from: prng.seed, at: UInt64(targetDirection)),
+                seed: Xoshiro256.deriveSeed(from: prng.seed, at: UInt64(directionIndex)),
                 subdivisionThresholds: .relaxed
             )
         } catch {
-            let directionName = directions[targetDirection].name
             ExhaustLog.error(
                 category: .propertyTest,
                 event: "explore_tune_error",
@@ -188,7 +213,63 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             )
             return nil
         }
+    }
 
+    // MARK: - Regression seeds
+
+    private mutating func runRegressionPhase(
+        tunedGenerators: [Int: Generator<Output>],
+        state: inout RunState,
+        stopwatch: Stopwatch
+    ) throws -> ClassificationExploreResult<Output>? {
+        for regressionSeed in regressionSeeds {
+            for (directionIndex, tunedGen) in tunedGenerators.sorted(by: { $0.key < $1.key }) {
+                var regressionInterpreter = ValueAndChoiceTreeInterpreter(
+                    tunedGen,
+                    materializePicks: false,
+                    seed: regressionSeed,
+                    maxRuns: 1
+                )
+                guard let (value, tunedTree) = try regressionInterpreter.next() else { continue }
+                state.propertyInvocations += 1
+
+                let matching = classify(value)
+                state.coOccurrence.recordSample(matchingDirections: matching)
+                for matchedIndex in matching {
+                    state.hits[matchedIndex] += 1
+                }
+
+                if property(value) == false {
+                    ExhaustLog.notice(
+                        category: .propertyTest,
+                        event: "explore_regression_failed",
+                        metadata: [
+                            "seed": "\(regressionSeed)",
+                            "direction": directions[directionIndex].name,
+                        ]
+                    )
+                    let reduced = reduceFromTunedTree(value: value, tunedTree: tunedTree, matchingDirections: matching)
+                    let reducedDirections = classify(reduced.counterexample)
+                    return assembleResult(
+                        state: state, failure: reduced, matchingDirections: reducedDirections,
+                        stopwatch: stopwatch, termination: .propertyFailed
+                    )
+                }
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Per-direction sampling
+
+    private mutating func sampleTunedDirection(
+        tunedGen: Generator<Output>,
+        targetDirection: Int,
+        passBudget: Int,
+        directionCount: Int,
+        state: inout RunState,
+        stopwatch: Stopwatch
+    ) throws -> ClassificationExploreResult<Output>? {
         var passSamplesDrawn = 0
         var passInterpreter = ValueAndChoiceTreeInterpreter(
             tunedGen,
@@ -223,20 +304,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             }
 
             if propertyHolds == false {
-                let fullTree = Materializer.materialize(
-                    gen,
-                    prefix: ChoiceSequence.flatten(tunedTree),
-                    mode: .exact,
-                    fallbackTree: tunedTree,
-                    materializePicks: true
-                )
-                let reductionTree = switch fullTree {
-                    case let .success(_, rematerialized, _):
-                        rematerialized as ChoiceTree?
-                    case .rejected, .failed:
-                        ChoiceTree?.none
-                }
-                let reduced = reduce(value: value, tree: reductionTree, matchingDirections: matching)
+                let reduced = reduceFromTunedTree(value: value, tunedTree: tunedTree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)
                 state.remainingPool += passBudget - passSamplesDrawn
                 return assembleResult(
@@ -248,6 +316,27 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
 
         state.remainingPool += passBudget - passSamplesDrawn
         return nil
+    }
+
+    // MARK: - Rematerialization
+
+    private func reduceFromTunedTree(
+        value: Output,
+        tunedTree: ChoiceTree,
+        matchingDirections: [Int]
+    ) -> ReducedFailure<Output> {
+        let fullTree = Materializer.materialize(
+            gen,
+            prefix: ChoiceSequence.flatten(tunedTree),
+            mode: .exact,
+            fallbackTree: tunedTree,
+            materializePicks: true
+        )
+        let reductionTree: ChoiceTree? = switch fullTree {
+            case let .success(_, rematerialized, _): rematerialized
+            case .rejected, .failed: nil
+        }
+        return reduce(value: value, tree: reductionTree, matchingDirections: matchingDirections)
     }
 
     // MARK: - Classification

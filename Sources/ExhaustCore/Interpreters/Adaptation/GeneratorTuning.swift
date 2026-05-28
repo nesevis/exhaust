@@ -50,7 +50,7 @@ package enum GeneratorTuning {
     /// Minimum total samples per choice before convergence checks begin (2 × batchSize).
     static let convergenceMinSamples: UInt64 = 40
 
-    /// Minimum selection probability per choice. Prevents extreme weight ratios from compounding across depth levels, which would collapse rare-but-valid deep paths to near-zero probability. The paper (§4.3, Figure 13) shows that bounding weights to [0.1, 0.9] prevents overfitting and improves output diversity.
+    /// Minimum selection probability per choice. Prevents extreme weight ratios from compounding across depth levels, which would collapse rare-but-valid deep paths to near-zero probability. The paper (section 4.3, Figure 13) shows that bounding weights to [0.1, 0.9] prevents overfitting and improves output diversity.
     ///
     /// **Caveat for wide picks:** the floor applies per-choice, so a pick with many dead branches pays a cost proportional to `deadBranches / totalBranches`.
     /// Binary picks lose at most ~10% of selection probability to the floor, but for example a 20-way pick with 2 valid branches drops valid selection from ~100% to ~36%. If this becomes a problem, scale the fraction inversely with branch count (`weightFloorFraction / choiceCount`) to cap total floor budget at a fixed share of weight regardless of branch count.

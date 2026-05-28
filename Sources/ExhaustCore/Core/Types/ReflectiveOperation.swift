@@ -1,7 +1,7 @@
-// MARK: - Academic Provenance
+// MARK: - Academic Background
 
 //
-// Based on the `R b a` effect type (Goldstein §4.3, Fig 4.2). The dissertation defines six primitive operations; Exhaust maps them as follows:
+// Based on the `R b a` effect type (Goldstein section 4.3, Fig 4.2). The dissertation defines six primitive operations; Exhaust maps them as follows:
 //
 //   Dissertation      Exhaust
 //   ─────────────     ─────────────

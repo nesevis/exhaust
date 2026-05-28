@@ -7,10 +7,10 @@
 
 import Foundation
 
-// MARK: - Academic Provenance
+// MARK: - Academic Background
 
 //
-// Implements the `parse` interpretation P⟦·⟧ (Goldstein §3.3.3) from a hierarchical ChoiceTree. The dissertation parses from flat choice sequences; Exhaust adds tree-structured replay for precise structural matching.
+// Implements the `parse` interpretation P⟦·⟧ (Goldstein section 3.3.3) from a hierarchical ChoiceTree. The dissertation parses from flat choice sequences; Exhaust adds tree-structured replay for precise structural matching.
 
 // MARK: - Why This Exists
 

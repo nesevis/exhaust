@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 8/2/2026.
 //
 
-// MARK: - Academic Provenance
+// MARK: - Academic Background
 
 //
-// Corresponds to the dissertation's bracketed choice sequences (Goldstein §4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker — is from MacIver & Donaldson (ECOOP 2020, §2.2). Zobrist hashing for O(1) incremental duplicate detection lives in ``ZobristHash``.
+// Corresponds to the dissertation's bracketed choice sequences (Goldstein section 4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker, is from MacIver & Donaldson (ECOOP 2020, section 2.2). Zobrist hashing for O(1) incremental duplicate detection lives in ``ZobristHash``.
 
 @usableFromInline
 package typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
