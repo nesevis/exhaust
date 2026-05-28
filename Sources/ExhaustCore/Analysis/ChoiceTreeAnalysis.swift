@@ -372,42 +372,84 @@ package enum ChoiceTreeAnalysis {
             elementSlotParams.append(slotParams)
         }
 
-        let baseMaxLength: UInt64 = expandSequencePairs && elementSlotParams.count >= 2 ? 2 : min(1, UInt64(maxElementSlots))
+        let baseMaxLength: UInt64 = elementSlotParams.count >= 2 ? 2 : min(1, UInt64(maxElementSlots))
         let maxAnalyzedLength = max(baseMaxLength, lengthRange.lowerBound)
         let lengthValues = Set([0, 1, 2, lengthRange.lowerBound])
             .filter { $0 <= maxAnalyzedLength && lengthRange.contains($0) }
             .sorted()
 
-        var slots: [SequenceLengthSlot] = []
-        var offset: UInt64 = 0
+        func buildSlots(
+            from elementSlotParams: [[BoundaryParameter]]
+        ) -> (slots: [SequenceLengthSlot], compositeSize: UInt64) {
+            var slots: [SequenceLengthSlot] = []
+            var offset: UInt64 = 0
 
-        for length in lengthValues {
-            let activeCount = min(Int(length), elementSlotParams.count)
-            let contribution: UInt64
-            if activeCount == 0 {
-                contribution = 1
-            } else {
-                contribution = elementSlotParams.prefix(activeCount)
-                    .reduce(UInt64(1)) { accumulator, slotParams in
-                        slotParams.reduce(accumulator) { inner, param in
-                            let (product, overflow) = inner.multipliedReportingOverflow(by: param.domainSize)
-                            return overflow ? .max : product
+            for length in lengthValues {
+                let activeCount = min(Int(length), elementSlotParams.count)
+                let contribution: UInt64
+                if activeCount == 0 {
+                    contribution = 1
+                } else {
+                    contribution = elementSlotParams.prefix(activeCount)
+                        .reduce(UInt64(1)) { accumulator, slotParams in
+                            slotParams.reduce(accumulator) { inner, param in
+                                let (product, overflow) = inner.multipliedReportingOverflow(by: param.domainSize)
+                                return overflow ? .max : product
+                            }
                         }
-                    }
+                }
+
+                slots.append(SequenceLengthSlot(
+                    length: length,
+                    flatOffset: offset,
+                    contribution: contribution,
+                    activeElementCount: activeCount
+                ))
+
+                let (sum, overflow) = offset.addingReportingOverflow(contribution)
+                offset = overflow ? .max : sum
             }
-
-            slots.append(SequenceLengthSlot(
-                length: length,
-                flatOffset: offset,
-                contribution: contribution,
-                activeElementCount: activeCount
-            ))
-
-            let (sum, overflow) = offset.addingReportingOverflow(contribution)
-            offset = overflow ? .max : sum
+            return (slots, offset)
         }
 
-        let compositeSize = offset
+        var (slots, compositeSize) = buildSlots(from: elementSlotParams)
+
+        // When the composite domain exceeds the finite threshold, finite element params whose products dominate the space should use boundary representatives instead of full enumeration.
+        if compositeSize > Self.finiteDomainThreshold {
+            var converted = false
+            for slotIndex in elementSlotParams.indices {
+                for paramIndex in elementSlotParams[slotIndex].indices {
+                    let param = elementSlotParams[slotIndex][paramIndex]
+                    if case let .finiteChooseBits(range, tag) = param.kind {
+                        let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
+                            min: range.lowerBound, max: range.upperBound, tag: tag
+                        )
+                        elementSlotParams[slotIndex][paramIndex] = BoundaryParameter(
+                            index: param.index,
+                            values: boundaryValues,
+                            domainSize: UInt64(boundaryValues.count),
+                            kind: .sequenceElement(elementIndex: slotIndex, range: range, tag: tag)
+                        )
+                        converted = true
+                    }
+                }
+            }
+            if converted {
+                (slots, compositeSize) = buildSlots(from: elementSlotParams)
+            }
+        }
+
+        // When not expanding sequence pairs, keep length 2 but give each position a disjoint half of the boundary values. This reduces the length-2 product from d² to (d/2)² = d²/4 while still exercising pair interactions. Without this, the only alternative is dropping length 2 entirely, losing all element-pair coverage.
+        if expandSequencePairs == false, elementSlotParams.count >= 2 {
+            let pairCount = min(elementSlotParams[0].count, elementSlotParams[1].count)
+            for paramIndex in 0 ..< pairCount {
+                let (firstHalf, secondHalf) = elementSlotParams[0][paramIndex].values.halved()
+                elementSlotParams[0][paramIndex] = elementSlotParams[0][paramIndex].withValues(firstHalf)
+                elementSlotParams[1][paramIndex] = elementSlotParams[1][paramIndex].withValues(secondHalf)
+            }
+            (slots, compositeSize) = buildSlots(from: elementSlotParams)
+        }
+
         let param = BoundaryParameter(
             index: parameters.count,
             values: Array(0 ..< compositeSize),
