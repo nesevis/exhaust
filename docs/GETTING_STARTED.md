@@ -38,7 +38,7 @@ If your existing unit tests use hand-written fixtures (mock instances of your do
 
 ```swift
 // Before
-let user = User(id: UUID(), name: "Alice", age: 32, subscription: .premium)
+let user = User(id: UUID(), name: "Chris", age: 42, subscription: .premium)
 #expect(process(user).isValid)
 
 // After
@@ -51,6 +51,16 @@ Your test now runs against a generated user each time rather than a hand-crafted
 You're not yet getting everything Exhaust offers this way: just one input per run instead of hundreds, and if the test fails you'll see the whole random value that triggered it rather than a minimal counterexample. Those benefits come with the next step up, when you move the assertion inside an `#exhaust` call.
 
 The immediate win is time. Mock instances of rich domain types are tedious to write and tedious to maintain as those types evolve. `#example(userGenerator)` replaces all of that with a single line. A side benefit is that every run exercises your function on data the fixture-writing habit would probably never have picked — the cases you didn't think to write down.
+
+If your types already conform to `Codable`, you can skip writing the generator entirely. `#gen` can synthesise one from an example JSON value or an existing instance:
+
+```swift
+let user = User(id: UUID(), name: "Chris", age: 42, subscription: .premium)
+let gen = try #gen(from: user)
+let users = #example(gen, count: 100)
+```
+
+The synthesised generator won't know about your domain constraints (it generates across the full range of each field) but it's a fast way to get coverage without writing a generator by hand. See [Synthesising generators from Decodable types](GEN.md#synthesising-generators-from-decodable-types) for the details and limitations.
 
 ## The smallest useful test you can write
 

@@ -25,7 +25,7 @@ extension Generator where Operation == ReflectiveOperation {
         return "Generator<\(typeName)>\n" + treeDescription(prefix: "", isLast: true)
     }
 
-    private func treeDescription(prefix: String, isLast: Bool, depth: Int = 0) -> String {
+    package func treeDescription(prefix: String, isLast: Bool, depth: Int = 0) -> String {
         // Prevent infinite recursion in self-referential generators
         guard depth < 15 else {
             let connector = isLast ? "└── " : "├── "

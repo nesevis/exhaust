@@ -133,9 +133,15 @@ package extension Generator where Operation == ReflectiveOperation {
 public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     package let gen: Generator<Output>
 
+    /// Whether this generator was synthesized from a `Decodable` type via ``GeneratorSynthesizer``.
+    ///
+    /// Generators synthesized from JSON example data may contain `.just` nodes for fields where the ``GeneratorSynthesizer`` could not build a full generator (for example, non-`CaseIterable` enums). These fields are pinned to the constant value from the example JSON. Diagnostic tools can check this flag to distinguish synthesized generators from hand-written ones.
+    public let isSynthesized: Bool
+
     /// Wraps an already-constructed generator.
-    package init(_ gen: Generator<Output>) {
+    package init(_ gen: Generator<Output>, isSynthesized: Bool = false) {
         self.gen = gen
+        self.isSynthesized = isSynthesized
     }
 
     /// Chains this generator with a dependent generator whose structure depends on the produced value.
@@ -200,6 +206,16 @@ package extension FreerMonad where Operation == ReflectiveOperation {
 
 extension ReflectiveGenerator: CustomDebugStringConvertible {
     public var debugDescription: String {
-        gen.debugDescription
+        let typeName = "\(Output.self)"
+        let synthesized = isSynthesized ? " (synthesized)" : ""
+        return "ReflectiveGenerator<\(typeName)>(\(synthesized)\n"
+            + gen.treeDescription(prefix: "", isLast: true)
+    }
+}
+
+extension ReflectiveGenerator: CustomStringConvertible {
+    public var description: String {
+        let synthesized = isSynthesized ? " (synthesized)" : ""
+        return "ReflectiveGenerator<\(Output.self)>\(synthesized)"
     }
 }

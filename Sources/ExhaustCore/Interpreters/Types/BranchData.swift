@@ -12,7 +12,7 @@ package struct BranchData: Hashable, Sendable {
     var weight: UInt64
     var id: UInt64
     var branchCount: UInt64
-    var choice: ChoiceTree
+    package var choice: ChoiceTree
     var isSelected: Bool
 
     package init(
