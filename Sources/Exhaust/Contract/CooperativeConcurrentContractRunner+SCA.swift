@@ -48,19 +48,11 @@ extension __ExhaustRuntime {
             return nil
         }
 
-        let strengthCap = switch sequenceLength {
-            case ...6: 6
-            case ...8: 5
-            case ...12: 4
-            case ...20: 3
-            default: 2
-        }
-
         guard let domain = SCADomain.build(
             sequenceLength: sequenceLength,
             pickChoices: pickChoices,
             coverageBudget: coverageBudget,
-            strengthCap: strengthCap
+            strengthCap: 2
         ) else {
             ExhaustLog.notice(
                 category: .propertyTest,
@@ -71,8 +63,7 @@ extension __ExhaustRuntime {
         }
 
         let domainSizes = domain.profile.domainSizes
-        let strength = min(domain.maxStrength, domainSizes.count, 4)
-        guard strength >= 2 else {
+        guard domainSizes.count >= 2 else {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "concurrent_sca_skipped",
@@ -81,10 +72,7 @@ extension __ExhaustRuntime {
             return nil
         }
 
-        let generator = PullBasedCoveringArrayGenerator(
-            domainSizes: domainSizes,
-            strength: strength
-        )
+        let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
         let lengthRange = UInt64(0) ... UInt64(commandLimit)
         let reductionConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
 
@@ -175,7 +163,7 @@ extension __ExhaustRuntime {
                 "command_types": "\(pickChoices.count)",
                 "iterations": "\(iterations)",
                 "sequence_length": "\(sequenceLength)",
-                "strength": "\(strength)",
+                "strength": "2",
             ]
         )
 

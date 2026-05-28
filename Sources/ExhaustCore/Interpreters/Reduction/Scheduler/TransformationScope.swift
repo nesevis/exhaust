@@ -53,8 +53,8 @@ struct CoveringAlignedRemovalScope {
     /// The sibling sequences participating in aligned deletion.
     let siblings: [AlignedSibling]
 
-    /// Covering array generator. The encoder pulls rows via ``PullBasedCoveringArrayGenerator/next()``. Bit vectors are deallocated automatically when the generator is released.
-    let generator: PullBasedCoveringArrayGenerator
+    /// Covering array generator. The encoder pulls rows via ``BalancedCoveringArrayGenerator/next()``. Bit vectors are deallocated automatically when the generator is released.
+    let generator: BalancedCoveringArrayGenerator
 
     /// Per-parameter domain value that encodes "skip this sibling." Equal to the sibling's element count (one past the last valid element index).
     let skipValues: [UInt64]

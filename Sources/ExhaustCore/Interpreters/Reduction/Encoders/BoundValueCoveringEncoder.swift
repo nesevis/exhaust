@@ -6,7 +6,7 @@
 ///
 /// Two regimes based on the subtree leaves' total domain size:
 /// - **Small domains** (total space ≤ ``exhaustiveThreshold``): exhaustive enumeration of all value assignments via mixed-radix counting.
-/// - **Large domains** (2 or more parameters): pairwise covering (strength 2) via the density method (``PullBasedCoveringArrayGenerator``). Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
+/// - **Large domains** (2 or more parameters): pairwise covering (strength 2) via ``BalancedCoveringArrayGenerator``. Each ``nextProbe(lastAccepted:)`` call pulls the next greedy row — no upfront batch build.
 package struct BoundValueCoveringEncoder: ComposableEncoder {
     public let name: EncoderName = .boundValueSearch
 
@@ -26,7 +26,7 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
     private var exhaustiveProbeIndex = 0
 
     /// Pull-based generator for the pairwise regime. Nil when using exhaustive.
-    private var generator: PullBasedCoveringArrayGenerator?
+    private var generator: BalancedCoveringArrayGenerator?
     private var pullProbeCount = 0
 
     /// The total bound value space computed at `start()` time. Used by the driver for profiling (domain size vs exhaustive threshold).
@@ -93,14 +93,11 @@ package struct BoundValueCoveringEncoder: ComposableEncoder {
             exhaustiveProbes = buildExhaustiveRows(count: Int(totalSpace))
         } else if valuePositions.count >= 2 {
             // Pull-based pairwise coverage. Rows are generated lazily in nextProbe().
-            // Cap each domain to coveringBudget: we emit at most that many rows, so larger domains add no useful coverage and would produce enormous bit vector allocations (for example, Unicode scalar domains of ~1.1M values clamp to 65535 in PullBasedCoveringArrayGenerator, giving a 536 MB bit vector and O(65535²) work per row).
+            // Cap each domain to coveringBudget: we emit at most that many rows, so larger domains add no useful coverage and would produce enormous allocations (for example, Unicode scalar domains of ~1.1M values would create O(domain²) coverage matrices).
             let cappedDomains = valuePositions.map {
                 min($0.domainSize, UInt64(Self.coveringBudget))
             }
-            generator = PullBasedCoveringArrayGenerator(
-                domainSizes: cappedDomains,
-                strength: 2
-            )
+            generator = BalancedCoveringArrayGenerator(domainSizes: cappedDomains)
         }
     }
 

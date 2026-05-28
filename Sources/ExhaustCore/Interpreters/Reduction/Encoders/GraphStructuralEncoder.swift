@@ -7,7 +7,7 @@
 
 /// Applies a scope-determined structural mutation to the base sequence.
 ///
-/// Handles all pure (stateless) graph operations: removal, replacement, and migration. For most operations the scope fully determines the probe — one scope, one probe, one ``nextProbe(into:lastAccepted:)`` call. The exception is ``RemovalScope/coveringAligned(_:)``, which carries a ``PullBasedCoveringArrayGenerator`` and emits one probe per covering array row until the generator is exhausted or a probe is accepted.
+/// Handles all pure (stateless) graph operations: removal, replacement, and migration. For most operations the scope fully determines the probe — one scope, one probe, one ``nextProbe(into:lastAccepted:)`` call. The exception is ``RemovalScope/coveringAligned(_:)``, which carries a ``BalancedCoveringArrayGenerator`` and emits one probe per covering array row until the generator is exhausted or a probe is accepted.
 ///
 /// Permutation (sibling swap) is handled by the stateful ``GraphSwapEncoder``, which supports adaptive rightward extension after a successful swap.
 ///
