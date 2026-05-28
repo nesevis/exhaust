@@ -77,8 +77,9 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
 
     func decode<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T {
         let jsonValue = dictionary[key.stringValue] as Any
-        recordGeneratorForType(type, jsonValue: jsonValue, key: key, asOptional: false)
-        return try decodeValue(type, from: jsonValue, key: key)
+        let decodedValue = try decodeValue(type, from: jsonValue, key: key)
+        recordGeneratorForType(type, decodedValue: decodedValue, jsonValue: jsonValue, key: key, asOptional: false)
+        return decodedValue
     }
 
     // MARK: - decodeIfPresent — Type-Specific Overloads
@@ -155,41 +156,32 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
     private func decodeOptional<T: Decodable>(_ type: T.Type, forKey key: Key) throws -> T? {
         let jsonValue = dictionary[key.stringValue]
         let isNil = jsonValue == nil || jsonValue is NSNull
-        recordGeneratorForType(type, jsonValue: jsonValue as Any, key: key, asOptional: true)
-        if isNil { return nil }
-        return try decodeValue(type, from: jsonValue as Any, key: key)
+        let decodedValue: T? = isNil ? nil : try decodeValue(type, from: jsonValue as Any, key: key)
+        recordGeneratorForType(type, decodedValue: decodedValue, jsonValue: jsonValue as Any, key: key, asOptional: true)
+        return decodedValue
     }
 
     private func recordGeneratorForType<T: Decodable>(
         _ type: T.Type,
+        decodedValue: T?,
         jsonValue: Any,
         key: Key,
         asOptional: Bool
     ) {
         let generator: AnyGenerator
 
-        // This is a type Exhaust already has a generator for
         if let generableType = type as? ExhaustGenerable.Type {
             generator = generableType.defaultGenerator
-            // This is a CaseIterable, so we can create an equally weighted choice of the options. Usually an enum, but potentially something else, like an OptionSet
         } else if let caseIterable = type as? any(CaseIterable & Decodable).Type {
             generator = makeCaseIterableGenerator(caseIterable)
         } else if type is any RawRepresentable.Type {
-            let nested = DiscoveryDecoder(
-                jsonValue: jsonValue,
-                codingPath: codingPath + [key]
-            )
-            if let value = try? T(from: nested) {
-                generator = Gen.just(value as Any)
-            } else {
-                generator = Gen.just(jsonValue).erase()
-            }
+            generator = Gen.just((decodedValue ?? jsonValue) as Any).erase()
         } else {
             let nested = DiscoveryDecoder(
                 jsonValue: jsonValue,
                 codingPath: codingPath + [key]
             )
-            if let value = try? T(from: nested),
+            if (try? T(from: nested)) != nil,
                nested.childGenerators.isEmpty == false
             {
                 let childGens = ContiguousArray(nested.childGenerators)
@@ -209,7 +201,7 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
                     inner: zipped
                 )) as AnyGenerator
             } else {
-                generator = Gen.just(jsonValue).erase()
+                generator = Gen.just((decodedValue ?? jsonValue) as Any).erase()
             }
         }
 
