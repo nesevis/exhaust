@@ -80,6 +80,8 @@ New to property-based testing? **[Getting Started](docs/GETTING_STARTED.md)** wa
 
 Testing a stateful system? **[Contract Testing](docs/CONTRACT_TESTING.md)** covers generating command sequences, model-based oracles, and concurrent interleaving.
 
+Using Swift Testing? **[Swift Testing Integration](docs/SWIFT_TESTING.md)** covers suite and test traits, how `#expect` and `#require` work inside property closures, and how failures surface in the test runner. Using XCTest? **[XCTest Compatibility](docs/XCTEST.md)** covers what works, what doesn't, and the differences.
+
 Exhaust's entry points are five macros. `#gen` builds generators; the rest consume them:
 
 | Macro | Purpose |
