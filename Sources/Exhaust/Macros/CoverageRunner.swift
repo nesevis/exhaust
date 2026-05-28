@@ -91,7 +91,7 @@ package enum CoverageRunner {
                     if rowResult.passed == false {
                         return .failure(
                             value: rowResult.value, tree: rowResult.tree, iteration: rowIndex + 1,
-                            strength: strength, rows: rowIndex + 1,
+                            strength: 2, rows: rowIndex + 1,
                             parameters: paramCount, totalSpace: totalSpace, kind: kind
                         )
                     }
@@ -107,7 +107,7 @@ package enum CoverageRunner {
             }
 
             return .partial(
-                iterations: iterations, strength: strength, rows: rowIndex,
+                iterations: iterations, strength: 2, rows: rowIndex,
                 parameters: paramCount, totalSpace: totalSpace, kind: kind
             )
         }
