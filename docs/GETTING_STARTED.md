@@ -38,7 +38,7 @@ If your existing unit tests use hand-written fixtures (mock instances of your do
 
 ```swift
 // Before
-let user = User(id: UUID(), name: "Alice", age: 32, subscription: .premium)
+let user = User(id: UUID(), name: "Chris", age: 42, subscription: .premium)
 #expect(process(user).isValid)
 
 // After
@@ -60,7 +60,7 @@ let gen = try #gen(from: user)
 let users = #example(gen, count: 100)
 ```
 
-The synthesised generator won't know about your domain constraints — it generates across the full range of each field — but it's a fast way to get coverage without writing a generator by hand. See [Synthesising generators from Decodable types](GEN.md#synthesising-generators-from-decodable-types) for the details and limitations.
+The synthesised generator won't know about your domain constraints (it generates across the full range of each field) but it's a fast way to get coverage without writing a generator by hand. See [Synthesising generators from Decodable types](GEN.md#synthesising-generators-from-decodable-types) for the details and limitations.
 
 ## The smallest useful test you can write
 
