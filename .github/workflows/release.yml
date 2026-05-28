@@ -23,6 +23,9 @@ jobs:
       - name: Select Xcode 26.2
         run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
 
+      - name: Work around Swift 6.2 prebuilt swift-syntax linker bug (SPM#9495)
+        run: swift package edit swift-syntax
+
       - name: Run tests (source)
         run: |
           mkdir -p .build
@@ -128,9 +131,16 @@ jobs:
                       total = m.group(1)
                       break
 
+          errors = [l.rstrip() for l in all_lines if re.search(r'\berror:', l)]
+
           with open(summary_path, 'a') as f:
               if total == '?':
                   f.write("### Test report unavailable\n\nCould not find test summary line in output.\n")
+                  if errors:
+                      f.write(f"\n**Build errors ({len(errors)}):**\n```\n")
+                      for line in errors:
+                          f.write(line + '\n')
+                      f.write("```\n")
                   f.write(f"\nLast 20 lines of output:\n```\n")
                   for line in all_lines[-20:]:
                       f.write(line)
