@@ -169,7 +169,9 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
     ) {
         let generator: AnyGenerator
 
-        if let generableType = type as? ExhaustGenerable.Type {
+        if let collectionGen = makeCollectionGenerator(for: type) {
+            generator = collectionGen
+        } else if let generableType = type as? ExhaustGenerable.Type {
             generator = generableType.defaultGenerator
         } else if let caseIterable = type as? any(CaseIterable & Decodable).Type {
             generator = makeCaseIterableGenerator(caseIterable)
@@ -374,6 +376,55 @@ private func makeCaseIterableGenerator(_ type: any (CaseIterable & Decodable).Ty
         ).erase()
     }
     return build(type)
+}
+
+// MARK: - Collection Generator Construction
+
+//
+// Conditional conformances to ``ExhaustGenerable`` (Array, Dictionary, Set) are not reliably resolved at runtime in xcframework builds — the linker may strip conformance records that are only reachable via dynamic `as?` casts.
+//
+// ``SynthesizableCollection`` is an unconditional conformance on each collection type (no `where` clause), so it is always present in the binary. The element/key/value type's ``ExhaustGenerable`` conformance is checked at runtime inside the property, where unconditional conformances resolve correctly.
+
+/// Provides a generator for standard library collection types without relying on conditional ``ExhaustGenerable`` conformances.
+///
+/// Each conformance is unconditional (no `where` clause) so the linker cannot strip it. The element type's ``ExhaustGenerable`` conformance is checked at runtime inside ``synthesizedGenerator``, returning `nil` when the element type has no generator.
+package protocol SynthesizableCollection {
+    /// Returns a generator for this collection type, or `nil` if the element/key/value types do not conform to ``ExhaustGenerable``.
+    static var synthesizedGenerator: AnyGenerator? { get }
+}
+
+extension Array: SynthesizableCollection {
+    /// Returns ``Gen/arrayOf(_:)`` with the element's default generator, or `nil` if `Element` is not ``ExhaustGenerable``.
+    package static var synthesizedGenerator: AnyGenerator? {
+        guard let elementType = Element.self as? ExhaustGenerable.Type else { return nil }
+        let typed: Generator<Element> = elementType.defaultGenerator.map { $0 as! Element }
+        return Gen.arrayOf(typed).erase()
+    }
+}
+
+extension Dictionary: SynthesizableCollection {
+    /// Returns ``Gen/dictionaryOf(_:_:)`` with the key and value default generators, or `nil` if either is not ``ExhaustGenerable``.
+    package static var synthesizedGenerator: AnyGenerator? {
+        guard let keyType = Key.self as? ExhaustGenerable.Type,
+              let valueType = Value.self as? ExhaustGenerable.Type
+        else { return nil }
+        let typedKey: Generator<Key> = keyType.defaultGenerator.map { $0 as! Key }
+        let typedValue: Generator<Value> = valueType.defaultGenerator.map { $0 as! Value }
+        return Gen.dictionaryOf(typedKey, typedValue).erase()
+    }
+}
+
+extension Set: SynthesizableCollection {
+    /// Returns ``Gen/setOf(_:)`` with the element's default generator, or `nil` if `Element` is not ``ExhaustGenerable``.
+    package static var synthesizedGenerator: AnyGenerator? {
+        guard let elementType = Element.self as? ExhaustGenerable.Type else { return nil }
+        let typed: Generator<Element> = elementType.defaultGenerator.map { $0 as! Element }
+        return Gen.setOf(typed).erase()
+    }
+}
+
+private func makeCollectionGenerator(for type: (some Any).Type) -> AnyGenerator? {
+    (type as? SynthesizableCollection.Type)?.synthesizedGenerator
 }
 
 private func decodePrimitive<T>(_ type: T.Type, from jsonValue: Any) throws -> T {
