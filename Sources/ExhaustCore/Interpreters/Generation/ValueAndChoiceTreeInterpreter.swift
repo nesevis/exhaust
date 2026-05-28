@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 27/7/2025.
 //
 
-// MARK: - Academic Provenance
+// MARK: - Academic Background
 
 //
-// Combines the dissertation's `generate` and `randomness` interpretations (Goldstein §3.3.3) into a single pass that produces both the value and the ChoiceTree recording every decision. The ChoiceTree is Exhaust's extension — the dissertation uses flat choice sequences. Correctness relies on the factoring theorem (§4.4): replaying the recorded randomness through the generator reproduces the original value.
+// Combines the dissertation's `generate` and `randomness` interpretations (Goldstein section 3.3.3) into a single pass that produces both the value and the ChoiceTree recording every decision. The ChoiceTree is Exhaust's extension — the dissertation uses flat choice sequences. Correctness relies on the factoring theorem (section 3.3.3, theorem 1): replaying the recorded randomness through the generator reproduces the original value.
 
 /// Produces both a value and a ``ChoiceTree`` by walking the ``FreerMonad`` spine and recording each choice.
 ///

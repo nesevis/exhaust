@@ -17,6 +17,11 @@ package struct BoundaryParameter: @unchecked Sendable {
     package let domainSize: UInt64
     /// The generator operation this parameter was derived from.
     package let kind: BoundaryParameterKind
+
+    /// Returns a copy with a replacement boundary value set.
+    package func withValues(_ newValues: [UInt64]) -> BoundaryParameter {
+        BoundaryParameter(index: index, values: newValues, domainSize: UInt64(newValues.count), kind: kind)
+    }
 }
 
 /// Classifies the generator operation that produced a boundary parameter, determining which boundary-value strategy (range endpoints, sequence lengths, pick branches, or composite encoding) applies.
@@ -404,7 +409,7 @@ package enum BoundaryDomainAnalysis {
 package enum DSTTransitions {
     /// Returns DST transition times (seconds since reference date) that fall within [lower, upper] for the given timezone.
     ///
-    /// Only the first and last transitions within [lower, upper] are included to keep boundary value counts small for large ranges. Each transition includes the transition moment itself plus the start and end of its calendar day.
+    /// Only the first and last transitions within [lower, upper] are included to keep boundary value counts small for large ranges. Each transition includes the transition moment itself, the start and end of its calendar day, and the day's true midpoint (which differs from hour 12 on non-24-hour days).
     package static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
         guard let zone = TimeZone(identifier: timeZoneID) else { return [] }
 
@@ -440,6 +445,10 @@ package enum DSTTransitions {
                 let endSeconds = Int64(endOfDay.timeIntervalSinceReferenceDate)
                 transitions.append(endSeconds)
                 transitions.append(endSeconds - 1)
+
+                // Midpoint of the transition day: 11:30 local on a 23-hour spring-forward day, 12:30 on a 25-hour fall-back day. Catches nearest-day rounding bugs that assume the midpoint of any day is hour 12.
+                let startSeconds = Int64(startOfDay.timeIntervalSinceReferenceDate)
+                transitions.append(startSeconds + (endSeconds - startSeconds) / 2)
             }
         }
         return transitions
@@ -448,9 +457,9 @@ package enum DSTTransitions {
 
 // MARK: - Calendar Boundary Computation
 
-/// Computes real month starts, year starts, and leap day boundaries within a date range.
+/// Computes real month starts, year starts, leap day, and month-end last-day boundaries within a date range.
 package enum CalendarBoundaries {
-    /// Returns seconds-since-reference-date for the first and last month start, year start, and any Feb 29 within [lower, upper].
+    /// Returns seconds-since-reference-date for the first and last month start, year start, Feb 29, and the start of the last day for each distinct month length (28, 29, 30, 31 days) within [lower, upper].
     package static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
         let zone = TimeZone(identifier: timeZoneID) ?? TimeZone(secondsFromGMT: 0)!
         var calendar = Calendar(identifier: .gregorian)
@@ -533,6 +542,27 @@ package enum CalendarBoundaries {
                     results.append(seconds)
                 }
             }
+        }
+
+        // Month-end last-day variants: start of the last day for each distinct month length (28, 29, 30, 31 days). Month-addition clamping behaves differently for each — Jan 31 + 1 month clamps to Feb 28, but Jan 30 + 1 month clamps to Feb 29 in a leap year.
+        var seenMonthLengths = Set<Int>()
+        var monthCursor = endDate
+        for _ in 0 ..< 12 {
+            guard let previousMonth = calendar.date(byAdding: .month, value: -1, to: monthCursor)
+            else { break }
+            let daysInMonth = calendar.range(of: .day, in: .month, for: previousMonth)!.count
+            if seenMonthLengths.insert(daysInMonth).inserted {
+                let year = calendar.component(.year, from: previousMonth)
+                let month = calendar.component(.month, from: previousMonth)
+                if let lastDay = calendar.date(from: DateComponents(year: year, month: month, day: daysInMonth)) {
+                    let seconds = Int64(lastDay.timeIntervalSinceReferenceDate)
+                    if seconds >= lower, seconds <= upper {
+                        results.append(seconds)
+                    }
+                }
+            }
+            monthCursor = previousMonth
+            if seenMonthLengths.count >= 4 { break }
         }
 
         return results

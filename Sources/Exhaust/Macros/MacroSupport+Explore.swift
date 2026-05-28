@@ -88,6 +88,22 @@ public extension __ExhaustRuntime {
             (name: direction.0, predicate: { (value: Output) in direction.1(value) })
         }
 
+        var regressionSeeds: [UInt64] = []
+        #if canImport(Testing)
+            if let traitConfig = ExhaustTraitConfiguration.current {
+                for encodedSeed in traitConfig.regressions {
+                    guard let decoded = CrockfordBase32.decodeWithIteration(encodedSeed) else {
+                        reportIssue(
+                            "Invalid regression seed: \(encodedSeed)",
+                            fileID: fileID, filePath: filePath, line: line, column: column
+                        )
+                        continue
+                    }
+                    regressionSeeds.append(decoded.seed)
+                }
+            }
+        #endif
+
         return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
             let result: ClassificationExploreResult<Output>
             do {
@@ -107,7 +123,8 @@ public extension __ExhaustRuntime {
                         directions: namedDirections,
                         hitsPerDirection: budget.hitsPerDirection,
                         maxAttemptsPerDirection: budget.maxAttemptsPerDirection,
-                        seed: seed
+                        seed: seed,
+                        regressionSeeds: regressionSeeds
                     )
                     return try runner.run()
                 }

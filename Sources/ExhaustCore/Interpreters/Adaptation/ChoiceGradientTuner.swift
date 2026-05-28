@@ -83,11 +83,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         //
         // SMC-style interleaved resampling: after each batch (once past the minimum warmup), intermediate weights are baked from accumulated fitness and fed into the next batch's interpreter. Deep picks (depth >= 4), which fall back to static generator weights, benefit from progressively improved proposals rather than staying uniform.
         //
-        // Convergence detection (ψ-based early stopping): after each batch, check if per-site weight shares have stabilized. When the maximum absolute shift drops below 5%, further runs won't meaningfully change the baked weights — stop early to save warmup cost.
-        //
-        // Adapted from the ψ₀ probability-mass tracking in:
-        //   Lipkin et al., "Fast Controlled Generation from Language Models with Adaptive Weighted Rejection Sampling", COLM 2025.
-        //   arXiv:2504.05410
+        // Convergence detection (early stopping): after each batch, check if per-site weight shares have stabilized. When the maximum absolute shift drops below 5%, further runs won't meaningfully change the baked weights — stop early to save warmup cost.
         let accumulator = FitnessAccumulator()
         let resamplingBatchSize: UInt64 = 20
         let minWarmupRuns: UInt64 = 40

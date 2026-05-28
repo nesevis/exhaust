@@ -3,7 +3,7 @@
 //  Exhaust
 //
 
-// MARK: - Academic Provenance
+// MARK: - Academic Background
 
 //
 // This file implements the "density method" — a one-test-at-a-time greedy covering array generator — from:

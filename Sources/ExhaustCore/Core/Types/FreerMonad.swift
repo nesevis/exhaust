@@ -1,11 +1,11 @@
-// MARK: - Academic Provenance
+// MARK: - Academic Background
 
 //
-// Freer Monad from Kiselyov and Ishii, "Freer Monads, More Extensible Effects" (Haskell Symposium 2015). Goldstein et al., "Reflecting on Random Generation" (ICFP 2023), §3.2 chose it as the encoding for reflective generators.
+// Freer Monad from Kiselyov and Ishii, "Freer Monads, More Extensible Effects" (Haskell Symposium 2015). Goldstein et al., "Reflecting on Random Generation" (ICFP 2023), section 3.2 chose it as the encoding for reflective generators.
 //
 // A closure-based generator (QuickCheck's `Gen a = Int -> a`) is a black box: it can only be run forward. The Freer Monad lifts each generator decision out of closures and into an inspectable data structure — a chain of `ReflectiveOperation` nodes connected by continuations. Because the decisions are data, not control flow, the same generator can be interpreted in multiple ways: forward (generation), backward (reflection), deterministic replay, adaptation (CGS tuning), coverage analysis, and graph-based reduction all operate on the same `FreerMonad` value without the generator author writing mode-specific code.
 //
-// Goldstein et al. considered a tagless-final encoding but found it more tedious to program with and no more expressive. The Freer Monad's concrete data representation is what makes the multi-interpretation architecture practical: interpreters pattern-match on operations rather than threading effect handlers through type class dictionaries.
+// The Freer Monad's concrete data representation is what makes the multi-interpretation architecture practical: interpreters pattern-match on operations rather than threading effect handlers through type class dictionaries.
 
 /// Reifies generator decisions as inspectable data rather than opaque closures.
 ///
