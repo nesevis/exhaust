@@ -3,8 +3,8 @@ import ExhaustCore
 import Foundation
 import Testing
 
-@Suite("FuzzyDecoder")
-struct FuzzyDecoderTests {
+@Suite("Generator Synthesizer")
+struct GeneratorSynthesizerTests {
     @Test("Synthesises a generator from a flat struct")
     func flatStruct() throws {
         let json = """
@@ -33,11 +33,11 @@ struct FuzzyDecoderTests {
     }
 
     @Test("Generates all cases for CaseIterable enum properties")
-    func caseIterableEnum() {
+    func caseIterableEnum() throws {
         let json = """
         {"label": "test", "status": "active"}
         """
-        let generator = #gen(WithEnum.self, from: json)
+        let generator = try #gen(WithEnum.self, from: json)
         let values = #example(generator, count: 50)
 
         #expect(Set(values.map(\.label)).count > 1)
@@ -45,11 +45,11 @@ struct FuzzyDecoderTests {
     }
 
     @Test("Falls back to .just for non-CaseIterable RawRepresentable properties")
-    func rawRepresentableFallback() {
+    func rawRepresentableFallback() throws {
         let json = """
         {"name": "test", "priority": "high"}
         """
-        let generator = #gen(WithNonIterable.self, from: json)
+        let generator = try #gen(WithNonIterable.self, from: json)
         let values = #example(generator, count: 20)
 
         #expect(Set(values.map(\.name)).count > 1)
@@ -57,11 +57,11 @@ struct FuzzyDecoderTests {
     }
 
     @Test("Exhaust finds a counterexample with a synthesised generator")
-    func exhaustFindsCounterexample() {
+    func exhaustFindsCounterexample() throws {
         let json = """
         {"name": "Gaute", "age": 30, "active": true}
         """
-        let generator = #gen(Person.self, from: json)
+        let generator = try #gen(Person.self, from: json)
 
         #exhaust(generator, .suppress(.issueReporting)) { person in
             person.age >= 0
@@ -69,11 +69,11 @@ struct FuzzyDecoderTests {
     }
 
     @Test("Generates dictionary properties")
-    func dictionaryProperty() {
+    func dictionaryProperty() throws {
         let json = """
         {"name": "test", "scores": {"alice": 10, "bob": 20}}
         """
-        let generator = #gen(WithDictionary.self, from: json)
+        let generator = try #gen(WithDictionary.self, from: json)
         let values = #example(generator, count: 20)
 
         #expect(Set(values.map(\.name)).count > 1)
@@ -81,11 +81,11 @@ struct FuzzyDecoderTests {
     }
 
     @Test("Generates optional properties with both nil and non-nil values")
-    func optionalProperty() {
+    func optionalProperty() throws {
         let json = """
         {"name": "Gaute", "nickname": "Ali"}
         """
-        let generator = #gen(WithOptional.self, from: json)
+        let generator = try #gen(WithOptional.self, from: json)
         let values = #example(generator, count: 50)
 
         let nicknames = values.map(\.nickname)
@@ -94,11 +94,11 @@ struct FuzzyDecoderTests {
     }
 
     @Test("Generates optional properties when JSON value is null")
-    func optionalPropertyNull() {
+    func optionalPropertyNull() throws {
         let json = """
         {"name": "Gaute", "nickname": null}
         """
-        let generator = #gen(WithOptional.self, from: json)
+        let generator = try #gen(WithOptional.self, from: json)
         let values = #example(generator, count: 50)
 
         let nicknames = values.map(\.nickname)
@@ -107,9 +107,9 @@ struct FuzzyDecoderTests {
     }
 
     @Test("Accepts a Codable instance directly")
-    func codableInstance() {
+    func codableInstance() throws {
         let example = Person(name: "Gaute", age: 30, active: true)
-        let generator = #gen(from: example)
+        let generator = try #gen(from: example)
         let values = #example(generator, count: 20)
         print(generator.debugDescription)
 
@@ -118,11 +118,11 @@ struct FuzzyDecoderTests {
     }
 
     @Test("Synthesised generators are marked with isSynthesised flag")
-    func isSynthesisedFlag() {
+    func isSynthesisedFlag() throws {
         let json = """
         {"name": "Gaute", "age": 30, "active": true}
         """
-        let synthesised = #gen(Person.self, from: json)
+        let synthesised = try #gen(Person.self, from: json)
         let handWritten = #gen(.int(in: 0 ... 100))
 
         #expect(synthesised.isSynthesized)
@@ -130,11 +130,11 @@ struct FuzzyDecoderTests {
     }
 
     @Test("#examine skips reflection for synthesised generators")
-    func examineSkipsReflection() {
+    func examineSkipsReflection() throws {
         let json = """
         {"name": "Gaute", "age": 30, "active": true}
         """
-        let generator = #gen(Person.self, from: json)
+        let generator = try #gen(Person.self, from: json)
         let report = #examine(generator, .samples(20))
 
         #expect(report.passed)
@@ -144,11 +144,11 @@ struct FuzzyDecoderTests {
     }
 
     @Test("#examine reports pinned fields for synthesised generators")
-    func examineReportsPinnedFields() {
+    func examineReportsPinnedFields() throws {
         let json = """
         {"name": "test", "priority": "high"}
         """
-        let generator = #gen(WithNonIterable.self, from: json)
+        let generator = try #gen(WithNonIterable.self, from: json)
         let report = #examine(generator, .samples(20))
         print()
 
