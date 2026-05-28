@@ -15,6 +15,6 @@ public struct GenerateFromDecodableMacro: ExpressionMacro {
         let typeExpr = args[0].expression.trimmedDescription
         let dataExpr = args[1].expression.trimmedDescription
 
-        return "try __ExhaustRuntime._macroGenDecodable(\(raw: typeExpr), from: \(raw: dataExpr))"
+        return "__ExhaustRuntime._macroGenDecodable(\(raw: typeExpr), from: \(raw: dataExpr)).get()"
     }
 }

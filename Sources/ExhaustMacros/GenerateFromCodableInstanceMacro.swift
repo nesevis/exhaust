@@ -14,6 +14,6 @@ public struct GenerateFromCodableInstanceMacro: ExpressionMacro {
 
         let instanceExpr = args[0].expression.trimmedDescription
 
-        return "try __ExhaustRuntime._macroGenCodableInstance(\(raw: instanceExpr))"
+        return "__ExhaustRuntime._macroGenCodableInstance(\(raw: instanceExpr)).get()"
     }
 }
