@@ -85,6 +85,7 @@ Exhaust's entry points are five macros. `#gen` builds generators; the rest consu
 | Macro | Purpose |
 |---|---|
 | [`#gen(…)`](docs/GEN.md) | Build generators from primitives, structs, enums, and recursive types. |
+| [`#gen(T.self, from:)`](docs/GEN.md#synthesising-generators-from-decodable-types) | Synthesise a generator from a `Decodable` type and example JSON or a `Codable` instance. |
 | [`#exhaust(gen) {…}`](docs/EXHAUST.md) | Test a property and report a minimal counterexample on failure. |
 | [`#exhaust(Spec.self, …)`](docs/EXHAUST.md#contract-invocation) | Run a contract test against a stateful system. |
 | [`#explore(gen, directions:) {…}`](docs/EXPLORE.md) | Test a property with per-direction coverage guarantees. |

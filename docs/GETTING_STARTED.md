@@ -52,6 +52,16 @@ You're not yet getting everything Exhaust offers this way: just one input per ru
 
 The immediate win is time. Mock instances of rich domain types are tedious to write and tedious to maintain as those types evolve. `#example(userGenerator)` replaces all of that with a single line. A side benefit is that every run exercises your function on data the fixture-writing habit would probably never have picked — the cases you didn't think to write down.
 
+If your types already conform to `Codable`, you can skip writing the generator entirely. `#gen` can synthesise one from an example JSON value or an existing instance:
+
+```swift
+let user = User(id: UUID(), name: "Chris", age: 42, subscription: .premium)
+let gen = try #gen(from: user)
+let users = #example(gen, count: 100)
+```
+
+The synthesised generator won't know about your domain constraints — it generates across the full range of each field — but it's a fast way to get coverage without writing a generator by hand. See [Synthesising generators from Decodable types](GEN.md#synthesising-generators-from-decodable-types) for the details and limitations.
+
 ## The smallest useful test you can write
 
 If you'd rather add a new test than modify an existing one, here's the cheapest new test you can write. Pick a function that takes some structured input, and pick the most pessimistic property you can imagine: that it doesn't crash and it doesn't throw an unexpected error.

@@ -66,8 +66,8 @@ public macro gen<each GeneratedValue>(
 /// ```swift
 /// let gen = try #gen(Person.self, from: jsonData)
 ///
-/// #exhaust(gen) { dto in
-///     dto.amount >= 0
+/// #exhaust(gen) { person in
+///     person.age >= 0
 /// }
 /// ```
 ///

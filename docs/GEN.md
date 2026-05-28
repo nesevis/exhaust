@@ -4,6 +4,19 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 
 If you're new to Exhaust, start with [Getting Started](GETTING_STARTED.md). This page covers the main generator concepts.
 
+- [Three modes](#three-modes)
+- [Primitives](#primitives)
+- [Collections](#collections)
+- [Choice](#choice)
+- [Composing generators](#composing-generators)
+- [Synthesising generators from Decodable types](#synthesising-generators-from-decodable-types)
+- [Generating test data with `#example`](#generating-test-data-with-example)
+- [Recursive generators](#recursive-generators)
+- [Metamorphic testing](#metamorphic-testing)
+- [Filters and classification](#filters-and-classification)
+- [Bidirectional transforms](#bidirectional-transforms)
+- [Reflecting known values](#reflecting-known-values)
+
 ## Three modes
 
 Every generator records the choices it makes during generation: which branch of a `oneOf`, which integer from a range, how many elements in an array. Exhaust operates on these recorded choices in three modes:
@@ -56,6 +69,79 @@ let personGen = #gen(.string(length: 1...20), .int(in: 0...120)) { name, age in
 ```
 
 When Exhaust can synthesise the backward mapping (extracting struct properties by label, or pattern-matching enum cases), it inserts a `mapped` transform and the generator is fully reflectable. When it cannot, the generator remains forward-only. Generation and reduction still work, but reflection from a concrete value cannot pass backward through the composition. See [Bidirectional transforms](#bidirectional-transforms) for the full picture.
+
+## Synthesising generators from Decodable types
+
+Writing generators by hand scales well for a handful of types. When you have many types that already conform to `Codable`, you can skip the manual work and let Exhaust build a generator from an example value.
+
+```swift
+struct Person: Codable {
+    let name: String
+    let age: Int
+    let active: Bool
+}
+
+let gen = try #gen(Person.self, from: """
+    {
+      "name": "Chris", 
+      "age": 42, 
+      "active": true
+    }
+    """)
+```
+
+Exhaust decodes the JSON once to discover the type's field structure, then builds a generator with one sub-generator per field. The JSON values are scaffolding: they make the discovery pass work but do not constrain the generator's output. Once built, the generator is a normal `ReflectiveGenerator` that produces arbitrary values, reduces counterexamples, and gets edge case coverage like any hand-written generator.
+
+Three overloads accept different input shapes:
+
+```swift
+// From a JSON `String`:
+let gen = try #gen(Person.self, from: jsonString)
+
+// From JSON `Data`:
+let gen = try #gen(Person.self, from: jsonData)
+
+// From an existing `Codable` instance:
+let example = Person(name: "Chris", age: 42, active: true)
+let gen = try #gen(from: example)
+```
+
+### What gets a full generator
+
+Primitive types: all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat` produce full generators with size scaling and boundary analysis. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators when their element types are supported. `CaseIterable` types produce even-weighted picks across all cases.
+
+### What falls back to a constant
+
+Types the synthesiser cannot handle (non-`CaseIterable` enums, types with hand-written `init(from:)` that branch on decoded values) fall back to `.just(decodedValue)`, pinning the field to the constant value from the example JSON or instance. The generator still works, but those fields do not vary across iterations.
+
+> [!Tip]
+> Run `#examine` on a synthesised generator to see which fields are fully generated and which are pinned:
+> ```swift
+> let report = #examine(gen, .samples(50))
+> // Output includes:
+> //   Correctness: reflection skipped (synthesised generator)
+> //   Pinned fields: 1 field could not be synthesised (constant value from example JSON)
+> ```
+
+### Limitations
+
+Synthesised generators are forward-only. Reflection is not supported, so `reflecting:` cannot decompose a concrete value backward through a synthesised generator. Reduction still works because the reducer operates on the generator's choices, not output values.
+
+> [!Note]
+> Synthesised generators are at least three times slower per iteration than hand-written generators, because each value is reconstructed through `init(from: Decoder)`. More importantly, they have no knowledge of domain constraints, like valid ranges, inter-field relationships, or other invariants that the type's consumers rely on. 
+>
+> A hand-written generator encodes these constraints directly, producing values that exercise the interesting parts of the domain rather than all possible values. Treat synthesised generators as a starting point, not a replacement for domain-aware generators on types that matter.
+
+## Generating test data with `#example`
+
+`#example` generates values from your generators outside of property tests. This is a fast way to produce test data, prototypes, and snapshot inputs:
+
+```swift
+let person = #example(personGen)
+let people = #example(personGen, count: 100, seed: 42)
+```
+
+`#example` generates values at size 50 on Exhaust's 0-to-100 complexity scale. Specifying a `seed` makes the output deterministic. Specifying `count` generates multiple values.
 
 ## Recursive generators
 
@@ -197,14 +283,3 @@ Sometimes you already have a failing value — from a bug report, a production l
 ```
 
 Exhaust decomposes the value into the generator choices that could have produced it, then reduces those choices to find the minimal counterexample. This works with any reflectable generator, including composed ones.
-
-## Generating test data with `#example`
-
-`#example` generates values from your generators outside of property tests. This is a fast way to produce test data, prototypes, and snapshot inputs:
-
-```swift
-let person = #example(personGen)
-let people = #example(personGen, count: 100, seed: 42)
-```
-
-`#example` generates values at size 50 on Exhaust's 0-to-100 complexity scale. Specifying a `seed` makes the output deterministic. Specifying `count` generates multiple values.
