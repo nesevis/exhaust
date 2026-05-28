@@ -1,4 +1,3 @@
-import ExhaustCore
 import Foundation
 
 /// Builds a ``ReflectiveGenerator`` from a `Decodable` type and an example JSON value.
@@ -73,3 +72,4 @@ package enum GeneratorSynthesizerError: Error {
     /// The JSON structure did not match the expected container type (keyed, unkeyed, or single-value).
     case unexpectedContainer
 }
+

@@ -74,7 +74,8 @@ struct GeneratorSynthesizerTests {
         {"name": "test", "scores": {"alice": 10, "bob": 20}}
         """
         let generator = try #gen(WithDictionary.self, from: json)
-        let values = #example(generator, count: 20)
+        let values = #example(generator, count: 20, seed: 1337)
+        print(values)
 
         #expect(Set(values.map(\.name)).count > 1)
         #expect(Set(values.map(\.scores.count)).count > 1)

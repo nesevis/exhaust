@@ -1,4 +1,3 @@
-import ExhaustCore
 import Foundation
 
 /// A `Decoder` that intercepts decode calls to build a generator tree while returning concrete JSON values.
