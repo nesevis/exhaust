@@ -45,27 +45,32 @@ package enum GeneratorSynthesizer {
             return ReflectiveGenerator(rootGenerator, isSynthesized: true)
         }
 
+        // A top-level collection of a non-generable element type (for example `[Person]`) has no pre-configured generator, but its element can be discovered from a representative element of the example. This varies the collection's length and contents rather than pinning the whole value.
+        if let discoveredCollection = makeDiscoveredCollectionGenerator(for: T.self, fromExample: jsonValue, codingPath: []) {
+            let typed: Generator<T> = discoveredCollection.map { $0 as! T }
+            return ReflectiveGenerator(typed, isSynthesized: true)
+        }
+
         let discovery = DiscoveryDecoder(jsonValue: jsonValue)
         let exampleValue = try T(from: discovery)
-        let childGenerators = ContiguousArray(discovery.childGenerators)
 
-        // No child generators means the discovery pass found nothing to synthesize — a collection of non-generable elements, or a type whose decode produced no leaves. Pin to the example at build time instead of building an empty zip that the replay pass would immediately over-read. This pinning is structural and surfaces through `#examine`'s pinned-field report, so it does not emit a per-sample fallback warning.
-        guard childGenerators.isEmpty == false else {
+        // An empty shape means the discovery pass found nothing to synthesize — a collection of non-generable elements, or a type whose decode produced no leaves. Pin to the example at build time instead of building an empty container the replay pass would immediately over-read. This pinning is structural and surfaces through `#examine`'s pinned-field report, so it does not emit a per-sample fallback warning.
+        guard let (generators, rebuild) = discovery.shape.lowering() else {
             return ReflectiveGenerator(Gen.just(exampleValue), isSynthesized: true)
         }
 
         let zipped: AnyGenerator = .impure(
-            operation: .zip(childGenerators),
+            operation: .zip(generators),
             continuation: { .pure($0) }
         )
 
         let generator = Gen.liftF(.transform(
             kind: .map(
                 forward: { values in
-                    // A generated value can drive a hand-written `init(from:)` down a branch the example never exercised, exhausting the tape. Catch that and pin this sample to the example rather than letting it crash; a genuine decode error still propagates.
+                    // A generated value can drive a hand-written `init(from:)` down a branch the example never exercised, leaving a key the replay value does not carry. Catch that and pin this sample to the example rather than letting it crash; a genuine decode error still propagates.
+                    let replayValue = rebuild(values as! [Any])
                     do {
-                        let replay = ReplayDecoder(values: values as! [Any])
-                        return try T(from: replay)
+                        return try T(from: ReplayDecoder(replayValue))
                     } catch let miss as GenSchemaMiss {
                         SynthesisDiagnostics.recordFallback(type: T.self, codingPath: miss.codingPath)
                         return exampleValue

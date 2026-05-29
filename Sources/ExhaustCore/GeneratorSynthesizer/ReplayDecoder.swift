@@ -1,216 +1,279 @@
 import Foundation
 
-/// A `Decoder` that feeds pre-generated values through `init(from:)` to reconstruct a `Decodable` value.
+/// A generated value, shaped per decoder level, that ``ReplayDecoder`` feeds through `init(from:)`.
 ///
-/// Used inside the synthesized generator's `.map` closure. Each `decode` call pulls the next value from a sequential tape and casts it to the requested type.
+/// Each value addresses one container level. A keyed level is a dictionary keyed by `CodingKey` string, so reconstruction reads each field by name rather than by position — a hand-written `init(from:)` that decodes fields in a different order than the example does still reads the right value. Nested types decoded through `decode(_:forKey:)` are already built by their own sub-generators and stored as ``leaf`` values; only `nestedContainer`-style decoding produces nested ``keyed``/``unkeyed`` values.
+package indirect enum ReplayValue {
+    /// A keyed container level: field values addressed by `CodingKey` string.
+    case keyed([String: ReplayValue])
+    /// An unkeyed container level: element values addressed by position, with a real count.
+    case unkeyed([ReplayValue])
+    /// A single generated (or pre-built) value. A nil optional is `leaf` wrapping `Optional.none`.
+    case leaf(Any)
+}
+
+// MARK: - Optional detection
+
+//
+// A nil optional is stored as `leaf(Optional<Any>.none)`. `as?` already unwraps it correctly for `decode`/`decodeIfPresent`, so the only place that needs to recognize it is `decodeNil`. A protocol cast avoids the cost of `Mirror` on this path.
+
+private protocol OptionalValue {
+    var isNilValue: Bool { get }
+}
+
+extension Optional: OptionalValue {
+    var isNilValue: Bool {
+        self == nil
+    }
+}
+
+private func leafIsNil(_ value: Any) -> Bool {
+    (value as? OptionalValue)?.isNilValue ?? false
+}
+
+// MARK: - Replay Decoder
+
+/// A `Decoder` that feeds a generated ``ReplayValue`` through `init(from:)` to reconstruct a `Decodable` value.
+///
+/// Used inside the synthesized generator's reconstruction map. Lookups are non-consuming and addressed by key or index; a key or index the generated value does not carry throws ``GenSchemaMiss``, which the synthesized generator catches to pin that sample to the example.
 package final class ReplayDecoder: Decoder {
     package let codingPath: [any CodingKey]
     package let userInfo: [CodingUserInfoKey: Any] = [:]
-    private let values: [Any]
-    private var index: Int = 0
+    private let value: ReplayValue
 
-    package init(values: [Any], codingPath: [any CodingKey] = []) {
-        self.values = values
+    package init(_ value: ReplayValue, codingPath: [any CodingKey] = []) {
+        self.value = value
         self.codingPath = codingPath
-    }
-
-    /// Consumes and returns the next value from the tape.
-    ///
-    /// Throws ``GenSchemaMiss`` rather than trapping when the tape is exhausted. Exhaustion means a generated value drove `init(from:)` to decode more values than the discovery pass recorded — the synthesized generator catches this and pins the affected value to the example.
-    ///
-    /// - Parameter codingPath: The coding path of the requesting decode call, recorded on the thrown ``GenSchemaMiss``.
-    func nextValue(at codingPath: [any CodingKey]) throws -> Any {
-        guard index < values.count else {
-            throw GenSchemaMiss(codingPath: codingPath)
-        }
-        defer { index += 1 }
-        return values[index]
     }
 
     package func container<Key: CodingKey>(
         keyedBy _: Key.Type
     ) throws -> KeyedDecodingContainer<Key> {
-        KeyedDecodingContainer(
-            ReplayKeyedContainer<Key>(decoder: self, codingPath: codingPath)
+        guard case let .keyed(fields) = value else {
+            throw GenSchemaMiss(codingPath: codingPath)
+        }
+        return KeyedDecodingContainer(
+            ReplayKeyedContainer<Key>(fields: fields, codingPath: codingPath)
         )
     }
 
     package func unkeyedContainer() throws -> any UnkeyedDecodingContainer {
-        ReplayUnkeyedContainer(decoder: self, codingPath: codingPath)
+        guard case let .unkeyed(elements) = value else {
+            throw GenSchemaMiss(codingPath: codingPath)
+        }
+        return ReplayUnkeyedContainer(elements: elements, codingPath: codingPath)
     }
 
     package func singleValueContainer() throws -> any SingleValueDecodingContainer {
-        ReplaySingleValueContainer(decoder: self, codingPath: codingPath)
+        ReplaySingleValueContainer(value: value, codingPath: codingPath)
     }
 }
 
 // MARK: - Keyed Container
 
 private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol {
-    let decoder: ReplayDecoder
+    let fields: [String: ReplayValue]
     let codingPath: [any CodingKey]
+
     var allKeys: [Key] {
-        []
+        fields.keys.compactMap { Key(stringValue: $0) }
     }
 
-    func contains(_: Key) -> Bool {
-        true
+    func contains(_ key: Key) -> Bool {
+        fields[key.stringValue] != nil
     }
 
-    func decodeNil(forKey _: Key) throws -> Bool {
-        false
+    func decodeNil(forKey key: Key) throws -> Bool {
+        switch fields[key.stringValue] {
+            case .none:
+                return true
+            case let .leaf(value):
+                return leafIsNil(value)
+            default:
+                return false
+        }
     }
 
     func decode<T: Decodable>(_: T.Type, forKey key: Key) throws -> T {
-        let value = try decoder.nextValue(at: codingPath + [key])
-        guard let typed = value as? T else {
+        guard case let .leaf(value)? = fields[key.stringValue], let typed = value as? T else {
             throw GenSchemaMiss(codingPath: codingPath + [key])
         }
         return typed
     }
 
-    // Type-specific `decodeIfPresent` overloads — see DiscoveryDecoder.swift for why these are necessary. Each pulls a single value from the tape. Without these overrides, the protocol extension's default calls `decodeNil` then `decode`, consuming two tape values and crashing.
+    // Type-specific `decodeIfPresent` overloads. Unlike the positional design these were originally written for, key-addressed lookup is non-consuming, so reading a key here cannot desynchronize anything — but the overloads stay because the standard library resolves `decodeIfPresent(String.self, forKey:)` to the type-specific protocol requirement, and routing each through the same lookup keeps behavior explicit. Each returns nil for an absent key or a nil-optional leaf (via `as?`).
 
     func decodeIfPresent(_: Bool.Type, forKey key: Key) throws -> Bool? {
-        try decoder.nextValue(at: codingPath + [key]) as? Bool
+        present(key)
     }
 
     func decodeIfPresent(_: String.Type, forKey key: Key) throws -> String? {
-        try decoder.nextValue(at: codingPath + [key]) as? String
+        present(key)
     }
 
     func decodeIfPresent(_: Double.Type, forKey key: Key) throws -> Double? {
-        try decoder.nextValue(at: codingPath + [key]) as? Double
+        present(key)
     }
 
     func decodeIfPresent(_: Float.Type, forKey key: Key) throws -> Float? {
-        try decoder.nextValue(at: codingPath + [key]) as? Float
+        present(key)
     }
 
     func decodeIfPresent(_: Int.Type, forKey key: Key) throws -> Int? {
-        try decoder.nextValue(at: codingPath + [key]) as? Int
+        present(key)
     }
 
     func decodeIfPresent(_: Int8.Type, forKey key: Key) throws -> Int8? {
-        try decoder.nextValue(at: codingPath + [key]) as? Int8
+        present(key)
     }
 
     func decodeIfPresent(_: Int16.Type, forKey key: Key) throws -> Int16? {
-        try decoder.nextValue(at: codingPath + [key]) as? Int16
+        present(key)
     }
 
     func decodeIfPresent(_: Int32.Type, forKey key: Key) throws -> Int32? {
-        try decoder.nextValue(at: codingPath + [key]) as? Int32
+        present(key)
     }
 
     func decodeIfPresent(_: Int64.Type, forKey key: Key) throws -> Int64? {
-        try decoder.nextValue(at: codingPath + [key]) as? Int64
+        present(key)
     }
 
     func decodeIfPresent(_: UInt.Type, forKey key: Key) throws -> UInt? {
-        try decoder.nextValue(at: codingPath + [key]) as? UInt
+        present(key)
     }
 
     func decodeIfPresent(_: UInt8.Type, forKey key: Key) throws -> UInt8? {
-        try decoder.nextValue(at: codingPath + [key]) as? UInt8
+        present(key)
     }
 
     func decodeIfPresent(_: UInt16.Type, forKey key: Key) throws -> UInt16? {
-        try decoder.nextValue(at: codingPath + [key]) as? UInt16
+        present(key)
     }
 
     func decodeIfPresent(_: UInt32.Type, forKey key: Key) throws -> UInt32? {
-        try decoder.nextValue(at: codingPath + [key]) as? UInt32
+        present(key)
     }
 
     func decodeIfPresent(_: UInt64.Type, forKey key: Key) throws -> UInt64? {
-        try decoder.nextValue(at: codingPath + [key]) as? UInt64
+        present(key)
     }
 
     func decodeIfPresent<T: Decodable>(_: T.Type, forKey key: Key) throws -> T? {
-        try decoder.nextValue(at: codingPath + [key]) as? T
+        present(key)
+    }
+
+    /// Returns the value at `key` cast to `Target`, or nil when the key is absent or holds a nil optional.
+    private func present<Target>(_ key: Key) -> Target? {
+        guard case let .leaf(value)? = fields[key.stringValue] else {
+            return nil
+        }
+        return value as? Target
     }
 
     func nestedContainer<NestedKey: CodingKey>(
         keyedBy _: NestedKey.Type,
         forKey key: Key
     ) throws -> KeyedDecodingContainer<NestedKey> {
-        KeyedDecodingContainer(
-            ReplayKeyedContainer<NestedKey>(decoder: decoder, codingPath: codingPath + [key])
+        guard case let .keyed(nested)? = fields[key.stringValue] else {
+            throw GenSchemaMiss(codingPath: codingPath + [key])
+        }
+        return KeyedDecodingContainer(
+            ReplayKeyedContainer<NestedKey>(fields: nested, codingPath: codingPath + [key])
         )
     }
 
     func nestedUnkeyedContainer(forKey key: Key) throws -> any UnkeyedDecodingContainer {
-        ReplayUnkeyedContainer(decoder: decoder, codingPath: codingPath + [key])
+        guard case let .unkeyed(elements)? = fields[key.stringValue] else {
+            throw GenSchemaMiss(codingPath: codingPath + [key])
+        }
+        return ReplayUnkeyedContainer(elements: elements, codingPath: codingPath + [key])
     }
 
     func superDecoder() throws -> any Decoder {
-        decoder
+        ReplayDecoder(fields["super"] ?? .keyed([:]), codingPath: codingPath)
     }
 
-    func superDecoder(forKey _: Key) throws -> any Decoder {
-        decoder
+    func superDecoder(forKey key: Key) throws -> any Decoder {
+        ReplayDecoder(fields[key.stringValue] ?? .keyed([:]), codingPath: codingPath + [key])
     }
 }
 
 // MARK: - Unkeyed Container
 
 private struct ReplayUnkeyedContainer: UnkeyedDecodingContainer {
-    let decoder: ReplayDecoder
+    let elements: [ReplayValue]
     let codingPath: [any CodingKey]
+    var currentIndex: Int = 0
+
     var count: Int? {
-        nil
+        elements.count
     }
 
     var isAtEnd: Bool {
-        false
+        currentIndex >= elements.count
     }
 
-    var currentIndex: Int = 0
-
     mutating func decodeNil() throws -> Bool {
-        false
+        guard isAtEnd == false, case let .leaf(value) = elements[currentIndex], leafIsNil(value) else {
+            return false
+        }
+        currentIndex += 1
+        return true
     }
 
     mutating func decode<T: Decodable>(_: T.Type) throws -> T {
-        currentIndex += 1
-        let value = try decoder.nextValue(at: codingPath)
-        guard let typed = value as? T else {
+        guard isAtEnd == false, case let .leaf(value) = elements[currentIndex], let typed = value as? T else {
             throw GenSchemaMiss(codingPath: codingPath)
         }
+        currentIndex += 1
         return typed
     }
 
     mutating func nestedContainer<NestedKey: CodingKey>(
         keyedBy _: NestedKey.Type
     ) throws -> KeyedDecodingContainer<NestedKey> {
-        KeyedDecodingContainer(
-            ReplayKeyedContainer<NestedKey>(decoder: decoder, codingPath: codingPath)
+        guard isAtEnd == false, case let .keyed(nested) = elements[currentIndex] else {
+            throw GenSchemaMiss(codingPath: codingPath)
+        }
+        currentIndex += 1
+        return KeyedDecodingContainer(
+            ReplayKeyedContainer<NestedKey>(fields: nested, codingPath: codingPath)
         )
     }
 
     mutating func nestedUnkeyedContainer() throws -> any UnkeyedDecodingContainer {
-        ReplayUnkeyedContainer(decoder: decoder, codingPath: codingPath)
+        guard isAtEnd == false, case let .unkeyed(nested) = elements[currentIndex] else {
+            throw GenSchemaMiss(codingPath: codingPath)
+        }
+        currentIndex += 1
+        return ReplayUnkeyedContainer(elements: nested, codingPath: codingPath)
     }
 
     mutating func superDecoder() throws -> any Decoder {
-        decoder
+        guard isAtEnd == false else {
+            throw GenSchemaMiss(codingPath: codingPath)
+        }
+        defer { currentIndex += 1 }
+        return ReplayDecoder(elements[currentIndex], codingPath: codingPath)
     }
 }
 
 // MARK: - Single Value Container
 
 private struct ReplaySingleValueContainer: SingleValueDecodingContainer {
-    let decoder: ReplayDecoder
+    let value: ReplayValue
     let codingPath: [any CodingKey]
 
     func decodeNil() -> Bool {
-        false
+        guard case let .leaf(inner) = value else {
+            return false
+        }
+        return leafIsNil(inner)
     }
 
     func decode<T: Decodable>(_: T.Type) throws -> T {
-        let value = try decoder.nextValue(at: codingPath)
-        guard let typed = value as? T else {
+        guard case let .leaf(inner) = value, let typed = inner as? T else {
             throw GenSchemaMiss(codingPath: codingPath)
         }
         return typed
