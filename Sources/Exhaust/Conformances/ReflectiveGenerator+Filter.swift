@@ -13,6 +13,8 @@ public extension ReflectiveGenerator {
     ///
     /// All strategies maintain deterministic behavior — given the same seed, the generator will produce the same sequence of values.
     ///
+    /// - Note: A filter constructed inside a `bind`/`flatMap` closure whose predicate captures the bound value (for example `outer.bind { n in inner.filter { $0 < n } }`) is an exception under the CGS strategies. Such a filter is tuned once per call site and reuses those weights for every bound value, so for the same seed its output can differ across runs and a specific counterexample may not reproduce. The output is always valid, because the predicate is still enforced on every candidate — but prefer ``FilterType/rejectionSampling`` for these bind-inner filters when reproducibility matters.
+    ///
     /// ```swift
     /// // Auto strategy (default) — in this case uses .choiceGradientSampling
     /// let balancedBST = #gen(myBSTGen)
