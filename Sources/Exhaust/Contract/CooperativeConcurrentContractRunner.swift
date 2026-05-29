@@ -105,8 +105,9 @@ private extension __ExhaustRuntime {
     ) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
         let runStopwatch = Stopwatch()
         nonisolated(unsafe) var report = ExhaustReport()
-        nonisolated(unsafe) var coverageInvocations = 0
+        nonisolated(unsafe) var coverageSnapshot = 0
         nonisolated(unsafe) var reductionInvocations = 0
+        nonisolated(unsafe) var discoveredDuringCoverage = false
         var deferredIssues: [String] = []
         let statsAccumulator: OpenPBTStatsAccumulator? = config.collectOpenPBTStats
             ? OpenPBTStatsAccumulator(propertyName: "\(fileID)")
@@ -156,13 +157,12 @@ private extension __ExhaustRuntime {
         }
 
         defer {
-            // Reduction probes flow through `property`, so they are inside `invocationCounter`; subtract them (and coverage) to leave pure random sampling. The three buckets then sum to `invocationCounter`.
-            let samplingInvocations = invocationCounter.value - coverageInvocations - reductionInvocations
             report.totalMilliseconds = runStopwatch.elapsedMilliseconds
-            report.setInvocations(
-                coverage: coverageInvocations,
-                randomSampling: samplingInvocations,
-                reduction: reductionInvocations
+            report.setConcurrentInvocations(
+                totalInvocations: invocationCounter.value,
+                coverageThroughReduction: coverageSnapshot,
+                reduction: reductionInvocations,
+                discoveredDuringCoverage: discoveredDuringCoverage
             )
             report.seed = config.seed
             if let statsAccumulator {
@@ -223,7 +223,7 @@ private extension __ExhaustRuntime {
             }
         }
 
-        coverageInvocations = invocationCounter.value
+        coverageSnapshot = invocationCounter.value
         report.coverageMilliseconds = coverageStopwatch.elapsedMilliseconds
 
         // Random sampling
@@ -256,10 +256,7 @@ private extension __ExhaustRuntime {
             report.applyReductionStats(stats)
         }
         reductionInvocations = discovery.reductionInvocations
-        // Coverage-phase reduction ran before the `coverageInvocations` snapshot, so it is already inside that bucket — pull it out so coverage, sampling, and reduction stay disjoint and sum to `invocationCounter`.
-        if discovery.discoveryMethod == .coverage {
-            coverageInvocations -= discovery.reductionInvocations
-        }
+        discoveredDuringCoverage = discovery.discoveryMethod == .coverage
         report.reductionMilliseconds = discovery.reductionMilliseconds
 
         var ctx = failureContext

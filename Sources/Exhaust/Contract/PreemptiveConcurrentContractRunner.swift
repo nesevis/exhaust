@@ -188,9 +188,12 @@ private extension __ExhaustRuntime {
                     replaySeed: scaReplaySeed,
                     discoveryMethod: .coverage
                 )
-                // Coverage-phase reduction probes flow through `property`, so they are already inside `invocationCounter`. Pull them out of the coverage bucket so coverage, sampling, and reduction stay disjoint and sum to `invocationCounter`.
-                coverageInvocations = invocationCounter.value - scaResult.reductionInvocations
-                report.setInvocations(coverage: coverageInvocations, randomSampling: 0, reduction: scaResult.reductionInvocations)
+                report.setConcurrentInvocations(
+                    totalInvocations: invocationCounter.value,
+                    coverageThroughReduction: invocationCounter.value,
+                    reduction: scaResult.reductionInvocations,
+                    discoveredDuringCoverage: true
+                )
 
                 if config.suppressIssueReporting == false {
                     var failureContext = FailureContext()
