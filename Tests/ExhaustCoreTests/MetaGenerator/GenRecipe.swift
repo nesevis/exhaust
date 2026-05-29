@@ -410,12 +410,18 @@ private func boundRangeGenerator(maxDepth _: Int) -> Generator<GenRecipe> {
 // MARK: - Recipe Interpreter
 
 /// Builds a real `AnyGenerator` from a `GenRecipe`.
-func buildGenerator(from recipe: GenRecipe) -> AnyGenerator {
+func buildGenerator(
+    from recipe: GenRecipe,
+    fileID: StaticString = #fileID,
+    filePath: StaticString = #filePath,
+    line: UInt = #line,
+    column: UInt = #column
+) -> AnyGenerator {
     switch recipe {
         case let .leaf(kind):
             buildLeaf(kind)
         case let .combinator(kind):
-            buildCombinator(kind)
+            buildCombinator(kind, fileID: fileID, filePath: filePath, line: line, column: column)
     }
 }
 
@@ -434,7 +440,13 @@ private func buildLeaf(_ kind: GenRecipe.LeafKind) -> AnyGenerator {
     }
 }
 
-private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> AnyGenerator {
+private func buildCombinator(
+    _ kind: GenRecipe.CombinatorKind,
+    fileID: StaticString = #fileID,
+    filePath: StaticString = #filePath,
+    line: UInt = #line,
+    column: UInt = #column
+) -> AnyGenerator {
     switch kind {
         case let .mapped(inner, transform):
             return Gen.contramap(
@@ -453,10 +465,10 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> AnyGenerator {
             return AnyGenerator.impure(
                 operation: .filter(
                     gen: innerGen.erase(),
-                    fingerprint: Gen.sourceFingerprint(fileID: #fileID, line: #line, column: #column),
+                    fingerprint: Gen.sourceFingerprint(fileID: fileID, line: line, column: column),
                     filterType: .auto,
                     predicate: { predicate.evaluate($0) },
-                    sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
+                    sourceLocation: FilterSourceLocation(fileID: fileID, filePath: filePath, line: column, column: column)
                 ),
                 continuation: { .pure($0) }
             )
