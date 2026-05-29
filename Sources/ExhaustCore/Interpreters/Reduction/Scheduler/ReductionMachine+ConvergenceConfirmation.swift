@@ -31,6 +31,7 @@ extension ReductionMachine {
         let baseHash = ZobristHash.hash(of: sequence)
 
         for nodeID in graph.leafNodes {
+            if isDeadlineExceeded() { break }
             guard case let .chooseBits(metadata) = graph.nodes[nodeID].kind else { continue }
             guard let origin = graph.convergenceStore[nodeID] else { continue }
             guard let range = graph.nodes[nodeID].positionRange else { continue }
@@ -55,7 +56,7 @@ extension ReductionMachine {
                 ChoiceGraphScheduler.logReducer("stale_convergence_detected", isInstrumented: isInstrumented, metadata: [
                     "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(origin.bound - 1)",
                 ])
-            } else if result == .rejected, origin.bound >= minBound + 2 {
+            } else if result == .rejected, origin.bound - minBound >= 2 {
                 let gapResult = try probeBelow(
                     value: origin.bound - 2,
                     at: range.lowerBound,

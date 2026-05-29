@@ -47,7 +47,7 @@ package enum ProjectedMutation {
 
 /// One leaf change in a ``ProjectedMutation/leafValues(_:)`` report.
 ///
-/// The encoder copies ``mayReshape`` from the originating ``LeafEntry/mayReshapeOnAcceptance`` without inspecting it. ``ChoiceGraph/apply(_:freshTree:)`` reads the flag to route between the value-only fast path and the bind-inner reshape path.
+/// The encoder copies ``mayReshape`` from the originating ``LeafEntry/mayReshapeOnAcceptance`` without inspecting it. ``ChoiceGraph/apply(_:)`` reads the flag: a value-only change is written in place, while a `mayReshape` change sets ``ChangeApplication/requiresFullRebuild`` so the scheduler rebuilds the graph from the fresh tree.
 package struct LeafChange {
     /// Identifier of the leaf node whose value changed.
     package let leafNodeID: Int

@@ -225,9 +225,14 @@ extension ChoiceGraph {
         let clampLow: UInt64
         let clampHigh: UInt64
         if typeTag.isSigned {
+            // Saturate against the type's bit-pattern range. Wrapping `simplest &- windowRadius` underflows for narrow signed types (Int8's semantic zero is bit pattern 128, below the 10000 radius), collapsing the window to an empty interval and silently disabling classification.
             let simplest = typeTag.simplestBitPattern
-            clampLow = simplest &- windowRadius
-            clampHigh = simplest &+ windowRadius
+            let bitPatternRange = typeTag.bitPatternRange
+            clampLow = simplest > windowRadius
+                ? simplest - windowRadius
+                : bitPatternRange.lowerBound
+            let (raised, overflow) = simplest.addingReportingOverflow(windowRadius)
+            clampHigh = overflow ? bitPatternRange.upperBound : min(raised, bitPatternRange.upperBound)
         } else {
             clampLow = 0
             clampHigh = windowRadius

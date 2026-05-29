@@ -109,9 +109,9 @@ enum MinimizationScope {
 
 /// Per-leaf annotation in a value-only scope.
 ///
-/// Carries the leaf's node ID plus a marker that tells the graph (on acceptance) whether mutating this leaf might trigger a downstream bind subtree rebuild. The encoder ignores ``mayReshapeOnAcceptance`` and minimizes the leaf value identically for both kinds. The marker rides along into the encoder's ``ProjectedMutation`` report so that ``ChoiceGraph/apply(_:freshTree:)`` can route between the value-only fast path and the bind-inner reshape path on a per-leaf basis.
+/// Carries the leaf's node ID plus a marker that tells the graph (on acceptance) whether mutating this leaf might trigger a downstream bind subtree rebuild. The encoder ignores ``mayReshapeOnAcceptance`` and minimizes the leaf value identically for both kinds. The marker rides along into the encoder's ``ProjectedMutation`` report so that ``ChoiceGraph/apply(_:)`` can route on a per-leaf basis.
 ///
-/// Source builders populate ``mayReshapeOnAcceptance`` from graph metadata: the marker is true when the leaf is the inner child of a non-structurally-constant bind. On acceptance, ``ChoiceGraph/apply(_:freshTree:)`` reads the marker to route between the value-only fast path and the bind-inner reshape path via ``ChoiceGraph/rebuildBoundSubtree(bindNodeID:newBoundTree:)``.
+/// Source builders populate ``mayReshapeOnAcceptance`` from graph metadata: the marker is true when the leaf is the inner child of a non-structurally-constant bind. On acceptance, ``ChoiceGraph/apply(_:)`` reads the marker: a value-only change is written in place, while a reshape change sets ``ChangeApplication/requiresFullRebuild`` so the scheduler rebuilds the graph from the fresh tree.
 struct LeafEntry {
     /// Identifier of the leaf node.
     let nodeID: Int
