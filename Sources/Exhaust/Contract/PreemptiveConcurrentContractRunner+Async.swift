@@ -154,7 +154,8 @@ private extension __ExhaustRuntime {
                 skipToRow: config.coverageReplayRow,
                 property: property,
                 identifySkips: identifySkips,
-                lastRunTimedOut: lastRunTimedOut
+                lastRunTimedOut: lastRunTimedOut,
+                invocationCounter: invocationCounter
             ) {
                 if let stats = scaResult.reductionStats {
                     report.applyReductionStats(stats)

@@ -70,7 +70,7 @@ struct NonAtomicCounterConcurrentTests {
             settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 50)), .replay(.numeric(42)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
         )
         let report = try #require(deliveredReport, "onReport closure should be called")
-        #expect(report.propertyInvocations == 28)
+        #expect(report.propertyInvocations == 15)
         #expect(report.reductionInvocations == 13)
         #expect(report.totalMilliseconds > 0)
         #expect(report.totalMaterializations == 15)

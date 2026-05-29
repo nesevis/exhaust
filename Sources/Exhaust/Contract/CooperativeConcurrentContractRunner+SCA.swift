@@ -27,7 +27,8 @@ extension __ExhaustRuntime {
         skipToRow: Int? = nil,
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
         identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
-        lastRunTimedOut: UnsafeSendableBox<Bool>
+        lastRunTimedOut: UnsafeSendableBox<Bool>,
+        invocationCounter: UnsafeSendableBox<Int>
     ) -> SCAFailureResult<Command>? {
         guard let pickChoices = extractPickChoices(from: commandGen) else {
             ExhaustLog.notice(
@@ -101,56 +102,27 @@ extension __ExhaustRuntime {
                     metadata: ["iteration": "\(iterations)", "commands": "\(value.count)", "timedOut": "\(timedOut)"]
                 )
 
-                if timedOut {
-                    return SCAFailureResult(finalInput: value, originalCount: value.count, iteration: iterations, timedOut: true)
-                }
-
-                let (reduceValue, reduceTree) = pruneSkippedCommands(
-                    value: value,
+                let reductionStartInvocations = invocationCounter.value
+                let reduction = reduceConcurrentCounterexample(
+                    input: value,
                     tree: freshTree,
-                    generator: seqGen,
-                    seed: iterations,
+                    sequenceGen: seqGen,
+                    reductionConfig: reductionConfig,
                     property: property,
                     identifySkips: identifySkips,
-                    logEvent: "concurrent_sca_skip_pruning"
+                    seed: iterations,
+                    skipPruningLogEvent: "concurrent_sca_skip_pruning",
+                    timedOut: timedOut
                 )
+                let reductionInvocations = invocationCounter.value - reductionStartInvocations
 
-                nonisolated(unsafe) var reductionPropertyInvocations = 0
-                let countingProperty: @Sendable ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
-                    reductionPropertyInvocations += 1
-                    return property(taggedCommands)
-                }
-                if let reduceResult = try? Interpreters.choiceGraphReduceCollectingStats(
-                    gen: seqGen,
-                    tree: reduceTree,
-                    output: reduceValue,
-                    config: reductionConfig,
-                    property: countingProperty
-                ) {
-                    if case let .reduced(_, reduced) = reduceResult.outcome {
-                        return SCAFailureResult(
-                            finalInput: reduced,
-                            originalCount: value.count,
-                            iteration: iterations,
-                            timedOut: false,
-                            reductionStats: reduceResult.stats,
-                            reductionInvocations: reductionPropertyInvocations
-                        )
-                    }
-                    return SCAFailureResult(
-                        finalInput: reduceValue,
-                        originalCount: value.count,
-                        iteration: iterations,
-                        timedOut: false,
-                        reductionStats: reduceResult.stats,
-                        reductionInvocations: reductionPropertyInvocations
-                    )
-                }
                 return SCAFailureResult(
-                    finalInput: reduceValue,
+                    finalInput: reduction.finalInput,
                     originalCount: value.count,
                     iteration: iterations,
-                    timedOut: false
+                    timedOut: reduction.timedOut,
+                    reductionStats: reduction.stats,
+                    reductionInvocations: reductionInvocations
                 )
             }
             if skipToRow != nil { break }

@@ -33,7 +33,7 @@ struct LeakyBucketConcurrentTests {
             settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 500)), .replay(.numeric(42)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
         )
         let report = try #require(deliveredReport)
-        #expect(report.propertyInvocations == 36)
+        #expect(report.propertyInvocations == 19)
         #expect(report.reductionInvocations == 17)
         #expect(report.totalMaterializations == 23)
         #expect(report.cycles == 3)

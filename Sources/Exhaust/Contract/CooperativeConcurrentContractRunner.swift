@@ -101,6 +101,7 @@ private extension __ExhaustRuntime {
         let runStopwatch = Stopwatch()
         nonisolated(unsafe) var report = ExhaustReport()
         nonisolated(unsafe) var coverageInvocations = 0
+        nonisolated(unsafe) var reductionInvocations = 0
         var deferredIssues: [String] = []
         let statsAccumulator: OpenPBTStatsAccumulator? = config.collectOpenPBTStats
             ? OpenPBTStatsAccumulator(propertyName: "\(fileID)")
@@ -150,12 +151,13 @@ private extension __ExhaustRuntime {
         }
 
         defer {
-            let samplingInvocations = invocationCounter.value - coverageInvocations
+            // Reduction probes flow through `property`, so they are inside `invocationCounter`; subtract them (and coverage) to leave pure random sampling. The three buckets then sum to `invocationCounter`.
+            let samplingInvocations = invocationCounter.value - coverageInvocations - reductionInvocations
             report.totalMilliseconds = runStopwatch.elapsedMilliseconds
             report.setInvocations(
                 coverage: coverageInvocations,
                 randomSampling: samplingInvocations,
-                reduction: report.reductionInvocations
+                reduction: reductionInvocations
             )
             report.seed = config.seed
             if let statsAccumulator {
@@ -197,7 +199,8 @@ private extension __ExhaustRuntime {
                 skipToRow: config.coverageReplayRow,
                 property: property,
                 identifySkips: identifySkips,
-                lastRunTimedOut: lastRunTimedOut
+                lastRunTimedOut: lastRunTimedOut,
+                invocationCounter: invocationCounter
             ) {
                 discovery = ConcurrentDiscovery(
                     taggedCommands: scaResult.finalInput,
@@ -247,7 +250,11 @@ private extension __ExhaustRuntime {
         if let stats = discovery.reductionStats {
             report.applyReductionStats(stats)
         }
-        report.reductionInvocations = discovery.reductionInvocations
+        reductionInvocations = discovery.reductionInvocations
+        // Coverage-phase reduction ran before the `coverageInvocations` snapshot, so it is already inside that bucket — pull it out so coverage, sampling, and reduction stay disjoint and sum to `invocationCounter`.
+        if discovery.discoveryMethod == .coverage {
+            coverageInvocations -= discovery.reductionInvocations
+        }
         report.reductionMilliseconds = discovery.reductionMilliseconds
 
         var ctx = failureContext
@@ -380,29 +387,41 @@ private extension __ExhaustRuntime {
             )
 
             if passed == false {
-                let reduction = try reduceConcurrentCounterexample(
+                ExhaustLog.notice(
+                    category: .propertyTest,
+                    event: "concurrent_failure_found",
+                    metadata: ["commands": "\(input.count)", "timedOut": "\(lastRunTimedOut.value)"]
+                )
+
+                let reductionStartInvocations = invocationCounter.value
+                let reductionStopwatch = Stopwatch()
+                let reduction = reduceConcurrentCounterexample(
                     input: input,
                     tree: tree,
                     sequenceGen: sequenceGen,
                     reductionConfig: reductionConfig,
                     property: property,
                     identifySkips: identifySkips,
+                    seed: 0,
+                    skipPruningLogEvent: "concurrent_skip_pruning",
                     timedOut: lastRunTimedOut.value
                 )
+                let reductionMilliseconds = reductionStopwatch.elapsedMilliseconds
+                let reductionInvocations = invocationCounter.value - reductionStartInvocations
 
                 let discoveryMethod: ContractDiscoveryMethod = replayIteration != nil ? .replay : .randomSampling
                 return ConcurrentDiscovery(
-                    taggedCommands: reduction.taggedCommands,
+                    taggedCommands: reduction.finalInput,
                     discoveryMethod: discoveryMethod,
-                    timedOut: lastRunTimedOut.value,
+                    timedOut: reduction.timedOut,
                     seed: actualSeed,
                     originalCount: input.count,
                     iteration: absoluteIteration,
                     budget: samplingBudget,
-                    sequencesTested: invocationCounter.value + reduction.invocations,
+                    sequencesTested: invocationCounter.value,
                     reductionStats: reduction.stats,
-                    reductionInvocations: reduction.invocations,
-                    reductionMilliseconds: reduction.milliseconds
+                    reductionInvocations: reductionInvocations,
+                    reductionMilliseconds: reductionMilliseconds
                 )
             }
         }
@@ -413,63 +432,54 @@ private extension __ExhaustRuntime {
 
 // MARK: - Reduction
 
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-private extension __ExhaustRuntime {
-    /// Prunes skipped commands, then runs graph reduction on the failing counterexample. When the drain loop timed out, skips reduction entirely and returns the input unchanged — timed-out schedules produce non-deterministic replay, making reduction unreliable.
-    static func reduceConcurrentCounterexample<Command: CustomStringConvertible>(
+/// Internal (not fileprivate) so the SCA coverage path in `CooperativeConcurrentContractRunner+SCA.swift` can share this single reducer. Not `@available`-gated: it uses no macOS-15 APIs, so the (ungated) coverage and preemptive paths can call it directly.
+extension __ExhaustRuntime {
+    /// Prunes skipped commands, then runs graph reduction on the failing counterexample. When the failing probe timed out, skips reduction entirely and returns the input unchanged — timed-out schedules produce non-deterministic replay, making reduction unreliable.
+    ///
+    /// Shared by the random-sampling and SCA-coverage paths. Keeps no invocation count of its own: every probe flows through `property`, so the caller measures reduction invocations by snapshotting its own counter around this call.
+    ///
+    /// - Parameters:
+    ///   - seed: Pruning materialization seed (sampling uses `0`; coverage uses the row iteration for determinism per row).
+    ///   - skipPruningLogEvent: Log event name for the skip-pruning pass, distinguishing the two callers in the log stream.
+    ///   - timedOut: The failing probe's timeout status, captured by the caller before reduction. Returned unchanged, so a reduced counterexample reports `false` rather than whatever the reducer probed last.
+    static func reduceConcurrentCounterexample<Command>(
         input: [(ScheduleMarker, Command)],
         tree: ChoiceTree,
         sequenceGen: Generator<[(ScheduleMarker, Command)]>,
         reductionConfig: Interpreters.ReducerConfiguration,
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
         identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
+        seed: UInt64,
+        skipPruningLogEvent: String,
         timedOut: Bool
-    ) throws -> ReductionOutcome<Command> {
-        ExhaustLog.notice(
-            category: .propertyTest,
-            event: "concurrent_failure_found",
-            metadata: ["commands": "\(input.count)", "timedOut": "\(timedOut)"]
-        )
-        for (marker, cmd) in input {
-            ExhaustLog.debug(
-                category: .propertyTest,
-                event: "concurrent_initial_command",
-                "[\(marker.description)] \(cmd)"
-            )
-        }
-
+    ) -> ConcurrentReduction<Command> {
         guard timedOut == false else {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "concurrent_timeout_skipping_reduction"
             )
-            return ReductionOutcome(taggedCommands: input, stats: nil, milliseconds: 0, invocations: 0)
+            return ConcurrentReduction(finalInput: input, stats: nil, timedOut: true)
         }
 
         let (reduceValue, reduceTree) = pruneSkippedCommands(
             value: input,
             tree: tree,
             generator: sequenceGen,
-            seed: 0,
+            seed: seed,
             property: property,
             identifySkips: identifySkips,
-            logEvent: "concurrent_skip_pruning"
+            logEvent: skipPruningLogEvent
         )
 
-        nonisolated(unsafe) var reductionPropertyInvocations = 0
-        let countingProperty: @Sendable ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
-            reductionPropertyInvocations += 1
-            return property(taggedCommands)
-        }
-        let reductionStopwatch = Stopwatch()
-        let reduceResult = try Interpreters.choiceGraphReduceCollectingStats(
+        guard let reduceResult = try? Interpreters.choiceGraphReduceCollectingStats(
             gen: sequenceGen,
             tree: reduceTree,
             output: reduceValue,
             config: reductionConfig,
-            property: countingProperty
-        )
-        let reductionMilliseconds = reductionStopwatch.elapsedMilliseconds
+            property: property
+        ) else {
+            return ConcurrentReduction(finalInput: reduceValue, stats: nil, timedOut: false)
+        }
 
         let finalInput: [(ScheduleMarker, Command)]
         if case let .reduced(_, reduced) = reduceResult.outcome {
@@ -478,13 +488,6 @@ private extension __ExhaustRuntime {
                 event: "concurrent_reduced",
                 metadata: ["from": "\(input.count)", "to": "\(reduced.count)"]
             )
-            for (marker, cmd) in reduced {
-                ExhaustLog.debug(
-                    category: .propertyTest,
-                    event: "concurrent_reduced_command",
-                    "[\(marker.description)] \(cmd)"
-                )
-            }
             finalInput = reduced
         } else {
             ExhaustLog.notice(
@@ -494,12 +497,7 @@ private extension __ExhaustRuntime {
             finalInput = reduceValue
         }
 
-        return ReductionOutcome(
-            taggedCommands: finalInput,
-            stats: reduceResult.stats,
-            milliseconds: reductionMilliseconds,
-            invocations: reductionPropertyInvocations
-        )
+        return ConcurrentReduction(finalInput: finalInput, stats: reduceResult.stats, timedOut: false)
     }
 }
 
@@ -569,8 +567,8 @@ private extension __ExhaustRuntime {
 
 // MARK: - Supporting Types
 
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-private extension __ExhaustRuntime {
+/// Not `@available`-gated: `ConcurrentReduction` is returned by the ungated shared reducer, and these are plain data carriers with no macOS-15 dependency.
+extension __ExhaustRuntime {
     /// Carries the failure metadata from the coverage or sampling phase back to the entry point, which uses it to populate ``FailureContext``, call ``buildFailureResult(finalInput:specInit:concurrencyLevel:idleTimeout:seed:discoveryMethod:timedOut:failureContext:)``, and update the ``ExhaustReport``.
     struct ConcurrentDiscovery<Command> {
         let taggedCommands: [(ScheduleMarker, Command)]
@@ -586,11 +584,13 @@ private extension __ExhaustRuntime {
         let reductionMilliseconds: Double
     }
 
-    /// Return value of ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:timedOut:)`` carrying the reduced commands and reduction statistics for the report.
-    struct ReductionOutcome<Command> {
-        let taggedCommands: [(ScheduleMarker, Command)]
+    /// Outcome of ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``, shared by the sampling and coverage paths.
+    ///
+    /// Carries no invocation count or timing: every reduction probe flows through the caller's `property`, so the caller measures both by snapshotting around the call.
+    struct ConcurrentReduction<Command> {
+        let finalInput: [(ScheduleMarker, Command)]
         let stats: ReductionStats?
-        let milliseconds: Double
-        let invocations: Int
+        /// The failing probe's timeout status, passed through unchanged — a reduced (non-timed-out) counterexample reports `false`, never the reducer's last probe.
+        let timedOut: Bool
     }
 }
