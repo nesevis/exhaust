@@ -172,16 +172,19 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         return .impure(operation: .zip(bakedGens), continuation: continuation)
 
                     case let .sequence(lengthGen, elementGen):
+                        // The interpreter pushes one `.sequenceElement` derivative frame per element, so picks inside the element generator accumulate one depth deeper — bake the element at `depth + 1` to land on the same key. The length generator runs in a fresh context maxed at `maxDerivativeDepth`, so its picks hit handlePick's fast path and never record; its bake depth is immaterial, so leave it at `depth`.
                         return .impure(
                             operation: .sequence(
                                 length: bakeWeights(lengthGen, from: accumulator, strategy: strategy, depth: depth),
-                                gen: bakeWeights(elementGen, from: accumulator, strategy: strategy, depth: depth)
+                                gen: bakeWeights(elementGen, from: accumulator, strategy: strategy, depth: depth + 1)
                             ),
                             continuation: continuation
                         )
 
                     default:
-                        if let mapped = operation.mapInnerGenerator({ bakeWeights($0, from: accumulator, strategy: strategy, depth: depth) }) {
+                        // A reified `bind` (`transform(.bind)`) pushes a `.bind` derivative frame during accumulation; mirror that by baking its inner one depth deeper. A forward-only `map` pushes no frame and stays at `depth`.
+                        let innerDepth = operation.pushesBindFrameOnInnerDescent ? depth + 1 : depth
+                        if let mapped = operation.mapInnerGenerator({ bakeWeights($0, from: accumulator, strategy: strategy, depth: innerDepth) }) {
                             return .impure(operation: mapped, continuation: continuation)
                         }
                         return gen
@@ -510,5 +513,15 @@ package enum ChoiceGradientTuner<FinalOutput> {
             operation: .pick(choices: choices, totalWeight: choices.reduce(0) { $0 &+ $1.weight }),
             continuation: { .pure($0 as! Output) } // swiftlint:disable:this force_cast
         )
+    }
+}
+
+private extension ReflectiveOperation {
+    /// True when ``OnlineCGSInterpreter`` pushes a derivative frame while descending into this operation's inner generator, so `bakeWeights` must descend one depth deeper to land on the same `(fingerprint, depth)` accumulation key. A reified `bind` pushes a `.bind` frame; a forward-only `map` pushes nothing.
+    var pushesBindFrameOnInnerDescent: Bool {
+        if case let .transform(kind, _) = self, case .bind = kind {
+            return true
+        }
+        return false
     }
 }
