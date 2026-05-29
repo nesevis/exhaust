@@ -210,7 +210,7 @@ private extension __ExhaustRuntime {
                     originalCount: scaResult.originalCount,
                     iteration: Int(scaResult.iteration),
                     budget: coverageBudget,
-                    sequencesTested: invocationCounter.value + scaResult.reductionInvocations,
+                    sequencesTested: invocationCounter.value,
                     reductionStats: scaResult.reductionStats,
                     reductionInvocations: scaResult.reductionInvocations,
                     reductionMilliseconds: 0

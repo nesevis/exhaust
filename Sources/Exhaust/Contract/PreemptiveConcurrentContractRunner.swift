@@ -182,7 +182,8 @@ private extension __ExhaustRuntime {
                     replaySeed: scaReplaySeed,
                     discoveryMethod: .coverage
                 )
-                coverageInvocations = invocationCounter.value
+                // Coverage-phase reduction probes flow through `property`, so they are already inside `invocationCounter`. Pull them out of the coverage bucket so coverage, sampling, and reduction stay disjoint and sum to `invocationCounter`.
+                coverageInvocations = invocationCounter.value - scaResult.reductionInvocations
                 report.setInvocations(coverage: coverageInvocations, randomSampling: 0, reduction: scaResult.reductionInvocations)
 
                 if config.suppressIssueReporting == false {
@@ -192,7 +193,7 @@ private extension __ExhaustRuntime {
                     failureContext.discoveryMethod = .coverage
                     failureContext.iteration = Int(scaResult.iteration)
                     failureContext.budget = coverageBudget
-                    failureContext.sequencesTested = invocationCounter.value + scaResult.reductionInvocations
+                    failureContext.sequencesTested = invocationCounter.value
                     failureContext.reductionInvocations = scaResult.reductionInvocations
                     failureContext.originalCount = scaResult.originalCount
                     failureContext.replaySeed = CrockfordBase32.encodeCoverageRow(Int(scaResult.iteration) - 1)
