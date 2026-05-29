@@ -5,14 +5,26 @@
 ///
 /// ``Gen`` provides a unified entry point to all generator construction. Import `Exhaust` and use `Gen.int(in:)`, `Gen.string()`, `Gen.pick(choices:)`, and so on, or use the ``#gen(_:transform:)`` macro for composing generators from existing ones.
 package enum Gen {
-    /// Computes a per-site fingerprint from source location components.
-    @inline(__always)
+    /// Computes a process-stable per-site fingerprint from source-location components.
+    ///
+    /// Folds the file identifier's UTF-8 bytes with a Fibonacci-hashing multiply-add (using ``Xoshiro256/goldenRatioConstant``), then mixes in the line and column through ``Xoshiro256/deriveSeed(from:at:)``. UTF-8 bytes and that arithmetic are reproducible across process launches, unlike `String.hashValue`, which SipHash randomizes per launch — so the same call site yields the same fingerprint every run, a prerequisite for using it as a CGS tuning seed and as a cross-process cache key. The multiply-add spreads distinct files across the full 64-bit range (the cross-file discrimination `String.hashValue` used to provide), while folding the components separately removes the transposition collision of the previous additive `hash &+ line &+ column` form, where for example `(line: 10, column: 5)` and `(line: 5, column: 10)` mapped to the same value.
     package static func sourceFingerprint(
         fileID: StaticString,
         line: UInt,
         column: UInt = 0
     ) -> UInt64 {
-        fileID.description.hashValue.bitPattern64 &+ line.bitPattern64 &+ column.bitPattern64
+        var accumulator: UInt64 = 0
+        if fileID.hasPointerRepresentation {
+            fileID.withUTF8Buffer { bytes in
+                for byte in bytes {
+                    accumulator = accumulator &* Xoshiro256.goldenRatioConstant &+ UInt64(byte)
+                }
+            }
+        } else {
+            accumulator = UInt64(fileID.unicodeScalar.value)
+        }
+        accumulator = Xoshiro256.deriveSeed(from: accumulator, at: UInt64(line))
+        return Xoshiro256.deriveSeed(from: accumulator, at: UInt64(column))
     }
 }
 

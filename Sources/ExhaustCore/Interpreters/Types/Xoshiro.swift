@@ -25,6 +25,11 @@ package struct Xoshiro256: ~Copyable {
         0xA958_2618_E03F_C9AA, 0x39AB_DC45_29B1_661C,
     ]
 
+    /// The odd 64-bit approximation of 2^64 / φ (the golden ratio).
+    ///
+    /// Serves two roles in this module: the SplitMix64 stream increment behind ``deriveSeed(from:at:)`` and seeding, and a Fibonacci-hashing multiplier for folding byte sequences (for example source-location fingerprints) into a well-distributed `UInt64`.
+    package static let goldenRatioConstant: UInt64 = 0x9E37_79B9_7F4A_7C15
+
     /// Creates a generator seeded from the system random number generator.
     public init() {
         var rng = SystemRandomNumberGenerator()
@@ -154,7 +159,7 @@ package struct Xoshiro256: ~Copyable {
 private struct SplitMix64 {
     private var state: UInt64
 
-    static let incrementConstant: UInt64 = 0x9E37_79B9_7F4A_7C15
+    static let incrementConstant: UInt64 = Xoshiro256.goldenRatioConstant
     static let mixingConstant1: UInt64 = 0xBF58_476D_1CE4_E5B9
     static let mixingConstant2: UInt64 = 0x94D0_49BB_1331_11EB
 
