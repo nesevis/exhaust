@@ -81,7 +81,11 @@ private extension __ExhaustRuntime {
 
         let samplingBudget = config.budget.samplingBudget
         let coverageBudget = config.budget.coverageBudget
-        let check = AsyncPreemptiveChecker<Spec>()
+        // A non-positive or sentinel-large idle timeout (e.g. `Int.max` to disable) means "wait unbounded".
+        let idleTimeoutMilliseconds: Int? = (config.idleTimeout > 0 && config.idleTimeout < Int.max)
+            ? config.idleTimeout
+            : nil
+        let check = AsyncPreemptiveChecker<Spec>(idleTimeoutMilliseconds: idleTimeoutMilliseconds)
         var coverageInvocations = 0
         let invocationCounter = UnsafeSendableBox(0)
         let lastRunTimedOut = UnsafeSendableBox(false)
@@ -295,6 +299,25 @@ private extension __ExhaustRuntime {
 ///
 /// Bridges async command execution to GCD threads via Task+semaphore. Each lane gets a real OS thread, and within that thread async commands are driven synchronously — the cooperative pool handles the Task's continuations while the GCD thread blocks on the semaphore. This provides real thread-level preemption for synchronous primitives (locks, dispatch queues) hidden behind async facades.
 private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
+    /// Idle-timeout bound (milliseconds) for the blocking drain loop, or `nil` to wait unbounded. A command that suspends onto a foreign executor never returns to the drain lane; without this bound the loop spins a CPU core forever.
+    let idleTimeoutMilliseconds: Int?
+
+    /// Bridges async work to the calling thread, bailing with `nil` (and a log) if the drain loop idles past ``idleTimeoutMilliseconds``. Returns the work's result, or `nil` only on timeout.
+    private func awaitOrTimeout<R>(_ label: String, _ work: @Sendable @escaping () async -> R) -> R? {
+        guard let idleTimeoutMilliseconds else {
+            return __ExhaustRuntime.blockingAwait(work)
+        }
+        let result = __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: idleTimeoutMilliseconds, work)
+        if result == nil {
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "async_preemptive_drain_timeout",
+                label
+            )
+        }
+        return result
+    }
+
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// Prefix and sequential commands are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
@@ -325,7 +348,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
                 var exception: NSException?
                 nonisolated(unsafe) let spec = concurrentSpec
                 let succeeded = exhaust_runCatchingObjCException({
-                    __ExhaustRuntime.blockingAwait {
+                    let completed: Void? = awaitOrTimeout("lane") {
                         for (_, command) in laneCommands {
                             if commandFailed.value { break }
                             do {
@@ -338,6 +361,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
                             }
                         }
                     }
+                    if completed == nil { commandFailed.value = true }
                 }, &exception)
                 if succeeded == false {
                     caughtException.value = exception
@@ -352,14 +376,14 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
         }
 
         nonisolated(unsafe) let invariantSpec = concurrentSpec
-        let invariantsPassed = __ExhaustRuntime.blockingAwait {
+        let invariantsPassed = awaitOrTimeout("invariants") {
             do {
                 try await invariantSpec.checkInvariants()
                 return true
             } catch {
                 return false
             }
-        }
+        } ?? false // Timeout → treat as failed (cannot confirm invariants held).
 
         if invariantsPassed == false {
             return false
@@ -367,9 +391,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
 
         nonisolated(unsafe) let oracleSpec = concurrentSpec
         nonisolated(unsafe) let sequentialResult = sequentialSpec.systemUnderTest
-        return __ExhaustRuntime.blockingAwait {
+        // Timeout → treat as failed (cannot confirm the oracle).
+        return awaitOrTimeout("oracle") {
             await oracleSpec.oracleCheck(sequentialResult)
-        }
+        } ?? false
     }
 
     /// Runs commands sequentially on a spec, bridging async execution via ``__ExhaustRuntime/blockingAwait(_:)``. Wraps in ObjC exception handling so NSExceptions from underlying C/ObjC code are caught rather than crashing the process.
@@ -381,7 +406,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
         let failed = SendableBox(false)
         nonisolated(unsafe) let spec = spec
         exhaust_runCatchingObjCException({
-            __ExhaustRuntime.blockingAwait {
+            let completed: Void? = awaitOrTimeout("sequential") {
                 for command in commands {
                     do {
                         try await spec.run(command)
@@ -393,6 +418,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
                     }
                 }
             }
+            if completed == nil { failed.value = true }
         }, &exception)
         return exception == nil && failed.value == false
     }

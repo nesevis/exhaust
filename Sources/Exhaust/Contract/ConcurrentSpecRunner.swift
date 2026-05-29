@@ -78,8 +78,6 @@ func drainSchedule<Spec: AsyncContractSpec>(
     recordTrace: Bool,
     idleTimeoutMilliseconds: Int = 1000
 ) -> ConcurrentExecutionResult {
-    let idleTimeout: Duration = .milliseconds(idleTimeoutMilliseconds)
-
     let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
     let laneCommands: [[Spec.Command]] = (0 ..< concurrencyLevel).map { laneIndex in
         let marker = ScheduleMarker(rawValue: UInt8(laneIndex + 1))
@@ -131,11 +129,10 @@ func drainSchedule<Spec: AsyncContractSpec>(
             prefixDone.value = true
         }
 
-        var lastActivity = ContinuousClock.now
+        var idleStopwatch = Stopwatch()
         while prefixDone.value == false {
             guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
-                let elapsed = ContinuousClock.now - lastActivity
-                if elapsed > idleTimeout {
+                if idleStopwatch.elapsedMilliseconds > Double(idleTimeoutMilliseconds) {
                     return ConcurrentExecutionResult(
                         passed: false,
                         trace: recordTrace ? buildTrace(trace.value) : [],
@@ -145,7 +142,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
                 continue
             }
             job.runSynchronously(on: executors[0].asUnownedTaskExecutor())
-            lastActivity = ContinuousClock.now
+            idleStopwatch = Stopwatch()
         }
         if failed.value != nil {
             return ConcurrentExecutionResult(passed: false, trace: recordTrace ? buildTrace(trace.value) : [])
@@ -207,12 +204,11 @@ func drainSchedule<Spec: AsyncContractSpec>(
     )
     var scheduleIndex = 0
 
-    var lastActivity = ContinuousClock.now
+    var idleStopwatch = Stopwatch()
 
     while runQueue.isFinished == false {
         if runQueue.hasPendingJobs == false {
-            let elapsed = ContinuousClock.now - lastActivity
-            if elapsed > idleTimeout {
+            if idleStopwatch.elapsedMilliseconds > Double(idleTimeoutMilliseconds) {
                 let finalTrace: [TraceStep] = recordTrace ? buildTrace(trace.value) : []
                 return ConcurrentExecutionResult(passed: false, trace: finalTrace, timedOut: true)
             }
@@ -238,7 +234,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
         job.runSynchronously(on: executor.asUnownedTaskExecutor())
         laneHasOpenCommand[lane] = runQueue.hasPendingJob(for: lane)
         lastDrainedLane = lane
-        lastActivity = ContinuousClock.now
+        idleStopwatch = Stopwatch()
 
         if failed.value != nil {
             break

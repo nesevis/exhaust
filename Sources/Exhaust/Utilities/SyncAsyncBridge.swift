@@ -20,17 +20,33 @@ extension __ExhaustRuntime {
         _ work: @Sendable @escaping () async -> Result
     ) -> Result {
         if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
-            return _blockingAwaitDrainLoop(work)
+            // A nil idle timeout never bails, so the force-unwrap is safe: the loop only returns once the work completes.
+            return _blockingAwaitDrainLoop(idleTimeoutMilliseconds: nil, work)!
         } else {
-            return _blockingAwaitSemaphore(work)
+            return _blockingAwaitSemaphore(timeoutMilliseconds: nil, work)!
         }
     }
 
-    /// Runs the task's continuations on the calling thread via a single-lane ``RunQueue`` and ``LaneExecutor``, avoiding the cooperative pool entirely.
+    /// Like ``blockingAwait(_:)`` but bails with `nil` if the work makes no progress within `idleTimeoutMilliseconds`.
+    ///
+    /// Use when the awaited work may suspend onto a foreign executor (the main actor, a custom-executor actor, the global pool, `Task.sleep`, or I/O bridged through a continuation that resumes elsewhere). Such a continuation never returns to this single drain lane, so the unbounded ``blockingAwait(_:)`` would spin a CPU core forever. The bound mirrors the cooperative scheduler's idle timeout: the drain-loop path measures time since the last drained job (so legitimately long-but-active work does not trip it); the semaphore fallback measures total wall-clock.
+    static func blockingAwait<Result>(
+        idleTimeoutMilliseconds: Int,
+        _ work: @Sendable @escaping () async -> Result
+    ) -> Result? {
+        if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
+            return _blockingAwaitDrainLoop(idleTimeoutMilliseconds: idleTimeoutMilliseconds, work)
+        } else {
+            return _blockingAwaitSemaphore(timeoutMilliseconds: idleTimeoutMilliseconds, work)
+        }
+    }
+
+    /// Runs the task's continuations on the calling thread via a single-lane ``RunQueue`` and ``LaneExecutor``, avoiding the cooperative pool entirely. Returns `nil` when `idleTimeoutMilliseconds` is non-nil and no job is drained within that window while the work is still incomplete.
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     private static func _blockingAwaitDrainLoop<Result>(
+        idleTimeoutMilliseconds: Int?,
         _ work: @Sendable @escaping () async -> Result
-    ) -> Result {
+    ) -> Result? {
         let lane = LaneID(index: 0)
         let runQueue = RunQueue(laneCount: 1)
         let executor = LaneExecutor(lane: lane, runQueue: runQueue)
@@ -42,26 +58,41 @@ extension __ExhaustRuntime {
             done.value = true
         }
 
+        // Reset the idle timer whenever a job is drained, so only a genuine stall — the work suspended onto another executor — trips the bound.
+        var idleStopwatch = Stopwatch()
         while done.value == false {
             if let (_, job) = runQueue.dequeue(preferring: lane) {
                 job.runSynchronously(on: executor.asUnownedTaskExecutor())
+                idleStopwatch = Stopwatch()
+            } else if let idleTimeoutMilliseconds {
+                // No job to run and the work has not completed — the continuation has suspended onto another executor and will not return to this lane. Bail rather than spin forever. The orphaned Task retains `box`/`done`, so its later resumption only writes to boxes we no longer read.
+                if idleStopwatch.elapsedMilliseconds > Double(idleTimeoutMilliseconds) {
+                    return nil
+                }
             }
         }
-        return box.value!
+        return box.value
     }
 
-    /// Creates a cooperative-pool task and sleeps the calling thread until it completes.
+    /// Creates a cooperative-pool task and sleeps the calling thread until it completes. Returns `nil` when `timeoutMilliseconds` is non-nil and the work does not complete within it.
     private static func _blockingAwaitSemaphore<Result>(
+        timeoutMilliseconds: Int?,
         _ work: @Sendable @escaping () async -> Result
-    ) -> Result {
+    ) -> Result? {
         let box = UnsafeSendableBox<Result?>(nil)
         let semaphore = DispatchSemaphore(value: 0)
         Task { @Sendable in
             box.value = await work()
             semaphore.signal()
         }
-        semaphore.wait()
-        return box.value!
+        if let timeoutMilliseconds {
+            if semaphore.wait(timeout: .now() + .milliseconds(timeoutMilliseconds)) == .timedOut {
+                return nil
+            }
+        } else {
+            semaphore.wait()
+        }
+        return box.value
     }
 
     /// Dispatches a synchronous closure onto a GCD thread and returns the result asynchronously.
