@@ -23,34 +23,11 @@ package extension Gen {
             column: sourceLocation.column
         )
 
+        // Tune eagerly at construction, unless we are inside an interpreter bind continuation, where tuning is deferred to the interpreter's per-run cache. Either way the seed is the source fingerprint, so the baked weights are reproducible across runs (see ``tuneFilter(_:predicate:type:seed:)``).
         let isInterpreting = __ExhaustRuntime.isInterpreting
-        let tuned: AnyGenerator?
-        switch (type, isInterpreting) {
-            case (.rejectionSampling, _),
-                 (.choiceGradientSampling, true),
-                 (.auto, true),
-                 (.probeSampling, true),
-                 (.customCGS, true):
-                tuned = nil
-            case (.choiceGradientSampling, false), (.auto, false):
-                tuned = try? ChoiceGradientTuner<Any>.tune(
-                    erased,
-                    predicate: erasedPredicate
-                )
-            case (.probeSampling, false):
-                tuned = try? GeneratorTuning.probeAndTune(
-                    erased,
-                    predicate: erasedPredicate
-                )
-            case let (.customCGS(warmupRuns, sampleCount, subdivisionThresholds), false):
-                tuned = try? ChoiceGradientTuner<Any>.tune(
-                    erased,
-                    predicate: erasedPredicate,
-                    warmupRuns: warmupRuns,
-                    sampleCount: sampleCount,
-                    subdivisionThresholds: subdivisionThresholds
-                )
-        }
+        let tuned: AnyGenerator? = isInterpreting
+            ? nil
+            : Gen.tuneFilter(erased, predicate: erasedPredicate, type: type, seed: fingerprint)
 
         return .impure(
             operation: .filter(
@@ -63,5 +40,33 @@ package extension Gen {
             ),
             continuation: { .pure($0 as! Output) }
         )
+    }
+
+    /// Tunes a filtered generator according to its ``FilterType``, seeded deterministically from `seed`.
+    ///
+    /// Both the construction-time path (``filter(_:type:predicate:sourceLocation:)``) and the interpreters' deferred per-run cache call through this single point, so the strategy dispatch and the seed cannot drift between them. Seeding from a stable per-site value (the source fingerprint) rather than system randomness keeps the baked weights — and therefore generation — reproducible for a given run seed. Returns the input generator unchanged for ``FilterType/rejectionSampling`` or if a tuning pass throws.
+    static func tuneFilter(
+        _ generator: AnyGenerator,
+        predicate: @escaping (Any) -> Bool,
+        type: FilterType,
+        seed: UInt64
+    ) -> AnyGenerator {
+        switch type {
+            case .rejectionSampling:
+                generator
+            case .auto, .choiceGradientSampling:
+                (try? ChoiceGradientTuner<Any>.tune(generator, predicate: predicate, seed: seed)) ?? generator
+            case .probeSampling:
+                (try? GeneratorTuning.probeAndTune(generator, seed: seed, predicate: predicate)) ?? generator
+            case let .customCGS(warmupRuns, sampleCount, subdivisionThresholds):
+                (try? ChoiceGradientTuner<Any>.tune(
+                    generator,
+                    predicate: predicate,
+                    warmupRuns: warmupRuns,
+                    sampleCount: sampleCount,
+                    seed: seed,
+                    subdivisionThresholds: subdivisionThresholds
+                )) ?? generator
+        }
     }
 }

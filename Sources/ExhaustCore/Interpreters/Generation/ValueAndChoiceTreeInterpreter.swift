@@ -338,7 +338,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 } else if let cached = context.tunedFilterCache[fingerprint] {
                     filteredGen = cached
                 } else {
-                    let resolved = (try? ChoiceGradientTuner<Any>.tune(filterGen, predicate: predicate)) ?? filterGen
+                    let resolved = Gen.tuneFilter(filterGen, predicate: predicate, type: filterType, seed: fingerprint)
                     context.tunedFilterCache[fingerprint] = resolved
                     filteredGen = resolved
                 }
