@@ -33,6 +33,12 @@ public extension __ExhaustRuntime {
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
                 return nil
+            case let .invalidConcurrencyLevel(level):
+                reportIssue(
+                    "concurrencyLevel must be between 1 and 8, but was \(level)",
+                    fileID: fileID, filePath: filePath, line: line, column: column
+                )
+                return nil
         }
 
         let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)
@@ -166,7 +172,8 @@ private extension __ExhaustRuntime {
                 skipToRow: config.coverageReplayRow,
                 property: property,
                 identifySkips: identifySkips,
-                lastRunTimedOut: lastRunTimedOut
+                lastRunTimedOut: lastRunTimedOut,
+                invocationCounter: invocationCounter
             ) {
                 if let stats = scaResult.reductionStats {
                     report.applyReductionStats(stats)
@@ -181,8 +188,12 @@ private extension __ExhaustRuntime {
                     replaySeed: scaReplaySeed,
                     discoveryMethod: .coverage
                 )
-                coverageInvocations = invocationCounter.value
-                report.setInvocations(coverage: coverageInvocations, randomSampling: 0, reduction: scaResult.reductionInvocations)
+                report.setConcurrentInvocations(
+                    totalInvocations: invocationCounter.value,
+                    coverageThroughReduction: invocationCounter.value,
+                    reduction: scaResult.reductionInvocations,
+                    discoveredDuringCoverage: true
+                )
 
                 if config.suppressIssueReporting == false {
                     var failureContext = FailureContext()
@@ -191,7 +202,7 @@ private extension __ExhaustRuntime {
                     failureContext.discoveryMethod = .coverage
                     failureContext.iteration = Int(scaResult.iteration)
                     failureContext.budget = coverageBudget
-                    failureContext.sequencesTested = invocationCounter.value + scaResult.reductionInvocations
+                    failureContext.sequencesTested = invocationCounter.value
                     failureContext.reductionInvocations = scaResult.reductionInvocations
                     failureContext.originalCount = scaResult.originalCount
                     failureContext.replaySeed = CrockfordBase32.encodeCoverageRow(Int(scaResult.iteration) - 1)

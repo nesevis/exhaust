@@ -26,6 +26,7 @@ struct ResolvedConcurrentConfig {
     enum ParseResult {
         case success(ResolvedConcurrentConfig)
         case invalidReplaySeed(ReplaySeed)
+        case invalidConcurrencyLevel(Int)
     }
 
     static func parse(_ settings: [ConcurrentContractSettings]) -> ParseResult {
@@ -76,6 +77,9 @@ struct ResolvedConcurrentConfig {
                 case let .log(level):
                     config.logLevel = level
             }
+        }
+        guard 1 ... 8 ~= config.concurrencyLevel else {
+            return .invalidConcurrencyLevel(config.concurrencyLevel)
         }
         return .success(config)
     }

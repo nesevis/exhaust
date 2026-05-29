@@ -34,6 +34,12 @@ public extension __ExhaustRuntime {
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
                 return nil
+            case let .invalidConcurrencyLevel(level):
+                reportIssue(
+                    "concurrencyLevel must be between 1 and 8, but was \(level)",
+                    fileID: fileID, filePath: filePath, line: line, column: column
+                )
+                return nil
         }
 
         let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)
@@ -81,7 +87,11 @@ private extension __ExhaustRuntime {
 
         let samplingBudget = config.budget.samplingBudget
         let coverageBudget = config.budget.coverageBudget
-        let check = AsyncPreemptiveChecker<Spec>()
+        // A non-positive or sentinel-large idle timeout (e.g. `Int.max` to disable) means "wait unbounded".
+        let idleTimeoutMilliseconds: Int? = (config.idleTimeout > 0 && config.idleTimeout < Int.max)
+            ? config.idleTimeout
+            : nil
+        let check = AsyncPreemptiveChecker<Spec>(idleTimeoutMilliseconds: idleTimeoutMilliseconds)
         var coverageInvocations = 0
         let invocationCounter = UnsafeSendableBox(0)
         let lastRunTimedOut = UnsafeSendableBox(false)
@@ -93,7 +103,9 @@ private extension __ExhaustRuntime {
         }
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             invocationCounter.value += 1
-            return check.execute(taggedCommands)
+            let outcome = check.execute(taggedCommands)
+            lastRunTimedOut.value = outcome.timedOut
+            return outcome.passed
         }
 
         // Phase 0: Smoke test
@@ -154,7 +166,8 @@ private extension __ExhaustRuntime {
                 skipToRow: config.coverageReplayRow,
                 property: property,
                 identifySkips: identifySkips,
-                lastRunTimedOut: lastRunTimedOut
+                lastRunTimedOut: lastRunTimedOut,
+                invocationCounter: invocationCounter
             ) {
                 if let stats = scaResult.reductionStats {
                     report.applyReductionStats(stats)
@@ -169,8 +182,12 @@ private extension __ExhaustRuntime {
                     replaySeed: scaReplaySeed,
                     discoveryMethod: .coverage
                 )
-                coverageInvocations = invocationCounter.value
-                report.setInvocations(coverage: coverageInvocations, randomSampling: 0, reduction: scaResult.reductionInvocations)
+                report.setConcurrentInvocations(
+                    totalInvocations: invocationCounter.value,
+                    coverageThroughReduction: invocationCounter.value,
+                    reduction: scaResult.reductionInvocations,
+                    discoveredDuringCoverage: true
+                )
 
                 if config.suppressIssueReporting == false {
                     var failureContext = FailureContext()
@@ -179,10 +196,12 @@ private extension __ExhaustRuntime {
                     failureContext.discoveryMethod = .coverage
                     failureContext.iteration = Int(scaResult.iteration)
                     failureContext.budget = coverageBudget
-                    failureContext.sequencesTested = invocationCounter.value + scaResult.reductionInvocations
+                    failureContext.sequencesTested = invocationCounter.value
                     failureContext.reductionInvocations = scaResult.reductionInvocations
                     failureContext.originalCount = scaResult.originalCount
                     failureContext.replaySeed = CrockfordBase32.encodeCoverageRow(Int(scaResult.iteration) - 1)
+                    // When set, the renderer emits the timeout diagnostic and ignores the expected-state line below.
+                    failureContext.timedOut = scaResult.timedOut
                     failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
                     let message = renderFailure(scaResult.finalInput, trace: result.trace, context: failureContext)
                     deferredIssues.append(message)
@@ -211,26 +230,37 @@ private extension __ExhaustRuntime {
             do { while let (taggedCommands, tree) = try interpreter.next() {
                 samplingIteration += 1
                 let absoluteIteration = Int(startIndex) + samplingIteration
-                if check.execute(taggedCommands) == false {
-                    let reductionResult = check.reduce(
-                        generator: sequenceGen,
-                        tree: tree,
-                        output: taggedCommands,
-                        repetitions: 10
-                    )
+                let outcome = check.execute(taggedCommands)
+                if outcome.passed == false {
+                    // Reduction stays correct on a timeout — the reducer only ever returns a failing schedule — but on a hang every probe waits out the idle bound (idleTimeout × repetitions) and a timing-dependent timeout often will not reproduce, so it is slow and usually fruitless. Skip it and report the original schedule.
+                    let reduced: [(ScheduleMarker, Spec.Command)]
+                    let reductionInvocations: Int
+                    if outcome.timedOut {
+                        reduced = taggedCommands
+                        reductionInvocations = 0
+                    } else {
+                        let reductionResult = check.reduce(
+                            generator: sequenceGen,
+                            tree: tree,
+                            output: taggedCommands,
+                            repetitions: 10
+                        )
+                        reduced = reductionResult.output
+                        reductionInvocations = reductionResult.propertyInvocations
+                        report.applyReductionStats(reductionResult.stats)
+                    }
 
                     let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
                     let samplingReplaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
                     let result = buildAsyncPreemptiveResult(
-                        reduced: reductionResult.output,
+                        reduced: reduced,
                         checker: check,
                         seed: actualSeed,
                         replaySeed: samplingReplaySeed,
                         discoveryMethod: discoveryMethod
                     )
 
-                    report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionResult.propertyInvocations)
-                    report.applyReductionStats(reductionResult.stats)
+                    report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionInvocations)
 
                     if config.suppressIssueReporting == false {
                         var failureContext = FailureContext()
@@ -241,11 +271,13 @@ private extension __ExhaustRuntime {
                         failureContext.iteration = absoluteIteration
                         failureContext.budget = samplingBudget
                         failureContext.sequencesTested = samplingIteration
-                        failureContext.reductionInvocations = reductionResult.propertyInvocations
+                        failureContext.reductionInvocations = reductionInvocations
                         failureContext.originalCount = taggedCommands.count
                         failureContext.replaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
+                        // When set, the renderer emits the timeout diagnostic and ignores the expected-state line below.
+                        failureContext.timedOut = outcome.timedOut
                         failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
-                        let message = renderFailure(reductionResult.output, trace: result.trace, context: failureContext)
+                        let message = renderFailure(reduced, trace: result.trace, context: failureContext)
                         deferredIssues.append(message)
                     }
 
@@ -293,28 +325,54 @@ private extension __ExhaustRuntime {
 ///
 /// Bridges async command execution to GCD threads via Task+semaphore. Each lane gets a real OS thread, and within that thread async commands are driven synchronously — the cooperative pool handles the Task's continuations while the GCD thread blocks on the semaphore. This provides real thread-level preemption for synchronous primitives (locks, dispatch queues) hidden behind async facades.
 private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
+    /// Idle-timeout bound (milliseconds) for the blocking drain loop, or `nil` to wait unbounded. A command that suspends onto a foreign executor never returns to the drain lane; without this bound the loop spins a CPU core forever.
+    let idleTimeoutMilliseconds: Int?
+
+    /// Bridges async work to the calling thread, bailing with `nil` (and a log) if the drain loop idles past ``idleTimeoutMilliseconds``. Returns the work's result, or `nil` only on timeout.
+    private func awaitOrTimeout<R>(_ label: String, _ work: @Sendable @escaping () async -> R) -> R? {
+        guard let idleTimeoutMilliseconds else {
+            return __ExhaustRuntime.blockingAwait(work)
+        }
+        let result = __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: idleTimeoutMilliseconds, work)
+        if result == nil {
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "async_preemptive_drain_timeout",
+                label
+            )
+        }
+        return result
+    }
+
+    /// Outcome of one concurrent execution.
+    ///
+    /// `timedOut` distinguishes a drain-loop idle bailout (a hang) from a genuine pass or property failure, so the runner can report the hang as a timeout rather than dressing it up as a confirmed race. A timed-out run always has `passed == false`.
+    struct ExecutionOutcome {
+        let passed: Bool
+        let timedOut: Bool
+    }
+
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// Prefix and sequential commands are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Bool {
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> ExecutionOutcome {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
         let prefixCommands = taggedCommands.filter(\.0.isPrefix)
         let concurrentCommands = taggedCommands.filter { $0.0.isPrefix == false }
 
-        guard runSequentially(prefixCommands.map(\.1), on: concurrentSpec) else {
-            return false
-        }
-        guard runSequentially(prefixCommands.map(\.1), on: sequentialSpec) else {
-            return false
-        }
-        guard runSequentially(concurrentCommands.map(\.1), on: sequentialSpec) else {
-            return false
+        for run in [
+            runSequentially(prefixCommands.map(\.1), on: concurrentSpec),
+            runSequentially(prefixCommands.map(\.1), on: sequentialSpec),
+            runSequentially(concurrentCommands.map(\.1), on: sequentialSpec),
+        ] where run.succeeded == false {
+            return ExecutionOutcome(passed: false, timedOut: run.timedOut)
         }
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
         let commandFailed = SendableBox(false)
+        let timedOut = SendableBox(false)
         let caughtException = SendableBox<NSException?>(nil)
         let group = DispatchGroup()
         for (_, laneCommands) in laneGroups {
@@ -323,7 +381,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
                 var exception: NSException?
                 nonisolated(unsafe) let spec = concurrentSpec
                 let succeeded = exhaust_runCatchingObjCException({
-                    __ExhaustRuntime.blockingAwait {
+                    let completed: Void? = awaitOrTimeout("lane") {
                         for (_, command) in laneCommands {
                             if commandFailed.value { break }
                             do {
@@ -336,6 +394,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
                             }
                         }
                     }
+                    if completed == nil {
+                        commandFailed.value = true
+                        timedOut.value = true
+                    }
                 }, &exception)
                 if succeeded == false {
                     caughtException.value = exception
@@ -346,36 +408,56 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
         group.wait()
 
         if caughtException.value != nil || commandFailed.value {
-            return false
+            return ExecutionOutcome(passed: false, timedOut: timedOut.value)
         }
 
         nonisolated(unsafe) let invariantSpec = concurrentSpec
-        let invariantsPassed = __ExhaustRuntime.blockingAwait {
+        // Timeout → treat as failed (cannot confirm invariants held), and flag it so the failure is reported as a hang.
+        guard let invariantsPassed = awaitOrTimeout("invariants", {
             do {
                 try await invariantSpec.checkInvariants()
                 return true
             } catch {
                 return false
             }
+        }) else {
+            return ExecutionOutcome(passed: false, timedOut: true)
         }
 
         if invariantsPassed == false {
-            return false
+            return ExecutionOutcome(passed: false, timedOut: false)
         }
 
-        return concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest)
+        nonisolated(unsafe) let oracleSpec = concurrentSpec
+        nonisolated(unsafe) let sequentialResult = sequentialSpec.systemUnderTest
+        // Timeout → treat as failed (cannot confirm the oracle), and flag it so the failure is reported as a hang.
+        guard let oraclePassed = awaitOrTimeout("oracle", {
+            await oracleSpec.oracleCheck(sequentialResult)
+        }) else {
+            return ExecutionOutcome(passed: false, timedOut: true)
+        }
+        return ExecutionOutcome(passed: oraclePassed, timedOut: false)
+    }
+
+    /// Outcome of a sequential command run.
+    ///
+    /// `timedOut` distinguishes a drain-loop idle bailout from a command that threw or trapped, so a hang in the prefix or sequential reference replay propagates to ``ExecutionOutcome/timedOut`` rather than masquerading as a deterministic failure.
+    struct SequentialOutcome {
+        let succeeded: Bool
+        let timedOut: Bool
     }
 
     /// Runs commands sequentially on a spec, bridging async execution via ``__ExhaustRuntime/blockingAwait(_:)``. Wraps in ObjC exception handling so NSExceptions from underlying C/ObjC code are caught rather than crashing the process.
     ///
-    /// Returns `true` if all commands succeeded or were skipped, `false` if any command threw a non-skip error or an NSException was caught.
+    /// `succeeded` is `true` when all commands succeeded or were skipped, `false` when any command threw a non-skip error, an NSException was caught, or the drain loop idled out. `timedOut` is `true` only in that last case.
     @discardableResult
-    func runSequentially(_ commands: [Spec.Command], on spec: Spec) -> Bool {
+    func runSequentially(_ commands: [Spec.Command], on spec: Spec) -> SequentialOutcome {
         var exception: NSException?
         let failed = SendableBox(false)
+        let timedOut = SendableBox(false)
         nonisolated(unsafe) let spec = spec
         exhaust_runCatchingObjCException({
-            __ExhaustRuntime.blockingAwait {
+            let completed: Void? = awaitOrTimeout("sequential") {
                 for command in commands {
                     do {
                         try await spec.run(command)
@@ -387,8 +469,12 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
                     }
                 }
             }
+            if completed == nil {
+                failed.value = true
+                timedOut.value = true
+            }
         }, &exception)
-        return exception == nil && failed.value == false
+        return SequentialOutcome(succeeded: exception == nil && failed.value == false, timedOut: timedOut.value)
     }
 
     struct ReductionResult {
@@ -408,7 +494,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
         let property: ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             for _ in 0 ..< repetitions {
                 propertyInvocations += 1
-                if execute(taggedCommands) == false {
+                if execute(taggedCommands).passed == false {
                     return false
                 }
             }

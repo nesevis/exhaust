@@ -52,6 +52,26 @@ public struct ExhaustReport: Sendable {
         propertyInvocations = coverage + randomSampling + reduction
     }
 
+    /// Records the three phase buckets for a concurrent runner whose reduction probes flow through the same shared invocation counter as the phase that discovered the failure.
+    ///
+    /// The concurrent runners drive a single property closure across coverage, sampling, and reduction, so every reduction probe lands inside whichever phase bucket was open when reduction ran. Left uncorrected, that probe would be counted twice — once in the enclosing phase and once in reduction. This peels reduction back out of its enclosing bucket so the three buckets stay disjoint and sum to `totalInvocations`.
+    ///
+    /// - Parameters:
+    ///   - totalInvocations: The shared counter's final value, the sum the three buckets must reproduce.
+    ///   - coverageThroughReduction: The counter value captured at the end of the coverage phase. It already includes coverage-phase reduction when the failure was found during coverage; it equals `totalInvocations` for a runner that returns immediately on a coverage failure.
+    ///   - reduction: Reduction probe count, measured by snapshotting the shared counter around the reduce call.
+    ///   - discoveredDuringCoverage: Whether the failure (and therefore the reduction) occurred in the coverage phase. Selects which enclosing bucket the reduction is peeled from: coverage when `true`, sampling otherwise.
+    package mutating func setConcurrentInvocations(
+        totalInvocations: Int,
+        coverageThroughReduction: Int,
+        reduction: Int,
+        discoveredDuringCoverage: Bool
+    ) {
+        let coverage = discoveredDuringCoverage ? coverageThroughReduction - reduction : coverageThroughReduction
+        let sampling = totalInvocations - coverageThroughReduction - (discoveredDuringCoverage ? 0 : reduction)
+        setInvocations(coverage: coverage, randomSampling: sampling, reduction: reduction)
+    }
+
     /// Total materialization attempts (decoder invocations) during the reduction phase.
     public var totalMaterializations: Int = 0
 

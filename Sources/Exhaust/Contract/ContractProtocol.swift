@@ -157,9 +157,11 @@ public protocol AsyncConcurrentContractSpec: ContractSpecBase, AnyObject {
 
     /// Compares the concurrent SUT state against a sequentially-replayed reference SUT.
     ///
+    /// Asynchronous so an `async @Oracle` method can be awaited; a synchronous oracle satisfies the requirement without `await`.
+    ///
     /// - Parameter sequentialResult: The SUT state from a sequential (race-free) replay of the same command sequence.
     /// - Returns: `true` if the concurrent SUT state matches the expected sequential state.
-    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool
+    func oracleCheck(_ sequentialResult: SystemUnderTest) async -> Bool
 }
 
 extension ConcurrentContractSpec {

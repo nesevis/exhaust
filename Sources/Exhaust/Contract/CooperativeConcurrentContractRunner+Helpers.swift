@@ -25,8 +25,6 @@ extension __ExhaustRuntime {
         let executor = LaneExecutor(lane: LaneID(index: 0), runQueue: runQueue)
         let passed = UnsafeSendableBox(true)
         let done = UnsafeSendableBox(false)
-        let idleTimeout: Duration = .milliseconds(idleTimeoutMilliseconds)
-
         Task(executorPreference: executor) { @Sendable [spec] in
             for command in commands {
                 do {
@@ -40,14 +38,14 @@ extension __ExhaustRuntime {
             done.value = true
         }
 
-        var lastActivity = ContinuousClock.now
+        var idleStopwatch = Stopwatch()
         while done.value == false {
             guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
-                if ContinuousClock.now - lastActivity > idleTimeout { return nil }
+                if idleStopwatch.elapsedMilliseconds > Double(idleTimeoutMilliseconds) { return nil }
                 continue
             }
             job.runSynchronously(on: executor.asUnownedTaskExecutor())
-            lastActivity = ContinuousClock.now
+            idleStopwatch = Stopwatch()
         }
 
         guard passed.value else { return nil }
