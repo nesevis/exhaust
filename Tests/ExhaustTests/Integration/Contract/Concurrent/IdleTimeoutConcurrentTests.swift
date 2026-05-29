@@ -32,15 +32,29 @@ struct IdleTimeoutConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Async preemptive idle timeout surfaces a stalling command instead of hanging")
+    @Test("Async preemptive idle timeout surfaces a stalling command as a timeout, not a race")
     func asyncPreemptiveIdleTimeoutSurfacesStallingCommand() async throws {
+        var deliveredReport: ExhaustReport?
         let result = try #require(
             await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 StallingAsyncSpec.self,
-                settings: [.concurrent(2), .commandLimit(2), .idleTimeoutMs(20), .budget(.custom(coverage: 0, sampling: 10)), .suppress(.issueReporting)]
+                settings: [
+                    .concurrent(2),
+                    .commandLimit(2),
+                    .idleTimeoutMs(20),
+                    .budget(.custom(coverage: 0, sampling: 10)),
+                    .suppress(.issueReporting),
+                    .onReport { deliveredReport = $0 },
+                ]
             )
         )
         #expect(result.commands.isEmpty == false)
+
+        // The stalling command always exceeds the idle bound, so the first sampling run times out. The runner must route that to the timeout path: flag the failure (so it renders as a timeout rather than a confirmed race) and skip reduction (slow and usually fruitless on a hang). Zero reduction probes is the regression signal — a failure misclassified as a race would have run the three-pass reducer, leaving `reductionInvocations > 0`.
+        let report = try #require(deliveredReport)
+        #expect(report.reductionInvocations == 0)
+        #expect(report.randomSamplingInvocations == 1)
+        #expect(report.propertyInvocations == 1)
     }
 }
 
