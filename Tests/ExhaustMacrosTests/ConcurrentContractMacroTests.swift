@@ -193,7 +193,7 @@
                         "counter: \(counter)"
                     }
 
-                    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool {
+                    func oracleCheck(_ sequentialResult: SystemUnderTest) async -> Bool {
                         valuesMatch(other: sequentialResult)
                     }
 

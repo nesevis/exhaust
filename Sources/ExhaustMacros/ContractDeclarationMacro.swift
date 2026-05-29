@@ -69,6 +69,12 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
                 message: ContractDiagnostic.noSUT
             ))
         }
+        if sutProps.count > 1 {
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: ContractDiagnostic.multipleSUT
+            ))
+        }
 
         let hasAnyAsync =
             commands.contains(where: \.isAsync)
@@ -126,12 +132,24 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
 
 struct CommandInfo {
     let methodName: String
-    let parameters: [(label: String, type: String)]
+    let parameters: [CommandParameter]
     let weight: String
     let generatorExprs: [String]
     let isAsync: Bool
     let isThrows: Bool
     let syntax: FunctionDeclSyntax?
+}
+
+/// One parameter of a `@Command` method, splitting the external argument label from the internal binding name.
+///
+/// A parameter like `func push(_ value: Int)` has no external label (`firstName` is `_`) but a usable binding name (`value`). Reusing the raw `_` as a value expression produces illegal synthesized code, so the two roles are tracked separately.
+struct CommandParameter {
+    /// External argument label at the call site, or `nil` when the parameter is unlabeled (source `firstName` is `_`).
+    let externalLabel: String?
+    /// Identifier for the synthesized enum associated value, pattern binding, and value expression. Never `_` — synthesized as `arg{index}` when the source parameter has no usable internal name.
+    let bindingName: String
+    /// The parameter's type, used for generator qualification and the enum associated-value declaration.
+    let type: String
 }
 
 struct InvariantInfo {
@@ -168,11 +186,14 @@ func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [SUTProper
         }
 
         // Fall back to inferring from initializer: `@SystemUnderTest var queue = BoundedQueue<Int>(capacity: 3)` or `@SystemUnderTest var stack = [Int]()`.
+        // Only when the callee is plausibly a type. A factory expression like `makeQueue()` has a non-type callee, so returning it would emit `typealias SystemUnderTest = makeQueue`; instead fall through to nil so the `sutTypeNotInferred` warning tells the user to annotate.
         if let initializer = binding.initializer,
            let call = initializer.value.as(FunctionCallExprSyntax.self)
         {
             let callee = call.calledExpression.trimmedDescription
-            return SUTProperty(name: name, type: callee)
+            if isPlausiblyTypeName(callee) {
+                return SUTProperty(name: name, type: callee)
+            }
         }
 
         return SUTProperty(name: name, type: nil)
@@ -186,10 +207,17 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
         else { return nil }
 
         let methodName = funcDecl.name.trimmedDescription
-        let parameters = funcDecl.signature.parameterClause.parameters.map { param in
-            let label = param.firstName.trimmedDescription
-            let type = param.type.trimmedDescription
-            return (label: label, type: type)
+        let parameters = funcDecl.signature.parameterClause.parameters.enumerated().map { index, param in
+            let firstName = param.firstName.trimmedDescription
+            let secondName = param.secondName?.trimmedDescription
+            let externalLabel = firstName == "_" ? nil : firstName
+            let rawBinding = secondName ?? firstName
+            let bindingName = rawBinding == "_" ? "arg\(index)" : rawBinding
+            return CommandParameter(
+                externalLabel: externalLabel,
+                bindingName: bindingName,
+                type: param.type.trimmedDescription
+            )
         }
 
         // Extract weight and generator expressions from @Command(weight:, #gen(...))
@@ -264,12 +292,12 @@ func synthesizeCommandEnum(commands: [CommandInfo]) -> DeclSyntax {
             descriptionCases.append("            case .\(cmd.methodName): \"\(cmd.methodName)\"")
         } else {
             let assocValues = cmd.parameters.map {
-                "\($0.label): \($0.type)"
+                "\($0.bindingName): \($0.type)"
             }.joined(separator: ", ")
             cases.append("        case \(cmd.methodName)(\(assocValues))")
 
-            let bindings = cmd.parameters.map(\.label).joined(separator: ", ")
-            let formatParts = cmd.parameters.map { "\\(\($0.label))" }.joined(separator: ", ")
+            let bindings = cmd.parameters.map(\.bindingName).joined(separator: ", ")
+            let formatParts = cmd.parameters.map { "\\(\($0.bindingName))" }.joined(separator: ", ")
             descriptionCases.append("            case let .\(cmd.methodName)(\(bindings)): \"\(cmd.methodName)(\(formatParts))\"")
         }
     }
@@ -296,30 +324,40 @@ func synthesizeCommandGenerator(commands: [CommandInfo], context: some MacroExpa
     for cmd in commands {
         if cmd.parameters.isEmpty {
             choices.append("            (\(cmd.weight), .just(Command.\(cmd.methodName)))")
-        } else if cmd.generatorExprs.count == 1, cmd.parameters.count == 1 {
+            continue
+        }
+
+        // A parameterized command needs exactly one generator per parameter. Without this check, `zip` truncation silently emits a `#gen` whose arity disagrees with the closure (compile error) or drops extra generators (wrong behavior), with no diagnostic.
+        guard cmd.generatorExprs.count == cmd.parameters.count else {
+            if let syntax = cmd.syntax {
+                let message: DiagnosticMessage = cmd.generatorExprs.isEmpty
+                    ? ContractDiagnostic.commandMissingGenerators
+                    : CommandGeneratorArityDiagnostic(
+                        parameterCount: cmd.parameters.count,
+                        generatorCount: cmd.generatorExprs.count
+                    )
+                context.diagnose(Diagnostic(node: Syntax(syntax), message: message))
+            }
+            choices.append("            (\(cmd.weight), .just(Command.\(cmd.methodName)))")
+            continue
+        }
+
+        if cmd.parameters.count == 1 {
             // Single parameter — use #gen for bidirectional enum case mapping
             let param = cmd.parameters[0]
             let genExpr = qualifyGenExpression(cmd.generatorExprs[0], paramType: param.type)
-            choices.append("            (\(cmd.weight), #gen(\(genExpr)) { \(param.label) in Command.\(cmd.methodName)(\(param.label): \(param.label)) })")
-        } else if cmd.generatorExprs.count > 1 {
-            // Multiple parameters — #gen with zip
+            choices.append("            (\(cmd.weight), #gen(\(genExpr)) { \(param.bindingName) in Command.\(cmd.methodName)(\(param.bindingName): \(param.bindingName)) })")
+        } else {
+            // Multiple parameters — #gen with zip (counts are equal, guaranteed above)
             let qualifiedGens = zip(cmd.generatorExprs, cmd.parameters).map {
                 qualifyGenExpression($0.0, paramType: $0.1.type)
             }
             let genArgs = qualifiedGens.joined(separator: ", ")
-            let closureParams = cmd.parameters.map(\.label).joined(separator: ", ")
+            let closureParams = cmd.parameters.map(\.bindingName).joined(separator: ", ")
             let constructorArgs = cmd.parameters.map {
-                "\($0.label): \($0.label)"
+                "\($0.bindingName): \($0.bindingName)"
             }.joined(separator: ", ")
             choices.append("            (\(cmd.weight), #gen(\(genArgs)) { \(closureParams) in Command.\(cmd.methodName)(\(constructorArgs)) })")
-        } else {
-            if let syntax = cmd.syntax {
-                context.diagnose(Diagnostic(
-                    node: Syntax(syntax),
-                    message: ContractDiagnostic.commandMissingGenerators
-                ))
-            }
-            choices.append("            (\(cmd.weight), .just(Command.\(cmd.methodName)))")
         }
     }
 
@@ -348,8 +386,11 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isClassDecl
         if cmd.parameters.isEmpty {
             cases.append("        case .\(cmd.methodName): \(effectKeywords)self.\(cmd.methodName)()")
         } else {
-            let bindings = cmd.parameters.map(\.label).joined(separator: ", ")
-            let args = cmd.parameters.map { "\($0.label): \($0.label)" }.joined(separator: ", ")
+            let bindings = cmd.parameters.map(\.bindingName).joined(separator: ", ")
+            // The call into the user's method uses the external argument label (omitted when the parameter is unlabeled); the value is always the binding name.
+            let args = cmd.parameters.map { param in
+                param.externalLabel.map { "\($0): \(param.bindingName)" } ?? param.bindingName
+            }.joined(separator: ", ")
             cases.append("        case let .\(cmd.methodName)(\(bindings)): \(effectKeywords)self.\(cmd.methodName)(\(args))")
         }
     }
@@ -448,11 +489,21 @@ func qualifyGenExpression(_ expr: String, paramType: String) -> String {
     return expr
 }
 
+/// Whether an initializer's callee expression is plausibly a type name (so it can back a `typealias`), as opposed to a factory function.
+///
+/// Array and dictionary sugar (`[Int]`, `[Key: Value]`) qualifies. Otherwise the final dot-separated component must begin with an uppercase character — `BoundedQueue<Int>` and `Module.Queue` qualify; `makeQueue` and `factory.make` do not.
+func isPlausiblyTypeName(_ expression: String) -> Bool {
+    if expression.hasPrefix("[") { return true }
+    let lastComponent = expression.split(separator: ".").last.map(String.init) ?? expression
+    return lastComponent.first?.isUppercase ?? false
+}
+
 // MARK: - Diagnostics
 
 enum ContractDiagnostic: String, DiagnosticMessage {
     case noCommands = "@Contract requires at least one @Command method"
     case noSUT = "@Contract requires exactly one @SystemUnderTest property"
+    case multipleSUT = "@Contract requires exactly one @SystemUnderTest property, but multiple were found"
     case sutTypeNotInferred = "@SystemUnderTest property type could not be inferred — add an explicit type annotation"
     case commandMissingGenerators = "@Command method has parameters but no generator expressions — add generators to the @Command attribute"
     case asyncRequiresClass = "@Contract with async commands or invariants must be a class — use 'final class' instead of 'struct'"
@@ -467,8 +518,28 @@ enum ContractDiagnostic: String, DiagnosticMessage {
 
     var severity: DiagnosticSeverity {
         switch self {
-            case .noCommands, .noSUT, .commandMissingGenerators, .asyncRequiresClass: .error
+            case .noCommands, .noSUT, .multipleSUT, .commandMissingGenerators, .asyncRequiresClass: .error
             case .sutTypeNotInferred: .warning
         }
+    }
+}
+
+/// Diagnostic for a `@Command` whose generator count does not match its parameter count.
+///
+/// Carries both counts so the message names the exact mismatch rather than a generic "wrong generators" note.
+struct CommandGeneratorArityDiagnostic: DiagnosticMessage {
+    let parameterCount: Int
+    let generatorCount: Int
+
+    var message: String {
+        "@Command has \(parameterCount) parameter\(parameterCount == 1 ? "" : "s") but \(generatorCount) generator\(generatorCount == 1 ? "" : "s") — provide exactly one generator per parameter"
+    }
+
+    var diagnosticID: MessageID {
+        MessageID(domain: "ExhaustMacros", id: "commandGeneratorArityMismatch")
+    }
+
+    var severity: DiagnosticSeverity {
+        .error
     }
 }

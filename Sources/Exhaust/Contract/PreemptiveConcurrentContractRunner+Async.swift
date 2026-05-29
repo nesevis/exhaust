@@ -363,7 +363,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
             return false
         }
 
-        return concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest)
+        nonisolated(unsafe) let oracleSpec = concurrentSpec
+        nonisolated(unsafe) let sequentialResult = sequentialSpec.systemUnderTest
+        return __ExhaustRuntime.blockingAwait {
+            await oracleSpec.oracleCheck(sequentialResult)
+        }
     }
 
     /// Runs commands sequentially on a spec, bridging async execution via ``__ExhaustRuntime/blockingAwait(_:)``. Wraps in ObjC exception handling so NSExceptions from underlying C/ObjC code are caught rather than crashing the process.

@@ -22,9 +22,12 @@ public struct ConcurrentContractDeclarationMacro: MemberMacro, ExtensionMacro {
         let members = declaration.memberBlock.members
         let commands = extractCommands(from: members)
         let invariants = extractInvariants(from: members)
+        let oracles = extractOracles(from: members)
+        // An async oracle forces the async protocol on its own: the synthesized `oracleCheck` must be able to `await` it, which only `AsyncConcurrentContractSpec` permits.
         let hasAnyAsync =
             commands.contains(where: \.isAsync)
                 || invariants.contains(where: \.isAsync)
+                || oracles.contains(where: \.isAsync)
 
         let proto = hasAnyAsync ? "AsyncConcurrentContractSpec" : "ConcurrentContractSpec"
         let ext: DeclSyntax = "extension \(type.trimmed): \(raw: proto) {}"
@@ -67,6 +70,12 @@ public struct ConcurrentContractDeclarationMacro: MemberMacro, ExtensionMacro {
                 message: ConcurrentContractDiagnostic.noSUT
             ))
         }
+        if sutProps.count > 1 {
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: ConcurrentContractDiagnostic.multipleSUT
+            ))
+        }
         if oracles.isEmpty {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
@@ -83,6 +92,7 @@ public struct ConcurrentContractDeclarationMacro: MemberMacro, ExtensionMacro {
         let hasAnyAsync =
             commands.contains(where: \.isAsync)
                 || invariants.contains(where: \.isAsync)
+                || oracles.contains(where: \.isAsync)
 
         var decls: [DeclSyntax] = []
 
@@ -106,7 +116,7 @@ public struct ConcurrentContractDeclarationMacro: MemberMacro, ExtensionMacro {
         decls.append(synthesizeSUTDescription(sutProps: sutProps))
 
         if let oracle = oracles.first {
-            decls.append(synthesizeOracleCheck(oracle: oracle))
+            decls.append(synthesizeOracleCheck(oracle: oracle, hasAnyAsync: hasAnyAsync))
         }
 
         let hasUserInit = members.contains { member in
@@ -127,6 +137,7 @@ struct OracleInfo {
     let methodName: String
     let parameterLabel: String
     let parameterType: String
+    let isAsync: Bool
 }
 
 func extractOracles(from members: MemberBlockItemListSyntax) -> [OracleInfo] {
@@ -136,20 +147,31 @@ func extractOracles(from members: MemberBlockItemListSyntax) -> [OracleInfo] {
         else { return nil }
         let params = funcDecl.signature.parameterClause.parameters
         guard let firstParam = params.first else { return nil }
+        let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
         return OracleInfo(
             methodName: funcDecl.name.trimmedDescription,
             parameterLabel: firstParam.firstName.trimmedDescription,
-            parameterType: firstParam.type.trimmedDescription
+            parameterType: firstParam.type.trimmedDescription,
+            isAsync: isAsync
         )
     }
 }
 
 // MARK: - Oracle Synthesis
 
-func synthesizeOracleCheck(oracle: OracleInfo) -> DeclSyntax {
-    """
-    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool {
-        \(raw: oracle.methodName)(\(raw: oracle.parameterLabel): sequentialResult)
+func synthesizeOracleCheck(oracle: OracleInfo, hasAnyAsync: Bool) -> DeclSyntax {
+    // The synthesized `oracleCheck` matches the protocol it satisfies: `AsyncConcurrentContractSpec` (when anything is async) requires an `async` method, so a synchronous oracle is simply called without `await` inside the async wrapper. `await` is emitted only for an async oracle.
+    let signature = hasAnyAsync
+        ? "func oracleCheck(_ sequentialResult: SystemUnderTest) async -> Bool"
+        : "func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool"
+    let awaitKeyword = oracle.isAsync ? "await " : ""
+    // An unlabeled oracle parameter (`func check(_ result:)`) has firstName `_`, which is not a valid call label — omit the label entirely in that case.
+    let callArgument = oracle.parameterLabel == "_"
+        ? "sequentialResult"
+        : "\(oracle.parameterLabel): sequentialResult"
+    return """
+    \(raw: signature) {
+        \(raw: awaitKeyword)\(raw: oracle.methodName)(\(raw: callArgument))
     }
     """
 }
@@ -160,6 +182,7 @@ enum ConcurrentContractDiagnostic: String, DiagnosticMessage {
     case mustBeClass = "@ConcurrentContract must be applied to a class, not a struct"
     case noCommands = "@ConcurrentContract requires at least one @Command method"
     case noSUT = "@ConcurrentContract requires exactly one @SystemUnderTest property"
+    case multipleSUT = "@ConcurrentContract requires exactly one @SystemUnderTest property, but multiple were found"
     case noOracle = "@ConcurrentContract requires exactly one @Oracle method"
     case multipleOracles = "@ConcurrentContract allows only one @Oracle method"
     case sutTypeNotInferred = "@SystemUnderTest property type could not be inferred — add an explicit type annotation"
@@ -174,7 +197,7 @@ enum ConcurrentContractDiagnostic: String, DiagnosticMessage {
 
     var severity: DiagnosticSeverity {
         switch self {
-            case .mustBeClass, .noCommands, .noSUT, .noOracle, .multipleOracles: .error
+            case .mustBeClass, .noCommands, .noSUT, .multipleSUT, .noOracle, .multipleOracles: .error
             case .sutTypeNotInferred: .warning
         }
     }
