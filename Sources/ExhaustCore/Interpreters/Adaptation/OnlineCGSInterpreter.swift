@@ -313,13 +313,22 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - ChooseBits
 
                     case let .chooseBits(min, max, tag, isRangeExplicit, scaling):
+                        // Warmup-only subdivision (never baked). A large-range chooseBits that the pre-pass `subdivideForCGS` left raw — a standalone scalar; the pre-pass only subdivides sequence lengths, plus element gens on the relaxed path — is split into a pick here so derivative sampling and vocabulary elimination can bias it toward predicate-satisfying subranges over the warmup. That biasing raises the valid-sample rate, which is what gives the surrounding bakeable picks a usable fitness signal for sparse filters.
+                        //
+                        // These synthesized picks are intentionally never baked: `bakeWeights` walks the original generator (default thresholds, to keep the choice-tree structure that replay and reduction depend on) or the pre-pass subdivided generator (relaxed), and neither contains this on-the-fly pick. A chooseBits cannot carry CGS weights in the final generator without becoming a pick, which would break replay structural compatibility — so a standalone scalar's own tuning is warmup-only by design, and `.rejectionSampling` is the right strategy for such filters. This is not dead code.
+                        //
+                        // The fingerprint is per-site, folded from the range and tag rather than a constant, so distinct chooseBits sites at the same derivative depth do not share fitness keys and corrupt each other's vocabulary elimination. A per-process value suffices because these records never leave the warmup.
                         if derivativeContext.depth < cgsState.subdivisionThresholds.maximumDerivativeDepth,
                            max >= min,
                            (min ... max).saturatingCount >= cgsState.subdivisionThresholds.minimumRangeSize,
                            let choices = SharedInterpreterHelpers.subdivideChooseBits(
                                lower: min, upper: max, tag: tag,
                                isRangeExplicit: isRangeExplicit, scaling: scaling,
-                               makeFingerprint: { 0 }
+                               makeFingerprint: {
+                                   var fingerprint = Xoshiro256.fold(min, mixing: max)
+                                   fingerprint = Xoshiro256.fold(fingerprint, mixing: UInt64(bitPattern: Int64(tag.hashValue)))
+                                   return fingerprint
+                               }
                            )
                         {
                             let synthesisedPick: Generator<Output> = .impure(
@@ -485,8 +494,9 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             // MARK: - Filter
 
-                    case let .filter(gen, _, _, filterPredicate, tuned, sourceLocation):
-                        let tunedGen = tuned ?? gen
+                    case let .filter(gen, _, _, filterPredicate, sourceLocation):
+                        // Warmup uses the untuned base so the fitness it collects — and the tuning it produces — depend only on the seed, not on prior cache state.
+                        let tunedGen = gen
 
                         var attempts = 0 as UInt64
                         while attempts < GenerationContext.maxFilterRuns {

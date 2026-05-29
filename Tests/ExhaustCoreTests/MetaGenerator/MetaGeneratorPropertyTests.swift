@@ -171,7 +171,13 @@ struct MetaGeneratorPropertyTests {
                 }
 
                 let filteredGen: AnyGenerator = .impure(
-                    operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { predicate.evaluate($0) }, tuned: nil, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
+                    operation: .filter(
+                        gen: innerGen.erase(),
+                        fingerprint: Gen.sourceFingerprint(fileID: #fileID, line: #line, column: #column),
+                        filterType: .auto,
+                        predicate: { predicate.evaluate($0) },
+                        sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
+                    ),
                     continuation: { .pure($0) }
                 )
 

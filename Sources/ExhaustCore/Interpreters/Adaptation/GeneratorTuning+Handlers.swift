@@ -225,7 +225,7 @@ extension GeneratorTuning {
                 }
             }
 
-            let tunedInner = try tuneRecursive(
+            let tunedInner = try measureAndTune(
                 choice.generator,
                 context: context,
                 insideSubdividedChooseBits: insideSubdividedChooseBits,
@@ -290,7 +290,7 @@ extension GeneratorTuning {
 
     // MARK: - ChooseBits
 
-    /// Subdivides a ``ReflectiveOperation/chooseBits`` range into up to four subrange picks, then delegates to ``tuneRecursive(_:context:insideSubdividedChooseBits:predicate:)`` to weight them.
+    /// Subdivides a ``ReflectiveOperation/chooseBits`` range into up to four subrange picks, then delegates to ``measureAndTune(_:context:insideSubdividedChooseBits:predicate:)`` to weight them.
     ///
     /// Unlike picks, chooseBits has no natural branch structure to measure fitness against. Subdivision creates synthetic branches so the same Phase 1/Phase 2 pick-tuning pipeline can bias sampling toward productive subranges.
     static func tuneChooseBits<Output>(
@@ -322,7 +322,7 @@ extension GeneratorTuning {
             continuation: continuation
         )
 
-        return try tuneRecursive(
+        return try measureAndTune(
             synthesisedPick,
             context: context,
             insideSubdividedChooseBits: true,
@@ -392,7 +392,7 @@ extension GeneratorTuning {
                 continuation: continuation
             )
 
-            return try tuneRecursive(
+            return try measureAndTune(
                 synthesisedPick,
                 context: context,
                 insideSubdividedChooseBits: true,
@@ -447,7 +447,7 @@ extension GeneratorTuning {
                 continuation: continuation
             )
 
-            return try tuneRecursive(
+            return try measureAndTune(
                 synthesisedPick,
                 context: context,
                 insideSubdividedChooseBits: true,
@@ -461,7 +461,7 @@ extension GeneratorTuning {
             true
         }
 
-        let tunedElementGen = try tuneRecursive(
+        let tunedElementGen = try measureAndTune(
             elementGen,
             context: context,
             insideSubdividedChooseBits: false,
@@ -503,7 +503,7 @@ extension GeneratorTuning {
             continuation: continuation
         )
 
-        return try tuneRecursive(
+        return try measureAndTune(
             synthesisedPick,
             context: context,
             insideSubdividedChooseBits: true,
@@ -566,7 +566,7 @@ extension GeneratorTuning {
                 }
             }
 
-            let tuned = try tuneRecursive(
+            let tuned = try measureAndTune(
                 componentGen,
                 context: context,
                 insideSubdividedChooseBits: false,
@@ -585,32 +585,30 @@ extension GeneratorTuning {
 
     /// Tunes the inner generator of a filter operation using the filter predicate as the fitness function.
     ///
-    /// Skips tuning if the filter already has a tuned generator or uses rejection sampling, since both indicate CGS has already run or is inapplicable. Only the candidate-producing generator is tuned -- the filter predicate itself is not modified.
+    /// Skips tuning if the filter uses rejection sampling, since CGS is inapplicable. Only the candidate-producing generator is tuned -- the filter predicate itself is not modified.
     static func tuneFilter<Output>(
         subGen: AnyGenerator,
         fingerprint: UInt64,
         filterType: FilterType,
         filterPredicate: @escaping (Any) -> Bool,
         sourceLocation: FilterSourceLocation,
-        tuned: AnyGenerator?,
         continuation: @escaping (Any) throws -> Generator<Output>,
         context: TuningContext
     ) throws -> Generator<Output> {
-        if tuned != nil || filterType == .rejectionSampling {
+        if filterType == .rejectionSampling {
             return .impure(
                 operation: .filter(
                     gen: subGen,
                     fingerprint: fingerprint,
                     filterType: filterType,
                     predicate: filterPredicate,
-                    tuned: tuned,
                     sourceLocation: sourceLocation
                 ),
                 continuation: continuation
             )
         }
 
-        let tunedInner = try tuneRecursive(
+        let tunedInner = try measureAndTune(
             subGen,
             context: context,
             insideSubdividedChooseBits: false,
@@ -623,7 +621,6 @@ extension GeneratorTuning {
                 fingerprint: fingerprint,
                 filterType: filterType,
                 predicate: filterPredicate,
-                tuned: nil,
                 sourceLocation: sourceLocation
             ),
             continuation: continuation
@@ -648,7 +645,7 @@ extension GeneratorTuning {
             predicate: predicate
         )
 
-        let tunedNext = try tuneRecursive(
+        let tunedNext = try measureAndTune(
             next,
             context: context,
             insideSubdividedChooseBits: false,
@@ -680,7 +677,7 @@ extension GeneratorTuning {
             predicate: predicate
         )
 
-        let tunedNext = try tuneRecursive(
+        let tunedNext = try measureAndTune(
             next,
             context: context,
             insideSubdividedChooseBits: insideSubdividedChooseBits,
@@ -711,7 +708,7 @@ extension GeneratorTuning {
             predicate: predicate
         )
 
-        let tunedNext = try tuneRecursive(
+        let tunedNext = try measureAndTune(
             next,
             context: context,
             insideSubdividedChooseBits: insideSubdividedChooseBits,
@@ -744,7 +741,7 @@ extension GeneratorTuning {
             predicate: predicate
         )
 
-        let tunedInner = try tuneRecursive(
+        let tunedInner = try measureAndTune(
             subGen,
             context: context,
             insideSubdividedChooseBits: insideSubdividedChooseBits,

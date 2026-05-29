@@ -134,7 +134,7 @@ package enum GeneratorTuning {
             maxSize: maxSize,
             rng: rng
         )
-        return try tuneRecursive(
+        return try measureAndTune(
             generator,
             context: context,
             insideSubdividedChooseBits: false,
@@ -144,7 +144,7 @@ package enum GeneratorTuning {
 
     // MARK: - Recursive Engine
 
-    static func tuneRecursive<Output>(
+    static func measureAndTune<Output>(
         _ gen: Generator<Output>,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
@@ -206,14 +206,13 @@ package enum GeneratorTuning {
                             predicate: predicate
                         )
 
-                    case let .filter(subGen, fingerprint, filterType, filterPredicate, tuned, sourceLocation):
+                    case let .filter(subGen, fingerprint, filterType, filterPredicate, sourceLocation):
                         return try tuneFilter(
                             subGen: subGen,
                             fingerprint: fingerprint,
                             filterType: filterType,
                             filterPredicate: filterPredicate,
                             sourceLocation: sourceLocation,
-                            tuned: tuned,
                             continuation: continuation,
                             context: context
                         )
@@ -260,7 +259,7 @@ package enum GeneratorTuning {
 
                     // Transforming wrappers: the inner value is altered by an arbitrary function before reaching the continuation, so the outer predicate cannot apply to the inner type. Recurse with a trivial predicate.
                     case let .unique(subGen, fingerprint, keyExtractor):
-                        let tunedInner = try tuneRecursive(
+                        let tunedInner = try measureAndTune(
                             subGen,
                             context: context,
                             insideSubdividedChooseBits: insideSubdividedChooseBits,
@@ -276,7 +275,7 @@ package enum GeneratorTuning {
                         )
 
                     case let .transform(kind, inner):
-                        let tunedInner = try tuneRecursive(
+                        let tunedInner = try measureAndTune(
                             inner,
                             context: context,
                             insideSubdividedChooseBits: insideSubdividedChooseBits,

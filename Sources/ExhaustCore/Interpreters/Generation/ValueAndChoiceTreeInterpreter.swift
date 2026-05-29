@@ -329,19 +329,13 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         // MARK: filter
 
-            case let .impure(operation: .filter(filterGen, fingerprint, filterType, predicate, tuned, sourceLocation), continuation):
-                let filteredGen: AnyGenerator
-                if let tuned {
-                    filteredGen = tuned
-                } else if filterType == .rejectionSampling {
-                    filteredGen = filterGen
-                } else if let cached = context.tunedFilterCache[fingerprint] {
-                    filteredGen = cached
-                } else {
-                    let resolved = (try? ChoiceGradientTuner<Any>.tune(filterGen, predicate: predicate)) ?? filterGen
-                    context.tunedFilterCache[fingerprint] = resolved
-                    filteredGen = resolved
-                }
+            case let .impure(operation: .filter(filterGen, fingerprint, filterType, predicate, sourceLocation), continuation):
+                let filteredGen = GenerationContext.resolveTunedFilter(
+                    fingerprint: fingerprint,
+                    generator: filterGen,
+                    predicate: predicate,
+                    type: filterType
+                )
                 var attempts = 0 as UInt64
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let (result, tree) = try Self.generateRecursiveAny(

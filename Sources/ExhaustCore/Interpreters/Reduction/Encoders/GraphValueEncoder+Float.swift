@@ -173,12 +173,11 @@ extension GraphValueEncoder {
 
     /// Sets up binary search over the integral part of the float value, computing the ULP-aligned step size and maximum quantum for the target's type width.
     mutating func prepareFloatIntegralBinarySearch(state: inout FloatState, target: FloatTarget) {
+        // `Int64(exactly:)` rejects both non-integral values and magnitudes outside Int64. Do not gate on `abs(...) <= Double(Int64.max)`: `Double(Int64.max)` rounds up to 2^63, so that test admits exactly 2^63, which then traps in the `Int64` conversion.
         guard target.currentValue.isFinite,
-              target.currentValue == target.currentValue.rounded(.towardZero),
-              abs(target.currentValue) <= Double(Int64.max)
+              let currentInt = Int64(exactly: target.currentValue)
         else { return }
 
-        let currentInt = Int64(target.currentValue)
         let targetInt = floatIntegerReductionTarget(target: target)
         let movesUp = targetInt > currentInt
         let distance = movesUp
@@ -580,7 +579,10 @@ extension GraphValueEncoder {
         let targetBitPattern = ChoiceValue(target.currentBitPattern, tag: target.typeTag)
             .reductionTarget(in: validRange)
         let targetValue = target.typeTag.numericDoubleValue(forBitPattern: targetBitPattern)
-        guard targetValue.isFinite, abs(targetValue) <= Double(Int64.max) else { return 0 }
-        return Int64(targetValue.rounded(.towardZero))
+        // See `prepareFloatIntegralBinarySearch`: `Double(Int64.max)` rounds to 2^63, so an `abs(...) <= Double(Int64.max)` gate would admit 2^63 and trap. `Int64(exactly:)` on the truncated value cannot overflow.
+        guard targetValue.isFinite,
+              let truncated = Int64(exactly: targetValue.rounded(.towardZero))
+        else { return 0 }
+        return truncated
     }
 }

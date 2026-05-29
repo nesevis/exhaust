@@ -271,19 +271,17 @@ private extension __ExhaustRuntime {
                 }
             }
         )
-        let (counterexample, innerReplaySeed) = __ExhaustRuntime.withIsInterpreting(true) {
-            __ExhaustRuntime.__exhaustBody(
-                gen: sequenceGenerator,
-                settings: samplingSettings,
-                reflecting: nil,
-                fileID: context.fileID,
-                filePath: context.filePath,
-                line: context.line,
-                column: context.column,
-                testName: "\(context.fileID)",
-                property: property
-            )
-        }
+        let (counterexample, innerReplaySeed) = __ExhaustRuntime.__exhaustBody(
+            gen: sequenceGenerator,
+            settings: samplingSettings,
+            reflecting: nil,
+            fileID: context.fileID,
+            filePath: context.filePath,
+            line: context.line,
+            column: context.column,
+            testName: "\(context.fileID)",
+            property: property
+        )
 
         guard let counterexample else {
             return nil

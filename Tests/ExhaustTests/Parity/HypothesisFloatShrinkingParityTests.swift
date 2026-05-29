@@ -90,13 +90,12 @@ struct HypothesisFloatShrinkingParityTests {
             let gen: Generator<Double> = .impure(
                 operation: .filter(
                     gen: innerGen.erase(),
-                    fingerprint: 0,
+                    fingerprint: Gen.sourceFingerprint(fileID: #fileID, line: #line, column: #column),
                     filterType: .auto,
                     predicate: { value in
                         let v = value as! Double
                         return v > lower && v < upper && v.rounded(.towardZero) != v
                     },
-                    tuned: nil,
                     sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
                 ),
                 continuation: { .pure($0 as! Double) }

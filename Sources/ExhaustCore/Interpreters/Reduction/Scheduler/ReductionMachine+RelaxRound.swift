@@ -14,6 +14,17 @@ extension ReductionMachine {
         let checkpointTree = tree
         let checkpointOutput = output
         let checkpointConvergence = ChoiceGraphScheduler.extractAllConvergence(from: graph)
+        // The exploitation loop applies pass reports that set these per-cycle flags. On rollback the committed counterexample is unchanged, so the flags must be restored too — otherwise a stale `anyAccepted` defers termination for a cycle that produced nothing.
+        let checkpointAnyAccepted = anyAccepted
+        let checkpointShortlexRejection = hadReplacementShortlexRejection
+
+        // Value-only deadline probe: `self` is passed `inout` below, so the closure captures the deadline bounds rather than `self`.
+        let deadlineNanos = deadlineNanoseconds
+        let startNanos = startNanoseconds
+        let deadlineCheck: () -> Bool = {
+            guard deadlineNanos > 0 else { return false }
+            return monotonicNanoseconds() - startNanos >= deadlineNanos
+        }
 
         ChoiceGraphScheduler.logReducer("relax_round_start", isInstrumented: isInstrumented, metadata: [
             "seq_len": "\(sequence.count)",
@@ -38,6 +49,7 @@ extension ReductionMachine {
         var materializationsUsed = 0
         for candidate in candidates {
             guard materializationsUsed < materializationBudget else { break }
+            guard deadlineCheck() == false else { break }
             let decoder: SequenceDecoder = .exact(materializePicks: true)
             var filterObservations: [UInt64: FilterObservation] = [:]
 
@@ -81,6 +93,7 @@ extension ReductionMachine {
         let savedRejectCache = rejectCache
         rejectCache = []
         while true {
+            guard deadlineCheck() == false else { break }
             guard let sourceIndex = ChoiceGraphScheduler.highestPrioritySourceIndex(exploitSources) else {
                 break
             }
@@ -115,7 +128,7 @@ extension ReductionMachine {
                 baseSequence: sequence,
                 hasBind: sequence.contains { if case .bind = $0 { return true }; return false }
             )
-            let report = try session.runToCompletion(state: &self)
+            let report = try session.runToCompletion(state: &self, deadlineCheck: deadlineCheck)
 
             _ = applyPassReport(report)
 
@@ -136,6 +149,8 @@ extension ReductionMachine {
         sequence = checkpointSequence
         tree = checkpointTree
         output = checkpointOutput
+        anyAccepted = checkpointAnyAccepted
+        hadReplacementShortlexRejection = checkpointShortlexRejection
         _ = rebuildAndUpdateGraph()
         ChoiceGraphScheduler.transferConvergence(checkpointConvergence, to: &graph)
 

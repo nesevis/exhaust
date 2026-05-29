@@ -195,14 +195,12 @@ package enum ReflectiveOperation {
     ///   - fingerprint: Unique identifier for this filter condition (for optimization caching).
     ///   - filterType: Strategy to use for satisfying the predicate.
     ///   - predicate: Validity condition that generated values must satisfy.
-    ///   - tuned: Pre-tuned generator with baked CGS weights, used by generation interpreters. Reduction interpreters ignore this and use `gen` directly.
     ///   - sourceLocation: Source location of the `.filter(...)` call site, for diagnostic warnings.
     case filter(
         gen: AnyGenerator,
         fingerprint: UInt64,
         filterType: FilterType,
         predicate: (Any) -> Bool,
-        tuned: AnyGenerator?,
         sourceLocation: FilterSourceLocation
     )
 
@@ -313,13 +311,12 @@ package extension ReflectiveOperation {
             case let .resize(newSize, next):
                 return try .resize(newSize: newSize, next: transform(next))
 
-            case let .filter(gen, fingerprint, filterType, predicate, tuned, sourceLocation):
+            case let .filter(gen, fingerprint, filterType, predicate, sourceLocation):
                 return try .filter(
                     gen: transform(gen),
                     fingerprint: fingerprint,
                     filterType: filterType,
                     predicate: predicate,
-                    tuned: tuned.map(transform),
                     sourceLocation: sourceLocation
                 )
 

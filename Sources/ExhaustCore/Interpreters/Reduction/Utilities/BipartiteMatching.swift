@@ -59,11 +59,10 @@ enum BipartiteMatching {
                 for right in adjacency[left] {
                     // The right node's match (or leftCount as sentinel for free right nodes).
                     let nextLeft = matchRight[right] ?? leftCount
-                    let nextIndex = nextLeft == leftCount ? leftCount : nextLeft
-                    if distance[nextIndex] == sentinel {
-                        distance[nextIndex] = distance[left] + 1
-                        if nextIndex != leftCount {
-                            queue.append(nextIndex)
+                    if distance[nextLeft] == sentinel {
+                        distance[nextLeft] = distance[left] + 1
+                        if nextLeft != leftCount {
+                            queue.append(nextLeft)
                         }
                     }
                 }
@@ -76,9 +75,8 @@ enum BipartiteMatching {
             guard left != leftCount else { return true }
             for right in adjacency[left] {
                 let nextLeft = matchRight[right] ?? leftCount
-                let nextIndex = nextLeft == leftCount ? leftCount : nextLeft
-                if distance[nextIndex] == distance[left] + 1 {
-                    if dfs(nextIndex) {
+                if distance[nextLeft] == distance[left] + 1 {
+                    if dfs(nextLeft) {
                         matchRight[right] = left
                         matchLeft[left] = right
                         return true

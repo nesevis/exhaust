@@ -18,7 +18,13 @@ struct GeneratorTuningTests {
     func filterAdaptation() throws {
         let innerGen = Gen.choose(in: 1 ... 1000)
         let gen: Generator<Int> = .impure(
-            operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { ($0 as! Int) < 200 }, tuned: nil, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
+            operation: .filter(
+                gen: innerGen.erase(),
+                fingerprint: Gen.sourceFingerprint(fileID: #fileID, line: #line, column: #column),
+                filterType: .auto,
+                predicate: { ($0 as! Int) < 200 },
+                sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
+            ),
             continuation: { .pure($0 as! Int) }
         )
 
@@ -31,7 +37,7 @@ struct GeneratorTuningTests {
         )
 
         // Verify that the tuned generator structure contains a filter with an tuned inner gen
-        guard case let .impure(.filter(tunedInner, _, _, _, _, _), _) = tuned else {
+        guard case let .impure(.filter(tunedInner, _, _, _, _), _) = tuned else {
             Issue.record("Expected tuned generator to be a filter")
             return
         }
@@ -48,6 +54,46 @@ struct GeneratorTuningTests {
         let lastWeight = choices.last?.weight ?? 0
         #expect(firstWeight >= lastWeight,
                 "Low subrange should have equal or higher weight than high subrange")
+    }
+
+    // MARK: - Nested Pick Under Sequence (depth-alignment regression)
+
+    @Test("A pick nested inside an array is tuned, not collapsed to uniform")
+    func nestedPickUnderArrayIsTuned() throws {
+        // The array element is a pick whose first branch satisfies the predicate and second does not.
+        let elementGen = Gen.pick(choices: [
+            (1, Gen.choose(in: 1 ... 10)),
+            (1, Gen.choose(in: 100 ... 110)),
+        ])
+        let arrayGen = Gen.arrayOf(elementGen, within: 3 ... 3)
+
+        // Favours small elements, so CGS should weight the small branch above the large one.
+        let predicate: ([Int]) -> Bool = { $0.allSatisfy { $0 < 50 } }
+
+        let tuned = try ChoiceGradientTuner<[Int]>.tune(
+            arrayGen,
+            predicate: predicate,
+            warmupRuns: 200,
+            sampleCount: 20,
+            seed: 42
+        )
+
+        guard case let .impure(.sequence(_, elementGenerator), _) = tuned else {
+            Issue.record("Expected the tuned generator to be a sequence, got \(tuned)")
+            return
+        }
+        guard case let .impure(.pick(choices, _), _) = elementGenerator else {
+            Issue.record("Expected the sequence element to be a pick, got \(elementGenerator)")
+            return
+        }
+
+        // Before the depth-alignment fix the element pick's fitness was recorded one depth deeper than it was baked at, so the lookup missed and every weight collapsed to 1 (uniform).
+        // After the fix the predicate-favoured branch carries strictly more weight.
+        #expect(choices.count == 2)
+        #expect(
+            choices[0].weight > choices[1].weight,
+            "Element pick should favour the small (valid) branch, got weights \(choices.map(\.weight))"
+        )
     }
 
     // MARK: - Zero-weight Branches

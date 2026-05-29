@@ -19,10 +19,9 @@ struct GenerationExamplesTests {
             let filteredGen: Generator<UInt> = .impure(
                 operation: .filter(
                     gen: innerGen.erase(),
-                    fingerprint: 0,
+                    fingerprint: Gen.sourceFingerprint(fileID: #fileID, line: #line, column: #column),
                     filterType: .auto,
                     predicate: { ($0 as! UInt).isMultiple(of: 3) },
-                    tuned: nil,
                     sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
                 ),
                 continuation: { .pure($0 as! UInt) }

@@ -20,7 +20,7 @@
 ///
 /// Rebuilt from the tree on every structural acceptance. All derived data (live node IDs, leaf nodes, topological order, dependency adjacency) is computed eagerly during ``ChoiceGraphBuilder/assembleGraph()`` and stored as immutable fields. Infrequently-accessed derived data (type-compatibility edges) is recomputed on each access without caching.
 ///
-/// Value-only leaf changes (no reshape) are applied in place via ``apply(_:freshTree:)`` without rebuilding. Structural mutations return ``ChangeApplication/requiresFullRebuild`` true, delegating the rebuild to the scheduler.
+/// Value-only leaf changes (no reshape) are applied in place via ``apply(_:)`` without rebuilding. Reshape and structural mutations return ``ChangeApplication/requiresFullRebuild`` true, delegating the rebuild to the scheduler.
 ///
 /// ## File Layout
 ///

@@ -72,20 +72,18 @@ public extension __ExhaustRuntime {
         property: @Sendable (Output) -> Bool
     ) -> Output? {
         let gen = refGen.gen
-        return __ExhaustRuntime.withIsInterpreting(true) {
-            withoutActuallyEscaping(property) { property in
-                __exhaustBody(
-                    gen: gen,
-                    settings: settings,
-                    reflecting: reflecting,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column,
-                    testName: "\(function)",
-                    property: property
-                ).0
-            }
+        return withoutActuallyEscaping(property) { property in
+            __exhaustBody(
+                gen: gen,
+                settings: settings,
+                reflecting: reflecting,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column,
+                testName: "\(function)",
+                property: property
+            ).0
         }
     }
 
@@ -104,30 +102,28 @@ public extension __ExhaustRuntime {
         property: @Sendable (Output) throws -> Bool
     ) -> Output? {
         let gen = refGen.gen
-        return __ExhaustRuntime.withIsInterpreting(true) {
-            withoutActuallyEscaping(property) { property in
-                let property: @Sendable (Output) -> Bool = { value in
-                    do {
-                        return try property(value)
-                    } catch {
-                        #if canImport(XCTest)
-                            if error is XCTSkip { return true }
-                        #endif
-                        return false
-                    }
+        return withoutActuallyEscaping(property) { property in
+            let property: @Sendable (Output) -> Bool = { value in
+                do {
+                    return try property(value)
+                } catch {
+                    #if canImport(XCTest)
+                        if error is XCTSkip { return true }
+                    #endif
+                    return false
                 }
-                return __exhaustBody(
-                    gen: gen,
-                    settings: settings,
-                    reflecting: reflecting,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column,
-                    testName: "\(function)",
-                    property: property
-                ).0
             }
+            return __exhaustBody(
+                gen: gen,
+                settings: settings,
+                reflecting: reflecting,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column,
+                testName: "\(function)",
+                property: property
+            ).0
         }
     }
 
@@ -757,15 +753,13 @@ public extension __ExhaustRuntime {
         column _: UInt = #column
     ) -> Output {
         let gen = refGen.gen
-        return __ExhaustRuntime.withIsInterpreting(true) {
-            var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: 1, sizeOverride: 50)
-            guard let value = try? interpreter.next() else {
-                preconditionFailure(
-                    "#example: generator produced no values. If the generator uses a sparse filter, consider restructuring it to produce valid values directly."
-                )
-            }
-            return value
+        var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: 1, sizeOverride: 50)
+        guard let value = try? interpreter.next() else {
+            preconditionFailure(
+                "#example: generator produced no values. If the generator uses a sparse filter, consider restructuring it to produce valid values directly."
+            )
         }
+        return value
     }
 
     /// Generates an array of values from a generator. Runtime target of `#example` expansion.
@@ -779,23 +773,21 @@ public extension __ExhaustRuntime {
         column: UInt = #column
     ) -> [Output] {
         let gen = refGen.gen
-        return __ExhaustRuntime.withIsInterpreting(true) {
-            var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: count)
-            var results: [Output] = []
-            while let value = try? interpreter.next() {
-                results.append(value)
-            }
-            if results.count < count {
-                reportIssue(
-                    "#example: generator produced \(results.count) of \(count) requested values. If the generator uses a sparse filter, consider restructuring it to produce valid values directly.",
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-            }
-            return results
+        var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: count)
+        var results: [Output] = []
+        while let value = try? interpreter.next() {
+            results.append(value)
         }
+        if results.count < count {
+            reportIssue(
+                "#example: generator produced \(results.count) of \(count) requested values. If the generator uses a sparse filter, consider restructuring it to produce valid values directly.",
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+        }
+        return results
     }
 
     // MARK: - Examination
@@ -852,18 +844,16 @@ public extension __ExhaustRuntime {
         }
 
         let gen = refGen.gen
-        return __ExhaustRuntime.withIsInterpreting(true) {
-            gen.validate(
-                samples: config.samples,
-                seed: seed,
-                skipReflection: refGen.isSynthesized,
-                reporting: config,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
-        }
+        return gen.validate(
+            samples: config.samples,
+            seed: seed,
+            skipReflection: refGen.isSynthesized,
+            reporting: config,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
     }
 
     /// Validates a generator's reflection, replay, and health. Runtime target of `#examine` expansion.
@@ -918,18 +908,16 @@ public extension __ExhaustRuntime {
         }
 
         let gen = refGen.gen
-        return __ExhaustRuntime.withIsInterpreting(true) {
-            gen.validate(
-                samples: config.samples,
-                seed: seed,
-                skipReflection: refGen.isSynthesized,
-                reporting: config,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
-        }
+        return gen.validate(
+            samples: config.samples,
+            seed: seed,
+            skipReflection: refGen.isSynthesized,
+            reporting: config,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
     }
 
     /// Validates a generator with a user-provided replay determinism check. Runtime target of `#examine` expansion with trailing closure.
@@ -983,23 +971,21 @@ public extension __ExhaustRuntime {
         }
 
         let gen = refGen.gen
-        return __ExhaustRuntime.withIsInterpreting(true) {
-            gen.validate(
-                samples: config.samples,
-                seed: seed,
-                skipReflection: refGen.isSynthesized,
-                replayCheck: { lhs, rhs in
-                    guard let lhs = lhs as? Output, let rhs = rhs as? Output else {
-                        return false
-                    }
-                    return replayCheck(lhs, rhs)
-                },
-                reporting: config,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
-        }
+        return gen.validate(
+            samples: config.samples,
+            seed: seed,
+            skipReflection: refGen.isSynthesized,
+            replayCheck: { lhs, rhs in
+                guard let lhs = lhs as? Output, let rhs = rhs as? Output else {
+                    return false
+                }
+                return replayCheck(lhs, rhs)
+            },
+            reporting: config,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
     }
 }

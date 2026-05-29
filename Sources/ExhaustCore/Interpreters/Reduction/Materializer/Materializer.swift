@@ -289,7 +289,7 @@ extension Materializer {
                     continuationFallback: continuationFallback
                 )
 
-            case let .impure(.filter(gen, fingerprint, filterType, predicate, _, sourceLocation), continuation):
+            case let .impure(.filter(gen, fingerprint, filterType, predicate, sourceLocation), continuation):
                 let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 guard let (result, tree) = try generateRecursive(
                     gen, with: inputValue, context: &context, fallbackTree: calleeFallback

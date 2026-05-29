@@ -376,7 +376,7 @@ struct ChoiceGraphBuilder {
 
             if childStartID < nextNodeID {
                 childIDs.append(childStartID)
-                containmentEdges.append(ContainmentEdge(source: nodeID, target: childStartID))
+                // The child's own walk already recorded the parent → childStartID containment edge (branch nodes are transparent and forward `parent: nodeID` into the first emitted node). Appending here would duplicate it.
             }
             branchIndex += 1
         }

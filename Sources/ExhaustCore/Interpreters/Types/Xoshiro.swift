@@ -25,6 +25,19 @@ package struct Xoshiro256: ~Copyable {
         0xA958_2618_E03F_C9AA, 0x39AB_DC45_29B1_661C,
     ]
 
+    /// The odd 64-bit approximation of 2^64 / φ (the golden ratio).
+    ///
+    /// Serves two roles in this module: the SplitMix64 stream increment behind ``deriveSeed(from:at:)`` and seeding, and the Fibonacci-hashing multiplier in ``fold(_:mixing:)``.
+    package static let goldenRatioConstant: UInt64 = 0x9E37_79B9_7F4A_7C15
+
+    /// Folds one component into a running fingerprint via a Fibonacci-hashing multiply-add.
+    ///
+    /// Multiplying by ``goldenRatioConstant`` before adding the next component spreads sequentially-folded values across the full 64-bit range and makes the fold order-sensitive, so `(a, b)` and `(b, a)` do not collide. Callers fold byte sequences (promote each `UInt8` to `UInt64`) or whole `UInt64` components; both share this single point so fingerprints that must stay mutually distinct cannot drift apart arithmetically.
+    @inline(__always)
+    package static func fold(_ accumulator: UInt64, mixing component: UInt64) -> UInt64 {
+        accumulator &* goldenRatioConstant &+ component
+    }
+
     /// Creates a generator seeded from the system random number generator.
     public init() {
         var rng = SystemRandomNumberGenerator()
@@ -154,7 +167,7 @@ package struct Xoshiro256: ~Copyable {
 private struct SplitMix64 {
     private var state: UInt64
 
-    static let incrementConstant: UInt64 = 0x9E37_79B9_7F4A_7C15
+    static let incrementConstant: UInt64 = Xoshiro256.goldenRatioConstant
     static let mixingConstant1: UInt64 = 0xBF58_476D_1CE4_E5B9
     static let mixingConstant2: UInt64 = 0x94D0_49BB_1331_11EB
 

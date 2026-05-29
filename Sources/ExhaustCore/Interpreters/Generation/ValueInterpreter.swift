@@ -255,19 +255,13 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
         // MARK: filter
 
-            case let .impure(operation: .filter(filterGen, fingerprint, filterType, predicate, tuned, sourceLocation), continuation):
-                let tunedGen: AnyGenerator
-                if let tuned {
-                    tunedGen = tuned
-                } else if filterType == .rejectionSampling {
-                    tunedGen = filterGen
-                } else if let cached = context.tunedFilterCache[fingerprint] {
-                    tunedGen = cached
-                } else {
-                    let resolved = (try? ChoiceGradientTuner<Any>.tune(filterGen, predicate: predicate)) ?? filterGen
-                    context.tunedFilterCache[fingerprint] = resolved
-                    tunedGen = resolved
-                }
+            case let .impure(operation: .filter(filterGen, fingerprint, filterType, predicate, sourceLocation), continuation):
+                let tunedGen = GenerationContext.resolveTunedFilter(
+                    fingerprint: fingerprint,
+                    generator: filterGen,
+                    predicate: predicate,
+                    type: filterType
+                )
                 var attempts = 0 as UInt64
                 var accepted: Any?
                 while attempts < GenerationContext.maxFilterRuns {
