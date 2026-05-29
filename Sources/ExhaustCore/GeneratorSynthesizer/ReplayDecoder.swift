@@ -8,28 +8,23 @@ package final class ReplayDecoder: Decoder {
     package let userInfo: [CodingUserInfoKey: Any] = [:]
     private let values: [Any]
     private var index: Int = 0
-    private var peekedValue: Any?
 
     package init(values: [Any], codingPath: [any CodingKey] = []) {
         self.values = values
         self.codingPath = codingPath
     }
 
-    /// Consumes and returns the next value from the tape, or returns a previously peeked value.
-    func nextValue() -> Any {
-        if let peeked = peekedValue {
-            peekedValue = nil
-            return peeked
+    /// Consumes and returns the next value from the tape.
+    ///
+    /// Throws ``GenSchemaMiss`` rather than trapping when the tape is exhausted. Exhaustion means a generated value drove `init(from:)` to decode more values than the discovery pass recorded — the synthesized generator catches this and pins the affected value to the example.
+    ///
+    /// - Parameter codingPath: The coding path of the requesting decode call, recorded on the thrown ``GenSchemaMiss``.
+    func nextValue(at codingPath: [any CodingKey]) throws -> Any {
+        guard index < values.count else {
+            throw GenSchemaMiss(codingPath: codingPath)
         }
         defer { index += 1 }
         return values[index]
-    }
-
-    /// Returns the next value without consuming it. A subsequent ``nextValue()`` call returns the same value.
-    func peekValue() -> Any {
-        let value = nextValue()
-        peekedValue = value
-        return value
     }
 
     package func container<Key: CodingKey>(
@@ -66,70 +61,74 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
         false
     }
 
-    func decode<T: Decodable>(_: T.Type, forKey _: Key) throws -> T {
-        decoder.nextValue() as! T
+    func decode<T: Decodable>(_: T.Type, forKey key: Key) throws -> T {
+        let value = try decoder.nextValue(at: codingPath + [key])
+        guard let typed = value as? T else {
+            throw GenSchemaMiss(codingPath: codingPath + [key])
+        }
+        return typed
     }
 
     // Type-specific `decodeIfPresent` overloads — see DiscoveryDecoder.swift for why these are necessary. Each pulls a single value from the tape. Without these overrides, the protocol extension's default calls `decodeNil` then `decode`, consuming two tape values and crashing.
 
-    func decodeIfPresent(_: Bool.Type, forKey _: Key) throws -> Bool? {
-        decoder.nextValue() as? Bool
+    func decodeIfPresent(_: Bool.Type, forKey key: Key) throws -> Bool? {
+        try decoder.nextValue(at: codingPath + [key]) as? Bool
     }
 
-    func decodeIfPresent(_: String.Type, forKey _: Key) throws -> String? {
-        decoder.nextValue() as? String
+    func decodeIfPresent(_: String.Type, forKey key: Key) throws -> String? {
+        try decoder.nextValue(at: codingPath + [key]) as? String
     }
 
-    func decodeIfPresent(_: Double.Type, forKey _: Key) throws -> Double? {
-        decoder.nextValue() as? Double
+    func decodeIfPresent(_: Double.Type, forKey key: Key) throws -> Double? {
+        try decoder.nextValue(at: codingPath + [key]) as? Double
     }
 
-    func decodeIfPresent(_: Float.Type, forKey _: Key) throws -> Float? {
-        decoder.nextValue() as? Float
+    func decodeIfPresent(_: Float.Type, forKey key: Key) throws -> Float? {
+        try decoder.nextValue(at: codingPath + [key]) as? Float
     }
 
-    func decodeIfPresent(_: Int.Type, forKey _: Key) throws -> Int? {
-        decoder.nextValue() as? Int
+    func decodeIfPresent(_: Int.Type, forKey key: Key) throws -> Int? {
+        try decoder.nextValue(at: codingPath + [key]) as? Int
     }
 
-    func decodeIfPresent(_: Int8.Type, forKey _: Key) throws -> Int8? {
-        decoder.nextValue() as? Int8
+    func decodeIfPresent(_: Int8.Type, forKey key: Key) throws -> Int8? {
+        try decoder.nextValue(at: codingPath + [key]) as? Int8
     }
 
-    func decodeIfPresent(_: Int16.Type, forKey _: Key) throws -> Int16? {
-        decoder.nextValue() as? Int16
+    func decodeIfPresent(_: Int16.Type, forKey key: Key) throws -> Int16? {
+        try decoder.nextValue(at: codingPath + [key]) as? Int16
     }
 
-    func decodeIfPresent(_: Int32.Type, forKey _: Key) throws -> Int32? {
-        decoder.nextValue() as? Int32
+    func decodeIfPresent(_: Int32.Type, forKey key: Key) throws -> Int32? {
+        try decoder.nextValue(at: codingPath + [key]) as? Int32
     }
 
-    func decodeIfPresent(_: Int64.Type, forKey _: Key) throws -> Int64? {
-        decoder.nextValue() as? Int64
+    func decodeIfPresent(_: Int64.Type, forKey key: Key) throws -> Int64? {
+        try decoder.nextValue(at: codingPath + [key]) as? Int64
     }
 
-    func decodeIfPresent(_: UInt.Type, forKey _: Key) throws -> UInt? {
-        decoder.nextValue() as? UInt
+    func decodeIfPresent(_: UInt.Type, forKey key: Key) throws -> UInt? {
+        try decoder.nextValue(at: codingPath + [key]) as? UInt
     }
 
-    func decodeIfPresent(_: UInt8.Type, forKey _: Key) throws -> UInt8? {
-        decoder.nextValue() as? UInt8
+    func decodeIfPresent(_: UInt8.Type, forKey key: Key) throws -> UInt8? {
+        try decoder.nextValue(at: codingPath + [key]) as? UInt8
     }
 
-    func decodeIfPresent(_: UInt16.Type, forKey _: Key) throws -> UInt16? {
-        decoder.nextValue() as? UInt16
+    func decodeIfPresent(_: UInt16.Type, forKey key: Key) throws -> UInt16? {
+        try decoder.nextValue(at: codingPath + [key]) as? UInt16
     }
 
-    func decodeIfPresent(_: UInt32.Type, forKey _: Key) throws -> UInt32? {
-        decoder.nextValue() as? UInt32
+    func decodeIfPresent(_: UInt32.Type, forKey key: Key) throws -> UInt32? {
+        try decoder.nextValue(at: codingPath + [key]) as? UInt32
     }
 
-    func decodeIfPresent(_: UInt64.Type, forKey _: Key) throws -> UInt64? {
-        decoder.nextValue() as? UInt64
+    func decodeIfPresent(_: UInt64.Type, forKey key: Key) throws -> UInt64? {
+        try decoder.nextValue(at: codingPath + [key]) as? UInt64
     }
 
-    func decodeIfPresent<T: Decodable>(_: T.Type, forKey _: Key) throws -> T? {
-        decoder.nextValue() as? T
+    func decodeIfPresent<T: Decodable>(_: T.Type, forKey key: Key) throws -> T? {
+        try decoder.nextValue(at: codingPath + [key]) as? T
     }
 
     func nestedContainer<NestedKey: CodingKey>(
@@ -175,7 +174,11 @@ private struct ReplayUnkeyedContainer: UnkeyedDecodingContainer {
 
     mutating func decode<T: Decodable>(_: T.Type) throws -> T {
         currentIndex += 1
-        return decoder.nextValue() as! T
+        let value = try decoder.nextValue(at: codingPath)
+        guard let typed = value as? T else {
+            throw GenSchemaMiss(codingPath: codingPath)
+        }
+        return typed
     }
 
     mutating func nestedContainer<NestedKey: CodingKey>(
@@ -206,6 +209,10 @@ private struct ReplaySingleValueContainer: SingleValueDecodingContainer {
     }
 
     func decode<T: Decodable>(_: T.Type) throws -> T {
-        decoder.nextValue() as! T
+        let value = try decoder.nextValue(at: codingPath)
+        guard let typed = value as? T else {
+            throw GenSchemaMiss(codingPath: codingPath)
+        }
+        return typed
     }
 }

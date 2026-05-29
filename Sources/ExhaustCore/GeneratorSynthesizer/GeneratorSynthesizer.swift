@@ -40,9 +40,19 @@ package enum GeneratorSynthesizer {
         _: T.Type,
         jsonValue: Any
     ) throws -> ReflectiveGenerator<T> {
+        // A top-level leaf or collection type resolves to its pre-configured generator directly, without running `init(from:)`. This covers single-value types (Date, UUID, URL, Data, Decimal, CGFloat, and the primitives) and top-level collections of generable elements — both of which the example-driven discovery pass cannot characterize on its own (a top-level array records no child generators, and a single-value type would record the inner primitive rather than itself).
+        if let rootGenerator = rootGenerator(for: T.self) {
+            return ReflectiveGenerator(rootGenerator, isSynthesized: true)
+        }
+
         let discovery = DiscoveryDecoder(jsonValue: jsonValue)
-        _ = try T(from: discovery)
+        let exampleValue = try T(from: discovery)
         let childGenerators = ContiguousArray(discovery.childGenerators)
+
+        // No child generators means the discovery pass found nothing to synthesize — a collection of non-generable elements, or a type whose decode produced no leaves. Pin to the example at build time instead of building an empty zip that the replay pass would immediately over-read. This pinning is structural and surfaces through `#examine`'s pinned-field report, so it does not emit a per-sample fallback warning.
+        guard childGenerators.isEmpty == false else {
+            return ReflectiveGenerator(Gen.just(exampleValue), isSynthesized: true)
+        }
 
         let zipped: AnyGenerator = .impure(
             operation: .zip(childGenerators),
@@ -52,8 +62,14 @@ package enum GeneratorSynthesizer {
         let generator = Gen.liftF(.transform(
             kind: .map(
                 forward: { values in
-                    let replay = ReplayDecoder(values: values as! [Any])
-                    return try T(from: replay)
+                    // A generated value can drive a hand-written `init(from:)` down a branch the example never exercised, exhausting the tape. Catch that and pin this sample to the example rather than letting it crash; a genuine decode error still propagates.
+                    do {
+                        let replay = ReplayDecoder(values: values as! [Any])
+                        return try T(from: replay)
+                    } catch let miss as GenSchemaMiss {
+                        SynthesisDiagnostics.recordFallback(type: T.self, codingPath: miss.codingPath)
+                        return exampleValue
+                    }
                 },
                 inputType: [Any].self,
                 outputType: T.self
@@ -62,6 +78,21 @@ package enum GeneratorSynthesizer {
         )) as Generator<T>
 
         return ReflectiveGenerator(generator, isSynthesized: true)
+    }
+
+    /// Returns the pre-configured generator for a top-level leaf or collection type, or `nil` when the type needs the discovery pass.
+    ///
+    /// Mirrors the per-field dispatch the discovery pass already applies to nested values, lifted to the root: ``ExhaustGenerable`` types use their default generator, and standard-library collections of generable elements use their ``SynthesizableCollection`` generator.
+    private static func rootGenerator<T>(for _: T.Type) -> Generator<T>? {
+        if let generable = T.self as? ExhaustGenerable.Type {
+            return generable.defaultGenerator.map { $0 as! T }
+        }
+        if let collection = T.self as? SynthesizableCollection.Type,
+           let collectionGenerator = collection.synthesizedGenerator
+        {
+            return collectionGenerator.map { $0 as! T }
+        }
+        return nil
     }
 }
 
@@ -72,4 +103,3 @@ package enum GeneratorSynthesizerError: Error {
     /// The JSON structure did not match the expected container type (keyed, unkeyed, or single-value).
     case unexpectedContainer
 }
-

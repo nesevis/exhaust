@@ -48,10 +48,6 @@ package final class DiscoveryDecoder: Decoder {
     func recordGenerator(_ generator: AnyGenerator) {
         childGenerators.append(generator)
     }
-
-    func removeLastGenerator() -> AnyGenerator {
-        childGenerators.removeLast()
-    }
 }
 
 // MARK: - Keyed Container
@@ -190,11 +186,20 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
                     operation: .zip(childGens),
                     continuation: { .pure($0) }
                 )
+                let pinnedFallback = (decodedValue ?? jsonValue) as Any
+                let fallbackPath = codingPath + [key]
                 generator = Gen.liftF(.transform(
                     kind: .map(
                         forward: { values in
-                            let replay = ReplayDecoder(values: values as! [Any])
-                            return try T(from: replay) as Any
+                            // Pin this nested value to the example if a generated value reaches an
+                            // uncovered branch in `T.init(from:)`, rather than crashing the whole sample.
+                            do {
+                                let replay = ReplayDecoder(values: values as! [Any])
+                                return try T(from: replay) as Any
+                            } catch is GenSchemaMiss {
+                                SynthesisDiagnostics.recordFallback(type: T.self, codingPath: fallbackPath)
+                                return pinnedFallback
+                            }
                         },
                         inputType: [Any].self,
                         outputType: Any.self
