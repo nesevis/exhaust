@@ -458,8 +458,7 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> AnyGenerator {
                     predicate: { predicate.evaluate($0) },
                     sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
                 ),
-                continuation: { .pure($0)
-                }
+                continuation: { .pure($0) }
             )
 
         case let .resized(inner, size: size):

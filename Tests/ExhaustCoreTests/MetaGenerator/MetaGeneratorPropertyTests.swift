@@ -178,8 +178,7 @@ struct MetaGeneratorPropertyTests {
                         predicate: { predicate.evaluate($0) },
                         sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
                     ),
-                    continuation: { .pure($0)
-                    }
+                    continuation: { .pure($0) }
                 )
 
                 var valueIter = ValueInterpreter(filteredGen, maxRuns: 15)

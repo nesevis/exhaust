@@ -25,8 +25,7 @@ struct GeneratorTuningTests {
                 predicate: { ($0 as! Int) < 200 },
                 sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
             ),
-            continuation: { .pure($0 as! Int)
-            }
+            continuation: { .pure($0 as! Int) }
         )
 
         // The outer predicate is irrelevant — filter's predicate should drive adaptation

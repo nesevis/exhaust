@@ -7,8 +7,8 @@ struct BindInnerFilterTests {
     func bindInnerFilterProducesValidValues() {
         let gen = #gen(.int(in: 1 ... 5).bind { n in
             .int(in: 0 ... 100)
-                // A `filter` inside a bind would cause eager CGS to fire for every time the bind's continuation is executed.
-                // This test lets you confirm that the @TaskLocal `isInterpreting` workaround is causing the eager CGS to be deferred to the interpreter and then cached. It's not as optimal, but it prevents a significant footgun and lets Exhaust hide this complexity well
+                // A `filter` inside a bind is rebuilt every time the bind's continuation runs, so tuning it eagerly at construction would re-run CGS per bound value.
+                // Instead the generation interpreters tune lazily and memoize by source fingerprint in a process-wide cache, so this filter is tuned at most once. The output stays valid because the predicate is always enforced; it is not guaranteed reproducible across runs, which this test does not assert.
                 .filter { $0 % n == 0 }
         })
 
