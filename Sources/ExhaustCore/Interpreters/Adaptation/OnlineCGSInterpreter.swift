@@ -325,8 +325,8 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                                lower: min, upper: max, tag: tag,
                                isRangeExplicit: isRangeExplicit, scaling: scaling,
                                makeFingerprint: {
-                                   var fingerprint = min &* Xoshiro256.goldenRatioConstant &+ max
-                                   fingerprint = fingerprint &* Xoshiro256.goldenRatioConstant &+ UInt64(bitPattern: Int64(tag.hashValue))
+                                   var fingerprint = Xoshiro256.fold(min, mixing: max)
+                                   fingerprint = Xoshiro256.fold(fingerprint, mixing: UInt64(bitPattern: Int64(tag.hashValue)))
                                    return fingerprint
                                }
                            )

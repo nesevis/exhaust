@@ -17,7 +17,7 @@ package enum Gen {
         if fileID.hasPointerRepresentation {
             fileID.withUTF8Buffer { bytes in
                 for byte in bytes {
-                    accumulator = accumulator &* Xoshiro256.goldenRatioConstant &+ UInt64(byte)
+                    accumulator = Xoshiro256.fold(accumulator, mixing: UInt64(byte))
                 }
             }
         } else {

@@ -48,7 +48,7 @@ package extension Gen {
     ) -> UInt64 {
         var fingerprint = sourceFingerprint(fileID: fileID, line: line, column: column)
         for byte in String(reflecting: outputType).utf8 {
-            fingerprint = fingerprint &* Xoshiro256.goldenRatioConstant &+ UInt64(byte)
+            fingerprint = Xoshiro256.fold(fingerprint, mixing: UInt64(byte))
         }
         return fingerprint
     }
