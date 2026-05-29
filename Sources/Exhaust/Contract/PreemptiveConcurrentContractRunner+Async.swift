@@ -34,6 +34,12 @@ public extension __ExhaustRuntime {
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
                 return nil
+            case let .invalidConcurrencyLevel(level):
+                reportIssue(
+                    "concurrencyLevel must be between 1 and 8, but was \(level)",
+                    fileID: fileID, filePath: filePath, line: line, column: column
+                )
+                return nil
         }
 
         let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)

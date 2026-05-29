@@ -40,11 +40,16 @@ public extension __ExhaustRuntime {
                     column: column
                 )
                 return nil
+            case let .invalidConcurrencyLevel(level):
+                reportIssue(
+                    "concurrencyLevel must be between 1 and 8, but was \(level)",
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                return nil
         }
-        precondition(
-            1 ... 8 ~= config.concurrencyLevel,
-            "concurrencyLevel must be between 1 and 8"
-        )
 
         var regressionSeeds: [String] = []
         #if canImport(Testing)
