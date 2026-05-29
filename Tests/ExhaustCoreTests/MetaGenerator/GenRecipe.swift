@@ -451,8 +451,15 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> AnyGenerator {
         case let .filtered(inner, predicate):
             let innerGen = buildGenerator(from: inner)
             return AnyGenerator.impure(
-                operation: .filter(gen: innerGen.erase(), fingerprint: 0, filterType: .auto, predicate: { predicate.evaluate($0) }, tuned: nil, sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)),
-                continuation: { .pure($0) }
+                operation: .filter(
+                    gen: innerGen.erase(),
+                    fingerprint: Gen.sourceFingerprint(fileID: #fileID, line: #line, column: #column),
+                    filterType: .rejectionSampling,
+                    predicate: { predicate.evaluate($0) },
+                    sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
+                ),
+                continuation: { .pure($0)
+                }
             )
 
         case let .resized(inner, size: size):

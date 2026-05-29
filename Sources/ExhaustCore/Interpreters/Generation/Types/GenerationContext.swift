@@ -31,8 +31,6 @@ package struct GenerationContext: ~Copyable {
 
     // MARK: - Caches
 
-    /// CGS-tuned filter generators for bind-inner filters, keyed by source-location fingerprint. Populated on first encounter when ``Gen/isInterpreting`` caused the filter to defer eager tuning.
-    package var tunedFilterCache: [UInt64: AnyGenerator] = [:]
     /// Seen keys for `unique(by:)` deduplication, keyed by site fingerprint.
     package var uniqueSeenKeys: [UInt64: Set<AnyHashable>] = [:]
     /// Seen choice sequences for `unique()` deduplication, keyed by site fingerprint.
@@ -92,5 +90,30 @@ package struct GenerationContext: ~Copyable {
     /// Returns the size parameter for a given run index, cycling through 1 to 100 independently of ``maxRuns``.
     package static func scaledSize(forRun runIndex: UInt64) -> UInt64 {
         (runIndex % 100) + 1
+    }
+}
+
+// MARK: - Filter tuning cache
+
+package extension GenerationContext {
+    /// Process-wide cache of CGS-tuned filter generators, keyed by source fingerprint.
+    ///
+    /// Static rather than per-context: the fingerprint is stable across runs (see ``Gen/sourceFingerprint(fileID:line:column:)``), so a filter is tuned once per process instead of once per run, and a top-level or non-value-capturing filter resolves to the same tuned generator everywhere. A bind-inner filter whose predicate captures the bound value shares one slot per call site, so its weights reflect whichever value warmed it first — output stays valid (the predicate is always enforced) but is not guaranteed reproducible across runs; use ``FilterType/rejectionSampling`` for those when reproducibility matters. Accessed only by the generation interpreters, never at construction.
+    static let tunedFilterCache = SendableBox<[UInt64: AnyGenerator]>([:])
+
+    /// Resolves the tuned generator for a filter, tuning on first encounter and memoizing in ``tunedFilterCache``.
+    ///
+    /// Returns `generator` unchanged for ``FilterType/rejectionSampling``. The tuning pass runs outside the lock, so a concurrent double-tune is possible but harmless: the fingerprint seed makes the result deterministic, so both writers produce the same generator and a redundant store overwrites with an identical value.
+    static func resolveTunedFilter(
+        fingerprint: UInt64,
+        generator: AnyGenerator,
+        predicate: @escaping (Any) -> Bool,
+        type: FilterType
+    ) -> AnyGenerator {
+        if type == .rejectionSampling { return generator }
+        if let cached = tunedFilterCache.value[fingerprint] { return cached }
+        let tuned = Gen.tuneFilter(generator, predicate: predicate, type: type, seed: fingerprint)
+        tunedFilterCache.withValue { $0[fingerprint] = tuned }
+        return tuned
     }
 }

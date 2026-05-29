@@ -149,8 +149,8 @@ package enum CGSDerivativeInterpreter {
                             inputValue: inputValue, rng: &rng, size: size
                         )
 
-                    case let .filter(gen, _, _, predicate, tuned, sourceLocation):
-                        let filterGen = tuned ?? gen
+                    case let .filter(gen, _, _, predicate, sourceLocation):
+                        let filterGen = gen
                         var attempts: UInt64 = 0
                         while attempts < GenerationContext.maxFilterRuns {
                             guard let result = try generateRecursive(

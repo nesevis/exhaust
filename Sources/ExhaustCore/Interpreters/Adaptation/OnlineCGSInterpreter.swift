@@ -485,8 +485,9 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
             // MARK: - Filter
 
-                    case let .filter(gen, _, _, filterPredicate, tuned, sourceLocation):
-                        let tunedGen = tuned ?? gen
+                    case let .filter(gen, _, _, filterPredicate, sourceLocation):
+                        // Warmup uses the untuned base so the fitness it collects — and the tuning it produces — depend only on the seed, not on prior cache state.
+                        let tunedGen = gen
 
                         var attempts = 0 as UInt64
                         while attempts < GenerationContext.maxFilterRuns {

@@ -23,19 +23,13 @@ package extension Gen {
             column: sourceLocation.column
         )
 
-        // Tune eagerly at construction, unless we are inside an interpreter bind continuation, where tuning is deferred to the interpreter's per-run cache. Either way the seed is the source fingerprint, so the baked weights are reproducible across runs (see ``tuneFilter(_:predicate:type:seed:)``).
-        let isInterpreting = __ExhaustRuntime.isInterpreting
-        let tuned: AnyGenerator? = isInterpreting
-            ? nil
-            : Gen.tuneFilter(erased, predicate: erasedPredicate, type: type, seed: fingerprint)
-
+        // Tuning is resolved lazily by the generation interpreters via the shared cache (``GenerationContext/resolveTunedFilter(fingerprint:generator:predicate:type:)``); construction only records the operation, seeded deterministically from the source fingerprint when it is tuned.
         return .impure(
             operation: .filter(
                 gen: erased,
                 fingerprint: fingerprint,
                 filterType: type,
                 predicate: erasedPredicate,
-                tuned: tuned,
                 sourceLocation: sourceLocation
             ),
             continuation: { .pure($0 as! Output) }

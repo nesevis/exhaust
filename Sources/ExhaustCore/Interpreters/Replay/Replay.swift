@@ -115,7 +115,7 @@ extension Interpreters {
                     continuation: continuation,
                     choices: &choices
                 )
-            case let .filter(gen, _, _, predicate, _, _):
+            case let .filter(gen, _, _, predicate, _):
                 // Invariant: .filter's continuation is always .pure($0). The inner value is the output; the predicate is the only gate.
                 guard let inner = try replayWithChoicesHelper(gen, choices: &choices),
                       predicate(inner)
@@ -477,7 +477,7 @@ extension Interpreters {
                 )
             case let .prune(subGenerator):
                 return try replayRecursive(subGenerator, with: script) as? Output
-            case let .filter(gen, _, _, predicate, _, _):
+            case let .filter(gen, _, _, predicate, _):
                 guard let inner = try replayRecursive(gen, with: script),
                       predicate(inner)
                 else { return nil }

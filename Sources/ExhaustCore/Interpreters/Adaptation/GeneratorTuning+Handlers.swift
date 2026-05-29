@@ -585,25 +585,23 @@ extension GeneratorTuning {
 
     /// Tunes the inner generator of a filter operation using the filter predicate as the fitness function.
     ///
-    /// Skips tuning if the filter already has a tuned generator or uses rejection sampling, since both indicate CGS has already run or is inapplicable. Only the candidate-producing generator is tuned -- the filter predicate itself is not modified.
+    /// Skips tuning if the filter uses rejection sampling, since CGS is inapplicable. Only the candidate-producing generator is tuned -- the filter predicate itself is not modified.
     static func tuneFilter<Output>(
         subGen: AnyGenerator,
         fingerprint: UInt64,
         filterType: FilterType,
         filterPredicate: @escaping (Any) -> Bool,
         sourceLocation: FilterSourceLocation,
-        tuned: AnyGenerator?,
         continuation: @escaping (Any) throws -> Generator<Output>,
         context: TuningContext
     ) throws -> Generator<Output> {
-        if tuned != nil || filterType == .rejectionSampling {
+        if filterType == .rejectionSampling {
             return .impure(
                 operation: .filter(
                     gen: subGen,
                     fingerprint: fingerprint,
                     filterType: filterType,
                     predicate: filterPredicate,
-                    tuned: tuned,
                     sourceLocation: sourceLocation
                 ),
                 continuation: continuation
@@ -623,7 +621,6 @@ extension GeneratorTuning {
                 fingerprint: fingerprint,
                 filterType: filterType,
                 predicate: filterPredicate,
-                tuned: nil,
                 sourceLocation: sourceLocation
             ),
             continuation: continuation
