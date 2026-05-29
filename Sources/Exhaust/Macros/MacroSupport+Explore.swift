@@ -107,7 +107,7 @@ public extension __ExhaustRuntime {
         return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
             let result: ClassificationExploreResult<Output>
             do {
-                result = try __ExhaustRuntime.withIsInterpreting(true) { () throws -> ClassificationExploreResult<Output> in
+                result = try { () throws -> ClassificationExploreResult<Output> in
                     if shouldParallelize, seed == nil, namedDirections.count > 1 {
                         return try runParallelExplore(
                             gen: gen,
@@ -127,7 +127,7 @@ public extension __ExhaustRuntime {
                         regressionSeeds: regressionSeeds
                     )
                     return try runner.run()
-                }
+                }()
             } catch {
                 reportIssue(
                     "Generator failed during exploration: \(error)",

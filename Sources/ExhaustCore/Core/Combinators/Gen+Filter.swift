@@ -1,7 +1,7 @@
 package extension Gen {
     /// Restricts a generator to values satisfying a predicate.
     ///
-    /// For ``FilterType/choiceGradientSampling`` and ``FilterType/auto``, eagerly tunes the inner generator via CGS warmup at construction time so generation interpreters pay no tuning cost per invocation. When constructed inside an interpreter bind continuation (``isInterpreting`` is true), tuning is deferred to the interpreter's fingerprint-keyed cache instead.
+    /// For ``FilterType/choiceGradientSampling`` and ``FilterType/auto``, the generation interpreters tune the inner generator via CGS the first time the filter is encountered and memoize the result in a process-wide cache keyed by the source fingerprint, so each filter is tuned at most once per process. Reduction and replay interpreters use the untuned base generator directly.
     ///
     /// - Parameters:
     ///   - generator: The base generator to filter.
