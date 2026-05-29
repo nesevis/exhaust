@@ -454,7 +454,7 @@ private func buildCombinator(_ kind: GenRecipe.CombinatorKind) -> AnyGenerator {
                 operation: .filter(
                     gen: innerGen.erase(),
                     fingerprint: Gen.sourceFingerprint(fileID: #fileID, line: #line, column: #column),
-                    filterType: .rejectionSampling,
+                    filterType: .auto,
                     predicate: { predicate.evaluate($0) },
                     sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
                 ),
