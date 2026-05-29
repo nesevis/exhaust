@@ -1,6 +1,6 @@
 // Encapsulates the structured coverage phase of a property test.
 //
-// Analyzes the generator, then pulls rows from the density algorithm (PullBasedCoveringArrayGenerator) one at a time, testing each against the property. Stops on first failure or budget.
+// Analyzes the generator, then pulls rows from BalancedCoveringArrayGenerator one at a time, testing each against the property. Stops on first failure or budget.
 import ExhaustCore
 
 /// Runs the structured coverage phase of a property test, exhausting the generator's finite or boundary domain before the random phase.
@@ -74,12 +74,7 @@ package enum CoverageRunner {
 
         // Pull-based pairwise coverage for 2+ parameters.
         if paramCount >= 2 {
-            // Use the highest strength the space can support for exhaustive candidates.
-            let strength = isExhaustiveCandidate ? min(paramCount, 4) : 2
-            let generator = PullBasedCoveringArrayGenerator(
-                domainSizes: domainSizes,
-                strength: strength
-            )
+            let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
             var iterations = 0
             var rowIndex = 0
             while rowIndex < budget, let row = generator.next() {
@@ -96,7 +91,7 @@ package enum CoverageRunner {
                     if rowResult.passed == false {
                         return .failure(
                             value: rowResult.value, tree: rowResult.tree, iteration: rowIndex + 1,
-                            strength: strength, rows: rowIndex + 1,
+                            strength: 2, rows: rowIndex + 1,
                             parameters: paramCount, totalSpace: totalSpace, kind: kind
                         )
                     }
@@ -112,7 +107,7 @@ package enum CoverageRunner {
             }
 
             return .partial(
-                iterations: iterations, strength: strength, rows: rowIndex,
+                iterations: iterations, strength: 2, rows: rowIndex,
                 parameters: paramCount, totalSpace: totalSpace, kind: kind
             )
         }

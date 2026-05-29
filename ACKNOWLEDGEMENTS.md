@@ -47,14 +47,6 @@ Links:
 
 1. [Categories of Optimization Reductions](https://www.researchgate.net/publication/399656065_CATEGORIES_OF_OPTIMIZATION_REDUCTIONS) (2026)
 
-## Renée Bryce & Charles Colbourn
-
-Their _Density_ algorithm provides a way to do pull-based/lazy covering array generation. Exhaust uses it to combine problematic values across generator parameters efficiently, ensuring every pairwise combination is tested without generating the full Cartesian product. The one-row-at-a-time design means Exhaust can stop the moment a property fails, without wasting budget on rows that would never be tested.
-
-Links:
-
-1. [A density-based greedy algorithm for higher strength covering arrays](https://onlinelibrary.wiley.com/doi/epdf/10.1002/stvr.393) (2009) (paywall)
-
 ## Other influences
 
 ### Hillel Wayne
@@ -71,6 +63,15 @@ Stevan's writing about the PBT ecosystem and parallel stateful testing has been 
 ### Johannes Link
 
 jqwik maintainer Johannes Link’s [Shrinking Challenge](https://github.com/jlink/shrinking-challenge) repository was a perfect test bed for refining Exhaust’s test case reducer.
+
+### Renée Bryce & Charles Colbourn
+
+Their _Density_ algorithm provides a way to do pull-based/lazy covering array generation. Exhaust's `BalancedCoveringArrayGenerator` evolved from an implementation of this algorithm. Exhaust uses covering arrays to combine problematic values across generator parameters efficiently, ensuring as many pairwise combinations as possible are tested without having to generate the full Cartesian product upfront. The one-row-at-a-time design means Exhaust can stop the moment a property fails, without wasting time building rows that would never be tested.
+
+Links:
+
+1. [A density-based greedy algorithm for higher strength covering arrays](https://onlinelibrary.wiley.com/doi/epdf/10.1002/stvr.393) (2009) (paywall)
+
 
 ### Swift Testing
 

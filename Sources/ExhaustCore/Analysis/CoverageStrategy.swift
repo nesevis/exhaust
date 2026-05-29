@@ -2,7 +2,7 @@
 
 /// Unified interface for domain profiles used by the coverage runner.
 ///
-/// Both ``FiniteDomainProfile`` (actual parameter values) and ``BoundaryDomainProfile`` (boundary-representative values) conform. The coverage runner uses this to pull rows from the density algorithm (``PullBasedCoveringArrayGenerator``) and convert each row to a ``ChoiceTree`` for materialization.
+/// Both ``FiniteDomainProfile`` (actual parameter values) and ``BoundaryDomainProfile`` (boundary-representative values) conform. The coverage runner uses this to pull rows from ``BalancedCoveringArrayGenerator`` and convert each row to a ``ChoiceTree`` for materialization.
 package protocol CoverageProfile {
     /// The number of distinct values for each parameter.
     var domainSizes: [UInt64] { get }

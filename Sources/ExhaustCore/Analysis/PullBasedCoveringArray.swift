@@ -31,186 +31,6 @@
 //
 // These omissions are deliberate: Exhaust's use case is property-based testing where the first failure matters more than the total array size, and determinism (no random tie-breaking) is required for reproducibility.
 
-// MARK: - Pull-Based Bit Vector
-
-/// Bit-vector with unsafe pointer storage for coverage tracking.
-private struct PullBitVector {
-    private let storage: UnsafeMutablePointer<UInt64>
-    let wordCount: Int
-
-    init(bitCount: Int) {
-        let words = max((bitCount &+ 63) >> 6, 1)
-        wordCount = words
-        storage = .allocate(capacity: words)
-        storage.initialize(repeating: 0, count: words)
-    }
-
-    @inline(__always)
-    func isSet(_ index: UInt32) -> Bool {
-        let word = Int(index &>> 6)
-        let bit = index & 63
-        return (storage[word] &>> bit) & 1 != 0
-    }
-
-    @inline(__always)
-    mutating func set(_ index: UInt32) -> Bool {
-        let word = Int(index &>> 6)
-        let bit = index & 63
-        let mask: UInt64 = 1 &<< bit
-        let old = storage[word]
-        if old & mask != 0 { return false }
-        storage[word] = old | mask
-        return true
-    }
-
-    /// Counts unset bits in the range [`start`, `start` + `count`).
-    @inline(__always)
-    func countUnsetInRange(from start: UInt32, count: Int) -> Int {
-        if count == 0 { return 0 }
-        var unset = 0
-        let end = start &+ UInt32(count)
-        let firstWord = Int(start &>> 6)
-        let lastWord = Int((end &- 1) &>> 6)
-        let firstBit = start & 63
-        let lastBit = (end &- 1) & 63
-
-        if firstWord == lastWord {
-            // Single word: mask from firstBit to lastBit inclusive.
-            let mask = (UInt64.max &<< firstBit) & (UInt64.max &>> (63 &- lastBit))
-            unset = (~storage[firstWord] & mask).nonzeroBitCount
-        } else {
-            // First partial word.
-            let firstMask = UInt64.max &<< firstBit
-            unset = (~storage[firstWord] & firstMask).nonzeroBitCount
-
-            // Full words in between.
-            var word = firstWord &+ 1
-            while word < lastWord {
-                unset &+= (~storage[word]).nonzeroBitCount
-                word &+= 1
-            }
-
-            // Last partial word.
-            let lastMask = UInt64.max &>> (63 &- lastBit)
-            unset &+= (~storage[lastWord] & lastMask).nonzeroBitCount
-        }
-        return unset
-    }
-
-    func deallocate() {
-        storage.deinitialize(count: wordCount)
-        storage.deallocate()
-    }
-}
-
-// MARK: - Partial Slice Reference
-
-/// Reference to a non-completing slice at a specific column, storing the column's position within the slice and the stride at that position (which equals the range size for partial coverage counting).
-private struct PartialSliceRef {
-    let sliceIndex: Int
-
-    /// Which position (0-indexed) this column occupies in the slice's paramIndices.
-    let position: UInt8
-
-    /// The stride at this position — equals the product of domain sizes for all positions after this one. Used as the range count for ``PullBitVector/countUnsetInRange(from:count:)``.
-    let rangeSize: UInt32
-}
-
-// MARK: - Pull-Based Coverage Slice
-
-/// Tracks coverage for one specific t-tuple of parameter indices.
-///
-/// Stores all `t` parameter indices because any slice can be evaluated at any column fill step. The `strides` tuple encodes the mixed-radix multipliers for converting a tuple of domain values into a flat bit-vector index: for strength `t`, the first `t - 1` entries are meaningful (the last stride is implicitly 1). For example, at t=3 with domain sizes (d0, d1, d2), strides are (d1 * d2, d2, 1, unused). `paramIndices` and `strides` are stored as fixed-size 4-tuples rather than arrays to avoid heap allocation in this performance-critical structure.
-private struct PullCoverageSlice {
-    var bits: PullBitVector
-    let strides: (UInt32, UInt32, UInt32, UInt32)
-
-    /// All t parameter indices (in reordered space, sorted ascending). Only the first `strength` entries are meaningful.
-    let paramIndices: (UInt16, UInt16, UInt16, UInt16)
-
-    var remaining: Int
-
-    @inline(__always)
-    func flatIndex2(_ value0: UInt16, _ value1: UInt16) -> UInt32 {
-        UInt32(value0) &* strides.0 &+ UInt32(value1)
-    }
-
-    @inline(__always)
-    func flatIndex3(_ value0: UInt16, _ value1: UInt16, _ value2: UInt16) -> UInt32 {
-        UInt32(value0) &* strides.0 &+ UInt32(value1) &* strides.1 &+ UInt32(value2)
-    }
-
-    @inline(__always)
-    func flatIndex4(
-        _ value0: UInt16,
-        _ value1: UInt16,
-        _ value2: UInt16,
-        _ value3: UInt16
-    ) -> UInt32 {
-        UInt32(value0) &* strides.0
-            &+ UInt32(value1) &* strides.1
-            &+ UInt32(value2) &* strides.2
-            &+ UInt32(value3)
-    }
-
-    @inline(__always)
-    mutating func mark(_ index: UInt32) -> Bool {
-        if bits.set(index) {
-            remaining &-= 1
-            return true
-        }
-        return false
-    }
-
-    @inline(__always)
-    func isSet(_ index: UInt32) -> Bool {
-        bits.isSet(index)
-    }
-
-    mutating func deallocate() {
-        bits.deallocate()
-    }
-}
-
-// MARK: - Parameter Ordering
-
-/// Reorders parameters so that smallest domains come first.
-///
-/// Early columns (small domain) have fewer completing slices and fewer candidate values, so they resolve quickly. Later columns (larger domain) have the most completing slices and the richest greedy signal.
-private struct ParameterOrdering {
-    let reorderedDomainSizes: ContiguousArray<UInt16>
-
-    /// Maps reordered index back to original parameter index.
-    let inversePermutation: ContiguousArray<Int>
-
-    init(domainSizes: ContiguousArray<UInt16>) {
-        // swiftlint:disable:next unused_enumerated
-        let indexed = domainSizes.enumerated().sorted { $0.element < $1.element }
-        var reordered = ContiguousArray<UInt16>()
-        var inverse = ContiguousArray<Int>()
-        reordered.reserveCapacity(domainSizes.count)
-        inverse.reserveCapacity(domainSizes.count)
-        for entry in indexed {
-            reordered.append(entry.element)
-            inverse.append(entry.offset)
-        }
-        reorderedDomainSizes = reordered
-        inversePermutation = inverse
-    }
-
-    /// Restores a row from reordered space to original parameter order.
-    func restore(_ row: ContiguousArray<UInt16>) -> [UInt64] {
-        let count = row.count
-        var output = [UInt64](repeating: 0, count: count)
-        var index = 0
-        while index < count {
-            output[inversePermutation[index]] = UInt64(row[index])
-            index &+= 1
-        }
-        return output
-    }
-}
-
 // MARK: - Pull-Based Covering Array Generator
 
 /// Pull-based covering array generator that emits one row at a time via ``next()``.
@@ -634,5 +454,185 @@ package final class PullBasedCoveringArrayGenerator {
             }
             column &+= 1
         }
+    }
+}
+
+// MARK: - Pull-Based Bit Vector
+
+/// Bit-vector with unsafe pointer storage for coverage tracking.
+private struct PullBitVector {
+    private let storage: UnsafeMutablePointer<UInt64>
+    let wordCount: Int
+
+    init(bitCount: Int) {
+        let words = max((bitCount &+ 63) >> 6, 1)
+        wordCount = words
+        storage = .allocate(capacity: words)
+        storage.initialize(repeating: 0, count: words)
+    }
+
+    @inline(__always)
+    func isSet(_ index: UInt32) -> Bool {
+        let word = Int(index &>> 6)
+        let bit = index & 63
+        return (storage[word] &>> bit) & 1 != 0
+    }
+
+    @inline(__always)
+    mutating func set(_ index: UInt32) -> Bool {
+        let word = Int(index &>> 6)
+        let bit = index & 63
+        let mask: UInt64 = 1 &<< bit
+        let old = storage[word]
+        if old & mask != 0 { return false }
+        storage[word] = old | mask
+        return true
+    }
+
+    /// Counts unset bits in the range [`start`, `start` + `count`).
+    @inline(__always)
+    func countUnsetInRange(from start: UInt32, count: Int) -> Int {
+        if count == 0 { return 0 }
+        var unset = 0
+        let end = start &+ UInt32(count)
+        let firstWord = Int(start &>> 6)
+        let lastWord = Int((end &- 1) &>> 6)
+        let firstBit = start & 63
+        let lastBit = (end &- 1) & 63
+
+        if firstWord == lastWord {
+            // Single word: mask from firstBit to lastBit inclusive.
+            let mask = (UInt64.max &<< firstBit) & (UInt64.max &>> (63 &- lastBit))
+            unset = (~storage[firstWord] & mask).nonzeroBitCount
+        } else {
+            // First partial word.
+            let firstMask = UInt64.max &<< firstBit
+            unset = (~storage[firstWord] & firstMask).nonzeroBitCount
+
+            // Full words in between.
+            var word = firstWord &+ 1
+            while word < lastWord {
+                unset &+= (~storage[word]).nonzeroBitCount
+                word &+= 1
+            }
+
+            // Last partial word.
+            let lastMask = UInt64.max &>> (63 &- lastBit)
+            unset &+= (~storage[lastWord] & lastMask).nonzeroBitCount
+        }
+        return unset
+    }
+
+    func deallocate() {
+        storage.deinitialize(count: wordCount)
+        storage.deallocate()
+    }
+}
+
+// MARK: - Partial Slice Reference
+
+/// Reference to a non-completing slice at a specific column, storing the column's position within the slice and the stride at that position (which equals the range size for partial coverage counting).
+private struct PartialSliceRef {
+    let sliceIndex: Int
+
+    /// Which position (0-indexed) this column occupies in the slice's paramIndices.
+    let position: UInt8
+
+    /// The stride at this position — equals the product of domain sizes for all positions after this one. Used as the range count for ``PullBitVector/countUnsetInRange(from:count:)``.
+    let rangeSize: UInt32
+}
+
+// MARK: - Pull-Based Coverage Slice
+
+/// Tracks coverage for one specific t-tuple of parameter indices.
+///
+/// Stores all `t` parameter indices because any slice can be evaluated at any column fill step. The `strides` tuple encodes the mixed-radix multipliers for converting a tuple of domain values into a flat bit-vector index: for strength `t`, the first `t - 1` entries are meaningful (the last stride is implicitly 1). For example, at t=3 with domain sizes (d0, d1, d2), strides are (d1 * d2, d2, 1, unused). `paramIndices` and `strides` are stored as fixed-size 4-tuples rather than arrays to avoid heap allocation in this performance-critical structure.
+private struct PullCoverageSlice {
+    var bits: PullBitVector
+    let strides: (UInt32, UInt32, UInt32, UInt32)
+
+    /// All t parameter indices (in reordered space, sorted ascending). Only the first `strength` entries are meaningful.
+    let paramIndices: (UInt16, UInt16, UInt16, UInt16)
+
+    var remaining: Int
+
+    @inline(__always)
+    func flatIndex2(_ value0: UInt16, _ value1: UInt16) -> UInt32 {
+        UInt32(value0) &* strides.0 &+ UInt32(value1)
+    }
+
+    @inline(__always)
+    func flatIndex3(_ value0: UInt16, _ value1: UInt16, _ value2: UInt16) -> UInt32 {
+        UInt32(value0) &* strides.0 &+ UInt32(value1) &* strides.1 &+ UInt32(value2)
+    }
+
+    @inline(__always)
+    func flatIndex4(
+        _ value0: UInt16,
+        _ value1: UInt16,
+        _ value2: UInt16,
+        _ value3: UInt16
+    ) -> UInt32 {
+        UInt32(value0) &* strides.0
+            &+ UInt32(value1) &* strides.1
+            &+ UInt32(value2) &* strides.2
+            &+ UInt32(value3)
+    }
+
+    @inline(__always)
+    mutating func mark(_ index: UInt32) -> Bool {
+        if bits.set(index) {
+            remaining &-= 1
+            return true
+        }
+        return false
+    }
+
+    @inline(__always)
+    func isSet(_ index: UInt32) -> Bool {
+        bits.isSet(index)
+    }
+
+    mutating func deallocate() {
+        bits.deallocate()
+    }
+}
+
+// MARK: - Parameter Ordering
+
+/// Reorders parameters so that smallest domains come first.
+///
+/// Early columns (small domain) have fewer completing slices and fewer candidate values, so they resolve quickly. Later columns (larger domain) have the most completing slices and the richest greedy signal.
+private struct ParameterOrdering {
+    let reorderedDomainSizes: ContiguousArray<UInt16>
+
+    /// Maps reordered index back to original parameter index.
+    let inversePermutation: ContiguousArray<Int>
+
+    init(domainSizes: ContiguousArray<UInt16>) {
+        // swiftlint:disable:next unused_enumerated
+        let indexed = domainSizes.enumerated().sorted { $0.element < $1.element }
+        var reordered = ContiguousArray<UInt16>()
+        var inverse = ContiguousArray<Int>()
+        reordered.reserveCapacity(domainSizes.count)
+        inverse.reserveCapacity(domainSizes.count)
+        for entry in indexed {
+            reordered.append(entry.element)
+            inverse.append(entry.offset)
+        }
+        reorderedDomainSizes = reordered
+        inversePermutation = inverse
+    }
+
+    /// Restores a row from reordered space to original parameter order.
+    func restore(_ row: ContiguousArray<UInt16>) -> [UInt64] {
+        let count = row.count
+        var output = [UInt64](repeating: 0, count: count)
+        var index = 0
+        while index < count {
+            output[inversePermutation[index]] = UInt64(row[index])
+            index &+= 1
+        }
+        return output
     }
 }

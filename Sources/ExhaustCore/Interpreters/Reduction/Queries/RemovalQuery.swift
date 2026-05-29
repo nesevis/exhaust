@@ -64,7 +64,7 @@ enum RemovalQuery {
 
     /// Computes covering-array-backed aligned removal scopes for all zip nodes with multiple deletable sequence children.
     ///
-    /// Each zip node with two or more deletable sibling sequences produces one ``CoveringAlignedRemovalScope``. The scope contains a strength-2 ``PullBasedCoveringArrayGenerator`` whose parameters are the sibling sequences and whose domains are `elementCount + 1` (the extra value encodes "skip this sibling"). The encoder pulls rows from the generator, decoding each into an element deletion combination with pairwise interaction coverage.
+    /// Each zip node with two or more deletable sibling sequences produces one ``CoveringAlignedRemovalScope``. The scope contains a ``BalancedCoveringArrayGenerator`` whose parameters are the sibling sequences and whose domains are `elementCount + 1` (the extra value encodes "skip this sibling"). The encoder pulls rows from the generator, decoding each into an element deletion combination with pairwise interaction coverage.
     ///
     /// - Complexity: O(S) per zip node to build the generator, where S is the sibling count. The generator itself produces O(max(domain)^2 * log(S)) rows on demand, replacing the previous O(2^S) subset enumeration and O(nA * nB) cross-product expansion.
     static func coveringAlignedRemovalScopes(graph: ChoiceGraph) -> [CoveringAlignedRemovalScope] {
@@ -92,10 +92,7 @@ enum RemovalQuery {
             let domainSizes = allSequenceChildren.map { UInt64($0.elementNodeIDs.count + 1) }
             let skipValues = allSequenceChildren.map { UInt64($0.elementNodeIDs.count) }
 
-            let generator = PullBasedCoveringArrayGenerator(
-                domainSizes: domainSizes,
-                strength: 2
-            )
+            let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
 
             let maxElementYield = allSequenceChildren.reduce(0) { maxSoFar, sibling in
                 let siblingMax = sibling.elementNodeIDs.reduce(0) { innerMax, nodeID in

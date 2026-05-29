@@ -142,21 +142,11 @@ extension __ExhaustRuntime {
             return .skipped
         }
 
-        // Cap interaction strength based on sequence length. Higher strength gives better coverage but the number of covering array rows grows with C(sequenceLength, t).
-        // Short sequences can afford high strength; long sequences fall back to pairwise.
-        let strengthCap = switch sequenceLength {
-            case ...6: 6
-            case ...8: 5
-            case ...12: 4
-            case ...20: 3
-            default: 2
-        }
-
         guard let domain = SCADomain.build(
             sequenceLength: sequenceLength,
             pickChoices: pickChoices,
             coverageBudget: coverageBudget,
-            strengthCap: strengthCap
+            strengthCap: 2
         ) else {
             ExhaustLog.notice(
                 category: .propertyTest,
@@ -167,8 +157,7 @@ extension __ExhaustRuntime {
         }
 
         let domainSizes = domain.profile.domainSizes
-        let strength = min(domain.maxStrength, domainSizes.count, 4)
-        guard strength >= 2 else {
+        guard domainSizes.count >= 2 else {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "sca_coverage_skipped",
@@ -177,10 +166,7 @@ extension __ExhaustRuntime {
             return .skipped
         }
 
-        let generator = PullBasedCoveringArrayGenerator(
-            domainSizes: domainSizes,
-            strength: strength
-        )
+        let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
         let lengthRange = UInt64(0) ... UInt64(commandLimit)
 
         var iterations = 0
@@ -257,7 +243,7 @@ extension __ExhaustRuntime {
                 "iterations": "\(iterations)",
                 "rows": "\(iterations)",
                 "sequence_length": "\(sequenceLength)",
-                "strength": "\(strength)",
+                "strength": "2",
             ]
         )
 

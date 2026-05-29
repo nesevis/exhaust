@@ -30,7 +30,7 @@
 ///
 /// Every generator that contains at least one random choice point (a `chooseBits`, `pick`, or `sequence`) is analyzable. The ``analyze(_:)`` method returns `nil` only when zero parameters are extracted — that is, the generator is purely deterministic (for example `Gen.just(value)`).
 ///
-/// - SeeAlso: ``PullBasedCoveringArrayGenerator``, ``CoverageRunner``, ``BoundaryDomainAnalysis``
+/// - SeeAlso: ``BalancedCoveringArrayGenerator``, ``CoverageRunner``, ``BoundaryDomainAnalysis``
 package enum ChoiceTreeAnalysis {
     /// The outcome of analyzing a generator's choice tree structure.
     public enum AnalysisResult {
@@ -87,7 +87,7 @@ package enum ChoiceTreeAnalysis {
             }
 
             let hasIncompleteSequence = parameters.contains { param in
-                if case let .compositeSequence(_, elementSlotParams, _) = param.kind {
+                if case let .compositeSequence(_, elementSlotParams, _, _) = param.kind {
                     return elementSlotParams.count < 2
                 }
                 return false
@@ -379,18 +379,22 @@ package enum ChoiceTreeAnalysis {
             .sorted()
 
         func buildSlots(
-            from elementSlotParams: [[BoundaryParameter]]
+            from elementSlotParams: [[BoundaryParameter]],
+            halvedPairs: Bool
         ) -> (slots: [SequenceLengthSlot], compositeSize: UInt64) {
             var slots: [SequenceLengthSlot] = []
             var offset: UInt64 = 0
 
             for length in lengthValues {
                 let activeCount = min(Int(length), elementSlotParams.count)
+                let params = (halvedPairs && activeCount >= 2)
+                    ? halveElementSlotParams(elementSlotParams)
+                    : elementSlotParams
                 let contribution: UInt64
                 if activeCount == 0 {
                     contribution = 1
                 } else {
-                    contribution = elementSlotParams.prefix(activeCount)
+                    contribution = params.prefix(activeCount)
                         .reduce(UInt64(1)) { accumulator, slotParams in
                             slotParams.reduce(accumulator) { inner, param in
                                 let (product, overflow) = inner.multipliedReportingOverflow(by: param.domainSize)
@@ -412,7 +416,8 @@ package enum ChoiceTreeAnalysis {
             return (slots, offset)
         }
 
-        var (slots, compositeSize) = buildSlots(from: elementSlotParams)
+        var halvedPairs = false
+        var (slots, compositeSize) = buildSlots(from: elementSlotParams, halvedPairs: false)
 
         // When the composite domain exceeds the finite threshold, finite element params whose products dominate the space should use boundary representatives instead of full enumeration.
         if compositeSize > Self.finiteDomainThreshold {
@@ -435,19 +440,14 @@ package enum ChoiceTreeAnalysis {
                 }
             }
             if converted {
-                (slots, compositeSize) = buildSlots(from: elementSlotParams)
+                (slots, compositeSize) = buildSlots(from: elementSlotParams, halvedPairs: false)
             }
         }
 
-        // When not expanding sequence pairs, keep length 2 but give each position a disjoint half of the boundary values. This reduces the length-2 product from d² to (d/2)² = d²/4 while still exercising pair interactions. Without this, the only alternative is dropping length 2 entirely, losing all element-pair coverage.
+        // When not expanding sequence pairs, keep length 2 but give each position a disjoint half of the boundary values. Length ≤1 keeps the full set so every boundary value appears at least once. This reduces the length-2 product from d² to (d/2)² = d²/4 while still exercising pair interactions.
         if expandSequencePairs == false, elementSlotParams.count >= 2 {
-            let pairCount = min(elementSlotParams[0].count, elementSlotParams[1].count)
-            for paramIndex in 0 ..< pairCount {
-                let (firstHalf, secondHalf) = elementSlotParams[0][paramIndex].values.halved()
-                elementSlotParams[0][paramIndex] = elementSlotParams[0][paramIndex].withValues(firstHalf)
-                elementSlotParams[1][paramIndex] = elementSlotParams[1][paramIndex].withValues(secondHalf)
-            }
-            (slots, compositeSize) = buildSlots(from: elementSlotParams)
+            halvedPairs = true
+            (slots, compositeSize) = buildSlots(from: elementSlotParams, halvedPairs: true)
         }
 
         let param = BoundaryParameter(
@@ -457,11 +457,27 @@ package enum ChoiceTreeAnalysis {
             kind: .compositeSequence(
                 lengthRange: lengthRange,
                 elementSlotParams: elementSlotParams,
+                halvedPairs: halvedPairs,
                 lengthSlots: slots
             )
         )
         parameters.append(param)
         return true
+    }
+
+    // MARK: - Element Pair Halving
+
+    /// Splits each element slot's boundary values between positions: slot 0 gets the first half, slot 1 gets the second half.
+    static func halveElementSlotParams(_ params: [[BoundaryParameter]]) -> [[BoundaryParameter]] {
+        guard params.count >= 2 else { return params }
+        var result = params
+        let pairCount = min(result[0].count, result[1].count)
+        for paramIndex in 0 ..< pairCount {
+            let (firstHalf, secondHalf) = result[0][paramIndex].values.halved()
+            result[0][paramIndex] = result[0][paramIndex].withValues(firstHalf)
+            result[1][paramIndex] = result[1][paramIndex].withValues(secondHalf)
+        }
+        return result
     }
 
     // MARK: - Element Walk

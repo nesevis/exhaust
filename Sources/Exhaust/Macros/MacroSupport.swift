@@ -414,7 +414,6 @@ public extension __ExhaustRuntime {
         private static func replayRegressionSeeds<Output>( // swiftlint:disable:this function_parameter_count
             gen: Generator<Output>,
             settings: [PropertySettings],
-
             fileID: StaticString,
             filePath: StaticString,
             line: UInt,
@@ -512,8 +511,14 @@ public extension __ExhaustRuntime {
                 withExpectedIssue(isIntermittent: true) {
                     #if canImport(Testing)
                         if let regression = replayRegressionSeeds(
-                            gen: gen, settings: settings, fileID: fileID, filePath: filePath, line: line, column: column,
-                            function: function, property: boolProperty
+                            gen: gen,
+                            settings: settings,
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column,
+                            function: function,
+                            property: boolProperty
                         ) {
                             pipelineResult = regression.counterexample
                             capturedReplaySeed = regression.replaySeed

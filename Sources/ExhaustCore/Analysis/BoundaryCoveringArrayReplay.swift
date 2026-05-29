@@ -109,20 +109,23 @@ package enum BoundaryCoveringArrayReplay {
                 let compositeIndex = row.values[paramIndex]
                 paramIndex += 1
 
-                if case let .compositeSequence(_, elementSlotParams, lengthSlots) = param.kind {
+                if case let .compositeSequence(_, elementSlotParams, halvedPairs, lengthSlots) = param.kind {
                     guard let slot = findLengthSlot(for: compositeIndex, in: lengthSlots) else {
                         return nil
                     }
+                    let effectiveParams = (halvedPairs && slot.activeElementCount >= 2)
+                        ? ChoiceTreeAnalysis.halveElementSlotParams(elementSlotParams)
+                        : elementSlotParams
                     let elementValues = decomposeCompositeIndex(
                         compositeIndex - slot.flatOffset,
-                        activeSlotParams: Array(elementSlotParams.prefix(slot.activeElementCount))
+                        activeSlotParams: Array(effectiveParams.prefix(slot.activeElementCount))
                     )
                     var newElements: [ChoiceTree] = []
                     var flatIdx = 0
                     for (elementIndex, element) in elements.enumerated() {
                         guard UInt64(elementIndex) < slot.length else { break }
                         if elementIndex < slot.activeElementCount {
-                            let slotParams = elementSlotParams[elementIndex]
+                            let slotParams = effectiveParams[elementIndex]
                             let subRow = CoveringArrayRow(values: Array(elementValues[flatIdx ..< flatIdx + slotParams.count]))
                             let subProfile = BoundaryDomainProfile(parameters: slotParams)
                             guard let newElement = Self.buildTree(row: subRow, profile: subProfile) else {
@@ -218,19 +221,22 @@ package enum BoundaryCoveringArrayReplay {
                     trees.append(tree)
                     i += 1 + consumed
 
-                case let .compositeSequence(lengthRange, elementSlotParams, lengthSlots):
+                case let .compositeSequence(lengthRange, elementSlotParams, halvedPairs, lengthSlots):
                     guard let slot = findLengthSlot(for: valueIndex, in: lengthSlots) else {
                         return nil
                     }
+                    let effectiveParams = (halvedPairs && slot.activeElementCount >= 2)
+                        ? ChoiceTreeAnalysis.halveElementSlotParams(elementSlotParams)
+                        : elementSlotParams
                     let elementValues = decomposeCompositeIndex(
                         valueIndex - slot.flatOffset,
-                        activeSlotParams: Array(elementSlotParams.prefix(slot.activeElementCount))
+                        activeSlotParams: Array(effectiveParams.prefix(slot.activeElementCount))
                     )
                     var elementTrees: [ChoiceTree] = []
                     var flatIdx = 0
                     for elemIdx in 0 ..< Int(slot.length) {
                         if elemIdx < slot.activeElementCount {
-                            let slotParams = elementSlotParams[elemIdx]
+                            let slotParams = effectiveParams[elemIdx]
                             let subRow = CoveringArrayRow(values: Array(elementValues[flatIdx ..< flatIdx + slotParams.count]))
                             let subProfile = BoundaryDomainProfile(parameters: slotParams)
                             guard let elemTree = Self.buildTree(row: subRow, profile: subProfile) else {
