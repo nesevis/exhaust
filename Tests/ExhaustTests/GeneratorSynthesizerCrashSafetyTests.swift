@@ -116,6 +116,33 @@ struct GeneratorSynthesizerCollectionTests {
     }
 }
 
+/// Regression tests for inline nested containers: a custom `init(from:)` that decodes a nested structure with `nestedContainer(keyedBy:forKey:)` or `nestedUnkeyedContainer(forKey:)` records the nested fields as a sub-tree, so they vary rather than pinning.
+@Suite("Generator Synthesizer — nested containers")
+struct GeneratorSynthesizerNestedContainerTests {
+    @Test("Inline nested keyed container varies outer and nested fields")
+    func inlineNestedKeyedContainerVaries() throws {
+        let generator = try #gen(InlineNested.self, from: """
+        {"id": 1, "meta": {"label": "hello"}}
+        """)
+        let values = #example(generator, count: 50)
+
+        #expect(Set(values.map(\.id)).count > 1)
+        #expect(Set(values.map(\.label)).count > 1)
+    }
+
+    @Test("Inline nested unkeyed container varies its length and elements")
+    func inlineNestedUnkeyedContainerVaries() throws {
+        let generator = try #gen(InlineList.self, from: """
+        {"id": 1, "numbers": [10, 20, 30]}
+        """)
+        let values = #example(generator, count: 50)
+
+        #expect(Set(values.map(\.id)).count > 1)
+        #expect(Set(values.map(\.numbers.count)).count > 1)
+        #expect(Set(values.flatMap(\.numbers)).count > 1)
+    }
+}
+
 // MARK: - Supporting Types
 
 private struct Member: Codable, Hashable {
@@ -189,5 +216,47 @@ private struct ReorderedBranch: Codable, Equatable {
         try container.encode(flag, forKey: .flag)
         try container.encode(a, forKey: .a)
         try container.encode(b, forKey: .b)
+    }
+}
+
+private struct InlineNested: Decodable {
+    let id: Int
+    let label: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case meta
+    }
+
+    enum MetaKeys: String, CodingKey {
+        case label
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        let meta = try container.nestedContainer(keyedBy: MetaKeys.self, forKey: .meta)
+        label = try meta.decode(String.self, forKey: .label)
+    }
+}
+
+private struct InlineList: Decodable {
+    let id: Int
+    let numbers: [Int]
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case numbers
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        var nested = try container.nestedUnkeyedContainer(forKey: .numbers)
+        var collected = [Int]()
+        while nested.isAtEnd == false {
+            try collected.append(nested.decode(Int.self))
+        }
+        numbers = collected
     }
 }

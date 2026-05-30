@@ -4,10 +4,12 @@ import Foundation
 ///
 /// A keyed level carries the `CodingKey` string for each field so the replay decoder can address values by name rather than by position. The shape lowers to the child generators to zip and a closure that reassembles their generated values into a ``ReplayValue``.
 package enum ContainerShape {
-    /// A keyed container: one `(key, generator)` per `decode`/`decodeIfPresent(forKey:)` call.
-    case keyed([(key: String, generator: AnyGenerator)])
-    /// An unkeyed container: one generator per decoded element, in order.
+    /// A keyed container: one child per `decode`/`decodeIfPresent`/`nestedContainer(forKey:)` call.
+    case keyed([KeyedChild])
+    /// A heterogeneous unkeyed container: a generator per decoded element, in order, with the length fixed to the example (a positional/tuple decode that wants exactly this sequence).
     case unkeyed([AnyGenerator])
+    /// A homogeneous unkeyed container: every element decoded to the same type, so the length varies like an array rather than being fixed to the example.
+    case homogeneousArray(element: AnyGenerator)
     /// A single-value container: one generator.
     case single(AnyGenerator)
     /// Nothing was recorded — the discovery pass could not synthesize anything for this level.
@@ -24,20 +26,25 @@ package enum ContainerShape {
     /// Lowers the shape into the child generators to zip and a closure that reassembles their generated values into a ``ReplayValue``. Returns `nil` for ``empty``.
     func lowering() -> (generators: ContiguousArray<AnyGenerator>, rebuild: ([Any]) -> ReplayValue)? {
         switch self {
-            case let .keyed(pairs):
-                let keys = pairs.map(\.key)
-                let generators = ContiguousArray(pairs.map(\.generator))
+            case let .keyed(children):
+                let generators = ContiguousArray(children.map(\.generator))
                 return (generators, { values in
-                    var fields = [String: ReplayValue](minimumCapacity: keys.count)
-                    for (index, key) in keys.enumerated() {
-                        // A custom init may decode the same key twice; last write wins, which also avoids a duplicate-key trap.
-                        fields[key] = .leaf(values[index])
+                    var fields = [String: ReplayValue](minimumCapacity: children.count)
+                    for (index, child) in children.enumerated() {
+                        // A nested-container child's generator already produces a `ReplayValue` sub-tree; a value child's generator produces the built value, wrapped here as a leaf. A custom init may decode the same key twice; last write wins, which also avoids a duplicate-key trap.
+                        fields[child.key] = child.producesReplayValue ? (values[index] as! ReplayValue) : .leaf(values[index])
                     }
                     return .keyed(fields)
                 })
             case let .unkeyed(generators):
                 return (ContiguousArray(generators), { values in
                     .unkeyed(values.map(ReplayValue.leaf))
+                })
+            case let .homogeneousArray(element):
+                // Reuse the array combinator's length distribution: one generator produces the whole varying-length array, which the rebuild unpacks into unkeyed leaves.
+                let arrayGenerator: AnyGenerator = Gen.arrayOf(element).erase()
+                return (ContiguousArray([arrayGenerator]), { values in
+                    .unkeyed((values[0] as! [Any]).map(ReplayValue.leaf))
                 })
             case let .single(generator):
                 return (ContiguousArray([generator]), { values in
@@ -49,16 +56,27 @@ package enum ContainerShape {
     }
 }
 
+/// One field of a keyed container shape.
+package struct KeyedChild {
+    /// The `CodingKey` string the replay decoder addresses this field by.
+    let key: String
+    /// Generates either the field's built value (when ``producesReplayValue`` is `false`) or a nested ``ReplayValue`` sub-tree (when `true`).
+    let generator: AnyGenerator
+    /// Whether ``generator`` produces a ``ReplayValue`` directly (a nested container) rather than a value to wrap as a leaf.
+    let producesReplayValue: Bool
+}
+
 /// A `Decoder` that intercepts decode calls to record a per-level generator shape while returning concrete JSON values.
 package final class DiscoveryDecoder: Decoder {
     package let codingPath: [any CodingKey]
     package let userInfo: [CodingUserInfoKey: Any] = [:]
     private let jsonValue: Any
 
-    // Exactly one of these is populated, determined by which container kind the decoded type requested. The `shape` getter resolves them into a `ContainerShape`.
+    // The keyed/unkeyed/single fields are populated by whichever container kind the decoded type requested; `nestedDecoders` holds the sub-decoders spawned for inline `nestedContainer(forKey:)` calls on a keyed container. The `shape` getter resolves them into a `ContainerShape`.
     private var keyedChildren: [(key: String, generator: AnyGenerator)] = []
-    private var unkeyedChildren: [AnyGenerator] = []
+    private var unkeyedChildren: [(elementType: ObjectIdentifier, generator: AnyGenerator)] = []
     private var singleChild: AnyGenerator?
+    private var nestedDecoders: [(key: String, decoder: DiscoveryDecoder)] = []
 
     package init(jsonValue: Any, codingPath: [any CodingKey] = []) {
         self.jsonValue = jsonValue
@@ -66,15 +84,31 @@ package final class DiscoveryDecoder: Decoder {
     }
 
     /// The container shape discovered for this decoder's value.
+    ///
+    /// A keyed level combines its direct field generators with the sub-shapes of any inline nested containers, each folded in under its key as a child whose generator produces a nested ``ReplayValue``. Reading this after `init(from:)` completes is what gives the nested decoders their final shape.
     package var shape: ContainerShape {
         if let singleChild {
             return .single(singleChild)
         }
-        if keyedChildren.isEmpty == false {
-            return .keyed(keyedChildren)
+        if keyedChildren.isEmpty == false || nestedDecoders.isEmpty == false {
+            var children = keyedChildren.map {
+                KeyedChild(key: $0.key, generator: $0.generator, producesReplayValue: false)
+            }
+            for (key, nestedDecoder) in nestedDecoders {
+                children.append(KeyedChild(
+                    key: key,
+                    generator: nestedReplayValueGenerator(for: nestedDecoder.shape),
+                    producesReplayValue: true
+                ))
+            }
+            return .keyed(children)
         }
         if unkeyedChildren.isEmpty == false {
-            return .unkeyed(unkeyedChildren)
+            // A single element type across all positions reads as a collection (a loop over homogeneous elements), so the length varies. Mixed types read as a positional/tuple decode that wants exactly this sequence, so the length stays fixed.
+            let isHomogeneous = Set(unkeyedChildren.map(\.elementType)).count == 1
+            return isHomogeneous
+                ? .homogeneousArray(element: unkeyedChildren[0].generator)
+                : .unkeyed(unkeyedChildren.map(\.generator))
         }
         return .empty
     }
@@ -116,12 +150,16 @@ package final class DiscoveryDecoder: Decoder {
         keyedChildren.append((key, generator))
     }
 
-    func recordUnkeyed(_ generator: AnyGenerator) {
-        unkeyedChildren.append(generator)
+    func recordUnkeyed(elementType: Any.Type, _ generator: AnyGenerator) {
+        unkeyedChildren.append((ObjectIdentifier(elementType), generator))
     }
 
     func recordSingle(_ generator: AnyGenerator) {
         singleChild = generator
+    }
+
+    func recordNested(key: String, decoder: DiscoveryDecoder) {
+        nestedDecoders.append((key, decoder))
     }
 }
 
@@ -259,10 +297,11 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
                 jsonValue: jsonValue,
                 codingPath: codingPath + [key]
             )
-            if (try? T(from: nested)) != nil, nested.shape.isEmpty == false {
+            let nestedShape = (try? T(from: nested)) == nil ? ContainerShape.empty : nested.shape
+            if nestedShape.isEmpty == false {
                 generator = makeReconstructingGenerator(
                     type,
-                    shape: nested.shape,
+                    shape: nestedShape,
                     pin: (decodedValue ?? jsonValue) as Any,
                     fallbackPath: codingPath + [key]
                 )
@@ -289,9 +328,12 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
         guard let nested = dictionary[key.stringValue] as? [String: Any] else {
             throw GeneratorSynthesizerError.unexpectedContainer
         }
+        // A fresh decoder keeps the nested container's recordings separate from this level's, so its shape folds in under `key` as a nested `ReplayValue` rather than flattening into this level's fields.
+        let nestedDecoder = DiscoveryDecoder(jsonValue: nested, codingPath: codingPath + [key])
+        decoder.recordNested(key: key.stringValue, decoder: nestedDecoder)
         let container = DiscoveryKeyedContainer<NestedKey>(
             dictionary: nested,
-            decoder: decoder,
+            decoder: nestedDecoder,
             codingPath: codingPath + [key]
         )
         return KeyedDecodingContainer(container)
@@ -301,9 +343,11 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
         guard let array = dictionary[key.stringValue] as? [Any] else {
             throw GeneratorSynthesizerError.unexpectedContainer
         }
+        let nestedDecoder = DiscoveryDecoder(jsonValue: array, codingPath: codingPath + [key])
+        decoder.recordNested(key: key.stringValue, decoder: nestedDecoder)
         return DiscoveryUnkeyedContainer(
             array: array,
-            decoder: decoder,
+            decoder: nestedDecoder,
             codingPath: codingPath + [key]
         )
     }
@@ -359,7 +403,7 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
         currentIndex += 1
 
         if let generableType = type as? ExhaustGenerable.Type {
-            decoder.recordUnkeyed(generableType.defaultGenerator)
+            decoder.recordUnkeyed(elementType: type, generableType.defaultGenerator)
             return try decodePrimitive(type, from: jsonValue)
         }
 
@@ -458,6 +502,29 @@ func makeReconstructingGenerator<T: Decodable>(
                     SynthesisDiagnostics.recordFallback(type: T.self, codingPath: fallbackPath)
                     return pin
                 }
+            },
+            inputType: [Any].self,
+            outputType: Any.self
+        ),
+        inner: zipped
+    )) as AnyGenerator
+}
+
+/// Builds a generator that produces the nested ``ReplayValue`` for an inline nested container, from the shape its sub-decoder recorded.
+///
+/// Unlike ``makeReconstructingGenerator(_:shape:pin:fallbackPath:)``, this does not run `init(from:)` — the nested container is decoded inline by the parent type, so the parent's replay decoder reads this sub-tree directly through `nestedContainer(forKey:)`.
+private func nestedReplayValueGenerator(for shape: ContainerShape) -> AnyGenerator {
+    guard let (generators, rebuild) = shape.lowering() else {
+        return Gen.just(ReplayValue.keyed([:]) as Any).erase()
+    }
+    let zipped: AnyGenerator = .impure(
+        operation: .zip(generators),
+        continuation: { .pure($0) }
+    )
+    return Gen.liftF(.transform(
+        kind: .map(
+            forward: { values in
+                rebuild(values as! [Any]) as Any
             },
             inputType: [Any].self,
             outputType: Any.self
