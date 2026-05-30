@@ -9,7 +9,7 @@
 ///
 /// In `.findSmallest` mode, probes bias toward `lo` under the prior that the boundary is near the reduction target. In `.findLargest` mode, probes bias toward `hi`. The divisor `K` starts at 16 and halves on rejection (flooring at 2, which is pure binary search). On acceptance, `K` resets to 16 for the narrowed interval.
 ///
-/// Transitions to pure binary search when the interval shrinks below ``binaryThreshold`` values.
+/// Transitions to pure binary search when the interval narrows below ``binaryThreshold`` values.
 struct InterpolationSearchStepper {
     // MARK: - State
 

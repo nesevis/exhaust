@@ -122,7 +122,7 @@ struct GraphValueEncoder: GraphEncoder {
 
     /// State for the batch bisection phase.
     ///
-    /// Performs joint interpolation search across groups of leaves. Each group probe moves all leaves in the group one interpolation step toward their targets simultaneously. On acceptance, the group's values update and the next step is tried. On rejection, the group is bisected into two halves that are searched independently. When a group shrinks to a single leaf, it is deferred to the per-leaf phase.
+    /// Performs joint interpolation search across groups of leaves. Each group probe moves all leaves in the group one interpolation step toward their targets simultaneously. On acceptance, the group's values update and the next step is tried. On rejection, the group is bisected into two halves that are searched independently. When a group is reduced to a single leaf, it is deferred to the per-leaf phase.
     struct BisectionState {
         /// Stack of leaf groups to search. Each group is a half-open interval into ``IntegerState/leafPositions``.
         var pendingGroups: [(start: Int, end: Int)]

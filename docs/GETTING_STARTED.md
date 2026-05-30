@@ -283,7 +283,7 @@ Generators with very small domains get enumerated exhaustively as a special case
 
 **Reduction.** The moment any phase produces a failing input, `#exhaust` switches from searching for failures to making the failure it found useful to you. Reduction works across every dimension of the input at once: it deletes elements from sequences, collapses recursive structure, swaps between branches, drives numeric values toward their simplest form, redistributes magnitude between coupled parameters, and reorders siblings into a natural reading order. 
 
-Big structural simplifications tend to happen first, because they shrink the counterexample fastest. Value minimisation happens late, once the structure has settled. The result is the smallest, simplest input the reducer can find that still triggers the failure — the counterexample format you've seen already in the `myDedupe` example, with a `Reduction diff` showing the path from the first failing input to the minimum.
+Big structural simplifications tend to happen first, because they reduce the counterexample fastest. Value minimisation happens late, once the structure has settled. The result is the smallest, simplest input the reducer can find that still triggers the failure — the counterexample format you've seen already in the `myDedupe` example, with a `Reduction diff` showing the path from the first failing input to the minimum.
 
 The first two phases search for bugs. The third strips away everything that doesn't contribute to the failure, making the underlying bug stand out. A property that passes all three means *no failures in the coverage budget, no failures in random sampling, and nothing for reduction to simplify*. A failure in either of the first two triggers the third automatically. [How reduction works](REDUCTION.md) walks through a complete example.
 
@@ -301,7 +301,7 @@ When reduction finishes, Exhaust reports the minimal counterexample it arrived a
 }
 ```
 
-The property might fail on an eight-element input like `[3, 7, 7, 0, 7, 1, 1, 4]`, but that's not what gets reported. The reducer shrinks it first, and you see this instead:
+The property might fail on an eight-element input like `[3, 7, 7, 0, 7, 1, 1, 4]`, but that's not what gets reported. The reducer reduces it first, and you see this instead:
 
 ```
    Counterexample:

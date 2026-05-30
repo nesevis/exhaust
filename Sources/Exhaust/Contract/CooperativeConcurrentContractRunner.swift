@@ -5,7 +5,7 @@
 // This implementation adapts the approach to Swift Concurrency:
 // - Schedule markers encoded as reducible chooseBits replace PULSE's external schedule.
 // - A cooperative TaskExecutor-based drain loop replaces the Erlang VM instrumentation.
-// - The schedule is part of the generated input (not an external random choice), so reduction operates on schedule and commands jointly — no separate ?ALWAYS(N, Prop) wrapper is needed for shrinking stability.
+// - The schedule is part of the generated input (not an external random choice), so reduction operates on schedule and commands jointly — no separate ?ALWAYS(N, Prop) wrapper is needed for reduction stability.
 import ExhaustCore
 import IssueReporting
 

@@ -23,7 +23,7 @@ With `.includeDiff` enabled, the output also includes a structural diff between 
 # Worked example: large union list
 
 > [!Note]
-> This example is from the [Shrinking Challenge](https://github.com/jlink/shrinking-challenge/blob/main/pbt-libraries/exhaust/reports/largeUnionList.md), a cross-library benchmark for test case reduction.
+> This example is from the [Shrinking Challenge](https://github.com/jlink/shrinking-challenge/blob/main/pbt-libraries/exhaust/reports/largeUnionList.md), a cross-library benchmark for test case reduction, or "shrinking".
 
 Consider a property about nested lists of integers:
 
@@ -71,11 +71,11 @@ Starting from `[[-31, 111, 405], [-32, 545, 537], [-643]]`, the reducer converge
 
 During this time, the scheduler interleaves operations by estimated improvement, so deletion, migration, and value search all run within the first cycle.
 
-**Deletion.** The deletion encoder proposes removing elements from the sublists. The first four proposals are rejected: each would drop the distinct-value count below five, and the property would pass. The fifth succeeds, shrinking the choice sequence from 15 entries to 12. The graph is rebuilt.
+**Deletion.** The deletion encoder proposes removing elements from the sublists. The first four proposals are rejected: each would drop the distinct-value count below five, and the property would pass. The fifth succeeds, reducing the choice sequence from 15 entries to 12. The graph is rebuilt.
 
-**Migration.** The migration encoder consolidates elements from one sublist into another, enabling further deletion. One migration is accepted. The sequence shrinks to 10 entries.
+**Migration.** The migration encoder consolidates elements from one sublist into another, enabling further deletion. One migration is accepted. The sequence is further reduced to 10 entries.
 
-**More deletion.** With elements consolidated, one more element can be removed. The sequence shrinks to 9. Seven more deletion proposals follow, all rejected. The structure has reached its minimum: one sublist, five elements, five distinct values.
+**More deletion.** With elements consolidated, one more element can be removed. The sequence is reduced to to 9. Seven more deletion proposals follow, all rejected. The structure has reached its minimum: one sublist, five elements, five distinct values.
 
 **Value search.** The value encoder targets each integer leaf and drives it toward zero. Out of 58 probes, 30 are accepted, 11 hit a rejection cache — a hash of previously rejected mutations that avoids re-testing them — and 17 are rejected by the property because the candidate is equal to another value. When a leaf cannot go below a certain value without the property passing, the encoder records that bound and stops.
 
