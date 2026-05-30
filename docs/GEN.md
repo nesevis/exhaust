@@ -72,7 +72,7 @@ When Exhaust can synthesise the backward mapping (extracting struct properties b
 
 ## Synthesising generators from Decodable types
 
-Writing generators by hand scales well for a handful of types. When you have many types that already conform to `Codable`, you can skip the manual work and let Exhaust build a generator from an example value.
+Writing generators by hand scales well for a handful of types. When you have many types that already conform to `Decodable`, you can skip the manual work and let Exhaust build a generator from example JSON or an existing `Codable` instance.
 
 ```swift
 struct Person: Codable {
@@ -106,18 +106,28 @@ let example = Person(name: "Chris", age: 42, active: true)
 let gen = try #gen(from: example)
 ```
 
+The two JSON overloads require only `Decodable`. The instance overload requires `Codable`: Exhaust encodes the instance to JSON first, then runs it back through the same discovery decode, so the type has to support both directions.
+
 ### What gets a full generator
 
-Primitive types: all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat` produce full generators with size scaling and boundary analysis. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators when their element types are supported. `CaseIterable` types produce even-weighted picks across all cases.
+These types produce full generators with size scaling and boundary analysis:
+
+- **Primitives**: all signed and unsigned integer types, `Bool`, `Float`, `Double`, `String`, and `Character`.
+- **Foundation types**: `Date`, `UUID`, `URL`, `Data`, `Decimal`, and `CGFloat`.
+- **`CaseIterable` types**: even-weighted picks across every case.
+- **`Optional`, `Array`, `Set`, and `Dictionary`**: full generators whose presence, length, and contents vary, as long as the element type — or the wrapped, key, and value types — is itself supported.
+- **Nested `Decodable` types**: a field whose type is another `Decodable` struct is discovered recursively and rebuilt through its own initialiser. The same applies to the element of an array or set and the value of a dictionary — Exhaust reads the element's shape from a representative entry in the example.
+
+Top-level containers work too. A leaf or collection type passed directly — `#gen([Item].self, from: "[…]")` — synthesises a generator whose elements are discovered from the example, whether the element is a primitive or a nested `Decodable` type.
 
 ### What falls back to a constant
 
-Types the synthesiser cannot handle (non-`CaseIterable` enums, types with hand-written `init(from:)` that branch on decoded values) fall back to `.just(decodedValue)`, pinning the field to the constant value from the example JSON or instance. The generator still works, but those fields do not vary across iterations.
+Some fields fall back to a constant from the example, pinned with `.just(decodedValue)`. This covers non-`CaseIterable` `RawRepresentable` enums, collections whose example is empty (no element to discover from), and values decoded through patterns the synthesiser does not model (manual element-by-element unkeyed decoding, class inheritance via a super decoder). A hand-written `init(from:)` that branches still generates correctly, as long as the example exercises the path it takes; only a generated value that drives it down an unexercised branch is pinned for that one sample, with a deduplicated warning. The generator still works either way — pinned fields just do not vary across iterations.
 
 > [!Tip]
 > Run `#examine` on a synthesised generator to see which fields are fully generated and which are pinned:
 > ```swift
-> let report = #examine(gen, .samples(50))
+> let report = #examine(gen, samples: 50)
 > // Output includes:
 > //   Correctness: reflection skipped (synthesised generator)
 > //   Pinned fields: 1 field could not be synthesised (constant value from example JSON)
