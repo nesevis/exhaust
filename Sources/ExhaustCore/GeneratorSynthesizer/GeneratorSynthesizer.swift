@@ -51,53 +51,26 @@ package enum GeneratorSynthesizer {
             return ReflectiveGenerator(typed, isSynthesized: true)
         }
 
+        // The example-driven path: run `init(from:)` once to discover the type's shape, then reconstruct from it. `makeReconstructingGenerator` owns the zip-map-replay machinery and the catch-and-pin fallback; an empty shape (nothing to synthesize) pins to the example directly. The example value seeds the fallback at the root path `[]`.
         let discovery = DiscoveryDecoder(jsonValue: jsonValue)
         let exampleValue = try T(from: discovery)
-
-        // An empty shape means the discovery pass found nothing to synthesize — a collection of non-generable elements, or a type whose decode produced no leaves. Pin to the example at build time instead of building an empty container the replay pass would immediately over-read. This pinning is structural and surfaces through `#examine`'s pinned-field report, so it does not emit a per-sample fallback warning.
-        guard let (generators, rebuild) = discovery.shape.lowering() else {
-            return ReflectiveGenerator(Gen.just(exampleValue), isSynthesized: true)
-        }
-
-        let zipped: AnyGenerator = .impure(
-            operation: .zip(generators),
-            continuation: { .pure($0) }
+        let reconstructing = makeReconstructingGenerator(
+            T.self,
+            shape: discovery.shape,
+            pin: exampleValue,
+            codingPath: []
         )
-
-        let generator = Gen.liftF(.transform(
-            kind: .map(
-                forward: { values in
-                    // A generated value can drive a hand-written `init(from:)` down a branch the example never exercised, leaving a key the replay value does not carry. Catch that and pin this sample to the example rather than letting it crash; a genuine decode error still propagates.
-                    let replayValue = rebuild(values as! [Any])
-                    do {
-                        return try T(from: ReplayDecoder(replayValue))
-                    } catch let miss as GenSchemaMiss {
-                        SynthesisDiagnostics.recordFallback(type: T.self, codingPath: miss.codingPath)
-                        return exampleValue
-                    }
-                },
-                inputType: [Any].self,
-                outputType: T.self
-            ),
-            inner: zipped
-        )) as Generator<T>
-
-        return ReflectiveGenerator(generator, isSynthesized: true)
+        let typed: Generator<T> = reconstructing.map { $0 as! T }
+        return ReflectiveGenerator(typed, isSynthesized: true)
     }
 
     /// Returns the pre-configured generator for a top-level leaf or collection type, or `nil` when the type needs the discovery pass.
     ///
-    /// Mirrors the per-field dispatch the discovery pass already applies to nested values, lifted to the root: ``ExhaustGenerable`` types use their default generator, and standard-library collections of generable elements use their ``SynthesizableCollection`` generator.
+    /// Lifts the per-field dispatch the discovery pass already applies to nested values to the root: ``ExhaustGenerable`` types use their default generator, and standard-library collections of generable elements use their ``SynthesizableCollection`` generator.
     private static func rootGenerator<T>(for _: T.Type) -> Generator<T>? {
-        if let generable = T.self as? ExhaustGenerable.Type {
-            return generable.defaultGenerator.map { $0 as! T }
+        resolveGenerator(for: T.self).map { anyGenerator in
+            anyGenerator.map { $0 as! T }
         }
-        if let collection = T.self as? SynthesizableCollection.Type,
-           let collectionGenerator = collection.synthesizedGenerator
-        {
-            return collectionGenerator.map { $0 as! T }
-        }
-        return nil
     }
 }
 

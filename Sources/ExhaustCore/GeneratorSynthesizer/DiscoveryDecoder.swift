@@ -1,71 +1,5 @@
 import Foundation
 
-/// The container shape a ``DiscoveryDecoder`` observed for one decoder level, with a child generator per decoded field.
-///
-/// A keyed level carries the `CodingKey` string for each field so the replay decoder can address values by name rather than by position. The shape lowers to the child generators to zip and a closure that reassembles their generated values into a ``ReplayValue``.
-package enum ContainerShape {
-    /// A keyed container: one child per `decode`/`decodeIfPresent`/`nestedContainer(forKey:)` call.
-    case keyed([KeyedChild])
-    /// A heterogeneous unkeyed container: a generator per decoded element, in order, with the length fixed to the example (a positional/tuple decode that wants exactly this sequence).
-    case unkeyed([AnyGenerator])
-    /// A homogeneous unkeyed container: every element decoded to the same type, so the length varies like an array rather than being fixed to the example.
-    case homogeneousArray(element: AnyGenerator)
-    /// A single-value container: one generator.
-    case single(AnyGenerator)
-    /// Nothing was recorded — the discovery pass could not synthesize anything for this level.
-    case empty
-
-    /// Whether the discovery pass recorded no generators for this level.
-    var isEmpty: Bool {
-        if case .empty = self {
-            return true
-        }
-        return false
-    }
-
-    /// Lowers the shape into the child generators to zip and a closure that reassembles their generated values into a ``ReplayValue``. Returns `nil` for ``empty``.
-    func lowering() -> (generators: ContiguousArray<AnyGenerator>, rebuild: ([Any]) -> ReplayValue)? {
-        switch self {
-            case let .keyed(children):
-                let generators = ContiguousArray(children.map(\.generator))
-                return (generators, { values in
-                    var fields = [String: ReplayValue](minimumCapacity: children.count)
-                    for (index, child) in children.enumerated() {
-                        // A nested-container child's generator already produces a `ReplayValue` sub-tree; a value child's generator produces the built value, wrapped here as a leaf. A custom init may decode the same key twice; last write wins, which also avoids a duplicate-key trap.
-                        fields[child.key] = child.producesReplayValue ? (values[index] as! ReplayValue) : .leaf(values[index])
-                    }
-                    return .keyed(fields)
-                })
-            case let .unkeyed(generators):
-                return (ContiguousArray(generators), { values in
-                    .unkeyed(values.map(ReplayValue.leaf))
-                })
-            case let .homogeneousArray(element):
-                // Reuse the array combinator's length distribution: one generator produces the whole varying-length array, which the rebuild unpacks into unkeyed leaves.
-                let arrayGenerator: AnyGenerator = Gen.arrayOf(element).erase()
-                return (ContiguousArray([arrayGenerator]), { values in
-                    .unkeyed((values[0] as! [Any]).map(ReplayValue.leaf))
-                })
-            case let .single(generator):
-                return (ContiguousArray([generator]), { values in
-                    .leaf(values[0])
-                })
-            case .empty:
-                return nil
-        }
-    }
-}
-
-/// One field of a keyed container shape.
-package struct KeyedChild {
-    /// The `CodingKey` string the replay decoder addresses this field by.
-    let key: String
-    /// Generates either the field's built value (when ``producesReplayValue`` is `false`) or a nested ``ReplayValue`` sub-tree (when `true`).
-    let generator: AnyGenerator
-    /// Whether ``generator`` produces a ``ReplayValue`` directly (a nested container) rather than a value to wrap as a leaf.
-    let producesReplayValue: Bool
-}
-
 /// A `Decoder` that intercepts decode calls to record a per-level generator shape while returning concrete JSON values.
 package final class DiscoveryDecoder: Decoder {
     package let codingPath: [any CodingKey]
@@ -278,14 +212,15 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
     ) {
         let generator: AnyGenerator
 
-        if let collectionGen = makeCollectionGenerator(for: type) {
-            generator = collectionGen
-        } else if let discoveredCollectionGen = makeDiscoveredCollectionGenerator(
+        // Collections are checked before `ExhaustGenerable` because Array/Dictionary/Set conform to `ExhaustGenerable` only conditionally, and those conditional conformance records are not reliably linked in xcframework builds. `SynthesizableCollection` and `DiscoverableCollection` are unconditional, so they resolve where the conditional conformance would not.
+        if let collectionGenerator = (type as? SynthesizableCollection.Type)?.synthesizedGenerator {
+            generator = collectionGenerator
+        } else if let discoveredCollectionGenerator = makeDiscoveredCollectionGenerator(
             for: type,
             fromExample: jsonValue,
             codingPath: codingPath + [key]
         ) {
-            generator = discoveredCollectionGen
+            generator = discoveredCollectionGenerator
         } else if let generableType = type as? ExhaustGenerable.Type {
             generator = generableType.defaultGenerator
         } else if let caseIterable = type as? any(CaseIterable & Decodable).Type,
@@ -295,21 +230,15 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
         } else if type is any RawRepresentable.Type {
             generator = Gen.just((decodedValue ?? jsonValue) as Any).erase()
         } else {
-            let nested = DiscoveryDecoder(
-                jsonValue: jsonValue,
+            // Recurse into the nested type. Use the recorded shape only when the example decode succeeds — a partial shape from a thrown decode would reconstruct from incomplete fields. An empty shape (decode failed, or produced no leaves) makes `makeReconstructingGenerator` pin to the example, so no separate branch is needed.
+            let nested = DiscoveryDecoder(jsonValue: jsonValue, codingPath: codingPath + [key])
+            let shape = (try? T(from: nested)) == nil ? ContainerShape.empty : nested.shape
+            generator = makeReconstructingGenerator(
+                type,
+                shape: shape,
+                pin: (decodedValue ?? jsonValue) as Any,
                 codingPath: codingPath + [key]
             )
-            let nestedShape = (try? T(from: nested)) == nil ? ContainerShape.empty : nested.shape
-            if nestedShape.isEmpty == false {
-                generator = makeReconstructingGenerator(
-                    type,
-                    shape: nestedShape,
-                    pin: (decodedValue ?? jsonValue) as Any,
-                    fallbackPath: codingPath + [key]
-                )
-            } else {
-                generator = Gen.just((decodedValue ?? jsonValue) as Any).erase()
-            }
         }
 
         decoder.recordKeyed(key.stringValue, asOptional ? wrapOptional(generator) : generator)
@@ -413,6 +342,8 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
         return try T(from: nested)
     }
 
+    // A nested container opened inside an unkeyed container records into the *parent* unkeyed decoder — there is no fresh sub-decoder here, unlike the keyed `nestedContainer(forKey:)` path. For a hand-written init that decodes structs element-by-element this leaves the parent level with keyed/unkeyed children that do not match the unkeyed container the parent's `init(from:)` reopens at replay, so the value degrades to a pin rather than reconstructing. This is the documented "manual element-by-element unkeyed decoding" limitation.
+
     mutating func nestedContainer<NestedKey: CodingKey>(
         keyedBy _: NestedKey.Type
     ) throws -> KeyedDecodingContainer<NestedKey> {
@@ -472,225 +403,6 @@ private struct DiscoverySingleValueContainer: SingleValueDecodingContainer {
 }
 
 // MARK: - Primitive Decoding
-
-private func wrapOptional(_ innerGenerator: AnyGenerator) -> AnyGenerator {
-    // Wrap using the public `.optional()` generator so default weights stay consistent
-    ReflectiveGenerator(innerGenerator, isSynthesized: true).optional().gen.erase()
-}
-
-/// Builds a generator that reconstructs a value of `type` from a discovered container shape, producing the built value type-erased to `Any`.
-///
-/// Zips the shape's child generators, reassembles their generated values into a ``ReplayValue``, and runs `type.init(from:)` against a ``ReplayDecoder``. When a generated value drives `init(from:)` to a branch the example did not cover, the reconstruction pins to `pin` and records a fallback rather than crashing; a genuine decode error still propagates.
-func makeReconstructingGenerator<T: Decodable>(
-    _: T.Type,
-    shape: ContainerShape,
-    pin: Any,
-    fallbackPath: [any CodingKey]
-) -> AnyGenerator {
-    guard let (generators, rebuild) = shape.lowering() else {
-        return Gen.just(pin).erase()
-    }
-    let zipped: AnyGenerator = .impure(
-        operation: .zip(generators),
-        continuation: { .pure($0) }
-    )
-    return Gen.liftF(.transform(
-        kind: .map(
-            forward: { values in
-                let replayValue = rebuild(values as! [Any])
-                do {
-                    return try T(from: ReplayDecoder(replayValue)) as Any
-                } catch is GenSchemaMiss {
-                    SynthesisDiagnostics.recordFallback(type: T.self, codingPath: fallbackPath)
-                    return pin
-                }
-            },
-            inputType: [Any].self,
-            outputType: Any.self
-        ),
-        inner: zipped
-    )) as AnyGenerator
-}
-
-/// Builds a generator that produces the nested ``ReplayValue`` for an inline nested container, from the shape its sub-decoder recorded.
-///
-/// Unlike ``makeReconstructingGenerator(_:shape:pin:fallbackPath:)``, this does not run `init(from:)` — the nested container is decoded inline by the parent type, so the parent's replay decoder reads this sub-tree directly through `nestedContainer(forKey:)`.
-private func nestedReplayValueGenerator(for shape: ContainerShape) -> AnyGenerator {
-    guard let (generators, rebuild) = shape.lowering() else {
-        return Gen.just(ReplayValue.keyed([:]) as Any).erase()
-    }
-    let zipped: AnyGenerator = .impure(
-        operation: .zip(generators),
-        continuation: { .pure($0) }
-    )
-    return Gen.liftF(.transform(
-        kind: .map(
-            forward: { values in
-                rebuild(values as! [Any]) as Any
-            },
-            inputType: [Any].self,
-            outputType: Any.self
-        ),
-        inner: zipped
-    )) as AnyGenerator
-}
-
-private func makeCaseIterableGenerator(_ type: any (CaseIterable & Decodable).Type) -> AnyGenerator? {
-    func build<T: CaseIterable & Decodable>(_: T.Type) -> AnyGenerator? {
-        let cases = Array(T.allCases)
-        // An enum with no cases is uninhabited; there is nothing to pick from. Returning nil lets the caller fall through to the pin path rather than trapping in `Gen.pick`.
-        guard cases.isEmpty == false else {
-            return nil
-        }
-        return Gen.pick(
-            choices: cases.map { (1, Gen.just($0 as Any)) }
-        ).erase()
-    }
-    return build(type)
-}
-
-// MARK: - Collection Generator Construction
-
-//
-// Conditional conformances to ``ExhaustGenerable`` (Array, Dictionary, Set) are not reliably resolved at runtime in xcframework builds — the linker may strip conformance records that are only reachable via dynamic `as?` casts.
-//
-// ``SynthesizableCollection`` is an unconditional conformance on each collection type (no `where` clause), so it is always present in the binary. The element/key/value type's ``ExhaustGenerable`` conformance is checked at runtime inside the property, where unconditional conformances resolve correctly.
-
-/// Provides a generator for standard library collection types without relying on conditional ``ExhaustGenerable`` conformances.
-///
-/// Each conformance is unconditional (no `where` clause) so the linker cannot strip it. The element type's ``ExhaustGenerable`` conformance is checked at runtime inside ``synthesizedGenerator``, returning `nil` when the element type has no generator.
-package protocol SynthesizableCollection {
-    /// Returns a generator for this collection type, or `nil` if the element/key/value types do not conform to ``ExhaustGenerable``.
-    static var synthesizedGenerator: AnyGenerator? { get }
-}
-
-extension Array: SynthesizableCollection {
-    /// Returns ``Gen/arrayOf(_:)`` with the element's default generator, or `nil` if `Element` has no generator.
-    package static var synthesizedGenerator: AnyGenerator? {
-        guard let elementGen = resolveGenerator(for: Element.self) else { return nil }
-        let typed: Generator<Element> = elementGen.map { $0 as! Element }
-        return Gen.arrayOf(typed).erase()
-    }
-}
-
-extension Dictionary: SynthesizableCollection {
-    /// Returns ``Gen/dictionaryOf(_:_:)`` with the key and value default generators, or `nil` if either has no generator.
-    package static var synthesizedGenerator: AnyGenerator? {
-        guard let keyGen = resolveGenerator(for: Key.self),
-              let valueGen = resolveGenerator(for: Value.self)
-        else { return nil }
-        let typedKey: Generator<Key> = keyGen.map { $0 as! Key }
-        let typedValue: Generator<Value> = valueGen.map { $0 as! Value }
-        return Gen.dictionaryOf(typedKey, typedValue).erase()
-    }
-}
-
-extension Set: SynthesizableCollection {
-    /// Returns ``Gen/setOf(_:)`` with the element's default generator, or `nil` if `Element` has no generator.
-    package static var synthesizedGenerator: AnyGenerator? {
-        guard let elementGen = resolveGenerator(for: Element.self) else { return nil }
-        let typed: Generator<Element> = elementGen.map { $0 as! Element }
-        return Gen.setOf(typed).erase()
-    }
-}
-
-/// Resolves a generator for any type, trying ``ExhaustGenerable`` first and ``SynthesizableCollection`` as a fallback for collection types whose conditional conformances may not survive xcframework linking.
-private func resolveGenerator(for type: Any.Type) -> AnyGenerator? {
-    if let generable = type as? ExhaustGenerable.Type {
-        return generable.defaultGenerator
-    }
-    if let collection = type as? SynthesizableCollection.Type {
-        return collection.synthesizedGenerator
-    }
-    return nil
-}
-
-private func makeCollectionGenerator(for type: (some Any).Type) -> AnyGenerator? {
-    (type as? SynthesizableCollection.Type)?.synthesizedGenerator
-}
-
-// MARK: - Discovered Collection Generators
-
-//
-// ``SynthesizableCollection`` only covers collections whose element/key/value types are themselves ``ExhaustGenerable``. A collection of a nested `Decodable` type — `[Address]`, `Set<Shape>`, `[String: Lineitem]` — has no built-in element generator, so without this it would pin to the example. ``DiscoverableCollection`` discovers the element type's shape from a representative element of the example and builds a real element generator, wrapped in the standard collection combinator so the length and contents vary like a hand-written collection generator.
-//
-// The conformances are unconditional (matching ``SynthesizableCollection``) so they survive xcframework linking; the element type's `Decodable` conformance is checked at runtime inside each property.
-
-/// Builds a generator for a standard library collection of a non-``ExhaustGenerable`` element type by discovering the element from a representative example value.
-package protocol DiscoverableCollection {
-    /// Returns a generator that varies the collection's length and contents, or `nil` when the element type is not `Decodable` or the example has no representative element to discover from.
-    static func discoveredGenerator(fromExample jsonValue: Any, codingPath: [any CodingKey]) -> AnyGenerator?
-}
-
-extension Array: DiscoverableCollection {
-    package static func discoveredGenerator(fromExample jsonValue: Any, codingPath: [any CodingKey]) -> AnyGenerator? {
-        guard let elementType = Element.self as? any Decodable.Type,
-              let array = jsonValue as? [Any],
-              let representativeElement = array.first,
-              let elementGen = discoverElementGenerator(elementType, fromExample: representativeElement, codingPath: codingPath)
-        else { return nil }
-        let typed: Generator<Element> = elementGen.map { $0 as! Element }
-        return Gen.arrayOf(typed).erase()
-    }
-}
-
-extension Set: DiscoverableCollection {
-    package static func discoveredGenerator(fromExample jsonValue: Any, codingPath: [any CodingKey]) -> AnyGenerator? {
-        guard let elementType = Element.self as? any Decodable.Type,
-              let array = jsonValue as? [Any],
-              let representativeElement = array.first,
-              let elementGen = discoverElementGenerator(elementType, fromExample: representativeElement, codingPath: codingPath)
-        else { return nil }
-        let typed: Generator<Element> = elementGen.map { $0 as! Element }
-        return Gen.setOf(typed).erase()
-    }
-}
-
-extension Dictionary: DiscoverableCollection {
-    package static func discoveredGenerator(fromExample jsonValue: Any, codingPath: [any CodingKey]) -> AnyGenerator? {
-        guard let dictionary = jsonValue as? [String: Any],
-              let representativeValue = dictionary.values.first,
-              let valueType = Value.self as? any Decodable.Type,
-              let valueGen = discoverElementGenerator(valueType, fromExample: representativeValue, codingPath: codingPath),
-              let keyGen = resolveGenerator(for: Key.self)
-        else { return nil }
-        let typedKey: Generator<Key> = keyGen.map { $0 as! Key }
-        let typedValue: Generator<Value> = valueGen.map { $0 as! Value }
-        return Gen.dictionaryOf(typedKey, typedValue).erase()
-    }
-}
-
-/// Discovers a generator for a single `Decodable` element type from a representative example value.
-///
-/// Runs `Element.init(from:)` once against the example element to record its shape, then builds a reconstructing generator from that shape. Returns `nil` when the element decode fails or records nothing to synthesize (an element that would itself only pin).
-private func discoverElementGenerator(
-    _ elementType: any Decodable.Type,
-    fromExample jsonValue: Any,
-    codingPath: [any CodingKey]
-) -> AnyGenerator? {
-    func build<Element: Decodable>(_: Element.Type) -> AnyGenerator? {
-        let decoder = DiscoveryDecoder(jsonValue: jsonValue, codingPath: codingPath)
-        guard let representative = try? Element(from: decoder), decoder.shape.isEmpty == false else {
-            return nil
-        }
-        return makeReconstructingGenerator(
-            Element.self,
-            shape: decoder.shape,
-            pin: representative,
-            fallbackPath: codingPath
-        )
-    }
-    return build(elementType)
-}
-
-/// Builds an example-driven generator for a collection of a non-``ExhaustGenerable`` element type, or `nil` when `type` is not such a collection.
-func makeDiscoveredCollectionGenerator(
-    for type: Any.Type,
-    fromExample jsonValue: Any,
-    codingPath: [any CodingKey]
-) -> AnyGenerator? {
-    (type as? DiscoverableCollection.Type)?.discoveredGenerator(fromExample: jsonValue, codingPath: codingPath)
-}
 
 private func decodePrimitive<T>(_ type: T.Type, from jsonValue: Any) throws -> T {
     if let value = jsonValue as? T {
