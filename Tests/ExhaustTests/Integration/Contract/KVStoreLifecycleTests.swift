@@ -28,7 +28,7 @@ struct KVStoreLifecycleTests {
     func staleDataAfterClosereopenDetectedViaInvariantOrPostcondition() throws {
         // Bonsai is more or less equivalent here
         let result = try #require(
-            #exhaust(
+            #execute(
                 KVStoreLifecycleContract.self,
                 .commandLimit(10),
                 .suppress(.issueReporting)

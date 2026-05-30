@@ -83,15 +83,15 @@ Testing a stateful system? **[Contract Testing](docs/CONTRACT_TESTING.md)** cove
 
 Using Swift Testing? **[Swift Testing Integration](docs/SWIFT_TESTING.md)** covers suite and test traits, how `#expect` and `#require` work inside property closures, and how failures surface in the test runner. Using XCTest? **[XCTest Compatibility](docs/XCTEST.md)** covers what works, what doesn't, and the differences.
 
-Exhaust's entry points are five macros. `#gen` builds generators; the rest consume them:
+Exhaust's entry points are six macros. `#gen` builds generators; the rest consume them:
 
 | Macro | Purpose |
 |---|---|
 | [`#gen(…)`](docs/GEN.md) | Build generators from primitives, structs, enums, and recursive types. |
-| [`#gen(T.self, from:)`](docs/GEN.md#synthesising-generators-from-decodable-types) | Synthesise a generator from a `Decodable` type and example JSON or a `Codable` instance. |
+| [`#gen(MyType.self, from:)`](docs/GEN.md#synthesising-generators-from-decodable-types) | Synthesise a generator from a `Decodable` type and example JSON or a `Codable` instance. |
 | [`#exhaust(gen) {…}`](docs/EXHAUST.md) | Test a property and report a minimal counterexample on failure. |
-| [`#exhaust(Spec.self, …)`](docs/EXHAUST.md#contract-invocation) | Run a contract test against a stateful system. |
 | [`#explore(gen, directions:) {…}`](docs/EXPLORE.md) | Test a property with per-direction coverage guarantees. |
+| [`#execute(MyContract.self, …)`](docs/EXECUTE.md) | Run a contract test against a stateful system. |
 | [`#example(gen)`](docs/GEN.md#example) | Generate test data from your generators. |
 | [`#examine(gen) {…}`](docs/EXAMINE.md) | Test your generators: correctness, coverage, and distribution quality. |
 

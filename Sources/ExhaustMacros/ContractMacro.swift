@@ -3,7 +3,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expression macro that expands `#exhaust(Spec.self, .settings...)` into a call to `__ExhaustRuntime.__runContract(...)` for contract property tests.
+/// Expression macro that expands `#execute(Spec.self, .settings...)` into a call to `__ExhaustRuntime.__runContract(...)` for contract property tests.
 public struct ExhaustContractMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
@@ -16,7 +16,7 @@ public struct ExhaustContractMacro: ExpressionMacro {
                 node: Syntax(node),
                 message: ExhaustMacroDiagnostic.exhaustContractMissingSpec
             ))
-            return "fatalError(\"#exhaust requires a spec type argument\")"
+            return "fatalError(\"#execute requires a spec type argument\")"
         }
 
         let specExpr = args[0].expression.trimmedDescription
@@ -36,7 +36,7 @@ public struct ExhaustContractMacro: ExpressionMacro {
     }
 }
 
-/// Expression macro that expands `#exhaust(ConcurrentSpec.self, .settings...)` into a call to `__ExhaustRuntime.__runPreemptiveConcurrentContract(...)` for GCD-based concurrent contract tests with oracle comparison.
+/// Expression macro that expands `#execute(ConcurrentSpec.self, .settings...)` into a call to `__ExhaustRuntime.__runPreemptiveConcurrentContract(...)` for GCD-based concurrent contract tests with oracle comparison.
 public struct ExhaustGCDContractMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
@@ -49,7 +49,7 @@ public struct ExhaustGCDContractMacro: ExpressionMacro {
                 node: Syntax(node),
                 message: ExhaustMacroDiagnostic.exhaustContractMissingSpec
             ))
-            return "fatalError(\"#exhaust requires a spec type argument\")"
+            return "fatalError(\"#execute requires a spec type argument\")"
         }
 
         let specExpr = args[0].expression.trimmedDescription
@@ -71,7 +71,7 @@ public struct ExhaustGCDContractMacro: ExpressionMacro {
     }
 }
 
-/// Expression macro that expands `#exhaust(AsyncConcurrentSpec.self, .settings...)` into a call to `__ExhaustRuntime.__runPreemptiveConcurrentContractAsync(...)` for async GCD-based concurrent contract tests.
+/// Expression macro that expands `#execute(AsyncConcurrentSpec.self, .settings...)` into a call to `__ExhaustRuntime.__runPreemptiveConcurrentContractAsync(...)` for async GCD-based concurrent contract tests.
 public struct ExhaustAsyncGCDContractMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
@@ -84,7 +84,7 @@ public struct ExhaustAsyncGCDContractMacro: ExpressionMacro {
                 node: Syntax(node),
                 message: ExhaustMacroDiagnostic.exhaustContractMissingSpec
             ))
-            return "fatalError(\"#exhaust requires a spec type argument\")"
+            return "fatalError(\"#execute requires a spec type argument\")"
         }
 
         let specExpr = args[0].expression.trimmedDescription
@@ -104,7 +104,7 @@ public struct ExhaustAsyncGCDContractMacro: ExpressionMacro {
     }
 }
 
-/// Expression macro that expands `#exhaust(AsyncSpec.self, .settings...)` into a call to `__ExhaustRuntime.__runContractConcurrent(...)` for async contract property tests with concurrent interleaving.
+/// Expression macro that expands `#execute(AsyncSpec.self, .settings...)` into a call to `__ExhaustRuntime.__runContractConcurrent(...)` for async contract property tests with concurrent interleaving.
 public struct ExhaustConcurrentContractMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
@@ -117,7 +117,7 @@ public struct ExhaustConcurrentContractMacro: ExpressionMacro {
                 node: Syntax(node),
                 message: ExhaustMacroDiagnostic.exhaustContractMissingSpec
             ))
-            return "fatalError(\"#exhaust requires a spec type argument\")"
+            return "fatalError(\"#execute requires a spec type argument\")"
         }
 
         let specExpr = args[0].expression.trimmedDescription

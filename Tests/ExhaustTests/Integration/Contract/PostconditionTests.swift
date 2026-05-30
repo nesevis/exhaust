@@ -9,7 +9,7 @@ struct PostconditionTests {
     @Test("Set uniqueness postcondition detects duplicate add")
     func setUniquenessPostconditionDetectsDuplicateAdd() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 SetUniquenessContract.self,
                 .commandLimit(5),
                 .suppress(.issueReporting)
@@ -25,7 +25,7 @@ struct PostconditionTests {
     @Test("Stack LIFO postcondition detects wrong peek")
     func stackLIFOPostconditionDetectsWrongPeek() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 StackLIFOContract.self,
                 .commandLimit(4),
                 .suppress(.issueReporting)
@@ -41,7 +41,7 @@ struct PostconditionTests {
     @Test("Dictionary consistency detects count drift")
     func dictionaryConsistencyDetectsCountDrift() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 DictionaryConsistencyContract.self,
                 .commandLimit(6),
                 .suppress(.issueReporting)

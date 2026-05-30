@@ -138,7 +138,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 ///
 /// ```swift
 /// @Test func boundedQueueBehavior() {
-///     #exhaust(BoundedQueueSpec.self, .commandLimit(20))
+///     #execute(BoundedQueueSpec.self, .commandLimit(20))
 /// }
 /// ```
 ///
@@ -154,7 +154,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
 @discardableResult
-public macro exhaust<Spec: ContractSpec>(
+public macro execute<Spec: ContractSpec>(
     _ specType: Spec.Type,
     _ settings: ContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustContractMacro")
@@ -165,7 +165,7 @@ public macro exhaust<Spec: ContractSpec>(
 ///
 /// ```swift
 /// @Test func concurrentQueueBehavior() async {
-///     let result = await #exhaust(ConcurrentQueueSpec.self, .concurrent(3), .commandLimit(12))
+///     let result = await #execute(ConcurrentQueueSpec.self, .concurrent(3), .commandLimit(12))
 /// }
 /// ```
 ///
@@ -184,7 +184,7 @@ public macro exhaust<Spec: ContractSpec>(
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @freestanding(expression)
 @discardableResult
-public macro exhaust<Spec: AsyncContractSpec>(
+public macro execute<Spec: AsyncContractSpec>(
     _ specType: Spec.Type,
     _ settings: ConcurrentContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustConcurrentContractMacro")
@@ -195,7 +195,7 @@ public macro exhaust<Spec: AsyncContractSpec>(
 ///
 /// ```swift
 /// @Test func counterThreadSafety() {
-///     let result = #exhaust(CounterGCDSpec.self, .concurrent(2), .budget(.extensive))
+///     let result = #execute(CounterGCDSpec.self, .concurrent(2), .budget(.extensive))
 /// }
 /// ```
 ///
@@ -212,7 +212,7 @@ public macro exhaust<Spec: AsyncContractSpec>(
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
 @discardableResult
-public macro exhaust<Spec: ConcurrentContractSpec>(
+public macro execute<Spec: ConcurrentContractSpec>(
     _ specType: Spec.Type,
     _ settings: ConcurrentContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustGCDContractMacro")
@@ -223,7 +223,7 @@ public macro exhaust<Spec: ConcurrentContractSpec>(
 ///
 /// ```swift
 /// @Test func asyncCounterThreadSafety() async {
-///     let result = await #exhaust(AsyncCounterGCDSpec.self, .concurrent(2), .budget(.extensive))
+///     let result = await #execute(AsyncCounterGCDSpec.self, .concurrent(2), .budget(.extensive))
 /// }
 /// ```
 ///
@@ -240,7 +240,7 @@ public macro exhaust<Spec: ConcurrentContractSpec>(
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
 @discardableResult
-public macro exhaust<Spec: AsyncConcurrentContractSpec>(
+public macro execute<Spec: AsyncConcurrentContractSpec>(
     _ specType: Spec.Type,
     _ settings: ConcurrentContractSettings...
 ) -> ContractResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncGCDContractMacro")

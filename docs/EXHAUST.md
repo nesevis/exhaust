@@ -1,6 +1,6 @@
 # Running property tests
 
-`#exhaust` tests a property across generated values and reports a minimal counterexample on failure. This page covers closure shapes, settings, observability, and contract invocation.
+`#exhaust` tests a property across generated values and reports a minimal counterexample on failure. This page covers closure shapes, settings, and observability. For contract tests over stateful systems, see [Running contract tests](EXECUTE.md) and the `#execute` macro.
 
 ## Closure shapes
 
@@ -150,49 +150,3 @@ A property test that passes does not mean the generator is good. It may mean the
 Tyche renders these signals as interactive charts: sample breakdowns, feature distributions, and per-example drill-down. This lets you diagnose generator quality visually rather than reading thousands of lines of test output.
 
 For a lighter-weight check that runs as part of your test suite, [`#examine`](EXAMINE.md) lets you assert on generator quality — correctness, coverage, and distribution — without external tooling.
-
-# Running contract tests
-
-For how to write contracts, see [Contract Testing](CONTRACT_TESTING.md). This section covers invocation and settings.
-
-Contract tests use the same `#exhaust` macro with a spec type instead of a generator:
-
-```swift
-@Test func counterObeysSpec() {
-    #exhaust(CounterSpec.self, .commandLimit(10))
-}
-```
-
-Exhaust generates sequences of commands, executes them against the system under test, and checks invariants after each step. When something breaks, the trace is reduced to the shortest command sequence that reproduces the failure.
-
-### Contract settings
-
-Sync contract tests accept `ContractSettings`:
-
-| Setting | Default | Effect |
-|---|---|---|
-| `.commandLimit(N)` | auto-estimated | Maximum commands per sequence. Auto-estimated from the command domain when omitted (capped at 100). Reduce for specs with expensive command bodies. |
-| `.budget(...)` | `.thorough` | Coverage and sampling budgets. |
-| `.replay(seed)` | — | Deterministic reproduction from a failure report seed. |
-| `.suppress(.issueReporting)` | — | Suppress issue reporting. |
-| `.includeDiff` | off | Structural diff between the original and reduced counterexample. |
-| `.collectOpenPBTStats` | off | Per-example stats in OpenPBTStats format. |
-| `.onReport { report in }` | — | Delivers an `ExhaustReport` after the run. |
-| `.log(.debug)` | `.error` | Log verbosity. |
-
-### Concurrent contract settings
-
-Async contract tests accept `ConcurrentContractSettings`:
-
-| Setting | Default | Effect |
-|---|---|---|
-| `.commandLimit(N)` | auto-estimated | Maximum commands per sequence (capped at 40 for async). |
-| `.concurrent(N)` | 2 | Number of concurrent execution lanes (1 to 8). |
-| `.budget(...)` | `.thorough` | Coverage and sampling budgets. |
-| `.idleTimeoutMs(ms)` | 1000 | Drain loop stall detection. |
-| `.replay(seed)` | — | Deterministic reproduction. |
-| `.suppress(.issueReporting)` | — | Suppress issue reporting. |
-| `.collectOpenPBTStats` | off | Per-example stats in OpenPBTStats format. |
-| `.onReport { report in }` | — | Delivers an `ExhaustReport` after the run. |
-| `.log(.debug)` | `.error` | Log verbosity. |
-

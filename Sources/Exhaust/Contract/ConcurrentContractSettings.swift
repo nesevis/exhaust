@@ -1,12 +1,12 @@
-// Configuration options for concurrent contract tests via `#exhaust`.
+// Configuration options for concurrent contract tests via `#execute`.
 import ExhaustCore
 
-/// Configuration options for `#exhaust` concurrent contract property tests, passed as variadic arguments to control test behavior.
+/// Configuration options for `#execute` concurrent contract property tests, passed as variadic arguments to control test behavior.
 ///
 /// Concurrent contracts test interleaving at `await` boundaries using a cooperative scheduler. These settings control the concurrency level, idle timeout, sampling budget, and other test parameters.
 ///
 /// ```swift
-/// #exhaust(MySpec.self, .concurrent(4), .budget(.thorough))
+/// #execute(MySpec.self, .concurrent(4), .budget(.thorough))
 /// ```
 public enum ConcurrentContractSettings {
     /// Sets the number of concurrent execution lanes (1...8). Default is 2.

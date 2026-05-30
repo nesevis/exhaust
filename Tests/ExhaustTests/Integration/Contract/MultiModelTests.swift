@@ -6,7 +6,7 @@ import Testing
 struct MultiModelTests {
     @Test("Spec with three @Model properties detects divergence")
     func specWithThreeModelPropertiesDetectsDivergence() {
-        let result = #exhaust(
+        let result = #execute(
             MultiModelSpec.self,
             .commandLimit(8),
             .suppress(.issueReporting)

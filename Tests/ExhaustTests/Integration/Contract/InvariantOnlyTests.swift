@@ -9,7 +9,7 @@ struct InvariantOnlyTests {
     @Test("Circular buffer capacity invariant detects overflow")
     func circularBufferCapacityInvariantDetectsOverflow() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 CircularBufferContract.self,
                 .commandLimit(6),
                 .suppress(.issueReporting)
@@ -25,7 +25,7 @@ struct InvariantOnlyTests {
     @Test("Sorted backing invariant detects unsorted insert")
     func sortedBackingInvariantDetectsUnsortedInsert() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 SortedBackingContract.self,
                 .commandLimit(5),
                 .suppress(.issueReporting)

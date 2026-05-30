@@ -36,7 +36,7 @@ struct CircularQueueTests {
     @Test("Position-dependent corruption detected via FIFO postcondition")
     func positionDependentCorruptionDetectedViaFIFOPostcondition() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 CircularQueueContract.self,
                 .commandLimit(10),
                 .budget(.thorough),
