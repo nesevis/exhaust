@@ -58,7 +58,27 @@ import ExhaustCore
 @discardableResult
 public macro exhaust<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
-    reflecting: GeneratedValue? = nil,
+    _ settings: PropertySettings...,
+    property: @Sendable (GeneratedValue) throws -> PropertyResult
+) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
+
+/// Reduces a value you already have instead of searching for one.
+///
+/// Provide a concrete value you suspect is a counterexample — recovered from a bug report, a saved regression, or a previous failure. Exhaust reflects it back through the generator to recover the choices that produce it, then reduces it to a minimal counterexample. The coverage and random-sampling phases do not run: this overload starts from `reflecting` and only reduces.
+///
+/// ```swift
+/// let minimal = #exhaust(personGen, reflecting: personFromBugReport) { person in
+///     person.age >= 0
+/// }
+/// ```
+///
+/// - Parameter reflecting: A concrete value to reduce. It must be reachable by `gen`; if the generator cannot reflect it, Exhaust reports an issue and returns the value unreduced.
+/// - Returns: The reduced counterexample, or `nil` if the value does not fail the property.
+@freestanding(expression)
+@discardableResult
+public macro exhaust<GeneratedValue, PropertyResult>(
+    _ gen: ReflectiveGenerator<GeneratedValue>,
+    reflecting: GeneratedValue,
     _ settings: PropertySettings...,
     property: @Sendable (GeneratedValue) throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustTestMacro")
@@ -127,7 +147,27 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 @discardableResult
 public macro exhaust<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
-    reflecting: GeneratedValue? = nil,
+    _ settings: PropertySettings...,
+    property: @Sendable (GeneratedValue) async throws -> PropertyResult
+) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncTestMacro")
+
+/// Reduces a value you already have instead of searching for one, with an async property closure.
+///
+/// Use this when you have a concrete value to investigate and the property must `await`. Exhaust reflects the value back through the generator to recover the choices that produce it, then reduces it to a minimal counterexample. The coverage and random-sampling phases do not run: this overload starts from `reflecting` and only reduces.
+///
+/// ```swift
+/// let minimal = await #exhaust(transactionGen, reflecting: txnFromBugReport) { txn in
+///     try await ledger.process(txn).balance >= 0
+/// }
+/// ```
+///
+/// - Parameter reflecting: A concrete value to reduce. It must be reachable by `gen`; if the generator cannot reflect it, Exhaust reports an issue and returns the value unreduced.
+/// - Returns: The reduced counterexample, or `nil` if the value does not fail the property.
+@freestanding(expression)
+@discardableResult
+public macro exhaust<GeneratedValue, PropertyResult>(
+    _ gen: ReflectiveGenerator<GeneratedValue>,
+    reflecting: GeneratedValue,
     _ settings: PropertySettings...,
     property: @Sendable (GeneratedValue) async throws -> PropertyResult
 ) -> GeneratedValue? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncTestMacro")
