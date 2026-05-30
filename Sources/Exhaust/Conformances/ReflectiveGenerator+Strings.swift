@@ -20,14 +20,7 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Character>? = nil,
         simplest: Unicode.Scalar? = nil
     ) -> ReflectiveGenerator<Character> {
-        guard let range else {
-            return characterGenerator(from: defaultScalarRangeSet).wrapped
-        }
-        let lower = range.lowerBound.unicodeScalars.min()!
-        let upper = range.upperBound.unicodeScalars.max()!
-        let characterSet = CharacterSet(charactersIn: lower ... upper)
-        let bottom = resolveSimplest(simplest, in: characterSet)
-        return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)).wrapped
+        Gen.character(in: range, simplest: simplest)
     }
 
     /// Generates a random Unicode string with size-scaled or fixed length.
@@ -45,7 +38,7 @@ public extension ReflectiveGenerator {
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<String> {
-        stringGenerator(from: defaultScalarRangeSet, length: length, scaling: scaling)
+        Gen.string(length: length, scaling: scaling)
     }
 
     /// Generates a random printable ASCII string (U+0020–U+007E) with size-scaled or fixed length.
@@ -59,7 +52,7 @@ public extension ReflectiveGenerator {
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<String> {
-        stringGenerator(from: asciiScalarRangeSet, length: length, scaling: scaling)
+        Gen.asciiString(length: length, scaling: scaling)
     }
 
     /// Generates a random Unicode string with the given length range.
@@ -97,8 +90,7 @@ public extension ReflectiveGenerator {
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil
     ) -> ReflectiveGenerator<Character> {
-        let bottom = resolveSimplest(simplest, in: characterSet)
-        return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)).wrapped
+        Gen.character(from: characterSet, simplest: simplest)
     }
 
     /// Generates a random character from the union of two or more `CharacterSet`s.
@@ -124,12 +116,7 @@ public extension ReflectiveGenerator {
         length: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<String> {
-        let bottom = resolveSimplest(simplest, in: characterSet)
-        return stringGenerator(
-            from: characterSet.scalarRangeSet(bottomCodepoint: bottom),
-            length: length,
-            scaling: scaling
-        )
+        Gen.string(from: characterSet, simplest: simplest, length: length, scaling: scaling)
     }
 
     /// Generates a random string whose characters are drawn from the given `CharacterSet`.
@@ -150,110 +137,3 @@ public extension ReflectiveGenerator {
         return string(from: characterSet, simplest: simplest, length: uint64Range, scaling: scaling)
     }
 }
-
-// MARK: - Simplest Character Resolution
-
-/// Resolves the bottom codepoint for a character set.
-///
-/// - If the caller provides an explicit `simplest`, validates it is in the set and returns it.
-/// - If nil, returns space if the set contains it, otherwise nil (the set's natural lower bound becomes index 0).
-private func resolveSimplest(
-    _ explicit: Unicode.Scalar?,
-    in characterSet: CharacterSet
-) -> Unicode.Scalar? {
-    if let explicit {
-        precondition(
-            characterSet.contains(explicit),
-            "simplest scalar U+\(String(explicit.value, radix: 16, uppercase: true)) is not in the CharacterSet"
-        )
-        return explicit
-    }
-    if characterSet.contains(" ") {
-        return " "
-    }
-    return nil
-}
-
-// MARK: - ScalarRangeSet-based generators (no CharacterSet reconstruction)
-
-/// Builds a character generator directly from a pre-computed ``ScalarRangeSet``.
-private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character> {
-    let operation = ReflectiveOperation.chooseBits(
-        min: 0,
-        max: UInt64(srs.scalarCount - 1),
-        tag: .character(boundaryIndices: srs.boundaryIndices),
-        isRangeExplicit: true
-    )
-    let innerGen = Generator<Character>.impure(operation: operation) { result in
-        guard let convertible = result as? any BitPatternConvertible else {
-            throw GeneratorError.typeMismatch(
-                expected: "any BitPatternConvertible",
-                actual: String(describing: Swift.type(of: result))
-            )
-        }
-        return .pure(Character(srs.scalar(at: Int(convertible.bitPattern64))))
-    }
-    return Gen.contramap(
-        { (char: Character) throws -> UInt32 in
-            guard let scalar = char.unicodeScalars.first else {
-                throw ReflectionError.couldNotReflectOnSequenceElement(
-                    "Character has no scalars"
-                )
-            }
-            return UInt32(srs.index(of: scalar))
-        },
-        innerGen
-    )
-}
-
-/// Builds a string generator directly from a pre-computed ``ScalarRangeSet``.
-///
-/// String <-> [Character] is not bijective when the CharacterSet includes combining marks.
-/// The generator produces single-scalar characters, but Array(string) splits by grapheme clusters — so if "e" followed by U+0301 (combining accent) were generated as two characters, the String merges them into "é", and Array(...) returns one Character instead of two. We use `unicodeScalars.map` in the backward direction to preserve the original scalar count.
-private func stringGenerator(
-    from srs: ScalarRangeSet,
-    length: ClosedRange<UInt64>? = nil,
-    scaling: SizeScaling<UInt64> = .linear
-) -> ReflectiveGenerator<String> {
-    let charGen = characterGenerator(from: srs)
-    if let length {
-        return Gen.arrayOf(charGen, within: length, scaling: scaling).wrapped
-            .mapped(
-                forward: { String($0) },
-                backward: { $0.unicodeScalars.map { Character($0) } }
-            )
-    }
-    return Gen.arrayOf(charGen).wrapped
-        .mapped(
-            forward: { String($0) },
-            backward: { $0.unicodeScalars.map { Character($0) } }
-        )
-}
-
-// MARK: - Pre-computed ScalarRangeSets
-
-/// All assigned Unicode scalars minus illegals and Private Use Areas. Reduces toward space (U+0020).
-private let defaultScalarRangeSet: ScalarRangeSet = CharacterSet.illegalCharacters.inverted
-    .removingPrivateUseAreas()
-    .scalarRangeSet(bottomCodepoint: " ")
-
-// MARK: - CharacterSet Extensions
-
-private extension CharacterSet {
-    /// Returns a copy with the three Unicode Private Use Areas removed.
-    ///
-    /// - BMP PUA: U+E000–U+F8FF (6,400 code points)
-    /// - Supplementary PUA-A (Plane 15): U+F0000–U+FFFFD (65,534 code points)
-    /// - Supplementary PUA-B (Plane 16): U+100000–U+10FFFD (65,534 code points)
-    func removingPrivateUseAreas() -> CharacterSet {
-        var result = self
-        result.remove(charactersIn: Unicode.Scalar(0xE000)! ... Unicode.Scalar(0xF8FF)!)
-        result.remove(charactersIn: Unicode.Scalar(0xF0000)! ... Unicode.Scalar(0xFFFFD)!)
-        result.remove(charactersIn: Unicode.Scalar(0x100000)! ... Unicode.Scalar(0x10FFFD)!)
-        return result
-    }
-}
-
-/// Printable ASCII (U+0020–U+007E). Space is naturally at index 0; no bottom codepoint needed.
-private let asciiScalarRangeSet: ScalarRangeSet =
-    CharacterSet(charactersIn: Unicode.Scalar(0x0020)! ... Unicode.Scalar(0x007E)!).scalarRangeSet()

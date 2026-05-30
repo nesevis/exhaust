@@ -27,39 +27,7 @@ public extension ReflectiveGenerator {
         interval: DateStride,
         timeZone: TimeZone = .current
     ) -> ReflectiveGenerator<Date> {
-        let lowerSeconds = Int64(range.lowerBound.timeIntervalSinceReferenceDate)
-        let upperSeconds = Int64(range.upperBound.timeIntervalSinceReferenceDate)
-        let intervalSeconds = Int64(abs(interval.fixedSeconds))
-
-        precondition(intervalSeconds > 0, "Interval must be non-zero")
-        precondition(
-            intervalSeconds <= upperSeconds - lowerSeconds,
-            "Interval must not exceed the date range"
-        )
-
-        let numSteps = (upperSeconds - lowerSeconds) / intervalSeconds
-
-        return Generator<Int64>.impure(
-            operation: .chooseBits(
-                min: Int64(0).bitPattern64,
-                max: numSteps.bitPattern64,
-                tag: .date(
-                    lowerSeconds: lowerSeconds,
-                    intervalSeconds: intervalSeconds,
-                    timeZoneID: timeZone.identifier
-                ),
-                isRangeExplicit: true
-            )
-        ) { .pure(Int64(bitPattern64: ($0 as! any BitPatternConvertible).bitPattern64)) }
-            .wrapped.mapped(
-                forward: { step in
-                    Date(timeIntervalSinceReferenceDate: Double(lowerSeconds + step * intervalSeconds))
-                },
-                backward: { date in
-                    let offset = date.timeIntervalSinceReferenceDate - Double(lowerSeconds)
-                    return Int64(floor(offset / Double(intervalSeconds)))
-                }
-            )
+        Gen.date(between: range, interval: interval, timeZone: timeZone)
     }
 
     /// Generates dates within `span` on either side of `anchor`, spaced by `interval`.
