@@ -6,7 +6,7 @@ import Testing
 struct MultiInvariantTests {
     @Test("First failing invariant is reported in trace")
     func firstFailingInvariantIsReportedInTrace() {
-        let result = #exhaust(
+        let result = #execute(
             FiveInvariantSpec.self,
             .commandLimit(4),
             .suppress(.issueReporting)
@@ -24,7 +24,7 @@ struct MultiInvariantTests {
 
     @Test("Passing spec with five invariants produces no counterexample")
     func passingSpecWithFiveInvariantsProducesNoCounterexample() {
-        let result = #exhaust(
+        let result = #execute(
             PassingFiveInvariantSpec.self,
             .commandLimit(6),
             .budget(.custom(coverage: 100, sampling: 50)),

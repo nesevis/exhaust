@@ -9,7 +9,7 @@ struct BuggyCounterTests {
     @Test("Detects model/SUT divergence in buggy counter")
     func detectsModelSUTDivergenceInBuggyCounter() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(10),
                 .suppress(.issueReporting)
@@ -28,7 +28,7 @@ struct BuggyCounterTests {
     @Test("Trace steps have correct structure")
     func traceStepsHaveCorrectStructure() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(10),
                 .suppress(.issueReporting)
@@ -56,7 +56,7 @@ struct BuggyCounterTests {
     @Test("Sequential contract failure carries replay seed")
     func sequentialContractFailureCarriesReplaySeed() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(10),
                 .budget(.custom(coverage: 0, sampling: 200)),
@@ -70,7 +70,7 @@ struct BuggyCounterTests {
     @Test("Sequential contract SCA coverage failure carries U-prefixed replay seed")
     func sequentialContractSCACoverageFailureCarriesUPrefixedReplaySeed() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(4),
                 .suppress(.issueReporting)
@@ -88,7 +88,7 @@ struct SCAReductionCoverageTests {
     @Test("SCA coverage exercises the reduction path")
     func scaCoverageExercisesReductionPath() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 PairwiseBugSpec.self,
                 .commandLimit(3),
                 .budget(.custom(coverage: 200, sampling: 0)),

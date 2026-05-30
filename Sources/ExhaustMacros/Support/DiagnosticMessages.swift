@@ -15,7 +15,7 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case exploreMissingDirections = "#explore requires a 'directions:' argument"
     case exampleMissingGenerator = "#example requires a generator as its first argument"
     case examineMissingGenerator = "#examine requires a generator as its first argument"
-    case exhaustContractMissingSpec = "#exhaust requires a spec type argument"
+    case exhaustContractMissingSpec = "#execute requires a spec type argument"
     case closureCannotFail = "Closure has no failure mechanism (throw, try, #expect, #require, or Issue.record); test will always pass"
     case closureCannotFailXCTest = "Closure has no failure mechanism; return a Bool or throw an error to signal failure"
     case xcTestUnwrapInPropertyClosure = "XCTUnwrap is expensive on failure (several hundred milliseconds per call); prefer a guard or throwing an explicit error"

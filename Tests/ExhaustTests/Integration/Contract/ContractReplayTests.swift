@@ -8,7 +8,7 @@ struct ContractReplayTests {
     @Test("Iteration-targeted replay reproduces a sampling failure")
     func iterationTargetedReplayReproducesSamplingFailure() throws {
         let initial = try #require(
-            #exhaust(
+            #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
@@ -19,7 +19,7 @@ struct ContractReplayTests {
         #expect(replaySeed.contains("-"), "Sampling replay seed should include iteration suffix")
 
         let replayed = try #require(
-            #exhaust(
+            #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
@@ -33,7 +33,7 @@ struct ContractReplayTests {
     @Test("Coverage row replay reproduces an SCA coverage failure")
     func coverageRowReplayReproducesSCACoverageFailure() throws {
         let initial = try #require(
-            #exhaust(
+            #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(4),
                 .suppress(.all)
@@ -47,7 +47,7 @@ struct ContractReplayTests {
         #expect(replaySeed.hasPrefix("U"), "SCA replay seed should have U prefix")
 
         let replayed = try #require(
-            #exhaust(
+            #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(4),
                 .replay(.encoded(replaySeed)),
@@ -60,7 +60,7 @@ struct ContractReplayTests {
     @Test("Seed-only replay (no iteration) still finds failure within budget")
     func seedOnlyReplayFindsFailureWithinBudget() throws {
         let initial = try #require(
-            #exhaust(
+            #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
@@ -70,7 +70,7 @@ struct ContractReplayTests {
         let seed = try #require(initial.seed)
 
         let replayed = try #require(
-            #exhaust(
+            #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),

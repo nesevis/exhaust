@@ -29,7 +29,7 @@ struct HeapMergeTests {
         // Legacy uses 256 in 23ms
         // Bonsai does not reduce as well (6 vs 5)
         let result = try #require(
-            #exhaust(
+            #execute(
                 HeapMergeContract.self,
                 .commandLimit(12),
                 .budget(.extensive),
@@ -54,7 +54,7 @@ struct HeapAliasingTests {
         // Legacy: 90 invocations, 31ms, CE 5 steps
         // Bonsai: 151 invocations, 26ms, CE 5 steps
         let result = try #require(
-            #exhaust(
+            #execute(
                 HeapAliasingContract.self,
                 .commandLimit(20),
                 .suppress(.issueReporting),

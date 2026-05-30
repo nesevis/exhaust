@@ -9,7 +9,7 @@ struct AsyncContractTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Passing async spec produces no counterexample")
     func passingAsyncSpecProducesNoCounterexample() async {
-        let result = await #exhaust(
+        let result = await #execute(
             AsyncCounterSpec.self,
             .concurrent(1),
             .commandLimit(8),
@@ -22,7 +22,7 @@ struct AsyncContractTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Failing async spec produces a counterexample")
     func failingAsyncSpecProducesACounterexample() async {
-        let result = await #exhaust(
+        let result = await #execute(
             BuggyAsyncCounterSpec.self,
             .commandLimit(10),
             .budget(.custom(coverage: 0, sampling: 200)),
@@ -42,7 +42,7 @@ struct AsyncContractTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Async contract with skip() works correctly")
     func asyncContractWithSkipWorksCorrectly() async {
-        let result = await #exhaust(
+        let result = await #execute(
             AsyncSkipSpec.self,
             .concurrent(1),
             .commandLimit(8),
@@ -55,7 +55,7 @@ struct AsyncContractTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Mixed sync+async commands produce AsyncContractSpec conformance")
     func mixedSyncasyncCommandsProduceAsyncContractSpecConformance() async {
-        let result = await #exhaust(
+        let result = await #execute(
             MixedAsyncSpec.self,
             .concurrent(1),
             .commandLimit(8),
@@ -68,7 +68,7 @@ struct AsyncContractTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Async contract replay reproduces failure with seed through shrinking")
     func asyncContractReplayReproducesFailureWithSeedThroughShrinking() async {
-        let result1 = await #exhaust(
+        let result1 = await #execute(
             BuggyAsyncCounterSpec.self,
             .commandLimit(10),
             .replay(.numeric(42)),
@@ -76,7 +76,7 @@ struct AsyncContractTests {
         )
         #expect(result1 != nil, "Replay with seed 42 should produce a failure")
 
-        let result2 = await #exhaust(
+        let result2 = await #execute(
             BuggyAsyncCounterSpec.self,
             .commandLimit(10),
             .replay(.numeric(42)),
@@ -91,7 +91,7 @@ struct AsyncContractTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Async contract with SCA coverage finds and shrinks failure")
     func asyncContractWithSCACoverageFindsAndShrinksFailure() async {
-        let result = await #exhaust(
+        let result = await #execute(
             BuggyAsyncCounterSpec.self,
             .commandLimit(20),
             .budget(.custom(coverage: 0, sampling: 200)),
@@ -108,7 +108,7 @@ struct AsyncContractTests {
     @Test("sync contract replay reproduces failure deterministically")
     func syncContractReplayReproducesFailureDeterministically() {
         // Use a fixed seed that produces a failure
-        let result1 = #exhaust(
+        let result1 = #execute(
             BuggyCounterSpec.self,
             .commandLimit(20),
             .replay(42),

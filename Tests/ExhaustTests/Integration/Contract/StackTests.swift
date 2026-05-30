@@ -8,7 +8,7 @@ import Testing
 struct StackTests {
     @Test("Passing spec produces no counterexample")
     func passingSpecProducesNoCounterexample() {
-        let result = #exhaust(
+        let result = #execute(
             StackSpec.self,
             .commandLimit(15),
             .budget(.custom(coverage: 500, sampling: 50)),

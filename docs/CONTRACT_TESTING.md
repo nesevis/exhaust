@@ -26,11 +26,11 @@ A contract has four parts: a system under test, commands that operate on it, inv
 
 ```swift
 @Test func stackBehavesCorrectly() {
-    #exhaust(StackSpec.self, .commandLimit(15))
+    #execute(StackContract.self, .commandLimit(15))
 }
 
 @Contract
-struct StackSpec {
+struct StackContract {
     @Model
     var expected: [Int] = []
     @SystemUnderTest
@@ -59,7 +59,7 @@ struct StackSpec {
 
 Each `@Command` method is one operation Exhaust can choose to run. The `weight:` parameter controls how often it appears relative to other commands. A weight-3 command shows up roughly three times as often as a weight-1 command. After every command, all `@Invariant` methods are checked automatically.
 
-`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget (capped at 100 for sync contracts, 40 for async). Longer sequences explore deeper states but take longer to test and to reduce. The overhead scales linearly with command limit. A spec with cheap commands runs in under 15ms even at the 40-command cap. Specs with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
+`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget (capped at 100 for sync contracts, 40 for async). Longer sequences explore deeper states but take longer to test and to reduce. The overhead scales linearly with command limit. A contract with cheap commands runs in under 15ms even at the 40-command cap. Contracts with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
 
 ## Model-based oracles
 
@@ -83,7 +83,7 @@ protocol Queue<Element> {
 }
 
 @Contract
-struct QueueContractSpec {
+struct QueueContract {
     @Model var fake = ListQueue<Int>()
     @SystemUnderTest var queue = CircularBufferQueue<Int>(capacity: 8)
 
@@ -152,7 +152,7 @@ The distinction between `@Invariant` and `check`: invariants run after every com
 
 ```swift
 @Test func queueMaintainsFIFOOrder() {
-    #exhaust(CircularQueueSpec.self, .commandLimit(10), .budget(.thorough))
+    #execute(CircularQueueContract.self, .commandLimit(10), .budget(.thorough))
 }
 ```
 
@@ -179,11 +179,11 @@ The replay seed lets you re-run the exact same sequence deterministically for de
 
 ## Async contracts
 
-When your system under test has async methods (actors, network services, databases), declare the spec as a `final class` and make commands `async`:
+When your system under test has async methods (actors, network services, databases), declare the contract as a `final class` and make commands `async`:
 
 ```swift
 @Contract
-final class AsyncCounterSpec {
+final class AsyncCounterContract {
     @Model
     var expected: Int = 0
     @SystemUnderTest
@@ -209,11 +209,11 @@ final class AsyncCounterSpec {
 }
 ```
 
-Three differences from sync contracts: the spec is a `final class` (not a struct), commands drop `mutating` (class semantics), and the test call needs `await`:
+Three differences from sync contracts: the contract is a `final class` (not a struct), commands drop `mutating` (class semantics), and the test call needs `await`:
 
 ```swift
 @Test func counterBehavesCorrectly() async {
-    await #exhaust(AsyncCounterSpec.self, .commandLimit(10))
+    await #execute(AsyncCounterContract.self, .commandLimit(10))
 }
 ```
 
@@ -225,8 +225,8 @@ The cooperative runner executes commands concurrently across multiple execution 
 
 ```swift
 @Test func counterIsSafeUnderConcurrency() async {
-    await #exhaust(
-        NonAtomicCounterSpec.self,
+    await #execute(
+        NonAtomicCounterContract.self,
         .concurrent(2),
         .commandLimit(6),
         .budget(.thorough)
@@ -287,7 +287,7 @@ Preemptive contracts use `@ConcurrentContract` instead of `@Contract`. The diffe
 
 ```swift
 @ConcurrentContract
-final class AsyncRacyCounterSpec {
+final class AsyncRacyCounterContract {
     @SystemUnderTest
     var counter: AsyncRacyCounter = .init()
 
@@ -320,8 +320,8 @@ Running the test:
 
 ```swift
 @Test func counterIsSafeUnderConcurrency() async {
-    await #exhaust(
-        AsyncRacyCounterSpec.self,
+    await #execute(
+        AsyncRacyCounterContract.self,
         .concurrent(2),
         .commandLimit(6),
         .budget(.custom(coverage: 0, sampling: 200))
@@ -341,7 +341,7 @@ The cooperative runner is the better choice when both can find the bug. Determin
 
 ```swift
 @ConcurrentContract
-final class SyncCounterSpec {
+final class SyncCounterContract {
     @SystemUnderTest
     var counter: RacyCounter = .init()
 
@@ -359,7 +359,7 @@ final class SyncCounterSpec {
 
 ## Settings reference
 
-All contract styles accept settings as variadic arguments to `#exhaust`:
+All contract styles accept settings as variadic arguments to `#execute`:
 
 | Setting | Default | Effect |
 |---------|---------|--------|

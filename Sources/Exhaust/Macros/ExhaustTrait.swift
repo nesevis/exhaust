@@ -14,7 +14,7 @@
         @TaskLocal public static var current: ExhaustTraitConfiguration?
     }
 
-    /// A Swift Testing trait that configures `#exhaust` property tests.
+    /// A Swift Testing trait that configures `#exhaust` property tests and `#execute` contract tests.
     ///
     /// ```swift
     /// @Test(.exhaust(.budget(.thorough)))
@@ -40,7 +40,7 @@
 
         /// Sets the trait configuration as a task-local for the duration of the test body.
         ///
-        /// The `testCase` parameter is intentionally ignored. Since `#exhaust` drives its own iteration internally rather than using `@Test(arguments:)`, the trait always hits the single-case path.
+        /// The `testCase` parameter is intentionally ignored. Since `#exhaust` and `#execute` drive their own iteration internally rather than using `@Test(arguments:)`, the trait always hits the single-case path.
         public func provideScope(
             for _: Test,
             testCase _: Test.Case?,
@@ -78,7 +78,7 @@
 
         /// Sets the iteration budget for coverage, sampling, and reduction.
         ///
-        /// Applies to all `#exhaust` calls in the test that do not specify an inline `.budget(...)` setting. Inline settings take precedence.
+        /// Applies to all `#exhaust` and `#execute` calls in the test that do not specify an inline `.budget(...)` setting. Inline settings take precedence.
         public static func budget(_ budget: ExhaustBudget) -> ExhaustTraitOption {
             ExhaustTraitOption(kind: .budget(budget))
         }
@@ -105,9 +105,9 @@
 
         let kind: Kind
 
-        /// Sets the default iteration budget for every `#exhaust` call in the suite.
+        /// Sets the default iteration budget for every `#exhaust` and `#execute` call in the suite.
         ///
-        /// Applies to all `#exhaust` calls in the suite that do not specify an inline `.budget(...)` setting or a test-level `.exhaust(.budget(...))` trait. Those take precedence.
+        /// Applies to all `#exhaust` and `#execute` calls in the suite that do not specify an inline `.budget(...)` setting or a test-level `.exhaust(.budget(...))` trait. Those take precedence.
         public static func budget(_ budget: ExhaustBudget) -> ExhaustSuiteTraitOption {
             ExhaustSuiteTraitOption(kind: .budget(budget))
         }
@@ -119,7 +119,7 @@
     /// (any SuiteTrait) context. Paired with the suite builder being on SuiteTrait, each context sees
     /// exactly one `exhaust` overload, so neither `.exhaust(...)` call is ever ambiguous.
     public extension TestTrait where Self == ExhaustTrait {
-        /// Configures `#exhaust` property tests with the given options.
+        /// Configures `#exhaust` property tests and `#execute` contract tests with the given options.
         ///
         /// ```swift
         /// @Test(.exhaust(.budget(.thorough)))
@@ -150,7 +150,7 @@
     // This also matches the intended semantics below: the scope fires once per test function, which is only valid for a trait that test functions accept.
     // See swiftlang/swift-testing#1048.
 
-    /// A Swift Testing trait that sets a default iteration budget for all `#exhaust` tests in a suite.
+    /// A Swift Testing trait that sets a default iteration budget for all `#exhaust` and `#execute` tests in a suite.
     ///
     /// Apply to a `@Suite` to set a budget that propagates to every test in the suite. Individual tests can override with an inline `.budget(...)` setting or a test-level `.exhaust(...)` trait.
     ///
@@ -203,7 +203,7 @@
     /// Without that, because ExhaustSuiteTrait is also a TestTrait, @Test(.exhaust(.budget(...))) would be
     /// ambiguous between ExhaustTrait and ExhaustSuiteTrait (both expose a .budget option).
     public extension SuiteTrait where Self == ExhaustSuiteTrait {
-        /// Sets a default iteration budget for all `#exhaust` tests in a suite.
+        /// Sets a default iteration budget for all `#exhaust` and `#execute` tests in a suite.
         ///
         /// ```swift
         /// @Suite(.exhaust(.budget(.thorough)))

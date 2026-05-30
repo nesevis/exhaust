@@ -22,7 +22,7 @@ import Testing
 struct BudgetAffordabilityTests {
     @Test("canAfford agrees with brute-force reference for all generated bills")
     func canAffordAgreesWithBruteForceReferenceForAllGeneratedBills() {
-        let result = #exhaust(
+        let result = #execute(
             BudgetAffordabilitySpec.self,
             .suppress(.issueReporting)
         )
@@ -32,7 +32,7 @@ struct BudgetAffordabilityTests {
     @Test("Greedy canAfford disagrees with brute-force on optimal assignment")
     func greedyCanAffordDisagreesWithBruteForceOnOptimalAssignment() throws {
         let result = try #require(
-            #exhaust(
+            #execute(
                 BuggyBudgetAffordabilitySpec.self,
                 .commandLimit(8),
                 .suppress(.issueReporting)

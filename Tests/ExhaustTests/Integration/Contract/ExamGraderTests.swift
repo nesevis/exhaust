@@ -32,7 +32,7 @@ struct ExamGraderTests {
     func detectsAnswerLengthMismatchOrGradingBug() throws {
         // Note: Bonsai doesn't produce as minimal a counterexample
         let result = try #require(
-            #exhaust(
+            #execute(
                 ExamGraderContract.self,
                 .commandLimit(8),
                 .suppress(.issueReporting)
