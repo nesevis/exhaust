@@ -15,9 +15,9 @@ Describe what your code should do, and Exhaust checks that claim across hundreds
 ```swift
 @Test func mySortProducesAscendingOrder() {
     #exhaust(.int().array(length: 0...100)) { array in
-        let custom = mySort(array)
-        let reference = array.sorted()
-        #expect(custom == reference)
+        let result = mySort(array)
+        let expected = array.sorted()
+        #expect(result == expected)
     }
 }
 ```

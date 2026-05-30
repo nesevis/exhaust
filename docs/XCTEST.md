@@ -70,7 +70,7 @@ Throwing `XCTSkip` inside a property closure is treated as a pass for that input
 
 ### OpenPBTStats attachments
 
-When `.collectOpenPBTStats` is enabled, Exhaust records the JSONL data as an `XCTAttachment` inside an `XCTContext.runActivity`. The attachment appears in Xcode's test report alongside any other test attachments.
+When `.collectOpenPBTStats` is enabled, Exhaust records the data as an `XCTAttachment`. The attachment appears in Xcode's test report alongside any other test attachments.
 
 ### Contract tests
 
