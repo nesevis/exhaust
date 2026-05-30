@@ -288,8 +288,10 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
             generator = discoveredCollectionGen
         } else if let generableType = type as? ExhaustGenerable.Type {
             generator = generableType.defaultGenerator
-        } else if let caseIterable = type as? any(CaseIterable & Decodable).Type {
-            generator = makeCaseIterableGenerator(caseIterable)
+        } else if let caseIterable = type as? any(CaseIterable & Decodable).Type,
+                  let caseGenerator = makeCaseIterableGenerator(caseIterable)
+        {
+            generator = caseGenerator
         } else if type is any RawRepresentable.Type {
             generator = Gen.just((decodedValue ?? jsonValue) as Any).erase()
         } else {
@@ -533,10 +535,13 @@ private func nestedReplayValueGenerator(for shape: ContainerShape) -> AnyGenerat
     )) as AnyGenerator
 }
 
-private func makeCaseIterableGenerator(_ type: any (CaseIterable & Decodable).Type) -> AnyGenerator {
-    func build<T: CaseIterable & Decodable>(_: T.Type) -> AnyGenerator {
+private func makeCaseIterableGenerator(_ type: any (CaseIterable & Decodable).Type) -> AnyGenerator? {
+    func build<T: CaseIterable & Decodable>(_: T.Type) -> AnyGenerator? {
         let cases = Array(T.allCases)
-        precondition(cases.isEmpty == false, "CaseIterable type \(T.self) has no cases")
+        // An enum with no cases is uninhabited; there is nothing to pick from. Returning nil lets the caller fall through to the pin path rather than trapping in `Gen.pick`.
+        guard cases.isEmpty == false else {
+            return nil
+        }
         return Gen.pick(
             choices: cases.map { (1, Gen.just($0 as Any)) }
         ).erase()

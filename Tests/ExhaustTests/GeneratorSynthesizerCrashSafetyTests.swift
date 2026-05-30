@@ -59,6 +59,18 @@ struct GeneratorSynthesizerCrashSafetyTests {
 
         #expect(Set(values).count > 1)
     }
+
+    /// A `CaseIterable` enum with no cases has nothing to pick from; the discovery pass falls through to a pin instead of trapping in `Gen.pick`.
+    @Test("Empty-allCases enum field pins instead of crashing")
+    func emptyCaseIterableEnumPins() throws {
+        let generator = try #gen(WithEmptyEnum.self, from: """
+        {"name": "x", "marker": null}
+        """)
+        let values = #example(generator, count: 20)
+
+        #expect(values.count == 20)
+        #expect(values.allSatisfy { $0.marker == nil })
+    }
 }
 
 /// Regression tests for key-addressed replay: a value reads its field by `CodingKey`, so a custom `init(from:)` that decodes fields in a different order on different branches still reads the right value rather than swapping or pinning.
@@ -147,6 +159,18 @@ struct GeneratorSynthesizerNestedContainerTests {
 
 private struct Member: Codable, Hashable {
     let id: Int
+}
+
+private enum NoCases: CaseIterable, Codable {
+    case unused
+    static var allCases: [NoCases] {
+        []
+    }
+}
+
+private struct WithEmptyEnum: Codable {
+    let name: String
+    let marker: NoCases?
 }
 
 private struct Team: Codable {
