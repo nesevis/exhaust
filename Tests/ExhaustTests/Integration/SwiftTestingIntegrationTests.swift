@@ -275,3 +275,29 @@ struct SwiftTestingIntegrationTests {
         #expect(result == nil, "All values in 0...100 should pass")
     }
 }
+
+// MARK: - Suite Trait
+
+/// Constructing the plan for this suite would trap during _recursivelyApplyTraits before any test ran if ExhaustSuiteTrait were not a TestTrait — the recursive suite trait is propagated to this child test, where Swift Testing asserts that every trait is a TestTrait.
+/// The suite running at all is the regression guard; the assertion confirms the suite budget reaches the child test.
+@Suite("Exhaust suite trait", .exhaust(.budget(.thorough)))
+struct ExhaustSuiteTraitTests {
+    @Test("suite trait sets budget for child test")
+    func suiteTraitSetsBudgetForChildTest() {
+        var capturedReport: ExhaustReport?
+        let result = #exhaust(
+            #gen(.int(in: Int.min ... Int.max)),
+            .suppress(.issueReporting),
+            .onReport { report in
+                capturedReport = report
+            }
+        ) { _ in
+            true // always passes — runs the full sampling budget
+        }
+        #expect(result == nil)
+        #expect(
+            capturedReport?.randomSamplingInvocations == 600,
+            "Suite trait .thorough sampling budget is 600; the default .standard would be 200"
+        )
+    }
+}

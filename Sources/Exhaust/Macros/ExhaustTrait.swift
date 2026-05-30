@@ -58,15 +58,16 @@
 
     // MARK: - Trait Options
 
-    /// A configuration option for the `.exhaust(...)` test trait.
+    /// A configuration option for the `.exhaust(...)` trait on a `@Test`.
     ///
-    /// Pass one or more options to `.exhaust(...)` to configure property test behavior at the test or suite level:
+    /// Pass one or more options to configure property test behavior:
     ///
     /// ```swift
     /// @Test(.exhaust(.budget(.thorough)))
     /// @Test(.exhaust(.budget(.thorough), .regressions("3RT5GH8KM2", "9WXY1CV7")))
-    /// @Suite(.exhaust(.budget(.extensive)))
     /// ```
+    ///
+    /// Regression seeds are a per-test concern, so they live here rather than on the suite option type. A `@Suite` takes ``ExhaustSuiteTraitOption``, which offers only `.budget(...)`, so `@Suite(.exhaust(.regressions(...)))` does not compile.
     public struct ExhaustTraitOption: Sendable {
         enum Kind: Sendable {
             case budget(ExhaustBudget)
@@ -77,7 +78,7 @@
 
         /// Sets the iteration budget for coverage, sampling, and reduction.
         ///
-        /// Applies to all `#exhaust` calls in the test (or suite) that do not specify an inline `.budget(...)` setting. Inline settings take precedence.
+        /// Applies to all `#exhaust` calls in the test that do not specify an inline `.budget(...)` setting. Inline settings take precedence.
         public static func budget(_ budget: ExhaustBudget) -> ExhaustTraitOption {
             ExhaustTraitOption(kind: .budget(budget))
         }
@@ -90,9 +91,34 @@
         }
     }
 
+    /// A configuration option for the `.exhaust(...)` trait on a `@Suite`.
+    ///
+    /// A suite supports only `.budget(...)`. Regression seeds are a per-test concern and are deliberately absent here, so `@Suite(.exhaust(.regressions(...)))` does not compile.
+    ///
+    /// ```swift
+    /// @Suite(.exhaust(.budget(.extensive)))
+    /// ```
+    public struct ExhaustSuiteTraitOption: Sendable {
+        enum Kind: Sendable {
+            case budget(ExhaustBudget)
+        }
+
+        let kind: Kind
+
+        /// Sets the default iteration budget for every `#exhaust` call in the suite.
+        ///
+        /// Applies to all `#exhaust` calls in the suite that do not specify an inline `.budget(...)` setting or a test-level `.exhaust(.budget(...))` trait. Those take precedence.
+        public static func budget(_ budget: ExhaustBudget) -> ExhaustSuiteTraitOption {
+            ExhaustSuiteTraitOption(kind: .budget(budget))
+        }
+    }
+
     // MARK: - Builder API
 
-    public extension Trait where Self == ExhaustTrait {
+    /// Declared on TestTrait (not Trait) so it is invisible to implicit member lookup in a @Suite
+    /// (any SuiteTrait) context. Paired with the suite builder being on SuiteTrait, each context sees
+    /// exactly one `exhaust` overload, so neither `.exhaust(...)` call is ever ambiguous.
+    public extension TestTrait where Self == ExhaustTrait {
         /// Configures `#exhaust` property tests with the given options.
         ///
         /// ```swift
@@ -118,12 +144,18 @@
 
     // MARK: - Suite Trait
 
+    // TestTrait conformance is required, not optional.
+    // Because isRecursive is true, Swift Testing propagates this trait down to every child @Test function and inserts it into that test's trait list.
+    // The Test.traits setter asserts that traits on a test function are TestTraits, so a SuiteTrait that is not also a TestTrait traps the runner during plan construction (a brk trap inside Runner.Plan._recursivelyApplyTraits) before any test runs.
+    // This also matches the intended semantics below: the scope fires once per test function, which is only valid for a trait that test functions accept.
+    // See swiftlang/swift-testing#1048.
+
     /// A Swift Testing trait that sets a default iteration budget for all `#exhaust` tests in a suite.
     ///
     /// Apply to a `@Suite` to set a budget that propagates to every test in the suite. Individual tests can override with an inline `.budget(...)` setting or a test-level `.exhaust(...)` trait.
     ///
     /// ```swift
-    /// @Suite(.exhaust(.thorough))
+    /// @Suite(.exhaust(.budget(.thorough)))
     /// struct MyPropertyTests {
     ///     @Test func sortedArrays() {
     ///         #exhaust(gen) { ... }  // inherits .thorough
@@ -137,7 +169,7 @@
     /// ```
     ///
     /// Regression seeds are per-test concerns and belong on `@Test(.exhaust(.regressions(...)))`.
-    public struct ExhaustSuiteTrait: SuiteTrait, TestScoping {
+    public struct ExhaustSuiteTrait: TestTrait, SuiteTrait, TestScoping {
         let budget: ExhaustBudget
 
         public var isRecursive: Bool {
@@ -166,17 +198,28 @@
         }
     }
 
-    public extension Trait where Self == ExhaustSuiteTrait {
+    /// Declared on SuiteTrait, not Trait: a static member of SuiteTrait is invisible to implicit member
+    /// lookup in a @Test (any TestTrait) context, so this overload never competes with the @Test builder.
+    /// Without that, because ExhaustSuiteTrait is also a TestTrait, @Test(.exhaust(.budget(...))) would be
+    /// ambiguous between ExhaustTrait and ExhaustSuiteTrait (both expose a .budget option).
+    public extension SuiteTrait where Self == ExhaustSuiteTrait {
         /// Sets a default iteration budget for all `#exhaust` tests in a suite.
         ///
         /// ```swift
-        /// @Suite(.exhaust(.thorough))
+        /// @Suite(.exhaust(.budget(.thorough)))
         /// struct MyPropertyTests { ... }
         /// ```
         ///
-        /// - Parameter budget: The iteration budget to apply to all property tests in the suite.
-        static func exhaust(_ budget: ExhaustBudget) -> ExhaustSuiteTrait {
-            ExhaustSuiteTrait(budget: budget)
+        /// - Parameter options: Suite configuration. Only `.budget(...)` is available; regression seeds belong on `@Test`.
+        static func exhaust(_ options: ExhaustSuiteTraitOption...) -> ExhaustSuiteTrait {
+            var budget: ExhaustBudget = .standard
+            for option in options {
+                switch option.kind {
+                    case let .budget(value):
+                        budget = value
+                }
+            }
+            return ExhaustSuiteTrait(budget: budget)
         }
     }
 

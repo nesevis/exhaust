@@ -76,7 +76,7 @@ Regression seeds are per-test concerns. They belong on `@Test`, not `@Suite`.
 The suite trait sets a default budget for every property test in the suite:
 
 ```swift
-@Suite(.exhaust(.thorough))
+@Suite(.exhaust(.budget(.thorough)))
 struct MyPropertyTests {
     @Test func sortPreservesLength() {
         #exhaust(gen) { xs in
@@ -100,10 +100,10 @@ The full precedence order, from highest to lowest:
 
 1. Inline `.budget(...)` on the `#exhaust` call.
 2. `.exhaust(.budget(...))` on the `@Test`.
-3. `.exhaust(.thorough)` on the `@Suite`.
+3. `.exhaust(.budget(.thorough))` on the `@Suite`.
 4. The default (`.standard`).
 
-The suite trait only accepts a budget. Regression seeds are per-test and are not accepted at the suite level.
+The suite trait accepts only `.budget(...)`. Regression seeds are per-test, so `@Suite(.exhaust(.regressions(...)))` does not compile.
 
 ### Tags
 
