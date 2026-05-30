@@ -15,8 +15,9 @@ Describe what your code should do, and Exhaust checks that claim across hundreds
 ```swift
 @Test func mySortProducesAscendingOrder() {
     #exhaust(.int().array(length: 0...100)) { array in
-        let sorted = mySort(array)
-        #expect(sorted == sorted.sorted())
+        let custom = mySort(array)
+        let reference = array.sorted()
+        #expect(custom == reference)
     }
 }
 ```
@@ -72,7 +73,7 @@ Exhaust is built on [reflective generators](https://dl.acm.org/doi/10.1145/36078
 
 - **Minimal counterexamples**: When a property fails, Exhaust reduces the failing input to the smallest counterexample that still triggers the failure. Reduction works for every type without custom logic, and because the reducer understands how values relate to each other, it finds [smaller counterexamples](https://github.com/jlink/shrinking-challenge/blob/main/pbt-libraries/exhaust/README.md) than most other reducers.
 
-- **Filters that don't time out**: Most similar libraries implement `.filter` by generating values and discarding those that fail the predicate. When valid values are sparse, this can appear to hang. Exhaust analyses the generator, measures which choices lead toward valid outputs, and reweights accordingly, a technique called Choice Gradient Sampling (CGS).
+- **Filters that don't time out**: Most similar libraries implement `.filter` by generating values and discarding those that fail the predicate. When valid values are sparse, this can appear to hang. Exhaust analyses the generator, measures which choices lead toward valid outputs, and reweights accordingly, a technique called Choice Gradient Sampling (CGS). While the generated values still have to pass the predicate, they are much more likely to after tuning the generator.
 
 ## Guides
 

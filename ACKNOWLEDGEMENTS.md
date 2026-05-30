@@ -1,6 +1,6 @@
 # Acknowledgements
 
-Work on what would become Exhaust started in [early 2025](https://hachyderm.io/@nesevis/113789286635356164) after I came across Harrison Goldstein’s PhD dissertation _Property-based Testing for the People_. I’ve had a longstanding interest in PBT and testing more generally, and have been fascinated by the integrated test case reduction in [Hypothesis](https://hypothesis.works/).
+Work on what would become Exhaust started in [early 2025](https://hachyderm.io/@nesevis/113789286635356164) after I came across Harrison Goldstein’s PhD dissertation [Property-Based Testing for the People](https://repository.upenn.edu/server/api/core/bitstreams/8abd65a8-7b3c-43c4-b004-fb756f3bc466/content). I’ve had a longstanding interest in PBT and testing more generally, and have been fascinated by the ergonomics and integrated test case reduction in [Hypothesis](https://hypothesis.works/), the industry leader in PBT.
 
 I wanted a similarly powerful and ergonomic PBT library for Swift. Exhaust is my attempt at creating that.
 
@@ -8,15 +8,20 @@ Along the way I went down many rabbit holes; sometimes I even came back up with 
 
 ## Harrison Goldstein
 
-Exhaust would not exist without the foundation laid out in his thesis: the Freer monad-based reflective generator that reifies effects as inspectable data; the notion of _interpreting_ a generator bidirectionally; Choice Gradient optimisation.
+Exhaust would not exist without the foundation laid out in his PhD thesis: the Freer monad-based reflective generator that reifies effects as inspectable data; the notion of _interpreting_ a generator bidirectionally; Choice Gradient optimisation.
+
+_Property-Based Testing in Practice_ has been very helpful in understanding the pain points of developers using PBT.
+
+Most of these concepts are explored in more detail in individual papers, some of which are listed below.
 
 Links:
 
-1. [Property-based Testing for the People](https://repository.upenn.edu/server/api/core/bitstreams/8abd65a8-7b3c-43c4-b004-fb756f3bc466/content) (2024)
+1. [Property-Based Testing for the People](https://repository.upenn.edu/server/api/core/bitstreams/8abd65a8-7b3c-43c4-b004-fb756f3bc466/content) (2024)
 2. [Reflecting on Random Generation](https://dl.acm.org/doi/10.1145/3607842) (2023)
 3. [Do Judge a Test by its Cover: Combining Combinatorial and Property-Based Testing](https://doi.org/10.1007/978-3-030-72019-3_10) (2021, with Hughes, Lampropoulos, and Pierce)
 4. [Tuning Random Generators: Property-Based Testing as Probabilistic Programming](https://arxiv.org/abs/2508.14394) (2025, Tjoa et al; Goldstein as co-author)
 5. [Tyche: Making Sense of PBT Effectiveness](https://dl.acm.org/doi/10.1145/3654777.3676407) (2024)
+6. [Property-Based Testing in Practice](https://dl.acm.org/doi/10.1145/3597503.3639581) (2024, with Cutler, Dickstein, Pierce and Head)
 
 ## David MacIver, Alastair Donaldson and Hypothesis
 
@@ -51,7 +56,10 @@ Links:
 
 ### Hillel Wayne
 
-Hillel’s primary area of focus is formal methods (he’s got a book out!) but he has written extensively about testing and PBT in particular for a long time. [Blog](https://www.hillelwayne.com)
+Hillel’s primary area of focus is formal methods, but he has written extensively about testing and PBT in particular for a long time.
+
+1. [Blog](https://www.hillelwayne.com)
+2. [Logic for Programmers](https://leanpub.com/logic/c/wobsite-HexyEt7TTTe3)
 
 ### Stevan Andjelkovic
 
@@ -66,12 +74,23 @@ jqwik maintainer Johannes Link’s [Shrinking Challenge](https://github.com/jlin
 
 ### Renée Bryce & Charles Colbourn
 
-Their _Density_ algorithm provides a way to do pull-based/lazy covering array generation. Exhaust's `BalancedCoveringArrayGenerator` evolved from an implementation of this algorithm. Exhaust uses covering arrays to combine problematic values across generator parameters efficiently, ensuring as many pairwise combinations as possible are tested without having to generate the full Cartesian product upfront. The one-row-at-a-time design means Exhaust can stop the moment a property fails, without wasting time building rows that would never be tested.
+Their _Density_ algorithm provides a way to do pull-based/lazy covering array generation. Exhaust's `BalancedCoveringArrayGenerator` evolved from an implementation of this algorithm. Exhaust uses covering arrays to combine problematic values across generator parameters efficiently, ensuring as many pairwise combinations as possible are tested without having to generate the full Cartesian product upfront. 
+
+The one-row-at-a-time design means Exhaust can stop the moment a property fails, without wasting time building rows that would never be tested.
 
 Links:
 
 1. [A density-based greedy algorithm for higher strength covering arrays](https://onlinelibrary.wiley.com/doi/epdf/10.1002/stvr.393) (2009) (paywall)
 
+### Point-Free
+
+Brandon Williams and Stephen Celis' [Point-Free](https://pointfree.co) is a wonderful resource for all developers, especially those of us using Swift daily.
+
+Exhaust leans on 3 of PF's focused libraries:
+
+1. [Custom Dump](https://github.com/pointfreeco/swift-custom-dump) is used to output counterexamples and diffs in a standardised way
+2. [Issue Reporting](https://github.com/pointfreeco/swift-issue-reporting) is used for surfacing issues in Swift Testing and XCTest
+3. [Macro Testing](https://github.com/pointfreeco/swift-macro-testing) is used to test Exhaust's macro expansions.
 
 ### Swift Testing
 
@@ -88,7 +107,3 @@ I used tests from these libraries to help verify Exhaust’s reduction code
 - [Fast-check](https://fast-check.dev/) JS/TS
 - [jqwik](https://jqwik.net/) Java/Kotlin
 - [CsCheck](https://github.com/AnthonyLloyd/CsCheck) C#
-
-### Point-free
-
-[Point-free](https://www.pointfree.co)'s excellent library [Custom Dump](https://github.com/pointfreeco/swift-custom-dump) is used to output counterexamples and diffs in a standardised way, and [Swift Issue Reporting](https://github.com/pointfreeco/swift-issue-reporting) is used for surfacing issues in Swift Testing and XCTest. Macros are also tested with [MacroTests](https://github.com/pointfreeco/swift-macro-testing).
