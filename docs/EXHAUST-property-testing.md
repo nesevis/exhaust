@@ -1,6 +1,6 @@
 # Running property tests
 
-`#exhaust` tests a property across generated values and reports a minimal counterexample on failure. This page covers closure shapes, settings, and observability. For contract tests over stateful systems, see [Running contract tests](EXECUTE.md) and the `#execute` macro.
+`#exhaust` tests a property across generated values and reports a minimal counterexample on failure. This page covers closure shapes, settings, and observability. For contract tests over stateful systems, see [Contract testing](EXECUTE-contract-testing.md) and the `#execute` macro.
 
 ## Closure shapes
 
@@ -87,7 +87,7 @@ You can also throw errors directly. Any thrown error counts as a failure:
 | `.budget(.custom(...))` | — | Explicit values for coverage and sampling budgets. |
 | `.budget(.thorough * 3)` | — | Scale any preset with `*` or `/`. |
 | `.replay(seed)` | — | Deterministic reproduction from a failure report seed (for example `.replay("8DZR69-7")`). Also accepts a raw `UInt64`. |
-| `reflecting: value` | `nil` | Skip generation; reflect the given value and reduce it (see [Reflecting known values](GEN.md#reflecting-known-values)). Passed as a named parameter, not a setting. |
+| `reflecting: value` | `nil` | Skip generation; reflect the given value and reduce it (see [Reflecting known values](GEN-building-generators.md#reflecting-known-values)). Passed as a named parameter, not a setting. |
 | `.visualize` | off | Prints the choice tree before and after reduction as a Unicode visualisation. |
 | `.onReport(closure)` | — | Registers a closure that receives an `ExhaustReport` after the test completes. See [Run statistics](#run-statistics). |
 | `.collectOpenPBTStats` | off | Collects per-example statistics in [OpenPBTStats](https://tyche-pbt.github.io/tyche-extension/) JSON Lines format. See [Test observability](#test-observability). |
@@ -149,4 +149,4 @@ A property test that passes does not mean the generator is good. It may mean the
 
 Tyche renders these signals as interactive charts: sample breakdowns, feature distributions, and per-example drill-down. This lets you diagnose generator quality visually rather than reading thousands of lines of test output.
 
-For a lighter-weight check that runs as part of your test suite, [`#examine`](EXAMINE.md) lets you assert on generator quality — correctness, coverage, and distribution — without external tooling.
+For a lighter-weight check that runs as part of your test suite, [`#examine`](EXAMINE-generator-testing.md) lets you assert on generator quality — correctness, coverage, and distribution — without external tooling.

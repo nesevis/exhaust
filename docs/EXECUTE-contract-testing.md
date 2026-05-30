@@ -2,17 +2,19 @@
 
 This guide covers testing stateful systems, things with mutable internal state where bugs emerge from sequences of operations rather than single calls. If you've read the [getting started guide](GETTING_STARTED.md), you're familiar with `#exhaust` for pure functions. `@Contract` is the equivalent for objects with memory.
 
+You declare a contract with `@Contract` (or `@ConcurrentContract`, for systems built on threads, locks, or atomics rather than Swift's async/await) and run it with `#execute`. `#execute` generates command sequences, runs them against a fresh system under test, checks every invariant after each step, and — when something breaks — reduces the trace to the shortest sequence that still reproduces the failure and reports it with a replay seed. For pure functions over a generator rather than a stateful system, reach for [`#exhaust`](EXHAUST-property-testing.md) instead.
+
 ## Choosing a contract style
 
-| Your situation | Macro | Runner |
-|----------------|-------|--------|
-| Synchronous SUT, sequential commands | `@Contract` (struct) | Sequential |
-| Async SUT, sequential commands | `@Contract` (final class, async commands) | Sequential with async bridging |
-| Async SUT, bugs at `await` suspension points | `@Contract` (final class, async commands) + `.concurrent(N)` | Cooperative scheduler — deterministic interleaving, same seed = same result |
-| Async facade over locks, dispatch queues, or atomics | `@ConcurrentContract` (final class, async commands) + `.concurrent(N)` | Preemptive — real GCD threads, non-deterministic, oracle comparison |
-| Synchronous SUT, bugs need real thread preemption | `@ConcurrentContract` (final class, sync commands) + `.concurrent(N)` | Preemptive — real GCD threads, non-deterministic, oracle comparison |
+| What you're testing | Macro | Concurrency setting | How it runs |
+|---|---|---|---|
+| Synchronous SUT, operations in sequence | `@Contract` (struct) | — | Sequential |
+| Async SUT (actors, async functions), operations in sequence | `@Contract` (final class) | — | Sequential, async-bridged |
+| Pure Swift concurrency — data races across `await` boundaries | `@Contract` (final class) | `.concurrent(N)` | Cooperative: deterministic interleaving at `await`, reproducible seeds |
+| Multithreading behind an async facade — locks, dispatch queues, atomics | `@ConcurrentContract` (final class) | `.concurrent(N)` | Preemptive: real GCD threads, non-deterministic, `@Oracle` comparison |
+| The same, with synchronous command bodies | `@ConcurrentContract` (final class, sync commands) | `.concurrent(N)` | Preemptive: real GCD threads, no async bridging |
 
-The first three rows use `@Contract` and differ only in whether commands are async and whether `.concurrent` is set. The last two rows use `@ConcurrentContract`, which adds an `@Oracle` method for comparing concurrent state against a sequential replay. The [cooperative scheduler](#cooperative-concurrent-testing) controls interleaving deterministically at `await` boundaries. The [preemptive runner](#preemptive-concurrent-testing) dispatches to real OS threads and catches races invisible to the cooperative scheduler.
+The two concurrent rows split on what the system under test is built on: pure Swift concurrency (async functions, actors), or multithreading primitives — locks, dispatch queues, atomics — behind an async facade. [Where interleaving can happen](#where-interleaving-can-happen) explains how that changes where the runner can interleave, and what each choice trades away.
 
 ## When to reach for `@Contract`
 
@@ -218,6 +220,16 @@ Three differences from sync contracts: the contract is a `final class` (not a st
 ```
 
 Exhaust detects async methods and generates the correct conformance automatically.
+
+## Where interleaving can happen
+
+The two concurrent runners differ in one thing: where one lane's work can be interleaved with another's.
+
+Code written in pure Swift concurrency gives up the thread only at an `await` — between two `await`s, a task runs to completion without interruption (the scheduling term is *cooperative*). The cooperative runner (`@Contract` with async commands and `.concurrent`) drives the tasks itself and chooses which lane to resume at each suspension point. Because the only places an interleaving can occur are the `await`s your command bodies actually reach, the runner can enumerate and replay them exactly: the same seed reproduces the same interleaving, and the reducer shrinks the lane assignments alongside the command sequence. The limitation follows from the same fact. A race that lives entirely in synchronous code, with no `await` between the two conflicting accesses, gives the scheduler nowhere to interleave, so it stays invisible.
+
+The preemptive runner (`@ConcurrentContract`) gives up that control to reach those races. It dispatches commands to real GCD threads, which the operating system can interrupt at any instruction, including the synchronous stretches a cooperative scheduler treats as atomic. That reaches races inside the multithreading primitives an async facade hides — locks, dispatch queues, atomics — which the cooperative runner steps straight over. The price is determinism. The OS chooses the interleaving, so the same seed no longer reproduces the same run, and the runner compensates by repeating each sequence and comparing its final state against a race-free sequential replay through an `@Oracle` method, rather than checking invariants at every intermediate step.
+
+So the choice comes down to where the race lives. A race that straddles an `await` is the cooperative runner's territory — deterministic, reproducible, and faster to reduce. A race hidden in synchronous code, behind locks or atomics, needs the preemptive runner, at the cost of reproducibility.
 
 ## Cooperative concurrent testing
 

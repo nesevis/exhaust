@@ -60,7 +60,7 @@ let gen = try #gen(from: user)
 let users = #example(gen, count: 100)
 ```
 
-The synthesised generator won't know about your domain constraints (it generates across the full range of each field) but it's a fast way to get coverage without writing a generator by hand. See [Synthesising generators from Decodable types](GEN.md#synthesising-generators-from-decodable-types) for the details and limitations.
+The synthesised generator won't know about your domain constraints (it generates across the full range of each field) but it's a fast way to get coverage without writing a generator by hand. See [Synthesising generators from Decodable types](GEN-building-generators.md#synthesising-generators-from-decodable-types) for the details and limitations.
 
 ## The smallest useful test you can write
 
@@ -277,7 +277,7 @@ It's worth running this against code you already trust, just to see what happens
 
 The catalogue encodes the kinds of bugs each type is known for — the sort of thing a seasoned developer has learned to check for by hand over a career of finding them the hard way. These problematic values are drawn in combinations at pairwise coverage by default, so any bug that surfaces when two parameters hit their problematic values simultaneously gets caught without your having to remember to test the combination yourself. 
 
-Generators with very small domains get enumerated exhaustively as a special case. See [Ordered coverage of problematic values](EXHAUST.md#ordered-coverage-of-problematic-values) for the full detail.
+Generators with very small domains get enumerated exhaustively as a special case. See [Ordered coverage of problematic values](EXHAUST-property-testing.md#ordered-coverage-of-problematic-values) for the full detail.
 
 **Random sampling.** Once coverage is done, the sampler turns to the generator's natural distribution, testing the property against varied, ordinary inputs. Coverage and sampling have separate budgets. At the default `.standard` budget you get 200 of each, so a property runs 400 times per invocation in total. Larger budgets (`.thorough`, `.extensive`) scale both numbers in lockstep.
 
@@ -348,7 +348,7 @@ Property closures can be async, throwing or return a simple boolean.
 
 ## Writing your own generators
 
-Built-in generators (`.int()`, `.array()`, `.string()`, and their siblings) are simple enough. Generators compose together in ways that let you express almost any generator you could care to think of. [Building generators](GEN.md) covers the main concepts in more depth.
+Built-in generators (`.int()`, `.array()`, `.string()`, and their siblings) are simple enough. Generators compose together in ways that let you express almost any generator you could care to think of. [Building generators](GEN-building-generators.md) covers the main concepts in more depth.
 
 ```swift
 struct Order {
@@ -438,7 +438,7 @@ Each direction gets its own tuning pass and its own biased generator.
 
 At the default `.standard` budget, the property runs on 30 examples per direction, and the report tells you which directions got exercised and whether any of them failed. If "refund + partial" turns out to be infeasible under your generator — because some constraint in the generator rules it out — the sampler exhausts its tuning budget without getting close, and `#explore` tells you the direction was unreachable. You find the bug in your generator instead of getting a false silence.
 
-The `#explore` skill is recognising the moment when your worry shifts from "does the property hold?" to "is the property even being tested in the cases I care about?" The first question is `#exhaust`'s job; the second is `#explore`'s. See [Directed exploration](EXPLORE.md) for the full reference.
+The `#explore` skill is recognising the moment when your worry shifts from "does the property hold?" to "is the property even being tested in the cases I care about?" The first question is `#exhaust`'s job; the second is `#explore`'s. See [Directed exploration](EXPLORE-directed-exploration.md) for the full reference.
 
 A few signs you've crossed into `#explore` territory:
 
@@ -479,5 +479,5 @@ For async SUTs, the contract becomes a `final class` and the runner tests concur
 }
 ```
 
-Contract testing has its own guide: [Contract Testing with Exhaust](CONTRACT_TESTING.md). If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@Contract` instead — that's what it's there for.
+Contract testing has its own guide: [Contract Testing with Exhaust](EXECUTE-contract-testing.md). If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@Contract` instead — that's what it's there for.
 

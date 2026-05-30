@@ -79,7 +79,7 @@ Exhaust is built on [reflective generators](https://dl.acm.org/doi/10.1145/36078
 
 New to property-based testing? **[Getting Started](docs/GETTING_STARTED.md)** walks you from your first `#exhaust` call through generators, properties, and reading failure reports.
 
-Testing a stateful system? **[Contract Testing](docs/CONTRACT_TESTING.md)** covers generating command sequences, model-based oracles, and concurrent interleaving.
+Testing a stateful system? **[Contract Testing](docs/EXECUTE-contract-testing.md)** covers generating command sequences, model-based oracles, and concurrent interleaving.
 
 Using Swift Testing? **[Swift Testing Integration](docs/SWIFT_TESTING.md)** covers suite and test traits, how `#expect` and `#require` work inside property closures, and how failures surface in the test runner. Using XCTest? **[XCTest Compatibility](docs/XCTEST.md)** covers what works, what doesn't, and the differences.
 
@@ -87,13 +87,13 @@ Exhaust's entry points are six macros. `#gen` builds generators; the rest consum
 
 | Macro | Purpose |
 |---|---|
-| [`#gen(…)`](docs/GEN.md) | Build generators from primitives, structs, enums, and recursive types. |
-| [`#gen(MyType.self, from:)`](docs/GEN.md#synthesising-generators-from-decodable-types) | Synthesise a generator from a `Decodable` type and example JSON or a `Codable` instance. |
-| [`#exhaust(gen) {…}`](docs/EXHAUST.md) | Test a property and report a minimal counterexample on failure. |
-| [`#explore(gen, directions:) {…}`](docs/EXPLORE.md) | Test a property with per-direction coverage guarantees. |
-| [`#execute(MyContract.self, …)`](docs/EXECUTE.md) | Run a contract test against a stateful system. |
-| [`#example(gen)`](docs/GEN.md#example) | Generate test data from your generators. |
-| [`#examine(gen) {…}`](docs/EXAMINE.md) | Test your generators: correctness, coverage, and distribution quality. |
+| [`#gen(…)`](docs/GEN-building-generators.md) | Build generators from primitives, structs, enums, and recursive types. |
+| [`#gen(MyType.self, from:)`](docs/GEN-building-generators.md#synthesising-generators-from-decodable-types) | Synthesise a generator from a `Decodable` type and example JSON or a `Codable` instance. |
+| [`#exhaust(gen) {…}`](docs/EXHAUST-property-testing.md) | Test a property and report a minimal counterexample on failure. |
+| [`#explore(gen, directions:) {…}`](docs/EXPLORE-directed-exploration.md) | Test a property with per-direction coverage guarantees. |
+| [`#execute(MyContract.self, …)`](docs/EXECUTE-contract-testing.md) | Run a contract test against a stateful system. |
+| [`#example(gen)`](docs/GEN-building-generators.md#example) | Generate test data from your generators. |
+| [`#examine(gen) {…}`](docs/EXAMINE-generator-testing.md) | Test your generators: correctness, coverage, and distribution quality. |
 
 ## Installation
 
