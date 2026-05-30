@@ -2,7 +2,7 @@
 
 *Last updated: 2026-05-14*
 
-When Exhaust finds a failing test case, the reducer shrinks it to a minimal counterexample. It builds a graph from the choice tree — a structural map of every decision the generator made — then tries operations that make the counterexample smaller or simpler while keeping the property failing. Structural operations (delete elements, collapse recursion levels, swap branches) compete with value operations (binary search toward zero, redistribute between coupled parameters) in a shared priority queue. The highest-priority operation wins at each step.
+When Exhaust finds a failing test case, the reducer "shrinks" it down it to a minimal counterexample. It builds a graph from the choice tree — a structural map of every decision the generator made — then tries operations that make the counterexample smaller or simpler while keeping the property failing. Structural operations (delete elements, collapse recursion levels, swap branches) compete with value operations (binary search toward zero, redistribute between coupled parameters) in a shared priority queue. The highest-priority operation wins at each step.
 
 The reducer runs in cycles. Each cycle pulls operations from the graph until all sources are exhausted, then checks whether anything improved. If values have all converged and no structural progress was made, it exits early. Otherwise it decrements a stall budget and tries again.
 
@@ -48,7 +48,7 @@ flowchart TD
 
 ## What the reducer tries
 
-The graph identifies which operations are available and estimates how much each one would shrink the counterexample. Ten encoders compete in the priority queue each cycle:
+The graph identifies which operations are available and estimates how much each one would reduce the counterexample. Ten encoders compete in the priority queue each cycle:
 
 | Encoder | What it does |
 |---|---|

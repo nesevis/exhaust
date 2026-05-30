@@ -1,15 +1,50 @@
 import Foundation
 
-/// A `Decoder` that intercepts decode calls to build a generator tree while returning concrete JSON values.
+/// A `Decoder` that intercepts decode calls to record a per-level generator shape while returning concrete JSON values.
 package final class DiscoveryDecoder: Decoder {
     package let codingPath: [any CodingKey]
     package let userInfo: [CodingUserInfoKey: Any] = [:]
     private let jsonValue: Any
-    package private(set) var childGenerators: [AnyGenerator] = []
+
+    // The keyed/unkeyed/single fields are populated by whichever container kind the decoded type requested; `nestedDecoders` holds the sub-decoders spawned for inline `nestedContainer(forKey:)` calls on a keyed container. The `shape` getter resolves them into a `ContainerShape`.
+    private var keyedChildren: [(key: String, generator: AnyGenerator)] = []
+    private var unkeyedChildren: [(elementType: ObjectIdentifier, generator: AnyGenerator)] = []
+    private var singleChild: AnyGenerator?
+    private var nestedDecoders: [(key: String, decoder: DiscoveryDecoder)] = []
 
     package init(jsonValue: Any, codingPath: [any CodingKey] = []) {
         self.jsonValue = jsonValue
         self.codingPath = codingPath
+    }
+
+    /// The container shape discovered for this decoder's value.
+    ///
+    /// A keyed level combines its direct field generators with the sub-shapes of any inline nested containers, each folded in under its key as a child whose generator produces a nested ``ReplayValue``. Reading this after `init(from:)` completes is what gives the nested decoders their final shape.
+    package var shape: ContainerShape {
+        if let singleChild {
+            return .single(singleChild)
+        }
+        if keyedChildren.isEmpty == false || nestedDecoders.isEmpty == false {
+            var children = keyedChildren.map {
+                KeyedChild(key: $0.key, generator: $0.generator, producesReplayValue: false)
+            }
+            for (key, nestedDecoder) in nestedDecoders {
+                children.append(KeyedChild(
+                    key: key,
+                    generator: nestedReplayValueGenerator(for: nestedDecoder.shape),
+                    producesReplayValue: true
+                ))
+            }
+            return .keyed(children)
+        }
+        if unkeyedChildren.isEmpty == false {
+            // A single element type across all positions reads as a collection (a loop over homogeneous elements), so the length varies. Mixed types read as a positional/tuple decode that wants exactly this sequence, so the length stays fixed.
+            let isHomogeneous = Set(unkeyedChildren.map(\.elementType)).count == 1
+            return isHomogeneous
+                ? .homogeneousArray(element: unkeyedChildren[0].generator)
+                : .unkeyed(unkeyedChildren.map(\.generator))
+        }
+        return .empty
     }
 
     package func container<Key: CodingKey>(
@@ -45,12 +80,20 @@ package final class DiscoveryDecoder: Decoder {
         )
     }
 
-    func recordGenerator(_ generator: AnyGenerator) {
-        childGenerators.append(generator)
+    func recordKeyed(_ key: String, _ generator: AnyGenerator) {
+        keyedChildren.append((key, generator))
     }
 
-    func removeLastGenerator() -> AnyGenerator {
-        childGenerators.removeLast()
+    func recordUnkeyed(elementType: Any.Type, _ generator: AnyGenerator) {
+        unkeyedChildren.append((ObjectIdentifier(elementType), generator))
+    }
+
+    func recordSingle(_ generator: AnyGenerator) {
+        singleChild = generator
+    }
+
+    func recordNested(key: String, decoder: DiscoveryDecoder) {
+        nestedDecoders.append((key, decoder))
     }
 }
 
@@ -169,44 +212,36 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
     ) {
         let generator: AnyGenerator
 
-        if let collectionGen = makeCollectionGenerator(for: type) {
-            generator = collectionGen
+        // Collections are checked before `ExhaustGenerable` because Array/Dictionary/Set conform to `ExhaustGenerable` only conditionally, and those conditional conformance records are not reliably linked in xcframework builds. `SynthesizableCollection` and `DiscoverableCollection` are unconditional, so they resolve where the conditional conformance would not.
+        if let collectionGenerator = (type as? SynthesizableCollection.Type)?.synthesizedGenerator {
+            generator = collectionGenerator
+        } else if let discoveredCollectionGenerator = makeDiscoveredCollectionGenerator(
+            for: type,
+            fromExample: jsonValue,
+            codingPath: codingPath + [key]
+        ) {
+            generator = discoveredCollectionGenerator
         } else if let generableType = type as? ExhaustGenerable.Type {
             generator = generableType.defaultGenerator
-        } else if let caseIterable = type as? any(CaseIterable & Decodable).Type {
-            generator = makeCaseIterableGenerator(caseIterable)
+        } else if let caseIterable = type as? any(CaseIterable & Decodable).Type,
+                  let caseGenerator = makeCaseIterableGenerator(caseIterable)
+        {
+            generator = caseGenerator
         } else if type is any RawRepresentable.Type {
             generator = Gen.just((decodedValue ?? jsonValue) as Any).erase()
         } else {
-            let nested = DiscoveryDecoder(
-                jsonValue: jsonValue,
+            // Recurse into the nested type. Use the recorded shape only when the example decode succeeds — a partial shape from a thrown decode would reconstruct from incomplete fields. An empty shape (decode failed, or produced no leaves) makes `makeReconstructingGenerator` pin to the example, so no separate branch is needed.
+            let nested = DiscoveryDecoder(jsonValue: jsonValue, codingPath: codingPath + [key])
+            let shape = (try? T(from: nested)) == nil ? ContainerShape.empty : nested.shape
+            generator = makeReconstructingGenerator(
+                type,
+                shape: shape,
+                pin: (decodedValue ?? jsonValue) as Any,
                 codingPath: codingPath + [key]
             )
-            if (try? T(from: nested)) != nil,
-               nested.childGenerators.isEmpty == false
-            {
-                let childGens = ContiguousArray(nested.childGenerators)
-                let zipped: AnyGenerator = .impure(
-                    operation: .zip(childGens),
-                    continuation: { .pure($0) }
-                )
-                generator = Gen.liftF(.transform(
-                    kind: .map(
-                        forward: { values in
-                            let replay = ReplayDecoder(values: values as! [Any])
-                            return try T(from: replay) as Any
-                        },
-                        inputType: [Any].self,
-                        outputType: Any.self
-                    ),
-                    inner: zipped
-                )) as AnyGenerator
-            } else {
-                generator = Gen.just((decodedValue ?? jsonValue) as Any).erase()
-            }
         }
 
-        decoder.recordGenerator(asOptional ? wrapOptional(generator) : generator)
+        decoder.recordKeyed(key.stringValue, asOptional ? wrapOptional(generator) : generator)
     }
 
     private func decodeValue<T: Decodable>(_ type: T.Type, from jsonValue: Any, key: Key) throws -> T {
@@ -224,9 +259,12 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
         guard let nested = dictionary[key.stringValue] as? [String: Any] else {
             throw GeneratorSynthesizerError.unexpectedContainer
         }
+        // A fresh decoder keeps the nested container's recordings separate from this level's, so its shape folds in under `key` as a nested `ReplayValue` rather than flattening into this level's fields.
+        let nestedDecoder = DiscoveryDecoder(jsonValue: nested, codingPath: codingPath + [key])
+        decoder.recordNested(key: key.stringValue, decoder: nestedDecoder)
         let container = DiscoveryKeyedContainer<NestedKey>(
             dictionary: nested,
-            decoder: decoder,
+            decoder: nestedDecoder,
             codingPath: codingPath + [key]
         )
         return KeyedDecodingContainer(container)
@@ -236,9 +274,11 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
         guard let array = dictionary[key.stringValue] as? [Any] else {
             throw GeneratorSynthesizerError.unexpectedContainer
         }
+        let nestedDecoder = DiscoveryDecoder(jsonValue: array, codingPath: codingPath + [key])
+        decoder.recordNested(key: key.stringValue, decoder: nestedDecoder)
         return DiscoveryUnkeyedContainer(
             array: array,
-            decoder: decoder,
+            decoder: nestedDecoder,
             codingPath: codingPath + [key]
         )
     }
@@ -294,13 +334,15 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
         currentIndex += 1
 
         if let generableType = type as? ExhaustGenerable.Type {
-            decoder.recordGenerator(generableType.defaultGenerator)
+            decoder.recordUnkeyed(elementType: type, generableType.defaultGenerator)
             return try decodePrimitive(type, from: jsonValue)
         }
 
         let nested = DiscoveryDecoder(jsonValue: jsonValue, codingPath: codingPath)
         return try T(from: nested)
     }
+
+    // A nested container opened inside an unkeyed container records into the *parent* unkeyed decoder — there is no fresh sub-decoder here, unlike the keyed `nestedContainer(forKey:)` path. For a hand-written init that decodes structs element-by-element this leaves the parent level with keyed/unkeyed children that do not match the unkeyed container the parent's `init(from:)` reopens at replay, so the value degrades to a pin rather than reconstructing. This is the documented "manual element-by-element unkeyed decoding" limitation.
 
     mutating func nestedContainer<NestedKey: CodingKey>(
         keyedBy _: NestedKey.Type
@@ -351,7 +393,7 @@ private struct DiscoverySingleValueContainer: SingleValueDecodingContainer {
 
     func decode<T: Decodable>(_ type: T.Type) throws -> T {
         if let generableType = type as? ExhaustGenerable.Type {
-            decoder.recordGenerator(generableType.defaultGenerator)
+            decoder.recordSingle(generableType.defaultGenerator)
             return try decodePrimitive(type, from: value)
         }
 
@@ -361,82 +403,6 @@ private struct DiscoverySingleValueContainer: SingleValueDecodingContainer {
 }
 
 // MARK: - Primitive Decoding
-
-private func wrapOptional(_ innerGenerator: AnyGenerator) -> AnyGenerator {
-    // Wrap using the public `.optional()` generator so default weights stay consistent
-    ReflectiveGenerator(innerGenerator, isSynthesized: true).optional().gen.erase()
-}
-
-private func makeCaseIterableGenerator(_ type: any (CaseIterable & Decodable).Type) -> AnyGenerator {
-    func build<T: CaseIterable & Decodable>(_: T.Type) -> AnyGenerator {
-        let cases = Array(T.allCases)
-        precondition(cases.isEmpty == false, "CaseIterable type \(T.self) has no cases")
-        return Gen.pick(
-            choices: cases.map { (1, Gen.just($0 as Any)) }
-        ).erase()
-    }
-    return build(type)
-}
-
-// MARK: - Collection Generator Construction
-
-//
-// Conditional conformances to ``ExhaustGenerable`` (Array, Dictionary, Set) are not reliably resolved at runtime in xcframework builds — the linker may strip conformance records that are only reachable via dynamic `as?` casts.
-//
-// ``SynthesizableCollection`` is an unconditional conformance on each collection type (no `where` clause), so it is always present in the binary. The element/key/value type's ``ExhaustGenerable`` conformance is checked at runtime inside the property, where unconditional conformances resolve correctly.
-
-/// Provides a generator for standard library collection types without relying on conditional ``ExhaustGenerable`` conformances.
-///
-/// Each conformance is unconditional (no `where` clause) so the linker cannot strip it. The element type's ``ExhaustGenerable`` conformance is checked at runtime inside ``synthesizedGenerator``, returning `nil` when the element type has no generator.
-package protocol SynthesizableCollection {
-    /// Returns a generator for this collection type, or `nil` if the element/key/value types do not conform to ``ExhaustGenerable``.
-    static var synthesizedGenerator: AnyGenerator? { get }
-}
-
-extension Array: SynthesizableCollection {
-    /// Returns ``Gen/arrayOf(_:)`` with the element's default generator, or `nil` if `Element` has no generator.
-    package static var synthesizedGenerator: AnyGenerator? {
-        guard let elementGen = resolveGenerator(for: Element.self) else { return nil }
-        let typed: Generator<Element> = elementGen.map { $0 as! Element }
-        return Gen.arrayOf(typed).erase()
-    }
-}
-
-extension Dictionary: SynthesizableCollection {
-    /// Returns ``Gen/dictionaryOf(_:_:)`` with the key and value default generators, or `nil` if either has no generator.
-    package static var synthesizedGenerator: AnyGenerator? {
-        guard let keyGen = resolveGenerator(for: Key.self),
-              let valueGen = resolveGenerator(for: Value.self)
-        else { return nil }
-        let typedKey: Generator<Key> = keyGen.map { $0 as! Key }
-        let typedValue: Generator<Value> = valueGen.map { $0 as! Value }
-        return Gen.dictionaryOf(typedKey, typedValue).erase()
-    }
-}
-
-extension Set: SynthesizableCollection {
-    /// Returns ``Gen/setOf(_:)`` with the element's default generator, or `nil` if `Element` has no generator.
-    package static var synthesizedGenerator: AnyGenerator? {
-        guard let elementGen = resolveGenerator(for: Element.self) else { return nil }
-        let typed: Generator<Element> = elementGen.map { $0 as! Element }
-        return Gen.setOf(typed).erase()
-    }
-}
-
-/// Resolves a generator for any type, trying ``ExhaustGenerable`` first and ``SynthesizableCollection`` as a fallback for collection types whose conditional conformances may not survive xcframework linking.
-private func resolveGenerator(for type: Any.Type) -> AnyGenerator? {
-    if let generable = type as? ExhaustGenerable.Type {
-        return generable.defaultGenerator
-    }
-    if let collection = type as? SynthesizableCollection.Type {
-        return collection.synthesizedGenerator
-    }
-    return nil
-}
-
-private func makeCollectionGenerator(for type: (some Any).Type) -> AnyGenerator? {
-    (type as? SynthesizableCollection.Type)?.synthesizedGenerator
-}
 
 private func decodePrimitive<T>(_ type: T.Type, from jsonValue: Any) throws -> T {
     if let value = jsonValue as? T {

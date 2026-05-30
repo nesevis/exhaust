@@ -126,10 +126,10 @@ struct MetaGeneratorPropertyTests {
         #expect(badRecipe == nil, "Monad right identity failed for minimal recipe: \(badRecipe!)")
     }
 
-    // MARK: 8. Shrinking Preserves Failure (manual — circular if dogfooded)
+    // MARK: 8. Reduction Preserves Failure (manual — circular if dogfooded)
 
-    @Test("Shrunk values still fail the original property")
-    func shrinkingPreservesFailure() throws {
+    @Test("Reduced values still fail the original property")
+    func reductionPreservesFailure() throws {
         let intLeafGen = recipeGenerator(producing: .int, maxDepth: 0)
         var recipeIter = ValueInterpreter(intLeafGen, maxRuns: 20)
         while let recipe = try recipeIter.next() {

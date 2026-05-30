@@ -49,11 +49,11 @@ public macro gen<each GeneratedValue>(
 ///
 /// ## What Gets a Full Generator
 ///
-/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, boundary analysis, and shrinking support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators when their element types conform. `CaseIterable` enums produce even-weighted picks across all cases.
+/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, boundary analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary — both when the element type conforms to ``ExhaustGenerable`` and when it is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
 ///
-/// ## What Falls Back to `.just`
+/// ## What Gets Pinned
 ///
-/// Types the decoder cannot synthesise a generator for — non-`CaseIterable` `RawRepresentable` enums, types with hand-written `init(from:)` that branch on decoded values, and any other type not covered above — fall back to `.just(decodedValue)`, pinning the field to the constant value from the example JSON. The generator still works; those fields simply do not vary across iterations.
+/// Fields the synthesizer cannot characterize from the example are pinned to the constant value from the example JSON — they still work, they simply do not vary. This covers non-`CaseIterable` `RawRepresentable` enums, collections whose example is empty (no element to discover from), and values decoded through patterns the synthesizer does not model (manual element-by-element unkeyed decoding, class inheritance via a super decoder). Separately, when a generated value drives a hand-written `init(from:)` down a branch the example does not cover, that one sample is pinned to the example and a deduplicated warning is logged.
 ///
 /// ## Limitations
 ///
@@ -87,11 +87,11 @@ public macro gen<T: Decodable>(
 ///
 /// ## What Gets a Full Generator
 ///
-/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, boundary analysis, and shrinking support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators when their element types conform. `CaseIterable` enums produce even-weighted picks across all cases.
+/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, boundary analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary — both when the element type conforms to ``ExhaustGenerable`` and when it is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
 ///
-/// ## What Falls Back to `.just`
+/// ## What Gets Pinned
 ///
-/// Types the decoder cannot synthesise a generator for — non-`CaseIterable` `RawRepresentable` enums, types with hand-written `init(from:)` that branch on decoded values, and any other type not covered above — fall back to `.just(decodedValue)`, pinning the field to the constant value from the encoded instance. The generator still works; those fields simply do not vary across iterations.
+/// Fields the synthesizer cannot characterize from the example are pinned to the constant value from the encoded instance — they still work, they simply do not vary. This covers non-`CaseIterable` `RawRepresentable` enums, collections whose example is empty (no element to discover from), and values decoded through patterns the synthesizer does not model (manual element-by-element unkeyed decoding, class inheritance via a super decoder). Separately, when a generated value drives a hand-written `init(from:)` down a branch the example does not cover, that one sample is pinned to the example and a deduplicated warning is logged.
 ///
 /// ## Limitations
 ///
@@ -123,11 +123,11 @@ public macro gen<T: Codable>(
 ///
 /// ## What Gets a Full Generator
 ///
-/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, boundary analysis, and shrinking support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators when their element types conform. `CaseIterable` enums produce even-weighted picks across all cases.
+/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, boundary analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary — both when the element type conforms to ``ExhaustGenerable`` and when it is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
 ///
-/// ## What Falls Back to `.just`
+/// ## What Gets Pinned
 ///
-/// Types the decoder cannot synthesise a generator for — non-`CaseIterable` `RawRepresentable` enums, types with hand-written `init(from:)` that branch on decoded values, and any other type not covered above — fall back to `.just(decodedValue)`, pinning the field to the constant value from the JSON. The generator still works; those fields simply do not vary across iterations.
+/// Fields the synthesizer cannot characterize from the example are pinned to the constant value from the JSON — they still work, they simply do not vary. This covers non-`CaseIterable` `RawRepresentable` enums, collections whose example is empty (no element to discover from), and values decoded through patterns the synthesizer does not model (manual element-by-element unkeyed decoding, class inheritance via a super decoder). Separately, when a generated value drives a hand-written `init(from:)` down a branch the example does not cover, that one sample is pinned to the example and a deduplicated warning is logged.
 ///
 /// ## Limitations
 ///

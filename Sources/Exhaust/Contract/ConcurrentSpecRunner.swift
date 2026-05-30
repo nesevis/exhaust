@@ -6,7 +6,7 @@
 //   - ScheduleMarker(rawValue: 0) → prefix: runs sequentially before the concurrent phase (state setup)
 //   - ScheduleMarker(rawValue: 1...N) → assigns to lane a...n; array position defines drain order
 //
-// The array order of non-prefix markers becomes the schedule: when the drain loop needs to pick which lane to advance, it consults the next marker in sequence. This encoding means reduction can simultaneously shrink commands (array deletion) and reduce concurrency (marker minimization toward 0/prefix) using the existing choice-graph reducer with no special logic.
+// The array order of non-prefix markers becomes the schedule: when the drain loop needs to pick which lane to advance, it consults the next marker in sequence. This encoding means reduction can simultaneously reduce commands (array deletion) and reduce concurrency (marker minimization toward 0/prefix) using the existing choice-graph reducer with no special logic.
 //
 // Execution model:
 //   1. Partition commands into prefix + one array per lane
