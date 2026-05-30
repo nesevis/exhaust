@@ -34,24 +34,6 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Decimal>,
         precision: UInt8
     ) -> ReflectiveGenerator<Decimal> {
-        let multiplier = pow(10, Int(precision)) as Decimal
-        let lowerStep = Int64(truncating: (range.lowerBound * multiplier) as NSDecimalNumber)
-        let upperStep = Int64(truncating: (range.upperBound * multiplier) as NSDecimalNumber)
-
-        precondition(
-            lowerStep <= upperStep,
-            "Lower bound must not exceed upper bound after scaling"
-        )
-
-        return Gen.choose(in: lowerStep ... upperStep).wrapped
-            .mapped(
-                forward: { step in
-                    Decimal(step) / multiplier
-                },
-                backward: { target in
-                    let scaled = Int64(truncating: (target * multiplier) as NSDecimalNumber)
-                    return min(max(scaled, lowerStep), upperStep)
-                }
-            )
+        Gen.decimal(in: range, precision: precision)
     }
 }
