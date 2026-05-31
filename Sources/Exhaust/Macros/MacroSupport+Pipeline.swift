@@ -431,11 +431,12 @@ package extension __ExhaustRuntime {
 
         let batchResults: [BatchResult<Output>]
         if laneCount <= 1 {
+            let replayStartIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
             let singleResult = runSamplingBatch(
                 gen: context.gen,
                 property: context.property,
                 baseSeed: baseSeed,
-                startIndex: 0,
+                startIndex: replayStartIndex,
                 count: context.samplingBudget,
                 lane: nil,
                 statsPropertyName: statsPropertyName,
