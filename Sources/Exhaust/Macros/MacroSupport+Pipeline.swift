@@ -535,7 +535,7 @@ package extension __ExhaustRuntime {
             iteration: failure.absoluteIteration,
             phaseBudget: context.samplingBudget,
             coverageIterations: coverageIterations,
-            randomSamplingIterations: failure.absoluteIteration,
+            randomSamplingIterations: totalIterations,
             replayHint: nil,
             report: &report
         )
