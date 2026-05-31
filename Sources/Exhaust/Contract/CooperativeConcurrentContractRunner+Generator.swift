@@ -11,10 +11,7 @@ extension Gen {
             isRangeExplicit: true
         )
         return .impure(operation: operation) { result in
-            guard let convertible = result as? any BitPatternConvertible else {
-                fatalError("chooseLaneControl: unexpected result type")
-            }
-            return .pure(UInt8(convertible.bitPattern64))
+            try .pure(UInt8(chooseBitsBitPattern(result)))
         }
     }
 }

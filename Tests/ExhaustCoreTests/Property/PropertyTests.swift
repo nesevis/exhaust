@@ -414,6 +414,22 @@ struct GeneratorContractPropertyTests {
             value == 42
         }
     }
+
+    @Test("A sequence length above the maximum throws rather than trapping or over-allocating")
+    func oversizedSequenceLengthThrows() {
+        let tooLong = UInt64(SharedInterpreterHelpers.maximumSequenceLength) + 1
+        let gen = Gen.arrayOf(Gen.choose(in: 0 ... 10) as Generator<Int>, exactly: tooLong)
+
+        var treeInterpreter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 1)
+        #expect(throws: GeneratorError.self) {
+            _ = try treeInterpreter.next()
+        }
+
+        var valueInterpreter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 1)
+        #expect(throws: GeneratorError.self) {
+            _ = try valueInterpreter.nextValueOnly()
+        }
+    }
 }
 
 // MARK: - Shrinking Properties

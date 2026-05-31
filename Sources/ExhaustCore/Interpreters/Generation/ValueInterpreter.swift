@@ -210,9 +210,10 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 guard let length = try interpretLength(lengthGen, context: &context) else {
                     return nil
                 }
+                let count = try SharedInterpreterHelpers.sequenceElementCount(length)
                 var elements: [Any] = []
-                elements.reserveCapacity(Int(length))
-                for _ in 0 ..< length {
+                elements.reserveCapacity(count)
+                for _ in 0 ..< count {
                     guard let element = try generateRecursiveAny(
                         elementGen, with: inputValue, context: &context
                     ) else {

@@ -574,12 +574,13 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             return nil
         }
 
+        let count = try SharedInterpreterHelpers.sequenceElementCount(length)
         var results: [Any] = []
         var elements: [ChoiceTree] = []
-        results.reserveCapacity(Int(length))
-        elements.reserveCapacity(Int(length))
+        results.reserveCapacity(count)
+        elements.reserveCapacity(count)
 
-        for _ in 0 ..< length {
+        for _ in 0 ..< count {
             guard let (result, element) = try generateRecursiveAny(
                 elementGen,
                 with: inputValue,

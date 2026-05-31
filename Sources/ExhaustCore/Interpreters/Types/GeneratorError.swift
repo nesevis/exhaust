@@ -17,6 +17,8 @@ public enum GeneratorError: LocalizedError {
     case sparseValidityCondition
     /// The ``unique`` combinator exhausted its retry budget without finding a new unique value.
     case uniqueBudgetExhausted
+    /// A generated sequence requested more elements than ``SharedInterpreterHelpers/maximumSequenceLength``.
+    case sequenceLengthExceedsMaximum(length: UInt64, maximum: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -28,6 +30,8 @@ public enum GeneratorError: LocalizedError {
                 "The filter predicate rejected too many candidates within the retry budget."
             case .uniqueBudgetExhausted:
                 "The unique combinator could not find a new distinct value within its retry budget."
+            case let .sequenceLengthExceedsMaximum(length, maximum):
+                "A generated sequence requested \(length) elements, exceeding the maximum of \(maximum)."
         }
     }
 
@@ -41,6 +45,8 @@ public enum GeneratorError: LocalizedError {
                 "Widen the input generator's range, relax the filter predicate, or increase the filter budget."
             case .uniqueBudgetExhausted:
                 "Reduce the number of unique values requested, widen the generator's domain, or increase the retry budget."
+            case .sequenceLengthExceedsMaximum:
+                "Narrow the length range passed to `arrayOf(within:)` (or the sequence's length generator); a sequence this long is not tractable to generate."
         }
     }
 }
