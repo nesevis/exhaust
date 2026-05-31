@@ -207,30 +207,31 @@ package extension __ExhaustRuntime {
             maxRuns: startIndex + count,
             initialRunIndex: startIndex
         )
-        var previousFilterObservations: [UInt64: FilterObservation] = [:]
-
         do {
             if let statsAccumulator {
+                var previousTotalAttempts = 0
+                var previousTotalPasses = 0
                 while cancelled.isCancelled == false {
-                    previousFilterObservations = interpreter.filterObservations
                     let generateStart = monotonicNanoseconds()
                     guard let (next, tree) = try interpreter.next() else { break }
                     let generateEnd = monotonicNanoseconds()
                     result.iterations += 1
 
-                    let currentObservations = interpreter.filterObservations
-                    var totalAttempts = 0
-                    var totalPasses = 0
-                    for (fingerprint, observation) in currentObservations {
-                        let previous = previousFilterObservations[fingerprint]
-                        totalAttempts += observation.attempts - (previous?.attempts ?? 0)
-                        totalPasses += observation.passes - (previous?.passes ?? 0)
+                    var currentTotalAttempts = 0
+                    var currentTotalPasses = 0
+                    for (_, observation) in interpreter.filterObservations {
+                        currentTotalAttempts += observation.attempts
+                        currentTotalPasses += observation.passes
                     }
+                    let deltaAttempts = currentTotalAttempts - previousTotalAttempts
+                    let deltaPasses = currentTotalPasses - previousTotalPasses
+                    previousTotalAttempts = currentTotalAttempts
+                    previousTotalPasses = currentTotalPasses
                     var filterAttempts: Int?
                     var filterRejections: Int?
-                    if totalAttempts > 0 {
-                        filterAttempts = totalAttempts
-                        filterRejections = totalAttempts - totalPasses
+                    if deltaAttempts > 0 {
+                        filterAttempts = deltaAttempts
+                        filterRejections = deltaAttempts - deltaPasses
                     }
 
                     let testStart = monotonicNanoseconds()
