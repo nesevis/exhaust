@@ -298,6 +298,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 )
                 var attempts = 0 as UInt64
                 var accepted: Any?
+                let observationDefault = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let candidate = try generateRecursiveAny(
                         tunedGen, with: inputValue, context: &context
@@ -305,10 +306,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                         return nil
                     }
                     let passed = predicate(candidate)
-                    if context.filterObservations[fingerprint] == nil {
-                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
-                    }
-                    context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
+                    context.filterObservations[fingerprint, default: observationDefault].recordAttempt(passed: passed)
                     if passed {
                         accepted = candidate
                         break

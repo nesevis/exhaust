@@ -354,15 +354,13 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     type: filterType
                 )
                 var attempts = 0 as UInt64
+                let observationDefault = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let (result, tree) = try Self.generateRecursiveAny(
                         filteredGen, with: inputValue, context: &context
                     ) else { return nil }
                     let passed = predicate(result)
-                    if context.filterObservations[fingerprint] == nil {
-                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
-                    }
-                    context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
+                    context.filterObservations[fingerprint, default: observationDefault].recordAttempt(passed: passed)
                     if passed {
                         return try runContinuation(
                             result: result, calleeChoiceTree: tree,
