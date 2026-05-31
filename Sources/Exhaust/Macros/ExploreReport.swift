@@ -22,7 +22,7 @@ public struct ExploreReport<Output> {
     /// Total property invocations across warm-up and all tuning passes.
     public var propertyInvocations: Int
 
-    /// Total samples drawn during the warm-up pass.
+    /// Total samples drawn during the warm-up pass. The parallel `#explore` path skips warm-up, so this is zero there (along with each direction's `warmupHits`, and a nil `warmupRuleOfThreeBound`); the sequential path always runs warm-up, so a zero value identifies the parallel path. Guard against division by zero when computing warm-up rates from a parallel report.
     public var warmupSamples: Int
 
     /// Total wall-clock time, in milliseconds.
@@ -59,7 +59,7 @@ public struct DirectionCoverage: Sendable {
     /// Samples from this direction's tuning pass where the property failed.
     public var tuningPassFailures: Int
 
-    /// Hits accumulated during the warm-up pass (identically distributed, valid for rule-of-three bounds).
+    /// Hits accumulated during the warm-up pass (identically distributed, valid for rule-of-three bounds). Zero on the parallel `#explore` path, which skips warm-up.
     public var warmupHits: Int
 
     /// Whether this direction achieved its K-hit quota.

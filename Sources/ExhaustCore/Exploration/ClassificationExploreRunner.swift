@@ -77,11 +77,11 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         let runStopwatch = Stopwatch()
         let totalPool = directionCount * maxAttemptsPerDirection
         var state = RunState(directionCount: directionCount, totalPool: totalPool)
-        let warmupCount = max(100, hitsPerDirection)
 
         // MARK: Warm-up
 
-        let warmupBudget = min(warmupCount, state.remainingPool)
+        // Warm-up uses a fixed budget and does not draw from the per-direction tuning pool.
+        let warmupBudget = 100
         var interpreter = ValueAndChoiceTreeInterpreter(
             gen,
             materializePicks: false,
@@ -91,7 +91,6 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
 
         while let (value, tree) = try interpreter.next() {
             state.warmupSamplesDrawn += 1
-            state.remainingPool -= 1
             state.propertyInvocations += 1
 
             let matching = classify(value)
