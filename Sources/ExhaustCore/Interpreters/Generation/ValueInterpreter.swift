@@ -178,6 +178,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         // MARK: prune
 
             case let .impure(operation: .prune(innerGen), continuation):
+                // Inert guard: forward generation never prunes (reflection-only), and forward inputValue is never Optional.none — kept for symmetry with the reflection/materializer handlers.
                 guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
                     return nil
                 }
@@ -383,6 +384,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                             isFixed: context.isFixed,
                             size: context.size,
                             prng: Xoshiro256(seed: 0),
+                            materializePicks: context.materializePicks,
                             runs: context.runs
                         )
                         swap(&context.prng, &vactiContext.prng)
