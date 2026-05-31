@@ -77,8 +77,8 @@ extension Interpreters {
                     let nextGen = try continuation(intermediateValue)
                     // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
                     let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
-                    return finalResults.map { finalValue, restOfPath in
-                        (finalValue, partialPath + restOfPath)
+                    return finalResults.compactMap { finalValue, restOfPath in
+                        (finalValue as? Output).map { (value: $0, path: partialPath + restOfPath) }
                     }
                 }
         }

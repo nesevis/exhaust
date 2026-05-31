@@ -326,7 +326,10 @@ private func interpretLogRecursive<Value>(_ monad: LoggingFreerMonad<Value>, log
 
                     // 3. Recursively call the interpreter on the next monad.
                     //    The compiler correctly infers the `Value` type for the next step.
-                    return try interpretLogRecursive(nextMonad, log: &log)
+                    guard let value = try interpretLogRecursive(nextMonad, log: &log) as? Value else {
+                        return nil
+                    }
+                    return value
             }
     }
 }

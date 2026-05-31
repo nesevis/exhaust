@@ -80,18 +80,18 @@ package enum SharedInterpreterHelpers {
     ///
     /// Used by the tuning handlers (contramap, resize, prune, classify) to compose a fitness predicate that evaluates inner values in the context of the full downstream pipeline.
     static func composedPredicate<Output>(
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: GeneratorTuning.TuningContext,
         predicate: @escaping (Output) -> Bool
     ) -> (Any) -> Bool {
         { innerValue in
             do {
                 let nextGen = try continuation(innerValue)
-                let output = try ValueInterpreter<Output>.generate(
+                let output = try ValueInterpreter<Any>.generate(
                     nextGen,
                     maxRuns: 1,
                     using: &context.rng
-                )
+                ) as? Output
                 return output.map(predicate) ?? false
             } catch {
                 return false

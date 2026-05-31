@@ -328,9 +328,11 @@ package enum ChoiceGradientTuner<FinalOutput> {
                                     continuation: { .pure($0 as! UInt64) }
                                 )
 
-                                let subSeqGen: AnyGenerator = try .impure(
+                                // swiftlint:disable:next force_cast
+                                let subLengthGen = try subSizeGen.bindReified(getSizeContinuation).map { $0 as! UInt64 }
+                                let subSeqGen: AnyGenerator = .impure(
                                     operation: .sequence(
-                                        length: subSizeGen.bindReified(getSizeContinuation),
+                                        length: subLengthGen,
                                         gen: subdividedElement
                                     ),
                                     continuation: { .pure($0) }
@@ -434,7 +436,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
     /// Returns a collapsed `chooseBits` if all choices in the pick are `chooseBits` subranges with near-equal weights. Returns `nil` if the pick has signal and should be kept.
     private static func collapseIfUniform<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        continuation: @escaping (Any) throws -> Generator<Output>
+        continuation: @escaping (Any) throws -> AnyGenerator
     ) -> Generator<Output>? {
         let maxWeight = choices.max(by: { $0.weight < $1.weight })!.weight
         let minWeight = choices.min(by: { $0.weight < $1.weight })!.weight
