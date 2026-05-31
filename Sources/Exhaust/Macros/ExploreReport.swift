@@ -62,7 +62,7 @@ public struct DirectionCoverage: Sendable {
     /// Hits accumulated during the warm-up pass (identically distributed, valid for rule-of-three bounds). Zero on the parallel `#explore` path, which skips warm-up.
     public var warmupHits: Int
 
-    /// Whether this direction achieved its K-hit quota.
+    /// Whether this direction achieved its K-hit quota. A direction whose CGS tuning failed reports `false` with `hits == 0`, the same as a genuinely unreachable direction; the tuning failure is surfaced separately as an `explore_tune_error` log entry rather than in this value.
     public var isCovered: Bool
 
     /// Rule-of-three upper bound on the in-direction failure rate from the warm-up pass. Valid only when `warmupHits > 0` and based on identically distributed samples.

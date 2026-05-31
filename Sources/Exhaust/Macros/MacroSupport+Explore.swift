@@ -108,13 +108,14 @@ public extension __ExhaustRuntime {
             let result: ClassificationExploreResult<Output>
             do {
                 result = try { () throws -> ClassificationExploreResult<Output> in
-                    if shouldParallelize, seed == nil, namedDirections.count > 1 {
+                    if shouldParallelize, namedDirections.count > 1 {
                         return try runParallelExplore(
                             gen: gen,
                             property: property,
                             directions: namedDirections,
                             hitsPerDirection: budget.hitsPerDirection,
-                            maxAttemptsPerDirection: budget.maxAttemptsPerDirection
+                            maxAttemptsPerDirection: budget.maxAttemptsPerDirection,
+                            seed: seed
                         )
                     }
                     var runner = ClassificationExploreRunner(
@@ -410,7 +411,7 @@ public extension __ExhaustRuntime {
                             try? await property(valueBox.value)
                         }
 
-                        let encoded = CrockfordBase32.encode(report.seed)
+                        let encoded = CrockfordBase32.encode(seed: report.seed, iteration: report.propertyInvocations)
                         reportIssue(
                             "Reproduce: .replay(\"\(encoded)\")",
                             fileID: fileID,

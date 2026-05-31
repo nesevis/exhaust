@@ -32,11 +32,12 @@ extension __ExhaustRuntime {
         property: @escaping (Output) -> Bool,
         directions: [(name: String, predicate: (Output) -> Bool)],
         hitsPerDirection: Int,
-        maxAttemptsPerDirection: Int
+        maxAttemptsPerDirection: Int,
+        seed: UInt64? = nil
     ) throws -> ClassificationExploreResult<Output> {
         let directionCount = directions.count
         let runStopwatch = Stopwatch()
-        let baseSeed = Xoshiro256().seed
+        let baseSeed = seed ?? Xoshiro256().seed
 
         let cancelled = SendableBox(false)
         let resultStorage = SendableBox<[DirectionLaneResult<Output>?]>(
