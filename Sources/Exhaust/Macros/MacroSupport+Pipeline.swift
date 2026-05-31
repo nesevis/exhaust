@@ -270,7 +270,7 @@ package extension __ExhaustRuntime {
 
                     if property(next) == false {
                         let absoluteIteration = Int(startIndex) + result.iterations
-                        let tree = try reproducedFailureTree(&interpreter)
+                        let tree = try interpreter.reproduceFailureTree()
                         result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
                         cancelled.isCancelled = true
                         break
@@ -313,7 +313,7 @@ package extension __ExhaustRuntime {
             while let next = try interpreter.nextValueOnly() {
                 iterations += 1
                 if context.property(next) == false {
-                    let tree = try reproducedFailureTree(&interpreter)
+                    let tree = try interpreter.reproduceFailureTree()
                     report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
                     emitFilterWarnings(interpreter.filterObservations, context: context)
 
@@ -378,24 +378,6 @@ package extension __ExhaustRuntime {
                 )
             }
         }
-    }
-
-    /// Re-derives the failing run's ``ChoiceTree`` for reduction, asserting on a VI/VACTI parity break.
-    ///
-    /// `nextValueOnly()` produced this value, so `reproduceWithTree()` re-deriving the same run index under the same seed must also produce it. A nil result means the tree-building pass diverged from the value-only pass in PRNG consumption — the parity invariant the fast sampling path depends on. The value is still a valid counterexample, so generation continues with an unreducible `.just` tree; the log and assertion make the divergence observable instead of silent.
-    private static func reproducedFailureTree(
-        _ interpreter: inout ValueAndChoiceTreeInterpreter<some Any>
-    ) throws -> ChoiceTree {
-        if let (_, tree) = try interpreter.reproduceWithTree() {
-            return tree
-        }
-        ExhaustLog.error(
-            category: .propertyTest,
-            event: "vacti_vi_parity_break",
-            "reproduceWithTree returned nil after nextValueOnly produced a failing value — reducing from an empty tree"
-        )
-        assertionFailure("VI/VACTI parity break: reproduceWithTree returned nil after a value-only failure")
-        return .just
     }
 
     // MARK: - Sampling Phase

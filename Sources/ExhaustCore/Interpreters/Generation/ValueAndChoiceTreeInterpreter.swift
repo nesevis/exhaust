@@ -188,6 +188,22 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         return (value as! FinalOutput, tree)
     }
 
+    /// Re-runs the most recent generation with full ``ChoiceTree`` construction, falling back to ``ChoiceTree/just`` on a VI/VACTI parity break.
+    ///
+    /// Call after ``nextValueOnly()`` returns a failing value to obtain the tree for reduction. When ``reproduceWithTree()`` returns nil, the value-only and tree-building interpreters disagreed on PRNG consumption for the same run — the parity invariant the fast sampling path depends on. The value is still a valid counterexample, so this method returns ``ChoiceTree/just`` (an unreducible tree); the log entry and assertion make the divergence observable rather than silent.
+    public mutating func reproduceFailureTree() throws -> ChoiceTree {
+        if let (_, tree) = try reproduceWithTree() {
+            return tree
+        }
+        ExhaustLog.error(
+            category: .propertyTest,
+            event: "vacti_vi_parity_break",
+            "reproduceWithTree returned nil after nextValueOnly produced a failing value"
+        )
+        assertionFailure("VI/VACTI parity break: reproduceWithTree returned nil after a failing nextValueOnly value")
+        return .just
+    }
+
     // MARK: - Generic Wrapper
 
     /// Typed entry point that erases to ``generateRecursiveAny`` and casts the result back.

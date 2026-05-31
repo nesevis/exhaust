@@ -89,7 +89,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             maxRuns: UInt64(warmupBudget)
         )
 
-        while let (value, tree) = try interpreter.next() {
+        while let value = try interpreter.nextValueOnly() {
             state.warmupSamplesDrawn += 1
             state.propertyInvocations += 1
 
@@ -102,6 +102,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             }
 
             if property(value) == false {
+                let tree = try interpreter.reproduceFailureTree()
                 let reduced = reduce(value: value, tree: tree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)
                 return assembleResult(
@@ -279,7 +280,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
 
         while passSamplesDrawn < passBudget,
               state.hits[targetDirection] < hitsPerDirection,
-              let (value, tunedTree) = try passInterpreter.next()
+              let value = try passInterpreter.nextValueOnly()
         {
             passSamplesDrawn += 1
             state.remainingPool -= 1
@@ -303,6 +304,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             }
 
             if propertyHolds == false {
+                let tunedTree = try passInterpreter.reproduceFailureTree()
                 let reduced = reduceFromTunedTree(value: value, tunedTree: tunedTree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)
                 return assembleResult(
