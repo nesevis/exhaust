@@ -600,16 +600,44 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         results.reserveCapacity(count)
         elements.reserveCapacity(count)
 
-        for _ in 0 ..< count {
-            guard let (result, element) = try generateRecursiveAny(
-                elementGen,
-                with: inputValue,
-                context: &context
-            ) else {
-                return nil
+        // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element.
+        if case let .impure(
+            operation: .chooseBits(min, max, tag, isRangeExplicit, .some(scaling)),
+            continuation: elementContinuation
+        ) = elementGen, context.sizeOverride == nil {
+            let size = consumeSize(&context)
+            let effectiveRange = Gen.applyScaling(
+                min: min, max: max, tag: tag, scaling: scaling, size: size
+            )
+            let metadata = ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
+
+            for _ in 0 ..< count {
+                let rawBits = context.prng.next(in: effectiveRange)
+                let randomBits = tag.isFloatingPoint
+                    ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+                    : rawBits
+                let calleeTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), metadata)
+                guard let (result, elementTree) = try runContinuation(
+                    result: randomBits, calleeChoiceTree: calleeTree,
+                    continuation: elementContinuation, inputValue: inputValue, context: &context
+                ) else {
+                    return nil
+                }
+                results.append(result)
+                elements.append(elementTree)
             }
-            results.append(result)
-            elements.append(element)
+        } else {
+            for _ in 0 ..< count {
+                guard let (result, element) = try generateRecursiveAny(
+                    elementGen,
+                    with: inputValue,
+                    context: &context
+                ) else {
+                    return nil
+                }
+                results.append(result)
+                elements.append(element)
+            }
         }
 
         let choiceTree = ChoiceTree.sequence(

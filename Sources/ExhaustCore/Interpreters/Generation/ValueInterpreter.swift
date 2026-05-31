@@ -217,13 +217,42 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 let count = try SharedInterpreterHelpers.sequenceElementCount(length)
                 var elements: [Any] = []
                 elements.reserveCapacity(count)
-                for _ in 0 ..< count {
-                    guard let element = try generateRecursiveAny(
-                        elementGen, with: inputValue, context: &context
-                    ) else {
-                        return nil
+                // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element.
+                if case let .impure(
+                    operation: .chooseBits(min, max, tag, _, .some(scaling)),
+                    continuation: elementContinuation
+                ) = elementGen, context.sizeOverride == nil {
+                    let size = consumeSize(&context)
+                    let effectiveRange = Gen.applyScaling(
+                        min: min, max: max, tag: tag, scaling: scaling, size: size
+                    )
+
+                    for _ in 0 ..< count {
+                        let rawBits = context.prng.next(in: effectiveRange)
+                        let randomBits: Any = tag.isFloatingPoint
+                            ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+                            : rawBits
+                        let nextElementGen = try elementContinuation(randomBits)
+                        if case let .pure(final) = nextElementGen {
+                            elements.append(final)
+                        } else {
+                            guard let element = try generateRecursiveAny(
+                                nextElementGen, with: inputValue, context: &context
+                            ) else {
+                                return nil
+                            }
+                            elements.append(element)
+                        }
                     }
-                    elements.append(element)
+                } else {
+                    for _ in 0 ..< count {
+                        guard let element = try generateRecursiveAny(
+                            elementGen, with: inputValue, context: &context
+                        ) else {
+                            return nil
+                        }
+                        elements.append(element)
+                    }
                 }
                 let nextGen = try continuation(elements)
                 if case let .pure(final) = nextGen { return final }
