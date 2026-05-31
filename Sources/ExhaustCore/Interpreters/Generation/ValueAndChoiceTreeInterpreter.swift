@@ -568,11 +568,14 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
-        guard let (length, lengthTrees) = try interpretLength(
-            lengthGen, context: &context
+        guard let (lengthValue, lengthTrees) = try generateRecursiveAny(
+            lengthGen.erase(), with: (), context: &context
         ) else {
             return nil
         }
+        // The length spine is `UInt64`-typed by construction; a non-`UInt64` value is a malformed generator, not a recoverable condition.
+        // swiftlint:disable:next force_cast
+        let length = lengthValue as! UInt64
 
         let count = try SharedInterpreterHelpers.sequenceElementCount(length)
         var results: [Any] = []

@@ -207,9 +207,12 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         // MARK: sequence
 
             case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
-                guard let length = try interpretLength(lengthGen, context: &context) else {
+                guard let lengthValue = try generateRecursiveAny(lengthGen.erase(), with: (), context: &context) else {
                     return nil
                 }
+                // The length spine is `UInt64`-typed by construction; a non-`UInt64` value is a malformed generator, not a recoverable condition.
+                // swiftlint:disable:next force_cast
+                let length = lengthValue as! UInt64
                 let count = try SharedInterpreterHelpers.sequenceElementCount(length)
                 var elements: [Any] = []
                 elements.reserveCapacity(count)
