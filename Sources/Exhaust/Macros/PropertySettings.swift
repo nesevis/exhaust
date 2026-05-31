@@ -12,11 +12,11 @@ import ExhaustCore
 ///
 /// Pass a single option to ``PropertySettings/suppress(_:)`` to disable issue reporting, log output, or both.
 public enum SuppressOption: Sendable, Equatable {
-    /// Suppresses `reportIssue()` calls on failure. The test does not fail via the framework; the caller asserts on the returned value instead.
+    /// Suppresses `reportIssue()` calls for property failures. The test does not fail via the framework; the caller asserts on the returned value instead. Generation and internal errors are not suppressed — they signal a malfunction rather than the expected failure the caller is asserting on.
     case issueReporting
     /// Suppresses all log output to the console. Overrides any `.log(_:)` setting.
     case logs
-    /// Suppresses both issue reporting and log output. The test run is completely silent.
+    /// Suppresses both issue reporting and log output. The test run is silent except for generation and internal errors, which always surface.
     case all
 }
 
@@ -140,7 +140,7 @@ public enum PropertySettings {
 
     /// Silences issue reporting, log output, or both for this test run.
     ///
-    /// Use `.suppress(.issueReporting)` when the property test is expected to find a counterexample and the test asserts on the returned value rather than relying on the framework to record the failure. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
+    /// Use `.suppress(.issueReporting)` when the property test is expected to find a counterexample and the test asserts on the returned value rather than relying on the framework to record the failure. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` to silence both. Generation and internal errors are always reported regardless of suppression — they indicate a malfunction, not the property failure being suppressed.
     case suppress(SuppressOption)
     /// Prints the choice tree before and after reduction as a bottom-up Unicode visualization.
     case visualize
