@@ -306,7 +306,6 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             if propertyHolds == false {
                 let reduced = reduceFromTunedTree(value: value, tunedTree: tunedTree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)
-                state.remainingPool += passBudget - passSamplesDrawn
                 return assembleResult(
                     state: state, failure: reduced, matchingDirections: reducedDirections,
                     stopwatch: stopwatch, termination: .propertyFailed
@@ -314,7 +313,6 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             }
         }
 
-        state.remainingPool += passBudget - passSamplesDrawn
         return nil
     }
 
