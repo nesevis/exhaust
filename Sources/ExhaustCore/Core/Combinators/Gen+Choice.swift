@@ -339,13 +339,7 @@ package extension Gen {
             scaling: scaling
         )
         return .impure(operation: operation) { result in
-            guard let convertible = result as? any BitPatternConvertible else {
-                throw GeneratorError.typeMismatch(
-                    expected: "any BitPatternConvertible",
-                    actual: String(describing: Swift.type(of: result))
-                )
-            }
-            return .pure(Output(bitPattern64: convertible.bitPattern64))
+            try .pure(Output(bitPattern64: chooseBitsBitPattern(result)))
         }
     }
 
@@ -364,13 +358,7 @@ package extension Gen {
             isRangeExplicit: range != nil
         )
         return .impure(operation: operation) { result in
-            guard let convertible = result as? any BitPatternConvertible else {
-                throw GeneratorError.typeMismatch(
-                    expected: "any BitPatternConvertible",
-                    actual: String(describing: Swift.type(of: result))
-                )
-            }
-            return .pure(UInt64(bitPattern64: convertible.bitPattern64))
+            try .pure(UInt64(bitPattern64: chooseBitsBitPattern(result)))
         }
     }
 }
