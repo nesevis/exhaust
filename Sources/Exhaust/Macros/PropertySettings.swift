@@ -174,7 +174,7 @@ public enum PropertySettings {
     ///
     /// On fast generators there is very little benefit in going above two.
     ///
-    /// Each lane runs an equal share of the sampling budget with an independently derived PRNG, so the same seed produces the same counterexample regardless of thread scheduling. The last lane absorbs any remainder from uneven division.
+    /// Each lane runs an equal share of the sampling budget with an independently derived PRNG. Lanes race, and the first failure discovered cancels the others, so which counterexample is reported can depend on thread scheduling. The last lane absorbs any remainder from uneven division.
     ///
     /// Has no effect when combined with `.replay`.
     ///
