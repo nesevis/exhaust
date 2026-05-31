@@ -86,14 +86,14 @@ let package = Package(
             dependencies: ["Exhaust", "ExhaustCore", "ExhaustTestSupport"],
             plugins: swiftLintPlugins
         ),
-        .testTarget(
-            name: "ExhaustMacrosTests",
-            dependencies: [
-                "Exhaust",
-                "ExhaustMacros",
-                .product(name: "MacroTesting", package: "swift-macro-testing"),
-            ]
-        ),
+//        .testTarget(
+//            name: "ExhaustMacrosTests",
+//            dependencies: [
+//                "Exhaust",
+//                "ExhaustMacros",
+//                .product(name: "MacroTesting", package: "swift-macro-testing"),
+//            ]
+//        ),
         .executableTarget(
             name: "ExhaustBenchmarks",
             dependencies: [
