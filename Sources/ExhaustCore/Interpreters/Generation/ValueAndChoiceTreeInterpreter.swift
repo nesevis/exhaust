@@ -495,7 +495,6 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         var branches = [ChoiceTree]()
         branches.reserveCapacity(choices.count)
         var finalValue: Any?
-        var branchContext = context.jump(seed: jumpSeed)
 
         for choice in choices {
             let isSelected = choice.id == selectedChoice.id
@@ -527,7 +526,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     )
                 }
             } else {
-                branchContext.prng = Xoshiro256(seed: jumpSeed)
+                var branchContext = context.jump(seed: jumpSeed)
                 if let result = try generateRecursiveAny(
                     choice.generator,
                     with: inputValue,
