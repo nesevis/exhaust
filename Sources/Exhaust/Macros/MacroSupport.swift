@@ -197,7 +197,7 @@ public extension __ExhaustRuntime {
                 case .includeDiff:
                     includeDiff = true
                 case let .parallel(lanes):
-                    parallelLanes = UInt8(clamping: max(1, lanes))
+                    parallelLanes = min(8, UInt8(clamping: max(1, lanes)))
                 case let .log(level):
                     logLevel = level
             }
