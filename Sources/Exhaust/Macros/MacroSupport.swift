@@ -143,6 +143,7 @@ public extension __ExhaustRuntime {
         var seed: UInt64?
         var replayIteration: Int?
         var coverageReplayRow: Int?
+        var invalidReplaySeed: ReplaySeed?
         var suppressIssueReporting = false
         var suppressLogs = false
         var visualize = false
@@ -159,14 +160,8 @@ public extension __ExhaustRuntime {
                     budget = b
                 case let .replay(replaySeed):
                     guard let resolved = replaySeed.resolve() else {
-                        reportIssue(
-                            "Invalid replay seed: \(replaySeed)",
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column
-                        )
-                        return (nil, nil)
+                        invalidReplaySeed = replaySeed
+                        continue
                     }
                     switch resolved {
                         case let .sampling(resolvedSeed, iteration):
@@ -234,6 +229,17 @@ public extension __ExhaustRuntime {
 
             var report = ExhaustReport()
             defer { onReportClosure?(report) }
+
+            if let invalidReplaySeed {
+                reportIssue(
+                    "Invalid replay seed: \(invalidReplaySeed)",
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                return (nil, nil)
+            }
 
             let statsAccumulator: OpenPBTStatsAccumulator? = collectOpenPBTStats
                 ? OpenPBTStatsAccumulator(propertyName: "\(testName)")
