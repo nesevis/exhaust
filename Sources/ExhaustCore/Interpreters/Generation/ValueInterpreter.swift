@@ -390,6 +390,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             case let .impure(operation: .unique(uniqueGen, fingerprint, keyExtractor), continuation):
                 var attempts = 0 as UInt64
                 var accepted: Any?
+                var vactiScratchContext: GenerationContext?
                 while attempts < GenerationContext.maxFilterRuns {
                     if let keyExtractor {
                         guard let candidate = try generateRecursiveAny(
@@ -403,23 +404,25 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                             break
                         }
                     } else {
-                        var vactiContext = GenerationContext(
-                            maxRuns: context.maxRuns,
-                            baseSeed: context.baseSeed,
-                            isFixed: context.isFixed,
-                            size: context.size,
-                            prng: Xoshiro256(seed: 0),
-                            materializePicks: context.materializePicks,
-                            runs: context.runs
-                        )
-                        swap(&context.prng, &vactiContext.prng)
+                        if attempts == 0 {
+                            vactiScratchContext = GenerationContext(
+                                maxRuns: context.maxRuns,
+                                baseSeed: context.baseSeed,
+                                isFixed: context.isFixed,
+                                size: context.size,
+                                prng: Xoshiro256(seed: 0),
+                                materializePicks: context.materializePicks,
+                                runs: context.runs
+                            )
+                        }
+                        swap(&context.prng, &vactiScratchContext!.prng)
                         let vactiResult = try ValueAndChoiceTreeInterpreter<Any>
-                            .generateRecursiveAny(uniqueGen, with: inputValue, context: &vactiContext)
+                            .generateRecursiveAny(uniqueGen, with: inputValue, context: &vactiScratchContext!)
                         guard let (candidate, tree) = vactiResult else {
-                            swap(&context.prng, &vactiContext.prng)
+                            swap(&context.prng, &vactiScratchContext!.prng)
                             return nil
                         }
-                        swap(&context.prng, &vactiContext.prng)
+                        swap(&context.prng, &vactiScratchContext!.prng)
                         let sequence = ChoiceSequence.flatten(tree)
                         if context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted {
                             accepted = candidate
