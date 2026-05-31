@@ -249,12 +249,12 @@ package enum CGSDerivativeInterpreter {
     @inline(__always)
     private static func runContinuation<Output>(
         _ result: Any,
-        _ continuation: (Any) throws -> Generator<Output>,
+        _ continuation: (Any) throws -> AnyGenerator,
         inputValue: some Any,
         rng: inout Xoshiro256,
         size: UInt64
     ) throws -> Output? {
         let nextGen = try continuation(result)
-        return try generateRecursive(nextGen, with: inputValue, rng: &rng, size: size)
+        return try generateRecursive(nextGen, with: inputValue, rng: &rng, size: size) as? Output
     }
 }

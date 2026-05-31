@@ -20,6 +20,20 @@ package enum SharedInterpreterHelpers {
         return GenerationContext.scaledSize(forRun: context.runs)
     }
 
+    // MARK: - Sequence Length
+
+    /// The largest element count a generated sequence may request — `UInt16.max`, a realistic high end for an array length. A drawn length above this is treated as a misused (too-wide) length generator rather than a real request, since generating substantially more is intractable for a property-test inner loop.
+    package static let maximumSequenceLength = Int(UInt16.max)
+
+    /// Converts a drawn sequence length to an element count, throwing ``GeneratorError/sequenceLengthExceedsMaximum(length:maximum:)`` when it exceeds ``maximumSequenceLength``. Guards every sequence interpreter against the trapping `Int(UInt64)` conversion and against allocating or looping over an intractable length.
+    @inline(__always)
+    static func sequenceElementCount(_ length: UInt64) throws -> Int {
+        guard length <= UInt64(maximumSequenceLength) else {
+            throw GeneratorError.sequenceLengthExceedsMaximum(length: length, maximum: maximumSequenceLength)
+        }
+        return Int(length)
+    }
+
     // MARK: - Parameter-Free Generator Walk
 
     /// Returns whether a generator produces values without any choices (no chooseBits, pick, sequence, zip, or getSize operations). Walks through transparent wrappers (pure, just, contramap, prune, transform).
@@ -66,18 +80,18 @@ package enum SharedInterpreterHelpers {
     ///
     /// Used by the tuning handlers (contramap, resize, prune, classify) to compose a fitness predicate that evaluates inner values in the context of the full downstream pipeline.
     static func composedPredicate<Output>(
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: GeneratorTuning.TuningContext,
         predicate: @escaping (Output) -> Bool
     ) -> (Any) -> Bool {
         { innerValue in
             do {
                 let nextGen = try continuation(innerValue)
-                let output = try ValueInterpreter<Output>.generate(
+                let output = try ValueInterpreter<Any>.generate(
                     nextGen,
                     maxRuns: 1,
                     using: &context.rng
-                )
+                ) as? Output
                 return output.map(predicate) ?? false
             } catch {
                 return false

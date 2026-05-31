@@ -33,7 +33,7 @@ extension GeneratorTuning {
     /// Runs until the maximum sample budget is consumed or the normalized success distribution converges. Returns a ``FitnessMeasurement`` with per-choice accumulators for use in Phase 2 tuning.
     private static func measureFitness<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: TuningContext,
         predicate: @escaping (Output) -> Bool
     ) throws -> FitnessMeasurement {
@@ -83,9 +83,9 @@ extension GeneratorTuning {
                     var output: Output?
                     do {
                         let nextGen = try continuation(innerValue)
-                        output = try ValueInterpreter<Output>.generate(
+                        output = try ValueInterpreter<Any>.generate(
                             nextGen, maxRuns: 1, using: &rng
-                        )
+                        ) as? Output
                         success = output.map(predicate) ?? false
                     } catch {
                         success = false
@@ -157,7 +157,7 @@ extension GeneratorTuning {
     /// Branches with zero successes are assigned weight 0 (skipped) unless all branches scored zero, in which case uniform weights are restored. Surviving branches receive entropy-weighted fitness scores and a minimum weight floor to prevent exponential probability collapse across depth.
     static func measureAndTunePick<Output>(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
@@ -214,11 +214,11 @@ extension GeneratorTuning {
                 }
                 do {
                     let nextGen = try continuation(innerValue)
-                    let output = try ValueInterpreter<Output>.generate(
+                    let output = try ValueInterpreter<Any>.generate(
                         nextGen,
                         maxRuns: 1,
                         using: &composedRng
-                    )
+                    ) as? Output
                     return output.map(predicate) ?? false
                 } catch {
                     return false
@@ -299,7 +299,7 @@ extension GeneratorTuning {
         tag: TypeTag,
         isRangeExplicit: Bool,
         scaling: ChooseBitsScaling?,
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: TuningContext,
         predicate: @escaping (Output) -> Bool
     ) throws -> Generator<Output> {
@@ -338,7 +338,7 @@ extension GeneratorTuning {
     static func tuneSequence<Output>(
         lengthGen: Generator<UInt64>,
         elementGen: AnyGenerator,
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
@@ -426,9 +426,11 @@ extension GeneratorTuning {
                 )
 
                 // Feed the size into the original getSize continuation to produce the actual length generator, then build the sequence
-                let subSeqGen: AnyGenerator = try .impure(
+                // swiftlint:disable:next force_cast
+                let subLengthGen = try subSizeGen.bindReified(getSizeContinuation).map { $0 as! UInt64 }
+                let subSeqGen: AnyGenerator = .impure(
                     operation: .sequence(
-                        length: subSizeGen.bindReified(getSizeContinuation),
+                        length: subLengthGen,
                         gen: elementGen
                     ),
                     continuation: { .pure($0) }
@@ -480,7 +482,7 @@ extension GeneratorTuning {
     ///
     /// The ``ReflectiveOperation/getSize`` operation itself is not a tunable choice -- it just reads the current size parameter. Subdivision converts it into a pick so that CGS can bias toward size subranges that produce more predicate-passing outputs.
     static func tuneGetSize<Output>(
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: TuningContext,
         predicate: @escaping (Output) -> Bool
     ) throws -> Generator<Output> {
@@ -518,7 +520,7 @@ extension GeneratorTuning {
     /// Each component's predicate holds its candidate value fixed and draws the remaining values from the other (untuned) generators, so tuning decisions for one component are not conditioned on another component's tuned distribution.
     static func tuneZip<Output>(
         generators: ContiguousArray<AnyGenerator>,
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: TuningContext,
         predicate: @escaping (Output) -> Bool
     ) throws -> Generator<Output> {
@@ -555,11 +557,11 @@ extension GeneratorTuning {
                     }
 
                     let nextGen = try continuation(values)
-                    let output = try ValueInterpreter<Output>.generate(
+                    let output = try ValueInterpreter<Any>.generate(
                         nextGen,
                         maxRuns: 1,
                         using: &context.rng
-                    )
+                    ) as? Output
                     return output.map(predicate) ?? false
                 } catch {
                     return false
@@ -592,7 +594,7 @@ extension GeneratorTuning {
         filterType: FilterType,
         filterPredicate: @escaping (Any) -> Bool,
         sourceLocation: FilterSourceLocation,
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: TuningContext
     ) throws -> Generator<Output> {
         if filterType == .rejectionSampling {
@@ -635,7 +637,7 @@ extension GeneratorTuning {
     static func tuneContramap<Output>(
         transform: @escaping (Any) throws -> Any?,
         next: AnyGenerator,
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: TuningContext,
         predicate: @escaping (Output) -> Bool
     ) throws -> Generator<Output> {
@@ -666,7 +668,7 @@ extension GeneratorTuning {
     static func tuneResize<Output>(
         newSize: UInt64,
         next: AnyGenerator,
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
@@ -697,7 +699,7 @@ extension GeneratorTuning {
     /// Pruning affects reduction behavior (marking subtrees as reducible to nil), not generation weights, so tuning passes through to the inner generator with a continuation-composed predicate.
     static func tunePrune<Output>(
         next: AnyGenerator,
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool
@@ -730,7 +732,7 @@ extension GeneratorTuning {
         subGen: AnyGenerator,
         fingerprint: UInt64,
         classifiers: [(label: String, predicate: (Any) -> Bool)],
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         context: TuningContext,
         insideSubdividedChooseBits: Bool,
         predicate: @escaping (Output) -> Bool

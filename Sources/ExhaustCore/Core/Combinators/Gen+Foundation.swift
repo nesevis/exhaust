@@ -164,7 +164,7 @@ package extension Gen {
                 ),
                 isRangeExplicit: true
             )
-        ) { .pure(Int64(bitPattern64: ($0 as! any BitPatternConvertible).bitPattern64)) }
+        ) { try .pure(Int64(bitPattern64: chooseBitsBitPattern($0))) }
             .wrapped.mapped(
                 forward: { step in
                     Date(timeIntervalSinceReferenceDate: Double(lowerSeconds + step * intervalSeconds))
@@ -312,13 +312,7 @@ private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character
         isRangeExplicit: true
     )
     let innerGen = Generator<Character>.impure(operation: operation) { result in
-        guard let convertible = result as? any BitPatternConvertible else {
-            throw GeneratorError.typeMismatch(
-                expected: "any BitPatternConvertible",
-                actual: String(describing: Swift.type(of: result))
-            )
-        }
-        return .pure(Character(srs.scalar(at: Int(convertible.bitPattern64))))
+        try .pure(Character(srs.scalar(at: Int(chooseBitsBitPattern(result)))))
     }
     return Gen.contramap(
         { (char: Character) throws -> UInt32 in

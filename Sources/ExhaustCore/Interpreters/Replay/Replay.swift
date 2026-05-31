@@ -58,14 +58,14 @@ extension Interpreters {
         switch gen {
             case let .pure(value):
                 // Base case: return the value
-                value
+                return value
 
             case let .impure(operation, continuation):
-                try replayWithChoicesOperation(
+                return try replayWithChoicesOperation(
                     operation,
                     continuation: continuation,
                     choices: &choices
-                )
+                ) as? Output
         }
     }
 
@@ -414,7 +414,7 @@ extension Interpreters {
 
             case let .impure(operation, continuation):
                 // This helper simplifies calling the continuation with a result.
-                let runContinuation = { (result: Any) -> Output? in
+                let runContinuation = { (result: Any) -> Any? in
                     // The crucial difference: we are NOT passing the script down.
                     // The continuation represents the rest of the generator, which will be handled by the next level of the .impure case.
                     let nextGen = try continuation(result)
@@ -427,7 +427,7 @@ extension Interpreters {
                     script: script,
                     continuation: continuation,
                     runContinuation: runContinuation
-                )
+                ) as? Output
         }
     }
 

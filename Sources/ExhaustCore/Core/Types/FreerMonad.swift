@@ -18,10 +18,10 @@ public indirect enum FreerMonad<Operation, Value> { // NOTE: The entire enum is 
     /// The terminal state. Interpreters return the contained value directly without further traversal. Pure nodes produce no entries in the ``ChoiceSequence``: they carry the result but no randomness.
     case pure(Value)
 
-    /// A suspended effect awaiting interpretation. The `operation` describes what randomness to consume or what structural choice to make; the `continuation` transforms the interpreter's result into the next step. The continuation takes `Any` because operations are type-erased: each case carries heterogeneous associated values that the continuation casts back to the expected type.
+    /// A suspended effect awaiting interpretation. The `operation` describes what randomness to consume or what structural choice to make; the `continuation` transforms the interpreter's result into the next step. The continuation takes `Any` because operations are type-erased, and it *returns* `Any` so the continuation chain never needs re-erasing as it is walked: `Value` is a static claim recovered by a cast at the interpreter boundary, concrete only at `.pure` leaves.
     case impure(
         operation: Operation,
-        continuation: (Any) throws -> FreerMonad<Operation, Value>
+        continuation: (Any) throws -> FreerMonad<Operation, Any>
     )
 }
 
@@ -42,7 +42,8 @@ package extension FreerMonad {
             case let .pure(value):
                 try transform(value)
             case let .impure(operation, continuation):
-                .impure(operation: operation) { try continuation($0).bind(transform) }
+                // swiftlint:disable:next force_cast
+                .impure(operation: operation) { input in try continuation(input).bind { try transform($0 as! Value).erase() } }
         }
     }
 
@@ -59,13 +60,14 @@ package extension FreerMonad {
         switch self {
             case let .pure(value): try .pure(transform(value))
             case let .impure(operation, continuation):
-                .impure(operation: operation) { try continuation($0).map(transform) }
+                // swiftlint:disable:next force_cast
+                .impure(operation: operation) { input in try continuation(input).map { try transform($0 as! Value) as Any } }
         }
     }
 
     /// Erases the value type to `Any` so computations with different output types can be stored together and passed through interpreter boundaries.
     ///
-    /// Erasure is structural: it traverses and rebuilds the entire continuation chain because Swift requires the full generic signature to match. Every call allocates a new chain. The ``FreerMonad/erase()-1loq6`` specialization for `Value == Any` short-circuits this to a no-op.
+    /// Because continuations already produce `Any`, erasure is O(1) per node and does not rebuild the chain: `.pure` reboxes its value and `.impure` reuses its operation and continuation unchanged. The ``FreerMonad/erase()-1loq6`` specialization for `Value == Any` short-circuits even the `.pure` reboxing.
     ///
     /// - Returns: An equivalent computation with value type erased to `Any`.
     func erase() -> FreerMonad<Operation, Any> {
@@ -73,7 +75,7 @@ package extension FreerMonad {
             case let .pure(value):
                 .pure(value as Any)
             case let .impure(operation, continuation):
-                .impure(operation: operation) { try continuation($0).erase() }
+                .impure(operation: operation, continuation: continuation)
         }
     }
 }

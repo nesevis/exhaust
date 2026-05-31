@@ -178,6 +178,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         // MARK: prune
 
             case let .impure(operation: .prune(innerGen), continuation):
+                // Inert guard: forward generation never prunes (reflection-only), and forward inputValue is never Optional.none — kept for symmetry with the reflection/materializer handlers.
                 guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
                     return nil
                 }
@@ -207,18 +208,51 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         // MARK: sequence
 
             case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
-                guard let length = try interpretLength(lengthGen, context: &context) else {
+                guard let lengthValue = try generateRecursiveAny(lengthGen.erase(), with: (), context: &context) else {
                     return nil
                 }
+                // The length spine is `UInt64`-typed by construction; a non-`UInt64` value is a malformed generator, not a recoverable condition.
+                // swiftlint:disable:next force_cast
+                let length = lengthValue as! UInt64
+                let count = try SharedInterpreterHelpers.sequenceElementCount(length)
                 var elements: [Any] = []
-                elements.reserveCapacity(Int(length))
-                for _ in 0 ..< length {
-                    guard let element = try generateRecursiveAny(
-                        elementGen, with: inputValue, context: &context
-                    ) else {
-                        return nil
+                elements.reserveCapacity(count)
+                // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element.
+                if case let .impure(
+                    operation: .chooseBits(min, max, tag, _, .some(scaling)),
+                    continuation: elementContinuation
+                ) = elementGen, context.sizeOverride == nil {
+                    let size = consumeSize(&context)
+                    let effectiveRange = Gen.applyScaling(
+                        min: min, max: max, tag: tag, scaling: scaling, size: size
+                    )
+
+                    for _ in 0 ..< count {
+                        let rawBits = context.prng.next(in: effectiveRange)
+                        let randomBits: Any = tag.isFloatingPoint
+                            ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+                            : rawBits
+                        let nextElementGen = try elementContinuation(randomBits)
+                        if case let .pure(final) = nextElementGen {
+                            elements.append(final)
+                        } else {
+                            guard let element = try generateRecursiveAny(
+                                nextElementGen, with: inputValue, context: &context
+                            ) else {
+                                return nil
+                            }
+                            elements.append(element)
+                        }
                     }
-                    elements.append(element)
+                } else {
+                    for _ in 0 ..< count {
+                        guard let element = try generateRecursiveAny(
+                            elementGen, with: inputValue, context: &context
+                        ) else {
+                            return nil
+                        }
+                        elements.append(element)
+                    }
                 }
                 let nextGen = try continuation(elements)
                 if case let .pure(final) = nextGen { return final }
@@ -264,6 +298,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 )
                 var attempts = 0 as UInt64
                 var accepted: Any?
+                let observationDefault = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let candidate = try generateRecursiveAny(
                         tunedGen, with: inputValue, context: &context
@@ -271,10 +306,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                         return nil
                     }
                     let passed = predicate(candidate)
-                    if context.filterObservations[fingerprint] == nil {
-                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
-                    }
-                    context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
+                    context.filterObservations[fingerprint, default: observationDefault].recordAttempt(passed: passed)
                     if passed {
                         accepted = candidate
                         break
@@ -297,11 +329,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 ) else {
                     return nil
                 }
-                var bucket = context.classifications[fingerprint, default: [:]]
                 for (label, classifier) in classifiers where classifier(value) {
-                    bucket[label, default: []].insert(context.runs)
+                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
                 }
-                context.classifications[fingerprint] = bucket
                 let nextGen = try continuation(value)
                 if case let .pure(final) = nextGen { return final }
                 return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
@@ -360,6 +390,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             case let .impure(operation: .unique(uniqueGen, fingerprint, keyExtractor), continuation):
                 var attempts = 0 as UInt64
                 var accepted: Any?
+                var vactiScratchContext: GenerationContext?
                 while attempts < GenerationContext.maxFilterRuns {
                     if let keyExtractor {
                         guard let candidate = try generateRecursiveAny(
@@ -373,22 +404,25 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                             break
                         }
                     } else {
-                        var vactiContext = GenerationContext(
-                            maxRuns: context.maxRuns,
-                            baseSeed: context.baseSeed,
-                            isFixed: context.isFixed,
-                            size: context.size,
-                            prng: Xoshiro256(seed: 0),
-                            runs: context.runs
-                        )
-                        swap(&context.prng, &vactiContext.prng)
+                        if attempts == 0 {
+                            vactiScratchContext = GenerationContext(
+                                maxRuns: context.maxRuns,
+                                baseSeed: context.baseSeed,
+                                isFixed: context.isFixed,
+                                size: context.size,
+                                prng: Xoshiro256(seed: 0),
+                                materializePicks: context.materializePicks,
+                                runs: context.runs
+                            )
+                        }
+                        swap(&context.prng, &vactiScratchContext!.prng)
                         let vactiResult = try ValueAndChoiceTreeInterpreter<Any>
-                            .generateRecursiveAny(uniqueGen, with: inputValue, context: &vactiContext)
+                            .generateRecursiveAny(uniqueGen, with: inputValue, context: &vactiScratchContext!)
                         guard let (candidate, tree) = vactiResult else {
-                            swap(&context.prng, &vactiContext.prng)
+                            swap(&context.prng, &vactiScratchContext!.prng)
                             return nil
                         }
-                        swap(&context.prng, &vactiContext.prng)
+                        swap(&context.prng, &vactiScratchContext!.prng)
                         let sequence = ChoiceSequence.flatten(tree)
                         if context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted {
                             accepted = candidate

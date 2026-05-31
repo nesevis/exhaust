@@ -188,6 +188,22 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         return (value as! FinalOutput, tree)
     }
 
+    /// Re-runs the most recent generation with full ``ChoiceTree`` construction, falling back to ``ChoiceTree/just`` on a VI/VACTI parity break.
+    ///
+    /// Call after ``nextValueOnly()`` returns a failing value to obtain the tree for reduction. When ``reproduceWithTree()`` returns nil, the value-only and tree-building interpreters disagreed on PRNG consumption for the same run — the parity invariant the fast sampling path depends on. The value is still a valid counterexample, so this method returns ``ChoiceTree/just`` (an unreducible tree); the log entry and assertion make the divergence observable rather than silent.
+    public mutating func reproduceFailureTree() throws -> ChoiceTree {
+        if let (_, tree) = try reproduceWithTree() {
+            return tree
+        }
+        ExhaustLog.error(
+            category: .propertyTest,
+            event: "vacti_vi_parity_break",
+            "reproduceWithTree returned nil after nextValueOnly produced a failing value"
+        )
+        assertionFailure("VI/VACTI parity break: reproduceWithTree returned nil after a failing nextValueOnly value")
+        return .just
+    }
+
     // MARK: - Generic Wrapper
 
     /// Typed entry point that erases to ``generateRecursiveAny`` and casts the result back.
@@ -278,6 +294,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         // MARK: prune
 
             case let .impure(operation: .prune(innerGen), continuation):
+                // Inert guard: forward generation never prunes (reflection-only), and forward inputValue is never Optional.none — kept for symmetry with the reflection/materializer handlers.
                 guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
                     return nil
                 }
@@ -337,15 +354,13 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     type: filterType
                 )
                 var attempts = 0 as UInt64
+                let observationDefault = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let (result, tree) = try Self.generateRecursiveAny(
                         filteredGen, with: inputValue, context: &context
                     ) else { return nil }
                     let passed = predicate(result)
-                    if context.filterObservations[fingerprint] == nil {
-                        context.filterObservations[fingerprint] = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
-                    }
-                    context.filterObservations[fingerprint]!.recordAttempt(passed: passed)
+                    context.filterObservations[fingerprint, default: observationDefault].recordAttempt(passed: passed)
                     if passed {
                         return try runContinuation(
                             result: result, calleeChoiceTree: tree,
@@ -363,11 +378,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 guard let (result, tree) = try generateRecursiveAny(
                     classifyGen, with: inputValue, context: &context
                 ) else { return nil }
-                var bucket = context.classifications[fingerprint, default: [:]]
                 for (label, classifier) in classifiers where classifier(result) {
-                    bucket[label, default: []].insert(context.runs)
+                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
                 }
-                context.classifications[fingerprint] = bucket
                 return try runContinuation(
                     result: result, calleeChoiceTree: tree,
                     continuation: continuation, inputValue: inputValue, context: &context
@@ -424,18 +437,14 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         if case let .pure(value) = nextGen {
             return (value, calleeChoiceTree)
         }
-        if let (continuationResult, innerChoiceTree) = try generateRecursiveAny(
+        guard let (continuationResult, innerChoiceTree) = try generateRecursiveAny(
             nextGen,
             with: inputValue,
             context: &context
-        ) {
-            if nextGen.isPure {
-                return (continuationResult, calleeChoiceTree)
-            } else {
-                return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
-            }
+        ) else {
+            return nil
         }
-        return nil
+        return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
     }
 
     @inline(__always)
@@ -477,14 +486,16 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 weight: selectedChoice.weight,
                 id: selectedChoice.id,
                 branchCount: branchCount,
-                choice: final.1
+                choice: final.1,
+                isSelected: true
             )
-            return (final.0, .group([tree.selecting()]))
+            return (final.0, .group([tree]))
         }
 
         var branches = [ChoiceTree]()
         branches.reserveCapacity(choices.count)
         var finalValue: Any?
+        var branchContext = context.jump(seed: jumpSeed)
 
         for choice in choices {
             let isSelected = choice.id == selectedChoice.id
@@ -511,11 +522,12 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                         weight: choice.weight,
                         id: choice.id,
                         branchCount: branchCount,
-                        choice: final.1
+                        choice: final.1,
+                        isSelected: true
                     )
                 }
             } else {
-                var branchContext = context.jump(seed: jumpSeed)
+                branchContext.prng = Xoshiro256(seed: jumpSeed)
                 if let result = try generateRecursiveAny(
                     choice.generator,
                     with: inputValue,
@@ -542,7 +554,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
             if isSelected, let branch {
                 finalValue = value
-                branches.append(branch.selecting())
+                branches.append(branch)
             } else if let branch {
                 branches.append(branch)
             }
@@ -568,27 +580,59 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         inputValue: Any,
         context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
-        guard let (length, lengthTrees) = try interpretLength(
-            lengthGen, context: &context
+        guard let (lengthValue, lengthTrees) = try generateRecursiveAny(
+            lengthGen.erase(), with: (), context: &context
         ) else {
             return nil
         }
+        // The length spine is `UInt64`-typed by construction; a non-`UInt64` value is a malformed generator, not a recoverable condition.
+        // swiftlint:disable:next force_cast
+        let length = lengthValue as! UInt64
 
+        let count = try SharedInterpreterHelpers.sequenceElementCount(length)
         var results: [Any] = []
         var elements: [ChoiceTree] = []
-        results.reserveCapacity(Int(length))
-        elements.reserveCapacity(Int(length))
+        results.reserveCapacity(count)
+        elements.reserveCapacity(count)
 
-        for _ in 0 ..< length {
-            guard let (result, element) = try generateRecursiveAny(
-                elementGen,
-                with: inputValue,
-                context: &context
-            ) else {
-                return nil
+        // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element.
+        if case let .impure(
+            operation: .chooseBits(min, max, tag, isRangeExplicit, .some(scaling)),
+            continuation: elementContinuation
+        ) = elementGen, context.sizeOverride == nil {
+            let size = consumeSize(&context)
+            let effectiveRange = Gen.applyScaling(
+                min: min, max: max, tag: tag, scaling: scaling, size: size
+            )
+            let metadata = ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
+
+            for _ in 0 ..< count {
+                let rawBits = context.prng.next(in: effectiveRange)
+                let randomBits = tag.isFloatingPoint
+                    ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+                    : rawBits
+                let calleeTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), metadata)
+                guard let (result, elementTree) = try runContinuation(
+                    result: randomBits, calleeChoiceTree: calleeTree,
+                    continuation: elementContinuation, inputValue: inputValue, context: &context
+                ) else {
+                    return nil
+                }
+                results.append(result)
+                elements.append(elementTree)
             }
-            results.append(result)
-            elements.append(element)
+        } else {
+            for _ in 0 ..< count {
+                guard let (result, element) = try generateRecursiveAny(
+                    elementGen,
+                    with: inputValue,
+                    context: &context
+                ) else {
+                    return nil
+                }
+                results.append(result)
+                elements.append(element)
+            }
         }
 
         let choiceTree = ChoiceTree.sequence(

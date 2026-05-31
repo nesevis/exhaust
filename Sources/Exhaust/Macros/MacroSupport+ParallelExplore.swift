@@ -32,11 +32,12 @@ extension __ExhaustRuntime {
         property: @escaping (Output) -> Bool,
         directions: [(name: String, predicate: (Output) -> Bool)],
         hitsPerDirection: Int,
-        maxAttemptsPerDirection: Int
+        maxAttemptsPerDirection: Int,
+        seed: UInt64? = nil
     ) throws -> ClassificationExploreResult<Output> {
         let directionCount = directions.count
         let runStopwatch = Stopwatch()
-        let baseSeed = Xoshiro256().seed
+        let baseSeed = seed ?? Xoshiro256().seed
 
         let cancelled = SendableBox(false)
         let resultStorage = SendableBox<[DirectionLaneResult<Output>?]>(
@@ -200,10 +201,10 @@ extension __ExhaustRuntime {
         )
 
         while cancelled.value == false, result.hits[targetDirection] < hitsPerDirection {
-            let sample: (value: Output, tree: ChoiceTree)
+            let value: Output
             do {
-                guard let next = try interpreter.next() else { break }
-                sample = next
+                guard let next = try interpreter.nextValueOnly() else { break }
+                value = next
             } catch {
                 result.error = error
                 break
@@ -212,14 +213,14 @@ extension __ExhaustRuntime {
             result.propertyInvocations += 1
             result.tuningPassSamples += 1
 
-            let matching = classifyExploreValue(sample.value, directions: directions)
+            let matching = classifyExploreValue(value, directions: directions)
             result.coOccurrence.recordSample(matchingDirections: matching)
 
             for directionIndex in matching {
                 result.hits[directionIndex] += 1
             }
 
-            let propertyHolds = property(sample.value)
+            let propertyHolds = property(value)
             if matching.contains(targetDirection) {
                 if propertyHolds {
                     result.tuningPassPasses += 1
@@ -230,7 +231,12 @@ extension __ExhaustRuntime {
 
             if propertyHolds == false {
                 cancelled.value = true
-                result.failure = (value: sample.value, tree: sample.tree, matchingDirections: matching)
+                do {
+                    let tree = try interpreter.reproduceFailureTree()
+                    result.failure = (value: value, tree: tree, matchingDirections: matching)
+                } catch {
+                    result.error = error
+                }
                 break
             }
         }
@@ -244,9 +250,11 @@ extension __ExhaustRuntime {
         _ value: Output,
         directions: [(name: String, predicate: (Output) -> Bool)]
     ) -> [Int] {
-        directions.enumerated()
-            .filter { $0.element.predicate(value) }
-            .map(\.offset)
+        var matching = [Int]()
+        for index in 0 ..< directions.count where directions[index].predicate(value) {
+            matching.append(index)
+        }
+        return matching
     }
 
     // MARK: - Reduction

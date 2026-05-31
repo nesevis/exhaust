@@ -207,30 +207,31 @@ package extension __ExhaustRuntime {
             maxRuns: startIndex + count,
             initialRunIndex: startIndex
         )
-        var previousFilterObservations: [UInt64: FilterObservation] = [:]
-
         do {
             if let statsAccumulator {
+                var previousTotalAttempts = 0
+                var previousTotalPasses = 0
                 while cancelled.isCancelled == false {
-                    previousFilterObservations = interpreter.filterObservations
                     let generateStart = monotonicNanoseconds()
                     guard let (next, tree) = try interpreter.next() else { break }
                     let generateEnd = monotonicNanoseconds()
                     result.iterations += 1
 
-                    let currentObservations = interpreter.filterObservations
-                    var totalAttempts = 0
-                    var totalPasses = 0
-                    for (fingerprint, observation) in currentObservations {
-                        let previous = previousFilterObservations[fingerprint]
-                        totalAttempts += observation.attempts - (previous?.attempts ?? 0)
-                        totalPasses += observation.passes - (previous?.passes ?? 0)
+                    var currentTotalAttempts = 0
+                    var currentTotalPasses = 0
+                    for (_, observation) in interpreter.filterObservations {
+                        currentTotalAttempts += observation.attempts
+                        currentTotalPasses += observation.passes
                     }
+                    let deltaAttempts = currentTotalAttempts - previousTotalAttempts
+                    let deltaPasses = currentTotalPasses - previousTotalPasses
+                    previousTotalAttempts = currentTotalAttempts
+                    previousTotalPasses = currentTotalPasses
                     var filterAttempts: Int?
                     var filterRejections: Int?
-                    if totalAttempts > 0 {
-                        filterAttempts = totalAttempts
-                        filterRejections = totalAttempts - totalPasses
+                    if deltaAttempts > 0 {
+                        filterAttempts = deltaAttempts
+                        filterRejections = deltaAttempts - deltaPasses
                     }
 
                     let testStart = monotonicNanoseconds()
@@ -270,11 +271,8 @@ package extension __ExhaustRuntime {
 
                     if property(next) == false {
                         let absoluteIteration = Int(startIndex) + result.iterations
-                        if let (_, tree) = try interpreter.reproduceWithTree() {
-                            result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
-                        } else {
-                            result.failure = (value: next, tree: .just, absoluteIteration: absoluteIteration)
-                        }
+                        let tree = try interpreter.reproduceFailureTree()
+                        result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
                         cancelled.isCancelled = true
                         break
                     }
@@ -316,12 +314,7 @@ package extension __ExhaustRuntime {
             while let next = try interpreter.nextValueOnly() {
                 iterations += 1
                 if context.property(next) == false {
-                    let tree: ChoiceTree
-                    if let (_, reproduced) = try interpreter.reproduceWithTree() {
-                        tree = reproduced
-                    } else {
-                        tree = .just
-                    }
+                    let tree = try interpreter.reproduceFailureTree()
                     report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
                     emitFilterWarnings(interpreter.filterObservations, context: context)
 
@@ -431,11 +424,12 @@ package extension __ExhaustRuntime {
 
         let batchResults: [BatchResult<Output>]
         if laneCount <= 1 {
+            let replayStartIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
             let singleResult = runSamplingBatch(
                 gen: context.gen,
                 property: context.property,
                 baseSeed: baseSeed,
-                startIndex: 0,
+                startIndex: replayStartIndex,
                 count: context.samplingBudget,
                 lane: nil,
                 statsPropertyName: statsPropertyName,
@@ -534,7 +528,7 @@ package extension __ExhaustRuntime {
             iteration: failure.absoluteIteration,
             phaseBudget: context.samplingBudget,
             coverageIterations: coverageIterations,
-            randomSamplingIterations: failure.absoluteIteration,
+            randomSamplingIterations: totalIterations,
             replayHint: nil,
             report: &report
         )

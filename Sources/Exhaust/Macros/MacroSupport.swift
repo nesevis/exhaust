@@ -143,6 +143,7 @@ public extension __ExhaustRuntime {
         var seed: UInt64?
         var replayIteration: Int?
         var coverageReplayRow: Int?
+        var invalidReplaySeed: ReplaySeed?
         var suppressIssueReporting = false
         var suppressLogs = false
         var visualize = false
@@ -159,14 +160,8 @@ public extension __ExhaustRuntime {
                     budget = b
                 case let .replay(replaySeed):
                     guard let resolved = replaySeed.resolve() else {
-                        reportIssue(
-                            "Invalid replay seed: \(replaySeed)",
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column
-                        )
-                        return (nil, nil)
+                        invalidReplaySeed = replaySeed
+                        continue
                     }
                     switch resolved {
                         case let .sampling(resolvedSeed, iteration):
@@ -202,7 +197,7 @@ public extension __ExhaustRuntime {
                 case .includeDiff:
                     includeDiff = true
                 case let .parallel(lanes):
-                    parallelLanes = UInt8(clamping: max(1, lanes))
+                    parallelLanes = min(8, UInt8(clamping: max(1, lanes)))
                 case let .log(level):
                     logLevel = level
             }
@@ -225,8 +220,8 @@ public extension __ExhaustRuntime {
 
             let samplingBudget: UInt64 = (replayIteration != nil || coverageReplayRow != nil) ? 1 : budget.samplingBudget
             let coverageBudget: UInt64 = (replayIteration != nil || coverageReplayRow != nil) ? 0 : budget.coverageBudget
-            let totalBudget = coverageBudget + samplingBudget
-            let reductionDeadlineNanoseconds = UInt64(totalBudget) * 5 * 1_000_000
+            // Deadline scales with the preset, not the phase budgets — replay collapses those to 1/0 but still reduces one counterexample, so it must keep the full reduction deadline.
+            let reductionDeadlineNanoseconds = (budget.coverageBudget + budget.samplingBudget) * 5 * 1_000_000
             let reductionConfig = Interpreters.ReducerConfiguration(
                 maxStalls: 2,
                 wallClockDeadlineNanoseconds: reductionDeadlineNanoseconds
@@ -234,6 +229,17 @@ public extension __ExhaustRuntime {
 
             var report = ExhaustReport()
             defer { onReportClosure?(report) }
+
+            if let invalidReplaySeed {
+                reportIssue(
+                    "Invalid replay seed: \(invalidReplaySeed)",
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                return (nil, nil)
+            }
 
             let statsAccumulator: OpenPBTStatsAccumulator? = collectOpenPBTStats
                 ? OpenPBTStatsAccumulator(propertyName: "\(testName)")

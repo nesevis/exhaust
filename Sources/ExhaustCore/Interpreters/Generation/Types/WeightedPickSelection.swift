@@ -25,6 +25,7 @@ package enum WeightedPickSelection {
             }
             roll = remaining
         }
-        return choices.last
+        // Only reached when totalWeight overstates the true sum; never return a zero-weight (unreachable) branch.
+        return choices.last(where: { $0.weight > 0 })
     }
 }

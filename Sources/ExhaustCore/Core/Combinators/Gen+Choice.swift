@@ -30,8 +30,12 @@ package extension Gen {
 
         var array = ContiguousArray<ReflectiveOperation.PickTuple>()
         array.reserveCapacity(choices.count)
+        var totalWeight: UInt64 = 0
         for index in choices.indices {
             let choice = choices[index]
+            let (sum, overflowed) = totalWeight.addingReportingOverflow(choice.weight)
+            precondition(overflowed == false, "Pick weights sum overflows UInt64")
+            totalWeight = sum
             array.append(.init(
                 fingerprint: fingerprint,
                 id: UInt64(index),
@@ -39,7 +43,7 @@ package extension Gen {
                 generator: choice.generator.erase()
             ))
         }
-        return liftF(.pick(choices: array, totalWeight: array.reduce(0) { $0 &+ $1.weight }))
+        return liftF(.pick(choices: array, totalWeight: totalWeight))
     }
 
     /// Selects from multiple weighted generator options.
@@ -339,13 +343,7 @@ package extension Gen {
             scaling: scaling
         )
         return .impure(operation: operation) { result in
-            guard let convertible = result as? any BitPatternConvertible else {
-                throw GeneratorError.typeMismatch(
-                    expected: "any BitPatternConvertible",
-                    actual: String(describing: Swift.type(of: result))
-                )
-            }
-            return .pure(Output(bitPattern64: convertible.bitPattern64))
+            try .pure(Output(bitPattern64: chooseBitsBitPattern(result)))
         }
     }
 
@@ -364,13 +362,7 @@ package extension Gen {
             isRangeExplicit: range != nil
         )
         return .impure(operation: operation) { result in
-            guard let convertible = result as? any BitPatternConvertible else {
-                throw GeneratorError.typeMismatch(
-                    expected: "any BitPatternConvertible",
-                    actual: String(describing: Swift.type(of: result))
-                )
-            }
-            return .pure(UInt64(bitPattern64: convertible.bitPattern64))
+            try .pure(UInt64(bitPattern64: chooseBitsBitPattern(result)))
         }
     }
 }

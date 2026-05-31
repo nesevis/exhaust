@@ -77,11 +77,11 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         let runStopwatch = Stopwatch()
         let totalPool = directionCount * maxAttemptsPerDirection
         var state = RunState(directionCount: directionCount, totalPool: totalPool)
-        let warmupCount = max(100, hitsPerDirection)
 
         // MARK: Warm-up
 
-        let warmupBudget = min(warmupCount, state.remainingPool)
+        // Warm-up uses a fixed budget and does not draw from the per-direction tuning pool.
+        let warmupBudget = 100
         var interpreter = ValueAndChoiceTreeInterpreter(
             gen,
             materializePicks: false,
@@ -89,9 +89,8 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             maxRuns: UInt64(warmupBudget)
         )
 
-        while let (value, tree) = try interpreter.next() {
+        while let value = try interpreter.nextValueOnly() {
             state.warmupSamplesDrawn += 1
-            state.remainingPool -= 1
             state.propertyInvocations += 1
 
             let matching = classify(value)
@@ -103,6 +102,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             }
 
             if property(value) == false {
+                let tree = try interpreter.reproduceFailureTree()
                 let reduced = reduce(value: value, tree: tree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)
                 return assembleResult(
@@ -280,7 +280,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
 
         while passSamplesDrawn < passBudget,
               state.hits[targetDirection] < hitsPerDirection,
-              let (value, tunedTree) = try passInterpreter.next()
+              let value = try passInterpreter.nextValueOnly()
         {
             passSamplesDrawn += 1
             state.remainingPool -= 1
@@ -304,9 +304,9 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             }
 
             if propertyHolds == false {
+                let tunedTree = try passInterpreter.reproduceFailureTree()
                 let reduced = reduceFromTunedTree(value: value, tunedTree: tunedTree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)
-                state.remainingPool += passBudget - passSamplesDrawn
                 return assembleResult(
                     state: state, failure: reduced, matchingDirections: reducedDirections,
                     stopwatch: stopwatch, termination: .propertyFailed
@@ -314,7 +314,6 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
             }
         }
 
-        state.remainingPool += passBudget - passSamplesDrawn
         return nil
     }
 
@@ -342,9 +341,11 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
     // MARK: - Classification
 
     private func classify(_ value: Output) -> [Int] {
-        directions.enumerated()
-            .filter { $0.element.predicate(value) }
-            .map(\.offset)
+        var matching = [Int]()
+        for index in 0 ..< directions.count where directions[index].predicate(value) {
+            matching.append(index)
+        }
+        return matching
     }
 
     // MARK: - Reduction

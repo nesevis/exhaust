@@ -692,7 +692,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     @inline(__always)
     private static func runContinuation<Output>(
         result: Any,
-        continuation: (Any) throws -> Generator<Output>,
+        continuation: (Any) throws -> AnyGenerator,
         inputValue: some Any,
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,
@@ -709,7 +709,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             sampleCount: sampleCount,
             cgsState: &cgsState,
             derivativeContext: derivativeContext
-        )
+        ) as? Output
     }
 
     // MARK: - Pick (CGS Core)
@@ -718,7 +718,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     private static func handlePick<Output>(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
         totalWeight: UInt64,
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         inputValue: some Any,
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,
@@ -979,7 +979,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     @inline(__always)
     private static func handleZip<Output>(
         _ generators: ContiguousArray<AnyGenerator>,
-        continuation: @escaping (Any) throws -> Generator<Output>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
         inputValue: some Any,
         context: inout GenerationContext,
         predicate: @escaping (FinalOutput) -> Bool,
