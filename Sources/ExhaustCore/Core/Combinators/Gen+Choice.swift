@@ -30,8 +30,12 @@ package extension Gen {
 
         var array = ContiguousArray<ReflectiveOperation.PickTuple>()
         array.reserveCapacity(choices.count)
+        var totalWeight: UInt64 = 0
         for index in choices.indices {
             let choice = choices[index]
+            let (sum, overflowed) = totalWeight.addingReportingOverflow(choice.weight)
+            precondition(overflowed == false, "Pick weights sum overflows UInt64")
+            totalWeight = sum
             array.append(.init(
                 fingerprint: fingerprint,
                 id: UInt64(index),
@@ -39,7 +43,7 @@ package extension Gen {
                 generator: choice.generator.erase()
             ))
         }
-        return liftF(.pick(choices: array, totalWeight: array.reduce(0) { $0 &+ $1.weight }))
+        return liftF(.pick(choices: array, totalWeight: totalWeight))
     }
 
     /// Selects from multiple weighted generator options.
