@@ -72,7 +72,9 @@ When Exhaust can synthesise the backward mapping (extracting struct properties b
 
 ## Synthesising generators from Decodable types
 
-Writing generators by hand scales well for a handful of types. When you have many types that already conform to `Decodable`, you can skip the manual work and let Exhaust build a generator from example JSON or an existing `Codable` instance.
+Synthesised generators build a working generator from example JSON or an existing `Codable` instance — no composition closure, no manual field threading, no access to the type's initialiser required. They run roughly three times slower per iteration than hand-written generators, and they have no knowledge of domain constraints — valid ranges, inter-field relationships, or invariants that the type's consumers rely on.
+
+For uncomplicated types you own, synthesis gets you testing quickly. When you want control over the values it generates, replace it with a hand-written generator. For types you don't own or can't construct directly, synthesis may be the only practical option. The JSON overloads construct values through `init(from:)`, so you never need access to the type's initialiser.
 
 ```swift
 struct Person: Codable {
@@ -136,11 +138,6 @@ Some fields fall back to a constant from the example, pinned with `.just(decoded
 ### Limitations
 
 Synthesised generators are forward-only. Reflection is not supported, so `reflecting:` cannot decompose a concrete value backward through a synthesised generator. Reduction still works because the reducer operates on the generator's choices, not output values.
-
-> [!Note]
-> Synthesised generators are approximately twice as slow per iteration as hand-written generators, because each value is reconstructed through `init(from: Decoder)`. More importantly, they have no knowledge of domain constraints, like valid ranges, inter-field relationships, or other invariants that the type's consumers rely on. 
->
-> A hand-written generator encodes these constraints directly, producing values that exercise the interesting parts of the domain rather than all possible values. Treat synthesised generators as a starting point, not a replacement for domain-aware generators on types that matter.
 
 ## Generating test data with `#example`
 

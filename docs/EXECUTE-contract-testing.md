@@ -291,6 +291,16 @@ SUTs that have races at suspension points (the `let v = state; await Task.yield(
 
 If a command body suspends to an executor outside the cooperative scheduler (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeoutMs(ms)` setting (default 1000ms) detects this and reports the stalling command sequence without attempting reduction.
 
+### When replay is deterministic
+
+The cooperative runner is fully deterministic when the system under test is async-native: all suspension points are explicit `await`s on actors, `Task.yield()`, or other Swift Concurrency primitives. Same seed, same interleaving, every time.
+
+Two things can break that guarantee:
+
+**Foreign executors.** When the system under test bridges to GCD internally (for example, `withCheckedContinuation` wrapping a `DispatchQueue` callback), the continuation arrives on an OS thread outside the drain loop. The runner's lock prevents data races on its internal state, but not timing races: whether the continuation is visible at the next dequeue depends on OS thread scheduling. Same seed, same choice sequence, but a different run can produce a different set of pending jobs at each drain step and therefore a different actual interleaving. If you observe the same seed passing on one run and failing on another, a foreign executor bridge is the most likely cause. For systems built on GCD, locks, or atomics, use [`@ConcurrentContract`](#preemptive-concurrent-testing) instead.
+
+**Schedule exhaustion.** The schedule array has one entry per non-prefix command, but the drain loop consumes one entry per dequeued job, including mid-command continuations from internal `await`s. Commands that suspend multiple times consume entries meant for later commands, exhausting the schedule early. Once exhausted, lane assignment falls back to deterministic round-robin. This fallback is itself deterministic, so it does not break replay. It does mean the reducer can only target command-level lane assignments, not continuation-level interleavings within a single command. For most systems under test this is not a practical limitation, because the bugs live at the command boundary, not between a command's internal suspension points.
+
 ## Preemptive concurrent testing
 
 The preemptive runner dispatches commands to real GCD threads, letting the OS scheduler create actual thread-level interleaving. This catches races that the cooperative scheduler cannot reach: bugs inside locks, dispatch queues, atomics, and other synchronous primitives hidden behind async facades.

@@ -61,7 +61,7 @@ public macro gen<each GeneratedValue>(
 ///
 /// The ``ReflectiveGenerator/isSynthesized`` flag is set to `true` on the returned generator. Diagnostic tools can check this flag to identify `.just` nodes that represent fields the decoder could not generate.
 ///
-/// - Note: Synthesized generators are approximately twice as slow per iteration as hand-written generators for the same type. The overhead comes from reconstructing each value through `init(from: Decoder)` — the only available construction path for types defined outside the test target — rather than calling the memberwise initializer directly. For hot-path benchmarks or large iteration counts, consider writing a generator by hand.
+/// - Note: Synthesized generators are roughly three times slower per iteration than hand-written generators for the same type. The overhead comes from reconstructing each value through `init(from: Decoder)` rather than calling the memberwise initializer directly. For hot-path benchmarks or large iteration counts, consider writing a generator by hand.
 ///
 /// ```swift
 /// let gen = try #gen(Person.self, from: jsonData)
@@ -99,7 +99,7 @@ public macro gen<T: Decodable>(
 ///
 /// The ``ReflectiveGenerator/isSynthesized`` flag is set to `true` on the returned generator. Diagnostic tools can check this flag to identify `.just` nodes that represent fields the decoder could not generate.
 ///
-/// - Note: Synthesized generators are approximately twice as slow per iteration as hand-written generators for the same type. The overhead comes from reconstructing each value through `init(from: Decoder)` — the only available construction path for types defined outside the test target — rather than calling the memberwise initializer directly. For hot-path benchmarks or large iteration counts, consider writing a generator by hand.
+/// - Note: Synthesized generators are roughly three times slower per iteration than hand-written generators for the same type. The overhead comes from reconstructing each value through `init(from: Decoder)` rather than calling the memberwise initializer directly. For hot-path benchmarks or large iteration counts, consider writing a generator by hand.
 ///
 /// ```swift
 /// let example = Person(name: "Alice", age: 30, active: true)
@@ -135,7 +135,7 @@ public macro gen<T: Codable>(
 ///
 /// The ``ReflectiveGenerator/isSynthesized`` flag is set to `true` on the returned generator. Diagnostic tools can check this flag to identify `.just` nodes that represent fields the decoder could not generate.
 ///
-/// - Note: Synthesized generators are approximately twice as slow per iteration as hand-written generators for the same type. The overhead comes from reconstructing each value through `init(from: Decoder)` — the only available construction path for types defined outside the test target — rather than calling the memberwise initializer directly. For hot-path benchmarks or large iteration counts, consider writing a generator by hand.
+/// - Note: Synthesized generators are roughly three times slower per iteration than hand-written generators for the same type. The overhead comes from reconstructing each value through `init(from: Decoder)` rather than calling the memberwise initializer directly. For hot-path benchmarks or large iteration counts, consider writing a generator by hand.
 ///
 /// ```swift
 /// let gen = try #gen(Person.self, from: """
