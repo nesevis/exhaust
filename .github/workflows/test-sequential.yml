@@ -1,0 +1,104 @@
+name: Tests (Sequential)
+
+on: workflow_dispatch
+
+jobs:
+  test:
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Select Xcode 26.2
+        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+
+      - name: Work around Swift 6.2 prebuilt swift-syntax linker bug (SPM#9495)
+        run: swift package edit swift-syntax
+
+      - name: Run tests
+        run: |
+          mkdir -p .build
+          set +o pipefail
+          swift test --no-parallel 2>&1 | tee .build/test-output.txt
+          exit ${PIPESTATUS[0]}
+
+      - name: Collect crash reports
+        if: failure()
+        run: |
+          REPORT_DIR="$HOME/Library/Logs/DiagnosticReports"
+          if [ -d "$REPORT_DIR" ]; then
+            echo "### Crash reports" >> "$GITHUB_STEP_SUMMARY"
+            for f in "$REPORT_DIR"/*.ips "$REPORT_DIR"/*.crash; do
+              [ -f "$f" ] || continue
+              echo "#### $(basename "$f")" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              head -80 "$f" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi
+
+      - name: Test report
+        if: always()
+        run: |
+          python3 - .build/test-output.txt <<'SCRIPT'
+          import sys, os, re
+
+          path = sys.argv[1]
+          summary_path = os.environ.get('GITHUB_STEP_SUMMARY', '')
+
+          if not summary_path:
+              print("GITHUB_STEP_SUMMARY not set, skipping report")
+              sys.exit(0)
+
+          if not os.path.exists(path):
+              msg = f"Test output file not found: {path}"
+              print(msg)
+              with open(summary_path, 'a') as f:
+                  f.write(f"### Test report unavailable\n\n{msg}\n")
+              sys.exit(0)
+
+          with open(path) as f:
+              lines = f.readlines()
+
+          if not lines:
+              msg = f"Test output file is empty: {path}"
+              print(msg)
+              with open(summary_path, 'a') as f:
+                  f.write(f"### Test report unavailable\n\n{msg}\n")
+              sys.exit(0)
+
+          failures = []
+          for line in lines:
+              m = re.search(r'Test "(.+?)" failed after .+ with (\d+) issue', line)
+              if m:
+                  failures.append((m.group(1), int(m.group(2))))
+
+          total = '?'
+          for line in reversed(lines):
+              m = re.search(r'Test run with (\d+) tests? in (\d+) suites? (passed|failed)', line)
+              if m:
+                  total = m.group(1)
+                  break
+
+          errors = [l.rstrip() for l in lines if re.search(r'\berror:', l)]
+
+          with open(summary_path, 'a') as f:
+              if total == '?':
+                  f.write("### Test report unavailable\n\nCould not find test summary line in output.\n")
+                  if errors:
+                      f.write(f"\n**Build errors ({len(errors)}):**\n```\n")
+                      for line in errors:
+                          f.write(line + '\n')
+                      f.write("```\n")
+                  f.write(f"\nLast 20 lines of output:\n```\n")
+                  for line in lines[-20:]:
+                      f.write(line)
+                  f.write("```\n")
+              elif not failures:
+                  f.write(f"### All {total} tests passed\n")
+              else:
+                  f.write(f"### {len(failures)} of {total} tests failed\n\n")
+                  f.write("| Test | Issues |\n|------|--------|\n")
+                  for name, count in failures:
+                      f.write(f"| {name} | {count} |\n")
+          SCRIPT
