@@ -329,11 +329,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 ) else {
                     return nil
                 }
-                var bucket = context.classifications[fingerprint, default: [:]]
                 for (label, classifier) in classifiers where classifier(value) {
-                    bucket[label, default: []].insert(context.runs)
+                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
                 }
-                context.classifications[fingerprint] = bucket
                 let nextGen = try continuation(value)
                 if case let .pure(final) = nextGen { return final }
                 return try generateRecursiveAny(nextGen, with: inputValue, context: &context)

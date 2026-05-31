@@ -378,11 +378,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 guard let (result, tree) = try generateRecursiveAny(
                     classifyGen, with: inputValue, context: &context
                 ) else { return nil }
-                var bucket = context.classifications[fingerprint, default: [:]]
                 for (label, classifier) in classifiers where classifier(result) {
-                    bucket[label, default: []].insert(context.runs)
+                    context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
                 }
-                context.classifications[fingerprint] = bucket
                 return try runContinuation(
                     result: result, calleeChoiceTree: tree,
                     continuation: continuation, inputValue: inputValue, context: &context

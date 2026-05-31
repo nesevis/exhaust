@@ -250,9 +250,11 @@ extension __ExhaustRuntime {
         _ value: Output,
         directions: [(name: String, predicate: (Output) -> Bool)]
     ) -> [Int] {
-        directions.enumerated()
-            .filter { $0.element.predicate(value) }
-            .map(\.offset)
+        var matching = [Int]()
+        for index in 0 ..< directions.count where directions[index].predicate(value) {
+            matching.append(index)
+        }
+        return matching
     }
 
     // MARK: - Reduction
