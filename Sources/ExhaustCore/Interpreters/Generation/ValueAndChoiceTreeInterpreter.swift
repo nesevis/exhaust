@@ -441,18 +441,14 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         if case let .pure(value) = nextGen {
             return (value, calleeChoiceTree)
         }
-        if let (continuationResult, innerChoiceTree) = try generateRecursiveAny(
+        guard let (continuationResult, innerChoiceTree) = try generateRecursiveAny(
             nextGen,
             with: inputValue,
             context: &context
-        ) {
-            if nextGen.isPure {
-                return (continuationResult, calleeChoiceTree)
-            } else {
-                return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
-            }
+        ) else {
+            return nil
         }
-        return nil
+        return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
     }
 
     @inline(__always)
@@ -494,9 +490,10 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 weight: selectedChoice.weight,
                 id: selectedChoice.id,
                 branchCount: branchCount,
-                choice: final.1
+                choice: final.1,
+                isSelected: true
             )
-            return (final.0, .group([tree.selecting()]))
+            return (final.0, .group([tree]))
         }
 
         var branches = [ChoiceTree]()
@@ -528,7 +525,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                         weight: choice.weight,
                         id: choice.id,
                         branchCount: branchCount,
-                        choice: final.1
+                        choice: final.1,
+                        isSelected: true
                     )
                 }
             } else {
@@ -559,7 +557,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
             if isSelected, let branch {
                 finalValue = value
-                branches.append(branch.selecting())
+                branches.append(branch)
             } else if let branch {
                 branches.append(branch)
             }
