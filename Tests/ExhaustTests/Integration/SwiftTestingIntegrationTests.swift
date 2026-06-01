@@ -274,6 +274,18 @@ struct SwiftTestingIntegrationTests {
         }
         #expect(result == nil, "All values in 0...100 should pass")
     }
+
+    @Test("NaN")
+    func testNaN() {
+        @Sendable func myDistance(_ a: Double, _ b: Double) -> Double {
+            abs(a - b)
+        }
+
+        // Fails on (-inf, -inf)
+        let result = #exhaust(#gen(.double(), .double())) { a, b in
+            #expect(myDistance(a, b) >= 0)
+        }
+    }
 }
 
 // MARK: - Suite Trait

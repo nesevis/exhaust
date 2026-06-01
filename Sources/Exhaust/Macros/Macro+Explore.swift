@@ -5,11 +5,12 @@
 /// Pass the property as a trailing closure to capture source location for better failure messages:
 ///
 /// ```swift
-/// let report = #explore(crossingGen, .budget(.thorough),
+/// let report = #explore(crossingGen,
 ///     directions: [
 ///         ("northward", { $0.from > 0 && $0.to < 0 }),
 ///         ("southward", { $0.from < 0 && $0.to > 0 }),
-///     ]
+///     ],
+///     .budget(.thorough)
 /// ) { value in
 ///     flightController.updatePosition(value)
 ///     #expect(flightController.heading.isValid)
@@ -35,8 +36,8 @@
 @discardableResult
 public macro explore<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
-    _ settings: ExploreSettings...,
     directions: [(String, (GeneratedValue) -> Bool)],
+    _ settings: ExploreSettings...,
     property: @Sendable (GeneratedValue) throws -> PropertyResult
 ) -> ExploreReport<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "ExploreMacro")
 
@@ -45,11 +46,12 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// Given a list of named directions (predicate-labeled regions of the output space), `#explore` tunes the generator per direction, draws K samples per direction, and reports per-direction coverage alongside cross-direction overlap and diagnostic findings. Must be called with `await` since the expanded function is `async`.
 ///
 /// ```swift
-/// let report = try await #explore(crossingGen, .budget(.thorough),
+/// let report = try await #explore(crossingGen,
 ///     directions: [
 ///         ("northward", { $0.from > 0 && $0.to < 0 }),
 ///         ("southward", { $0.from < 0 && $0.to > 0 }),
-///     ]
+///     ],
+///     .budget(.thorough)
 /// ) { value in
 ///     try await flightController.updatePosition(value)
 ///     #expect(flightController.heading.isValid)
@@ -69,7 +71,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 @discardableResult
 public macro explore<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
-    _ settings: ExploreSettings...,
     directions: [(String, (GeneratedValue) -> Bool)],
+    _ settings: ExploreSettings...,
     property: @Sendable (GeneratedValue) async throws -> PropertyResult
 ) -> ExploreReport<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "ExploreAsyncMacro")

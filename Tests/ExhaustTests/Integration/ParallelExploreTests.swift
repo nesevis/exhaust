@@ -10,14 +10,14 @@ struct ParallelExploreTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(Self.budget),
-            .parallel,
-            .suppress(.all),
             directions: [
                 ("low", { (value: Int) in value < 30 }),
                 ("mid", { (value: Int) in value >= 30 && value <= 70 }),
                 ("high", { (value: Int) in value > 70 }),
-            ]
+            ],
+            .budget(Self.budget),
+            .parallel,
+            .suppress(.all)
         ) { value in
             value >= 0
         }
@@ -33,13 +33,13 @@ struct ParallelExploreTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(Self.budget),
-            .parallel,
-            .suppress(.all),
             directions: [
                 ("low", { (value: Int) in value < 30 }),
                 ("high", { (value: Int) in value > 70 }),
-            ]
+            ],
+            .budget(Self.budget),
+            .parallel,
+            .suppress(.all)
         ) { value in
             value < 50
         }
@@ -52,14 +52,14 @@ struct ParallelExploreTests {
         let gen = #gen(.int(in: 0 ... 10000))
         let report = #explore(
             gen,
-            .budget(.custom(coverage: 100, sampling: 2000)),
-            .parallel,
-            .suppress(.all),
             directions: [
                 ("small", { (value: Int) in value < 100 }),
                 ("medium", { (value: Int) in value >= 100 && value < 5000 }),
                 ("large", { (value: Int) in value >= 5000 }),
-            ]
+            ],
+            .budget(.custom(coverage: 100, sampling: 2000)),
+            .parallel,
+            .suppress(.all)
         ) { value in
             value < 5
         }
@@ -73,13 +73,13 @@ struct ParallelExploreTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(Self.budget),
-            .parallel,
-            .suppress(.all),
             directions: [
                 ("low", { (value: Int) in value < 50 }),
                 ("high", { (value: Int) in value >= 50 }),
-            ]
+            ],
+            .budget(Self.budget),
+            .parallel,
+            .suppress(.all)
         ) { value in
             value >= 0
         }
@@ -97,13 +97,13 @@ struct ParallelExploreTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(Self.budget),
-            .parallel,
-            .suppress(.all),
             directions: [
                 ("low", { (value: Int) in value < 50 }),
                 ("high", { (value: Int) in value >= 50 }),
-            ]
+            ],
+            .budget(Self.budget),
+            .parallel,
+            .suppress(.all)
         ) { value in
             value >= 0
         }
@@ -117,10 +117,10 @@ struct ParallelExploreTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
+            directions: [("any", { (_: Int) in true })],
             .budget(Self.budget),
             .parallel,
-            .suppress(.all),
-            directions: [("any", { (_: Int) in true })]
+            .suppress(.all)
         ) { value in
             value >= 0
         }
@@ -134,13 +134,13 @@ struct ParallelExploreTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(Self.budget),
-            .parallel,
-            .suppress(.all),
             directions: [
                 ("low", { (value: Int) in value < 50 }),
                 ("high", { (value: Int) in value >= 50 }),
-            ]
+            ],
+            .budget(Self.budget),
+            .parallel,
+            .suppress(.all)
         ) { value in
             value >= 0
         }
@@ -153,13 +153,13 @@ struct ParallelExploreTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
-            .budget(.custom(coverage: 20, sampling: 400)),
-            .parallel,
-            .suppress(.all),
             directions: [
                 ("even", { (value: Int) in value % 2 == 0 }),
                 ("small", { (value: Int) in value < 30 }),
-            ]
+            ],
+            .budget(.custom(coverage: 20, sampling: 400)),
+            .parallel,
+            .suppress(.all)
         ) { value in
             value >= 0
         }

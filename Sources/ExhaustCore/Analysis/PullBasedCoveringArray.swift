@@ -6,9 +6,9 @@
 // MARK: - Academic Background
 
 //
-// This file implements the "density method" — a one-test-at-a-time greedy covering array generator — from:
+// This file implements the "density method": a one-test-at-a-time greedy covering array generator from:
 //
-//   Bryce, R.C. & Colbourn, C.J. (2009). "A density-based greedy algorithm for higher strength covering arrays." Softw. Test. Verif. Reliab., 19(1), 37–53. DOI: 10.1002/stvr.393
+//   Bryce, R.C. & Colbourn, C.J. (2009). "A density-based greedy algorithm for higher strength covering arrays."
 //
 // The paper defines a four-layer framework for greedy covering array construction: (1) test suite repetitions, (2) multiple candidates per row, (3) factor ordering, and (4) level selection via density. Exhaust instantiates this framework with the following choices:
 //

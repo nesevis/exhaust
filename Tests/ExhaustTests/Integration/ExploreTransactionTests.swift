@@ -53,13 +53,13 @@ struct ExploreTransactionTests {
 
         let report = #explore(
             gen,
-            .budget(.thorough),
-            .suppress(.all),
             directions: [
                 ("dips and recovers", { t in dipsAndRecovers(asArray(t)) }),
                 ("deep dip (below -200)", { t in runningMin(asArray(t)) < -200 }),
                 ("large swing", { t in asArray(t).contains { abs($0) > 80 } }),
-            ]
+            ],
+            .budget(.thorough),
+            .suppress(.all)
         ) { _ in
             true
         }
@@ -83,9 +83,9 @@ struct ExploreTransactionTests {
 
         let report = #explore(
             gen,
+            directions: makeTransactionDirections(),
             .budget(.thorough),
-            .suppress(.all),
-            directions: makeTransactionDirections()
+            .suppress(.all)
         ) { _ in
             true
         }
@@ -109,9 +109,9 @@ struct ExploreTransactionTests {
 
         let report = #explore(
             gen,
+            directions: makeTransactionDirections(),
             .budget(.extensive),
-            .suppress(.all),
-            directions: makeTransactionDirections()
+            .suppress(.all)
         ) { _ in
             true
         }

@@ -15,9 +15,9 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
+            directions: [("any", { (_: Int) in true })],
             .budget(.custom(coverage: 10, sampling: 200)),
-            .suppress(.all),
-            directions: [("any", { (_: Int) in true })]
+            .suppress(.all)
         ) { value in
             value >= 0
         }
@@ -30,9 +30,9 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
+            directions: [("any", { (_: Int) in true })],
             .budget(.custom(coverage: 10, sampling: 200)),
-            .suppress(.all),
-            directions: [("any", { (_: Int) in true })]
+            .suppress(.all)
         ) { value in
             value < 50
         }
@@ -47,9 +47,9 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
+            directions: [("any", { (_: Int) in true })],
             .budget(.custom(coverage: 10, sampling: 200)),
-            .suppress(.all),
-            directions: [("any", { (_: Int) in true })]
+            .suppress(.all)
         ) { value in
             #expect(value >= 0)
         }
@@ -62,9 +62,9 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
+            directions: [("any", { (_: Int) in true })],
             .budget(.custom(coverage: 10, sampling: 200)),
-            .suppress(.all),
-            directions: [("any", { (_: Int) in true })]
+            .suppress(.all)
         ) { value in
             #expect(value < 50)
         }
@@ -77,9 +77,9 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
+            directions: [("any", { (_: Int) in true })],
             .budget(.custom(coverage: 10, sampling: 200)),
-            .suppress(.all),
-            directions: [("any", { (_: Int) in true })]
+            .suppress(.all)
         ) { value in
             if value >= 50 {
                 throw TestError()
@@ -94,9 +94,9 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
+            directions: [("any", { (_: Int) in true })],
             .budget(.custom(coverage: 10, sampling: 200)),
-            .suppress(.all),
-            directions: [("any", { (_: Int) in true })]
+            .suppress(.all)
         ) { value in
             let doubled = value * 2
             #expect(doubled >= 0)
@@ -112,9 +112,9 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = await #explore(
             gen,
+            directions: [("any", { (_: Int) in true })],
             .budget(.custom(coverage: 10, sampling: 200)),
-            .suppress(.all),
-            directions: [("any", { (_: Int) in true })]
+            .suppress(.all)
         ) { value async in
             value >= 0
         }
@@ -127,9 +127,9 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = await #explore(
             gen,
+            directions: [("any", { (_: Int) in true })],
             .budget(.custom(coverage: 10, sampling: 200)),
-            .suppress(.all),
-            directions: [("any", { (_: Int) in true })]
+            .suppress(.all)
         ) { value async in
             value < 50
         }
@@ -144,9 +144,9 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = await #explore(
             gen,
+            directions: [("any", { (_: Int) in true })],
             .budget(.custom(coverage: 10, sampling: 200)),
-            .suppress(.all),
-            directions: [("any", { (_: Int) in true })]
+            .suppress(.all)
         ) { value async in
             #expect(value >= 0)
         }
@@ -159,9 +159,9 @@ struct ExploreClosureShapeTests {
         let gen = #gen(.int(in: 0 ... 100))
         let report = await #explore(
             gen,
+            directions: [("any", { (_: Int) in true })],
             .budget(.custom(coverage: 10, sampling: 200)),
-            .suppress(.all),
-            directions: [("any", { (_: Int) in true })]
+            .suppress(.all)
         ) { value async in
             #expect(value < 50)
         }
