@@ -58,7 +58,7 @@ func myProperty() {
 
 Regression seeds are Crockford Base32 encoded strings from a previous failure report. When a test has regression seeds, Exhaust replays each one before the normal coverage and sampling pipeline. If a seed still fails, the test reports the failure immediately with the replayed counterexample. If a seed now passes (because the bug was fixed) it sits inert as a silent guard until the property fails on that seed again.
 
-This means regression seeds are safe to leave in place permanently. They cost one property invocation per seed when the bug is fixed, and they catch regressions the moment the bug reappears. Think of them as pinned counterexamples that run before the random search begins.
+Regression seeds are cheap to leave in place: one property invocation each once the bug is fixed. As long as the generator is unchanged, a seed re-runs to the same case and catches that regression the moment it reappears. Keep in mind what a seed pins, though: a position in the search, not a fixed input. Change the generator and the same seed re-runs to a different case, as it would in any property-based testing library. To pin an exact input permanently, commit the literal value and reduce it with `reflecting:` instead.
 
 ```swift
 @Test(.exhaust(.regressions("3RT5GH8KM2")))

@@ -96,7 +96,7 @@ You can also throw errors directly. Any thrown error counts as a failure:
 | `.log(.debug)` | `.error` | Sets the minimum log level for this test run. Only messages at or above the level are emitted. |
 | `.parallel(N)` | off | Splits the random sampling phase across N parallel GCD lanes. Same seed, same counterexample regardless of lane count. Has no effect with `.replay`. |
 
-## Ordered coverage of problematic values
+## Coverage of problematic values
 
 Testing happens in two phases. Before random sampling begins, Exhaust systematically tests problematic values and parameter interactions. Bugs cluster around specific values: off-by-one errors at range edges, sign confusion at zero crossings, special-case handling of NaN and empty collections, timezone transitions that shift timestamps by an hour. Random sampling can take thousands of iterations to reach these values by chance. Exhaust tests them deliberately.
 

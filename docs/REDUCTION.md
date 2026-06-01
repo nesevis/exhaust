@@ -1,6 +1,6 @@
 # How reduction works
 
-When a property fails, Exhaust reduces the failing input to the smallest counterexample that still triggers the failure. Reduction operates on the generator's recorded choices rather than the output value, making it type-agnostic and preserving all generator invariants. No custom reduction logic is needed.
+When a property fails, Exhaust reduces the failing input to the minimal counterexample that still triggers the failure. Reduction operates on the generator's recorded choices rather than the output value, making it type-agnostic and preserving all generator invariants. No custom reduction logic is needed.
 
 ## Shape and values
 
@@ -37,7 +37,7 @@ The union of all values, across every sublist, contains at most four distinct me
 [[-31, 111, 405], [-32, 545, 537], [-643]]
 ```
 
-Three sublists, seven elements, seven distinct values. The property asked for at most four. This input is a valid counterexample, but it is an unhelpful one. What you as the developer need is the *simplest* input that still fails. The reducer's task is to find it.
+Three sublists, seven elements, seven distinct values. The property asked for at most four. This input is a valid counterexample, but it is an unhelpful one. What you as the developer need is the *minimal* input that still fails. The reducer's task is to find it.
 
 ## Three representations
 
