@@ -1,16 +1,16 @@
 //
-//  BoundaryCoveringArrayReplay.swift
+//  LargeDomainCoveringArrayReplay.swift
 //  Exhaust
 //
 
-/// Converts covering array rows into ``ChoiceTree`` structures for boundary profile replay.
-package enum BoundaryCoveringArrayReplay {
-    /// Builds a ``ChoiceTree`` from a covering array row using boundary parameter values.
+/// Converts covering array rows into ``ChoiceTree`` structures for large-domain profile replay.
+package enum LargeDomainCoveringArrayReplay {
+    /// Builds a ``ChoiceTree`` from a covering array row using coverage parameter values.
     ///
     /// When the profile contains an original tree (from VACTI), walks the tree as a template and substitutes parameter values at matching positions. This preserves structural nodes like `.bind` that the flat parameter list doesn't capture. Falls back to flat construction when no original tree is available.
     public static func buildTree(
         row: CoveringArrayRow,
-        profile: BoundaryDomainProfile
+        profile: LargeDomainProfile
     ) -> ChoiceTree? {
         guard row.values.count == profile.parameters.count else { return nil }
 
@@ -32,7 +32,7 @@ package enum BoundaryCoveringArrayReplay {
     private static func substituteParameters(
         in tree: ChoiceTree,
         row: CoveringArrayRow,
-        profile: BoundaryDomainProfile,
+        profile: LargeDomainProfile,
         paramIndex: inout Int
     ) -> ChoiceTree? {
         switch tree {
@@ -127,7 +127,7 @@ package enum BoundaryCoveringArrayReplay {
                         if elementIndex < slot.activeElementCount {
                             let slotParams = effectiveParams[elementIndex]
                             let subRow = CoveringArrayRow(values: Array(elementValues[flatIdx ..< flatIdx + slotParams.count]))
-                            let subProfile = BoundaryDomainProfile(parameters: slotParams)
+                            let subProfile = LargeDomainProfile(parameters: slotParams)
                             guard let newElement = Self.buildTree(row: subRow, profile: subProfile) else {
                                 return nil
                             }
@@ -188,7 +188,7 @@ package enum BoundaryCoveringArrayReplay {
 
     private static func buildTreeFlat(
         row: CoveringArrayRow,
-        profile: BoundaryDomainProfile
+        profile: LargeDomainProfile
     ) -> ChoiceTree? {
         var trees: [ChoiceTree] = []
 
@@ -199,7 +199,7 @@ package enum BoundaryCoveringArrayReplay {
 
             switch param.kind {
                 case let .chooseBits(range, tag),
-                     let .finiteChooseBits(range, tag),
+                     let .enumerableChooseBits(range, tag),
                      let .sequenceElement(_, range, tag):
                     guard let tree = buildChooseBitsTree(
                         param: param,
@@ -238,7 +238,7 @@ package enum BoundaryCoveringArrayReplay {
                         if elemIdx < slot.activeElementCount {
                             let slotParams = effectiveParams[elemIdx]
                             let subRow = CoveringArrayRow(values: Array(elementValues[flatIdx ..< flatIdx + slotParams.count]))
-                            let subProfile = BoundaryDomainProfile(parameters: slotParams)
+                            let subProfile = LargeDomainProfile(parameters: slotParams)
                             guard let elemTree = Self.buildTree(row: subRow, profile: subProfile) else {
                                 return nil
                             }
@@ -273,9 +273,9 @@ package enum BoundaryCoveringArrayReplay {
 
     /// Converts a covering array value index into a ``ChoiceTree`` leaf for a chooseBits parameter.
     ///
-    /// Looks up the concrete bit pattern at `valueIndex` in the parameter's boundary value table, then wraps it in a `.choice` node with the original range metadata so the materializer can validate it.
+    /// Looks up the concrete bit pattern at `valueIndex` in the parameter's problematic value table, then wraps it in a `.choice` node with the original range metadata so the materializer can validate it.
     private static func buildChooseBitsTree(
-        param: BoundaryParameter,
+        param: CoverageParameter,
         valueIndex: UInt64,
         range: ClosedRange<UInt64>,
         tag: TypeTag
@@ -288,10 +288,10 @@ package enum BoundaryCoveringArrayReplay {
     }
 
     private static func buildSequenceTree(
-        lengthParam: BoundaryParameter,
+        lengthParam: CoverageParameter,
         lengthValueIndex: UInt64,
         lengthRange: ClosedRange<UInt64>,
-        remainingParams: [BoundaryParameter],
+        remainingParams: [CoverageParameter],
         remainingValues: [UInt64]
     ) -> (tree: ChoiceTree, consumedParams: Int)? {
         guard Int(lengthValueIndex) < lengthParam.values.count else { return nil }
@@ -330,7 +330,7 @@ package enum BoundaryCoveringArrayReplay {
     }
 
     private static func buildPickTree(
-        param _: BoundaryParameter,
+        param _: CoverageParameter,
         valueIndex: UInt64,
         choices: ContiguousArray<ReflectiveOperation.PickTuple>
     ) -> ChoiceTree? {
@@ -368,7 +368,7 @@ package enum BoundaryCoveringArrayReplay {
     /// Decomposes a local index within a length slot into per-parameter value indices via mixed-radix arithmetic.
     private static func decomposeCompositeIndex(
         _ localIndex: UInt64,
-        activeSlotParams: [[BoundaryParameter]]
+        activeSlotParams: [[CoverageParameter]]
     ) -> [UInt64] {
         let flatParams = activeSlotParams.flatMap(\.self)
         guard flatParams.isEmpty == false else { return [] }
@@ -387,12 +387,12 @@ package enum BoundaryCoveringArrayReplay {
     }
 }
 
-// MARK: - BoundaryParameter tag helper
+// MARK: - CoverageParameter tag helper
 
-extension BoundaryParameter {
+extension CoverageParameter {
     var tag: TypeTag {
         switch kind {
-            case let .chooseBits(_, tag), let .finiteChooseBits(_, tag):
+            case let .chooseBits(_, tag), let .enumerableChooseBits(_, tag):
                 tag
             case let .sequenceElement(_, _, tag):
                 tag

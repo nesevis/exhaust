@@ -57,7 +57,7 @@ extension Materializer {
 
     /// Reads a bit pattern from the cursor and converts it to a typed value via the ``TypeTag``.
     ///
-    /// In exact mode the cursor must supply a value in range (or the handler rejects). In guided mode the handler falls through three tiers: cursor value, fallback tree, then PRNG. Bound values and non-explicit ranges are always clamped rather than rejected because their valid range may shift when inner values change. Float NaN and infinity bit patterns bypass clamping so boundary coverage counterexamples remain reducible.
+    /// In exact mode the cursor must supply a value in range (or the handler rejects). In guided mode the handler falls through three tiers: cursor value, fallback tree, then PRNG. Bound values and non-explicit ranges are always clamped rather than rejected because their valid range may shift when inner values change. Float NaN and infinity bit patterns bypass clamping so problematic-value coverage counterexamples remain reducible.
     @inline(__always)
     static func handleChooseBits(
         min: UInt64,
@@ -84,11 +84,11 @@ extension Materializer {
                     // Bound value or non-explicit range: clamp to fresh range.
                     // Bound ranges may shift when inner values change.
                     // Non-explicit ranges (from size scaling) are context-dependent — the generator may derive a narrower range than the original, so clamping is safer than rejecting.
-                    // Float NaN/infinity: pass through unclamped so the reducer can see non-finite boundary values.
+                    // Float NaN/infinity: pass through unclamped so the reducer can see non-finite problematic values.
                     randomBits = tag.clampBits(bp, min: min, max: max)
                 } else {
                     // Explicit-range inner value: reject if out of range.
-                    // Float NaN/infinity: pass through so boundary coverage counterexamples are reducible.
+                    // Float NaN/infinity: pass through so problematic-value coverage counterexamples are reducible.
                     guard bp >= min, bp <= max || tag.isFloatingPoint else {
                         throw RejectionError()
                     }
@@ -102,14 +102,14 @@ extension Materializer {
             case .guided:
                 if let prefixValue = context.cursor.tryConsumeValue() {
                     let bp = prefixValue.choice.bitPattern64
-                    // Float NaN/infinity: pass through unclamped so the reducer can see non-finite boundary values.
+                    // Float NaN/infinity: pass through unclamped so the reducer can see non-finite problematic values.
                     randomBits = tag.clampBits(bp, min: min, max: max)
                     if randomBits == bp {
                         reusedChoice = prefixValue.choice
                     }
                     context.decodingReport?.record(tier: .exactCarryForward)
                 } else if let calleeFallback, case let .choice(value, _) = calleeFallback {
-                    // Float NaN/infinity: pass through unclamped so the reducer can see non-finite boundary values.
+                    // Float NaN/infinity: pass through unclamped so the reducer can see non-finite problematic values.
                     randomBits = tag.clampBits(value.bitPattern64, min: min, max: max)
                     context.decodingReport?.record(tier: .fallbackTree)
                 } else {

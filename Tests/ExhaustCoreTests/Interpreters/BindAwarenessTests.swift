@@ -187,9 +187,9 @@ struct BindAwarenessTests {
         // Without opaque-bound, the bound array's parameters would also be extracted.
         // It's also valid for analyze() to return nil if the generator is unanalyzable.
         switch result {
-            case let .finite(profile):
+            case let .enumerable(profile):
                 #expect(profile.parameters.count == 1, "Only the inner parameter (0...3) should be extracted")
-            case let .boundary(profile):
+            case let .large(profile):
                 #expect(profile.parameters.count == 1, "Only the inner parameter (0...3) should be extracted")
             case nil:
                 break

@@ -7,7 +7,7 @@
 ///
 /// ## What It Does
 ///
-/// Runs a generator through the ``ValueAndChoiceTreeInterpreter`` (VACTI) with `materializePicks = true` to produce a complete ``ChoiceTree`` — a data structure that records every choice the generator made, including all branches points. Walks the tree to identify independent parameters: numeric choices, branch selections (picks), and sequence lengths/elements. Classifies the generator as finite-domain (all parameters have at most 256 values) or boundary-domain (some parameters have large ranges, requiring synthetic boundary value representatives). Returns a ``FiniteDomainProfile`` or ``BoundaryDomainProfile`` that downstream code uses to build covering arrays.
+/// Runs a generator through the ``ValueAndChoiceTreeInterpreter`` (VACTI) with `materializePicks = true` to produce a complete ``ChoiceTree`` — a data structure that records every choice the generator made, including all branches points. Walks the tree to identify independent parameters: numeric choices, branch selections (picks), and sequence lengths/elements. Classifies the generator as enumerable (all parameters have at most 256 values) or large-domain (some parameters have large ranges, requiring synthetic problematic value representatives). Returns a ``EnumerableDomainProfile`` or ``LargeDomainProfile`` that downstream code uses to build covering arrays.
 ///
 /// ## Why This Matters
 ///
@@ -19,10 +19,10 @@
 ///
 /// ## Parameter Classification
 ///
-/// Six ``BoundaryParameterKind`` cases:
-/// - `.finiteChooseBits`: domain size is 256 or smaller — enumerates all values.
-/// - `.chooseBits`: domain size exceeds 256 — synthesizes boundary values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific boundary sets.
-/// - `.compositeSequence`: a single parameter encoding all valid `(length, [element boundary values])` configurations for a sequence. The domain enumerates empty (if allowed), single-element, and optionally two-element boundary combinations. Element analysis is capped at two slots.
+/// Six ``CoverageParameterKind`` cases:
+/// - `.enumerableChooseBits`: domain size is 256 or smaller — enumerates all values.
+/// - `.chooseBits`: domain size exceeds 256 — synthesizes problematic values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific problematic sets.
+/// - `.compositeSequence`: a single parameter encoding all valid `(length, [element problematic values])` configurations for a sequence. The domain enumerates empty (if allowed), single-element, and optionally two-element problematic combinations. Element analysis is capped at two slots.
 /// - `.sequenceLength`, `.sequenceElement`: legacy cases used by the ``SequenceCoveringArray`` pipeline. Not produced by ``walkSequence``.
 /// - `.pick`: multi-way branch — values are branch indices. Analyzable when the branch count is 256 or fewer and all branches are structurally valid. Nested parameters within branches are allowed but not extracted — the covering array varies the branch index while the materializer's PRNG fills in values within the selected branch.
 ///
@@ -30,17 +30,17 @@
 ///
 /// Every generator that contains at least one random choice point (a `chooseBits`, `pick`, or `sequence`) is analyzable. The ``analyze(_:)`` method returns `nil` only when zero parameters are extracted — that is, the generator is purely deterministic (for example `Gen.just(value)`).
 ///
-/// - SeeAlso: ``BalancedCoveringArrayGenerator``, ``CoverageRunner``, ``BoundaryDomainAnalysis``
+/// - SeeAlso: ``BalancedCoveringArrayGenerator``, ``CoverageRunner``, ``ProblematicValues``
 package enum ChoiceTreeAnalysis {
     /// The outcome of analyzing a generator's choice tree structure.
     public enum AnalysisResult {
         /// All parameters have at most 256 values. Eligible for exhaustive enumeration or t-way covering.
-        case finite(FiniteDomainProfile)
-        /// At least one parameter has a large domain. Uses synthetic boundary values for covering array construction.
-        case boundary(BoundaryDomainProfile)
+        case enumerable(EnumerableDomainProfile)
+        /// At least one parameter has a large domain. Uses synthetic problematic values for covering array construction.
+        case large(LargeDomainProfile)
     }
 
-    private static let finiteDomainThreshold: UInt64 = 256
+    private static let enumerableDomainThreshold: UInt64 = 256
 
     private static let seeds: [UInt64] = [
         0x600D_F00D_600D_E665,
@@ -50,16 +50,16 @@ package enum ChoiceTreeAnalysis {
 
     /// Analyzes a generator by running it through VACTI and walking the resulting ChoiceTree.
     ///
-    /// Returns `.finite` if all parameters have small domains (≤256 values), `.boundary` if some parameters need boundary value synthesis, or `nil` if zero parameters are extracted (the generator is purely deterministic).
+    /// Returns `.enumerable` if all parameters have small domains (≤256 values), `.large` if some parameters need problematic value synthesis, or `nil` if zero parameters are extracted (the generator is purely deterministic).
     ///
     /// Tries multiple seeds to maximize element coverage for sequences.
     ///
-    /// - Parameter expandSequencePairs: When `true`, sequence boundary models include `[X, Y][X, Y]` two-element configurations (N^2 domain entries). When `false`, only `[]` and `[X]` are modeled. ``CoverageRunner`` uses this to retry with a smaller domain when the full model exceeds the coverage budget.
+    /// - Parameter expandSequencePairs: When `true`, sequence coverage models include `[X, Y][X, Y]` two-element configurations (N^2 domain entries). When `false`, only `[]` and `[X]` are modeled. ``CoverageRunner`` uses this to retry with a smaller domain when the full model exceeds the coverage budget.
     public static func analyze(
         _ gen: Generator<some Any>,
         expandSequencePairs: Bool = true
     ) -> AnalysisResult? {
-        var bestParameters: [BoundaryParameter]?
+        var bestParameters: [CoverageParameter]?
         var bestTree: ChoiceTree?
 
         for seed in seeds {
@@ -76,7 +76,7 @@ package enum ChoiceTreeAnalysis {
                 return nil
             }
 
-            var parameters: [BoundaryParameter] = []
+            var parameters: [CoverageParameter] = []
             guard walkTree(tree, expandSequencePairs: expandSequencePairs, parameters: &parameters) else {
                 return nil
             }
@@ -98,36 +98,36 @@ package enum ChoiceTreeAnalysis {
         guard let parameters = bestParameters, parameters.isEmpty == false else {
             return nil
         }
-        let allFinite = parameters.allSatisfy { param in
+        let allEnumerable = parameters.allSatisfy { param in
             switch param.kind {
-                case .finiteChooseBits, .pick:
+                case .enumerableChooseBits, .pick:
                     true
                 case .chooseBits, .sequenceLength, .sequenceElement, .compositeSequence:
                     false
             }
         }
 
-        if allFinite {
-            let finiteParams = parameters.enumerated().map { i, param -> FiniteParameter in
+        if allEnumerable {
+            let enumerableParams = parameters.enumerated().map { i, param -> EnumerableParameter in
                 switch param.kind {
-                    case let .finiteChooseBits(range, tag):
-                        return FiniteParameter(
+                    case let .enumerableChooseBits(range, tag):
+                        return EnumerableParameter(
                             index: i,
                             domainSize: param.domainSize,
                             kind: .chooseBits(range: range, tag: tag)
                         )
                     case let .pick(choices):
-                        return FiniteParameter(
+                        return EnumerableParameter(
                             index: i,
                             domainSize: param.domainSize,
                             kind: .pick(choices: choices)
                         )
                     default:
-                        fatalError("unreachable: allFinite check passed")
+                        fatalError("unreachable: allEnumerable check passed")
                 }
             }
             var totalSpace: UInt64 = 1
-            for param in finiteParams {
+            for param in enumerableParams {
                 let (product, overflow) =
                     totalSpace.multipliedReportingOverflow(by: param.domainSize)
                 if overflow {
@@ -136,18 +136,18 @@ package enum ChoiceTreeAnalysis {
                 }
                 totalSpace = product
             }
-            let profile = FiniteDomainProfile(
-                parameters: finiteParams,
+            let profile = EnumerableDomainProfile(
+                parameters: enumerableParams,
                 totalSpace: totalSpace,
                 originalTree: bestTree
             )
-            return .finite(profile)
+            return .enumerable(profile)
         } else {
-            let profile = BoundaryDomainProfile(
+            let profile = LargeDomainProfile(
                 parameters: parameters,
                 originalTree: bestTree
             )
-            return .boundary(profile)
+            return .large(profile)
         }
     }
 
@@ -162,7 +162,7 @@ package enum ChoiceTreeAnalysis {
     private static func walkTree(
         _ tree: ChoiceTree,
         expandSequencePairs: Bool,
-        parameters: inout [BoundaryParameter]
+        parameters: inout [CoverageParameter]
     ) -> Bool {
         switch tree {
             case let .choice(value, metadata):
@@ -233,12 +233,12 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Choice
 
     //
-    // Processes a single numeric choice node. Requires explicit range metadata (non-explicit ranges come from size scaling and are not analyzable). Computes domain size via subtractingReportingOverflow to handle full-range UInt64. Small domains (< 256) enumerate all values; large domains delegate to BoundaryDomainAnalysis for synthetic boundary values.
+    // Processes a single numeric choice node. Requires explicit range metadata (non-explicit ranges come from size scaling and are not analyzable). Computes domain size via subtractingReportingOverflow to handle full-range UInt64. Small domains (< 256) enumerate all values; large domains delegate to ProblematicValues for synthetic problematic values.
 
     private static func walkChoice(
         value: ChoiceValue,
         metadata: ChoiceMetadata,
-        parameters: inout [BoundaryParameter]
+        parameters: inout [CoverageParameter]
     ) -> Bool {
         // `isRangeExplicit: false` is accepted because ``analyze(_:)`` runs VACTI with `sizeOverride: 100`, at which point the stored range from a size-scaled `chooseDerived` equals the user-declared range.
         guard let range = metadata.validRange else {
@@ -248,25 +248,25 @@ package enum ChoiceTreeAnalysis {
         let typeTag = value.tag
         if case .laneControl = typeTag { return true }
         let (domainSize, overflow) = range.upperBound.subtractingReportingOverflow(range.lowerBound)
-        let isSmall = overflow == false && domainSize < finiteDomainThreshold
+        let isSmall = overflow == false && domainSize < enumerableDomainThreshold
 
         if isSmall {
             let count = domainSize + 1
-            let param = BoundaryParameter(
+            let param = CoverageParameter(
                 index: parameters.count,
                 values: Array(range.lowerBound ... range.upperBound),
                 domainSize: count,
-                kind: .finiteChooseBits(range: range, tag: typeTag)
+                kind: .enumerableChooseBits(range: range, tag: typeTag)
             )
             parameters.append(param)
         } else {
-            let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
+            let problematicValues = ProblematicValues.computeProblematicValues(
                 min: range.lowerBound, max: range.upperBound, tag: typeTag
             )
-            let param = BoundaryParameter(
+            let param = CoverageParameter(
                 index: parameters.count,
-                values: boundaryValues,
-                domainSize: UInt64(boundaryValues.count),
+                values: problematicValues,
+                domainSize: UInt64(problematicValues.count),
                 kind: .chooseBits(range: range, tag: typeTag)
             )
             parameters.append(param)
@@ -287,7 +287,7 @@ package enum ChoiceTreeAnalysis {
     private static func walkGroup(
         _ children: [ChoiceTree],
         expandSequencePairs: Bool,
-        parameters: inout [BoundaryParameter]
+        parameters: inout [CoverageParameter]
     ) -> Bool {
         if isPick(children) {
             return walkPick(children, parameters: &parameters)
@@ -309,10 +309,10 @@ package enum ChoiceTreeAnalysis {
 
     private static func walkPick(
         _ children: [ChoiceTree],
-        parameters: inout [BoundaryParameter]
+        parameters: inout [CoverageParameter]
     ) -> Bool {
         let domainSize = UInt64(children.count)
-        guard domainSize <= finiteDomainThreshold else { return false }
+        guard domainSize <= enumerableDomainThreshold else { return false }
 
         for child in children {
             guard case let .branch(b) = child else { return false }
@@ -331,7 +331,7 @@ package enum ChoiceTreeAnalysis {
             ))
         }
 
-        let param = BoundaryParameter(
+        let param = CoverageParameter(
             index: parameters.count,
             values: Array(0 ..< domainSize),
             domainSize: domainSize,
@@ -344,14 +344,14 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Sequence
 
     //
-    // Builds a single composite parameter encoding all valid (length, [element boundary values]) configurations. The domain enumerates empty (if allowed), single-element, and optionally two-element boundary combinations. Element analysis is capped at two slots.
+    // Builds a single composite parameter encoding all valid (length, [element problematic values]) configurations. The domain enumerates empty (if allowed), single-element, and optionally two-element problematic combinations. Element analysis is capped at two slots.
 
     private static func walkSequence(
         length _: UInt64,
         elements: [ChoiceTree],
         metadata: ChoiceMetadata,
         expandSequencePairs: Bool,
-        parameters: inout [BoundaryParameter]
+        parameters: inout [CoverageParameter]
     ) -> Bool {
         guard let lengthRange = metadata.validRange else {
             return false
@@ -359,9 +359,9 @@ package enum ChoiceTreeAnalysis {
 
         let clampedUpperBound = lengthRange.upperBound > UInt64(Int.max) ? Int.max : Int(lengthRange.upperBound)
         let maxElementSlots = min(2, clampedUpperBound, elements.count)
-        var elementSlotParams: [[BoundaryParameter]] = []
+        var elementSlotParams: [[CoverageParameter]] = []
         for elementIndex in 0 ..< maxElementSlots {
-            var slotParams: [BoundaryParameter] = []
+            var slotParams: [CoverageParameter] = []
             guard walkElementTree(
                 elements[elementIndex],
                 elementIndex: elementIndex,
@@ -379,7 +379,7 @@ package enum ChoiceTreeAnalysis {
             .sorted()
 
         func buildSlots(
-            from elementSlotParams: [[BoundaryParameter]],
+            from elementSlotParams: [[CoverageParameter]],
             halvedPairs: Bool
         ) -> (slots: [SequenceLengthSlot], compositeSize: UInt64) {
             var slots: [SequenceLengthSlot] = []
@@ -419,20 +419,20 @@ package enum ChoiceTreeAnalysis {
         var halvedPairs = false
         var (slots, compositeSize) = buildSlots(from: elementSlotParams, halvedPairs: false)
 
-        // When the composite domain exceeds the finite threshold, finite element params whose products dominate the space should use boundary representatives instead of full enumeration.
-        if compositeSize > Self.finiteDomainThreshold {
+        // When the composite domain exceeds the enumerable threshold, enumerable element params whose products dominate the space should use problematic representatives instead of full enumeration.
+        if compositeSize > Self.enumerableDomainThreshold {
             var converted = false
             for slotIndex in elementSlotParams.indices {
                 for paramIndex in elementSlotParams[slotIndex].indices {
                     let param = elementSlotParams[slotIndex][paramIndex]
-                    if case let .finiteChooseBits(range, tag) = param.kind {
-                        let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
+                    if case let .enumerableChooseBits(range, tag) = param.kind {
+                        let problematicValues = ProblematicValues.computeProblematicValues(
                             min: range.lowerBound, max: range.upperBound, tag: tag
                         )
-                        elementSlotParams[slotIndex][paramIndex] = BoundaryParameter(
+                        elementSlotParams[slotIndex][paramIndex] = CoverageParameter(
                             index: param.index,
-                            values: boundaryValues,
-                            domainSize: UInt64(boundaryValues.count),
+                            values: problematicValues,
+                            domainSize: UInt64(problematicValues.count),
                             kind: .sequenceElement(elementIndex: slotIndex, range: range, tag: tag)
                         )
                         converted = true
@@ -444,13 +444,13 @@ package enum ChoiceTreeAnalysis {
             }
         }
 
-        // When not expanding sequence pairs, keep length 2 but give each position a disjoint half of the boundary values. Length ≤1 keeps the full set so every boundary value appears at least once. This reduces the length-2 product from d² to (d/2)² = d²/4 while still exercising pair interactions.
+        // When not expanding sequence pairs, keep length 2 but give each position a disjoint half of the problematic values. Length ≤1 keeps the full set so every problematic value appears at least once. This reduces the length-2 product from d² to (d/2)² = d²/4 while still exercising pair interactions.
         if expandSequencePairs == false, elementSlotParams.count >= 2 {
             halvedPairs = true
             (slots, compositeSize) = buildSlots(from: elementSlotParams, halvedPairs: true)
         }
 
-        let param = BoundaryParameter(
+        let param = CoverageParameter(
             index: parameters.count,
             values: Array(0 ..< compositeSize),
             domainSize: compositeSize,
@@ -467,8 +467,8 @@ package enum ChoiceTreeAnalysis {
 
     // MARK: - Element Pair Halving
 
-    /// Splits each element slot's boundary values between positions: slot 0 gets the first half, slot 1 gets the second half.
-    static func halveElementSlotParams(_ params: [[BoundaryParameter]]) -> [[BoundaryParameter]] {
+    /// Splits each element slot's problematic values between positions: slot 0 gets the first half, slot 1 gets the second half.
+    static func halveElementSlotParams(_ params: [[CoverageParameter]]) -> [[CoverageParameter]] {
         guard params.count >= 2 else { return params }
         var result = params
         let pairCount = min(result[0].count, result[1].count)
@@ -490,7 +490,7 @@ package enum ChoiceTreeAnalysis {
     private static func walkElementTree(
         _ tree: ChoiceTree,
         elementIndex: Int,
-        parameters: inout [BoundaryParameter]
+        parameters: inout [CoverageParameter]
     ) -> Bool {
         switch tree {
             case let .choice(value, metadata):
@@ -536,7 +536,7 @@ package enum ChoiceTreeAnalysis {
         value: ChoiceValue,
         metadata: ChoiceMetadata,
         elementIndex: Int,
-        parameters: inout [BoundaryParameter]
+        parameters: inout [CoverageParameter]
     ) -> Bool {
         // See ``walkChoice(value:metadata:parameters:)`` for why `isRangeExplicit: false` is accepted here.
         guard let range = metadata.validRange else {
@@ -545,25 +545,25 @@ package enum ChoiceTreeAnalysis {
 
         let typeTag = value.tag
         let (domainSize, overflow) = range.upperBound.subtractingReportingOverflow(range.lowerBound)
-        let isSmall = overflow == false && domainSize < finiteDomainThreshold
+        let isSmall = overflow == false && domainSize < enumerableDomainThreshold
 
         if isSmall {
             let count = domainSize + 1
-            let param = BoundaryParameter(
+            let param = CoverageParameter(
                 index: parameters.count,
                 values: Array(range.lowerBound ... range.upperBound),
                 domainSize: count,
-                kind: .finiteChooseBits(range: range, tag: typeTag)
+                kind: .enumerableChooseBits(range: range, tag: typeTag)
             )
             parameters.append(param)
         } else {
-            let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
+            let problematicValues = ProblematicValues.computeProblematicValues(
                 min: range.lowerBound, max: range.upperBound, tag: typeTag
             )
-            let param = BoundaryParameter(
+            let param = CoverageParameter(
                 index: parameters.count,
-                values: boundaryValues,
-                domainSize: UInt64(boundaryValues.count),
+                values: problematicValues,
+                domainSize: UInt64(problematicValues.count),
                 kind: .sequenceElement(elementIndex: elementIndex, range: range, tag: typeTag)
             )
             parameters.append(param)

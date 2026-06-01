@@ -1,9 +1,9 @@
-// Encapsulates the structured coverage phase of a property test.
+// Encapsulates the coverage phase of a property test.
 //
 // Analyzes the generator, then pulls rows from BalancedCoveringArrayGenerator one at a time, testing each against the property. Stops on first failure or budget.
 import ExhaustCore
 
-/// Runs the structured coverage phase of a property test, exhausting the generator's finite or boundary domain before the random phase.
+/// Runs the coverage phase of a property test, exhausting the generator's enumerable or large domain before the random phase.
 package enum CoverageRunner {
     /// The outcome of a coverage run.
     package enum Result<Output> {
@@ -13,14 +13,14 @@ package enum CoverageRunner {
             iteration: Int, strength: Int, rows: Int,
             parameters: Int, totalSpace: UInt64, kind: String
         )
-        /// The entire finite domain was tested without finding a counterexample; the random phase can be skipped.
+        /// The entire enumerable domain was tested without finding a counterexample; the random phase can be skipped.
         case exhaustive(iterations: Int)
         /// Coverage completed its budget without a counterexample; proceed to the random phase.
         case partial(
             iterations: Int, strength: Int, rows: Int,
             parameters: Int, totalSpace: UInt64, kind: String
         )
-        /// The generator has no analyzable finite or boundary domain; skip coverage entirely.
+        /// The generator has no analyzable enumerable or large domain; skip coverage entirely.
         case notApplicable
     }
 
@@ -38,8 +38,8 @@ package enum CoverageRunner {
             return .notApplicable
         }
 
-        if case let .boundary(boundaryProfile) = analysis {
-            let sorted = boundaryProfile.domainSizes.sorted(by: >)
+        if case let .large(largeProfile) = analysis {
+            let sorted = largeProfile.domainSizes.sorted(by: >)
             let largestPairProduct = sorted.prefix(2).reduce(UInt64(1), *)
             if largestPairProduct > coverageBudget,
                let smaller = ChoiceTreeAnalysis.analyze(gen, expandSequencePairs: false)
@@ -53,15 +53,15 @@ package enum CoverageRunner {
         let isExhaustiveCandidate: Bool
 
         switch analysis {
-            case let .finite(finiteProfile):
-                profile = finiteProfile
-                kind = "finite"
-                isExhaustiveCandidate = finiteProfile.totalSpace <= coverageBudget
-                    && finiteProfile.originalTree?.containsBind == false
+            case let .enumerable(enumerableProfile):
+                profile = enumerableProfile
+                kind = "enumerable"
+                isExhaustiveCandidate = enumerableProfile.totalSpace <= coverageBudget
+                    && enumerableProfile.originalTree?.containsBind == false
 
-            case let .boundary(boundaryProfile):
-                profile = boundaryProfile
-                kind = "boundary"
+            case let .large(largeProfile):
+                profile = largeProfile
+                kind = "large"
                 isExhaustiveCandidate = false
         }
 

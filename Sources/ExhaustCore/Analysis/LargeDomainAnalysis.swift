@@ -1,54 +1,54 @@
 //
-//  BoundaryDomainAnalysis.swift
+//  LargeDomainAnalysis.swift
 //  Exhaust
 //
 
 import Foundation
 
-/// A parameter in the boundary model with synthetic values derived from boundary value analysis of the underlying generator operation.
-package struct BoundaryParameter: @unchecked Sendable {
-    // @unchecked Sendable: stores `BoundaryParameterKind`, which in its `.pick` case holds generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
+/// A parameter in the coverage model with synthetic values derived from problematic-value analysis of the underlying generator operation.
+package struct CoverageParameter: @unchecked Sendable {
+    // @unchecked Sendable: stores `CoverageParameterKind`, which in its `.pick` case holds generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
     /// Zero-based parameter index in the covering array model.
     package let index: Int
-    /// Synthetic boundary values as raw bit patterns.
+    /// Synthetic problematic values as raw bit patterns.
     package let values: [UInt64]
     /// Number of distinct values in this parameter's synthetic domain.
     package let domainSize: UInt64
     /// The generator operation this parameter was derived from.
-    package let kind: BoundaryParameterKind
+    package let kind: CoverageParameterKind
 
-    /// Returns a copy with a replacement boundary value set.
-    package func withValues(_ newValues: [UInt64]) -> BoundaryParameter {
-        BoundaryParameter(index: index, values: newValues, domainSize: UInt64(newValues.count), kind: kind)
+    /// Returns a copy with a replacement problematic value set.
+    package func withValues(_ newValues: [UInt64]) -> CoverageParameter {
+        CoverageParameter(index: index, values: newValues, domainSize: UInt64(newValues.count), kind: kind)
     }
 }
 
-/// Classifies the generator operation that produced a boundary parameter, determining which boundary-value strategy (range endpoints, sequence lengths, pick branches, or composite encoding) applies.
-package enum BoundaryParameterKind: @unchecked Sendable {
+/// Classifies the generator operation that produced a coverage parameter, determining which problematic-value strategy (range endpoints, sequence lengths, pick branches, or composite encoding) applies.
+package enum CoverageParameterKind: @unchecked Sendable {
     // @unchecked Sendable: the `.pick` case stores `ContiguousArray<ReflectiveOperation.PickTuple>`, which contains generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
-    /// A chooseBits with a range too large for finite-domain analysis. Values are boundary representatives: {min, min+1, midpoint, max-1, max, 0 if in range}
+    /// A chooseBits with a range too large to enumerate. Values are problematic representatives: {min, min+1, midpoint, max-1, max, 0 if in range}
     case chooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
 
     /// A sequence length (legacy). Used by the ``SequenceCoveringArray`` pipeline. Modern sequences use `.compositeSequence`. Values are {0, 1, 2, lowerBound} filtered to the declared length range.
     case sequenceLength(lengthRange: ClosedRange<UInt64>)
 
-    /// An element within a boundary-modeled sequence (legacy). Used by the ``SequenceCoveringArray`` pipeline and internally within `.compositeSequence` element slot parameters. Same boundary values as chooseBits for the element generator.
+    /// An element within a problematic-modeled sequence (legacy). Used by the ``SequenceCoveringArray`` pipeline and internally within `.compositeSequence` element slot parameters. Same problematic values as chooseBits for the element generator.
     case sequenceElement(elementIndex: Int, range: ClosedRange<UInt64>, tag: TypeTag)
 
-    /// A pick between branches (same as finite-domain pick).
+    /// A pick between branches (same as enumerable pick).
     case pick(choices: ContiguousArray<ReflectiveOperation.PickTuple>)
 
-    /// A chooseBits that was already small enough for finite-domain, kept as-is.
-    case finiteChooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
+    /// A chooseBits that was already small enough for enumerable, kept as-is.
+    case enumerableChooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
 
     /// A composite sequence parameter encoding `(length, [element values])` tuples into a single flat domain.
     ///
-    /// The domain enumerates all valid configurations: empty (if allowed), single-element, and optionally two-element boundary combinations. During replay, the composite index is decomposed via ``SequenceLengthSlot`` lookup and mixed-radix arithmetic back into a length and per-element boundary value indices. When `halvedPairs` is true, length-2 slots split each element's boundary values between positions so that position 0 uses the first half and position 1 uses the second half. Length ≤1 slots always use the full boundary set.
+    /// The domain enumerates all valid configurations: empty (if allowed), single-element, and optionally two-element problematic combinations. During replay, the composite index is decomposed via ``SequenceLengthSlot`` lookup and mixed-radix arithmetic back into a length and per-element problematic value indices. When `halvedPairs` is true, length-2 slots split each element's problematic values between positions so that position 0 uses the first half and position 1 uses the second half. Length ≤1 slots always use the full problematic set.
     case compositeSequence(
         lengthRange: ClosedRange<UInt64>,
-        elementSlotParams: [[BoundaryParameter]],
+        elementSlotParams: [[CoverageParameter]],
         halvedPairs: Bool,
         lengthSlots: [SequenceLengthSlot]
     )
@@ -66,23 +66,23 @@ package struct SequenceLengthSlot: Sendable {
     package let activeElementCount: Int
 }
 
-/// Result of boundary analysis — a synthetic finite domain suitable for covering array generation.
-package struct BoundaryDomainProfile: @unchecked Sendable {
-    // @unchecked Sendable: stores `[BoundaryParameter]` and `ChoiceTree?`. `ChoiceTree` nodes contain generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
+/// Result of problematic-value analysis — a small synthetic domain suitable for covering array generation.
+package struct LargeDomainProfile: @unchecked Sendable {
+    // @unchecked Sendable: stores `[CoverageParameter]` and `ChoiceTree?`. `ChoiceTree` nodes contain generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
-    /// The boundary parameters extracted from the generator's choice tree.
-    package let parameters: [BoundaryParameter]
-    /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, ``BoundaryCoveringArrayReplay`` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
+    /// The coverage parameters extracted from the generator's choice tree.
+    package let parameters: [CoverageParameter]
+    /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, ``LargeDomainCoveringArrayReplay`` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
     package let originalTree: ChoiceTree?
 
     /// Creates a profile with the given parameters and optional original tree template.
-    package init(parameters: [BoundaryParameter], originalTree: ChoiceTree? = nil) {
+    package init(parameters: [CoverageParameter], originalTree: ChoiceTree? = nil) {
         self.parameters = parameters
         self.originalTree = originalTree
     }
 }
 
-extension BoundaryDomainProfile: CoverageProfile {
+extension LargeDomainProfile: CoverageProfile {
     package var domainSizes: [UInt64] {
         parameters.map(\.domainSize)
     }
@@ -99,17 +99,17 @@ extension BoundaryDomainProfile: CoverageProfile {
     }
 
     package func buildTree(from row: CoveringArrayRow) -> ChoiceTree? {
-        BoundaryCoveringArrayReplay.buildTree(row: row, profile: self)
+        LargeDomainCoveringArrayReplay.buildTree(row: row, profile: self)
     }
 }
 
-// MARK: - Boundary Value Computation
+// MARK: - Problematic Value Computation
 
-/// Boundary value selection functions used by ``ChoiceTreeAnalysis``.
-package enum BoundaryDomainAnalysis {
+/// Problematic value selection functions used by ``ChoiceTreeAnalysis``.
+package enum ProblematicValues {
     /// Unicode scalar values that are prone to causing problems in string-processing code.
     ///
-    /// ``ScalarRangeSet`` converts these to flat indices during construction so that ``computeBoundaryValues(min:max:tag:)`` receives pre-computed, index-space boundary values via the ``TypeTag/character(boundaryIndices:)`` tag.
+    /// ``ScalarRangeSet`` converts these to flat indices during construction so that ``computeProblematicValues(min:max:tag:)`` receives pre-computed, index-space problematic values via the ``TypeTag/character(problematicIndices:)`` tag.
     package static let interestingCharacterScalars: [UInt32] = [
         0, // Null: truncates C-interop strings, invisible in output
         34, // Double quote: delimiter in JSON, SQL, HTML attributes, CSV, and shell commands
@@ -126,13 +126,13 @@ package enum BoundaryDomainAnalysis {
         128_078, // Thumbs down: supplementary plane emoji, requires UTF-16 surrogate pair
     ]
 
-    /// Computes boundary bit-patterns for a `[min, max]` domain using type-specific boundary value analysis rules.
-    package static func computeBoundaryValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
+    /// Computes problematic bit-patterns for a `[min, max]` domain using type-specific problematic-value analysis rules.
+    package static func computeProblematicValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
         switch tag {
             case _ where tag.isFloatingPoint:
-                computeFloatBoundaryValues(min: min, max: max, tag: tag)
+                computeFloatProblematicValues(min: min, max: max, tag: tag)
             case let .date(lowerSeconds, intervalSeconds, timeZoneID):
-                computeDateBoundaryValues(
+                computeDateProblematicValues(
                     min: min,
                     max: max,
                     lowerSeconds: lowerSeconds,
@@ -141,15 +141,15 @@ package enum BoundaryDomainAnalysis {
                 )
             case .bits:
                 [min, max]
-            case let .character(boundaryIndices):
-                // The boundary indices correspond to `interestingCharacterScalars`, but in flat array index space. They are clamped to min/max during construction
-                boundaryIndices
+            case let .character(problematicIndices):
+                // The problematic indices correspond to `interestingCharacterScalars`, but in flat array index space. They are clamped to min/max during construction
+                problematicIndices
             default:
-                computeIntegerBoundaryValues(min: min, max: max, tag: tag)
+                computeIntegerProblematicValues(min: min, max: max, tag: tag)
         }
     }
 
-    private static func computeIntegerBoundaryValues(
+    private static func computeIntegerProblematicValues(
         min: UInt64,
         max: UInt64,
         tag: TypeTag
@@ -166,7 +166,7 @@ package enum BoundaryDomainAnalysis {
         return values.sorted()
     }
 
-    private static func computeFloatBoundaryValues(
+    private static func computeFloatProblematicValues(
         min: UInt64,
         max: UInt64,
         tag: TypeTag
@@ -184,13 +184,13 @@ package enum BoundaryDomainAnalysis {
         }
 
         if isFullRange {
-            return fullRangeFloatBoundaryValues(tag: tag)
+            return fullRangeFloatProblematicValues(tag: tag)
         } else {
-            return computeIntegerBoundaryValues(min: min, max: max, tag: tag)
+            return computeIntegerProblematicValues(min: min, max: max, tag: tag)
         }
     }
 
-    private static func fullRangeFloatBoundaryValues(tag: TypeTag) -> [UInt64] {
+    private static func fullRangeFloatProblematicValues(tag: TypeTag) -> [UInt64] {
         var values = Set<UInt64>()
         switch tag {
             case .double:
@@ -294,7 +294,7 @@ package enum BoundaryDomainAnalysis {
         }
     }
 
-    // MARK: - Date Boundary Values
+    // MARK: - Date Problematic Values
 
     /// Seconds since reference date for well-known epoch points where date-handling bugs tend to cluster.
     private static let interestingDateEpochs: [Int64] = [
@@ -304,10 +304,10 @@ package enum BoundaryDomainAnalysis {
         -31_622_400, // Y2K (2000-01-01 00:00:00 UTC)
     ]
 
-    /// Computes boundary values for date step indices.
+    /// Computes problematic values for date step indices.
     ///
-    /// `min`/`max` are step indices in `[0, numSteps]`. Each step maps to real seconds as `lowerSeconds + step * intervalSeconds`. Boundary computation identifies interesting real-seconds values (epochs, calendar boundaries, DST transitions), then converts them to step indices. For each interesting point the ±1 step neighbors are also included.
-    private static func computeDateBoundaryValues(
+    /// `min`/`max` are step indices in `[0, numSteps]`. Each step maps to real seconds as `lowerSeconds + step * intervalSeconds`. Problematic-value computation identifies interesting real-seconds values (epochs, calendar boundaries, DST transitions), then converts them to step indices. For each interesting point the ±1 step neighbors are also included.
+    private static func computeDateProblematicValues(
         min: UInt64,
         max: UInt64,
         lowerSeconds: Int64,
@@ -410,7 +410,7 @@ package enum BoundaryDomainAnalysis {
 package enum DSTTransitions {
     /// Returns DST transition times (seconds since reference date) that fall within [lower, upper] for the given timezone.
     ///
-    /// Only the first and last transitions within [lower, upper] are included to keep boundary value counts small for large ranges. Each transition includes the transition moment itself, the start and end of its calendar day, and the day's true midpoint (which differs from hour 12 on non-24-hour days).
+    /// Only the first and last transitions within [lower, upper] are included to keep problematic value counts small for large ranges. Each transition includes the transition moment itself, the start and end of its calendar day, and the day's true midpoint (which differs from hour 12 on non-24-hour days).
     package static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
         guard let zone = TimeZone(identifier: timeZoneID) else { return [] }
 

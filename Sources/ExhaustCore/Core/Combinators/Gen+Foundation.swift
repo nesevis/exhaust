@@ -135,7 +135,7 @@ private func alphanumericString(
 package extension Gen {
     /// Generates dates within the given range, quantized to integral multiples of `interval` relative to the lower bound.
     ///
-    /// `timeZone` selects which zone's DST transitions boundary analysis includes; it does not change the generated grid. Reflection rounds off-grid dates down to the nearest step rather than rejecting them.
+    /// `timeZone` selects which zone's DST transitions problematic-value analysis includes; it does not change the generated grid. Reflection rounds off-grid dates down to the nearest step rather than rejecting them.
     static func date(
         between range: ClosedRange<Date>,
         interval: DateStride,
@@ -308,7 +308,7 @@ private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character
     let operation = ReflectiveOperation.chooseBits(
         min: 0,
         max: UInt64(srs.scalarCount - 1),
-        tag: .character(boundaryIndices: srs.boundaryIndices),
+        tag: .character(problematicIndices: srs.problematicIndices),
         isRangeExplicit: true
     )
     let innerGen = Generator<Character>.impure(operation: operation) { result in

@@ -16,15 +16,15 @@
 ///
 /// Each position in the command sequence becomes a parameter whose domain is the set of command types (pick branches). The covering array generator produces rows that guarantee every t-way ordered permutation of command types is tested.
 ///
-/// When branches have analyzable arguments, the domain per position is the flattened union of `(commandType × argumentCombinations)`. Branches with small finite parameters contribute all values; branches with large ranges contribute boundary-value representatives. Unanalyzable branches fall back to 1 domain value with random arguments at replay.
+/// When branches have analyzable arguments, the domain per position is the flattened union of `(commandType × argumentCombinations)`. Branches with small enumerable parameters contribute all values; branches with large ranges contribute problematic-value representatives. Unanalyzable branches fall back to 1 domain value with random arguments at replay.
 ///
 /// For `c` command types, sequence length `L`, strength `t`, the covering array produces roughly `c^t × log(L)` rows.
 /// - 5 commands, length 10, t=2: ~40–50 rows
 /// - 10 commands, length 15, t=2: ~150–200 rows
 package enum SequenceCoveringArray {
-    /// Computes the per-parameter finite threshold for SCA domain construction, derived from the covering array budget.
+    /// Computes the per-parameter enumerable threshold for SCA domain construction, derived from the covering array budget.
     ///
-    /// At strength t=2, the covering array produces roughly `d² × log₂(k)` rows where `d` is the per-position domain size and `k` is the sequence length. Solving for `d` gives `d ≤ sqrt(budget / log₂(k))`. Dividing evenly across branches gives each branch's per-parameter cap. Parameters with domain size above this threshold are converted to boundary-value representatives.
+    /// At strength t=2, the covering array produces roughly `d² × log₂(k)` rows where `d` is the per-position domain size and `k` is the sequence length. Solving for `d` gives `d ≤ sqrt(budget / log₂(k))`. Dividing evenly across branches gives each branch's per-parameter cap. Parameters with domain size above this threshold are converted to problematic-value representatives.
     ///
     /// The floor of 2 ensures every parameter retains at least its extremes. Param-free and unanalyzable branches use only 1 slot each, so analyzed branches effectively inherit leftover capacity.
     package static func computeThreshold(
@@ -49,7 +49,7 @@ package enum SequenceCoveringArray {
     /// - Returns: A ``ChoiceTree`` suitable for ``Interpreters/replay``, or `nil` on failure.
     package static func buildTree(
         row: CoveringArrayRow,
-        profile: FiniteDomainProfile,
+        profile: EnumerableDomainProfile,
         sequenceLengthRange: ClosedRange<UInt64>
     ) -> ChoiceTree? {
         guard row.values.count == profile.parameters.count else { return nil }
@@ -90,10 +90,10 @@ package enum SequenceCoveringArray {
     ///
     /// For each pick branch:
     /// - Parameter-free branches (no choices in the sub-generator) → `.parameterFree` (1 domain value)
-    /// - Analyzable branches → `.analyzed([BoundaryParameter])` with threshold normalization
+    /// - Analyzable branches → `.analyzed([CoverageParameter])` with threshold normalization
     /// - Unanalyzable branches (uses `getSize`, and so on) → `.unanalyzable` (1 domain value, random at replay)
     ///
-    /// Parameters with domain size above `threshold` are converted to boundary-value representatives to keep the per-position domain tractable. Use ``computeThreshold(budget:sequenceLength:branchCount:)`` to derive the threshold from the covering array budget.
+    /// Parameters with domain size above `threshold` are converted to problematic-value representatives to keep the per-position domain tractable. Use ``computeThreshold(budget:sequenceLength:branchCount:)`` to derive the threshold from the covering array budget.
     package static func analyzeBranches(
         _ pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
         threshold: UInt64
@@ -107,7 +107,7 @@ package enum SequenceCoveringArray {
                 return .unanalyzable
             }
 
-            let normalized = normalizeToBoundaryParameters(result, threshold: threshold)
+            let normalized = normalizeToCoverageParameters(result, threshold: threshold)
             if normalized.isEmpty {
                 return .unanalyzable
             }
@@ -115,7 +115,7 @@ package enum SequenceCoveringArray {
         }
     }
 
-    /// Builds a ``FiniteDomainProfile`` and ``SCADomainMapping`` incorporating argument domains.
+    /// Builds a ``EnumerableDomainProfile`` and ``SCADomainMapping`` incorporating argument domains.
     ///
     /// Each position's domain size is the sum of all branch contributions:
     /// - `.parameterFree` → 1
@@ -127,7 +127,7 @@ package enum SequenceCoveringArray {
         sequenceLength: Int,
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
         branchProfiles: [BranchArgProfile]
-    ) -> (FiniteDomainProfile, SCADomainMapping) {
+    ) -> (EnumerableDomainProfile, SCADomainMapping) {
         var slots: [SCADomainSlot] = []
         var offset: UInt64 = 0
 
@@ -156,7 +156,7 @@ package enum SequenceCoveringArray {
         let totalDomainSize = offset
 
         let parameters = (0 ..< sequenceLength).map { i in
-            FiniteParameter(
+            EnumerableParameter(
                 index: i,
                 domainSize: totalDomainSize,
                 kind: .pick(choices: pickChoices)
@@ -173,14 +173,14 @@ package enum SequenceCoveringArray {
             totalSpace = product
         }
 
-        let finiteProfile = FiniteDomainProfile(parameters: parameters, totalSpace: totalSpace)
+        let enumerableProfile = EnumerableDomainProfile(parameters: parameters, totalSpace: totalSpace)
         let mapping = SCADomainMapping(
             slots: slots,
             totalDomainSize: totalDomainSize,
             pickChoices: pickChoices
         )
 
-        return (finiteProfile, mapping)
+        return (enumerableProfile, mapping)
     }
 
     /// Converts a covering array row into a ``ChoiceTree`` using the SCA domain mapping.
@@ -195,7 +195,7 @@ package enum SequenceCoveringArray {
     /// - Returns: A ``ChoiceTree`` suitable for ``Interpreters/replay``, or `nil` on failure.
     package static func buildTree(
         row: CoveringArrayRow,
-        profile: FiniteDomainProfile,
+        profile: EnumerableDomainProfile,
         mapping: SCADomainMapping,
         sequenceLengthRange: ClosedRange<UInt64>
     ) -> ChoiceTree? {
@@ -251,38 +251,38 @@ package enum SequenceCoveringArray {
         SharedInterpreterHelpers.isParameterFree(gen)
     }
 
-    /// Normalizes an analysis result to `[BoundaryParameter]` with a budget-derived threshold.
+    /// Normalizes an analysis result to `[CoverageParameter]` with a budget-derived threshold.
     ///
-    /// For `.finite` results, converts ``FiniteParameter`` → ``BoundaryParameter``. For both result types, parameters with domain size above `threshold` are recomputed as boundary-value representatives.
-    private static func normalizeToBoundaryParameters(
+    /// For `.enumerable` results, converts ``EnumerableParameter`` → ``CoverageParameter``. For both result types, parameters with domain size above `threshold` are recomputed as problematic-value representatives.
+    private static func normalizeToCoverageParameters(
         _ result: ChoiceTreeAnalysis.AnalysisResult,
         threshold: UInt64
-    ) -> [BoundaryParameter] {
+    ) -> [CoverageParameter] {
         switch result {
-            case let .finite(profile):
+            case let .enumerable(profile):
                 profile.parameters.enumerated().map { i, param in
                     switch param.kind {
                         case let .chooseBits(range, tag):
                             if param.domainSize <= threshold {
-                                return BoundaryParameter(
+                                return CoverageParameter(
                                     index: i,
                                     values: Array(range.lowerBound ... range.upperBound),
                                     domainSize: param.domainSize,
-                                    kind: .finiteChooseBits(range: range, tag: tag)
+                                    kind: .enumerableChooseBits(range: range, tag: tag)
                                 )
                             } else {
-                                let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
+                                let problematicValues = ProblematicValues.computeProblematicValues(
                                     min: range.lowerBound, max: range.upperBound, tag: tag
                                 )
-                                return BoundaryParameter(
+                                return CoverageParameter(
                                     index: i,
-                                    values: boundaryValues,
-                                    domainSize: UInt64(boundaryValues.count),
+                                    values: problematicValues,
+                                    domainSize: UInt64(problematicValues.count),
                                     kind: .chooseBits(range: range, tag: tag)
                                 )
                             }
                         case let .pick(choices):
-                            return BoundaryParameter(
+                            return CoverageParameter(
                                 index: i,
                                 values: Array(0 ..< UInt64(choices.count)),
                                 domainSize: UInt64(choices.count),
@@ -291,21 +291,21 @@ package enum SequenceCoveringArray {
                     }
                 }
 
-            case let .boundary(profile):
+            case let .large(profile):
                 profile.parameters.enumerated().map { i, param in
                     switch param.kind {
-                        case let .finiteChooseBits(range, tag) where param.domainSize > threshold:
-                            let boundaryValues = BoundaryDomainAnalysis.computeBoundaryValues(
+                        case let .enumerableChooseBits(range, tag) where param.domainSize > threshold:
+                            let problematicValues = ProblematicValues.computeProblematicValues(
                                 min: range.lowerBound, max: range.upperBound, tag: tag
                             )
-                            return BoundaryParameter(
+                            return CoverageParameter(
                                 index: i,
-                                values: boundaryValues,
-                                domainSize: UInt64(boundaryValues.count),
+                                values: problematicValues,
+                                domainSize: UInt64(problematicValues.count),
                                 kind: .chooseBits(range: range, tag: tag)
                             )
                         default:
-                            return BoundaryParameter(
+                            return CoverageParameter(
                                 index: i,
                                 values: param.values,
                                 domainSize: param.domainSize,
@@ -352,10 +352,10 @@ package enum SequenceCoveringArray {
         return slot
     }
 
-    /// Decomposes a local index via mixed-radix into per-parameter value indices, then delegates to ``BoundaryCoveringArrayReplay`` to build the sub-tree.
+    /// Decomposes a local index via mixed-radix into per-parameter value indices, then delegates to ``LargeDomainCoveringArrayReplay`` to build the sub-tree.
     private static func buildArgTree(
         localIndex: UInt64,
-        params: [BoundaryParameter]
+        params: [CoverageParameter]
     ) -> ChoiceTree? {
         var valueIndices = [UInt64](repeating: 0, count: params.count)
         var remainder = localIndex
@@ -366,8 +366,8 @@ package enum SequenceCoveringArray {
         }
 
         let row = CoveringArrayRow(values: valueIndices)
-        let profile = BoundaryDomainProfile(parameters: params)
-        return BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile)
+        let profile = LargeDomainProfile(parameters: params)
+        return LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile)
     }
 }
 
@@ -380,7 +380,7 @@ package enum BranchArgProfile {
     /// Branch generator has no parameters — contributes 1 domain value.
     case parameterFree
     /// Branch generator has analyzable parameters — contributes product-of-domainSizes domain values.
-    case analyzed([BoundaryParameter])
+    case analyzed([CoverageParameter])
     /// Branch generator is not analyzable — contributes 1 domain value (random args at replay).
     case unanalyzable
 }

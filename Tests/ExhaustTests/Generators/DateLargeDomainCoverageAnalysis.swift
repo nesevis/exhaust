@@ -1,10 +1,10 @@
 //
-//  DateBoundaryCoverageAnalysis.swift
+//  DateLargeDomainCoverageAnalysis.swift
 //  Exhaust
 //
-//  Diagnostic: measures which date boundary values actually appear in
+//  Diagnostic: measures which date problematic values actually appear in
 //  covering array rows at each ExhaustBudget tier. Since both the
-//  boundary analysis and PBCAG are deterministic, values that are not
+//  problematic-value analysis and PBCAG are deterministic, values that are not
 //  covered at a given budget will NEVER be covered at that budget.
 //
 
@@ -14,8 +14,8 @@ import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Date Boundary Coverage Analysis", .serialized)
-struct DateBoundaryCoverageAnalysis {
+@Suite("Date Large Domain Coverage Analysis", .serialized)
+struct DateLargeDomainCoverageAnalysis {
     static let year2024Start = Date(timeIntervalSinceReferenceDate: 725_760_000)
     static let year2024End = Date(timeIntervalSinceReferenceDate: 725_760_000 + 86400 * 366)
     static let year2024 = year2024Start ... year2024End
@@ -46,7 +46,7 @@ struct DateBoundaryCoverageAnalysis {
         let intGen = #gen(.int(in: 0 ... 10000))
         let gen = #gen(dateGen, dateGen, stringGen)
 
-        let profile = try #require(analyzeBoundary(gen.gen, expand: false))
+        let profile = try #require(analyzeLargeDomain(gen.gen, expand: false))
         let domainSizes = profile.domainSizes
         let paramCount = profile.parameterCount
         let strength = 2
@@ -101,8 +101,8 @@ struct DateBoundaryCoverageAnalysis {
                     kindLabel = "sequenceLength"
                 case .compositeSequence:
                     kindLabel = "compositeSequence"
-                case .finiteChooseBits:
-                    kindLabel = "finiteChooseBits"
+                case .enumerableChooseBits:
+                    kindLabel = "enumerableChooseBits"
                 case .pick:
                     kindLabel = "pick"
                 case .sequenceElement:
@@ -132,7 +132,7 @@ struct DateBoundaryCoverageAnalysis {
         let intGen = #gen(.int(in: 0 ... 10000))
         let gen = #gen(dateGen, dateGen, stringGen)
 
-        let profile = try #require(analyzeBoundary(gen.gen, expand: false))
+        let profile = try #require(analyzeLargeDomain(gen.gen, expand: false))
         let domainSizes = profile.domainSizes
         let paramCount = profile.parameterCount
         let strength = 2
@@ -210,8 +210,8 @@ struct DateBoundaryCoverageAnalysis {
                     kindLabel = "sequenceLength"
                 case .compositeSequence:
                     kindLabel = "compositeSequence"
-                case .finiteChooseBits:
-                    kindLabel = "finiteChooseBits"
+                case .enumerableChooseBits:
+                    kindLabel = "enumerableChooseBits"
                 case .pick:
                     kindLabel = "pick"
                 case .sequenceElement:
@@ -241,7 +241,7 @@ struct DateBoundaryCoverageAnalysis {
         let intGen = #gen(.int(in: 0 ... 10000))
         let gen = #gen(dateGen, dateGen, stringGen)
 
-        let profile = try #require(analyzeBoundary(gen.gen, expand: false))
+        let profile = try #require(analyzeLargeDomain(gen.gen, expand: false))
         let domainSizes = profile.domainSizes
         let paramCount = profile.parameterCount
 
@@ -296,8 +296,8 @@ struct DateBoundaryCoverageAnalysis {
                     kindLabel = "sequenceLength"
                 case .compositeSequence:
                     kindLabel = "compositeSequence"
-                case .finiteChooseBits:
-                    kindLabel = "finiteChooseBits"
+                case .enumerableChooseBits:
+                    kindLabel = "enumerableChooseBits"
                 case .pick:
                     kindLabel = "pick"
                 case .sequenceElement:

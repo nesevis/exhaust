@@ -32,8 +32,8 @@ package struct ScalarRangeSet: @unchecked Sendable {
     /// When non-nil, index 0 maps to this scalar and all range-derived indices are offset by 1.
     public let bottomCodepoint: Unicode.Scalar?
 
-    /// Pre-computed flat indices for ``BoundaryDomainAnalysis/interestingCharacterScalars`` that are present in this range set. Passed to ``TypeTag/character(boundaryIndices:)`` so boundary analysis receives correct index-space values.
-    public let boundaryIndices: [UInt64]
+    /// Pre-computed flat indices for ``ProblematicValues/interestingCharacterScalars`` that are present in this range set. Passed to ``TypeTag/character(problematicIndices:)`` so problematic-value analysis receives correct index-space values.
+    public let problematicIndices: [UInt64]
 
     /// Creates a ``ScalarRangeSet`` from a `ExhaustRangeSet<UInt32>`, optionally pinning index zero to `bottomCodepoint` so the reducer converges toward that scalar.
     public init(_ rangeSet: ExhaustRangeSet<UInt32>, bottomCodepoint: Unicode.Scalar? = nil) {
@@ -48,7 +48,7 @@ package struct ScalarRangeSet: @unchecked Sendable {
             total += range.count
         }
 
-        let boundaryIndices = BoundaryDomainAnalysis.interestingCharacterScalars
+        let problematicIndices = ProblematicValues.interestingCharacterScalars
             .compactMap { candidate -> UInt64? in
                 guard rangeSet.contains(candidate) else {
                     return nil
@@ -66,7 +66,7 @@ package struct ScalarRangeSet: @unchecked Sendable {
         scalarCount = bottomCodepoint != nil ? total + 1 : total
         cumulativeCounts = cumulative
         self.rangesArray = rangesArray
-        self.boundaryIndices = boundaryIndices
+        self.problematicIndices = problematicIndices
     }
 
     /// Maps a flat index in `0..<scalarCount` to the corresponding `Unicode.Scalar`.

@@ -5,7 +5,7 @@
 //  Created by Chris Kolbu on 12/8/2025.
 //
 
-/// Identifies the numeric type of a ``ChoiceValue``, used for reconstruction, display, and boundary analysis.
+/// Identifies the numeric type of a ``ChoiceValue``, used for reconstruction, display, and problematic-value analysis.
 @usableFromInline
 package enum TypeTag: Sendable {
     /// Platform-width unsigned integer (`UInt`).
@@ -34,12 +34,12 @@ package enum TypeTag: Sendable {
     case float
     /// Half-precision floating point (ARM64 only).
     case float16
-    /// Date steps: the underlying integer represents step indices, where each step is `intervalSeconds` seconds offset from `lowerSeconds`. Used by boundary analysis to compute calendar-meaningful boundary values (month/year boundaries, DST transitions). The `timeZoneID` limits DST boundary values to a single timezone.
+    /// Date steps: the underlying integer represents step indices, where each step is `intervalSeconds` seconds offset from `lowerSeconds`. Used by problematic-value analysis to compute calendar-meaningful problematic values (month/year boundaries, DST transitions). The `timeZoneID` limits DST problematic values to a single timezone.
     case date(lowerSeconds: Int64, intervalSeconds: Int64, timeZoneID: String)
-    /// Raw bit storage used by composite generators (UUID, Int128, UInt128). Boundary analysis produces only all-low / all-high values.
+    /// Raw bit storage used by composite generators (UUID, Int128, UInt128). Problematic-value analysis produces only all-low / all-high values.
     case bits
-    /// Unicode scalar index: a contiguous integer index into a ``ScalarRangeSet``. Stored as ``UInt32``. The bit pattern is an index, not a Unicode code point. The associated boundary indices are pre-computed by ``ScalarRangeSet`` during construction and used by ``BoundaryDomainAnalysis`` for coverage analysis.
-    case character(boundaryIndices: [UInt64])
+    /// Unicode scalar index: a contiguous integer index into a ``ScalarRangeSet``. Stored as ``UInt32``. The bit pattern is an index, not a Unicode code point. The associated problematic indices are pre-computed by ``ScalarRangeSet`` during construction and used by ``ProblematicValues`` for coverage analysis.
+    case character(problematicIndices: [UInt64])
     /// Recursion depth control: selects which pre-built layer of a recursive generator to unfold. Excluded from value search because reducing it collapses recursive layers, destroying structural context (branch pivots, self-similar replacements) in the bound subtree. Structural operations (self-similar replacement, descendant promotion) handle depth reduction while preserving structural integrity.
     case depthControl
     /// Tags a structural scheduling decision that coverage analysis should skip but the reducer should minimize normally. Used for lane assignment in concurrent contract testing — the covering array covers command types without the combinatorial cost of lane combinations, while the reducer drives markers toward 0 (prefix) to discover minimal concurrency.
@@ -192,7 +192,7 @@ package extension TypeTag {
         return floatingBitPattern(from: value)
     }
 
-    /// Clamps a bit pattern into `[min, max]`, except for floating-point NaN/infinity which pass through unclamped so the reducer can see and reduce non-finite boundary values.
+    /// Clamps a bit pattern into `[min, max]`, except for floating-point NaN/infinity which pass through unclamped so the reducer can see and reduce non-finite problematic values.
     @inline(__always)
     func clampBits(_ bitPattern: UInt64, min: UInt64, max: UInt64) -> UInt64 {
         let clamped = Swift.min(Swift.max(bitPattern, min), max)
@@ -259,7 +259,7 @@ extension TypeTag: Equatable {
 }
 
 extension TypeTag: Hashable {
-    /// Hashes by discriminator only for most cases. `.character` intentionally includes `boundaryIndices` because distinct character sets produce distinct generators that must not collide in keyed caches. `.date` includes all three associated values for the same reason.
+    /// Hashes by discriminator only for most cases. `.character` intentionally includes `problematicIndices` because distinct character sets produce distinct generators that must not collide in keyed caches. `.date` includes all three associated values for the same reason.
     public func hash(into hasher: inout Hasher) {
         switch self {
             case .uint: hasher.combine(0)
@@ -281,9 +281,9 @@ extension TypeTag: Hashable {
                 hasher.combine(interval)
                 hasher.combine(tzID)
             case .bits: hasher.combine(14)
-            case let .character(boundaryIndices):
+            case let .character(problematicIndices):
                 hasher.combine(15)
-                hasher.combine(boundaryIndices)
+                hasher.combine(problematicIndices)
             case .depthControl: hasher.combine(16)
             case .laneControl: hasher.combine(17)
         }

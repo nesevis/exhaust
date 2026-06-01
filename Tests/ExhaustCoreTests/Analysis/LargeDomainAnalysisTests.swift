@@ -1,5 +1,5 @@
 //
-//  BoundaryDomainAnalysisTests.swift
+//  LargeDomainAnalysisTests.swift
 //  Exhaust
 //
 
@@ -8,14 +8,14 @@ import ExhaustTestSupport
 import Foundation
 import Testing
 
-// MARK: - Boundary Domain Analysis
+// MARK: - Large Domain Analysis
 
-@Suite("Boundary Domain Analysis")
-struct BoundaryDomainAnalysisTests {
-    @Test("Int explicit full range produces boundary profile with boundary values")
+@Suite("Large Domain Analysis")
+struct LargeDomainAnalysisTests {
+    @Test("Int explicit full range produces large-domain profile with problematic values")
     func intExplicitFullRange() {
         let gen = Gen.choose(in: Int.min ... Int.max)
-        let profile = analyzeBoundary(gen)
+        let profile = analyzeLargeDomain(gen)
         #expect(profile != nil)
         #expect(profile?.parameters.count == 1)
         let values = profile?.parameters[0].values ?? []
@@ -23,21 +23,21 @@ struct BoundaryDomainAnalysisTests {
         #expect(values.count <= 6)
     }
 
-    @Test("Size-scaled rangeless int is analyzable with full-type boundary values")
-    func rangelessIntProducesFullTypeBoundaries() {
+    @Test("Size-scaled rangeless int is analyzable with full-type problematic values")
+    func rangelessIntProducesFullTypeProblematicValues() {
         let gen = Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)
-        let profile = analyzeBoundary(gen)
+        let profile = analyzeLargeDomain(gen)
         #expect(profile != nil)
         #expect(profile?.parameters.count == 1)
-        // The default scaling's declared range is the full type range, so boundary
+        // The default scaling's declared range is the full type range, so problematic
         // values cover Int.min, Int.min+1, 0, Int.max-1, Int.max (and 0's bit pattern).
         #expect((profile?.parameters[0].values.count ?? 0) >= 4)
     }
 
-    @Test("Int in 0...1000 produces boundary profile with 5 values")
+    @Test("Int in 0...1000 produces large-domain profile with 5 values")
     func intBoundedRange() {
         let gen = Gen.choose(in: 0 ... 1000)
-        let profile = analyzeBoundary(gen)
+        let profile = analyzeLargeDomain(gen)
         #expect(profile != nil)
         #expect(profile?.parameters.count == 1)
 
@@ -55,30 +55,30 @@ struct BoundaryDomainAnalysisTests {
         #expect(values.contains(thousandBP))
     }
 
-    @Test("Small int range falls back to finite")
-    func smallRangeIsFinite() {
+    @Test("Small int range falls back to enumerable")
+    func smallRangeIsEnumerable() {
         let gen = Gen.choose(in: 0 ... 4)
-        // Small range should be classified as finite, not boundary
-        guard case let .finite(profile) = ChoiceTreeAnalysis.analyze(gen) else {
-            Issue.record("Expected .finite result for small range")
+        // Small range should be classified as enumerable, not large
+        guard case let .enumerable(profile) = ChoiceTreeAnalysis.analyze(gen) else {
+            Issue.record("Expected .enumerable result for small range")
             return
         }
         #expect(profile.parameters.count == 1)
         #expect(profile.parameters[0].domainSize == 5)
     }
 
-    @Test("Zip of boundary-analyzable generators produces concatenated parameters")
+    @Test("Zip of large-domain-analyzable generators produces concatenated parameters")
     func zipAnalysis() {
         let gen = Gen.zip(Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000))
-        let profile = analyzeBoundary(gen)
+        let profile = analyzeLargeDomain(gen)
         #expect(profile != nil)
         #expect(profile?.parameters.count == 2)
     }
 
-    @Test("Int array with constant-scaling length produces boundary profile")
+    @Test("Int array with constant-scaling length produces large-domain profile")
     func intArrayWithLength() {
         let gen = Gen.arrayOf(Gen.choose(in: 0 ... 1000), within: 0 ... 10, scaling: .constant)
-        let profile = analyzeBoundary(gen)
+        let profile = analyzeLargeDomain(gen)
         #expect(profile != nil)
         #expect(profile!.parameters.count == 1)
         if case let .compositeSequence(_, elementSlotParams, _, lengthSlots) = profile!.parameters[0].kind {
@@ -94,16 +94,16 @@ struct BoundaryDomainAnalysisTests {
     @Test("Int array with size-scaled length is analyzable")
     func sizeScaledArrayIsAnalyzable() {
         let gen = Gen.arrayOf(Gen.choose(in: 0 ... 1000), within: 0 ... 10)
-        let profile = analyzeBoundary(gen)
+        let profile = analyzeLargeDomain(gen)
         #expect(profile != nil)
         #expect(profile!.parameters.count == 1)
     }
 
-    @Test("Finite-domain generator returns finite result")
-    func finiteReturnsFinite() {
+    @Test("Enumerable generator returns enumerable result")
+    func enumerableReturnsEnumerable() {
         let gen = Gen.zip(Gen.choose(from: [true, false]), Gen.choose(from: [true, false]))
-        guard case let .finite(profile) = ChoiceTreeAnalysis.analyze(gen) else {
-            Issue.record("Expected .finite result")
+        guard case let .enumerable(profile) = ChoiceTreeAnalysis.analyze(gen) else {
+            Issue.record("Expected .enumerable result")
             return
         }
         #expect(profile.parameters.count == 2)
@@ -114,7 +114,7 @@ struct BoundaryDomainAnalysisTests {
     @Test("Array with minimum length > 2 produces non-empty domain", .disabled())
     func arrayMinLengthAboveTwo() {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: UInt64(5) ... 10, scaling: .constant)
-        let profile = analyzeBoundary(gen)
+        let profile = analyzeLargeDomain(gen)
         #expect(profile != nil, "Array with min length 5 should be analyzable")
         if let profile {
             #expect(profile.parameters.count == 1)
@@ -135,20 +135,20 @@ struct BoundaryDomainAnalysisTests {
     @Test("ASCII string generator is analyzable")
     func asciiStringIsAnalyzable() {
         let gen = asciiStringGen(length: 1 ... 5)
-        let profile = analyzeBoundary(gen)
+        let profile = analyzeLargeDomain(gen)
         #expect(profile != nil)
         #expect(profile!.parameters.count == 1)
     }
 }
 
-// MARK: - Boundary Covering Array Replay
+// MARK: - Large-Domain Covering Array Replay
 
-@Suite("Boundary Covering Array Replay")
-struct BoundaryCoveringArrayReplayTests {
-    @Test("Replay of boundary row produces valid value for large int range")
+@Suite("Large-Domain Covering Array Replay")
+struct LargeDomainCoveringArrayReplayTests {
+    @Test("Replay of problematic-value row produces valid value for large int range")
     func replayLargeIntRange() throws {
         let gen = Gen.zip(Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000))
-        let profile = try #require(analyzeBoundary(gen))
+        let profile = try #require(analyzeLargeDomain(gen))
         let generator = PullBasedCoveringArrayGenerator(
             domainSizes: profile.domainSizes,
             strength: min(profile.parameterCount, 4)
@@ -156,7 +156,7 @@ struct BoundaryCoveringArrayReplayTests {
 
         var replayedCount = 0
         while let row = generator.next() {
-            guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
+            guard let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile) else {
                 continue
             }
             let value: (Int, Int)? = try Interpreters.replay(gen, using: tree)
@@ -167,10 +167,10 @@ struct BoundaryCoveringArrayReplayTests {
         #expect(replayedCount > 0)
     }
 
-    @Test("Boundary replay includes actual boundary values")
-    func boundaryValuesAppear() throws {
+    @Test("Large-domain replay includes actual problematic values")
+    func problematicValuesAppear() throws {
         let gen = Gen.zip(Gen.choose(in: 0 ... 10000), Gen.choose(in: 0 ... 10000))
-        let profile = try #require(analyzeBoundary(gen))
+        let profile = try #require(analyzeLargeDomain(gen))
         let generator = PullBasedCoveringArrayGenerator(
             domainSizes: profile.domainSizes,
             strength: min(profile.parameterCount, 4)
@@ -178,7 +178,7 @@ struct BoundaryCoveringArrayReplayTests {
 
         var seenValues: Set<Int> = []
         while let row = generator.next() {
-            guard let tree = BoundaryCoveringArrayReplay.buildTree(row: row, profile: profile) else {
+            guard let tree = LargeDomainCoveringArrayReplay.buildTree(row: row, profile: profile) else {
                 continue
             }
             if let (a, b): (Int, Int) = try Interpreters.replay(gen, using: tree) {
@@ -187,7 +187,7 @@ struct BoundaryCoveringArrayReplayTests {
             }
         }
 
-        // Should have boundary values 0, 1, 5000, 9999, 10000
+        // Should have problematic values 0, 1, 5000, 9999, 10000
         #expect(seenValues.contains(0))
         #expect(seenValues.contains(10000))
     }
@@ -197,12 +197,12 @@ struct BoundaryCoveringArrayReplayTests {
 
 @Suite("ChoiceTree Analysis")
 struct ChoiceTreeAnalysisTests {
-    @Test("Finite generators return .finite result")
-    func finiteResult() {
+    @Test("Enumerable generators return .enumerable result")
+    func enumerableResult() {
         let gen = Gen.zip(Gen.choose(from: [true, false]), Gen.choose(from: [true, false]))
         let result = ChoiceTreeAnalysis.analyze(gen)
-        guard case let .finite(profile) = result else {
-            Issue.record("Expected .finite result")
+        guard case let .enumerable(profile) = result else {
+            Issue.record("Expected .enumerable result")
             return
         }
         #expect(profile.parameters.count == 2)
@@ -211,12 +211,12 @@ struct ChoiceTreeAnalysisTests {
         #expect(profile.totalSpace == 4)
     }
 
-    @Test("Large-range generators return .boundary result")
-    func boundaryResult() {
+    @Test("Large-range generators return .large result")
+    func largeResult() {
         let gen = Gen.choose(in: 0 ... 10000)
         let result = ChoiceTreeAnalysis.analyze(gen)
-        guard case let .boundary(profile) = result else {
-            Issue.record("Expected .boundary result")
+        guard case let .large(profile) = result else {
+            Issue.record("Expected .large result")
             return
         }
         #expect(profile.parameters.count == 1)
@@ -227,19 +227,19 @@ struct ChoiceTreeAnalysisTests {
     func sizeScaledIsAnalyzable() {
         let gen = Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)
         let result = ChoiceTreeAnalysis.analyze(gen)
-        guard case let .boundary(profile) = result else {
-            Issue.record("Expected .boundary result for size-scaled full-range Int")
+        guard case let .large(profile) = result else {
+            Issue.record("Expected .large result for size-scaled full-range Int")
             return
         }
         #expect(profile.parameters.count == 1)
     }
 
-    @Test("Mixed finite and boundary returns .boundary")
-    func mixedReturnsBoundary() {
+    @Test("Mixed enumerable and large returns .large")
+    func mixedReturnsLarge() {
         let gen = Gen.zip(Gen.choose(from: [true, false]), Gen.choose(in: 0 ... 10000))
         let result = ChoiceTreeAnalysis.analyze(gen)
-        guard case let .boundary(profile) = result else {
-            Issue.record("Expected .boundary result")
+        guard case let .large(profile) = result else {
+            Issue.record("Expected .large result")
             return
         }
         #expect(profile.parameters.count == 2)
@@ -259,8 +259,8 @@ struct ChoiceTreeAnalysisTests {
             }
 
         let newResult = ChoiceTreeAnalysis.analyze(gen)
-        guard case let .finite(profile) = newResult else {
-            Issue.record("Expected .finite result for bind chain")
+        guard case let .enumerable(profile) = newResult else {
+            Issue.record("Expected .enumerable result for bind chain")
             return
         }
         // Should find 1 parameters. It is two dependent values hanging off the outermost.
@@ -271,8 +271,8 @@ struct ChoiceTreeAnalysisTests {
     func sequenceAnalysis() {
         let gen = Gen.arrayOf(Gen.choose(in: 0 ... 1000), within: 0 ... 10, scaling: .constant)
         let result = ChoiceTreeAnalysis.analyze(gen)
-        guard case .boundary = result else {
-            Issue.record("Expected .boundary result for sequence with large elements")
+        guard case .large = result else {
+            Issue.record("Expected .large result for sequence with large elements")
             return
         }
     }
@@ -281,18 +281,18 @@ struct ChoiceTreeAnalysisTests {
     func sizeScaledSequenceIsAnalyzable() {
         let gen = Gen.arrayOf(Gen.choose(in: 0 ... 1000), within: 0 ... 10)
         let result = ChoiceTreeAnalysis.analyze(gen)
-        guard case let .boundary(profile) = result else {
-            Issue.record("Expected .boundary result for size-scaled sequence")
+        guard case let .large(profile) = result else {
+            Issue.record("Expected .large result for size-scaled sequence")
             return
         }
         #expect(profile.parameters.count >= 1)
     }
 }
 
-// MARK: - Date Boundary Values
+// MARK: - Date Problematic Values
 
-@Suite("Date Boundary Values")
-struct DateBoundaryValueTests {
+@Suite("Date Problematic Values")
+struct DateProblematicValueTests {
     @Test("Step-domain edges and midpoint are present")
     func stepDomainBoundaries() {
         // Range: 1000 seconds, interval: 100 seconds → 10 steps
@@ -300,7 +300,7 @@ struct DateBoundaryValueTests {
         let interval: Int64 = 100
         let numSteps: Int64 = 10 // 1000 / 100
 
-        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+        let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
@@ -324,7 +324,7 @@ struct DateBoundaryValueTests {
         let interval: Int64 = 3600 // 1 hour
         let numSteps: Int64 = 86400 * 365 / interval // 1 year in hours
 
-        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+        let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
@@ -346,7 +346,7 @@ struct DateBoundaryValueTests {
         let interval: Int64 = 1
         let numSteps: Int64 = 172_800 // 2 * 86400
 
-        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+        let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
@@ -364,7 +364,7 @@ struct DateBoundaryValueTests {
         let interval: Int64 = 1
         let numSteps: Int64 = 172_800 // 2 * 86400
 
-        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+        let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
@@ -382,7 +382,7 @@ struct DateBoundaryValueTests {
         let interval: Int64 = 1
         let numSteps: Int64 = 86400 * 60
 
-        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+        let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
@@ -400,7 +400,7 @@ struct DateBoundaryValueTests {
         let interval: Int64 = 3600 // 1 hour — too fine for ±1 to bridge the 86400s gap
         let numSteps: Int64 = (86400 * 21) / interval
 
-        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+        let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
@@ -420,7 +420,7 @@ struct DateBoundaryValueTests {
         let interval: Int64 = 86400 // 1 day — ±1 neighbor bridges the 86400s gap
         let numSteps: Int64 = 90 // 90 days
 
-        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+        let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
@@ -445,7 +445,7 @@ struct DateBoundaryValueTests {
         let interval: Int64 = 1
         let numSteps: Int64 = 86400 * 30
 
-        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+        let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
@@ -462,10 +462,10 @@ struct DateBoundaryValueTests {
     }
 }
 
-// MARK: - DST Boundary Values
+// MARK: - DST Problematic Values
 
-@Suite("Date Boundary Values — DST Transitions")
-struct DateDSTBoundaryTests {
+@Suite("Date Problematic Values — DST Transitions")
+struct DateDSTProblematicValueTests {
     struct DSTCase: CustomTestStringConvertible {
         let label: String
         let timeZoneID: String
@@ -503,7 +503,7 @@ struct DateDSTBoundaryTests {
         DSTCase(label: "EU fall 2025 (Oct 26, 01:00 UTC)", timeZoneID: "Europe/London", year: 2025, month: 10, day: 26, hour: 1),
     ]
 
-    @Test("DST transition appears in boundary values", arguments: knownTransitions)
+    @Test("DST transition appears in problematic values", arguments: knownTransitions)
     func dstTransitionPresent(transition: DSTCase) {
         let calendar = Calendar(identifier: .gregorian)
         let components = DateComponents(
@@ -521,7 +521,7 @@ struct DateDSTBoundaryTests {
         let interval: Int64 = 1
         let numSteps: Int64 = 14 * 86400 // 14 days in seconds
 
-        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+        let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID)
@@ -530,7 +530,7 @@ struct DateDSTBoundaryTests {
         let expectedStep = (expectedSeconds - lower) / interval
         #expect(
             values.contains(expectedStep.bitPattern64),
-            "\(transition.label): expected step \(expectedStep) in boundary values"
+            "\(transition.label): expected step \(expectedStep) in problematic values"
         )
     }
 
@@ -551,7 +551,7 @@ struct DateDSTBoundaryTests {
         let lower = expectedSeconds - 7 * 86400
         let numSteps: Int64 = 14 * 86400 / interval // 14 days in hours
 
-        let values = BoundaryDomainAnalysis.computeBoundaryValues(
+        let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID)
@@ -592,10 +592,10 @@ struct OpaqueGroupTests {
             return
         }
         switch result {
-            case let .finite(profile):
+            case let .enumerable(profile):
                 // Only the int 0...100 should appear
                 #expect(profile.parameters.count == 1)
-            case let .boundary(profile):
+            case let .large(profile):
                 #expect(profile.parameters.count == 1)
         }
     }
@@ -618,11 +618,11 @@ struct OpaqueGroupTests {
             return
         }
         switch result {
-            case let .finite(profile):
-                // Only the int 0...10 should appear (11 values, finite domain)
+            case let .enumerable(profile):
+                // Only the int 0...10 should appear (11 values, enumerable domain)
                 #expect(profile.parameters.count == 1)
                 #expect(profile.parameters[0].domainSize == 11)
-            case let .boundary(profile):
+            case let .large(profile):
                 #expect(profile.parameters.count == 1)
         }
     }
@@ -634,49 +634,49 @@ struct OpaqueGroupTests {
             Gen.choose(in: 0 ... 1),
             Gen.choose(in: 0 ... 1)
         )
-        guard case let .finite(profile) = ChoiceTreeAnalysis.analyze(gen) else {
-            Issue.record("Expected finite profile")
+        guard case let .enumerable(profile) = ChoiceTreeAnalysis.analyze(gen) else {
+            Issue.record("Expected enumerable profile")
             return
         }
         #expect(profile.parameters.count == 3)
     }
 }
 
-// MARK: - Character Boundary Membership
+// MARK: - Character Problematic Membership
 
-@Suite("Character Boundary Indices")
-struct CharacterBoundaryIndicesTests {
-    @Test("Boundary indices map to scalars within the CharacterSet")
-    func boundaryIndicesAreWithinCharacterSet() {
+@Suite("Character Problematic Indices")
+struct CharacterProblematicIndicesTests {
+    @Test("Problematic indices map to scalars within the CharacterSet")
+    func problematicIndicesAreWithinCharacterSet() {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "*-._"))
         let srs = allowed.scalarRangeSet()
 
-        for index in srs.boundaryIndices {
+        for index in srs.problematicIndices {
             let scalar = srs.scalar(at: Int(index))
             #expect(
                 allowed.contains(scalar),
-                "Boundary index \(index) maps to U+\(String(scalar.value, radix: 16, uppercase: true)) which is not in the CharacterSet"
+                "Problematic index \(index) maps to U+\(String(scalar.value, radix: 16, uppercase: true)) which is not in the CharacterSet"
             )
         }
     }
 
-    @Test("interestingCharacterScalars outside the CharacterSet are excluded from boundary indices")
+    @Test("interestingCharacterScalars outside the CharacterSet are excluded from problematic indices")
     func interestingScalarsNotInSetAreExcluded() {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "*-._"))
         let srs = allowed.scalarRangeSet()
 
-        let excludedScalars = BoundaryDomainAnalysis.interestingCharacterScalars
+        let excludedScalars = ProblematicValues.interestingCharacterScalars
             .filter { allowed.contains(Unicode.Scalar($0)!) == false }
 
         #expect(excludedScalars.isEmpty == false, "Test requires at least one interesting scalar outside the set")
 
         for scalarValue in excludedScalars {
-            let indexForScalar = srs.boundaryIndices.first { index in
+            let indexForScalar = srs.problematicIndices.first { index in
                 srs.scalar(at: Int(index)).value == scalarValue
             }
             #expect(
                 indexForScalar == nil,
-                "U+\(String(scalarValue, radix: 16, uppercase: true)) is not in the CharacterSet but appears as boundary index"
+                "U+\(String(scalarValue, radix: 16, uppercase: true)) is not in the CharacterSet but appears as problematic index"
             )
         }
     }
@@ -685,7 +685,7 @@ struct CharacterBoundaryIndicesTests {
     func coverageReplayProducesOnlyAllowedCharacters() {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "*-._"))
         let srs = allowed.scalarRangeSet()
-        let tag = TypeTag.character(boundaryIndices: srs.boundaryIndices)
+        let tag = TypeTag.character(problematicIndices: srs.problematicIndices)
         let max = UInt64(srs.scalarCount - 1)
 
         let operation = ReflectiveOperation.chooseBits(
@@ -719,14 +719,14 @@ struct CharacterBoundaryIndicesTests {
         }
 
         let profile: any CoverageProfile = switch analysis {
-            case let .finite(profile): profile
-            case let .boundary(profile): profile
+            case let .enumerable(profile): profile
+            case let .large(profile): profile
         }
 
         let domainSizes = profile.domainSizes
         let analysisKind = switch analysis {
-            case .finite: "finite"
-            case .boundary: "boundary"
+            case .enumerable: "enumerable"
+            case .large: "large"
         }
         print("Analysis: \(analysisKind), params=\(profile.parameterCount), domains=\(domainSizes)")
         #expect(domainSizes.isEmpty == false, "Analysis should produce at least one parameter")

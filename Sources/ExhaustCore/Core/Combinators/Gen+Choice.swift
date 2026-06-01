@@ -350,7 +350,7 @@ package extension Gen {
     /// Generates a raw ``UInt64`` value within a bit range, tagged as ``.bits``.
     ///
     /// Use this for composite generators (UUID, Int128, UInt128) where the individual UInt64 halves are not semantically meaningful on their own.
-    /// Boundary analysis will produce only all-low / all-high values.
+    /// Problematic-value analysis will produce only all-low / all-high values.
     static func chooseBits(
         in range: ClosedRange<UInt64>? = nil
     ) -> Generator<UInt64> {

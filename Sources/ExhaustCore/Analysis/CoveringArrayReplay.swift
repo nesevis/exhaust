@@ -11,11 +11,11 @@ package enum CoveringArrayReplay {
     ///
     /// - Parameters:
     ///   - row: The covering array row with value indices for each parameter.
-    ///   - profile: The finite domain profile describing parameter structure.
+    ///   - profile: The enumerable domain profile describing parameter structure.
     /// - Returns: A ``ChoiceTree`` suitable for ``Interpreters/replay``, or `nil` if construction fails.
     public static func buildTree(
         row: CoveringArrayRow,
-        profile: FiniteDomainProfile
+        profile: EnumerableDomainProfile
     ) -> ChoiceTree? {
         guard row.values.count == profile.parameters.count else { return nil }
 
@@ -51,7 +51,7 @@ package enum CoveringArrayReplay {
     private static func substituteParameters(
         in tree: ChoiceTree,
         row: CoveringArrayRow,
-        profile: FiniteDomainProfile,
+        profile: EnumerableDomainProfile,
         paramIndex: inout Int
     ) -> ChoiceTree? {
         switch tree {
@@ -118,7 +118,7 @@ package enum CoveringArrayReplay {
                 return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
 
             case .sequence:
-                // Sequences produce boundary parameters (sequenceLength/sequenceElement), not finite parameters. If we reach here, the sequence is not behind a bind — pass through unchanged as it shouldn't consume finite parameters.
+                // Sequences produce coverage parameters (sequenceLength/sequenceElement), not enumerable parameters. If we reach here, the sequence is not behind a bind — pass through unchanged as it shouldn't consume enumerable parameters.
                 return tree
 
             case let .branch(b):
@@ -144,7 +144,7 @@ package enum CoveringArrayReplay {
     // MARK: - Per-Parameter Tree Construction
 
     private static func buildParameterTree(
-        param: FiniteParameter,
+        param: EnumerableParameter,
         valueIndex: UInt64
     ) -> ChoiceTree? {
         switch param.kind {

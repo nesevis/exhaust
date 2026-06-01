@@ -1,13 +1,13 @@
 //
-//  FiniteDomainProfile.swift
+//  EnumerableDomainProfile.swift
 //  Exhaust
 //
 
 /// A single factor in the combinatorial model.
-package struct FiniteParameter: @unchecked Sendable {
+package struct EnumerableParameter: @unchecked Sendable {
     // @unchecked Sendable: the `.pick` case stores `ContiguousArray<ReflectiveOperation.PickTuple>`, which contains generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
-    /// Distinguishes the two generator operations that produce finite parameters, so the coverage runner can replay values through the correct interpretation path.
+    /// Distinguishes the two generator operations that produce enumerable parameters, so the coverage runner can replay values through the correct interpretation path.
     public enum Kind {
         /// Represents a range-bounded bit-pattern choice whose domain is small enough for exhaustive enumeration.
         case chooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
@@ -23,26 +23,26 @@ package struct FiniteParameter: @unchecked Sendable {
     public let kind: Kind
 }
 
-/// Result of analyzing a generator for finite-domain structure.
-package struct FiniteDomainProfile: @unchecked Sendable {
-    // @unchecked Sendable: stores `[FiniteParameter]` and `ChoiceTree?`. `ChoiceTree` nodes contain generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
+/// Result of analyzing a generator for enumerable structure.
+package struct EnumerableDomainProfile: @unchecked Sendable {
+    // @unchecked Sendable: stores `[EnumerableParameter]` and `ChoiceTree?`. `ChoiceTree` nodes contain generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
-    /// The finite parameters extracted from the generator's choice tree.
-    public let parameters: [FiniteParameter]
+    /// The enumerable parameters extracted from the generator's choice tree.
+    public let parameters: [EnumerableParameter]
     /// Product of all domainSizes. Capped at UInt64.max on overflow.
     public let totalSpace: UInt64
     /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, `CoveringArrayReplay.buildTree` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
     public let originalTree: ChoiceTree?
 
     /// Creates a profile with the given parameters, precomputed total space, and optional original tree template.
-    public init(parameters: [FiniteParameter], totalSpace: UInt64, originalTree: ChoiceTree? = nil) {
+    public init(parameters: [EnumerableParameter], totalSpace: UInt64, originalTree: ChoiceTree? = nil) {
         self.parameters = parameters
         self.totalSpace = totalSpace
         self.originalTree = originalTree
     }
 }
 
-extension FiniteDomainProfile: CoverageProfile {
+extension EnumerableDomainProfile: CoverageProfile {
     public var domainSizes: [UInt64] {
         parameters.map(\.domainSize)
     }
