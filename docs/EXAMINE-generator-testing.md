@@ -5,12 +5,12 @@ A passing property test gives no signal about whether the generator explored its
 ## What `#examine` checks
 
 ```swift
-@Test func personGeneratorIsHealthy() {
-    #examine(personGen)
+@Test func profileGeneratorIsHealthy() {
+    #examine(profileGen)
 }
 ```
 
-`#examine` generates 200 samples (configurable), checks that each value roundtrips through reflection, and records how well the generator covers its numeric ranges, branches, sequence lengths, and character space:
+`#examine` generates 200 samples (configurable), checks that each value roundtrips through the generator's backward pass (reflection), and records how well the generator covers its numeric ranges, branches, sequence lengths, and character space:
 
 ```
 #examine: 200 samples, 0.115ms/sample
@@ -33,11 +33,11 @@ A passing property test gives no signal about whether the generator explored its
 > [!Tip]
 > `10/10 deciles` means the generator spread across its entire range. `3/10` means it clustered and is worth investigating.
 >
-> These types of issues can usually be resolved by changing the `scaling` parameter of your generator.
+> Clustering usually means the scaling doesn't match the range width. Pass a `scaling:` parameter to adjust. For example, `.int(in: 0...1000)` defaults to no scaling (uniform), but `.int(in: 0...1000, scaling: .linear)` ramps from small values upward. Collection lengths accept the same parameter: `.array(length: 0...100, scaling: .constant)` disables ramping and samples the full length range uniformly from the start.
 
 ### Correctness checks
 
-- **Reflection round-trip**: each generated value is reflected back through the generator and the recovered choice tree is compared against the generation tree. A mismatch indicates a bug in a `mapped` or `bound` backward function, or a lossy mapping (such as unordered sets or dictionaries where reflection cannot recover the original element order).
+- **Reflection round-trip**: each generated value is reflected back through the generator and the recovered choice tree is compared against the generation tree. A mismatch indicates a bug in a `mapped` or `bound` backward function, or a lossy mapping (such as unordered sets or dictionaries where reflection cannot recover the original element order). Forward-only generators (those using `.map` or `.bind` without a backward direction) are reported. Synthesised generators skip this check automatically.
 - **Replay determinism** (opt-in): when a trailing comparison closure is provided, each sample's choice tree is replayed twice and the two values are compared using the closure. A mismatch indicates non-determinism in the generator or its output type.
 - **Filter health**: for filtered generators, the acceptance rate and CGS tuning effectiveness are reported.
 
@@ -46,8 +46,8 @@ A passing property test gives no signal about whether the generator explored its
 `#examine` operates on choice trees, not on your output values. By default it does not inspect generated values at all. When you want to verify that your type doesn't introduce non-determinism (for example, a stored `UUID()` or a non-deterministic closure inside `.map`), provide a trailing comparison closure:
 
 ```swift
-@Test func personGeneratorReplaysDeterministically() {
-    #examine(personGen, .samples(200)) { lhs, rhs in
+@Test func profileGeneratorReplaysDeterministically() {
+    #examine(profileGen, .samples(200)) { lhs, rhs in
         lhs.name == rhs.name && lhs.age == rhs.age
     }
 }
@@ -73,8 +73,8 @@ Without the closure, no replay determinism check runs and the replay column is o
 The returned `ExamineReport` exposes coverage metrics as assertable properties, so you can enforce quality thresholds on generator fixtures:
 
 ```swift
-@Test func personGeneratorCoversItsRange() {
-    let report = #examine(personGen, .samples(500))
+@Test func profileGeneratorCoversItsRange() {
+    let report = #examine(profileGen, .samples(500))
     #expect(report.numericCoverage.allSatisfy { $0.decilesCovered >= 7 })
     #expect(report.branchCoverage >= 0.9)
 }

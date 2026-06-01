@@ -1,6 +1,6 @@
 # Building generators
 
-Exhaust builds generators with the `#gen` macro. Each generator is an inspectable data structure that Exhaust can run forward to produce values, backward to reflect known values, and replay for deterministic reproduction. Reduction, coverage of problematic values, and filter optimisation follow from this design.
+Exhaust builds generators with the `#gen` macro. Each generator is an inspectable data structure that Exhaust can run forward to produce values, replay for deterministic reproduction, and, with bidirectional transforms, run backward to reconstruct a known value's choices. Reduction, coverage of problematic values, and filter optimisation all follow from inspection.
 
 If you're new to Exhaust, start with [Getting Started](GETTING_STARTED.md). This page covers the main generator concepts.
 
@@ -22,8 +22,8 @@ If you're new to Exhaust, start with [Getting Started](GETTING_STARTED.md). This
 Every generator records the choices it makes during generation: which branch of a `oneOf`, which integer from a range, how many elements in an array. Exhaust operates on these recorded choices in three modes:
 
 - **Generation (forward)**: the generator is interpreted to produce a value, recording every choice along the way. This is the normal path during test execution.
-- **Reflection (backward)**: given a concrete value, the generator is run in reverse to recover the choices that could have produced it. This powers `reflecting:` and automatic [reduction](REDUCTION.md) without custom reduction functions.
 - **Replay**: a recorded sequence of choices is fed back to reproduce the exact same value, powering deterministic reproduction via `.replay(seed)`.
+- **Reflection (backward)**: given a concrete value, the generator is run in reverse to recover the choices that could have produced it. This is what the `reflecting:` parameter uses. It requires bidirectional transforms (see [Bidirectional transforms](#bidirectional-transforms)).
 
 ## Primitives
 
@@ -129,7 +129,7 @@ Some fields fall back to a constant from the example, pinned with `.just(decoded
 > [!Tip]
 > Run `#examine` on a synthesised generator to see which fields are fully generated and which are pinned:
 > ```swift
-> let report = #examine(gen, samples: 50)
+> let report = #examine(gen, .samples(50))
 > // Output includes:
 > //   Correctness: reflection skipped (synthesised generator)
 > //   Pinned fields: 1 field could not be synthesised (constant value from example JSON)

@@ -1,6 +1,6 @@
 # XCTest compatibility
 
-Exhaust works under XCTest. The test macros (`#exhaust`, `#explore`, `#examine`, `#example`) expand to the same runtime functions regardless of test framework. Exhaust detects which framework is active at runtime via `TestContext.current` from the IssueReporting library and routes output accordingly.
+Exhaust works under XCTest. All macros expand to the same runtime functions regardless of test framework. Exhaust detects which framework is active at runtime via `TestContext.current` from the IssueReporting library and routes output accordingly.
 
 This page covers what works, what doesn't, and what behaves differently from Swift Testing.
 

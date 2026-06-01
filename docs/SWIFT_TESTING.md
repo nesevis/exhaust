@@ -18,7 +18,7 @@ func ageIsNonNegative() {
     }
 }
 
-@Test(.exhaust(.budget(.thorough), .regressions("3RT5GH8KM2", "9WXY1CV7")))
+@Test(.exhaust(.budget(.thorough), .regressions("3RT5GH8KM2-7", "9WXY1CV7-12")))
 func ageIsNonNegative() {
     #exhaust(personGen) { person in
         #expect(person.age >= 0)
@@ -61,7 +61,7 @@ Regression seeds are Crockford Base32 encoded strings from a previous failure re
 Regression seeds are cheap to leave in place: one property invocation each once the bug is fixed. As long as the generator is unchanged, a seed re-runs to the same case and catches that regression the moment it reappears. Keep in mind what a seed pins, though: a position in the search, not a fixed input. Change the generator and the same seed re-runs to a different case, as it would in any property-based testing library. To pin an exact input permanently, commit the literal value and reduce it with `reflecting:` instead.
 
 ```swift
-@Test(.exhaust(.regressions("3RT5GH8KM2")))
+@Test(.exhaust(.regressions("3RT5GH8KM2-7")))
 func dedupePreservesDistinctElements() {
     #exhaust(gen) { xs in
         #expect(Set(myDedupe(xs)) == Set(xs))

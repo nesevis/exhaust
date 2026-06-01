@@ -273,7 +273,7 @@ It's worth running this against code you already trust, just to see what happens
 
 `#exhaust` does more than random sampling. Every run moves through phases, and each one does a different job.
 
-**Coverage.** Before random sampling starts, Exhaust systematically exercises the values most likely to cause bugs. What counts as problematic depends on the type: min and max (plus one off each) for signed and unsigned integers; NaN, infinities, and `ulpOfOne` for floating-point types; DST transitions and timezone edges for dates; the set of lengths 0, 1, 2, and the range's lower bound (filtered to whichever fit the permitted range) for collections. 
+**Coverage.** Before random sampling starts, Exhaust systematically exercises the values most likely to cause bugs. What counts as problematic depends on the type: min, max, and the steps either side of them for integers; NaN, the infinities, and values near the edges of representable precision for floats; DST transitions and epoch points for dates; troublesome Unicode scalars for characters; lengths 0, 1, 2, and the range's lower bound for collections. 
 
 The catalogue encodes the kinds of bugs each type is known for — the sort of thing a seasoned developer has learned to check for by hand over a career of finding them the hard way. These problematic values are drawn in combinations at pairwise coverage by default, so any bug that surfaces when two parameters hit their problematic values simultaneously gets caught without your having to remember to test the combination yourself. 
 
@@ -346,7 +346,7 @@ Each string replays a specific reduced counterexample. The random distribution s
 
 By default, `#exhaust` and `#explore` record failures as Swift Testing issues via `Issue.record`, so they surface in the test runner alongside any `#expect` failures. If you need to assert on the result of the run yourself — checking that a property fails in a particular way, say — there's a way to suppress that reporting and inspect the return value directly.
 
-Exhaust is single-threaded within a test. This is because test suites will usually run tests in parallel. Property closures are required to be `@Sendable` so there is less risk of confounding results or bugs caused by shared state.
+Exhaust runs single-threaded by default, but the `.parallel(N)` setting splits random sampling across GCD lanes within a single test. Property closures are required to be `@Sendable` to support this.
 
 Property closures can be async, throwing or return a simple boolean.
 

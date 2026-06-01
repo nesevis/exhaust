@@ -67,15 +67,6 @@ struct LargeDomainBudgetTests {
             .date(between: Self.q1_2024, interval: .hours(1))
         )
 
-        #explore(
-            gen,
-            directions: [
-                ("Hey", { $0.0.timeIntervalSinceNow > $0.1.timeIntervalSinceNow }),
-            ]
-        ) { a, b in
-            a == b
-        }
-
         // Property: if eventEnd > eventStart, the duration is positive
         // (This is trivially true but exercises the 2-param covering array)
         let counterExample = #exhaust(gen, .suppress(.issueReporting)) { start, end in
