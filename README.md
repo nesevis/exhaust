@@ -79,6 +79,8 @@ Exhaust is built on [reflective generators](https://dl.acm.org/doi/10.1145/36078
 
 New to property-based testing? **[Getting Started](docs/GETTING_STARTED.md)** walks you from your first `#exhaust` call through generators, properties, and reading failure reports.
 
+Want the model rather than a tutorial? **[Conceptual Overview](docs/CONCEPTS.md)** maps Exhaust's vocabulary and how the pieces fit together.
+
 Testing a stateful system? **[Contract Testing](docs/EXECUTE-contract-testing.md)** covers generating command sequences, model-based oracles, and concurrent interleaving.
 
 Using Swift Testing? **[Swift Testing Integration](docs/SWIFT_TESTING.md)** covers suite and test traits, how `#expect` and `#require` work inside property closures, and how failures surface in the test runner. Using XCTest? **[XCTest Compatibility](docs/XCTEST.md)** covers what works, what doesn't, and the differences.
