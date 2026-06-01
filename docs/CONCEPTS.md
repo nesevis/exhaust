@@ -1,0 +1,188 @@
+# Conceptual overview
+
+This page is a map of what Exhaust's pieces are and how they fit together. It assumes you want the model rather than a tutorial, so for a hands-on first run start with [Getting Started](GETTING_STARTED.md). Read this when you want to understand why the tools are shaped the way they are, or to look a term up. There is a glossary at the bottom.
+
+## Testing as search
+
+The input space of most functions is too large to cover completely, so Exhaust searches it continuously for a **counterexample**: a value that fails. Every run tries new values, so a property that passed yesterday can still fail today.
+
+This is not flakiness. A flaky test fails unpredictably on the same input. A property fails because it reached a new input that genuinely breaks your code, and the failure comes with a seed that reproduces it every time.
+
+Each tool on this page is a different search strategy. `#exhaust` searches broadly, biased toward the values bugs cluster around. Reduction searches for the minimal form of a failure. `#explore` searches regions you name. `@Contract` searches sequences of operations.
+
+## Properties and generators
+
+To run a search you describe two things: a property and a generator.
+
+A **property** is a claim about your code that should hold for every input: a constraint the output always satisfies, rather than an expected value for one input. A sorted list is ordered. A decode of an encode returns the original. A clamped value lands inside its range. The property is what the search tries to break.
+
+A **generator** describes the shape of the inputs to try. It is the search space. `#gen` builds one from primitives and composes them:
+
+```swift
+let orders = #gen(.uuid(), lineItemGenerator.array(), .double()) { id, items, total in
+    Order(id: id, items: items, total: total)
+}
+```
+
+The shaping question for a generator is *what values does my code accept?*, which is usually the input type in the signature, not the narrower set you expect in production. A sort accepts any `[Int]`, so its generator should produce any `[Int]`, including the empty and the enormous. Restrict it to the inputs you expect in production and you only exercise cases a shipping bug has already got past.
+
+Two dials shape how a generator fills the space. **Size** is a value from 0 to 100 that Exhaust ramps over a run, so values without explicit ranges start small and grow. **Scaling** is how a given generator turns that size into a concrete length or magnitude.
+
+A **filter** (`.filter { … }`) keeps only values that satisfy a predicate. Exhaust tunes the generator toward valid values rather than generating and discarding, so a sparse constraint stays practical.
+
+## The default search: `#exhaust`
+
+`#exhaust` is the workhorse. Give it a generator and a property and it runs the property across hundreds of inputs, in two phases.
+
+```swift
+#exhaust(#gen(.int().array(length: 0...100))) { xs in
+    #expect(mySort(xs).count == xs.count)   // sorting preserves length
+}
+```
+
+**Coverage** comes first. Before any random sampling, Exhaust tests the **problematic values**: the catalogue of values bugs are known to cluster around. What counts as problematic depends on the type. Range limits and the steps either side of them for integers. NaN, the infinities, and the smallest representable steps for floating point. Daylight-saving transitions and epoch points for dates. A handful of troublesome scalars for characters. The empty and near-empty cases for collections.
+
+These are drawn in combinations at **pairwise** coverage, so every pair of problematic values from two parameters is tried together at least once. That matters because most bugs that involve more than one parameter involve exactly two: an overflow that needs one parameter at its maximum and another above zero surfaces the moment that pair is tried together, and stays hidden while they vary one at a time.
+
+**Random sampling** follows. Once the catalogue is covered, Exhaust draws from the generator's natural distribution, exercising ordinary, varied inputs. Coverage and sampling have separate budgets. At the default `.standard` budget you get 200 of each.
+
+A run that finds no failure in either phase passes. The moment either phase produces a failure, Exhaust stops searching and starts reducing.
+
+## Minimising the find: reduction
+
+Finding a failure is only half the search. The other half is **reduction**. The first failing input can be noisy, full of values that aren't relevant to the failure itself. Reducing that input to a **minimal counterexample**, the simplest version of itself that still triggers the failure, is what lets you see the forest, not the trees.
+
+Reduction is automatic, and it works for every type without a line of custom code. You never write a reduction function. The reducer runs the property against smaller and smaller candidates, keeping a change only while the property still fails, until nothing it tries makes the input simpler.
+
+Because it understands how the parts of an input relate, it can delete an element, collapse nested structures, drive a number toward zero, or move magnitude between coupled values.
+
+Reduce an eight-element failing list to `[0, 0]` and a `myDedupe` that empties the list whenever every element is identical gives itself away. [How reduction works](REDUCTION.md) walks through a complete example.
+
+## What makes it work: inspectable, reflective generators
+
+All of this rests on one design choice: an Exhaust generator is an inspectable data structure, not an opaque closure. Exhaust can look inside it and read its parameters, its branches, and their domains. This capability is **inspection**.
+
+Inspection is what powers the rest. Coverage reads a generator's parameters to find their domain's problematic values. Filter tuning tweaks its branching points. Reduction operates on the recorded choices rather than the output value.
+
+Because the generator is data, Exhaust can run it more than one way. There are three modes. **Generation** runs it forward to produce a value, recording each **choice** (which branch, which integer, which length) as it goes. **Reflection** runs it backward: given a finished value, it recovers choices that could have produced it. **Replay** feeds a recorded sequence of choices back in to reproduce a value exactly.
+
+It helps to think of a generator as a parser. Forward, it parses raw randomness into a structured value. Backward, it un-parses a value into the choices that drove it. Reflection is that backward direction, and it is what the `reflecting:` parameter uses to take a value you already have (from a bug report, say) and reduce it.
+
+Two cautions about the words. First, **inspection** is the foundation and **reflection** is one narrow capability built on it. Reduction runs on inspection, never on reflection, so a generator that cannot reflect still reduces perfectly well. Second, "reflection" here is narrower than in most languages. A Swift `Mirror` reflects a value's structure; Exhaust's reflection only ever means running a generator backward.
+
+This design comes from reflective generators (Goldstein et al., [Reflecting on Random Generation](https://dl.acm.org/doi/10.1145/3607842)). You do not need the theory to use Exhaust, but it is there if you want it.
+
+## Directed search: `#explore`
+
+`#exhaust` searches broadly, but it cannot promise it reached any particular region. A property can pass across hundreds of inputs and still never have generated the case you were worried about. `#explore` closes that gap.
+
+You give it **directions**: named predicates over the output, each describing a region you want the search to reach.
+
+```swift
+#explore(orderGen, directions: [
+    ("has refund",        { $0.hasRefund }),
+    ("refund + partial",  { $0.hasRefund && $0.fulfilment == .partial }),
+]) { order in
+    #expect(order.balance.isValid)
+}
+```
+
+Exhaust guarantees each direction is actually visited, and not by brute force, which would hang on a rare region. Instead it uses **Choice Gradient Sampling (CGS)**: a short pass that measures which of the generator's choices lead toward a direction, then reweights the generator to favour them.
+
+If a direction turns out to be unreachable, because some constraint in the generator rules it out, Exhaust tells you. You find the gap in your generator rather than a false silence.
+
+A direction is an active target. Its passive cousin is **classification** (`.classify(…)`), in the QuickCheck tradition, which only reports how often generated values fell into named buckets after the test run has finished.
+
+## Searching over sequences: `@Contract`
+
+The tools so far test pure functions: one input, one output. Stateful systems fail differently. A stack, a cache, or a connection pool can pass every single-operation test and still break under a particular ordering that leaves it in a state it should not be possible to reach. The fault is not in any one call, but in an exact series of them.
+
+`@Contract` searches over sequences. You declare a **system under test** (the real implementation), a set of **commands** Exhaust may call on it, and **invariants** that must hold after every command. Exhaust generates command sequences, runs them, checks the invariants after each step, and when one breaks it reduces the sequence to the few commands that still reproduce the failure.
+
+Invariants get much simpler if you add a **model**: a simpler reference implementation that the commands update in lockstep, so an invariant becomes "the system agrees with the model." The model is acting as an **oracle**, the trusted source of what the right answer is. For systems whose races hide in real threads rather than at `await` points, a separate **`@Oracle`** compares the concurrent result against a race-free sequential replay.
+
+That split, deterministic interleaving at `await` points versus races between real threads, is the difference between the **cooperative** runner and the **preemptive** one. The cooperative runner drives the tasks itself and interleaves at every `await`, so the same seed reproduces the same run. The preemptive runner hands off to real threads to reach races inside locks and atomics, trading reproducibility for that reach. [Contract testing](EXECUTE-contract-testing.md) covers both.
+
+## Testing without an oracle: metamorphic testing
+
+An oracle is not always within reach. Sometimes you cannot compute the right answer cheaply enough to check against it, or at all. Metamorphic testing is a way to test without one.
+
+Rather than checking a single output against an expected value, you check a **metamorphic relation**: how the output should change when you transform the input in a known way. You never need to know what the output is, only how two related outputs must relate. Sorting twice gives the same result as sorting once. A broader search returns at least what the narrower one did. Adding background noise to audio leaves the transcription unchanged.
+
+The `.metamorph` combinator builds the relation into the generator, pairing the original input with transformed copies so the property reads as a plain assertion over them. When a failure is found, the original reduces and the copies follow.
+
+## Reproducing a find: seeds and replay
+
+Every failure Exhaust reports comes with a **seed**, a short code that pins where in the search the failure was found.
+
+```
+Reproduce: .replay("7MK2N9-4")
+```
+
+**Replay** re-runs the search from that seed to reproduce the counterexample. The point to hold onto is what a seed pins: a position in the search, not a fixed input.
+
+It re-runs generation, so if you change the generator, the same seed lands on a different case. This is true of seeds in every property-based testing library. A seed is a coordinate in a search, and the search depends on the generator.
+
+A **regression seed** is a seed pinned to a test (`.regressions("…")`) so its case runs before the random search every time. While the generator is unchanged it re-tests the same case and catches that regression the moment it returns. To pin an exact input permanently, regardless of later generator changes, commit the literal value and reduce it with `reflecting:` instead.
+
+## Glossary
+
+### Generation
+
+- **Choice**: a single decision a generator records as it runs (which branch, which integer, which length).
+- **Choice Gradient Sampling (CGS)**: the technique that biases a generator toward a goal by measuring which choices lead toward it and reweighting them.
+- **Classification**: a report of how often generated values fall into named buckets; it observes, it does not steer.
+- **Filter**: a constraint that keeps only values satisfying a predicate; Exhaust tunes the generator toward valid values rather than discarding.
+- **Generator**: a description of the shape of inputs to try; the search space.
+- **Scaling**: how a generator turns the current size into a concrete length or magnitude.
+- **Size**: the 0 to 100 dial Exhaust ramps over a run, so values without explicit ranges start small and grow.
+
+### The run
+
+- **Counterexample**: an input for which the property fails; after reduction, the minimal counterexample, the simplest input that still fails.
+- **Coverage**: the first phase of an `#exhaust` run, testing problematic values pairwise before random sampling. Coverage of the input space, not code coverage.
+- **Pairwise**: covering every pair of problematic values from different parameters in at least one case.
+- **Problematic value**: a value bugs cluster around, from a fixed per-type catalogue (range limits, NaN, daylight-saving transitions, empty collections, troublesome Unicode scalars).
+- **Property**: a claim about your code that should hold for every generated input; what `#exhaust` and `#explore` check.
+- **Random sampling**: the second phase, drawing from the generator's natural distribution.
+- **Reduction**: reducing a failing input to the minimal counterexample, automatically and for every type.
+
+### Exploration
+
+- **Direction**: a named region of the output that `#explore` steers toward and guarantees coverage of.
+
+### Inspection and reflection
+
+- **Bidirectional**: a transform that supplies both directions (`mapped`, `bound`); a generator built only from these is reflectable.
+- **Forward-only**: a generator that generates and reduces but cannot reflect, because it contains a one-way `.map` or `.bind`.
+- **Inspection**: the foundation that makes generators inspectable data structures, so Exhaust can read their parameters, branches, and domains. It powers coverage, CGS, and reduction.
+- **Reflectable**: a generator reflection can pass backward through. Every generator is inspectable; only some are reflectable.
+- **Reflection**: running a generator backward to recover the choices behind a value; what `reflecting:` uses. It plays no part in reduction.
+- **Reflection round-trip**: `#examine`'s check that a generated value reflects back to the choices that made it.
+
+### Contracts
+
+- **Bundle**: a store of entities created by earlier commands so later commands can reference them.
+- **Command**: one operation Exhaust may invoke on the SUT.
+- **Contract**: a specification of a stateful system that Exhaust checks by generating command sequences and verifying invariants after each step.
+- **Cooperative / preemptive**: the two concurrent runners. Cooperative interleaves deterministically at `await` points; preemptive uses real threads to reach races in locks and atomics.
+- **Invariant**: a property checked after every command.
+- **Model**: a simpler reference implementation the commands update in lockstep, so invariants can compare the two.
+- **Oracle**: the trusted source of the right answer a contract checks against; the model, or an `@Oracle` method for concurrent contracts.
+- **System under test (SUT)**: the real implementation a contract exercises.
+
+### Reproduction
+
+- **Regression seed**: a seed pinned to a test so its case runs before the random search every time.
+- **Replay**: re-running the search from a seed to reproduce a counterexample.
+- **Seed**: a short code that pins a position in Exhaust's search; it carries neither the value nor its choices.
+
+### Metamorphic
+
+- **Metamorph**: the combinator that builds a metamorphic relation into a generator.
+- **Metamorphic testing**: checking a relation between related outputs instead of any single output, so you need no oracle.
+
+### Easily confused
+
+- **"Coverage" has three senses.** Bare coverage is the `#exhaust` phase that tries problematic values. `#examine`'s **domain coverage** is how much of a generator's output space the samples reached. `#explore`'s **direction coverage** is how many samples hit each direction. None of them is code coverage.
+- **Inspection is not reflection.** Inspection is reading a generator's structure, and it powers coverage, CGS, and reduction. Reflection is the narrower act of running a generator backward to recover a value's choices. Reduction uses inspection, never reflection.

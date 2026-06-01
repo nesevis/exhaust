@@ -1,17 +1,17 @@
 //
-//  BoundaryBudgetTests.swift
+//  LargeDomainBudgetTests.swift
 //  Exhaust
 //
-//  Exercises the coverage budget with multi-parameter boundary generators
-//  to measure how long boundary analysis takes at different scales.
+//  Exercises the coverage budget with multi-parameter large-domain generators
+//  to measure how long problematic-value analysis takes at different scales.
 //
 
 import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("Boundary Budget Stress Tests")
-struct BoundaryBudgetTests {
+@Suite("Large Domain Budget Stress Tests")
+struct LargeDomainBudgetTests {
     // MARK: - Date Ranges
 
     // Full year 2024
@@ -248,7 +248,7 @@ struct BoundaryBudgetTests {
         #expect(counterExample == nil)
     }
 
-    // MARK: - Budget Ceiling: Large Boundary Sets
+    // MARK: - Budget Ceiling: Large Problematic-Value Sets
 
     @Test("2-param year range with fine granularity — approaches budget ceiling")
     func budgetCeiling() {

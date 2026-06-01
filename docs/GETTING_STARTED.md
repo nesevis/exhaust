@@ -46,7 +46,7 @@ let user = #example(userGenerator)
 #expect(process(user).isValid)
 ```
 
-Your test now runs against a generated user each time rather than a hand-crafted fixture. Strictly speaking that makes it a property test, just one with a sample size of 1. After all, your assertion is being checked against a generated input instead of a hand-picked one. If you would like determinism you can also specify a `seed` to ensure the generated value is always the same, or a `count` to generate more than one. `#example` generates values at size 50 on Exhaust's 0-to-100 complexity scale — deliberately middle-of-the-road.
+Your test now runs against a generated user each time rather than a hand-crafted fixture. Strictly speaking that makes it a property test, just one with a sample size of 1. After all, your assertion is being checked against a generated input instead of a hand-picked one. If you would like determinism you can also specify a `seed` to ensure the generated value is always the same, or a `count` to generate more than one. `#example` generates values at size 50 on Exhaust's 0-to-100 size scale — deliberately middle-of-the-road.
 
 You're not yet getting everything Exhaust offers this way: just one input per run instead of hundreds, and if the test fails you'll see the whole random value that triggered it rather than a minimal counterexample. Those benefits come with the next step up, when you move the assertion inside an `#exhaust` call.
 
@@ -273,17 +273,17 @@ It's worth running this against code you already trust, just to see what happens
 
 `#exhaust` does more than random sampling. Every run moves through phases, and each one does a different job.
 
-**Coverage sampling.** Before random sampling starts, Exhaust systematically exercises the values most likely to cause bugs. What counts as problematic depends on the type: min and max (plus one off each) for signed and unsigned integers; NaN, infinities, and `ulpOfOne` for floating-point types; DST transitions and timezone edges for dates; the set of lengths 0, 1, 2, and the range's lower bound (filtered to whichever fit the permitted range) for collections. 
+**Coverage.** Before random sampling starts, Exhaust systematically exercises the values most likely to cause bugs. What counts as problematic depends on the type: min and max (plus one off each) for signed and unsigned integers; NaN, infinities, and `ulpOfOne` for floating-point types; DST transitions and timezone edges for dates; the set of lengths 0, 1, 2, and the range's lower bound (filtered to whichever fit the permitted range) for collections. 
 
 The catalogue encodes the kinds of bugs each type is known for — the sort of thing a seasoned developer has learned to check for by hand over a career of finding them the hard way. These problematic values are drawn in combinations at pairwise coverage by default, so any bug that surfaces when two parameters hit their problematic values simultaneously gets caught without your having to remember to test the combination yourself. 
 
-Generators with very small domains get enumerated exhaustively as a special case. See [Ordered coverage of problematic values](EXHAUST-property-testing.md#ordered-coverage-of-problematic-values) for the full detail.
+Generators with very small domains get enumerated exhaustively as a special case. See [Coverage of problematic values](EXHAUST-property-testing.md#coverage-of-problematic-values) for the full detail.
 
 **Random sampling.** Once coverage is done, the sampler turns to the generator's natural distribution, testing the property against varied, ordinary inputs. Coverage and sampling have separate budgets. At the default `.standard` budget you get 200 of each, so a property runs 400 times per invocation in total. Larger budgets (`.thorough`, `.extensive`) scale both numbers in lockstep.
 
 **Reduction.** The moment any phase produces a failing input, `#exhaust` switches from searching for failures to making the failure it found useful to you. Reduction works across every dimension of the input at once: it deletes elements from sequences, collapses recursive structure, swaps between branches, drives numeric values toward their simplest form, redistributes magnitude between coupled parameters, and reorders siblings into a natural reading order. 
 
-Big structural simplifications tend to happen first, because they reduce the counterexample fastest. Value minimisation happens late, once the structure has settled. The result is the smallest, simplest input the reducer can find that still triggers the failure — the counterexample format you've seen already in the `myDedupe` example, with a `Reduction diff` showing the path from the first failing input to the minimum.
+Big structural simplifications tend to happen first, because they reduce the counterexample fastest. Value minimisation happens late, once the structure has settled. The result is the minimal input the reducer can find that still triggers the failure — the counterexample format you've seen already in the `myDedupe` example, with a `Reduction diff` showing the path from the first failing input to the minimum.
 
 The first two phases search for bugs. The third strips away everything that doesn't contribute to the failure, making the underlying bug stand out. A property that passes all three means *no failures in the coverage budget, no failures in random sampling, and nothing for reduction to simplify*. A failure in either of the first two triggers the third automatically. [How reduction works](REDUCTION.md) walks through a complete example.
 
@@ -295,7 +295,7 @@ When reduction finishes, Exhaust reports the minimal counterexample it arrived a
 @Test func myDedupePreservesDistinctElements() {
     let generator = #gen(.int(in: 0...10).array(length: 0...20))
 
-    #exhaust(generator) { xs in
+    #exhaust(generator, .includeDiff) { xs in
         #expect(Set(myDedupe(xs)) == Set(xs))
     }
 }
@@ -322,17 +322,21 @@ The property might fail on an eight-element input like `[3, 7, 7, 0, 7, 1, 1, 4]
      -   [6]: 1,
      -   [7]: 4
        ]
+   
+   Property invoked: 36 times
+   
+   Reproduce: .replay("5QF8M2-3")
 Expectation failed: (Set(myDedupe(xs)) → []) == (Set(xs) → [0])
 ```
 
-Now you can see it. `myDedupe` is incorrectly clearing the array when every element is a duplicate, instead of leaving one of each. The `Counterexample` block shows the reduced input — two zeros — and the `Reduction diff` shows how Exhaust got there, stripping elements away until only the two needed to trigger the bug remain. You can paste the counterexample straight into a unit test as a regression: it's the minimal input that demonstrates the bug, and the failure message tells you exactly what went wrong.
+Now you can see it. `myDedupe` is incorrectly clearing the array when every element is a duplicate, instead of leaving one of each. The `Counterexample` block shows the reduced input — two zeros — and the `Reduction diff` (shown because the test passes `.includeDiff`) shows how Exhaust got there, stripping elements away until only the two needed to trigger the bug remain. You can paste the counterexample straight into a unit test as a regression: it's the minimal input that demonstrates the bug, and the failure message tells you exactly what went wrong.
 
 A habit worth forming: when a property test fails, don't reach for the debugger immediately. Read the reduced counterexample first, because it may just give you a direct route to the answer.
 
 When you want to lock in a specific failing case as a permanent regression, Exhaust exposes a Swift Testing trait that attaches seeds to a test:
 
 ```swift
-@Test(.exhaust(regressions: "1A-3", "2A-1"))
+@Test(.exhaust(.regressions("1A-3", "2A-1")))
 func myDedupePreservesDistinctElements() {
     // ...
 }

@@ -628,7 +628,7 @@ extension GraphValueEncoder {
             if range.contains(zeroBitPattern) == false {
                 return false
             }
-            // Micro-opt 2: skip cross-zero when the leaf's current value pins the valid range's boundary. Binary search has already exhausted everything between the boundary and the reduction target; the remaining "simpler" candidates cross-zero would try are all in that already-rejected region. The property has demonstrated that this exact boundary value is required. Saves the full budget of wasted probes per pinned leaf (for example, Bound5's leaves at `Int16.min`).
+            // Micro-opt 2: skip cross-zero when the leaf's current value pins the valid range's boundary. Binary search has already exhausted everything between the boundary and the reduction target; the remaining "simpler" candidates cross-zero would try are all in that already-rejected region. The property has demonstrated that this exact problematic value is required. Saves the full budget of wasted probes per pinned leaf (for example, Bound5's leaves at `Int16.min`).
             let currentBitPattern = currentEntry.choice.bitPattern64
             if currentBitPattern == range.lowerBound || currentBitPattern == range.upperBound {
                 return false

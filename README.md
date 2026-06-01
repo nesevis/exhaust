@@ -10,7 +10,7 @@
 
 Exhaust is a testing library for Swift. It integrates with Swift Testing and XCTest, runs in your existing test target, and executes in milliseconds.
 
-Describe what your code should do, and Exhaust checks that claim across hundreds of inputs. When it finds a failure, it reduces it to the smallest counterexample.
+Describe what your code should do, and Exhaust checks that claim across hundreds of inputs. When it finds a failure, it reduces it to the minimal counterexample.
 
 ```swift
 @Test func mySortProducesAscendingOrder() {
@@ -69,15 +69,17 @@ The reducer drove the first `increment` into the sequential prefix, leaving two 
 
 Exhaust is built on [reflective generators](https://dl.acm.org/doi/10.1145/3607842): generators that are inspectable data structures rather than opaque closures. This foundation enables:
 
-- **Edge cases first**: Before random sampling begins, Exhaust systematically tests values that bugs cluster around: range boundaries, zero crossings, NaN, empty collections, timezone transitions, funky unicode. These are combined in pairwise order. Because the generator's structure is inspectable, Exhaust is able to analyse its parameters and their domains; because it's replayable, these values can be targeted directly. Random sampling would take thousands of iterations to reach these values by chance.
+- **Edge cases first**: Before random sampling begins, Exhaust systematically tests the values that bugs cluster around. This catalogue of *problematic values* covers range limits and zero crossings, NaN, empty collections, timezone transitions, troublesome Unicode. These are combined pairwise. Because the generator's structure is inspectable, Exhaust can analyse its parameters and their domains; because it's replayable, these values can be targeted directly. Random sampling would take thousands of iterations to reach them by chance.
 
-- **Minimal counterexamples**: When a property fails, Exhaust reduces the failing input to the smallest counterexample that still triggers the failure. Reduction works for every type without custom logic, and because the reducer understands how values relate to each other, it finds [smaller counterexamples](https://github.com/jlink/shrinking-challenge/blob/main/pbt-libraries/exhaust/README.md) than most other reducers.
+- **Minimal counterexamples**: When a property fails, Exhaust reduces the failing input to the minimal counterexample that still triggers the failure. Reduction works for every type without custom logic, and because the reducer understands how values relate to each other, it finds [smaller counterexamples](https://github.com/jlink/shrinking-challenge/blob/main/pbt-libraries/exhaust/README.md) than most other reducers.
 
 - **Filters that don't time out**: Most similar libraries implement `.filter` by generating values and discarding those that fail the predicate. When valid values are sparse, this can appear to hang. Exhaust analyses the generator, measures which choices lead toward valid outputs, and reweights accordingly, a technique called Choice Gradient Sampling (CGS). While the generated values still have to pass the predicate, they are much more likely to after tuning the generator.
 
 ## Guides
 
 New to property-based testing? **[Getting Started](docs/GETTING_STARTED.md)** walks you from your first `#exhaust` call through generators, properties, and reading failure reports.
+
+Want the model rather than a tutorial? **[Conceptual Overview](docs/CONCEPTS.md)** maps Exhaust's vocabulary and how the pieces fit together.
 
 Testing a stateful system? **[Contract Testing](docs/EXECUTE-contract-testing.md)** covers generating command sequences, model-based oracles, and concurrent interleaving.
 

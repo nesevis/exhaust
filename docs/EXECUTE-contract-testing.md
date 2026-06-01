@@ -61,7 +61,7 @@ struct StackContract {
 
 Each `@Command` method is one operation Exhaust can choose to run. The `weight:` parameter controls how often it appears relative to other commands. A weight-3 command shows up roughly three times as often as a weight-1 command. After every command, all `@Invariant` methods are checked automatically.
 
-`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget (capped at 100 for sync contracts, 40 for async). Longer sequences explore deeper states but take longer to test and to reduce. The overhead scales linearly with command limit. A contract with cheap commands runs in under 15ms even at the 40-command cap. Contracts with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
+`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget (capped at 100 for sequential contracts, 40 for concurrent). Longer sequences explore deeper states but take longer to test and to reduce. The overhead scales linearly with command limit. A contract with cheap commands runs in under 15ms even at the 40-command cap. Contracts with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
 
 ## Model-based oracles
 
@@ -225,7 +225,7 @@ Exhaust detects async methods and generates the correct conformance automaticall
 
 The two concurrent runners differ in one thing: where one lane's work can be interleaved with another's.
 
-Code written in pure Swift concurrency gives up the thread only at an `await` — between two `await`s, a task runs to completion without interruption (the scheduling term is *cooperative*). The cooperative runner (`@Contract` with async commands and `.concurrent`) drives the tasks itself and chooses which lane to resume at each suspension point. Because the only places an interleaving can occur are the `await`s your command bodies actually reach, the runner can enumerate and replay them exactly: the same seed reproduces the same interleaving, and the reducer shrinks the lane assignments alongside the command sequence. The limitation follows from the same fact. A race that lives entirely in synchronous code, with no `await` between the two conflicting accesses, gives the scheduler nowhere to interleave, so it stays invisible.
+Code written in pure Swift concurrency gives up the thread only at an `await` — between two `await`s, a task runs to completion without interruption (the scheduling term is *cooperative*). The cooperative runner (`@Contract` with async commands and `.concurrent`) drives the tasks itself and chooses which lane to resume at each suspension point. Because the only places an interleaving can occur are the `await`s your command bodies actually reach, the runner can enumerate and replay them exactly: the same seed reproduces the same interleaving, and the reducer reduces the lane assignments alongside the command sequence. The limitation follows from the same fact. A race that lives entirely in synchronous code, with no `await` between the two conflicting accesses, gives the scheduler nowhere to interleave, so it stays invisible.
 
 The preemptive runner (`@ConcurrentContract`) gives up that control to reach those races. It dispatches commands to real GCD threads, which the operating system can interrupt at any instruction, including the synchronous stretches a cooperative scheduler treats as atomic. That reaches races inside the multithreading primitives an async facade hides — locks, dispatch queues, atomics — which the cooperative runner steps straight over. The price is determinism. The OS chooses the interleaving, so the same seed no longer reproduces the same run, and the runner compensates by repeating each sequence and comparing its final state against a race-free sequential replay through an `@Oracle` method, rather than checking invariants at every intermediate step.
 
@@ -387,7 +387,7 @@ All contract styles accept settings as variadic arguments to `#execute`:
 |---------|---------|--------|
 | `.commandLimit(N)` | auto-estimated | Maximum commands per generated sequence. Capped at 100 (sync sequential) or 40 (concurrent). |
 | `.concurrent(N)` | 2 | Number of concurrent lanes (concurrent contracts only, 1...8). |
-| `.budget(.thorough)` | `.thorough` | Controls coverage rows and random sampling iterations. |
+| `.budget(.thorough)` | `.standard` | Controls coverage rows and random sampling iterations. |
 | `.idleTimeoutMs(ms)` | 1000 | Milliseconds before declaring a drain-loop stall (cooperative runner only). |
 | `.replay("seed")` | — | Deterministic replay from a failure report seed. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
