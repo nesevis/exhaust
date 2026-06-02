@@ -89,7 +89,7 @@ import Testing
 @Suite("Hypothesis Float Range/Subnormal Parity")
 struct FloatRangeAndSubnormalParityTests {
     @Test("Generated doubles stay in very large finite ranges")
-    func doublesAreInRangeForLargeBounds() {
+    func doublesAreInRangeForLargeBounds() throws {
         // Adjustment relative to `test_floats_are_in_range`:
         // uses sampled draws via `#example` instead of Hypothesis `@given`.
         let ranges: [ClosedRange<Double>] = [
@@ -98,37 +98,37 @@ struct FloatRangeAndSubnormalParityTests {
         ]
 
         for range in ranges {
-            let values = #example(#gen(.double(in: range)), count: 256, seed: 42)
+            let values = try #example(#gen(.double(in: range)), count: 256, seed: 42)
             #expect(values.allSatisfy { range.contains($0) })
         }
     }
 
     @Test("Can generate both signed zeros when interval is [-0.0, 0.0]")
-    func canGenerateBothZeros() {
+    func canGenerateBothZeros() throws {
         // Adjustment relative to `test_can_generate_both_zeros_when_in_interval`:
         // covers one canonical interval because Exhaust has no unconstrained float strategy
         // that includes NaN/Inf and Hypothesis-style assumptions.
-        let values = #example(#gen(.double(in: -0.0 ... 0.0)), count: 128, seed: 42)
+        let values = try #example(#gen(.double(in: -0.0 ... 0.0)), count: 128, seed: 42)
         #expect(values.contains(where: { $0 == 0.0 && $0.sign == .plus }))
         #expect(values.contains(where: { $0 == 0.0 && $0.sign == .minus }))
     }
 
     @Test("Does not generate negative values when lower bound is +0.0")
-    func nonNegativeRangeDoesNotGenerateNegativeSigns() {
+    func nonNegativeRangeDoesNotGenerateNegativeSigns() throws {
         // Direct parity with `test_does_not_generate_negative_if_right_boundary_is_positive`.
-        let values = #example(#gen(.double(in: 0.0 ... 1.0)), count: 256, seed: 42)
+        let values = try #example(#gen(.double(in: 0.0 ... 1.0)), count: 256, seed: 42)
         #expect(values.allSatisfy { $0.sign == .plus })
     }
 
     @Test("Does not generate positive values when upper bound is -0.0")
-    func nonPositiveRangeDoesNotGeneratePositiveSigns() {
+    func nonPositiveRangeDoesNotGeneratePositiveSigns() throws {
         // Direct parity with `test_does_not_generate_positive_if_right_boundary_is_negative`.
-        let values = #example(#gen(.double(in: -1.0 ... -0.0)), count: 256, seed: 42)
+        let values = try #example(#gen(.double(in: -1.0 ... -0.0)), count: 256, seed: 42)
         #expect(values.allSatisfy { $0.sign == .minus })
     }
 
     @Test("Narrow interval generation remains within bounds")
-    func veryNarrowInterval() {
+    func veryNarrowInterval() throws {
         // Direct parity with `test_very_narrow_interval`, expressed with Swift `nextDown`.
         let upperBound = -1.0
         var lowerBound = upperBound
@@ -137,37 +137,37 @@ struct FloatRangeAndSubnormalParityTests {
         }
         #expect(lowerBound < upperBound)
 
-        let values = #example(#gen(.double(in: lowerBound ... upperBound)), count: 256, seed: 42)
+        let values = try #example(#gen(.double(in: lowerBound ... upperBound)), count: 256, seed: 42)
         #expect(values.allSatisfy { lowerBound <= $0 && $0 <= upperBound })
     }
 
     @Test("Can generate positive and negative subnormal doubles")
-    func canGenerateSubnormalDoubles() {
+    func canGenerateSubnormalDoubles() throws {
         // Adjustment relative to `test_can_generate_subnormals`:
         // uses bounded positive/negative subnormal ranges to avoid half-bounded strategy APIs.
         let smallestNormal = Double.leastNormalMagnitude
         let largestSubnormal = smallestNormal.nextDown
         let smallestSubnormal = Double.leastNonzeroMagnitude
 
-        let positives = #example(#gen(.double(in: smallestSubnormal ... largestSubnormal)), count: 256, seed: 42)
+        let positives = try #example(#gen(.double(in: smallestSubnormal ... largestSubnormal)), count: 256, seed: 42)
         #expect(positives.allSatisfy { $0 > 0 && $0 < smallestNormal })
 
-        let negatives = #example(#gen(.double(in: -largestSubnormal ... -smallestSubnormal)), count: 256, seed: 42)
+        let negatives = try #example(#gen(.double(in: -largestSubnormal ... -smallestSubnormal)), count: 256, seed: 42)
         #expect(negatives.allSatisfy { $0 < 0 && $0 > -smallestNormal })
     }
 
     @Test("Can generate positive and negative subnormal floats")
-    func canGenerateSubnormalFloats() {
+    func canGenerateSubnormalFloats() throws {
         // Adjustment relative to `test_can_generate_subnormals`:
         // same as Double case, but for 32-bit Float.
         let smallestNormal = Float.leastNormalMagnitude
         let largestSubnormal = smallestNormal.nextDown
         let smallestSubnormal = Float.leastNonzeroMagnitude
 
-        let positives = #example(#gen(.float(in: smallestSubnormal ... largestSubnormal)), count: 256, seed: 42)
+        let positives = try #example(#gen(.float(in: smallestSubnormal ... largestSubnormal)), count: 256, seed: 42)
         #expect(positives.allSatisfy { $0 > 0 && $0 < smallestNormal })
 
-        let negatives = #example(#gen(.float(in: -largestSubnormal ... -smallestSubnormal)), count: 256, seed: 42)
+        let negatives = try #example(#gen(.float(in: -largestSubnormal ... -smallestSubnormal)), count: 256, seed: 42)
         #expect(negatives.allSatisfy { $0 < 0 && $0 > -smallestNormal })
     }
 }

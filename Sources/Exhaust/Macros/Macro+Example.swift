@@ -5,8 +5,8 @@ import ExhaustCore
 /// The generated value uses a fixed size of 50 (midway on the 1–100 scale) so that size-dependent generators (arrays, strings, and so on) produce moderately complex output rather than minimal values.
 ///
 /// ```swift
-/// let person = #example(personGen)
-/// let person = #example(personGen, seed: 42)
+/// let person = try #example(personGen)
+/// let person = try #example(personGen, seed: 42)
 /// ```
 ///
 /// - Parameters:
@@ -24,8 +24,8 @@ public macro example<GeneratedValue>(
 /// Each element is generated at increasing size (cycling 1–100), so earlier elements tend to be simpler and later elements more complex.
 ///
 /// ```swift
-/// let people = #example(personGen, count: 10)
-/// let people = #example(personGen, count: 10, seed: 42)
+/// let people = try #example(personGen, count: 10)
+/// let people = try #example(personGen, count: 10, seed: 42)
 /// ```
 ///
 /// - Parameters:

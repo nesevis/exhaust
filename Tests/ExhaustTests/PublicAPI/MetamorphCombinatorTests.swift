@@ -55,10 +55,10 @@ struct MetamorphCombinatorTests {
     // MARK: - Determinism
 
     @Test("Same seed produces identical results")
-    func determinism() {
+    func determinism() throws {
         let gen = #gen(.int(in: 0 ... 1000)).metamorph { $0 * 3 }
-        let first = #example(gen, count: 50, seed: 99)
-        let second = #example(gen, count: 50, seed: 99)
+        let first = try #example(gen, count: 50, seed: 99)
+        let second = try #example(gen, count: 50, seed: 99)
         #expect(first.count == second.count)
         for (a, b) in zip(first, second) {
             #expect(a == b)

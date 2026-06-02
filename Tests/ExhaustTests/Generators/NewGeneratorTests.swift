@@ -13,9 +13,9 @@ import Testing
     @Suite("Float16 Generator")
     struct Float16GeneratorTests {
         @Test("Generated values are within range")
-        func valuesWithinRange() {
+        func valuesWithinRange() throws {
             let gen = #gen(.float16(in: Float16(-1.0) ... Float16(1.0)))
-            let values = #example(gen, count: 50, seed: 42)
+            let values = try #example(gen, count: 50, seed: 42)
 
             for value in values {
                 #expect(value >= Float16(-1.0))
@@ -25,11 +25,11 @@ import Testing
         }
 
         @Test("Deterministic: same seed produces same values")
-        func deterministic() {
+        func deterministic() throws {
             let gen = #gen(.float16(in: Float16(0) ... Float16(100)))
 
-            let values1 = #example(gen, count: 20, seed: 99)
-            let values2 = #example(gen, count: 20, seed: 99)
+            let values1 = try #example(gen, count: 20, seed: 99)
+            let values2 = try #example(gen, count: 20, seed: 99)
             #expect(values1 == values2)
         }
 
@@ -51,9 +51,9 @@ import Testing
 @Suite("CGFloat Generator")
 struct CGFloatGeneratorTests {
     @Test("Generated values are within range")
-    func valuesWithinRange() {
+    func valuesWithinRange() throws {
         let gen = #gen(.cgfloat(in: 0.0 ... 320.0))
-        let values = #example(gen, count: 50, seed: 42)
+        let values = try #example(gen, count: 50, seed: 42)
 
         for value in values {
             #expect(value >= 0.0)
@@ -62,9 +62,9 @@ struct CGFloatGeneratorTests {
     }
 
     @Test("Full-range generation produces finite values")
-    func fullRangeFinite() {
+    func fullRangeFinite() throws {
         let gen = #gen(.cgfloat())
-        let values = #example(gen, count: 50, seed: 42)
+        let values = try #example(gen, count: 50, seed: 42)
 
         for value in values {
             #expect(value.isFinite)
@@ -72,11 +72,11 @@ struct CGFloatGeneratorTests {
     }
 
     @Test("Deterministic: same seed produces same values")
-    func deterministic() {
+    func deterministic() throws {
         let gen = #gen(.cgfloat(in: -100.0 ... 100.0))
 
-        let values1 = #example(gen, count: 20, seed: 99)
-        let values2 = #example(gen, count: 20, seed: 99)
+        let values1 = try #example(gen, count: 20, seed: 99)
+        let values2 = try #example(gen, count: 20, seed: 99)
         #expect(values1 == values2)
     }
 }
@@ -86,18 +86,18 @@ struct CGFloatGeneratorTests {
 @Suite("Data Generator")
 struct DataGeneratorTests {
     @Test("Size-scaled generation produces data of varying lengths")
-    func sizeScaledGeneration() {
+    func sizeScaledGeneration() throws {
         let gen = #gen(.data())
-        let values = #example(gen, count: 20, seed: 42)
+        let values = try #example(gen, count: 20, seed: 42)
 
         let lengths = Set(values.map(\.count))
         #expect(lengths.count > 1, "Size-scaled data should produce varying lengths, got: \(lengths)")
     }
 
     @Test("Fixed-length generation produces correct size")
-    func fixedLength() {
+    func fixedLength() throws {
         let gen = #gen(.data(length: 32))
-        let values = #example(gen, count: 10, seed: 42)
+        let values = try #example(gen, count: 10, seed: 42)
 
         for value in values {
             #expect(value.count == 32)
@@ -105,9 +105,9 @@ struct DataGeneratorTests {
     }
 
     @Test("Range-length generation stays within bounds")
-    func rangeLengthWithinBounds() {
+    func rangeLengthWithinBounds() throws {
         let gen = #gen(.data(length: 16 ... 64))
-        let values = #example(gen, count: 30, seed: 42)
+        let values = try #example(gen, count: 30, seed: 42)
 
         for value in values {
             #expect(value.count >= 16)
@@ -116,9 +116,9 @@ struct DataGeneratorTests {
     }
 
     @Test("Byte values span full range")
-    func byteValueRange() {
+    func byteValueRange() throws {
         let gen = #gen(.data(length: 256))
-        let values = #example(gen, count: 10, seed: 42)
+        let values = try #example(gen, count: 10, seed: 42)
         let allBytes = Set(values.flatMap(\.self))
 
         // With 2560 random bytes, we should cover most of 0...255
@@ -126,11 +126,11 @@ struct DataGeneratorTests {
     }
 
     @Test("Deterministic: same seed produces same data")
-    func deterministic() {
+    func deterministic() throws {
         let gen = #gen(.data(length: 16 ... 32))
 
-        let values1 = #example(gen, count: 10, seed: 99)
-        let values2 = #example(gen, count: 10, seed: 99)
+        let values1 = try #example(gen, count: 10, seed: 99)
+        let values2 = try #example(gen, count: 10, seed: 99)
         #expect(values1 == values2)
     }
 
@@ -157,12 +157,12 @@ struct ResultGeneratorTests {
     }
 
     @Test("Generates both success and failure cases")
-    func generatesBothCases() {
+    func generatesBothCases() throws {
         let gen: ReflectiveGenerator<Result<Int, TestError>> = .result(
             success: .int(in: 0 ... 100),
             failure: .element(from: [TestError.notFound, TestError.timeout, TestError.forbidden])
         )
-        let values = #example(gen, count: 50, seed: 42)
+        let values = try #example(gen, count: 50, seed: 42)
 
         let hasSuccess = values.contains { result in
             if case .success = result { return true }
@@ -178,12 +178,12 @@ struct ResultGeneratorTests {
     }
 
     @Test("Success values are within range")
-    func successValuesInRange() {
+    func successValuesInRange() throws {
         let gen: ReflectiveGenerator<Result<Int, TestError>> = .result(
             success: .int(in: 10 ... 20),
             failure: .element(from: [TestError.notFound])
         )
-        let values = #example(gen, count: 50, seed: 42)
+        let values = try #example(gen, count: 50, seed: 42)
 
         for value in values {
             if case let .success(number) = value {
@@ -194,14 +194,14 @@ struct ResultGeneratorTests {
     }
 
     @Test("Deterministic: same seed produces same results")
-    func deterministic() {
+    func deterministic() throws {
         let gen: ReflectiveGenerator<Result<Int, TestError>> = .result(
             success: .int(in: 0 ... 100),
             failure: .element(from: [TestError.notFound, TestError.timeout])
         )
 
-        let values1 = #example(gen, count: 20, seed: 99)
-        let values2 = #example(gen, count: 20, seed: 99)
+        let values1 = try #example(gen, count: 20, seed: 99)
+        let values2 = try #example(gen, count: 20, seed: 99)
 
         for (first, second) in zip(values1, values2) {
             switch (first, second) {
@@ -221,9 +221,9 @@ struct ResultGeneratorTests {
 @Suite("ClosedRange Generator")
 struct ClosedRangeGeneratorTests {
     @Test("Lower bound is at most upper bound")
-    func boundsOrdered() {
+    func boundsOrdered() throws {
         let gen = #gen(.closedRange(.int(in: 0 ... 100)))
-        let values = #example(gen, count: 50, seed: 42)
+        let values = try #example(gen, count: 50, seed: 42)
 
         for range in values {
             #expect(range.lowerBound <= range.upperBound)
@@ -231,9 +231,9 @@ struct ClosedRangeGeneratorTests {
     }
 
     @Test("Bounds stay within source generator range")
-    func boundsWithinSourceRange() {
+    func boundsWithinSourceRange() throws {
         let gen = #gen(.closedRange(.int(in: -50 ... 50)))
-        let values = #example(gen, count: 50, seed: 42)
+        let values = try #example(gen, count: 50, seed: 42)
 
         for range in values {
             #expect(range.lowerBound >= -50)
@@ -242,11 +242,11 @@ struct ClosedRangeGeneratorTests {
     }
 
     @Test("Deterministic: same seed produces same ranges")
-    func deterministic() {
+    func deterministic() throws {
         let gen = #gen(.closedRange(.int(in: 0 ... 100)))
 
-        let values1 = #example(gen, count: 20, seed: 99)
-        let values2 = #example(gen, count: 20, seed: 99)
+        let values1 = try #example(gen, count: 20, seed: 99)
+        let values2 = try #example(gen, count: 20, seed: 99)
         #expect(values1 == values2)
     }
 }
@@ -256,9 +256,9 @@ struct ClosedRangeGeneratorTests {
 @Suite("Range Generator")
 struct RangeGeneratorTests {
     @Test("Lower bound is at most upper bound")
-    func boundsOrdered() {
+    func boundsOrdered() throws {
         let gen = #gen(.range(.int(in: 0 ... 100)))
-        let values = #example(gen, count: 50, seed: 42)
+        let values = try #example(gen, count: 50, seed: 42)
 
         for range in values {
             #expect(range.lowerBound <= range.upperBound)
@@ -266,9 +266,9 @@ struct RangeGeneratorTests {
     }
 
     @Test("Bounds stay within source generator range")
-    func boundsWithinSourceRange() {
+    func boundsWithinSourceRange() throws {
         let gen = #gen(.range(.double(in: 0.0 ... 1.0)))
-        let values = #example(gen, count: 50, seed: 42)
+        let values = try #example(gen, count: 50, seed: 42)
 
         for range in values {
             #expect(range.lowerBound >= 0.0)
@@ -277,21 +277,21 @@ struct RangeGeneratorTests {
     }
 
     @Test("Can produce empty ranges when bounds are equal")
-    func canProduceEmptyRanges() {
+    func canProduceEmptyRanges() throws {
         // With a very narrow source range, equal bounds become likely
         let gen = #gen(.range(.int(in: 0 ... 2)))
-        let values = #example(gen, count: 100, seed: 42)
+        let values = try #example(gen, count: 100, seed: 42)
 
         let hasEmpty = values.contains { $0.isEmpty }
         #expect(hasEmpty)
     }
 
     @Test("Deterministic: same seed produces same ranges")
-    func deterministic() {
+    func deterministic() throws {
         let gen = #gen(.range(.int(in: 0 ... 100)))
 
-        let values1 = #example(gen, count: 20, seed: 99)
-        let values2 = #example(gen, count: 20, seed: 99)
+        let values1 = try #example(gen, count: 20, seed: 99)
+        let values2 = try #example(gen, count: 20, seed: 99)
         #expect(values1 == values2)
     }
 }
@@ -301,9 +301,9 @@ struct RangeGeneratorTests {
 @Suite("URL Generator")
 struct URLGeneratorTests {
     @Test("Generated URLs are valid")
-    func validURLs() {
+    func validURLs() throws {
         let gen = #gen(.url())
-        let values = #example(gen, count: 30, seed: 42)
+        let values = try #example(gen, count: 30, seed: 42)
 
         for url in values {
             #expect(url.scheme == "http" || url.scheme == "https")
@@ -312,9 +312,9 @@ struct URLGeneratorTests {
     }
 
     @Test("Generated URLs have correct structure")
-    func correctStructure() {
+    func correctStructure() throws {
         let gen = #gen(.url())
-        let values = #example(gen, count: 30, seed: 42)
+        let values = try #example(gen, count: 30, seed: 42)
 
         for url in values {
             let string = url.absoluteString
@@ -329,11 +329,11 @@ struct URLGeneratorTests {
     }
 
     @Test("Deterministic: same seed produces same URLs")
-    func deterministic() {
+    func deterministic() throws {
         let gen = #gen(.url())
 
-        let values1 = #example(gen, count: 20, seed: 99)
-        let values2 = #example(gen, count: 20, seed: 99)
+        let values1 = try #example(gen, count: 20, seed: 99)
+        let values2 = try #example(gen, count: 20, seed: 99)
         #expect(values1 == values2)
     }
 }

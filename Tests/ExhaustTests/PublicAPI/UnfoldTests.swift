@@ -5,7 +5,7 @@ import Testing
 @Suite("Unfold Combinator")
 struct UnfoldTests {
     @Test("Immediate done produces the seed-derived value")
-    func immediateDoneProducesTheSeedDerivedValue() {
+    func immediateDoneProducesTheSeedDerivedValue() throws {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .int(in: 1 ... 10),
             depthRange: 1 ... 5
@@ -13,13 +13,13 @@ struct UnfoldTests {
             .just(.done(state * 2))
         }
 
-        let values = #example(gen, count: 20, seed: 42)
+        let values = try #example(gen, count: 20, seed: 42)
         #expect(values.isEmpty == false)
         #expect(values.allSatisfy { $0 >= 2 && $0 <= 20 })
     }
 
     @Test("Countdown accumulates state across iterations")
-    func countdownAccumulatesStateAcrossIterations() {
+    func countdownAccumulatesStateAcrossIterations() throws {
         let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just((list: [Int](), counter: 0)),
             depthRange: 1 ... 3
@@ -33,12 +33,12 @@ struct UnfoldTests {
             )))
         }
 
-        let value = #example(gen, seed: 42)
+        let value = try #example(gen, seed: 42)
         #expect(value == [0, 1, 2])
     }
 
     @Test("Step can terminate early")
-    func stepCanTerminateEarly() {
+    func stepCanTerminateEarly() throws {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .just(0),
             depthRange: 1 ... 100
@@ -49,12 +49,12 @@ struct UnfoldTests {
             return .just(.recurse(state + 1))
         }
 
-        let value = #example(gen, seed: 42)
+        let value = try #example(gen, seed: 42)
         #expect(value == 3)
     }
 
     @Test("Random decisions within step produce varied output")
-    func randomDecisionsWithinStepProduceVariedOutput() {
+    func randomDecisionsWithinStepProduceVariedOutput() throws {
         let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just([Int]()),
             depthRange: 1 ... 5
@@ -67,7 +67,7 @@ struct UnfoldTests {
             }
         }
 
-        let values = #example(gen, count: 50, seed: 42)
+        let values = try #example(gen, count: 50, seed: 42)
         let lengths = Set(values.map(\.count))
         #expect(lengths.count > 1, "Expected varied list lengths, got \(lengths)")
     }
@@ -124,7 +124,7 @@ struct UnfoldTests {
     }
 
     @Test("Deterministic replay with seed")
-    func deterministicReplayWithSeed() {
+    func deterministicReplayWithSeed() throws {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .int(in: 0 ... 100),
             depthRange: 1 ... 3
@@ -137,8 +137,8 @@ struct UnfoldTests {
             }
         }
 
-        let firstValues = #example(gen, count: 10, seed: 99)
-        let secondValues = #example(gen, count: 10, seed: 99)
+        let firstValues = try #example(gen, count: 10, seed: 99)
+        let secondValues = try #example(gen, count: 10, seed: 99)
         #expect(firstValues == secondValues)
     }
 }
