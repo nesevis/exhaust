@@ -44,7 +44,7 @@
         public func provideScope(
             for _: Test,
             testCase _: Test.Case?,
-            performing function: @Sendable () async throws -> Void
+            performing function: @concurrent @Sendable () async throws -> Void
         ) async throws {
             let config = ExhaustTraitConfiguration(
                 budget: budget,
@@ -186,7 +186,7 @@
         public func provideScope(
             for _: Test,
             testCase _: Test.Case?,
-            performing function: @Sendable () async throws -> Void
+            performing function: @concurrent @Sendable () async throws -> Void
         ) async throws {
             let config = ExhaustTraitConfiguration(
                 budget: budget,

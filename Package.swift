@@ -10,12 +10,19 @@ let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != n
 let swiftLintPlugins: [Target.PluginUsage] = []
 let swiftLintDependency: [Package.Dependency] = []
 
+let strictConcurrencySettings: [SwiftSetting] = [
+    .swiftLanguageMode(.v6),
+    .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+    .enableUpcomingFeature("InferIsolatedConformances"),
+    .enableExperimentalFeature("StrictConcurrency"),
+]
+
 let coreTarget: Target = usePrecompiled
     ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
     : .target(
         name: "ExhaustCore",
         dependencies: [],
-        swiftSettings: [
+        swiftSettings: strictConcurrencySettings + [
             .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
         ],
         plugins: swiftLintPlugins
@@ -61,9 +68,9 @@ let package = Package(
                 .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
                 .product(name: "CustomDump", package: "swift-custom-dump"),
             ],
-            swiftSettings: usePrecompiled
+            swiftSettings: strictConcurrencySettings + (usePrecompiled
                 ? [.unsafeFlags(["-Xfrontend", "-experimental-package-interface-load"])]
-                : [],
+                : []),
             plugins: swiftLintPlugins
         ),
         .macro(
@@ -74,16 +81,19 @@ let package = Package(
                 .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
                 .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
                 .product(name: "SwiftDiagnostics", package: "swift-syntax"),
-            ]
+            ],
+            swiftSettings: strictConcurrencySettings
         ),
         .target(
             name: "ExhaustTestSupport",
             dependencies: ["ExhaustCore"],
+            swiftSettings: strictConcurrencySettings,
             plugins: swiftLintPlugins
         ),
         .testTarget(
             name: "ExhaustTests",
             dependencies: ["Exhaust", "ExhaustCore", "ExhaustTestSupport"],
+            swiftSettings: strictConcurrencySettings,
             plugins: swiftLintPlugins
         ),
 //        .testTarget(
@@ -101,7 +111,7 @@ let package = Package(
                 "ExhaustCore",
                 .product(name: "Benchmark", package: "swift-benchmark"),
             ],
-            swiftSettings: [
+            swiftSettings: strictConcurrencySettings + [
                 .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
             ],
             plugins: swiftLintPlugins
@@ -117,6 +127,7 @@ if usePrecompiled == false {
         .testTarget(
             name: "ExhaustCoreTests",
             dependencies: ["ExhaustCore", "ExhaustTestSupport"],
+            swiftSettings: strictConcurrencySettings,
             plugins: swiftLintPlugins
         )
     )
