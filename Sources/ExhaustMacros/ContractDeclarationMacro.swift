@@ -29,15 +29,18 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
                 || invariants.contains(where: \.isAsync)
 
         let isClassDecl = declaration.is(ClassDeclSyntax.self)
-        if hasAnyAsync, isClassDecl == false {
+        let isActorDecl = declaration.is(ActorDeclSyntax.self)
+        if hasAnyAsync, isClassDecl == false, isActorDecl == false {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
                 message: ContractDiagnostic.asyncRequiresClass
             ))
         }
 
-        let proto = hasAnyAsync ? "AsyncContractSpec" : "ContractSpec"
-        let ext: DeclSyntax = "extension \(type.trimmed): \(raw: proto) {}"
+        let needsAsyncConformance = hasAnyAsync || isActorDecl
+        let proto = needsAsyncConformance ? "AsyncContractSpec" : "ContractSpec"
+        let preconcurrency = isActorDecl ? "@preconcurrency " : ""
+        let ext: DeclSyntax = "extension \(type.trimmed): \(raw: preconcurrency)\(raw: proto) {}"
         return [ext.cast(ExtensionDeclSyntax.self)]
     }
 
@@ -76,9 +79,14 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
             ))
         }
 
+        let isClassDecl = declaration.is(ClassDeclSyntax.self)
+        let isActorDecl = declaration.is(ActorDeclSyntax.self)
+        let isReferenceType = isClassDecl || isActorDecl
+
         let hasAnyAsync =
             commands.contains(where: \.isAsync)
                 || invariants.contains(where: \.isAsync)
+        let effectiveAsync = hasAnyAsync || isActorDecl
 
         var decls: [DeclSyntax] = []
 
@@ -90,8 +98,6 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
             decls.append("typealias SystemUnderTest = \(raw: sutType)")
             decls.append("var systemUnderTest: SystemUnderTest { \(raw: sutProp.name) }")
         } else if sutProps.first != nil {
-            // No type available — use Never as a placeholder and emit a note.
-            // The compiler will produce a type mismatch if the user accesses .systemUnderTest, which is better than a confusing "could not infer" error.
             context.diagnose(Diagnostic(
                 node: Syntax(node),
                 message: ContractDiagnostic.sutTypeNotInferred
@@ -103,11 +109,10 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         decls.append(synthesizeCommandGenerator(commands: commands, context: context))
 
         // 4. run(_:)
-        let isClassDecl = declaration.is(ClassDeclSyntax.self)
-        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: hasAnyAsync, isClassDecl: isClassDecl))
+        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: effectiveAsync, isReferenceType: isReferenceType))
 
         // 5. checkInvariants()
-        decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: hasAnyAsync))
+        decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: effectiveAsync))
 
         // 6. modelDescription
         decls.append(synthesizeModelDescription(modelProps: modelProps))
@@ -115,13 +120,17 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         // 7. sutDescription
         decls.append(synthesizeSUTDescription(sutProps: sutProps))
 
-        // 8. required init() for classes (satisfies ContractSpecBase.init())
+        // 8. init() for reference types (satisfies ContractSpecBase.init())
         let hasUserInit = members.contains { member in
             guard let initDecl = member.decl.as(InitializerDeclSyntax.self) else { return false }
             return initDecl.signature.parameterClause.parameters.isEmpty
         }
-        if isClassDecl, hasUserInit == false {
-            decls.append("required init() {}")
+        if isReferenceType, hasUserInit == false {
+            if isClassDecl {
+                decls.append("required init() {}")
+            } else {
+                decls.append("nonisolated init() {}")
+            }
         }
 
         return decls
@@ -372,7 +381,7 @@ func synthesizeCommandGenerator(commands: [CommandInfo], context: some MacroExpa
     """
 }
 
-func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isClassDecl: Bool) -> DeclSyntax {
+func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isReferenceType: Bool) -> DeclSyntax {
     var cases: [String] = []
 
     for cmd in commands {
@@ -396,7 +405,7 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isClassDecl
     }
 
     let casesBlock = cases.joined(separator: "\n")
-    let mutatingKeyword = isClassDecl ? "" : "mutating "
+    let mutatingKeyword = isReferenceType ? "" : "mutating "
     let signature = hasAnyAsync
         ? "\(mutatingKeyword)func run(_ command: Command) async throws"
         : "\(mutatingKeyword)func run(_ command: Command) throws"
@@ -506,7 +515,7 @@ enum ContractDiagnostic: String, DiagnosticMessage {
     case multipleSUT = "@Contract requires exactly one @SystemUnderTest property, but multiple were found"
     case sutTypeNotInferred = "@SystemUnderTest property type could not be inferred — add an explicit type annotation"
     case commandMissingGenerators = "@Command method has parameters but no generator expressions — add generators to the @Command attribute"
-    case asyncRequiresClass = "@Contract with async commands or invariants must be a class — use 'final class' instead of 'struct'"
+    case asyncRequiresClass = "@Contract with async commands or invariants must be a reference type — use 'final class' or 'actor' instead of 'struct'"
 
     var message: String {
         rawValue
