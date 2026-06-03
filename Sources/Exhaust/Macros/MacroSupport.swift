@@ -757,13 +757,11 @@ public extension __ExhaustRuntime {
         filePath _: StaticString = #filePath,
         line _: UInt = #line,
         column _: UInt = #column
-    ) -> Output {
+    ) throws -> Output {
         let gen = refGen.gen
         var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: 1, sizeOverride: 50)
-        guard let value = try? interpreter.next() else {
-            preconditionFailure(
-                "#example: generator produced no values. If the generator uses a sparse filter, consider restructuring it to produce valid values directly."
-            )
+        guard let value = try interpreter.next() else {
+            throw GeneratorError.sparseValidityCondition
         }
         return value
     }
@@ -777,11 +775,11 @@ public extension __ExhaustRuntime {
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
-    ) -> [Output] {
+    ) throws -> [Output] {
         let gen = refGen.gen
         var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: count)
         var results: [Output] = []
-        while let value = try? interpreter.next() {
+        while let value = try interpreter.next() {
             results.append(value)
         }
         if results.count < count {

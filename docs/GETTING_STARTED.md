@@ -42,7 +42,7 @@ let user = User(id: UUID(), name: "Chris", age: 42, subscription: .premium)
 #expect(process(user).isValid)
 
 // After
-let user = #example(userGenerator)
+let user = try #example(userGenerator)
 #expect(process(user).isValid)
 ```
 
@@ -50,14 +50,14 @@ Your test now runs against a generated user each time rather than a hand-crafted
 
 You're not yet getting everything Exhaust offers this way: just one input per run instead of hundreds, and if the test fails you'll see the whole random value that triggered it rather than a minimal counterexample. Those benefits come with the next step up, when you move the assertion inside an `#exhaust` call.
 
-The immediate win is time. Mock instances of rich domain types are tedious to write and tedious to maintain as those types evolve. `#example(userGenerator)` replaces all of that with a single line. A side benefit is that every run exercises your function on data the fixture-writing habit would probably never have picked — the cases you didn't think to write down.
+The immediate win is time. Mock instances of rich domain types are tedious to write and tedious to maintain as those types evolve. `try #example(userGenerator)` replaces all of that with a single line. A side benefit is that every run exercises your function on data the fixture-writing habit would probably never have picked — the cases you didn't think to write down.
 
 If your types already conform to `Codable`, `#gen` can synthesise a generator from an example JSON value or an existing instance:
 
 ```swift
 let user = User(id: UUID(), name: "Chris", age: 42, subscription: .premium)
 let gen = try #gen(from: user)
-let users = #example(gen, count: 100)
+let users = try #example(gen, count: 100)
 ```
 
 A synthesised generator is slower than a hand-written one (roughly three times per iteration) and has no knowledge of domain constraints — it generates across the full range of each field type. It gets you testing quickly, but when you want control over the values it generates, replace it with a hand-written generator. See [Synthesising generators from Decodable types](GEN-building-generators.md#synthesising-generators-from-decodable-types) for the full picture.

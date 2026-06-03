@@ -152,8 +152,8 @@ struct Bound5ShrinkingChallenge {
     }
 
     @Test("Bound5, 52")
-    func bound552() {
-        let bound5s = #example(Bound5Fixture.gen, count: 100, seed: 1337)
+    func bound552() throws {
+        let bound5s = try #example(Bound5Fixture.gen, count: 100, seed: 1337)
             .filter { Bound5Fixture.property($0) == false }
         for bound5 in bound5s {
             let output = #exhaust(

@@ -6,16 +6,16 @@ import Testing
 @Suite("Concurrency safety — generator sharing")
 struct GeneratorSharingTests {
     @Test("Shared generator interpreted concurrently via #example")
-    func sharedGeneratorInterpretedConcurrentlyViaExample() async {
+    func sharedGeneratorInterpretedConcurrentlyViaExample() async throws {
         let gen = #gen(.int(in: 0 ... 10000).array(length: 5 ... 15))
 
-        await withTaskGroup(of: [Int].self) { group in
+        try await withThrowingTaskGroup(of: [Int].self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    #example(gen, seed: seed)
+                    try #example(gen, seed: seed)
                 }
             }
-            for await values in group {
+            for try await values in group {
                 #expect(values.count >= 5 && values.count <= 15)
                 for value in values {
                     #expect((0 ... 10000).contains(value))
@@ -25,18 +25,18 @@ struct GeneratorSharingTests {
     }
 
     @Test("Shared composed generator with mapped/bound closures interpreted concurrently")
-    func sharedComposedGeneratorWithMappedboundClosuresInterpretedConcurrently() async {
+    func sharedComposedGeneratorWithMappedboundClosuresInterpretedConcurrently() async throws {
         let gen = #gen(.int(in: 1 ... 100))
             .mapped(forward: { "\($0)" }, backward: { Int($0) ?? 0 })
             .array(length: 3 ... 10)
 
-        await withTaskGroup(of: [[String]].self) { group in
+        try await withThrowingTaskGroup(of: [[String]].self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    #example(gen, count: 10, seed: seed)
+                    try #example(gen, count: 10, seed: seed)
                 }
             }
-            for await batches in group {
+            for try await batches in group {
                 #expect(batches.count == 10)
                 for batch in batches {
                     #expect(batch.count >= 3 && batch.count <= 10)
@@ -46,16 +46,16 @@ struct GeneratorSharingTests {
     }
 
     @Test("Shared generator with filter interpreted concurrently")
-    func sharedGeneratorWithFilterInterpretedConcurrently() async {
+    func sharedGeneratorWithFilterInterpretedConcurrently() async throws {
         let gen = #gen(.int(in: 0 ... 1000)).filter { $0 % 2 == 0 }.array(length: 5)
 
-        await withTaskGroup(of: [[Int]].self) { group in
+        try await withThrowingTaskGroup(of: [[Int]].self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    #example(gen, count: 5, seed: seed)
+                    try #example(gen, count: 5, seed: seed)
                 }
             }
-            for await batches in group {
+            for try await batches in group {
                 for batch in batches {
                     #expect(batch.count == 5)
                     for value in batch {
@@ -67,19 +67,19 @@ struct GeneratorSharingTests {
     }
 
     @Test("Shared oneOf generator with @Sendable closures interpreted concurrently")
-    func sharedOneOfGeneratorWithSendableClosuresInterpretedConcurrently() async {
+    func sharedOneOfGeneratorWithSendableClosuresInterpretedConcurrently() async throws {
         let gen = #gen(.oneOf(
             .int(in: 0 ... 100).mapped(forward: { "\($0)" }, backward: { Int($0) ?? 0 }),
             .string(length: 1 ... 5)
         )).array(length: 10)
 
-        await withTaskGroup(of: [[String]].self) { group in
+        try await withThrowingTaskGroup(of: [[String]].self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    #example(gen, count: 5, seed: seed)
+                    try #example(gen, count: 5, seed: seed)
                 }
             }
-            for await batches in group {
+            for try await batches in group {
                 for batch in batches {
                     #expect(batch.count == 10)
                 }
@@ -88,7 +88,7 @@ struct GeneratorSharingTests {
     }
 
     @Test("Shared recursive generator interpreted concurrently")
-    func sharedRecursiveGeneratorInterpretedConcurrently() async {
+    func sharedRecursiveGeneratorInterpretedConcurrently() async throws {
         let gen = ReflectiveGenerator<[Any]>.recursive(
             base: #gen(.int(in: 0 ... 10)).mapped(
                 forward: { [$0 as Any] },
@@ -102,30 +102,31 @@ struct GeneratorSharingTests {
             }
         )
 
-        await withTaskGroup(of: Void.self) { group in
+        try await withThrowingTaskGroup(of: Void.self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    let values = #example(gen, count: 10, seed: seed)
+                    let values = try #example(gen, count: 10, seed: seed)
                     #expect(values.count == 10)
                 }
             }
+            try await group.waitForAll()
         }
     }
 
     @Test("Shared bound generator interpreted concurrently")
-    func sharedBoundGeneratorInterpretedConcurrently() async {
+    func sharedBoundGeneratorInterpretedConcurrently() async throws {
         let gen = #gen(.int(in: 1 ... 10)).bound(
             forward: { length in .string(length: 1 ... length) },
             backward: \.count
         )
 
-        await withTaskGroup(of: [String].self) { group in
+        try await withThrowingTaskGroup(of: [String].self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    #example(gen, count: 10, seed: seed)
+                    try #example(gen, count: 10, seed: seed)
                 }
             }
-            for await batch in group {
+            for try await batch in group {
                 #expect(batch.count == 10)
                 for value in batch {
                     #expect((1 ... 10).contains(value.count))

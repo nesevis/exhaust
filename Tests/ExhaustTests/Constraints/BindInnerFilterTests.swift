@@ -4,7 +4,7 @@ import Testing
 @Suite("Bind-inner filter defers CGS tuning")
 struct BindInnerFilterTests {
     @Test("Filter inside bind produces valid values without eager CGS")
-    func bindInnerFilterProducesValidValues() {
+    func bindInnerFilterProducesValidValues() throws {
         let gen = #gen(.int(in: 1 ... 5).bind { n in
             .int(in: 0 ... 100)
                 // A `filter` inside a bind is rebuilt every time the bind's continuation runs, so tuning it eagerly at construction would re-run CGS per bound value.
@@ -12,7 +12,7 @@ struct BindInnerFilterTests {
                 .filter { $0 % n == 0 }
         })
 
-        let values = #example(gen, count: 50, seed: 42)
+        let values = try #example(gen, count: 50, seed: 42)
         for value in values {
             #expect(value >= 0)
             #expect(value <= 100)

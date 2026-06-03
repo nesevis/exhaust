@@ -37,7 +37,7 @@ struct AdvancedFeatureTests {
     @Suite("Recursive Structures")
     struct RecursiveTests {
         @Test("Recursive tree generation with depth control")
-        func recursiveTreeGeneration() {
+        func recursiveTreeGeneration() throws {
             func treeGen(depth: Int) -> ReflectiveGenerator<TestTree<Int>> {
                 if depth <= 0 {
                     // Leaf node
@@ -53,7 +53,7 @@ struct AdvancedFeatureTests {
             }
 
             let gen = treeGen(depth: 3)
-            let trees = #example(gen, count: 10, seed: 42)
+            let trees = try #example(gen, count: 10, seed: 42)
 
             /// Validate tree structure
             func validateDepth(_ tree: TestTree<Int>, maxDepth: Int) -> Bool {

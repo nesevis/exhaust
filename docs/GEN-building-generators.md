@@ -144,11 +144,11 @@ Synthesised generators are forward-only. Reflection is not supported, so `reflec
 `#example` generates values from your generators outside of property tests. This is a fast way to produce test data, prototypes, and snapshot inputs:
 
 ```swift
-let person = #example(personGen)
-let people = #example(personGen, count: 100, seed: 42)
+let person = try #example(personGen)
+let people = try #example(personGen, count: 100, seed: 42)
 ```
 
-`#example` generates values at size 50 on Exhaust's 0-to-100 size scale. Specifying a `seed` makes the output deterministic. Specifying `count` generates multiple values.
+`#example` is throwing because generator synthesis can fail at runtime for types whose `Decodable` conformance has invariants that preclude random generation. `#example` generates values at size 50 on Exhaust's 0-to-100 size scale. Specifying a `seed` makes the output deterministic. Specifying `count` generates multiple values.
 
 ## Recursive generators
 

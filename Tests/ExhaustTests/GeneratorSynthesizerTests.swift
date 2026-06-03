@@ -11,7 +11,7 @@ struct GeneratorSynthesizerTests {
         {"name": "Gaute", "age": 30, "active": true}
         """
         let generator = try #gen(Person.self, from: json)
-        let values = #example(generator, count: 20)
+        let values = try #example(generator, count: 20)
         print()
 
         #expect(Set(values.map(\.name)).count > 1)
@@ -25,7 +25,7 @@ struct GeneratorSynthesizerTests {
         """
         let data = json.data(using: .utf8)!
         let generator = try #gen(PersonWithAddress.self, from: data)
-        let values = #example(generator, count: 20)
+        let values = try #example(generator, count: 20)
 
         #expect(Set(values.map(\.name)).count > 1)
         #expect(Set(values.map(\.address.street)).count > 1)
@@ -38,7 +38,7 @@ struct GeneratorSynthesizerTests {
         {"label": "test", "status": "active"}
         """
         let generator = try #gen(WithEnum.self, from: json)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         #expect(Set(values.map(\.label)).count > 1)
         #expect(Set(values.map(\.status)).count > 1)
@@ -50,7 +50,7 @@ struct GeneratorSynthesizerTests {
         {"name": "test", "priority": "high"}
         """
         let generator = try #gen(WithNonIterable.self, from: json)
-        let values = #example(generator, count: 20)
+        let values = try #example(generator, count: 20)
 
         #expect(Set(values.map(\.name)).count > 1)
         #expect(values.allSatisfy { $0.priority == .high })
@@ -74,7 +74,7 @@ struct GeneratorSynthesizerTests {
         {"name": "test", "scores": {"alice": 10, "bob": 20}}
         """
         let generator = try #gen(WithDictionary.self, from: json)
-        let values = #example(generator, count: 20, seed: 1337)
+        let values = try #example(generator, count: 20, seed: 1337)
 
         #expect(Set(values.map(\.name)).count > 1)
         #expect(Set(values.map(\.scores.count)).count > 1)
@@ -86,7 +86,7 @@ struct GeneratorSynthesizerTests {
         {"name": "Gaute", "nickname": "Ali"}
         """
         let generator = try #gen(WithOptional.self, from: json)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         let nicknames = values.map(\.nickname)
         #expect(nicknames.contains(where: { $0 == nil }))
@@ -99,7 +99,7 @@ struct GeneratorSynthesizerTests {
         {"name": "Gaute", "nickname": null}
         """
         let generator = try #gen(WithOptional.self, from: json)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         let nicknames = values.map(\.nickname)
         #expect(nicknames.contains(where: { $0 == nil }))
@@ -110,7 +110,7 @@ struct GeneratorSynthesizerTests {
     func codableInstance() throws {
         let example = Person(name: "Gaute", age: 30, active: true)
         let generator = try #gen(from: example)
-        let values = #example(generator, count: 20)
+        let values = try #example(generator, count: 20)
         print(generator.debugDescription)
 
         #expect(Set(values.map(\.name)).count > 1)
@@ -161,7 +161,7 @@ struct GeneratorSynthesizerTests {
         let gen = try #gen(ArrayOnly.self, from: """
         {"tags": ["a", "b"]}
         """)
-        let values = #example(gen, count: 50)
+        let values = try #example(gen, count: 50)
         #expect(Set(values.map(\.tags.count)).count > 1)
     }
 
@@ -170,7 +170,7 @@ struct GeneratorSynthesizerTests {
         let gen = try #gen(DictionaryOnly.self, from: """
         {"scores": {"alice": 10, "bob": 20}}
         """)
-        let values = #example(gen, count: 50)
+        let values = try #example(gen, count: 50)
         #expect(Set(values.map(\.scores.count)).count > 1)
     }
 
@@ -179,7 +179,7 @@ struct GeneratorSynthesizerTests {
         let gen = try #gen(SetOnly.self, from: """
         {"ids": [1, 2, 3]}
         """)
-        let values = #example(gen, count: 50)
+        let values = try #example(gen, count: 50)
         #expect(Set(values.map(\.ids.count)).count > 1)
     }
 
@@ -188,7 +188,7 @@ struct GeneratorSynthesizerTests {
         let gen = try #gen(NestedDictionaryOnly.self, from: """
         {"metadata": {"key": [1, 2]}}
         """)
-        let values = #example(gen, count: 50)
+        let values = try #example(gen, count: 50)
         #expect(Set(values.map(\.metadata.count)).count > 1)
     }
 
@@ -197,7 +197,7 @@ struct GeneratorSynthesizerTests {
         let gen = try #gen(DoublyNestedDictionaryOnly.self, from: """
         {"deep": {"outer": {"inner": [1, 2]}}}
         """)
-        let values = #example(gen, count: 50)
+        let values = try #example(gen, count: 50)
         #expect(Set(values.map(\.deep.count)).count > 1)
     }
 
@@ -206,7 +206,7 @@ struct GeneratorSynthesizerTests {
         let gen = try #gen(OptionalArrayOnly.self, from: """
         {"tags": ["x"]}
         """)
-        let values = #example(gen, count: 50)
+        let values = try #example(gen, count: 50)
         #expect(values.contains(where: { $0.tags == nil }))
         #expect(values.contains(where: { $0.tags != nil }))
     }

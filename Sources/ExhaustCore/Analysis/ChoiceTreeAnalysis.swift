@@ -54,11 +54,15 @@ package enum ChoiceTreeAnalysis {
     ///
     /// Tries multiple seeds to maximize element coverage for sequences.
     ///
-    /// - Parameter expandSequencePairs: When `true`, sequence coverage models include `[X, Y][X, Y]` two-element configurations (N^2 domain entries). When `false`, only `[]` and `[X]` are modeled. ``CoverageRunner`` uses this to retry with a smaller domain when the full model exceeds the coverage budget.
+    /// - Parameters:
+    ///   - expandSequencePairs: When `true`, sequence coverage models include `[X, Y][X, Y]` two-element configurations (N^2 domain entries). When `false`, only `[]` and `[X]` are modeled. ``CoverageRunner`` uses this to retry with a smaller domain when the full model exceeds the coverage budget.
+    ///   - compositeThreshold: Composite sequence parameters whose domain exceeds this value after problematic-value conversion are treated as opaque. Defaults to ``enumerableDomainThreshold``. Pass the coverage budget to prevent sequences of multi-parameter elements from inflating the covering array domain beyond what the budget can cover.
     public static func analyze(
         _ gen: Generator<some Any>,
-        expandSequencePairs: Bool = true
+        expandSequencePairs: Bool = true,
+        compositeThreshold: UInt64? = nil
     ) -> AnalysisResult? {
+        let effectiveCompositeThreshold = compositeThreshold ?? enumerableDomainThreshold
         var bestParameters: [CoverageParameter]?
         var bestTree: ChoiceTree?
 
@@ -77,7 +81,7 @@ package enum ChoiceTreeAnalysis {
             }
 
             var parameters: [CoverageParameter] = []
-            guard walkTree(tree, expandSequencePairs: expandSequencePairs, parameters: &parameters) else {
+            guard walkTree(tree, expandSequencePairs: expandSequencePairs, compositeThreshold: effectiveCompositeThreshold, parameters: &parameters) else {
                 return nil
             }
 
@@ -162,6 +166,7 @@ package enum ChoiceTreeAnalysis {
     private static func walkTree(
         _ tree: ChoiceTree,
         expandSequencePairs: Bool,
+        compositeThreshold: UInt64,
         parameters: inout [CoverageParameter]
     ) -> Bool {
         switch tree {
@@ -175,12 +180,10 @@ package enum ChoiceTreeAnalysis {
                 return true
 
             case let .group(children, _):
-                return walkGroup(children, expandSequencePairs: expandSequencePairs, parameters: &parameters)
+                return walkGroup(children, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters)
 
             case let .bind(_, inner, bound):
-                // Walk inner subtree normally; validate bound subtree without collecting parameters because bound parameters depend on the inner value — extracting them into covering arrays would produce invalid combinations.
-                // The bound subtree is preserved in the original tree for replay.
-                guard walkTree(inner, expandSequencePairs: expandSequencePairs, parameters: &parameters) else { return false }
+                guard walkTree(inner, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters) else { return false }
                 return walkTreeValidateOnly(bound)
 
             case let .sequence(length, elements, metadata):
@@ -189,17 +192,16 @@ package enum ChoiceTreeAnalysis {
                     elements: elements,
                     metadata: metadata,
                     expandSequencePairs: expandSequencePairs,
+                    compositeThreshold: compositeThreshold,
                     parameters: &parameters
                 )
 
             case .getSize:
-                // getSize reads the current size parameter — a fixed value during any given generation run. Not a choice point.
                 return true
 
             case let .resize(_, children):
-                // resize changes the size context for its subtree. The children contain concrete choices that can be walked normally.
                 for child in children {
-                    guard walkTree(child, expandSequencePairs: expandSequencePairs, parameters: &parameters) else { return false }
+                    guard walkTree(child, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters) else { return false }
                 }
                 return true
 
@@ -287,6 +289,7 @@ package enum ChoiceTreeAnalysis {
     private static func walkGroup(
         _ children: [ChoiceTree],
         expandSequencePairs: Bool,
+        compositeThreshold: UInt64,
         parameters: inout [CoverageParameter]
     ) -> Bool {
         if isPick(children) {
@@ -294,7 +297,7 @@ package enum ChoiceTreeAnalysis {
         }
 
         for child in children {
-            guard walkTree(child, expandSequencePairs: expandSequencePairs, parameters: &parameters) else { return false }
+            guard walkTree(child, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters) else { return false }
         }
         return true
     }
@@ -351,6 +354,7 @@ package enum ChoiceTreeAnalysis {
         elements: [ChoiceTree],
         metadata: ChoiceMetadata,
         expandSequencePairs: Bool,
+        compositeThreshold: UInt64,
         parameters: inout [CoverageParameter]
     ) -> Bool {
         guard let lengthRange = metadata.validRange else {
@@ -442,6 +446,10 @@ package enum ChoiceTreeAnalysis {
             if converted {
                 (slots, compositeSize) = buildSlots(from: elementSlotParams, halvedPairs: false)
             }
+        }
+
+        if compositeSize > compositeThreshold {
+            return true
         }
 
         // When not expanding sequence pairs, keep length 2 but give each position a disjoint half of the problematic values. Length ≤1 keeps the full set so every problematic value appears at least once. This reduces the length-2 product from d² to (d/2)² = d²/4 while still exercising pair interactions.

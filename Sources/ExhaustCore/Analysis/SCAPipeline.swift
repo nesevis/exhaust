@@ -59,7 +59,8 @@ package struct SCADomain {
         )
         let branchProfiles = SequenceCoveringArray.analyzeBranches(
             pickChoices,
-            threshold: threshold
+            threshold: threshold,
+            coverageBudget: coverageBudget
         )
         let (profile, mapping) = SequenceCoveringArray.buildProfile(
             sequenceLength: sequenceLength,

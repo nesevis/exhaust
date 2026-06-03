@@ -12,7 +12,7 @@ struct GeneratorSynthesizerCrashSafetyTests {
         let generator = try #gen(Conditional.self, from: """
         {"kind": false}
         """)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         #expect(values.count == 50)
         #expect(values.allSatisfy { $0.kind == false })
@@ -25,7 +25,7 @@ struct GeneratorSynthesizerCrashSafetyTests {
         let generator = try #gen([Member].self, from: """
         [{"id": 1}, {"id": 2}]
         """)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         #expect(Set(values.map(\.count)).count > 1)
         #expect(Set(values.flatMap { $0.map(\.id) }).count > 1)
@@ -37,7 +37,7 @@ struct GeneratorSynthesizerCrashSafetyTests {
         let generator = try #gen([Int].self, from: """
         [1, 2, 3]
         """)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         #expect(Set(values.map(\.count)).count > 1)
     }
@@ -46,7 +46,7 @@ struct GeneratorSynthesizerCrashSafetyTests {
     @Test("Top-level Date resolves to a varying generator")
     func topLevelDateVaries() throws {
         let generator = try #gen(Date.self, from: "0")
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         #expect(Set(values).count > 1)
     }
@@ -55,7 +55,7 @@ struct GeneratorSynthesizerCrashSafetyTests {
     @Test("Top-level UUID resolves to a varying generator")
     func topLevelUUIDVaries() throws {
         let generator = try #gen(UUID.self, from: "\"00000000-0000-0000-0000-000000000000\"")
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         #expect(Set(values).count > 1)
     }
@@ -66,7 +66,7 @@ struct GeneratorSynthesizerCrashSafetyTests {
         let generator = try #gen(WithEmptyEnum.self, from: """
         {"name": "x", "marker": null}
         """)
-        let values = #example(generator, count: 20)
+        let values = try #example(generator, count: 20)
 
         #expect(values.count == 20)
         #expect(values.allSatisfy { $0.marker == nil })
@@ -82,7 +82,7 @@ struct GeneratorSynthesizerKeyAddressingTests {
         let generator = try #gen(ReorderedBranch.self, from: """
         {"flag": true, "a": 42, "b": "hello"}
         """)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         // The false branch is reachable and not pinned to the (flag == true) example.
         #expect(values.contains { $0.flag == true })
@@ -101,7 +101,7 @@ struct GeneratorSynthesizerCollectionTests {
         let generator = try #gen(Team.self, from: """
         {"name": "Avengers", "members": [{"id": 1}, {"id": 2}]}
         """)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         #expect(Set(values.map(\.members.count)).count > 1)
         #expect(Set(values.flatMap { $0.members.map(\.id) }).count > 1)
@@ -112,7 +112,7 @@ struct GeneratorSynthesizerCollectionTests {
         let generator = try #gen(ShapeBag.self, from: """
         {"shapes": [{"id": 1}, {"id": 2}]}
         """)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         #expect(Set(values.map(\.shapes.count)).count > 1)
     }
@@ -122,7 +122,7 @@ struct GeneratorSynthesizerCollectionTests {
         let generator = try #gen(Catalog.self, from: """
         {"items": {"a": {"id": 1}, "b": {"id": 2}}}
         """)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         #expect(Set(values.map(\.items.count)).count > 1)
     }
@@ -136,7 +136,7 @@ struct GeneratorSynthesizerNestedContainerTests {
         let generator = try #gen(InlineNested.self, from: """
         {"id": 1, "meta": {"label": "hello"}}
         """)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         #expect(Set(values.map(\.id)).count > 1)
         #expect(Set(values.map(\.label)).count > 1)
@@ -147,7 +147,7 @@ struct GeneratorSynthesizerNestedContainerTests {
         let generator = try #gen(InlineList.self, from: """
         {"id": 1, "numbers": [10, 20, 30]}
         """)
-        let values = #example(generator, count: 50)
+        let values = try #example(generator, count: 50)
 
         #expect(Set(values.map(\.id)).count > 1)
         #expect(Set(values.map(\.numbers.count)).count > 1)

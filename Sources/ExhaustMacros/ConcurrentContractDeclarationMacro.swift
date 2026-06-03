@@ -24,13 +24,16 @@ public struct ConcurrentContractDeclarationMacro: MemberMacro, ExtensionMacro {
         let invariants = extractInvariants(from: members)
         let oracles = extractOracles(from: members)
         // An async oracle forces the async protocol on its own: the synthesized `oracleCheck` must be able to `await` it, which only `AsyncConcurrentContractSpec` permits.
+        let isActorDecl = declaration.is(ActorDeclSyntax.self)
         let hasAnyAsync =
             commands.contains(where: \.isAsync)
                 || invariants.contains(where: \.isAsync)
                 || oracles.contains(where: \.isAsync)
+        let needsAsyncConformance = hasAnyAsync || isActorDecl
 
-        let proto = hasAnyAsync ? "AsyncConcurrentContractSpec" : "ConcurrentContractSpec"
-        let ext: DeclSyntax = "extension \(type.trimmed): \(raw: proto) {}"
+        let proto = needsAsyncConformance ? "AsyncConcurrentContractSpec" : "ConcurrentContractSpec"
+        let preconcurrency = isActorDecl ? "@preconcurrency " : ""
+        let ext: DeclSyntax = "extension \(type.trimmed): \(raw: preconcurrency)\(raw: proto) {}"
         return [ext.cast(ExtensionDeclSyntax.self)]
     }
 
@@ -44,11 +47,19 @@ public struct ConcurrentContractDeclarationMacro: MemberMacro, ExtensionMacro {
     ) throws -> [DeclSyntax] {
         let members = declaration.memberBlock.members
         let isClassDecl = declaration.is(ClassDeclSyntax.self)
+        let isActorDecl = declaration.is(ActorDeclSyntax.self)
+        let isReferenceType = isClassDecl || isActorDecl
 
-        if isClassDecl == false {
+        if isReferenceType == false {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
                 message: ConcurrentContractDiagnostic.mustBeClass
+            ))
+        }
+        if isActorDecl {
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: ConcurrentContractDiagnostic.actorSerializesAccess
             ))
         }
 
@@ -110,13 +121,14 @@ public struct ConcurrentContractDeclarationMacro: MemberMacro, ExtensionMacro {
         }
 
         decls.append(synthesizeCommandGenerator(commands: commands, context: context))
-        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: hasAnyAsync, isClassDecl: true))
-        decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: hasAnyAsync))
+        let effectiveAsync = hasAnyAsync || isActorDecl
+        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: effectiveAsync, isReferenceType: true))
+        decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: effectiveAsync))
         decls.append(synthesizeModelDescription(modelProps: modelProps))
         decls.append(synthesizeSUTDescription(sutProps: sutProps))
 
         if let oracle = oracles.first {
-            decls.append(synthesizeOracleCheck(oracle: oracle, hasAnyAsync: hasAnyAsync))
+            decls.append(synthesizeOracleCheck(oracle: oracle, hasAnyAsync: effectiveAsync))
         }
 
         let hasUserInit = members.contains { member in
@@ -124,7 +136,11 @@ public struct ConcurrentContractDeclarationMacro: MemberMacro, ExtensionMacro {
             return initDecl.signature.parameterClause.parameters.isEmpty
         }
         if hasUserInit == false {
-            decls.append("required init() {}")
+            if isClassDecl {
+                decls.append("required init() {}")
+            } else {
+                decls.append("nonisolated init() {}")
+            }
         }
 
         return decls
@@ -179,7 +195,8 @@ func synthesizeOracleCheck(oracle: OracleInfo, hasAnyAsync: Bool) -> DeclSyntax 
 // MARK: - Diagnostics
 
 enum ConcurrentContractDiagnostic: String, DiagnosticMessage {
-    case mustBeClass = "@ConcurrentContract must be applied to a class, not a struct"
+    case mustBeClass = "@ConcurrentContract must be applied to a reference type — use 'final class' instead of 'struct'"
+    case actorSerializesAccess = "@ConcurrentContract on an actor has no effect. Actor isolation serializes all command dispatch, preventing the interleaving that concurrent testing requires. Use @Contract instead, or use a class if you need to test concurrent access to the underlying system."
     case noCommands = "@ConcurrentContract requires at least one @Command method"
     case noSUT = "@ConcurrentContract requires exactly one @SystemUnderTest property"
     case multipleSUT = "@ConcurrentContract requires exactly one @SystemUnderTest property, but multiple were found"
@@ -198,7 +215,7 @@ enum ConcurrentContractDiagnostic: String, DiagnosticMessage {
     var severity: DiagnosticSeverity {
         switch self {
             case .mustBeClass, .noCommands, .noSUT, .multipleSUT, .noOracle, .multipleOracles: .error
-            case .sutTypeNotInferred: .warning
+            case .sutTypeNotInferred, .actorSerializesAccess: .warning
         }
     }
 }
