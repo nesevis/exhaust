@@ -56,6 +56,12 @@ public struct ConcurrentContractDeclarationMacro: MemberMacro, ExtensionMacro {
                 message: ConcurrentContractDiagnostic.mustBeClass
             ))
         }
+        if isActorDecl {
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: ConcurrentContractDiagnostic.actorSerializesAccess
+            ))
+        }
 
         let modelProps = extractModelProperties(from: members)
         let sutProps = extractSUTProperties(from: members)
@@ -189,7 +195,8 @@ func synthesizeOracleCheck(oracle: OracleInfo, hasAnyAsync: Bool) -> DeclSyntax 
 // MARK: - Diagnostics
 
 enum ConcurrentContractDiagnostic: String, DiagnosticMessage {
-    case mustBeClass = "@ConcurrentContract must be applied to a reference type — use 'final class' or 'actor' instead of 'struct'"
+    case mustBeClass = "@ConcurrentContract must be applied to a reference type — use 'final class' instead of 'struct'"
+    case actorSerializesAccess = "@ConcurrentContract on an actor has no effect. Actor isolation serializes all command dispatch, preventing the interleaving that concurrent testing requires. Use @Contract instead, or use a class if you need to test concurrent access to the underlying system."
     case noCommands = "@ConcurrentContract requires at least one @Command method"
     case noSUT = "@ConcurrentContract requires exactly one @SystemUnderTest property"
     case multipleSUT = "@ConcurrentContract requires exactly one @SystemUnderTest property, but multiple were found"
@@ -208,7 +215,7 @@ enum ConcurrentContractDiagnostic: String, DiagnosticMessage {
     var severity: DiagnosticSeverity {
         switch self {
             case .mustBeClass, .noCommands, .noSUT, .multipleSUT, .noOracle, .multipleOracles: .error
-            case .sutTypeNotInferred: .warning
+            case .sutTypeNotInferred, .actorSerializesAccess: .warning
         }
     }
 }
