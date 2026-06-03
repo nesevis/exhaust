@@ -9,8 +9,8 @@ You declare a contract with `@Contract` (or `@ConcurrentContract`, for systems b
 | What you're testing | Macro | Concurrency setting | How it runs |
 |---|---|---|---|
 | Synchronous SUT, operations in sequence | `@Contract` (struct) | — | Sequential |
-| Async SUT (actors, async functions), operations in sequence | `@Contract` (final class) | — | Sequential, async-bridged |
-| Pure Swift concurrency — data races across `await` boundaries | `@Contract` (final class) | `.concurrent(N)` | Cooperative: deterministic interleaving at `await`, reproducible seeds |
+| Async SUT (actors, async functions), operations in sequence | `@Contract` (final class or actor) | — | Sequential, async-bridged |
+| Pure Swift concurrency — data races across `await` boundaries | `@Contract` (final class or actor) | `.concurrent(N)` | Cooperative: deterministic interleaving at `await`, reproducible seeds |
 | Multithreading behind an async facade — locks, dispatch queues, atomics | `@ConcurrentContract` (final class) | `.concurrent(N)` | Preemptive: real GCD threads, non-deterministic, `@Oracle` comparison |
 | The same, with synchronous command bodies | `@ConcurrentContract` (final class, sync commands) | `.concurrent(N)` | Preemptive: real GCD threads, no async bridging |
 
@@ -181,7 +181,7 @@ The replay seed lets you re-run the exact same sequence deterministically for de
 
 ## Async contracts
 
-When your system under test has async methods (actors, network services, databases), declare the contract as a `final class` and make commands `async`:
+When your system under test has async methods (actors, network services, databases), declare the contract as a `final class` or an `actor` and make commands `async`:
 
 ```swift
 @Contract
@@ -211,7 +211,7 @@ final class AsyncCounterContract {
 }
 ```
 
-Three differences from sync contracts: the contract is a `final class` (not a struct), commands drop `mutating` (class semantics), and the test call needs `await`:
+Three differences from sync contracts: the contract is a `final class` or `actor` (not a struct), commands drop `mutating` (reference-type semantics), and the test call needs `await`:
 
 ```swift
 @Test func counterBehavesCorrectly() async {
@@ -220,6 +220,12 @@ Three differences from sync contracts: the contract is a `final class` (not a st
 ```
 
 Exhaust detects async methods and generates the correct conformance automatically.
+
+### Actors as contracts
+
+When the contract is an `actor`, Exhaust generates `AsyncContractSpec` conformance regardless of whether commands are explicitly `async`. Actor isolation makes all methods implicitly async from outside, so the async contract runner is always used. Sync commands still dispatch without `await` internally.
+
+Actors are a natural fit when the contract's own state (model properties, SUT) should be isolated from other tests running in parallel. Note that `@ConcurrentContract` on an actor is not useful. Actor isolation serializes all command dispatch, which prevents the interleaving that concurrent testing requires. Use a `final class` for `@ConcurrentContract`.
 
 ## Where interleaving can happen
 
@@ -285,7 +291,7 @@ SUTs that have races at suspension points (the `let v = state; await Task.yield(
 
 `.concurrent(N)` controls how many concurrent lanes commands are distributed across. The default is 2, which suffices for most data races. A study of 105 real-world concurrency bugs in MySQL, Apache, Mozilla, and OpenOffice found that 96% manifest with just two threads (Lu et al., [Learning from Mistakes](https://dl.acm.org/doi/10.1145/1346281.1346323), ASPLOS 2008). Use 3 or more when you suspect the bug requires three-way interleaving (for example, ABA problems or three-participant lost updates). The maximum is 8.
 
-`.concurrent(1)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
+`.concurrent(1)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest. Actor-based contracts can use `.concurrent(1)` to test sequential command behavior through the async contract runner.
 
 ### Idle timeout
 
