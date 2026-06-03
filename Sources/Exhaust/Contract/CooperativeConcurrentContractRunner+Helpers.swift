@@ -25,7 +25,8 @@ extension __ExhaustRuntime {
         let executor = LaneExecutor(lane: LaneID(index: 0), runQueue: runQueue)
         let passed = UnsafeSendableBox(true)
         let done = UnsafeSendableBox(false)
-        Task(executorPreference: executor) { @Sendable [spec] in
+        let oracleResult = UnsafeSendableBox<SequentialOracleResult<Spec>?>(nil)
+        Task(executorPreference: executor) { @Sendable [spec, oracleResult] in
             for command in commands {
                 do {
                     try await spec.value.run(command)
@@ -34,6 +35,13 @@ extension __ExhaustRuntime {
                     passed.value = false
                     break
                 }
+            }
+            if passed.value {
+                oracleResult.value = SequentialOracleResult(
+                    systemUnderTest: spec.value.systemUnderTest,
+                    modelDescription: spec.value.modelDescription,
+                    sutDescription: "\(spec.value.systemUnderTest)"
+                )
             }
             done.value = true
         }
@@ -48,12 +56,7 @@ extension __ExhaustRuntime {
             idleStopwatch = Stopwatch()
         }
 
-        guard passed.value else { return nil }
-        return SequentialOracleResult(
-            systemUnderTest: spec.value.systemUnderTest,
-            modelDescription: spec.value.modelDescription,
-            sutDescription: "\(spec.value.systemUnderTest)"
-        )
+        return oracleResult.value
     }
 }
 

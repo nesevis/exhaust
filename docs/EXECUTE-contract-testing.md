@@ -225,7 +225,10 @@ Exhaust detects async methods and generates the correct conformance automaticall
 
 When the contract is an `actor`, Exhaust generates `AsyncContractSpec` conformance regardless of whether commands are explicitly `async`. Actor isolation makes all methods implicitly async from outside, so the async contract runner is always used. Sync commands still dispatch without `await` internally.
 
-Actors are a natural fit when the contract's own state (model properties, SUT) should be isolated from other tests running in parallel. Note that `@ConcurrentContract` on an actor is not useful. Actor isolation serializes all command dispatch, which prevents the interleaving that concurrent testing requires. Use a `final class` for `@ConcurrentContract`.
+Actors are a natural fit when the contract's own state should be isolated from other tests running in parallel. `@TaskLocal` injection works inside command bodies, so dependency injection via task-locals scopes correctly to each command's execution.
+
+> [!NOTE]
+> `@ConcurrentContract` on an actor has no effect. Actor isolation serialises all command dispatch, which prevents the interleaving that concurrent testing requires. Use a `final class` for `@ConcurrentContract`.
 
 ## Where interleaving can happen
 

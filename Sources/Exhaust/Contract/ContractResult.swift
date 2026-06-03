@@ -10,8 +10,8 @@ public struct ContractResult<Spec: ContractSpecBase> {
     /// Step-by-step execution trace of the failing sequence.
     public let trace: [TraceStep]
 
-    /// The system under test's state after executing the failing sequence. For concurrent contracts, this is the state from a sequential replay — the expected outcome without the race.
-    public let systemUnderTest: Spec.SystemUnderTest
+    /// The system under test's state after executing the failing sequence. For concurrent contracts, this is the state from a sequential replay — the expected outcome without the race. Nil when the sequential replay also failed or the test timed out.
+    public let systemUnderTest: Spec.SystemUnderTest?
 
     /// The seed for deterministic replay, if available.
     public let seed: UInt64?

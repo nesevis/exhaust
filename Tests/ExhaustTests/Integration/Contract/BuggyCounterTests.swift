@@ -22,7 +22,7 @@ struct BuggyCounterTests {
         } == true)
 
         // The SUT should be a BuggyCounter with capacity 3
-        #expect(result.systemUnderTest.capacity == 3)
+        #expect(result.systemUnderTest?.capacity == 3)
     }
 
     @Test("Trace steps have correct structure")

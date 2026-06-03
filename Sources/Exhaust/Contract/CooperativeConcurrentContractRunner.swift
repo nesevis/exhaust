@@ -291,7 +291,7 @@ private extension __ExhaustRuntime {
         regressionSeeds: [String],
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool,
-        specInit: () -> Spec,
+        specInit: @escaping () -> Spec,
         concurrencyLevel: Int,
         idleTimeout: Int,
         failureContext: FailureContext,
@@ -514,7 +514,7 @@ private extension __ExhaustRuntime {
     /// Re-drains the failing schedule with trace recording enabled, runs a sequential oracle to capture the expected (race-free) SUT state, and renders the failure report. Returns both the result and the rendered failure message for the caller to report.
     static func buildFailureResult<Spec: AsyncContractSpec>(
         finalInput: [(ScheduleMarker, Spec.Command)],
-        specInit: () -> Spec,
+        specInit: @escaping () -> Spec,
         concurrencyLevel: Int,
         idleTimeout: Int,
         seed: UInt64?,
@@ -546,7 +546,7 @@ private extension __ExhaustRuntime {
         let result = ContractResult<Spec>(
             commands: finalInput.map(\.1),
             trace: trace,
-            systemUnderTest: oracle?.systemUnderTest ?? Spec().systemUnderTest,
+            systemUnderTest: oracle?.systemUnderTest,
             seed: seed,
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod
