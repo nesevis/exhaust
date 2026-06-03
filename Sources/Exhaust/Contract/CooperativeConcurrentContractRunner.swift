@@ -27,6 +27,23 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column
     ) async -> ContractResult<Spec>? {
+        if Spec.self is any Actor.Type {
+            let requestedLevel = settings.compactMap { setting -> Int? in
+                if case let .concurrent(level) = setting { return level }
+                return nil
+            }.last
+            if let requestedLevel, requestedLevel > 1 {
+                reportIssue(
+                    "Actor isolation serialises all command dispatch. .concurrent(\(requestedLevel)) will be ignored.",
+                    severity: .warning,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+            }
+        }
+
         var config: ResolvedConcurrentConfig
         switch ResolvedConcurrentConfig.parse(settings) {
             case let .success(resolved):
@@ -115,6 +132,11 @@ private extension __ExhaustRuntime {
 
         var failureContext = FailureContext()
         failureContext.specName = "\(Spec.self)"
+
+        var config = config
+        if config.concurrencyLevel > 1, Spec.self is any Actor.Type {
+            config.concurrencyLevel = 1
+        }
 
         let commandGen = Spec.commandGenerator.gen
         let samplingBudget = config.budget.samplingBudget
