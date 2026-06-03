@@ -34,7 +34,7 @@ package enum CoverageRunner {
         property: (Output) -> Bool,
         onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
     ) -> Result<Output> {
-        guard var analysis = ChoiceTreeAnalysis.analyze(gen) else {
+        guard var analysis = ChoiceTreeAnalysis.analyze(gen, compositeThreshold: coverageBudget) else {
             return .notApplicable
         }
 
@@ -42,7 +42,7 @@ package enum CoverageRunner {
             let sorted = largeProfile.domainSizes.sorted(by: >)
             let largestPairProduct = sorted.prefix(2).reduce(UInt64(1), *)
             if largestPairProduct > coverageBudget,
-               let smaller = ChoiceTreeAnalysis.analyze(gen, expandSequencePairs: false)
+               let smaller = ChoiceTreeAnalysis.analyze(gen, expandSequencePairs: false, compositeThreshold: coverageBudget)
             {
                 analysis = smaller
             }

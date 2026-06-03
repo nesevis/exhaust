@@ -35,7 +35,8 @@ extension __ExhaustRuntime {
         )
         let branchProfiles = SequenceCoveringArray.analyzeBranches(
             pickChoices,
-            threshold: threshold
+            threshold: threshold,
+            coverageBudget: coverageBudget
         )
         var domainSize: UInt64 = 0
         for profile in branchProfiles {

@@ -96,14 +96,15 @@ package enum SequenceCoveringArray {
     /// Parameters with domain size above `threshold` are converted to problematic-value representatives to keep the per-position domain tractable. Use ``computeThreshold(budget:sequenceLength:branchCount:)`` to derive the threshold from the covering array budget.
     package static func analyzeBranches(
         _ pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        threshold: UInt64
+        threshold: UInt64,
+        coverageBudget: UInt64
     ) -> [BranchArgProfile] {
         pickChoices.map { choice in
             if isParameterFree(choice.generator) {
                 return .parameterFree
             }
 
-            guard let result = ChoiceTreeAnalysis.analyze(choice.generator) else {
+            guard let result = ChoiceTreeAnalysis.analyze(choice.generator, compositeThreshold: coverageBudget) else {
                 return .unanalyzable
             }
 
