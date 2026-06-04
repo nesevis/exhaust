@@ -243,7 +243,8 @@ private extension __ExhaustRuntime {
             property: property,
             identifySkips: identifySkips,
             finalize: { commands in
-                __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+                // `DiagnosticSnapshot` is `@unchecked Sendable`, so returning it (rather than the bare non-Sendable SUT) crosses the blocking-await boundary without an unsafe escape hatch. The SUT is unpacked here, back on the calling thread.
+                let captured = __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
                     let spec = specInit()
                     let (trace, _) = await buildAsyncSequentialTrace(
                         commands,
@@ -251,12 +252,9 @@ private extension __ExhaustRuntime {
                         checkInvariants: { try await spec.checkInvariants() }
                     )
                     let snapshot = await spec.diagnosticSnapshot()
-                    nonisolated(unsafe) return (
-                        trace: trace,
-                        systemUnderTest: snapshot.systemUnderTest,
-                        modelDescription: snapshot.modelDescription
-                    )
+                    return (trace: trace, snapshot: snapshot)
                 }!
+                return (captured.trace, captured.snapshot.systemUnderTest, captured.snapshot.modelDescription)
             }
         ) else {
             return (nil, deferredIssues)

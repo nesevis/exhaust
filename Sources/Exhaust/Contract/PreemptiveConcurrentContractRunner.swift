@@ -89,7 +89,10 @@ private extension __ExhaustRuntime {
 
         let samplingBudget = config.budget.samplingBudget
         let coverageBudget = config.budget.coverageBudget
-        let check = PreemptiveChecker<Spec>()
+        let idleTimeoutMilliseconds: Int? = (config.idleTimeout > 0 && config.idleTimeout < Int.max)
+            ? config.idleTimeout
+            : nil
+        let check = PreemptiveChecker<Spec>(idleTimeoutMilliseconds: idleTimeoutMilliseconds)
         var coverageInvocations = 0
         let invocationCounter = UnsafeSendableBox(0)
         let lastRunTimedOut = UnsafeSendableBox(false)
@@ -100,7 +103,9 @@ private extension __ExhaustRuntime {
         }
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             invocationCounter.value += 1
-            return check.execute(taggedCommands)
+            let outcome = check.execute(taggedCommands)
+            lastRunTimedOut.value = outcome.timedOut
+            return outcome.passed
         }
 
         // Phase 0: Smoke test
@@ -233,19 +238,31 @@ private extension __ExhaustRuntime {
             do { while let (taggedCommands, tree) = try interpreter.next() {
                 samplingIteration += 1
                 let absoluteIteration = Int(startIndex) + samplingIteration
-                if check.execute(taggedCommands) == false {
-                    let reductionResult = check.reduce(
-                        generator: sequenceGen,
-                        tree: tree,
-                        output: taggedCommands,
-                        repetitions: 10
-                    )
+                let outcome = check.execute(taggedCommands)
+                if outcome.passed == false {
+                    // Reduction stays correct on a timeout — the reducer only ever returns a failing schedule — but on a hang every probe waits out the idle bound (idleTimeout × repetitions) and a timing-dependent timeout often will not reproduce, so it is slow and usually fruitless. Skip it and report the original schedule.
+                    let reduced: [(ScheduleMarker, Spec.Command)]
+                    let reductionInvocations: Int
+                    if outcome.timedOut {
+                        reduced = taggedCommands
+                        reductionInvocations = 0
+                    } else {
+                        let reductionResult = check.reduce(
+                            generator: sequenceGen,
+                            tree: tree,
+                            output: taggedCommands,
+                            repetitions: 10
+                        )
+                        reduced = reductionResult.output
+                        reductionInvocations = reductionResult.propertyInvocations
+                        report.applyReductionStats(reductionResult.stats)
+                    }
 
                     let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
                     let samplingReplaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
                     let result = buildPreemptiveResult(
                         Spec.self,
-                        reduced: reductionResult.output,
+                        reduced: reduced,
                         seed: actualSeed,
                         replaySeed: samplingReplaySeed,
                         discoveryMethod: discoveryMethod
@@ -254,9 +271,8 @@ private extension __ExhaustRuntime {
                     report.setInvocations(
                         coverage: coverageInvocations,
                         randomSampling: samplingIteration,
-                        reduction: reductionResult.propertyInvocations
+                        reduction: reductionInvocations
                     )
-                    report.applyReductionStats(reductionResult.stats)
 
                     if config.suppressIssueReporting == false {
                         var failureContext = FailureContext()
@@ -267,11 +283,13 @@ private extension __ExhaustRuntime {
                         failureContext.iteration = absoluteIteration
                         failureContext.budget = samplingBudget
                         failureContext.sequencesTested = samplingIteration
-                        failureContext.reductionInvocations = reductionResult.propertyInvocations
+                        failureContext.reductionInvocations = reductionInvocations
                         failureContext.originalCount = taggedCommands.count
                         failureContext.replaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
+                        // When set, the renderer emits the timeout diagnostic and ignores the expected-state line below.
+                        failureContext.timedOut = outcome.timedOut
                         failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
-                        let message = renderFailure(reductionResult.output, trace: result.trace, context: failureContext)
+                        let message = renderFailure(reduced, trace: result.trace, context: failureContext)
                         reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
                     }
 
@@ -359,10 +377,13 @@ private func runCatchingObjC(_ body: @convention(block) () -> Void) -> Bool {
 
 /// Encapsulates concurrent execution, oracle comparison, and three-pass reduction for a ``ContractSpec``.
 private struct PreemptiveChecker<Spec: ContractSpec> {
+    /// Idle bound for the concurrent lanes, or `nil` to wait indefinitely. A synchronous SUT deadlock — the exact bug class preemptive testing targets — would otherwise wedge a lane forever and hang the test process with no diagnostic.
+    let idleTimeoutMilliseconds: Int?
+
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
-    /// Returns `true` if the execution passes. Returns `false` if invariants fail or the oracle detects divergence from sequential behavior.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Bool {
+    /// `passed` is `false` when a command throws, an invariant fails, or the oracle detects divergence from sequential behavior. `timedOut` is `true` when the concurrent lanes did not finish within ``idleTimeoutMilliseconds`` — surfaced separately so the caller can skip reduction (every probe would wait out the bound) and report a hang rather than a deterministic failure.
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> (passed: Bool, timedOut: Bool) {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
@@ -371,16 +392,16 @@ private struct PreemptiveChecker<Spec: ContractSpec> {
 
         for (_, command) in prefixCommands {
             guard runCommandCatchingObjC(command, on: concurrentSpec) else {
-                return false
+                return (passed: false, timedOut: false)
             }
             guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return false
+                return (passed: false, timedOut: false)
             }
         }
 
         for (_, command) in concurrentCommands {
             guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return false
+                return (passed: false, timedOut: false)
             }
         }
 
@@ -411,19 +432,27 @@ private struct PreemptiveChecker<Spec: ContractSpec> {
                 group.leave()
             }
         }
-        group.wait()
+        if let idleTimeoutMilliseconds {
+            if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
+                // A lane is wedged (a synchronous deadlock in the SUT). Stop the lanes we can and report a hang rather than blocking the test process forever. Orphaned lanes blocked on the deadlock cannot be reclaimed.
+                commandFailed.value = true
+                return (passed: false, timedOut: true)
+            }
+        } else {
+            group.wait()
+        }
 
         if caughtException.value != nil || commandFailed.value {
-            return false
+            return (passed: false, timedOut: false)
         }
 
         do {
             try concurrentSpec.checkInvariants()
         } catch {
-            return false
+            return (passed: false, timedOut: false)
         }
 
-        return concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest)
+        return (passed: concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest), timedOut: false)
     }
 
     /// Runs a command on a spec with ObjC exception safety, treating ``ContractSkip`` as a pass.
@@ -470,7 +499,7 @@ private struct PreemptiveChecker<Spec: ContractSpec> {
         let property: ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             for _ in 0 ..< repetitions {
                 propertyInvocations += 1
-                if execute(taggedCommands) == false {
+                if execute(taggedCommands).passed == false {
                     return false
                 }
             }
