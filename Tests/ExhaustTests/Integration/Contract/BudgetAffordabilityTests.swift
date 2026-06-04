@@ -47,8 +47,8 @@ struct BudgetAffordabilityTests {
 
 // MARK: - Contract: Correct implementation
 
-@Contract
-struct BudgetAffordabilitySpec {
+@Contract(.sequential)
+final class BudgetAffordabilitySpec {
     @Model var wasUnaffordable = false
     @SystemUnderTest var items: [BillItem] = []
 
@@ -62,7 +62,7 @@ struct BudgetAffordabilitySpec {
     }
 
     @Command(weight: 3, .int(in: 1 ... 5), .int(in: 1 ... 2), .int(in: 0 ... 7))
-    mutating func addItem(cost: Int, count: Int, categoryMask: Int) throws {
+    func addItem(cost: Int, count: Int, categoryMask: Int) throws {
         items.append(BillItem(
             cost: cost,
             count: count,
@@ -79,12 +79,12 @@ struct BudgetAffordabilitySpec {
 
 // MARK: - Contract: Buggy greedy implementation
 
-@Contract
-struct BuggyBudgetAffordabilitySpec {
+@Contract(.sequential)
+final class BuggyBudgetAffordabilitySpec {
     @SystemUnderTest var items: [BillItem] = []
 
     @Command(weight: 1, .int(in: 1 ... 5), .int(in: 1 ... 2), .int(in: 0 ... 7))
-    mutating func addItem(cost: Int, count: Int, categoryMask: Int) throws {
+    func addItem(cost: Int, count: Int, categoryMask: Int) throws {
         items.append(BillItem(
             cost: cost,
             count: count,

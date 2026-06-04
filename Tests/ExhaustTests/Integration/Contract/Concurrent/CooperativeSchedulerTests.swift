@@ -65,7 +65,7 @@ struct CooperativeSchedulerTests {
     func concurrencyLevel1RunsEverythingSequentiallyAndFindsNoConcurrencyBugs() async {
         let result = await __ExhaustRuntime.__runContractConcurrent(
             NonAtomicCounterSpec.self,
-            settings: [.concurrent(1), .commandLimit(8), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+            settings: [.concurrent(.one), .commandLimit(8), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
         )
         #expect(result == nil, "With concurrency level 1, all commands run as prefix — no interleaving, no bug found")
     }

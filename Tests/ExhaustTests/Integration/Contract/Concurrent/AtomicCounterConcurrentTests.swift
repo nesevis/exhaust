@@ -29,7 +29,7 @@ struct AtomicCounterConcurrentTests {
 
 // MARK: - Specs
 
-@Contract
+@Contract(.tasks)
 final class AtomicCounterSpec {
     @Model
     var expected: Int = 0
@@ -55,7 +55,7 @@ final class AtomicCounterSpec {
     }
 }
 
-@Contract
+@Contract(.tasks)
 final class NarrowRaceCounterSpec {
     @Model
     var expected: Int = 0

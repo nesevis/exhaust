@@ -95,4 +95,4 @@ First, reduction operates on choices, not on values. The reducer never needs to 
 
 Second, shape and values are separated. The reducer removes structure until no further removal is possible, then drives the remaining values toward their simplest forms. The final counterexample is minimal in both dimensions independently.
 
-Third, committed progress is irreversible. Every accepted candidate is strictly simpler than the one before it. When reduction stalls at a local minimum, the reducer may explore a structurally different neighborhood — but only keeps the result if it is strictly simpler than what came before. This is what allows the reducer to reach the same counterexample regardless of where it starts.
+Third, committed progress is irreversible. Every accepted candidate is strictly simpler than the one before it. When reduction stalls at a local minimum, the reducer may explore a structurally different neighbourhood — but only keeps the result if it is strictly simpler than what came before. This is what allows the reducer to reach the same counterexample regardless of where it starts.

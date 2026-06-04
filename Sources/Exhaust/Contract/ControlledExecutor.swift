@@ -5,7 +5,7 @@
 //
 // Key invariant: one runSynchronously call executes exactly one continuation — the synchronous code between two suspension points. When a task hits an `await`, the runtime re-enqueues the next continuation through LaneExecutor.enqueue(_:), which deposits it back into the RunQueue. The drain loop then picks the next job (potentially from another lane), producing deterministic sub-command interleaving at every await boundary.
 //
-// Thread safety: RunQueue is protected by NSLock. In the common case (all continuations flow through LaneExecutor on the drain loop thread), the lock is uncontended. The lock exists because SUTs commonly wrap GCD-based code in async/await facades (for example, a database that uses DispatchQueue internally but exposes an async API via withCheckedContinuation). When the SUT's GCD work completes, the continuation is re-enqueued to LaneExecutor from the GCD thread, not the drain loop thread. Without the lock, this concurrent enqueue races with the drain loop's dequeue on the per-lane arrays. Custom-executor actors and Task.sleep produce the same cross-thread re-enqueue pattern.
+// Thread safety: RunQueue is protected by an NSCondition lock. In the common case (all continuations flow through LaneExecutor on the drain loop thread), the lock is uncontended. The lock exists because SUTs commonly wrap GCD-based code in async/await facades (for example, a database that uses DispatchQueue internally but exposes an async API via withCheckedContinuation). When the SUT's GCD work completes, the continuation is re-enqueued to LaneExecutor from the GCD thread, not the drain loop thread. Without the lock, this concurrent enqueue races with the drain loop's dequeue on the per-lane arrays. Custom-executor actors and Task.sleep produce the same cross-thread re-enqueue pattern.
 import Foundation
 
 /// Identifies a logical execution lane in a concurrent contract test.
@@ -46,9 +46,9 @@ final class LaneExecutor: TaskExecutor, @unchecked Sendable {
 
 /// Collects tagged jobs from all lane executors and dispatches them under schedule control.
 ///
-/// The drain loop calls ``dequeue(preferring:)`` in a tight loop, passing the next lane from the generated schedule. If a job for the preferred lane exists, it is returned; otherwise the queue falls back to any available job. This "prefer but don't block" policy means the generated schedule controls interleaving when multiple lanes have pending work, and automatically drains whichever lane is still active when others have no pending continuations.
+/// The drain loop calls ``dequeue(preferring:)``, passing the next lane from the generated schedule. If a job for the preferred lane exists, it is returned; otherwise the queue falls back to any available job. This "prefer but don't block" policy means the generated schedule controls interleaving when multiple lanes have pending work, and automatically drains whichever lane is still active when others have no pending continuations.
 ///
-/// Thread-safe: all mutable state is protected by `NSLock`. In the common case (single-threaded drain loop), the lock is uncontended. When a foreign executor re-enqueues a continuation from another thread, the lock serializes the access.
+/// Thread-safe: all mutable state is protected by `NSCondition`. In the common case (single-threaded drain loop), the lock is uncontended. When a foreign executor re-enqueues a continuation from another thread, the lock serializes the access. A queue-wide condition wakes the drain loop when it is parked with no runnable jobs; the condition does not participate in lane selection.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 final class RunQueue: @unchecked Sendable {
     private struct Lane {
@@ -62,7 +62,7 @@ final class RunQueue: @unchecked Sendable {
     }
 
     private var lanes: [Lane]
-    private let lock = NSLock()
+    private let condition = NSCondition()
 
     init(laneCount: Int) {
         lanes = Array(repeating: Lane(), count: laneCount)
@@ -70,29 +70,37 @@ final class RunQueue: @unchecked Sendable {
 
     /// Appends a job to the specified lane's queue. May be called from any thread.
     func enqueue(lane: LaneID, job: UnownedJob) {
-        lock.withLocking { lanes[Int(lane.index)].jobs.append(job) }
+        withLocking {
+            lanes[Int(lane.index)].jobs.append(job)
+            condition.signal()
+        }
     }
 
     /// Records that a lane's task has finished executing all its commands.
+    ///
+    /// Signals the condition and, together with the all-lanes-complete check in ``waitForJob(until:)``, releases a parked drain loop so it observes ``isFinished`` rather than waiting out the idle timeout. Today this is belt-and-braces: completion always runs on the drain thread (lane tasks carry `executorPreference`, so the terminal continuation routes back here), so the loop is never parked when a lane completes. The pairing keeps the drain loop live if a future change ever marks a lane complete from another thread.
     func markComplete(lane: LaneID) {
-        lock.withLocking { lanes[Int(lane.index)].isComplete = true }
+        withLocking {
+            lanes[Int(lane.index)].isComplete = true
+            condition.signal()
+        }
     }
 
     /// Returns true when all lanes have completed and no jobs remain.
     var isFinished: Bool {
-        lock.withLocking { lanes.allSatisfy(\.isComplete) && lanes.contains(where: \.hasPendingJob) == false }
+        withLocking { lanes.allSatisfy(\.isComplete) && lanes.contains(where: \.hasPendingJob) == false }
     }
 
     /// Returns true when at least one lane has a pending job.
     var hasPendingJobs: Bool {
-        lock.withLocking { lanes.contains(where: \.hasPendingJob) }
+        withLocking { lanes.contains(where: \.hasPendingJob) }
     }
 
     /// Removes and returns the next job, preferring the specified lane. O(1) for the preferred lane, O(K) fallback where K is the lane count.
     ///
     /// Falls back to any available job if the preferred lane has none pending. Returns nil only when all lanes are empty.
     func dequeue(preferring preferred: LaneID) -> (lane: LaneID, job: UnownedJob)? {
-        lock.withLocking {
+        withLocking {
             let prefIndex = Int(preferred.index)
             if lanes[prefIndex].hasPendingJob {
                 let job = lanes[prefIndex].jobs[lanes[prefIndex].cursor]
@@ -110,6 +118,63 @@ final class RunQueue: @unchecked Sendable {
 
     /// Returns true when the specified lane has at least one pending job.
     func hasPendingJob(for lane: LaneID) -> Bool {
-        lock.withLocking { lanes[Int(lane.index)].hasPendingJob }
+        withLocking { lanes[Int(lane.index)].hasPendingJob }
+    }
+
+    /// Waits until at least one job is enqueued (or every lane completes), or until the deadline expires.
+    ///
+    /// Callers should attempt ``dequeue(preferring:)`` before and after waiting. The condition only avoids empty-queue spin; the queue's normal preference and fallback logic still decides which job runs. Returns `true` on either a new job or all-lanes-complete so the drain loop loops back and re-checks ``isFinished``; returns `false` only on a genuine idle timeout. The all-complete check makes the wait safe even if a lane is ever marked complete from off the drain thread (see ``markComplete(lane:)``).
+    func waitForJob(until deadline: Date) -> Bool {
+        withLocking {
+            while lanes.contains(where: \.hasPendingJob) == false {
+                if lanes.allSatisfy(\.isComplete) {
+                    return true
+                }
+                if condition.wait(until: deadline) == false {
+                    return lanes.contains(where: \.hasPendingJob)
+                }
+            }
+            return true
+        }
+    }
+
+    /// Waits for the remainder of an idle-timeout window.
+    ///
+    /// Returns `false` when the idle timeout expires before another job is enqueued.
+    func waitForJob(
+        idleTimeoutMilliseconds: Int,
+        elapsedMilliseconds: Double
+    ) -> Bool {
+        if idleTimeoutMilliseconds == Int.max {
+            waitForJob()
+            return true
+        }
+
+        let remainingMilliseconds = idleTimeoutMilliseconds - Int(elapsedMilliseconds)
+        guard remainingMilliseconds > 0 else {
+            return false
+        }
+
+        return waitForJob(
+            until: Date(timeIntervalSinceNow: Double(remainingMilliseconds) / 1000)
+        )
+    }
+
+    /// Waits until at least one job is enqueued, or every lane completes.
+    func waitForJob() {
+        withLocking {
+            while lanes.contains(where: \.hasPendingJob) == false {
+                if lanes.allSatisfy(\.isComplete) {
+                    return
+                }
+                condition.wait()
+            }
+        }
+    }
+
+    private func withLocking<Result>(_ body: () throws -> Result) rethrows -> Result {
+        condition.lock()
+        defer { condition.unlock() }
+        return try body()
     }
 }

@@ -24,8 +24,8 @@ struct MultiModelTests {
 
 // MARK: - Spec
 
-@Contract
-struct MultiModelSpec {
+@Contract(.sequential)
+final class MultiModelSpec {
     @Model
     var expectedKeys: [String] = []
     @Model
@@ -46,7 +46,7 @@ struct MultiModelSpec {
     }
 
     @Command(weight: 3, .element(from: ["a", "b", "c"]), .int(in: 0 ... 9))
-    mutating func insert(key: String, value: Int) throws {
+    func insert(key: String, value: Int) throws {
         if expectedKeys.contains(key) == false {
             expectedKeys.append(key)
             expectedCount += 1
@@ -56,7 +56,7 @@ struct MultiModelSpec {
     }
 
     @Command(weight: 2, .element(from: ["a", "b", "c"]))
-    mutating func remove(key: String) throws {
+    func remove(key: String) throws {
         guard expectedKeys.contains(key) else { throw skip() }
         expectedKeys.removeAll { $0 == key }
         expectedCount -= 1

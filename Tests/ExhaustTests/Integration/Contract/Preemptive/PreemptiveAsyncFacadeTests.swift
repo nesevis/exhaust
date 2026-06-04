@@ -11,7 +11,7 @@ struct PreemptiveAsyncFacadeTests {
             await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 AsyncRacyCounterSpec.self,
                 settings: [
-                    .concurrent(2),
+                    .concurrent(.two),
                     .commandLimit(6),
                     .budget(.custom(coverage: 0, sampling: 200)),
                     .suppress(.issueReporting),
@@ -27,7 +27,7 @@ struct PreemptiveAsyncFacadeTests {
         _ = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
             AsyncRacyCounterSpec.self,
             settings: [
-                .concurrent(2),
+                .concurrent(.two),
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
                 .suppress(.issueReporting),
@@ -47,7 +47,7 @@ struct PreemptiveAsyncFacadeTests {
                 await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                     AsyncRacyCounterSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(6),
                         .budget(.custom(coverage: 0, sampling: 200)),
                     ]
@@ -59,7 +59,7 @@ struct PreemptiveAsyncFacadeTests {
 
 // MARK: - Spec
 
-@ConcurrentContract
+@Contract(.threads)
 final class AsyncRacyCounterSpec {
     @SystemUnderTest
     var counter: AsyncRacyCounter = .init()

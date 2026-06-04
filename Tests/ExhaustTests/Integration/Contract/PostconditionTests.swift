@@ -60,12 +60,12 @@ struct PostconditionTests {
 
 // MARK: - Contract: Set uniqueness
 
-@Contract
-struct SetUniquenessContract {
+@Contract(.sequential)
+final class SetUniquenessContract {
     @SystemUnderTest var uniqueSet = BuggySet<Int>()
 
     @Command(weight: 3, .int(in: 0 ... 3))
-    mutating func add(element: Int) throws {
+    func add(element: Int) throws {
         uniqueSet.add(element)
         // Postcondition: after add, the element is present
         try check(uniqueSet.contains(element), "added element must be contained")
@@ -75,14 +75,14 @@ struct SetUniquenessContract {
     }
 
     @Command(weight: 2, .int(in: 0 ... 3))
-    mutating func remove(element: Int) throws {
+    func remove(element: Int) throws {
         uniqueSet.remove(element)
         // Postcondition: after remove, the element is gone
         try check(!uniqueSet.contains(element), "removed element must not be contained")
     }
 
     @Command(weight: 1)
-    mutating func checkCount() throws {
+    func checkCount() throws {
         // Self-consistency: count equals the number of unique elements
         let unique = Set(uniqueSet.elements).count
         try check(uniqueSet.count == unique, "count must equal unique element count")
@@ -91,12 +91,12 @@ struct SetUniquenessContract {
 
 // MARK: - Contract: Stack LIFO ordering
 
-@Contract
-struct StackLIFOContract {
+@Contract(.sequential)
+final class StackLIFOContract {
     @SystemUnderTest var stack = BuggyStack<Int>()
 
     @Command(weight: 3, .int(in: 0 ... 9))
-    mutating func push(value: Int) throws {
+    func push(value: Int) throws {
         let previousCount = stack.count
         stack.push(value)
         // Postcondition: after push(x), peek returns x
@@ -106,7 +106,7 @@ struct StackLIFOContract {
     }
 
     @Command(weight: 2)
-    mutating func pop() throws {
+    func pop() throws {
         guard !stack.isEmpty else { throw skip() }
         let previousCount = stack.count
         _ = stack.pop()
@@ -117,8 +117,8 @@ struct StackLIFOContract {
 
 // MARK: - Contract: Dictionary consistency
 
-@Contract
-struct DictionaryConsistencyContract {
+@Contract(.sequential)
+final class DictionaryConsistencyContract {
     @SystemUnderTest var dict = TrackedDictionary()
 
     @Invariant
@@ -127,14 +127,14 @@ struct DictionaryConsistencyContract {
     }
 
     @Command(weight: 3, .int(in: 0 ... 4), .int(in: 0 ... 99))
-    mutating func set(key: Int, value: Int) throws {
+    func set(key: Int, value: Int) throws {
         dict.set(key, value)
         // Postcondition: the value is retrievable
         try check(dict.get(key) == value, "get must return set value")
     }
 
     @Command(weight: 2, .int(in: 0 ... 4))
-    mutating func remove(key: Int) throws {
+    func remove(key: Int) throws {
         dict.remove(key)
         // Postcondition: the key is gone
         try check(dict.get(key) == nil, "removed key must return nil")

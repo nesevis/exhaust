@@ -28,8 +28,8 @@ struct ALUTests {
 
 // MARK: - Contract
 
-@Contract
-struct ALUSpec {
+@Contract(.sequential)
+final class ALUSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var alu = FourBitALU()
 
@@ -40,35 +40,35 @@ struct ALUSpec {
 
     // store: 5 arg values  → 5 domain slots
     @Command(weight: 2, #gen(.int(in: 0 ... 4)))
-    mutating func store(value: Int) throws {
+    func store(value: Int) throws {
         expected = value
         alu.store(value)
     }
 
     // add: 4 arg values    → 4 domain slots
     @Command(weight: 2, #gen(.int(in: 1 ... 4)))
-    mutating func add(operand: Int) throws {
+    func add(operand: Int) throws {
         expected = (expected + operand) & 0xF
         alu.add(operand)
     }
 
     // multiply: 2 arg values → 2 domain slots  (the buggy operation)
     @Command(weight: 1, #gen(.int(in: 2 ... 3)))
-    mutating func multiply(factor: Int) throws {
+    func multiply(factor: Int) throws {
         expected = (expected * factor) & 0xF
         alu.multiply(factor)
     }
 
     // subtract: 3 arg values → 3 domain slots
     @Command(weight: 1, #gen(.int(in: 1 ... 3)))
-    mutating func subtract(amount: Int) throws {
+    func subtract(amount: Int) throws {
         expected = (expected - amount) & 0xF
         alu.subtract(amount)
     }
 
     // increment: param-free  → 1 domain slot
     @Command(weight: 1)
-    mutating func increment() throws {
+    func increment() throws {
         expected = (expected + 1) & 0xF
         alu.increment()
     }
@@ -76,7 +76,7 @@ struct ALUSpec {
     // clear: param-free → 1 domain slot
     // total: 16 domain values per position
     @Command(weight: 1)
-    mutating func clear() throws {
+    func clear() throws {
         expected = 0
         alu.clear()
     }

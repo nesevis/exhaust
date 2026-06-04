@@ -36,8 +36,8 @@ struct MultiInvariantTests {
 
 // MARK: - Spec: Five invariants, one fails
 
-@Contract
-struct FiveInvariantSpec {
+@Contract(.sequential)
+final class FiveInvariantSpec {
     @Model
     var expected: Int = 0
     @SystemUnderTest
@@ -64,7 +64,7 @@ struct FiveInvariantSpec {
     }
 
     @Command(weight: 3)
-    mutating func increment() throws {
+    func increment() throws {
         expected += 1
         counter.increment()
     }
@@ -72,8 +72,8 @@ struct FiveInvariantSpec {
 
 // MARK: - Spec: Five invariants, all pass
 
-@Contract
-struct PassingFiveInvariantSpec {
+@Contract(.sequential)
+final class PassingFiveInvariantSpec {
     @Model
     var expected: Int = 0
     @SystemUnderTest
@@ -100,13 +100,13 @@ struct PassingFiveInvariantSpec {
     }
 
     @Command(weight: 3)
-    mutating func increment() throws {
+    func increment() throws {
         expected += 1
         counter.increment()
     }
 
     @Command(weight: 1)
-    mutating func reset() throws {
+    func reset() throws {
         expected = 0
         counter.reset()
     }

@@ -10,7 +10,6 @@ struct ContractContext {
     var includeDiff: Bool = false
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
-    let logFormat: LogFormat = .keyValue
     let fileID: StaticString
     let filePath: StaticString
     let line: UInt
@@ -145,6 +144,8 @@ struct ContractContext {
                     }
                 case let .log(level):
                     logLevel = level
+                case .concurrent, .idleTimeoutMs:
+                    break
             }
         }
 

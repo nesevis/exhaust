@@ -45,7 +45,7 @@ public struct InvariantMacro: PeerMacro {
     }
 }
 
-/// Marker macro for oracle comparison methods. Generates no code — `@ConcurrentContract` reads this annotation.
+/// Marker macro for oracle comparison methods. Generates no code — `@Contract(.threads)` reads this annotation.
 public struct OracleMacro: PeerMacro {
     public static func expansion(
         of _: AttributeSyntax,

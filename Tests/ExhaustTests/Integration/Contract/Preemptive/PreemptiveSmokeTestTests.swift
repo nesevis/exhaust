@@ -12,7 +12,7 @@ struct PreemptiveSmokeTestTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SequentiallyBrokenSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(4),
                         .budget(.custom(coverage: 0, sampling: 50)),
                         .suppress(.issueReporting),
@@ -30,7 +30,7 @@ struct PreemptiveSmokeTestTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SequentiallyBrokenSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(4),
                         .budget(.custom(coverage: 200, sampling: 0)),
                         .suppress(.issueReporting),
@@ -45,7 +45,7 @@ struct PreemptiveSmokeTestTests {
 
 // MARK: - Spec
 
-@ConcurrentContract
+@Contract(.threads)
 final class SequentiallyBrokenSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var counter: BrokenCounter = .init()
@@ -77,7 +77,7 @@ final class SequentiallyBrokenSpec {
 // MARK: - SUT
 
 /// Broken even under sequential access — decrement is a no-op.
-/// Marked `@unchecked Sendable` to satisfy `ConcurrentContractSpec`; intentionally not thread-safe.
+/// Marked `@unchecked Sendable` to satisfy `ContractSpec`; intentionally not thread-safe.
 final class BrokenCounter: @unchecked Sendable, CustomDebugStringConvertible {
     private var _value: Int = 0
 

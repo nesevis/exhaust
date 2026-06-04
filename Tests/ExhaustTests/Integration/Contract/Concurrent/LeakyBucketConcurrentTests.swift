@@ -64,7 +64,7 @@ struct LeakyBucketConcurrentTests {
 
 // MARK: - Spec
 
-@Contract
+@Contract(.tasks)
 final class LeakyBucketSpec {
     @Model
     var expectedTokens: Int = 0

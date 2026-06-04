@@ -3,7 +3,7 @@ import Testing
 @testable import Exhaust
 
 // PCCR equivalents of the CCCR test specs. Same commands, same SUTs,
-// @ConcurrentContract instead of @Contract, @Oracle added for sequential comparison.
+// @Contract(.threads) instead of @Contract, @Oracle added for sequential comparison.
 // Purpose: verify that the preemptive runner catches the same bugs the cooperative runner does.
 //
 // @Model properties and model-comparing @Invariants are omitted because the preemptive runner
@@ -37,7 +37,7 @@ struct PreemptiveNonAtomicCounterParityTests {
     }
 }
 
-@ConcurrentContract
+@Contract(.threads)
 final class PreemptiveNonAtomicCounterParitySpec {
     @SystemUnderTest
     var counter: NonAtomicCounter = .init()
@@ -80,7 +80,7 @@ struct PreemptiveLeakyBucketParityTests {
     }
 }
 
-@ConcurrentContract
+@Contract(.threads)
 final class PreemptiveLeakyBucketParitySpec {
     @SystemUnderTest
     var bucket: LeakyBucket = .init(capacity: 5)
@@ -125,7 +125,7 @@ struct PreemptiveAtomicCounterParityTests {
     }
 }
 
-@ConcurrentContract
+@Contract(.threads)
 final class PreemptiveAtomicCounterParitySpec {
     @SystemUnderTest
     var counter: ThreadSafeCounter = .init()
@@ -166,14 +166,14 @@ struct PreemptiveDetectionBoundaryParityTests {
         let result = try #require(
             await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 PreemptiveThreeWayRaceParitySpec.self,
-                settings: [.concurrent(3), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+                settings: [.concurrent(.three), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
             )
         )
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
     }
 }
 
-@ConcurrentContract
+@Contract(.threads)
 final class PreemptiveExposedRaceParitySpec {
     @SystemUnderTest
     var counter: ExposedRacyCounter = .init()
@@ -189,7 +189,7 @@ final class PreemptiveExposedRaceParitySpec {
     }
 }
 
-@ConcurrentContract
+@Contract(.threads)
 final class PreemptiveThreeWayRaceParitySpec {
     @SystemUnderTest
     var counter: ThreeWayRacyCounter = .init()
@@ -228,7 +228,7 @@ struct PreemptiveAllSkipParityTests {
     }
 }
 
-@ConcurrentContract
+@Contract(.threads)
 final class PreemptiveAlwaysSkipParitySpec {
     @SystemUnderTest
     var value: Int = 0
