@@ -105,4 +105,26 @@ struct CrockfordBase32Tests {
             }
         }
     }
+
+    @Test func decodesSuffixlessSeedWithNilIteration() {
+        let decoded = CrockfordBase32.decodeWithIteration("1A")
+        #expect(decoded?.seed == CrockfordBase32.decode("1A"))
+        #expect(decoded?.iteration == nil)
+    }
+
+    @Test func decodesOneBasedIteration() {
+        let decoded = CrockfordBase32.decodeWithIteration("1A-7")
+        #expect(decoded?.seed == CrockfordBase32.decode("1A"))
+        #expect(decoded?.iteration == 7)
+    }
+
+    @Test func rejectsIterationZeroRatherThanUnderflowing() {
+        // The wire format is 1-based; replay recovers the start index as `iteration - 1`,
+        // so iteration 0 must be rejected here instead of trapping on `UInt64(-1)`.
+        #expect(CrockfordBase32.decodeWithIteration("1A-0") == nil)
+    }
+
+    @Test func rejectsNegativeIteration() {
+        #expect(CrockfordBase32.decodeWithIteration("1A--1") == nil)
+    }
 }

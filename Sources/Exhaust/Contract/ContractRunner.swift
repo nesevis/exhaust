@@ -104,8 +104,7 @@ public extension __ExhaustRuntime {
             // If regression seeds were passed in through a Swift Testing trait, execute those first.
             if let result = runRegressionSeeds(
                 specType: specType,
-                sequenceGenerator: sequenceGenerator,
-                property: property,
+                settings: settings,
                 context: context
             ) {
                 return result
@@ -505,13 +504,18 @@ private extension __ExhaustRuntime {
 
 private extension __ExhaustRuntime {
     /// Replays each regression seed from the Swift Testing trait configuration, returning the first failure as a ``ContractResult``. Returns nil when all seeds pass, none are configured, or Swift Testing is unavailable.
+    ///
+    /// Each seed is replayed through the same path as an inline `.replay(...)`, so coverage-row (`U…`) and iteration-suffixed (`…-N`) seeds — the exact strings the runner prints — round-trip and the failing run is re-materialised at its true position rather than only the first value.
     static func runRegressionSeeds<Spec: ContractSpec>(
         specType: Spec.Type,
-        sequenceGenerator: Generator<[Spec.Command]>,
-        property: @escaping @Sendable ([Spec.Command]) -> Bool,
+        settings: [ContractSettings],
         context: ContractContext
     ) -> ContractResult<Spec>? {
         #if canImport(Testing)
+            // An explicit `.replay` takes precedence over the regression trait. This guard also stops the per-seed `__runContract` replay below from re-entering the regression pass.
+            guard context.isSamplingReplay == false, context.isCoverageReplay == false else {
+                return nil
+            }
             guard let traitConfig = ExhaustTraitConfiguration.current,
                   traitConfig.regressions.isEmpty == false
             else {
@@ -519,7 +523,9 @@ private extension __ExhaustRuntime {
             }
 
             for encodedSeed in traitConfig.regressions {
-                guard let regressionSeed = CrockfordBase32.decode(encodedSeed) else {
+                guard CrockfordBase32.decodeWithIteration(encodedSeed) != nil
+                    || CrockfordBase32.decodeCoverageRow(encodedSeed) != nil
+                else {
                     reportIssue(
                         "Invalid regression seed: \(encodedSeed)",
                         fileID: context.fileID,
@@ -529,47 +535,22 @@ private extension __ExhaustRuntime {
                     )
                     continue
                 }
-                var regressionInterpreter = ValueAndChoiceTreeInterpreter(
-                    sequenceGenerator,
-                    materializePicks: true,
-                    seed: regressionSeed,
-                    maxRuns: 1
-                )
-                do {
-                    guard let (input, _) = try regressionInterpreter.next() else { continue }
-                    if property(input) == false {
-                        let (trace, spec) = buildTrace(input, specType: specType)
-                        let result = ContractResult<Spec>(
-                            commands: input,
-                            trace: trace,
-                            systemUnderTest: spec.systemUnderTest,
-                            seed: regressionSeed,
-                            replaySeed: CrockfordBase32.encode(regressionSeed),
-                            discoveryMethod: .replay
-                        )
-                        if context.suppressIssueReporting == false {
-                            let rendered = renderFailure(
-                                result,
-                                failureInfo: ContractFailureInfo(originalCommands: nil, discoveryMethod: .replay),
-                                modelDescription: spec.modelDescription,
-                                includeDiff: context.includeDiff
-                            )
-                            reportIssue(rendered, fileID: context.fileID, filePath: context.filePath, line: context.line, column: context.column)
-                        }
-                        return result
-                    } else if context.suppressIssueReporting == false {
-                        reportIssue(
-                            "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
-                            fileID: context.fileID,
-                            filePath: context.filePath,
-                            line: context.line,
-                            column: context.column
-                        )
-                    }
-                } catch {
+                if let result = __runContract(
+                    specType,
+                    settings: [.replay(.encoded(encodedSeed))] + settings,
+                    fileID: context.fileID,
+                    filePath: context.filePath,
+                    line: context.line,
+                    column: context.column
+                ) {
+                    return result
+                } else if context.suppressIssueReporting == false {
                     reportIssue(
-                        "Generator failed during regression replay (seed \(encodedSeed)): \(error)",
-                        fileID: context.fileID, filePath: context.filePath, line: context.line, column: context.column
+                        "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                        fileID: context.fileID,
+                        filePath: context.filePath,
+                        line: context.line,
+                        column: context.column
                     )
                 }
             }
