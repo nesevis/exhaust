@@ -49,7 +49,12 @@ extension __ExhaustRuntime {
         var idleStopwatch = Stopwatch()
         while done.value == false {
             guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
-                if idleStopwatch.elapsedMilliseconds > Double(idleTimeoutMilliseconds) { return nil }
+                if runQueue.waitForJob(
+                    idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+                    elapsedMilliseconds: idleStopwatch.elapsedMilliseconds
+                ) == false {
+                    return nil
+                }
                 continue
             }
             job.runSynchronously(on: executor.asUnownedTaskExecutor())

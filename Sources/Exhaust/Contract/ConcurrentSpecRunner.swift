@@ -132,7 +132,10 @@ func drainSchedule<Spec: AsyncContractSpec>(
         var idleStopwatch = Stopwatch()
         while prefixDone.value == false {
             guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
-                if idleStopwatch.elapsedMilliseconds > Double(idleTimeoutMilliseconds) {
+                if runQueue.waitForJob(
+                    idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+                    elapsedMilliseconds: idleStopwatch.elapsedMilliseconds
+                ) == false {
                     return ConcurrentExecutionResult(
                         passed: false,
                         trace: recordTrace ? buildTrace(trace.value) : [],
@@ -208,7 +211,10 @@ func drainSchedule<Spec: AsyncContractSpec>(
 
     while runQueue.isFinished == false {
         if runQueue.hasPendingJobs == false {
-            if idleStopwatch.elapsedMilliseconds > Double(idleTimeoutMilliseconds) {
+            if runQueue.waitForJob(
+                idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+                elapsedMilliseconds: idleStopwatch.elapsedMilliseconds
+            ) == false {
                 let finalTrace: [TraceStep] = recordTrace ? buildTrace(trace.value) : []
                 return ConcurrentExecutionResult(passed: false, trace: finalTrace, timedOut: true)
             }
