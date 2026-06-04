@@ -36,7 +36,7 @@ struct MultiInvariantTests {
 
 // MARK: - Spec: Five invariants, one fails
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class FiveInvariantSpec {
     @Model
     var expected: Int = 0
@@ -72,7 +72,7 @@ final class FiveInvariantSpec {
 
 // MARK: - Spec: Five invariants, all pass
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class PassingFiveInvariantSpec {
     @Model
     var expected: Int = 0

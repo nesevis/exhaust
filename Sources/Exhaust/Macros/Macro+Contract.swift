@@ -68,7 +68,8 @@ import ExhaustCore
     named(modelDescription),
     named(sutDescription),
     named(init),
-    named(concurrencyModel)
+    named(executionModel),
+    named(diagnosticSnapshot)
 )
 @attached(extension, conformances: ContractSpec, AsyncContractSpec)
 public macro Contract(_ mode: ExecutionModel) = #externalMacro(module: "ExhaustMacros", type: "ContractDeclarationMacro")

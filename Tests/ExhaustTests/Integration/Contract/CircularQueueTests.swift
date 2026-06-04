@@ -54,7 +54,7 @@ struct CircularQueueTests {
 
 // MARK: - Contract
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class CircularQueueContract {
     @Model var expected: [Int] = []
     @SystemUnderTest var queue = BuggyCircularQueue(capacity: 6)

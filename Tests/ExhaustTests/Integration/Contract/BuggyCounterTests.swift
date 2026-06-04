@@ -103,7 +103,7 @@ struct SCAReductionCoverageTests {
 
 // MARK: - Contract
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class BuggyCounterSpec {
     @Model var expectedValue: Int = 0
     @SystemUnderTest var counter = BuggyCounter(capacity: 3)
@@ -146,7 +146,7 @@ struct BuggyCounter {
 // MARK: - Pairwise Bug Contract
 
 /// A contract where any sequence containing both `setA` and `setB` triggers the invariant failure. Pairwise SCA at t=2 is guaranteed to produce such a row.
-@Contract(.tasks)
+@Contract(.sequential)
 final class PairwiseBugSpec {
     @Model var modelState: Int = 0
     @SystemUnderTest var sut = PairwiseBugSUT()

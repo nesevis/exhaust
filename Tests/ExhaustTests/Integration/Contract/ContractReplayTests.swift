@@ -148,7 +148,7 @@ struct ConcurrentContractReplayTests {
 
 // MARK: - Sequential Spec
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class BrokenModuloSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var counter = ModuloCounter(modulus: 3)
@@ -186,7 +186,7 @@ struct ModuloCounter {
 
 // MARK: - Cooperative Concurrent Spec
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class ReplayableNonAtomicCounterSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var counter: ReplayableNonAtomicCounter = .init()

@@ -55,7 +55,7 @@ struct KVStoreLifecycleTests {
 // making it likely that a `get` after reopen returns a stale value that
 // the model does not expect.
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class KVStoreLifecycleContract {
     @Model var isOpen = false
     @Model var contents: [Int: Int] = [:]

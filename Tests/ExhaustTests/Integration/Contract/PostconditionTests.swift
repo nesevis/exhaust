@@ -60,7 +60,7 @@ struct PostconditionTests {
 
 // MARK: - Contract: Set uniqueness
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class SetUniquenessContract {
     @SystemUnderTest var uniqueSet = BuggySet<Int>()
 
@@ -91,7 +91,7 @@ final class SetUniquenessContract {
 
 // MARK: - Contract: Stack LIFO ordering
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class StackLIFOContract {
     @SystemUnderTest var stack = BuggyStack<Int>()
 
@@ -117,7 +117,7 @@ final class StackLIFOContract {
 
 // MARK: - Contract: Dictionary consistency
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class DictionaryConsistencyContract {
     @SystemUnderTest var dict = TrackedDictionary()
 

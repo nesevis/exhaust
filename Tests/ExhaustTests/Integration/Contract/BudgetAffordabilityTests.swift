@@ -47,7 +47,7 @@ struct BudgetAffordabilityTests {
 
 // MARK: - Contract: Correct implementation
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class BudgetAffordabilitySpec {
     @Model var wasUnaffordable = false
     @SystemUnderTest var items: [BillItem] = []
@@ -79,7 +79,7 @@ final class BudgetAffordabilitySpec {
 
 // MARK: - Contract: Buggy greedy implementation
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class BuggyBudgetAffordabilitySpec {
     @SystemUnderTest var items: [BillItem] = []
 

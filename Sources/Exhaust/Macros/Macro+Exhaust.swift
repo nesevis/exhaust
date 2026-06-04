@@ -223,7 +223,6 @@ public macro execute<Spec: ContractSpec>(
 /// - `.suppress(.logs)`: silences all console output.
 ///
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @freestanding(expression)
 @discardableResult
 public macro execute<Spec: AsyncContractSpec>(

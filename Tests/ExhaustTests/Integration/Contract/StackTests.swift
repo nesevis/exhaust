@@ -20,7 +20,7 @@ struct StackTests {
 
 // MARK: - Contract
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class StackSpec {
     @Model var expected: [Int] = []
     @SystemUnderTest var stack: [Int] = []

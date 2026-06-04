@@ -11,9 +11,8 @@ import IssueReporting
 
 // MARK: - Async Dispatch
 
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 public extension __ExhaustRuntime {
-    /// Dispatches an asynchronous contract test to the `.tasks` or `.threads` runner based on the contract's ``ExecutionModel``.
+    /// Dispatches an asynchronous contract test to the appropriate runner based on the contract's ``ExecutionModel``.
     @discardableResult
     static func __runContractDispatchAsync<Spec: AsyncContractSpec>(
         _ specType: Spec.Type,
@@ -23,8 +22,27 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column
     ) async -> ContractResult<Spec>? {
-        switch Spec.concurrencyModel {
+        switch Spec.executionModel {
+            case .sequential:
+                return await __runContractAsync(
+                    specType,
+                    settings: settings,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
             case .tasks:
+                guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+                    reportIssue(
+                        "@Contract(.tasks) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, or visionOS 2+",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                    return nil
+                }
                 return await __runContractConcurrent(
                     specType,
                     settings: settings,

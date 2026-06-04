@@ -3,6 +3,21 @@
 // The macro synthesizes conformance. Users never implement this directly.
 import Foundation
 
+/// Captures diagnostic state from a contract for failure reports.
+///
+/// For actor contracts, these properties can only be read from the actor's executor. ``AsyncContractSpec/diagnosticSnapshot()`` provides an async entry point that hops correctly.
+public struct DiagnosticSnapshot<SystemUnderTest>: @unchecked Sendable {
+    public let systemUnderTest: SystemUnderTest
+    public let modelDescription: String
+    public let sutDescription: String
+
+    public init(systemUnderTest: SystemUnderTest, modelDescription: String, sutDescription: String) {
+        self.systemUnderTest = systemUnderTest
+        self.modelDescription = modelDescription
+        self.sutDescription = sutDescription
+    }
+}
+
 /// Shared requirements for both synchronous and asynchronous contracts.
 ///
 /// Users never conform to this protocol directly. Use ``ContractSpec`` or ``AsyncContractSpec`` instead, both synthesized by the `@Contract` macro.
@@ -22,7 +37,7 @@ public protocol ContractSpecBase {
     static var commandGenerator: ReflectiveGenerator<Command> { get }
 
     /// The execution model this contract uses, synthesized by the `@Contract` macro.
-    static var concurrencyModel: ExecutionModel { get }
+    static var executionModel: ExecutionModel { get }
 
     /// The system under test instance, for typed access in results and failure reports.
     var systemUnderTest: SystemUnderTest { get }
@@ -36,8 +51,8 @@ public protocol ContractSpecBase {
 
 public extension ContractSpecBase {
     /// Default execution model for contracts that do not declare one explicitly.
-    static var concurrencyModel: ExecutionModel {
-        .tasks
+    static var executionModel: ExecutionModel {
+        .sequential
     }
 }
 
@@ -131,12 +146,26 @@ public protocol AsyncContractSpec: ContractSpecBase, AnyObject {
     /// - Parameter sequentialResult: The SUT state from a sequential (race-free) replay of the same command sequence.
     /// - Returns: `true` if the concurrent SUT state matches the expected sequential state.
     func oracleCheck(_ sequentialResult: SystemUnderTest) async -> Bool
+
+    /// Captures diagnostic state for failure reports from an actor-safe async context.
+    ///
+    /// For actor conformers, this requirement is actor-isolated, so `await spec.diagnosticSnapshot()` hops to the actor's executor correctly. The macro synthesizes the implementation.
+    func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest>
 }
 
-extension AsyncContractSpec {
+public extension AsyncContractSpec {
     /// Default oracle that traps. Overridden by the `@Contract(.threads)` macro's synthesized `oracleCheck`.
-    public func oracleCheck(_: SystemUnderTest) async -> Bool {
+    func oracleCheck(_: SystemUnderTest) async -> Bool {
         fatalError("oracleCheck is only called for .threads contracts")
+    }
+
+    /// Default implementation for non-actor conformers that can access properties directly.
+    func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
+        DiagnosticSnapshot(
+            systemUnderTest: systemUnderTest,
+            modelDescription: modelDescription,
+            sutDescription: sutDescription
+        )
     }
 
     /// Returns a closure that re-executes a command sequence and returns the indices of skipped commands.
@@ -144,7 +173,7 @@ extension AsyncContractSpec {
     /// Bridges async execution via ``__ExhaustRuntime/blockingAwait(_:)``. The returned closure is safe to call from a GCD thread.
     ///
     /// - Parameter specInit: A factory that creates a fresh contract instance. Must be `nonisolated(unsafe)` at the call site to satisfy `@Sendable` capture.
-    static func skipIdentifier(
+    internal static func skipIdentifier(
         specInit: @escaping () -> Self
     ) -> @Sendable ([Command]) -> Set<Int> {
         nonisolated(unsafe) let specInit = specInit

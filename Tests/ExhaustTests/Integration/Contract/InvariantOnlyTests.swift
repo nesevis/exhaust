@@ -44,7 +44,7 @@ struct InvariantOnlyTests {
 /// No `@Model` — the invariant checks a structural property of the SUT alone.
 /// The bug surfaces when `write` is called on a full buffer because there's
 /// no capacity guard in the SUT implementation.
-@Contract(.tasks)
+@Contract(.sequential)
 final class CircularBufferContract {
     @SystemUnderTest var buffer = CircularBuffer(capacity: 2)
 
@@ -72,7 +72,7 @@ final class CircularBufferContract {
 
 // MARK: - Contract: Priority queue sorted backing
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class SortedBackingContract {
     @SystemUnderTest var queue = BuggyPriorityQueue()
 

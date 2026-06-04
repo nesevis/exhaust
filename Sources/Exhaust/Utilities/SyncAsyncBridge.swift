@@ -75,7 +75,7 @@ extension __ExhaustRuntime {
     }
 
     /// Creates a cooperative-pool task and sleeps the calling thread until it completes. Returns `nil` when `timeoutMilliseconds` is non-nil and the work does not complete within it.
-    private static func _blockingAwaitSemaphore<Result>(
+    package static func _blockingAwaitSemaphore<Result>(
         timeoutMilliseconds: Int?,
         _ work: @Sendable @escaping () async -> Result
     ) -> Result? {

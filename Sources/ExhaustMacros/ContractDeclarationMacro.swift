@@ -6,13 +6,14 @@ import SwiftSyntaxMacros
 // MARK: - Concurrency Mode Parsing
 
 private enum MacroConcurrencyMode {
+    case sequential
     case tasks
     case threads
 }
 
-/// Reads the `ExecutionModel` literal from `@Contract(.tasks)` or `@Contract(.threads)`.
+/// Reads the `ExecutionModel` literal from the `@Contract` attribute argument.
 ///
-/// Returns `nil` when the argument is missing or not a recognized literal.
+/// Returns `nil` when the argument is missing or not a recognised literal.
 private func extractConcurrencyMode(from node: AttributeSyntax) -> MacroConcurrencyMode? {
     guard let argList = node.arguments?.as(LabeledExprListSyntax.self),
           let firstArg = argList.first,
@@ -21,13 +22,32 @@ private func extractConcurrencyMode(from node: AttributeSyntax) -> MacroConcurre
         return nil
     }
     switch memberAccess.declName.baseName.trimmedDescription {
+        case "sequential": return .sequential
         case "tasks": return .tasks
         case "threads": return .threads
         default: return nil
     }
 }
 
-/// Attached macro that synthesizes contract conformance from a class annotated with `@Contract(.tasks)` or `@Contract(.threads)`.
+/// Determines whether the contract needs the `AsyncContractSpec` surface based on its members.
+///
+/// `.threads` also considers `@Oracle` methods, because the oracle runs inside the async preemptive runner. `.sequential` and `.tasks` only look at commands and invariants.
+private func contractHasAsyncMember(
+    mode: MacroConcurrencyMode,
+    commands: [CommandInfo],
+    invariants: [InvariantInfo],
+    oracles: [OracleInfo]
+) -> Bool {
+    let commandsOrInvariants = commands.contains(where: \.isAsync) || invariants.contains(where: \.isAsync)
+    switch mode {
+        case .sequential, .tasks:
+            return commandsOrInvariants
+        case .threads:
+            return commandsOrInvariants || oracles.contains(where: \.isAsync)
+    }
+}
+
+/// Attached macro that synthesizes contract conformance from a class annotated with `@Contract(.sequential)`, `@Contract(.tasks)`, or `@Contract(.threads)`.
 ///
 /// The mode argument selects the execution model:
 /// - `.tasks` — cooperative scheduling of Swift Tasks, checked by `@Invariant` (and optionally `@Model`).
@@ -68,17 +88,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
             ))
         }
 
-        let hasAnyAsync: Bool
-        switch mode {
-            case .tasks:
-                hasAnyAsync = commands.contains(where: \.isAsync)
-                    || invariants.contains(where: \.isAsync)
-            case .threads:
-                hasAnyAsync = commands.contains(where: \.isAsync)
-                    || invariants.contains(where: \.isAsync)
-                    || oracles.contains(where: \.isAsync)
-        }
-
+        let hasAnyAsync = contractHasAsyncMember(mode: mode, commands: commands, invariants: invariants, oracles: oracles)
         let needsAsyncConformance = hasAnyAsync || isActorDecl
         let preconcurrency = isActorDecl ? "@preconcurrency " : ""
 
@@ -144,11 +154,17 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
 
         // Mode-specific validation
         switch mode {
-            case .tasks:
+            case .sequential, .tasks:
                 if oracles.isEmpty == false {
                     context.diagnose(Diagnostic(
                         node: Syntax(node),
-                        message: ContractDiagnostic.oracleUnderTasks
+                        message: ContractDiagnostic.oracleRequiresThreads
+                    ))
+                }
+                if case .tasks = mode, isActorDecl {
+                    context.diagnose(Diagnostic(
+                        node: Syntax(node),
+                        message: ContractDiagnostic.actorRequiresSequential
                     ))
                 }
             case .threads:
@@ -184,17 +200,8 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
                 }
         }
 
-        let hasAnyAsync: Bool
-        switch mode {
-            case .tasks:
-                hasAnyAsync = commands.contains(where: \.isAsync)
-                    || invariants.contains(where: \.isAsync)
-            case .threads:
-                hasAnyAsync = commands.contains(where: \.isAsync)
-                    || invariants.contains(where: \.isAsync)
-                    || oracles.contains(where: \.isAsync)
-        }
-        let effectiveAsync = hasAnyAsync || isActorDecl
+        let effectiveAsync = contractHasAsyncMember(mode: mode, commands: commands, invariants: invariants, oracles: oracles)
+            || isActorDecl
 
         var decls: [DeclSyntax] = []
 
@@ -222,10 +229,19 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         }
 
         let modeString = switch mode {
+            case .sequential: ".sequential"
             case .tasks: ".tasks"
             case .threads: ".threads"
         }
-        decls.append("static let concurrencyModel: ExecutionModel = \(raw: modeString)")
+        decls.append("static let executionModel: ExecutionModel = \(raw: modeString)")
+
+        if isActorDecl {
+            decls.append("""
+            func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
+                DiagnosticSnapshot(systemUnderTest: systemUnderTest, modelDescription: modelDescription, sutDescription: sutDescription)
+            }
+            """)
+        }
 
         let hasUserInit = members.contains { member in
             guard let initDecl = member.decl.as(InitializerDeclSyntax.self) else { return false }
@@ -234,8 +250,8 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         if isReferenceType, hasUserInit == false {
             if isClassDecl {
                 decls.append("required init() {}")
-            } else {
-                decls.append("nonisolated init() {}")
+            } else if isActorDecl {
+                decls.append("init() {}")
             }
         }
 
@@ -665,12 +681,13 @@ enum ContractDiagnostic: String, DiagnosticMessage {
     case structNotAllowed = "Contract specs must be a 'final class' or 'actor' — structs are not supported"
     case missingMode = "@Contract requires an execution mode: @Contract(.sequential|.tasks|.threads)"
     case nonLiteralMode = "The execution mode must be a literal ExecutionModel case (.sequential|.tasks|.threads)"
-    case oracleUnderTasks = "@Oracle is only used with @Contract(.threads). For @Contract(.tasks), use @Invariant and @Model instead"
+    case oracleRequiresThreads = "@Oracle is only used with @Contract(.threads). For @Contract(.sequential) or @Contract(.tasks), use @Invariant and @Model instead"
     case invariantUnderThreads = "@Invariant requires deterministic per-step state, which a preemptive run does not have. Use @Contract(.tasks)"
     case modelUnderThreads = "@Model requires deterministic per-step state, which a preemptive run does not have. Use @Contract(.tasks)"
     case noOracle = "@Contract(.threads) requires exactly one @Oracle method"
     case multipleOracles = "@Contract(.threads) allows only one @Oracle method"
-    case actorWithThreads = "Actors are data-race-free; .threads cannot surface races in them. Use @Contract(.tasks)"
+    case actorRequiresSequential = "Actor contracts must use @Contract(.sequential). Actor isolation serialises all dispatch, so concurrent testing has nowhere to interleave"
+    case actorWithThreads = "Actor contracts must use @Contract(.sequential). Actors are data-race-free, so .threads cannot surface races in them"
 
     var message: String {
         rawValue
@@ -683,10 +700,10 @@ enum ContractDiagnostic: String, DiagnosticMessage {
     var severity: DiagnosticSeverity {
         switch self {
             case .noCommands, .noSUT, .multipleSUT, .commandMissingGenerators, .structNotAllowed,
-                 .missingMode, .nonLiteralMode, .noOracle, .multipleOracles:
+                 .missingMode, .nonLiteralMode, .noOracle, .multipleOracles,
+                 .actorRequiresSequential, .actorWithThreads:
                 .error
-            case .sutTypeNotInferred, .oracleUnderTasks, .invariantUnderThreads, .modelUnderThreads,
-                 .actorWithThreads:
+            case .sutTypeNotInferred, .oracleRequiresThreads, .invariantUnderThreads, .modelUnderThreads:
                 .warning
         }
     }

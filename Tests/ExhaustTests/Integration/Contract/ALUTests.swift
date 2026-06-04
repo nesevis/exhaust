@@ -28,7 +28,7 @@ struct ALUTests {
 
 // MARK: - Contract
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class ALUSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var alu = FourBitALU()

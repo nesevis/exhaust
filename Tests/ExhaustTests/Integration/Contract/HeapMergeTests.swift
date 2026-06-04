@@ -105,7 +105,7 @@ struct HeapAliasingTests {
 // mirroring the Hypothesis tutorial's use of bundle consumption for exclusive
 // ownership.
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class HeapMergeContract {
     @Model var expectedContents: [[Int]] = []
     @SystemUnderTest var heaps: [BuggyHeap] = []
@@ -163,7 +163,7 @@ final class HeapMergeContract {
 // structurally (parent ≤ children at every index), and the pop
 // postcondition verifies that the returned value is the minimum.
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class HeapAliasingContract {
     @SystemUnderTest var allHeaps: [SpliceHeap] = []
     let heapRefs = Bundle<SpliceHeap>()

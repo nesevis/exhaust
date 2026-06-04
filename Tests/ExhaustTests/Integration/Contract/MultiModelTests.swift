@@ -24,7 +24,7 @@ struct MultiModelTests {
 
 // MARK: - Spec
 
-@Contract(.tasks)
+@Contract(.sequential)
 final class MultiModelSpec {
     @Model
     var expectedKeys: [String] = []
