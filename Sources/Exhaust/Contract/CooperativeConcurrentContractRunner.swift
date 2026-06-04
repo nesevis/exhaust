@@ -99,7 +99,7 @@ public extension __ExhaustRuntime {
             }
         }
 
-        var config: ResolvedConcurrentConfig
+        let config: ResolvedConcurrentConfig
         switch ResolvedConcurrentConfig.parse(settings) {
             case let .success(resolved):
                 config = resolved
@@ -123,28 +123,17 @@ public extension __ExhaustRuntime {
                 return nil
         }
 
+        // The trait-budget fallback is applied in `ResolvedConcurrentConfig.parse`, so `config.budget` already reflects a suite-level `.budget` trait here.
         var regressionSeeds: [String] = []
         #if canImport(Testing)
-            let traitConfig = ExhaustTraitConfiguration.current
-            regressionSeeds = traitConfig?.regressions ?? []
-            if let traitConfig {
-                let hasInlineBudget = settings.contains {
-                    switch $0 {
-                        case .budget: true
-                        default: false
-                    }
-                }
-                if hasInlineBudget == false, let traitBudget = traitConfig.budget {
-                    config.budget = traitBudget
-                }
-            }
+            regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
         // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop — a deadlock under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD grows its thread pool dynamically, so concurrent drain loops cannot exhaust it.
         let logConfiguration = ExhaustLog.Configuration(
             isEnabled: config.suppressLogs == false,
             minimumLevel: config.logLevel,
-            format: config.logFormat
+            format: .keyValue
         )
 
         let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {

@@ -15,7 +15,6 @@ struct ResolvedConcurrentConfig {
     var collectOpenPBTStats: Bool = false
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
-    let logFormat: LogFormat = .keyValue
 
     var shouldRunCoverage: Bool {
         replayIteration == nil
@@ -80,6 +79,17 @@ struct ResolvedConcurrentConfig {
                     break
             }
         }
+
+        #if canImport(Testing)
+            // Adopt a suite-level `.budget` trait when no inline `.budget` was passed, matching the sequential resolver. Without this, all three concurrent runners silently ignore a budget set via a Swift Testing trait.
+            if let traitConfig = ExhaustTraitConfiguration.current {
+                let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
+                if hasInlineBudget == false, let traitBudget = traitConfig.budget {
+                    config.budget = traitBudget
+                }
+            }
+        #endif
+
         guard 1 ... 8 ~= config.concurrencyLevel else {
             return .invalidConcurrencyLevel(config.concurrencyLevel)
         }

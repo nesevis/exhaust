@@ -46,7 +46,7 @@ public extension __ExhaustRuntime {
             : nil
         let backend = PreemptiveChecker<Spec>(idleTimeoutMilliseconds: idleTimeoutMilliseconds)
 
-        let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)
+        let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: .keyValue)
         let (result, deferredIssues, report): (ContractResult<Spec>?, [String], ExhaustReport) = DispatchQueue.global().sync {
             ExhaustLog.withConfiguration(logConfiguration) {
                 runPreemptivePipeline(backend: backend, config: config)

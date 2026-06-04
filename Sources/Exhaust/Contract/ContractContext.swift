@@ -10,7 +10,6 @@ struct ContractContext {
     var includeDiff: Bool = false
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
-    let logFormat: LogFormat = .keyValue
     let fileID: StaticString
     let filePath: StaticString
     let line: UInt

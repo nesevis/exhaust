@@ -80,7 +80,7 @@ public extension __ExhaustRuntime {
             return nil
         }
 
-        return ExhaustLog.withConfiguration(.init(isEnabled: context.suppressLogs == false, minimumLevel: context.logLevel, format: context.logFormat)) {
+        return ExhaustLog.withConfiguration(.init(isEnabled: context.suppressLogs == false, minimumLevel: context.logLevel, format: .keyValue)) {
             var context = context
             let commandGen = Spec.commandGenerator
             let (sequenceGenerator, commandLimit) = makeCommandSequence(commandGen: commandGen, context: context)
