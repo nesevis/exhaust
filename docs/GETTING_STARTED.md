@@ -481,7 +481,7 @@ Contracts on an `actor` use `.sequential` because actor isolation serialises all
 
 ```swift
 @Test func sutIsSafeUnderConcurrency() async {
-    await #execute(AsyncContract.self, .concurrent(2))
+    await #execute(AsyncContract.self, .concurrent(.two))
 }
 ```
 

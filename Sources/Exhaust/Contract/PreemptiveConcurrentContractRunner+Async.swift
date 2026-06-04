@@ -34,12 +34,6 @@ public extension __ExhaustRuntime {
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
                 return nil
-            case let .invalidConcurrencyLevel(level):
-                reportIssue(
-                    "concurrencyLevel must be between 1 and 8, but was \(level)",
-                    fileID: fileID, filePath: filePath, line: line, column: column
-                )
-                return nil
         }
 
         // A non-positive or sentinel-large idle timeout (e.g. `Int.max` to disable) means "wait unbounded".

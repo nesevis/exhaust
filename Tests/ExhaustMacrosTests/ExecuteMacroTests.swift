@@ -114,13 +114,13 @@
         func executeAsyncContractWithSettings() {
             assertMacro {
                 """
-                #execute(AsyncSpec.self, .commandLimit(10), .concurrent(3))
+                #execute(AsyncSpec.self, .commandLimit(10), .concurrent(.three))
                 """
             } expansion: {
                 """
                 __ExhaustRuntime.__runContractDispatchAsync(
                     AsyncSpec.self,
-                    settings: [.commandLimit(10), .concurrent(3)],
+                    settings: [.commandLimit(10), .concurrent(.three)],
                     fileID: #fileID,
                     filePath: #filePath,
                     line: #line,

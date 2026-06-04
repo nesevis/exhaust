@@ -207,7 +207,7 @@ public macro execute<Spec: ContractSpec>(
 ///
 /// ```swift
 /// @Test func concurrentQueueBehavior() async {
-///     let result = await #execute(ConcurrentQueueContract.self, .concurrent(3), .commandLimit(12))
+///     let result = await #execute(ConcurrentQueueContract.self, .concurrent(.two), .commandLimit(12))
 /// }
 /// ```
 ///

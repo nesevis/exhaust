@@ -39,7 +39,7 @@ struct IdleTimeoutConcurrentTests {
             await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 StallingAsyncSpec.self,
                 settings: [
-                    .concurrent(2),
+                    .concurrent(.two),
                     .commandLimit(2),
                     .idleTimeoutMs(20),
                     .budget(.custom(coverage: 0, sampling: 10)),

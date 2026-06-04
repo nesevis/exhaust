@@ -12,7 +12,7 @@ struct PreemptiveObjCExceptionTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     ThrowingObjCSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(4),
                         .budget(.custom(coverage: 0, sampling: 50)),
                         .suppress(.issueReporting),

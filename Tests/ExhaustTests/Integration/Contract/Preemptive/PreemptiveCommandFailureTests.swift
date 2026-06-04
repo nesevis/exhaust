@@ -12,7 +12,7 @@ struct PreemptiveCommandFailureTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SyncPrefixFailingSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(4),
                         .budget(.custom(coverage: 0, sampling: 200)),
                         .suppress(.all),
@@ -30,7 +30,7 @@ struct PreemptiveCommandFailureTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SyncLaneFailingSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(6),
                         .budget(.custom(coverage: 0, sampling: 200)),
                         .suppress(.all),
@@ -47,7 +47,7 @@ struct PreemptiveCommandFailureTests {
             await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 AsyncPrefixFailingSpec.self,
                 settings: [
-                    .concurrent(2),
+                    .concurrent(.two),
                     .commandLimit(4),
                     .budget(.custom(coverage: 0, sampling: 200)),
                     .suppress(.all),
@@ -63,7 +63,7 @@ struct PreemptiveCommandFailureTests {
             await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 AsyncLaneFailingSpec.self,
                 settings: [
-                    .concurrent(2),
+                    .concurrent(.two),
                     .commandLimit(6),
                     .budget(.custom(coverage: 0, sampling: 200)),
                     .suppress(.all),

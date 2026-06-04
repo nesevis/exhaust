@@ -25,7 +25,6 @@ struct ResolvedConcurrentConfig {
     enum ParseResult {
         case success(ResolvedConcurrentConfig)
         case invalidReplaySeed(ReplaySeed)
-        case invalidConcurrencyLevel(Int)
     }
 
     static func parse(_ settings: [ContractSettings]) -> ParseResult {
@@ -33,7 +32,7 @@ struct ResolvedConcurrentConfig {
         for setting in settings {
             switch setting {
                 case let .concurrent(level):
-                    config.concurrencyLevel = level
+                    config.concurrencyLevel = level.rawValue
                 case let .budget(budget):
                     config.budget = budget
                 case let .commandLimit(limit):
@@ -90,9 +89,6 @@ struct ResolvedConcurrentConfig {
             }
         #endif
 
-        guard 1 ... 8 ~= config.concurrencyLevel else {
-            return .invalidConcurrencyLevel(config.concurrencyLevel)
-        }
         return .success(config)
     }
 }

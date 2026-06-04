@@ -84,7 +84,7 @@ public extension __ExhaustRuntime {
     ) async -> ContractResult<Spec>? {
         if Spec.self is any Actor.Type {
             let requestedLevel = settings.compactMap { setting -> Int? in
-                if case let .concurrent(level) = setting { return level }
+                if case let .concurrent(level) = setting { return level.rawValue }
                 return nil
             }.last
             if let requestedLevel, requestedLevel > 1 {
@@ -106,15 +106,6 @@ public extension __ExhaustRuntime {
             case let .invalidReplaySeed(seed):
                 reportIssue(
                     "Invalid replay seed: \(seed)",
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-                return nil
-            case let .invalidConcurrencyLevel(level):
-                reportIssue(
-                    "concurrencyLevel must be between 1 and 8, but was \(level)",
                     fileID: fileID,
                     filePath: filePath,
                     line: line,

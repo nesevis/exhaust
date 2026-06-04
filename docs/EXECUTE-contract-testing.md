@@ -189,7 +189,7 @@ The `.sequential` contracts shown above run each command one at a time. Some bug
 @Test func counterIsSafeUnderConcurrency() async {
     await #execute(
         NonAtomicCounterContract.self,
-        .concurrent(2),
+        .concurrent(.two),
         .commandLimit(6),
         .budget(.thorough)
     )
@@ -235,7 +235,7 @@ SUTs that have races at suspension points (the `let v = state; await Task.yield(
 
 `.concurrent(N)` controls how many concurrent lanes commands are distributed across. The default is 2, which suffices for most data races. A study of 105 real-world concurrency bugs in MySQL, Apache, Mozilla, and OpenOffice found that 96% manifest with just two threads (Lu et al., [Learning from Mistakes](https://dl.acm.org/doi/10.1145/1346281.1346323), ASPLOS 2008). Use three or more when you suspect the bug requires three-way interleaving (for example, ABA problems or three-participant lost updates). The maximum is 8.
 
-`.concurrent(1)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
+`.concurrent(.one)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
 
 ### Idle timeout
 
@@ -287,7 +287,7 @@ Running the test:
 @Test func counterIsThreadSafe() {
     #execute(
         RacyCounterContract.self,
-        .concurrent(2),
+        .concurrent(.two),
         .commandLimit(6),
         .budget(.thorough)
     )

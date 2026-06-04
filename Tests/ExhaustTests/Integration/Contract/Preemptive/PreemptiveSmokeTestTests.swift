@@ -12,7 +12,7 @@ struct PreemptiveSmokeTestTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SequentiallyBrokenSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(4),
                         .budget(.custom(coverage: 0, sampling: 50)),
                         .suppress(.issueReporting),
@@ -30,7 +30,7 @@ struct PreemptiveSmokeTestTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SequentiallyBrokenSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(4),
                         .budget(.custom(coverage: 200, sampling: 0)),
                         .suppress(.issueReporting),
