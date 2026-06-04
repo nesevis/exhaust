@@ -140,7 +140,7 @@
                         "counter: \(counter)"
                     }
 
-                    static let concurrencyModel: ExecutionModel = .tasks
+                    static let executionModel: ExecutionModel = .tasks
 
                     required init() {
                     }
@@ -215,7 +215,7 @@
                         "items: \(items)"
                     }
 
-                    static let concurrencyModel: ExecutionModel = .tasks
+                    static let executionModel: ExecutionModel = .tasks
 
                     required init() {
                     }
@@ -244,8 +244,8 @@
                 """
                 @Contract
                 ┬────────
-                ├─ 🛑 @Contract requires a concurrency mode argument: @Contract(.tasks) or @Contract(.threads)
-                ╰─ 🛑 @Contract requires a concurrency mode argument: @Contract(.tasks) or @Contract(.threads)
+                ├─ 🛑 @Contract requires an execution mode: @Contract(.sequential|.tasks|.threads)
+                ╰─ 🛑 @Contract requires an execution mode: @Contract(.sequential|.tasks|.threads)
                 final class Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -360,7 +360,7 @@
                         equivalent(to: sequentialResult)
                     }
 
-                    static let concurrencyModel: ExecutionModel = .threads
+                    static let executionModel: ExecutionModel = .threads
 
                     required init() {
                     }
@@ -421,7 +421,7 @@
                 """
                 @Contract(.tasks)
                 ┬────────────────
-                ╰─ ⚠️ @Oracle is only used with @Contract(.threads). For @Contract(.tasks), use @Invariant and @Model instead
+                ╰─ ⚠️ @Oracle is only used with @Contract(.threads). For @Contract(.sequential) or @Contract(.tasks), use @Invariant and @Model instead
                 final class Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -482,7 +482,7 @@
                         "sut: \(sut)"
                     }
 
-                    static let concurrencyModel: ExecutionModel = .tasks
+                    static let executionModel: ExecutionModel = .tasks
 
                     required init() {
                     }
@@ -587,7 +587,7 @@
                         equiv(to: sequentialResult)
                     }
 
-                    static let concurrencyModel: ExecutionModel = .threads
+                    static let executionModel: ExecutionModel = .threads
 
                     required init() {
                     }
@@ -687,7 +687,7 @@
                         equiv(to: sequentialResult)
                     }
 
-                    static let concurrencyModel: ExecutionModel = .threads
+                    static let executionModel: ExecutionModel = .threads
 
                     required init() {
                     }
@@ -699,8 +699,8 @@
             }
         }
 
-        @Test("@Contract(.threads) on actor produces warning")
-        func contractThreadsOnActorProducesWarning() {
+        @Test("@Contract(.threads) on actor produces error")
+        func contractThreadsOnActorProducesError() {
             assertMacro {
                 """
                 @Contract(.threads)
@@ -719,8 +719,72 @@
                 """
                 @Contract(.threads)
                 ┬──────────────────
-                ╰─ ⚠️ Actors are data-race-free; .threads cannot surface races in them. Use @Contract(.tasks)
+                ╰─ 🛑 Actor contracts must use @Contract(.sequential). Actors are data-race-free, so .threads cannot surface races in them
                 actor Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+
+                    @Oracle
+                    func equiv(to other: MySUT) -> Bool { true }
+                }
+                """
+            }
+        }
+
+        @Test("@Contract(.tasks) on actor produces error")
+        func contractTasksOnActorProducesError() {
+            assertMacro {
+                """
+                @Contract(.tasks)
+                actor Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() async throws {
+                    }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.tasks)
+                ┬────────────────
+                ╰─ 🛑 Actor contracts must use @Contract(.sequential). Actor isolation serialises all dispatch, so concurrent testing has nowhere to interleave
+                actor Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() async throws {
+                    }
+                }
+                """
+            }
+        }
+
+        @Test("@Contract(.sequential) with @Oracle produces warning")
+        func contractSequentialWithOracleProducesWarning() {
+            assertMacro {
+                """
+                @Contract(.sequential)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+
+                    @Oracle
+                    func equiv(to other: MySUT) -> Bool { true }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.sequential)
+                ┬─────────────────────
+                ╰─ ⚠️ @Oracle is only used with @Contract(.threads). For @Contract(.sequential) or @Contract(.tasks), use @Invariant and @Model instead
+                final class Spec {
                     @SystemUnderTest var sut: MySUT
 
                     @Command
@@ -733,7 +797,7 @@
                 """
             } expansion: {
                 #"""
-                actor Spec {
+                final class Spec {
                     var sut: MySUT
                     func doSomething() throws {
                     }
@@ -762,14 +826,14 @@
                         )
                     }
 
-                    func run(_ command: Command) async throws {
+                    func run(_ command: Command) throws {
                         switch command {
                             case .doSomething:
                             try self.doSomething()
                         }
                     }
 
-                    func checkInvariants() async throws {
+                    func checkInvariants() throws {
                     }
 
                     var modelDescription: String {
@@ -780,13 +844,98 @@
                         "sut: \(sut)"
                     }
 
-                    func oracleCheck(_ sequentialResult: SystemUnderTest) async -> Bool {
-                        equiv(to: sequentialResult)
+                    static let executionModel: ExecutionModel = .sequential
+
+                    required init() {
+                    }
+                }
+
+                extension Spec: ContractSpec {
+                }
+                """#
+            }
+        }
+
+        @Test("@Contract(.sequential) on actor synthesizes diagnosticSnapshot and init")
+        func contractSequentialOnActorSynthesizesDiagnosticSnapshot() {
+            assertMacro {
+                """
+                @Contract(.sequential)
+                actor Spec {
+                    @Model var expected: Int = 0
+                    @SystemUnderTest var sut: MySUT
+
+                    @Invariant
+                    func valueMatches() async -> Bool {
+                        true
                     }
 
-                    static let concurrencyModel: ExecutionModel = .threads
+                    @Command
+                    func doSomething() async throws {
+                    }
+                }
+                """
+            } expansion: {
+                #"""
+                actor Spec {
+                    var expected: Int = 0
+                    var sut: MySUT
+                    func valueMatches() async -> Bool {
+                        true
+                    }
+                    func doSomething() async throws {
+                    }
 
-                    nonisolated init() {
+                    enum Command: CustomStringConvertible, Sendable {
+                            case doSomething
+
+                        var description: String {
+                            switch self {
+                                case .doSomething:
+                                "doSomething"
+                            }
+                        }
+                    }
+
+                    typealias SystemUnderTest = MySUT
+
+                    var systemUnderTest: SystemUnderTest {
+                        sut
+                    }
+
+                    static var commandGenerator: ReflectiveGenerator<Command> {
+                        .oneOf(weighted:
+                                (1, .just(Command.doSomething))
+                        )
+                    }
+
+                    func run(_ command: Command) async throws {
+                        switch command {
+                            case .doSomething:
+                            try await self.doSomething()
+                        }
+                    }
+
+                    func checkInvariants() async throws {
+                            let valueMatchesResult = await valueMatches()
+                            try check(valueMatchesResult, "valueMatches")
+                    }
+
+                    var modelDescription: String {
+                        "expected: \(expected)"
+                    }
+
+                    var sutDescription: String {
+                        "sut: \(sut)"
+                    }
+
+                    static let executionModel: ExecutionModel = .sequential
+
+                    func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
+                        DiagnosticSnapshot(systemUnderTest: systemUnderTest, modelDescription: modelDescription, sutDescription: sutDescription)
+                    }
+
+                    init() {
                     }
                 }
 
@@ -865,7 +1014,7 @@
                 		"items: \(items)"
                 	}
 
-                	static let concurrencyModel: ExecutionModel = .tasks
+                	static let executionModel: ExecutionModel = .tasks
 
                 	required init() {
                 	}
@@ -945,7 +1094,7 @@
                 		"sut: \(sut)"
                 	}
 
-                	static let concurrencyModel: ExecutionModel = .tasks
+                	static let executionModel: ExecutionModel = .tasks
 
                 	required init() {
                 	}

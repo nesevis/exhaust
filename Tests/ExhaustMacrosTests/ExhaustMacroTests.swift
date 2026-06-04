@@ -170,7 +170,7 @@
                     if value < 0 {
                         Issue.record("negative")
                     }
-                    #expect(value > 0, sourceLocation: Testing.SourceLocation(fileID: "TestModule/Test.swift", filePath: "Test.swift", line: 5, column: 5))
+                    #expect(value > 0)
                     },
                     detection: { value in
                     if value < 0 {
@@ -249,9 +249,9 @@
                     property: { value in
                     switch value {
                     case 1:
-                        #expect(value > 0, sourceLocation: Testing.SourceLocation(fileID: "TestModule/Test.swift", filePath: "Test.swift", line: 3, column: 13))
+                        #expect(value > 0)
                     default:
-                        #expect(value != 0, sourceLocation: Testing.SourceLocation(fileID: "TestModule/Test.swift", filePath: "Test.swift", line: 4, column: 14))
+                        #expect(value != 0)
                     }
                     },
                     detection: { value in
@@ -479,7 +479,7 @@
                     function: #function,
                     property: { value in
                     let x = compute(value)
-                    #expect(x == 0, sourceLocation: Testing.SourceLocation(fileID: "TestModule/Test.swift", filePath: "Test.swift", line: 3, column: 5))
+                    #expect(x == 0)
                     },
                     detection: { value in
                     let x = compute(value)
@@ -602,7 +602,7 @@
                     function: #function,
                     property: { person in
                     let result = await actor.validate(person)
-                    #expect(result, sourceLocation: Testing.SourceLocation(fileID: "TestModule/Test.swift", filePath: "Test.swift", line: 3, column: 5))
+                    #expect(result)
                     },
                     detection: { person in
                     let result = await actor.validate(person)
