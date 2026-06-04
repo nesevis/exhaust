@@ -10,7 +10,7 @@ private enum MacroConcurrencyMode {
     case threads
 }
 
-/// Reads the `ConcurrencyModel` literal from `@Contract(.tasks)` or `@Contract(.threads)`.
+/// Reads the `ExecutionModel` literal from `@Contract(.tasks)` or `@Contract(.threads)`.
 ///
 /// Returns `nil` when the argument is missing or not a recognized literal.
 private func extractConcurrencyMode(from node: AttributeSyntax) -> MacroConcurrencyMode? {
@@ -29,7 +29,7 @@ private func extractConcurrencyMode(from node: AttributeSyntax) -> MacroConcurre
 
 /// Attached macro that synthesizes contract conformance from a class annotated with `@Contract(.tasks)` or `@Contract(.threads)`.
 ///
-/// The mode argument selects the concurrency mechanism:
+/// The mode argument selects the execution model:
 /// - `.tasks` — cooperative scheduling of Swift Tasks, checked by `@Invariant` (and optionally `@Model`).
 /// - `.threads` — preemptive scheduling on real OS threads, checked by `@Oracle`.
 ///
@@ -82,13 +82,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         let needsAsyncConformance = hasAnyAsync || isActorDecl
         let preconcurrency = isActorDecl ? "@preconcurrency " : ""
 
-        let proto: String
-        switch mode {
-            case .tasks:
-                proto = needsAsyncConformance ? "AsyncContractSpec" : "ContractSpec"
-            case .threads:
-                proto = needsAsyncConformance ? "AsyncConcurrentContractSpec" : "ConcurrentContractSpec"
-        }
+        let proto = needsAsyncConformance ? "AsyncContractSpec" : "ContractSpec"
 
         let ext: DeclSyntax = "extension \(type.trimmed): \(raw: preconcurrency)\(raw: proto) {}"
         return [ext.cast(ExtensionDeclSyntax.self)]
@@ -231,7 +225,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
             case .tasks: ".tasks"
             case .threads: ".threads"
         }
-        decls.append("static let concurrencyModel: ConcurrencyModel = \(raw: modeString)")
+        decls.append("static let concurrencyModel: ExecutionModel = \(raw: modeString)")
 
         let hasUserInit = members.contains { member in
             guard let initDecl = member.decl.as(InitializerDeclSyntax.self) else { return false }
@@ -669,8 +663,8 @@ enum ContractDiagnostic: String, DiagnosticMessage {
     case sutTypeNotInferred = "@SystemUnderTest property type could not be inferred — add an explicit type annotation"
     case commandMissingGenerators = "@Command method has parameters but no generator expressions — add generators to the @Command attribute"
     case structNotAllowed = "Contract specs must be a 'final class' or 'actor' — structs are not supported"
-    case missingMode = "@Contract requires a concurrency mode argument: @Contract(.tasks) or @Contract(.threads)"
-    case nonLiteralMode = "The concurrency mode must be a literal ConcurrencyModel case (.tasks or .threads)"
+    case missingMode = "@Contract requires an execution mode: @Contract(.sequential|.tasks|.threads)"
+    case nonLiteralMode = "The execution mode must be a literal ExecutionModel case (.sequential|.tasks|.threads)"
     case oracleUnderTasks = "@Oracle is only used with @Contract(.threads). For @Contract(.tasks), use @Invariant and @Model instead"
     case invariantUnderThreads = "@Invariant requires deterministic per-step state, which a preemptive run does not have. Use @Contract(.tasks)"
     case modelUnderThreads = "@Model requires deterministic per-step state, which a preemptive run does not have. Use @Contract(.tasks)"

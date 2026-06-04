@@ -6,10 +6,46 @@ import ExhaustCore
 import Foundation
 import IssueReporting
 
+// MARK: - Dispatch
+
+public extension __ExhaustRuntime {
+    /// Dispatches a synchronous contract test to the `.tasks` or `.threads` runner based on the contract's ``ExecutionModel``.
+    @discardableResult
+    static func __runContractDispatch<Spec: ContractSpec>(
+        _ specType: Spec.Type,
+        settings: [ContractSettings],
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column
+    ) -> ContractResult<Spec>? {
+        switch Spec.concurrencyModel {
+            case .tasks:
+                return __runContract(
+                    specType,
+                    settings: settings,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+            case .threads:
+                return __runPreemptiveConcurrentContract(
+                    specType,
+                    settings: settings,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+        }
+    }
+}
+
 // MARK: - Entry Point
 
 public extension __ExhaustRuntime {
-    /// Runs a contract property test for the given contract type.
+    /// Runs a `.tasks` contract property test for the given contract type.
     ///
     /// Generates command sequences using the spec's synthesized ``commandGenerator``, executes each sequence against a fresh instance, and verifies that invariants hold after every step. When a violation is found, the failing command sequence is reduced to a minimal counterexample.
     ///

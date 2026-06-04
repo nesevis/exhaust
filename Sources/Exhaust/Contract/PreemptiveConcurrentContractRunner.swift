@@ -13,11 +13,11 @@ import IssueReporting
 public extension __ExhaustRuntime {
     /// Runs a preemptive concurrent contract test for the given synchronous specification type.
     ///
-    /// Dispatches commands across real GCD threads and uses the spec's ``ConcurrentContractSpec/oracleCheck(_:)`` to verify consistency with sequential behavior. Non-deterministic scheduling means the same seed does not guarantee the same interleaving — bug detection is probabilistic, relying on repetition across the sampling budget.
+    /// Dispatches commands across real GCD threads and uses the spec's ``ContractSpec/oracleCheck(_:)`` to verify consistency with sequential behavior. Non-deterministic scheduling means the same seed does not guarantee the same interleaving — bug detection is probabilistic, relying on repetition across the sampling budget.
     @discardableResult
-    static func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
+    static func __runPreemptiveConcurrentContract<Spec: ContractSpec>(
         _: Spec.Type,
-        settings: [ConcurrentContractSettings],
+        settings: [ContractSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -61,7 +61,7 @@ public extension __ExhaustRuntime {
 
 private extension __ExhaustRuntime {
     /// Executes the full preemptive contract pipeline on a GCD thread: smoke test, SCA coverage, random sampling with three-pass reduction. Reports issues inline via `reportIssue` since Swift Testing task-locals are available on the calling thread.
-    static func runPreemptivePipeline<Spec: ConcurrentContractSpec>(
+    static func runPreemptivePipeline<Spec: ContractSpec>(
         _: Spec.Type,
         config: ResolvedConcurrentConfig,
         fileID: StaticString,
@@ -294,7 +294,7 @@ private extension __ExhaustRuntime {
 
 private extension __ExhaustRuntime {
     /// Builds a ``ContractResult`` for a preemptive failure by running the reduced commands sequentially on a fresh spec to capture the oracle SUT state.
-    static func buildPreemptiveResult<Spec: ConcurrentContractSpec>(
+    static func buildPreemptiveResult<Spec: ContractSpec>(
         _: Spec.Type,
         reduced: [(ScheduleMarker, Spec.Command)],
         seed: UInt64?,
@@ -357,8 +357,8 @@ private func runCatchingObjC(_ body: @convention(block) () -> Void) -> Bool {
 
 // MARK: - Checker
 
-/// Encapsulates concurrent execution, oracle comparison, and three-pass reduction for a ``ConcurrentContractSpec``.
-private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
+/// Encapsulates concurrent execution, oracle comparison, and three-pass reduction for a ``ContractSpec``.
+private struct PreemptiveChecker<Spec: ContractSpec> {
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// Returns `true` if the execution passes. Returns `false` if invariants fail or the oracle detects divergence from sequential behavior.

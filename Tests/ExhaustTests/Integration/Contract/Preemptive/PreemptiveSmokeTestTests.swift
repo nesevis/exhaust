@@ -77,7 +77,7 @@ final class SequentiallyBrokenSpec {
 // MARK: - SUT
 
 /// Broken even under sequential access — decrement is a no-op.
-/// Marked `@unchecked Sendable` to satisfy `ConcurrentContractSpec`; intentionally not thread-safe.
+/// Marked `@unchecked Sendable` to satisfy `ContractSpec`; intentionally not thread-safe.
 final class BrokenCounter: @unchecked Sendable, CustomDebugStringConvertible {
     private var _value: Int = 0
 

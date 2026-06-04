@@ -140,7 +140,7 @@
                         "counter: \(counter)"
                     }
 
-                    static let concurrencyModel: ConcurrencyModel = .tasks
+                    static let concurrencyModel: ExecutionModel = .tasks
 
                     required init() {
                     }
@@ -215,7 +215,7 @@
                         "items: \(items)"
                     }
 
-                    static let concurrencyModel: ConcurrencyModel = .tasks
+                    static let concurrencyModel: ExecutionModel = .tasks
 
                     required init() {
                     }
@@ -287,7 +287,7 @@
             }
         }
 
-        @Test("@Contract(.threads) on final class with @Oracle produces ConcurrentContractSpec conformance")
+        @Test("@Contract(.threads) on final class with @Oracle produces ContractSpec conformance with oracleCheck")
         func contractThreadsWithOracleProducesConcurrentConformance() {
             assertMacro {
                 """
@@ -360,13 +360,13 @@
                         equivalent(to: sequentialResult)
                     }
 
-                    static let concurrencyModel: ConcurrencyModel = .threads
+                    static let concurrencyModel: ExecutionModel = .threads
 
                     required init() {
                     }
                 }
 
-                extension CounterSpec: ConcurrentContractSpec {
+                extension CounterSpec: ContractSpec {
                 }
                 """#
             }
@@ -482,7 +482,7 @@
                         "sut: \(sut)"
                     }
 
-                    static let concurrencyModel: ConcurrencyModel = .tasks
+                    static let concurrencyModel: ExecutionModel = .tasks
 
                     required init() {
                     }
@@ -587,13 +587,13 @@
                         equiv(to: sequentialResult)
                     }
 
-                    static let concurrencyModel: ConcurrencyModel = .threads
+                    static let concurrencyModel: ExecutionModel = .threads
 
                     required init() {
                     }
                 }
 
-                extension Spec: ConcurrentContractSpec {
+                extension Spec: ContractSpec {
                 }
                 """#
             }
@@ -687,13 +687,13 @@
                         equiv(to: sequentialResult)
                     }
 
-                    static let concurrencyModel: ConcurrencyModel = .threads
+                    static let concurrencyModel: ExecutionModel = .threads
 
                     required init() {
                     }
                 }
 
-                extension Spec: ConcurrentContractSpec {
+                extension Spec: ContractSpec {
                 }
                 """#
             }
@@ -784,13 +784,13 @@
                         equiv(to: sequentialResult)
                     }
 
-                    static let concurrencyModel: ConcurrencyModel = .threads
+                    static let concurrencyModel: ExecutionModel = .threads
 
                     nonisolated init() {
                     }
                 }
 
-                extension Spec: @preconcurrency AsyncConcurrentContractSpec {
+                extension Spec: @preconcurrency AsyncContractSpec {
                 }
                 """#
             }
@@ -865,7 +865,7 @@
                 		"items: \(items)"
                 	}
 
-                	static let concurrencyModel: ConcurrencyModel = .tasks
+                	static let concurrencyModel: ExecutionModel = .tasks
 
                 	required init() {
                 	}
@@ -945,7 +945,7 @@
                 		"sut: \(sut)"
                 	}
 
-                	static let concurrencyModel: ConcurrencyModel = .tasks
+                	static let concurrencyModel: ExecutionModel = .tasks
 
                 	required init() {
                 	}

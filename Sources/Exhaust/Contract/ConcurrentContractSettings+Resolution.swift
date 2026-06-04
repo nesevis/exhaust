@@ -1,7 +1,7 @@
-// Parses ConcurrentContractSettings into a resolved configuration struct.
+// Parses ContractSettings into a resolved concurrent configuration struct.
 import ExhaustCore
 
-/// Flattened configuration produced by parsing a `[ConcurrentContractSettings]` array. Holds all resolved values with defaults applied, ready for the concurrent runner to consume without re-interpreting the enum cases.
+/// Flattened configuration produced by parsing a `[ContractSettings]` array for a concurrent contract. Holds all resolved values with defaults applied, ready for the concurrent runner to consume without re-interpreting the enum cases.
 struct ResolvedConcurrentConfig {
     var commandLimit: Int?
     var concurrencyLevel: Int = 2
@@ -29,14 +29,14 @@ struct ResolvedConcurrentConfig {
         case invalidConcurrencyLevel(Int)
     }
 
-    static func parse(_ settings: [ConcurrentContractSettings]) -> ParseResult {
+    static func parse(_ settings: [ContractSettings]) -> ParseResult {
         var config = ResolvedConcurrentConfig()
         for setting in settings {
             switch setting {
                 case let .concurrent(level):
                     config.concurrencyLevel = level
-                case let .budget(b):
-                    config.budget = b
+                case let .budget(budget):
+                    config.budget = budget
                 case let .commandLimit(limit):
                     config.commandLimit = limit
                 case let .replay(replaySeed):
@@ -76,6 +76,8 @@ struct ResolvedConcurrentConfig {
                     config.idleTimeout = ms
                 case let .log(level):
                     config.logLevel = level
+                case .includeDiff:
+                    break
             }
         }
         guard 1 ... 8 ~= config.concurrencyLevel else {

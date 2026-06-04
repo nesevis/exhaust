@@ -1,6 +1,6 @@
 // Async preemptive concurrent contract runner.
 //
-// Async variant of the preemptive runner for AsyncConcurrentContractSpec conformances.
+// Async variant of the preemptive runner for AsyncContractSpec conformances.
 // Bridges async command execution to GCD threads via Task+semaphore to catch races in synchronous primitives hidden behind async facades.
 import ExhaustCore
 import ExhaustObjCSupport
@@ -16,9 +16,9 @@ public extension __ExhaustRuntime {
     ///
     /// The outer loop runs on a GCD thread (via ``__ExhaustRuntime/dispatchToGCD(_:)``) to avoid starving the cooperative pool during parallel test runs. Issue reporting is deferred to the async return context where Swift Testing's task-locals are available.
     @discardableResult
-    static func __runPreemptiveConcurrentContractAsync<Spec: AsyncConcurrentContractSpec>(
+    static func __runPreemptiveConcurrentContractAsync<Spec: AsyncContractSpec>(
         _: Spec.Type,
-        settings: [ConcurrentContractSettings],
+        settings: [ContractSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -63,7 +63,7 @@ public extension __ExhaustRuntime {
 
 private extension __ExhaustRuntime {
     /// Executes the full async preemptive contract pipeline on a GCD thread: smoke test, SCA coverage, random sampling with three-pass reduction. Returns deferred issues for the caller to report in the async context where Swift Testing task-locals are available.
-    static func runAsyncPreemptivePipeline<Spec: AsyncConcurrentContractSpec>(
+    static func runAsyncPreemptivePipeline<Spec: AsyncContractSpec>(
         _: Spec.Type,
         config: ResolvedConcurrentConfig
     ) -> (result: ContractResult<Spec>?, deferredIssues: [String], report: ExhaustReport) {
@@ -299,7 +299,7 @@ private extension __ExhaustRuntime {
 
 private extension __ExhaustRuntime {
     /// Builds a ``ContractResult`` for an async preemptive failure by running the reduced commands sequentially on a fresh spec via the checker's ``AsyncPreemptiveChecker/runSequentially(_:on:)`` bridge to capture the oracle SUT state.
-    static func buildAsyncPreemptiveResult<Spec: AsyncConcurrentContractSpec>(
+    static func buildAsyncPreemptiveResult<Spec: AsyncContractSpec>(
         reduced: [(ScheduleMarker, Spec.Command)],
         checker: AsyncPreemptiveChecker<Spec>,
         seed: UInt64?,
@@ -321,10 +321,10 @@ private extension __ExhaustRuntime {
 
 // MARK: - Async Checker
 
-/// Encapsulates concurrent execution, oracle comparison, and three-pass reduction for an ``AsyncConcurrentContractSpec``.
+/// Encapsulates concurrent execution, oracle comparison, and three-pass reduction for an ``AsyncContractSpec``.
 ///
 /// Bridges async command execution to GCD threads via Task+semaphore. Each lane gets a real OS thread, and within that thread async commands are driven synchronously — the cooperative pool handles the Task's continuations while the GCD thread blocks on the semaphore. This provides real thread-level preemption for synchronous primitives (locks, dispatch queues) hidden behind async facades.
-private struct AsyncPreemptiveChecker<Spec: AsyncConcurrentContractSpec> {
+private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec> {
     /// Idle-timeout bound (milliseconds) for the blocking drain loop, or `nil` to wait unbounded. A command that suspends onto a foreign executor never returns to the drain lane; without this bound the loop spins a CPU core forever.
     let idleTimeoutMilliseconds: Int?
 

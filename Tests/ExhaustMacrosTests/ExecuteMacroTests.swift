@@ -5,20 +5,20 @@
     @testable import ExhaustMacros
 
     @Suite(
-        "#execute contract macro expansion tests",
+        "#execute sync contract macro expansion tests",
         .macros(["execute": ExhaustContractMacro.self], record: .failed)
     )
     struct ExecuteContractMacroTests {
-        @Test("Basic #execute contract expansion with commandLimit")
-        func basicExecuteContractExpansionWithCommandLimit() {
+        @Test("#execute sync contract expansion with commandLimit")
+        func executeContractWithCommandLimit() {
             assertMacro {
                 """
-                #execute(BoundedQueueSpec.self, .commandLimit(20))
+                #execute(BoundedQueueContract.self, .commandLimit(20))
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__runContract(
-                    BoundedQueueSpec.self,
+                __ExhaustRuntime.__runContractDispatch(
+                    BoundedQueueContract.self,
                     settings: [.commandLimit(20)],
                     fileID: #fileID,
                     filePath: #filePath,
@@ -29,7 +29,7 @@
             }
         }
 
-        @Test("#execute contract with settings")
+        @Test("#execute sync contract with multiple settings")
         func executeContractWithSettings() {
             assertMacro {
                 """
@@ -37,7 +37,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__runContract(
+                __ExhaustRuntime.__runContractDispatch(
                     Spec.self,
                     settings: [.commandLimit(20), .budget(.thorough)],
                     fileID: #fileID,
@@ -49,7 +49,7 @@
             }
         }
 
-        @Test("#execute contract with no settings")
+        @Test("#execute sync contract with no settings")
         func executeContractWithNoSettings() {
             assertMacro {
                 """
@@ -57,7 +57,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__runContract(
+                __ExhaustRuntime.__runContractDispatch(
                     Spec.self,
                     settings: [],
                     fileID: #fileID,
@@ -68,28 +68,6 @@
                 """
             }
         }
-
-        @Test("#execute contract with suppress only")
-        func executeContractWithSuppressOnly() {
-            assertMacro {
-                """
-                #execute(Spec.self, .suppress(.issueReporting))
-                """
-            } expansion: {
-                """
-                __ExhaustRuntime.__runContract(
-                    Spec.self,
-                    settings: [.suppress(.issueReporting)],
-                    fileID: #fileID,
-                    filePath: #filePath,
-                    line: #line,
-                    column: #column
-                )
-                """
-            }
-        }
-
-        // MARK: - Error Diagnostics
 
         @Test("Missing spec produces error")
         func missingSpec() {
@@ -109,18 +87,18 @@
 
     @Suite(
         "#execute async contract macro expansion tests",
-        .macros(["execute": ExhaustConcurrentContractMacro.self], record: .failed)
+        .macros(["execute": ExhaustAsyncContractMacro.self], record: .failed)
     )
     struct ExecuteAsyncContractMacroTests {
         @Test("#execute async contract expansion with no settings")
-        func executeAsyncContractExpansionWithNoSettings() {
+        func executeAsyncContractWithNoSettings() {
             assertMacro {
                 """
                 #execute(AsyncSpec.self)
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__runContractConcurrent(
+                __ExhaustRuntime.__runContractDispatchAsync(
                     AsyncSpec.self,
                     settings: [],
                     fileID: #fileID,
@@ -140,105 +118,9 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__runContractConcurrent(
+                __ExhaustRuntime.__runContractDispatchAsync(
                     AsyncSpec.self,
                     settings: [.commandLimit(10), .concurrent(3)],
-                    fileID: #fileID,
-                    filePath: #filePath,
-                    line: #line,
-                    column: #column
-                )
-                """
-            }
-        }
-    }
-
-    @Suite(
-        "#execute GCD concurrent contract macro expansion tests",
-        .macros(["execute": ExhaustGCDContractMacro.self], record: .failed)
-    )
-    struct ExecuteGCDContractMacroTests {
-        @Test("#execute sync concurrent contract expansion with no settings")
-        func executeSyncConcurrentContractExpansionWithNoSettings() {
-            assertMacro {
-                """
-                #execute(CounterSpec.self)
-                """
-            } expansion: {
-                """
-                await __ExhaustRuntime.dispatchToGCD {
-                    __ExhaustRuntime.__runPreemptiveConcurrentContract(
-                        CounterSpec.self,
-                        settings: [],
-                        fileID: #fileID,
-                        filePath: #filePath,
-                        line: #line,
-                        column: #column
-                    )
-                }
-                """
-            }
-        }
-
-        @Test("#execute sync concurrent contract with settings")
-        func executeSyncConcurrentContractWithSettings() {
-            assertMacro {
-                """
-                #execute(CounterSpec.self, .concurrent(2), .commandLimit(6))
-                """
-            } expansion: {
-                """
-                await __ExhaustRuntime.dispatchToGCD {
-                    __ExhaustRuntime.__runPreemptiveConcurrentContract(
-                        CounterSpec.self,
-                        settings: [.concurrent(2), .commandLimit(6)],
-                        fileID: #fileID,
-                        filePath: #filePath,
-                        line: #line,
-                        column: #column
-                    )
-                }
-                """
-            }
-        }
-    }
-
-    @Suite(
-        "#execute async GCD concurrent contract macro expansion tests",
-        .macros(["execute": ExhaustAsyncGCDContractMacro.self], record: .failed)
-    )
-    struct ExecuteAsyncGCDContractMacroTests {
-        @Test("#execute async concurrent contract expansion with no settings")
-        func executeAsyncConcurrentContractExpansionWithNoSettings() {
-            assertMacro {
-                """
-                #execute(AsyncCounterSpec.self)
-                """
-            } expansion: {
-                """
-                __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
-                    AsyncCounterSpec.self,
-                    settings: [],
-                    fileID: #fileID,
-                    filePath: #filePath,
-                    line: #line,
-                    column: #column
-                )
-                """
-            }
-        }
-
-        @Test("#execute async concurrent contract with settings")
-        func executeAsyncConcurrentContractWithSettings() {
-            assertMacro {
-                """
-                #execute(AsyncCounterSpec.self, .concurrent(2), .budget(.quick))
-                """
-            } expansion: {
-                """
-                __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
-                    AsyncCounterSpec.self,
-                    settings: [.concurrent(2), .budget(.quick)],
                     fileID: #fileID,
                     filePath: #filePath,
                     line: #line,

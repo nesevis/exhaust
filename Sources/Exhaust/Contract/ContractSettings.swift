@@ -36,4 +36,14 @@ public enum ContractSettings {
     ///
     /// Defaults to `.log(.error)` when omitted — only error-level messages appear.
     case log(LogLevel)
+
+    /// Sets the number of concurrent execution lanes (1 through 8). Default is 2.
+    ///
+    /// Each lane runs its assigned commands concurrently. For `.tasks` contracts, the cooperative scheduler interleaves continuations at every `await` boundary. For `.threads` contracts, each lane dispatches to a separate GCD thread.
+    case concurrent(Int)
+
+    /// Sets the maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout. Default is 1000.
+    ///
+    /// When the idle timeout fires, the test reports the current command sequence as a failure without attempting reduction (since each reduction probe would also time out).
+    case idleTimeoutMs(Int)
 }

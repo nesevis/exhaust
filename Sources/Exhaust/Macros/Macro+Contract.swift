@@ -7,7 +7,7 @@ import ExhaustCore
 
 /// Marks a `final class` or `actor` as a contract, synthesizing protocol conformance, a command enum, and a command generator.
 ///
-/// The required ``ConcurrencyModel`` argument selects the concurrency mechanism:
+/// The required ``ExecutionModel`` argument selects the execution model:
 ///
 /// - `.tasks` — cooperative scheduling of Swift Tasks. Checks use `@Invariant` (and optionally `@Model`). Deterministic and reproducible.
 /// - `.threads` — preemptive scheduling on real OS threads via GCD. Checks use `@Oracle`, which compares the concurrent end state against a sequential replay. Non-deterministic; bug detection relies on repetition.
@@ -69,8 +69,8 @@ import ExhaustCore
     named(init),
     named(concurrencyModel)
 )
-@attached(extension, conformances: ContractSpec, AsyncContractSpec, ConcurrentContractSpec, AsyncConcurrentContractSpec)
-public macro Contract(_ mode: ConcurrencyModel) = #externalMacro(module: "ExhaustMacros", type: "ContractDeclarationMacro")
+@attached(extension, conformances: ContractSpec, AsyncContractSpec)
+public macro Contract(_ mode: ExecutionModel) = #externalMacro(module: "ExhaustMacros", type: "ContractDeclarationMacro")
 
 /// Marks a property as model state in a contract.
 ///

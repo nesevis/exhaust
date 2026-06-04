@@ -9,11 +9,48 @@
 import ExhaustCore
 import IssueReporting
 
+// MARK: - Async Dispatch
+
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+public extension __ExhaustRuntime {
+    /// Dispatches an asynchronous contract test to the `.tasks` or `.threads` runner based on the contract's ``ExecutionModel``.
+    @discardableResult
+    static func __runContractDispatchAsync<Spec: AsyncContractSpec>(
+        _ specType: Spec.Type,
+        settings: [ContractSettings],
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column
+    ) async -> ContractResult<Spec>? {
+        switch Spec.concurrencyModel {
+            case .tasks:
+                return await __runContractConcurrent(
+                    specType,
+                    settings: settings,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+            case .threads:
+                return await __runPreemptiveConcurrentContractAsync(
+                    specType,
+                    settings: settings,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+        }
+    }
+}
+
 // MARK: - Runner Entry Point
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 public extension __ExhaustRuntime {
-    /// Runs a concurrent contract property test for the given async specification type.
+    /// Runs a `.tasks` concurrent contract property test for the given async contract type.
     ///
     /// Generates random tagged command sequences where each command carries a schedule marker assigning it to one of N concurrent lanes or the sequential prefix. The cooperative scheduler (``drainSchedule(taggedCommands:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``) executes the sequence with deterministic interleaving controlled by the marker order. When a failure is found, the choice-graph reducer reduces both the command sequence and the lane assignments.
     ///
@@ -21,7 +58,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __runContractConcurrent<Spec: AsyncContractSpec>(
         _: Spec.Type,
-        settings: [ConcurrentContractSettings],
+        settings: [ContractSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,

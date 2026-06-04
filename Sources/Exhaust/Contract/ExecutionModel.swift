@@ -1,4 +1,4 @@
-/// Selects the concurrency mechanism a contract uses.
+/// Selects the execution model a contract uses.
 ///
 /// Pass one of these cases to `@Contract` at the declaration site:
 ///
@@ -9,7 +9,7 @@
 ///
 /// - `.tasks` interleaves Swift Tasks cooperatively at every `await` boundary. The schedule is deterministic and reproducible. Checks use `@Invariant` (and optionally `@Model`).
 /// - `.threads` dispatches commands to real OS threads via GCD. The schedule is non-deterministic; bug detection relies on repetition. Checks use `@Oracle`, which compares the concurrent end state against a sequential replay.
-public enum ConcurrencyModel: Sendable {
+public enum ExecutionModel: Sendable {
     /// Cooperative scheduling of Swift Tasks.
     ///
     /// Interleavings happen at `await` suspension points only. The same seed always produces the same command ordering and lane assignment. Use this to find ordering bugs, reentrancy issues, and logical interleaving problems.

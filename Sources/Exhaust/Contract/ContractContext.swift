@@ -145,6 +145,8 @@ struct ContractContext {
                     }
                 case let .log(level):
                     logLevel = level
+                case .concurrent, .idleTimeoutMs:
+                    break
             }
         }
 
