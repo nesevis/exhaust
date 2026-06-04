@@ -9,8 +9,9 @@ import ExhaustCore
 ///
 /// The required ``ExecutionModel`` argument selects the execution model:
 ///
-/// - `.tasks` — cooperative scheduling of Swift Tasks. Checks use `@Invariant` (and optionally `@Model`). Deterministic and reproducible.
-/// - `.threads` — preemptive scheduling on real OS threads via GCD. Checks use `@Oracle`, which compares the concurrent end state against a sequential replay. Non-deterministic; bug detection relies on repetition.
+/// - `.sequential` runs commands one at a time. Checks use `@Invariant` (and optionally `@Model`).
+/// - `.tasks` runs commands concurrently with deterministic interleaving at `await` boundaries. Checks use `@Invariant`.
+/// - `.threads` dispatches commands to real OS threads via GCD. Checks use `@Oracle`, which compares the concurrent end state against a sequential replay.
 ///
 /// ## `.tasks` Contract (Model-Based)
 ///
@@ -74,7 +75,7 @@ public macro Contract(_ mode: ExecutionModel) = #externalMacro(module: "ExhaustM
 
 /// Marks a property as model state in a contract.
 ///
-/// Model properties represent the abstract state used to verify the system under test. They are included in `modelDescription` for failure reports. Model properties are optional — contracts can also use `@Invariant` and `check()` without a reference model.
+/// Model properties represent the abstract state used to verify the system under test. They are included in `modelDescription` for failure reports. Model properties are optional. Contracts can also use `@Invariant` and `check()` without a reference model.
 @attached(peer)
 public macro Model() = #externalMacro(module: "ExhaustMacros", type: "ModelMacro")
 
@@ -104,7 +105,7 @@ public macro Command<each Generator>(weight: Int = 1, _ generators: repeat Refle
 
 /// Marks a method as a global postcondition in a contract.
 ///
-/// Invariant methods are called after every command execution. They must return `Bool` — `true` for passing, `false` for failure. The method must be non-mutating.
+/// Invariant methods are called after every command execution. They must return `Bool`: `true` for passing, `false` for failure.
 ///
 /// ```swift
 /// @Invariant

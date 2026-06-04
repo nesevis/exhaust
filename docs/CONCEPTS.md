@@ -108,7 +108,7 @@ The tools so far test pure functions: one input, one output. Stateful systems fa
 
 Invariants get much simpler if you add a **model**: a simpler reference implementation that the commands update in lockstep, so an invariant becomes "the system agrees with the model." The model is acting as an **oracle**, the trusted source of what the right answer is. For systems whose races hide in real threads rather than at `await` points, a separate **`@Oracle`** compares the concurrent result against a race-free sequential replay.
 
-That split, deterministic interleaving at `await` points versus races between real threads, is the difference between the **cooperative** runner and the **preemptive** one. The cooperative runner drives the tasks itself and interleaves at every `await`, so the same seed reproduces the same run. The preemptive runner hands off to real threads to reach races inside locks and atomics, trading reproducibility for that reach. [Contract testing](EXECUTE-contract-testing.md) covers both.
+The execution mode (`.sequential`, `.tasks`, or `.threads`) tells Exhaust how to run the commands. `.sequential` runs commands one at a time: the right choice for testing logic. `.tasks` runs commands concurrently with deterministic interleaving at every `await`, so the same seed reproduces the same run. `.threads` hands off to real OS threads to reach races inside locks and atomics, trading reproducibility for that reach. [Contract testing](EXECUTE-contract-testing.md) covers all three.
 
 ## Testing without an oracle: metamorphic testing
 

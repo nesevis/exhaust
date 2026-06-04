@@ -120,8 +120,8 @@ Then add it as a dependency of your test target:
 
 - Swift 6.2+ (Xcode 26+)
 - macOS 10.15+, iOS 13+, Mac Catalyst 13+, tvOS 13+, watchOS 6+, visionOS 1+
-- Cooperative concurrent contract testing (`@Contract` + `.concurrent`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+
-- Preemptive concurrent contract testing (`@ConcurrentContract`) has no additional availability requirements
+- Cooperative concurrent contract testing (`@Contract(.tasks)`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+
+- Sequential and preemptive contract testing (`@Contract(.sequential)`, `@Contract(.threads)`) have no additional availability requirements
 
 > [!NOTE]
 > Exhaust is under active development. Some APIs may change before the 1.0 release.

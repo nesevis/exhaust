@@ -1,11 +1,11 @@
 // Defines the protocol that `@Contract`-annotated types conform to.
 //
-// The macro synthesizes conformance — users never implement this directly.
+// The macro synthesizes conformance. Users never implement this directly.
 import Foundation
 
 /// Shared requirements for both synchronous and asynchronous contracts.
 ///
-/// Users never conform to this protocol directly — use ``ContractSpec`` or ``AsyncContractSpec`` instead, both synthesized by the `@Contract` macro.
+/// Users never conform to this protocol directly. Use ``ContractSpec`` or ``AsyncContractSpec`` instead, both synthesized by the `@Contract` macro.
 public protocol ContractSpecBase {
     /// Creates a fresh instance with default model and SUT state.
     init()
@@ -80,7 +80,7 @@ public protocol ContractSpec: ContractSpecBase, AnyObject {
 }
 
 extension ContractSpec {
-    /// Default oracle that traps — overridden by the `@Contract(.threads)` macro's synthesized `oracleCheck`.
+    /// Default oracle that traps. Overridden by the `@Contract(.threads)` macro's synthesized `oracleCheck`.
     public func oracleCheck(_: SystemUnderTest) -> Bool {
         fatalError("oracleCheck is only called for .threads contracts")
     }
@@ -134,7 +134,7 @@ public protocol AsyncContractSpec: ContractSpecBase, AnyObject {
 }
 
 extension AsyncContractSpec {
-    /// Default oracle that traps — overridden by the `@Contract(.threads)` macro's synthesized `oracleCheck`.
+    /// Default oracle that traps. Overridden by the `@Contract(.threads)` macro's synthesized `oracleCheck`.
     public func oracleCheck(_: SystemUnderTest) async -> Bool {
         fatalError("oracleCheck is only called for .threads contracts")
     }
