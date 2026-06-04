@@ -5,7 +5,7 @@
 
     @Suite(
         "#exhaust macro expansion tests",
-        .macros(["exhaust": ExhaustTestMacro.self], record: .failed)
+        .macros(["exhaust": ExhaustTestMacro.self], record: .missing)
     )
     struct ExhaustMacroTests {
         @Test("Basic exhaust with trailing closure captures source")
@@ -549,7 +549,7 @@
 
     @Suite(
         "#exhaust async macro expansion tests",
-        .macros(["exhaust": ExhaustAsyncTestMacro.self], record: .failed)
+        .macros(["exhaust": ExhaustAsyncTestMacro.self], record: .missing)
     )
     struct ExhaustAsyncMacroTests {
         @Test("Async Bool trailing closure expands to __exhaustAsync")

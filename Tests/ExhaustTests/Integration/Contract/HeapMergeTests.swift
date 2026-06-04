@@ -105,8 +105,8 @@ struct HeapAliasingTests {
 // mirroring the Hypothesis tutorial's use of bundle consumption for exclusive
 // ownership.
 
-@Contract
-struct HeapMergeContract {
+@Contract(.sequential)
+final class HeapMergeContract {
     @Model var expectedContents: [[Int]] = []
     @SystemUnderTest var heaps: [BuggyHeap] = []
     let heapRefs = Bundle<Int>()
@@ -117,14 +117,14 @@ struct HeapMergeContract {
     }
 
     @Command(weight: 3)
-    mutating func newHeap() throws {
+    func newHeap() throws {
         heaps.append(BuggyHeap())
         expectedContents.append([])
         heapRefs.add(heaps.count - 1)
     }
 
     @Command(weight: 5, #gen(.int(in: 0 ... 99), .int(in: 0 ... 50)))
-    mutating func push(heapIndex: Int, value: Int) throws {
+    func push(heapIndex: Int, value: Int) throws {
         guard let idx = heapRefs.draw(at: heapIndex) else { throw skip() }
         heaps[idx].push(value)
         expectedContents[idx].append(value)
@@ -132,7 +132,7 @@ struct HeapMergeContract {
     }
 
     @Command(weight: 3, #gen(.int(in: 0 ... 99)))
-    mutating func pop(heapIndex: Int) throws {
+    func pop(heapIndex: Int) throws {
         guard let idx = heapRefs.draw(at: heapIndex) else { throw skip() }
         guard !heaps[idx].isEmpty else { throw skip() }
         let actual = heaps[idx].pop()
@@ -141,7 +141,7 @@ struct HeapMergeContract {
     }
 
     @Command(weight: 2, #gen(.int(in: 0 ... 99), .int(in: 0 ... 99)))
-    mutating func merge(sourceIndex: Int, targetIndex: Int) throws {
+    func merge(sourceIndex: Int, targetIndex: Int) throws {
         guard heapRefs.count >= 2 else { throw skip() }
         guard let src = heapRefs.consume(at: sourceIndex) else { throw skip() }
         guard let tgt = heapRefs.draw(at: targetIndex) else {
@@ -163,8 +163,8 @@ struct HeapMergeContract {
 // structurally (parent ≤ children at every index), and the pop
 // postcondition verifies that the returned value is the minimum.
 
-@Contract
-struct HeapAliasingContract {
+@Contract(.sequential)
+final class HeapAliasingContract {
     @SystemUnderTest var allHeaps: [SpliceHeap] = []
     let heapRefs = Bundle<SpliceHeap>()
 
@@ -182,20 +182,20 @@ struct HeapAliasingContract {
     }
 
     @Command(weight: 2)
-    mutating func newHeap() throws {
+    func newHeap() throws {
         let heap = SpliceHeap()
         allHeaps.append(heap)
         heapRefs.add(heap)
     }
 
     @Command(weight: 4, #gen(.int(in: 0 ... 99), .int(in: -5 ... 5)))
-    mutating func push(heapIndex: Int, value: Int) throws {
+    func push(heapIndex: Int, value: Int) throws {
         guard let heap = heapRefs.draw(at: heapIndex) else { throw skip() }
         heap.push(value)
     }
 
     @Command(weight: 2, #gen(.int(in: 0 ... 99)))
-    mutating func pop(heapIndex: Int) throws {
+    func pop(heapIndex: Int) throws {
         guard let heap = heapRefs.draw(at: heapIndex) else { throw skip() }
         guard !heap.isEmpty else { throw skip() }
         let expectedMin = heap.elements.min()!
@@ -204,7 +204,7 @@ struct HeapAliasingContract {
     }
 
     @Command(weight: 4, #gen(.int(in: 0 ... 99), .int(in: 0 ... 99)))
-    mutating func merge(index1: Int, index2: Int) throws {
+    func merge(index1: Int, index2: Int) throws {
         guard let heap1 = heapRefs.draw(at: index1) else { throw skip() }
         guard let heap2 = heapRefs.draw(at: index2) else { throw skip() }
         let merged = heap1.merged(with: heap2)

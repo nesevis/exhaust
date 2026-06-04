@@ -9,11 +9,66 @@
 import ExhaustCore
 import IssueReporting
 
+// MARK: - Async Dispatch
+
+public extension __ExhaustRuntime {
+    /// Dispatches an asynchronous contract test to the appropriate runner based on the contract's ``ExecutionModel``.
+    @discardableResult
+    static func __runContractDispatchAsync<Spec: AsyncContractSpec>(
+        _ specType: Spec.Type,
+        settings: [ContractSettings],
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column
+    ) async -> ContractResult<Spec>? {
+        switch Spec.executionModel {
+            case .sequential:
+                return await __runContractAsync(
+                    specType,
+                    settings: settings,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+            case .tasks:
+                guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+                    reportIssue(
+                        "@Contract(.tasks) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, or visionOS 2+",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                    return nil
+                }
+                return await __runContractConcurrent(
+                    specType,
+                    settings: settings,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+            case .threads:
+                return await __runPreemptiveConcurrentContractAsync(
+                    specType,
+                    settings: settings,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+        }
+    }
+}
+
 // MARK: - Runner Entry Point
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 public extension __ExhaustRuntime {
-    /// Runs a concurrent contract property test for the given async specification type.
+    /// Runs a `.tasks` concurrent contract property test for the given async contract type.
     ///
     /// Generates random tagged command sequences where each command carries a schedule marker assigning it to one of N concurrent lanes or the sequential prefix. The cooperative scheduler (``drainSchedule(taggedCommands:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``) executes the sequence with deterministic interleaving controlled by the marker order. When a failure is found, the choice-graph reducer reduces both the command sequence and the lane assignments.
     ///
@@ -21,7 +76,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __runContractConcurrent<Spec: AsyncContractSpec>(
         _: Spec.Type,
-        settings: [ConcurrentContractSettings],
+        settings: [ContractSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -29,7 +84,7 @@ public extension __ExhaustRuntime {
     ) async -> ContractResult<Spec>? {
         if Spec.self is any Actor.Type {
             let requestedLevel = settings.compactMap { setting -> Int? in
-                if case let .concurrent(level) = setting { return level }
+                if case let .concurrent(level) = setting { return level.rawValue }
                 return nil
             }.last
             if let requestedLevel, requestedLevel > 1 {
@@ -44,7 +99,7 @@ public extension __ExhaustRuntime {
             }
         }
 
-        var config: ResolvedConcurrentConfig
+        let config: ResolvedConcurrentConfig
         switch ResolvedConcurrentConfig.parse(settings) {
             case let .success(resolved):
                 config = resolved
@@ -57,39 +112,19 @@ public extension __ExhaustRuntime {
                     column: column
                 )
                 return nil
-            case let .invalidConcurrencyLevel(level):
-                reportIssue(
-                    "concurrencyLevel must be between 1 and 8, but was \(level)",
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-                return nil
         }
 
+        // The trait-budget fallback is applied in `ResolvedConcurrentConfig.parse`, so `config.budget` already reflects a suite-level `.budget` trait here.
         var regressionSeeds: [String] = []
         #if canImport(Testing)
-            let traitConfig = ExhaustTraitConfiguration.current
-            regressionSeeds = traitConfig?.regressions ?? []
-            if let traitConfig {
-                let hasInlineBudget = settings.contains {
-                    switch $0 {
-                        case .budget: true
-                        default: false
-                    }
-                }
-                if hasInlineBudget == false, let traitBudget = traitConfig.budget {
-                    config.budget = traitBudget
-                }
-            }
+            regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
         // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop — a deadlock under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD grows its thread pool dynamically, so concurrent drain loops cannot exhaust it.
         let logConfiguration = ExhaustLog.Configuration(
             isEnabled: config.suppressLogs == false,
             minimumLevel: config.logLevel,
-            format: config.logFormat
+            format: .keyValue
         )
 
         let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
@@ -196,19 +231,102 @@ private extension __ExhaustRuntime {
             config.onReportClosure?(report)
         }
 
-        // Regression seeds
-        if let regression = runConcurrentRegressionSeeds(
-            regressionSeeds: regressionSeeds,
-            sequenceGen: sequenceGen,
-            property: property,
-            specInit: specInit,
-            concurrencyLevel: concurrencyLevel,
-            idleTimeout: idleTimeout,
-            failureContext: failureContext,
-            suppressIssueReporting: config.suppressIssueReporting
-        ) as (result: ContractResult<Spec>, deferredIssues: [String])? {
-            deferredIssues.append(contentsOf: regression.deferredIssues)
-            return (regression.result, deferredIssues)
+        /// Builds the final result and deferred issue from a discovery, recording reduction stats. Shared by the regression-replay short-circuit and the normal coverage/sampling path so both account identically.
+        func finishDiscovery(_ discovery: ConcurrentDiscovery<Spec.Command>) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
+            if let stats = discovery.reductionStats {
+                report.applyReductionStats(stats)
+            }
+            reductionInvocations = discovery.reductionInvocations
+            discoveredDuringCoverage = discovery.discoveryMethod == .coverage
+            report.reductionMilliseconds = discovery.reductionMilliseconds
+
+            var ctx = failureContext
+            ctx.seed = discovery.seed
+            ctx.originalCount = discovery.originalCount
+            ctx.iteration = discovery.iteration
+            ctx.budget = discovery.budget
+            ctx.sequencesTested = discovery.sequencesTested
+            let failure = buildFailureResult(
+                finalInput: discovery.taggedCommands,
+                specInit: specInit,
+                concurrencyLevel: concurrencyLevel,
+                idleTimeout: idleTimeout,
+                seed: discovery.seed,
+                discoveryMethod: discovery.discoveryMethod,
+                timedOut: discovery.timedOut,
+                failureContext: &ctx
+            )
+            if config.suppressIssueReporting == false {
+                deferredIssues.append(failure.issueMessage)
+            }
+            return (failure.result, deferredIssues)
+        }
+
+        // Regression seeds: replay each through the same coverage/sampling machinery as an inline `.replay`, so the printed `U…` (coverage) and `…-N` (sampling) formats round-trip and the failing run is re-materialised at its true position. An explicit `.replay` takes precedence and skips this pass.
+        if config.coverageReplayRow == nil, config.seed == nil {
+            for encodedSeed in regressionSeeds {
+                let samplingSeed = CrockfordBase32.decodeWithIteration(encodedSeed)
+                let coverageRow = CrockfordBase32.decodeCoverageRow(encodedSeed)
+                guard samplingSeed != nil || coverageRow != nil else {
+                    deferredIssues.append("Invalid regression seed: \(encodedSeed)")
+                    continue
+                }
+
+                var regressionDiscovery: ConcurrentDiscovery<Spec.Command>?
+                if let coverageRow {
+                    if let scaResult = runConcurrentSCACoverage(
+                        seqGen: sequenceGen,
+                        commandGen: commandGen,
+                        commandLimit: resolvedCommandLimit,
+                        coverageBudget: max(coverageBudget, UInt64(coverageRow) + 1),
+                        concurrencyLevel: concurrencyLevel,
+                        idleTimeout: idleTimeout,
+                        skipToRow: coverageRow,
+                        property: property,
+                        identifySkips: identifySkips,
+                        lastRunTimedOut: lastRunTimedOut,
+                        invocationCounter: invocationCounter
+                    ) {
+                        regressionDiscovery = ConcurrentDiscovery(
+                            taggedCommands: scaResult.finalInput,
+                            discoveryMethod: .coverage,
+                            timedOut: scaResult.timedOut,
+                            seed: nil,
+                            originalCount: scaResult.originalCount,
+                            iteration: Int(scaResult.iteration),
+                            budget: coverageBudget,
+                            sequencesTested: invocationCounter.value,
+                            reductionStats: scaResult.reductionStats,
+                            reductionInvocations: scaResult.reductionInvocations,
+                            reductionMilliseconds: 0
+                        )
+                    }
+                } else if let (seed, iteration) = samplingSeed {
+                    do {
+                        regressionDiscovery = try runConcurrentSampling(
+                            sequenceGen: sequenceGen,
+                            reductionConfig: reductionConfig,
+                            property: property,
+                            identifySkips: identifySkips,
+                            lastRunTimedOut: lastRunTimedOut,
+                            invocationCounter: invocationCounter,
+                            seed: seed,
+                            replayIteration: iteration,
+                            samplingBudget: samplingBudget,
+                            failureContext: failureContext,
+                            statsAccumulator: statsAccumulator
+                        )
+                    } catch {
+                        deferredIssues.append("Generator failed during regression replay (seed \(encodedSeed)): \(error)")
+                    }
+                }
+
+                if let regressionDiscovery {
+                    return finishDiscovery(regressionDiscovery)
+                } else if config.suppressIssueReporting == false {
+                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
+                }
+            }
         }
 
         // Ordered coverage
@@ -273,99 +391,7 @@ private extension __ExhaustRuntime {
         guard let discovery else {
             return (nil as ContractResult<Spec>?, deferredIssues)
         }
-
-        if let stats = discovery.reductionStats {
-            report.applyReductionStats(stats)
-        }
-        reductionInvocations = discovery.reductionInvocations
-        discoveredDuringCoverage = discovery.discoveryMethod == .coverage
-        report.reductionMilliseconds = discovery.reductionMilliseconds
-
-        var ctx = failureContext
-        ctx.seed = discovery.seed
-        ctx.originalCount = discovery.originalCount
-        ctx.iteration = discovery.iteration
-        ctx.budget = discovery.budget
-        ctx.sequencesTested = discovery.sequencesTested
-        let failure = buildFailureResult(
-            finalInput: discovery.taggedCommands,
-            specInit: specInit,
-            concurrencyLevel: concurrencyLevel,
-            idleTimeout: idleTimeout,
-            seed: discovery.seed,
-            discoveryMethod: discovery.discoveryMethod,
-            timedOut: discovery.timedOut,
-            failureContext: &ctx
-        )
-        if config.suppressIssueReporting == false {
-            deferredIssues.append(failure.issueMessage)
-        }
-        return (failure.result, deferredIssues)
-    }
-}
-
-// MARK: - Regression Seeds
-
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-private extension __ExhaustRuntime {
-    /// Replays each regression seed against the concurrent property, returning the first failure as a ``ContractResult`` with deferred issue messages. Returns nil when all seeds pass or are absent.
-    static func runConcurrentRegressionSeeds<Spec: AsyncContractSpec>(
-        regressionSeeds: [String],
-        sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
-        property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool,
-        specInit: @escaping () -> Spec,
-        concurrencyLevel: Int,
-        idleTimeout: Int,
-        failureContext: FailureContext,
-        suppressIssueReporting: Bool
-    ) -> (result: ContractResult<Spec>, deferredIssues: [String])? {
-        guard regressionSeeds.isEmpty == false else {
-            return nil
-        }
-
-        var issues: [String] = []
-        for encodedSeed in regressionSeeds {
-            guard let regressionSeed = CrockfordBase32.decode(encodedSeed) else {
-                issues.append("Invalid regression seed: \(encodedSeed)")
-                continue
-            }
-            var regressionInterpreter = ValueAndChoiceTreeInterpreter(
-                sequenceGen,
-                materializePicks: true,
-                seed: regressionSeed,
-                maxRuns: 1
-            )
-            do {
-                if let (input, _) = try regressionInterpreter.next() {
-                    let passed = property(input)
-                    if passed == false {
-                        var ctx = failureContext
-                        ctx.seed = regressionSeed
-                        ctx.originalCount = input.count
-                        ctx.sequencesTested = 1
-                        let failure = buildFailureResult(
-                            finalInput: input,
-                            specInit: specInit,
-                            concurrencyLevel: concurrencyLevel,
-                            idleTimeout: idleTimeout,
-                            seed: regressionSeed,
-                            discoveryMethod: .replay,
-                            timedOut: false,
-                            failureContext: &ctx
-                        )
-                        if suppressIssueReporting == false {
-                            issues.append(failure.issueMessage)
-                        }
-                        return (failure.result, issues)
-                    } else if suppressIssueReporting == false {
-                        issues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
-                    }
-                }
-            } catch {
-                issues.append("Generator failed during regression replay (seed \(encodedSeed)): \(error)")
-            }
-        }
-        return nil
+        return finishDiscovery(discovery)
     }
 }
 
@@ -495,33 +521,27 @@ extension __ExhaustRuntime {
             logEvent: skipPruningLogEvent
         )
 
-        guard let reduceResult = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: sequenceGen,
+        let (finalInput, stats, reduced) = reduceContractCounterexample(
+            value: reduceValue,
             tree: reduceTree,
-            output: reduceValue,
+            generator: sequenceGen,
             config: reductionConfig,
             property: property
-        ) else {
-            return ConcurrentReduction(finalInput: reduceValue, stats: nil, timedOut: false)
-        }
-
-        let finalInput: [(ScheduleMarker, Command)]
-        if case let .reduced(_, reduced) = reduceResult.outcome {
+        )
+        if reduced {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "concurrent_reduced",
-                metadata: ["from": "\(input.count)", "to": "\(reduced.count)"]
+                metadata: ["from": "\(input.count)", "to": "\(finalInput.count)"]
             )
-            finalInput = reduced
         } else {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "concurrent_reduction_no_improvement"
             )
-            finalInput = reduceValue
         }
 
-        return ConcurrentReduction(finalInput: finalInput, stats: reduceResult.stats, timedOut: false)
+        return ConcurrentReduction(finalInput: finalInput, stats: stats, timedOut: false)
     }
 }
 
@@ -558,7 +578,10 @@ private extension __ExhaustRuntime {
 
         let replaySeed: String?
         if let seed {
-            replaySeed = CrockfordBase32.encode(seed: seed, iteration: failureContext.iteration)
+            // A regression replay decodes the seed directly (maxRuns: 1) and carries no iteration, so it must round-trip as a bare seed. Only sampling and replay failures, which set a 1-based iteration, take the iteration suffix.
+            replaySeed = failureContext.iteration >= 1
+                ? CrockfordBase32.encode(seed: seed, iteration: failureContext.iteration)
+                : CrockfordBase32.encode(seed)
         } else if discoveryMethod == .coverage || discoveryMethod == .smokeTest {
             replaySeed = CrockfordBase32.encodeCoverageRow(failureContext.iteration - 1)
         } else {

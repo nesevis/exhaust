@@ -6,15 +6,51 @@ import ExhaustCore
 import Foundation
 import IssueReporting
 
+// MARK: - Dispatch
+
+public extension __ExhaustRuntime {
+    /// Dispatches a synchronous contract test to the appropriate runner based on the contract's ``ExecutionModel``.
+    @discardableResult
+    static func __runContractDispatch<Spec: ContractSpec>(
+        _ specType: Spec.Type,
+        settings: [ContractSettings],
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column
+    ) -> ContractResult<Spec>? {
+        switch Spec.executionModel {
+            case .sequential, .tasks:
+                return __runContract(
+                    specType,
+                    settings: settings,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+            case .threads:
+                return __runPreemptiveConcurrentContract(
+                    specType,
+                    settings: settings,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+        }
+    }
+}
+
 // MARK: - Entry Point
 
 public extension __ExhaustRuntime {
-    /// Runs a contract property test for the given specification type.
+    /// Runs a `.tasks` contract property test for the given contract type.
     ///
     /// Generates command sequences using the spec's synthesized ``commandGenerator``, executes each sequence against a fresh instance, and verifies that invariants hold after every step. When a violation is found, the failing command sequence is reduced to a minimal counterexample.
     ///
     /// - Parameters:
-    ///   - specType: The `@Contract`-annotated specification type.
+    ///   - specType: The `@Contract`-annotated contract type.
     ///   - settings: Configuration options controlling iteration count, coverage, reduction, and command limits.
     @discardableResult
     static func __runContract<Spec: ContractSpec>(
@@ -44,31 +80,20 @@ public extension __ExhaustRuntime {
             return nil
         }
 
-        return ExhaustLog.withConfiguration(.init(isEnabled: context.suppressLogs == false, minimumLevel: context.logLevel, format: context.logFormat)) {
+        return ExhaustLog.withConfiguration(.init(isEnabled: context.suppressLogs == false, minimumLevel: context.logLevel, format: .keyValue)) {
             var context = context
             let commandGen = Spec.commandGenerator
-            let resolvedCommandLimit = context.commandLimit ?? estimateCommandLimit(
-                commandGen: commandGen.gen,
-                coverageBudget: context.coverageBudget
-            )
-
-            // Build the sequence generator: an array of commands with bounded length. Use 0 as the lower bound so the reducer can reduce sequences below the user's minimum — the minimum is a generation hint, not a reduction floor.
-            let commandSequenceGenerator = commandGen.array(
-                length: 0 ... resolvedCommandLimit,
-                scaling: .constant
-            ).gen
+            let (sequenceGenerator, commandLimit) = makeCommandSequence(commandGen: commandGen, context: context)
 
             // The property: execute the command sequence against a fresh spec and check for failures.
             let property: @Sendable ([Spec.Command]) -> Bool = { commands in
-                var spec = Spec()
+                let spec = Spec()
                 for command in commands {
                     do {
                         try spec.run(command)
                         try spec.checkInvariants()
                     } catch is ContractSkip {
                         continue
-                    } catch is ContractCheckFailure {
-                        return false
                     } catch {
                         return false
                     }
@@ -76,63 +101,239 @@ public extension __ExhaustRuntime {
                 return true
             }
 
-            // If regression seeds were passed in through a Swift Testing trait, execute those first
+            // If regression seeds were passed in through a Swift Testing trait, execute those first.
             if let result = runRegressionSeeds(
                 specType: specType,
-                sequenceGenerator: commandSequenceGenerator,
-                property: property,
+                settings: settings,
                 context: context
             ) {
                 return result
             }
 
-            guard let discovery = runCoverageAndSampling(
-                specType: specType,
+            guard let (result, rendered) = runSequentialContract(
+                specType,
                 commandGen: commandGen,
-                commandLimit: resolvedCommandLimit,
-                sequenceGenerator: commandSequenceGenerator,
+                sequenceGenerator: sequenceGenerator,
+                commandLimit: commandLimit,
+                context: &context,
                 property: property,
-                context: &context
+                identifySkips: Spec.skipIdentifier,
+                finalize: { commands in
+                    let (trace, spec) = buildTrace(commands, specType: specType)
+                    return (trace, spec.systemUnderTest, spec.modelDescription)
+                }
             ) else {
                 // The test passed
                 return nil
             }
 
-            // Re-execute the reduced sequence to build the trace and capture SUT state.
-            let (trace, spec) = buildTrace(discovery.commands, specType: specType)
-
-            let result = ContractResult<Spec>(
-                commands: discovery.commands,
-                trace: trace,
-                systemUnderTest: spec.systemUnderTest,
-                seed: context.seed,
-                replaySeed: discovery.replaySeed ?? context.encodedReplaySeed,
-                discoveryMethod: discovery.failureInfo.discoveryMethod
-            )
-
-            if context.suppressIssueReporting == false {
-                let rendered = renderFailure(
-                    result,
-                    failureInfo: discovery.failureInfo,
-                    modelDescription: spec.modelDescription,
-                    includeDiff: context.includeDiff
-                )
-                ExhaustLog.error(
-                    category: .propertyTest,
-                    event: "contract_failed",
-                    rendered
-                )
-                reportIssue(
-                    rendered,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
+            if let rendered {
+                ExhaustLog.error(category: .propertyTest, event: "contract_failed", rendered)
+                reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
             }
 
             return result
         } // withConfiguration
+    }
+}
+
+// MARK: - Async Sequential Entry Point
+
+public extension __ExhaustRuntime {
+    /// Runs a `.sequential` async contract property test without requiring macOS 15.
+    ///
+    /// Dispatches the pipeline to a GCD thread and bridges async command execution via ``blockingAwait(_:)``. This avoids the cooperative executor (and its availability gate) while still running async commands sequentially.
+    @discardableResult
+    static func __runContractAsync<Spec: AsyncContractSpec>(
+        _ specType: Spec.Type,
+        settings: [ContractSettings],
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column
+    ) async -> ContractResult<Spec>? {
+        let logConfiguration = ExhaustLog.Configuration(
+            isEnabled: !settings.contains { if case .suppress(.logs) = $0 { true } else if case .suppress(.all) = $0 { true } else { false } },
+            minimumLevel: settings.compactMap { if case let .log(level) = $0 { level } else { nil } }.last ?? .error,
+            format: .keyValue
+        )
+
+        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
+            ExhaustLog.withConfiguration(logConfiguration) {
+                runAsyncSequentialPipeline(
+                    specType,
+                    settings: settings,
+                    fileID: fileID
+                )
+            }
+        }
+        for issue in deferredIssues {
+            reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
+        }
+        return result
+    }
+}
+
+private extension __ExhaustRuntime {
+    static func runAsyncSequentialPipeline<Spec: AsyncContractSpec>(
+        _ specType: Spec.Type,
+        settings: [ContractSettings],
+        fileID: StaticString
+    ) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
+        var deferredIssues: [String] = []
+
+        var context = ContractContext(
+            settings: settings,
+            fileID: fileID,
+            filePath: "",
+            line: 0,
+            column: 0
+        )
+
+        guard context.hasInvalidReplaySeed == false else {
+            deferredIssues.append("Invalid replay seed")
+            return (nil, deferredIssues)
+        }
+
+        let commandGen = Spec.commandGenerator
+        let (sequenceGenerator, commandLimit) = makeCommandSequence(commandGen: commandGen, context: context)
+
+        nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
+        let identifySkips: @Sendable ([Spec.Command]) -> Set<Int> = { commands in
+            __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+                let spec = specInit()
+                var skips = Set<Int>()
+                for (index, command) in commands.enumerated() {
+                    do {
+                        try await spec.run(command)
+                        try await spec.checkInvariants()
+                    } catch is ContractSkip {
+                        skips.insert(index)
+                    } catch {
+                        break
+                    }
+                }
+                return skips
+            }!
+        }
+
+        let property: @Sendable ([Spec.Command]) -> Bool = { commands in
+            __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+                let spec = specInit()
+                for command in commands {
+                    do {
+                        try await spec.run(command)
+                        try await spec.checkInvariants()
+                    } catch is ContractSkip {
+                        continue
+                    } catch {
+                        return false
+                    }
+                }
+                return true
+            }!
+        }
+
+        guard let (result, rendered) = runSequentialContract(
+            specType,
+            commandGen: commandGen,
+            sequenceGenerator: sequenceGenerator,
+            commandLimit: commandLimit,
+            context: &context,
+            property: property,
+            identifySkips: identifySkips,
+            finalize: { commands in
+                // `DiagnosticSnapshot` is `@unchecked Sendable`, so returning it (rather than the bare non-Sendable SUT) crosses the blocking-await boundary without an unsafe escape hatch. The SUT is unpacked here, back on the calling thread.
+                let captured = __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+                    let spec = specInit()
+                    let (trace, _) = await buildAsyncSequentialTrace(
+                        commands,
+                        run: { try await spec.run($0) },
+                        checkInvariants: { try await spec.checkInvariants() }
+                    )
+                    let snapshot = await spec.diagnosticSnapshot()
+                    return (trace: trace, snapshot: snapshot)
+                }!
+                return (captured.trace, captured.snapshot.systemUnderTest, captured.snapshot.modelDescription)
+            }
+        ) else {
+            return (nil, deferredIssues)
+        }
+
+        if let rendered {
+            deferredIssues.append(rendered)
+        }
+
+        return (result, deferredIssues)
+    }
+}
+
+// MARK: - Shared Sequential Pipeline
+
+private extension __ExhaustRuntime {
+    /// Builds the command-sequence generator and resolves the command limit shared by the sync and async sequential runners.
+    ///
+    /// The sequence uses 0 as its lower length bound so the reducer can shrink sequences below the user's requested minimum — the minimum is a generation hint, not a reduction floor.
+    static func makeCommandSequence<Command>(
+        commandGen: ReflectiveGenerator<Command>,
+        context: ContractContext
+    ) -> (sequenceGenerator: Generator<[Command]>, commandLimit: Int) {
+        let commandLimit = context.commandLimit ?? estimateCommandLimit(
+            commandGen: commandGen.gen,
+            coverageBudget: context.coverageBudget
+        )
+        let sequenceGenerator = commandGen.array(
+            length: 0 ... commandLimit,
+            scaling: .constant
+        ).gen
+        return (sequenceGenerator, commandLimit)
+    }
+
+    /// Runs the coverage-and-sampling discovery phase and assembles the failing ``ContractResult`` and its rendered report.
+    ///
+    /// Shared by the synchronous and asynchronous sequential runners. They differ only in how commands execute (directly versus bridged through ``blockingAwait(_:)``) and how failure state is captured, both supplied through closures. Returns `nil` when every sequence passes.
+    ///
+    /// - Parameter finalize: Re-executes the discovered sequence to produce the trace, SUT snapshot, and model description used in the result and failure report.
+    static func runSequentialContract<Spec: ContractSpecBase>(
+        _: Spec.Type,
+        commandGen: ReflectiveGenerator<Spec.Command>,
+        sequenceGenerator: Generator<[Spec.Command]>,
+        commandLimit: Int,
+        context: inout ContractContext,
+        property: @escaping @Sendable ([Spec.Command]) -> Bool,
+        identifySkips: @escaping @Sendable ([Spec.Command]) -> Set<Int>,
+        finalize: ([Spec.Command]) -> (trace: [TraceStep], systemUnderTest: Spec.SystemUnderTest, modelDescription: String)
+    ) -> (result: ContractResult<Spec>, rendered: String?)? {
+        guard let discovery = runCoverageAndSampling(
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            sequenceGenerator: sequenceGenerator,
+            property: property,
+            identifySkips: identifySkips,
+            context: &context
+        ) else {
+            return nil
+        }
+
+        let outcome = finalize(discovery.commands)
+        let result = ContractResult<Spec>(
+            commands: discovery.commands,
+            trace: outcome.trace,
+            systemUnderTest: outcome.systemUnderTest,
+            seed: context.seed,
+            replaySeed: discovery.replaySeed ?? context.encodedReplaySeed,
+            discoveryMethod: discovery.failureInfo.discoveryMethod
+        )
+
+        let rendered: String? = context.suppressIssueReporting
+            ? nil
+            : renderFailure(
+                result,
+                failureInfo: discovery.failureInfo,
+                modelDescription: outcome.modelDescription,
+                includeDiff: context.includeDiff
+            )
+        return (result, rendered)
     }
 }
 
@@ -147,20 +348,20 @@ private extension __ExhaustRuntime {
     }
 
     /// Runs the SCA coverage phase followed by random sampling, returning a ``ContractDiscovery`` on the first failure or nil when the full budget passes.
-    static func runCoverageAndSampling<Spec: ContractSpec>(
-        specType _: Spec.Type,
-        commandGen: ReflectiveGenerator<Spec.Command>,
+    static func runCoverageAndSampling<Command>(
+        commandGen: ReflectiveGenerator<Command>,
         commandLimit: Int,
-        sequenceGenerator: Generator<[Spec.Command]>,
-        property: @escaping @Sendable ([Spec.Command]) -> Bool,
+        sequenceGenerator: Generator<[Command]>,
+        property: @escaping @Sendable ([Command]) -> Bool,
+        identifySkips: @escaping @Sendable ([Command]) -> Set<Int>,
         context: inout ContractContext
-    ) -> ContractDiscovery<Spec.Command>? {
+    ) -> ContractDiscovery<Command>? {
         let scaOutcome = runContractCoverage(
             commandGen: commandGen.gen,
             commandLimit: commandLimit,
             sequenceGenerator: sequenceGenerator,
             property: property,
-            identifySkips: Spec.skipIdentifier,
+            identifySkips: identifySkips,
             context: context
         )
 
@@ -301,13 +502,18 @@ private extension __ExhaustRuntime {
 
 private extension __ExhaustRuntime {
     /// Replays each regression seed from the Swift Testing trait configuration, returning the first failure as a ``ContractResult``. Returns nil when all seeds pass, none are configured, or Swift Testing is unavailable.
+    ///
+    /// Each seed is replayed through the same path as an inline `.replay(...)`, so coverage-row (`U…`) and iteration-suffixed (`…-N`) seeds — the exact strings the runner prints — round-trip and the failing run is re-materialised at its true position rather than only the first value.
     static func runRegressionSeeds<Spec: ContractSpec>(
         specType: Spec.Type,
-        sequenceGenerator: Generator<[Spec.Command]>,
-        property: @escaping @Sendable ([Spec.Command]) -> Bool,
+        settings: [ContractSettings],
         context: ContractContext
     ) -> ContractResult<Spec>? {
         #if canImport(Testing)
+            // An explicit `.replay` takes precedence over the regression trait. This guard also stops the per-seed `__runContract` replay below from re-entering the regression pass.
+            guard context.isSamplingReplay == false, context.isCoverageReplay == false else {
+                return nil
+            }
             guard let traitConfig = ExhaustTraitConfiguration.current,
                   traitConfig.regressions.isEmpty == false
             else {
@@ -315,7 +521,9 @@ private extension __ExhaustRuntime {
             }
 
             for encodedSeed in traitConfig.regressions {
-                guard let regressionSeed = CrockfordBase32.decode(encodedSeed) else {
+                guard CrockfordBase32.decodeWithIteration(encodedSeed) != nil
+                    || CrockfordBase32.decodeCoverageRow(encodedSeed) != nil
+                else {
                     reportIssue(
                         "Invalid regression seed: \(encodedSeed)",
                         fileID: context.fileID,
@@ -325,47 +533,22 @@ private extension __ExhaustRuntime {
                     )
                     continue
                 }
-                var regressionInterpreter = ValueAndChoiceTreeInterpreter(
-                    sequenceGenerator,
-                    materializePicks: true,
-                    seed: regressionSeed,
-                    maxRuns: 1
-                )
-                do {
-                    guard let (input, _) = try regressionInterpreter.next() else { continue }
-                    if property(input) == false {
-                        let (trace, spec) = buildTrace(input, specType: specType)
-                        let result = ContractResult<Spec>(
-                            commands: input,
-                            trace: trace,
-                            systemUnderTest: spec.systemUnderTest,
-                            seed: regressionSeed,
-                            replaySeed: CrockfordBase32.encode(regressionSeed),
-                            discoveryMethod: .replay
-                        )
-                        if context.suppressIssueReporting == false {
-                            let rendered = renderFailure(
-                                result,
-                                failureInfo: ContractFailureInfo(originalCommands: nil, discoveryMethod: .replay),
-                                modelDescription: spec.modelDescription,
-                                includeDiff: context.includeDiff
-                            )
-                            reportIssue(rendered, fileID: context.fileID, filePath: context.filePath, line: context.line, column: context.column)
-                        }
-                        return result
-                    } else if context.suppressIssueReporting == false {
-                        reportIssue(
-                            "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
-                            fileID: context.fileID,
-                            filePath: context.filePath,
-                            line: context.line,
-                            column: context.column
-                        )
-                    }
-                } catch {
+                if let result = __runContract(
+                    specType,
+                    settings: [.replay(.encoded(encodedSeed))] + settings,
+                    fileID: context.fileID,
+                    filePath: context.filePath,
+                    line: context.line,
+                    column: context.column
+                ) {
+                    return result
+                } else if context.suppressIssueReporting == false {
                     reportIssue(
-                        "Generator failed during regression replay (seed \(encodedSeed)): \(error)",
-                        fileID: context.fileID, filePath: context.filePath, line: context.line, column: context.column
+                        "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                        fileID: context.fileID,
+                        filePath: context.filePath,
+                        line: context.line,
+                        column: context.column
                     )
                 }
             }
@@ -386,7 +569,7 @@ private extension __ExhaustRuntime {
         _ commands: [Spec.Command],
         specType _: Spec.Type
     ) -> ([TraceStep], Spec) {
-        var spec = Spec()
+        let spec = Spec()
         let (trace, _) = buildSequentialTrace(
             commands,
             run: { try spec.run($0) },
@@ -511,70 +694,5 @@ extension __ExhaustRuntime {
         }
 
         return (trace, false)
-    }
-}
-
-// MARK: - Failure Rendering
-
-extension __ExhaustRuntime {
-    /// Formats a ``ContractResult`` and its associated failure metadata into a human-readable failure message.
-    static func renderFailure<Spec: ContractSpecBase>(
-        _ result: ContractResult<Spec>,
-        failureInfo: ContractFailureInfo<Spec.Command>,
-        modelDescription: String,
-        includeDiff: Bool = false
-    ) -> String {
-        var lines: [String] = []
-        lines.append("Contract failure (found via \(failureInfo.discoveryMethod))")
-        lines.append("")
-
-        // Show sequence header with reduction info when available.
-        if let original = failureInfo.originalCommands, original.count > result.commands.count {
-            let header =
-                "Command sequence (\(result.commands.count) steps, reduced from \(original.count)):"
-            lines.append(header)
-        } else {
-            lines.append("Command sequence (\(result.commands.count) steps):")
-        }
-
-        for step in result.trace {
-            lines.append("  \(step)")
-        }
-
-        if includeDiff, let original = failureInfo.originalCommands, original.count > result.commands.count {
-            let originalDescriptions = original.map { "\($0)" }
-            let reducedDescriptions = result.commands.map { "\($0)" }
-            if let reductionDiff = diff(originalDescriptions, reducedDescriptions) {
-                lines.append("")
-                lines.append("Reduction diff:")
-                for line in reductionDiff.split(separator: "\n", omittingEmptySubsequences: false) {
-                    lines.append("  \(line)")
-                }
-            }
-        }
-
-        lines.append("")
-        lines.append("Model: \(modelDescription)")
-        lines.append("SUT:   \(result.systemUnderTest)")
-
-        if let seed = result.seed {
-            lines.append("")
-            let encodedSeed = result.replaySeed ?? CrockfordBase32.encode(seed)
-            lines.append("Reproduce: .replay(\"\(encodedSeed)\")")
-        }
-
-        return lines.joined(separator: "\n")
-    }
-}
-
-// MARK: - Failure Metadata
-
-extension __ExhaustRuntime {
-    /// Captures the original command sequence and the discovery method for a contract failure, used by ``renderFailure(_:failureInfo:modelDescription:)`` to build failure reports.
-    struct ContractFailureInfo<Command> {
-        /// The original failing command sequence before reduction, if available.
-        var originalCommands: [Command]?
-        /// How the failure was discovered.
-        var discoveryMethod: ContractDiscoveryMethod
     }
 }

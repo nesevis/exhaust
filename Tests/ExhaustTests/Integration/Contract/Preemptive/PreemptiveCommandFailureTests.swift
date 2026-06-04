@@ -12,7 +12,7 @@ struct PreemptiveCommandFailureTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SyncPrefixFailingSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(4),
                         .budget(.custom(coverage: 0, sampling: 200)),
                         .suppress(.all),
@@ -30,7 +30,7 @@ struct PreemptiveCommandFailureTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SyncLaneFailingSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(6),
                         .budget(.custom(coverage: 0, sampling: 200)),
                         .suppress(.all),
@@ -47,7 +47,7 @@ struct PreemptiveCommandFailureTests {
             await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 AsyncPrefixFailingSpec.self,
                 settings: [
-                    .concurrent(2),
+                    .concurrent(.two),
                     .commandLimit(4),
                     .budget(.custom(coverage: 0, sampling: 200)),
                     .suppress(.all),
@@ -63,7 +63,7 @@ struct PreemptiveCommandFailureTests {
             await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 AsyncLaneFailingSpec.self,
                 settings: [
-                    .concurrent(2),
+                    .concurrent(.two),
                     .commandLimit(6),
                     .budget(.custom(coverage: 0, sampling: 200)),
                     .suppress(.all),
@@ -78,7 +78,7 @@ struct PreemptiveCommandFailureTests {
 
 /// Prefix command throws a postcondition failure after three increments.
 /// No invariant — the only failure path is the throw from `run(_:)`.
-@ConcurrentContract
+@Contract(.threads)
 final class SyncPrefixFailingSpec {
     @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
 
@@ -96,7 +96,7 @@ final class SyncPrefixFailingSpec {
 
 /// Concurrent lane command throws a postcondition failure. The oracle always passes —
 /// without proper error propagation from `run(_:)`, the failure is invisible.
-@ConcurrentContract
+@Contract(.threads)
 final class SyncLaneFailingSpec {
     @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
 
@@ -118,7 +118,7 @@ final class SyncLaneFailingSpec {
 // MARK: - Async Specs
 
 /// Async variant: prefix command throws a postcondition failure.
-@ConcurrentContract
+@Contract(.threads)
 final class AsyncPrefixFailingSpec {
     @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
 
@@ -135,7 +135,7 @@ final class AsyncPrefixFailingSpec {
 }
 
 /// Async variant: concurrent lane command throws a postcondition failure.
-@ConcurrentContract
+@Contract(.threads)
 final class AsyncLaneFailingSpec {
     @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
 

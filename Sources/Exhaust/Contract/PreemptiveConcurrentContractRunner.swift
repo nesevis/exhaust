@@ -13,11 +13,11 @@ import IssueReporting
 public extension __ExhaustRuntime {
     /// Runs a preemptive concurrent contract test for the given synchronous specification type.
     ///
-    /// Dispatches commands across real GCD threads and uses the spec's ``ConcurrentContractSpec/oracleCheck(_:)`` to verify consistency with sequential behavior. Non-deterministic scheduling means the same seed does not guarantee the same interleaving — bug detection is probabilistic, relying on repetition across the sampling budget.
+    /// Dispatches commands across real GCD threads and uses the spec's ``ContractSpec/oracleCheck(_:)`` to verify consistency with sequential behavior. Non-deterministic scheduling means the same seed does not guarantee the same interleaving — bug detection is probabilistic, relying on repetition across the sampling budget.
     @discardableResult
-    static func __runPreemptiveConcurrentContract<Spec: ConcurrentContractSpec>(
+    static func __runPreemptiveConcurrentContract<Spec: ContractSpec>(
         _: Spec.Type,
-        settings: [ConcurrentContractSettings],
+        settings: [ContractSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -33,286 +33,24 @@ public extension __ExhaustRuntime {
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
                 return nil
-            case let .invalidConcurrencyLevel(level):
-                reportIssue(
-                    "concurrencyLevel must be between 1 and 8, but was \(level)",
-                    fileID: fileID, filePath: filePath, line: line, column: column
-                )
-                return nil
         }
 
-        let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: config.logFormat)
-        return DispatchQueue.global().sync {
+        let idleTimeoutMilliseconds: Int? = (config.idleTimeout > 0 && config.idleTimeout < Int.max)
+            ? config.idleTimeout
+            : nil
+        let backend = PreemptiveChecker<Spec>(idleTimeoutMilliseconds: idleTimeoutMilliseconds)
+
+        let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: .keyValue)
+        let (result, deferredIssues, report): (ContractResult<Spec>?, [String], ExhaustReport) = DispatchQueue.global().sync {
             ExhaustLog.withConfiguration(logConfiguration) {
-                runPreemptivePipeline(
-                    Spec.self,
-                    config: config,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
+                runPreemptivePipeline(backend: backend, config: config)
             }
         }
-    }
-}
-
-// MARK: - Pipeline
-
-private extension __ExhaustRuntime {
-    /// Executes the full preemptive contract pipeline on a GCD thread: smoke test, SCA coverage, random sampling with three-pass reduction. Reports issues inline via `reportIssue` since Swift Testing task-locals are available on the calling thread.
-    static func runPreemptivePipeline<Spec: ConcurrentContractSpec>(
-        _: Spec.Type,
-        config: ResolvedConcurrentConfig,
-        fileID: StaticString,
-        filePath: StaticString,
-        line: UInt,
-        column: UInt
-    ) -> ContractResult<Spec>? {
-        let runStopwatch = Stopwatch()
-        var report = ExhaustReport()
-        report.seed = config.seed
-
-        defer {
-            report.totalMilliseconds = runStopwatch.elapsedMilliseconds
-            config.onReportClosure?(report)
+        config.onReportClosure?(report)
+        for issue in deferredIssues {
+            reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }
-
-        let commandGen = Spec.commandGenerator.gen
-        let commandLimit = config.commandLimit ?? 8
-        let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel)
-        let sequenceGen = Gen.arrayOf(
-            taggedCommandGen,
-            within: 1 ... UInt64(commandLimit),
-            scaling: .constant
-        )
-
-        let samplingBudget = config.budget.samplingBudget
-        let coverageBudget = config.budget.coverageBudget
-        let check = PreemptiveChecker<Spec>()
-        var coverageInvocations = 0
-        let invocationCounter = UnsafeSendableBox(0)
-        let lastRunTimedOut = UnsafeSendableBox(false)
-
-        let rawIdentifySkips = Spec.skipIdentifier
-        let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
-            rawIdentifySkips(taggedCommands.map(\.1))
-        }
-        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
-            invocationCounter.value += 1
-            return check.execute(taggedCommands)
-        }
-
-        // Phase 0: Smoke test
-        if config.seed == nil, config.replayIteration == nil {
-            let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
-            var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
-            var smokeRow = 0
-            do { while let (commands, _) = try smokeIterator.next() {
-                if let coverageReplayRow = config.coverageReplayRow, smokeRow < coverageReplayRow {
-                    smokeRow += 1
-                    continue
-                }
-                let spec = Spec()
-                let (trace, failed) = buildSequentialTrace(
-                    commands,
-                    run: { command in
-                        var caughtError: (any Error)?
-                        let objcSucceeded = runCatchingObjC {
-                            do {
-                                try spec.run(command)
-                            } catch {
-                                caughtError = error
-                            }
-                        }
-                        if let caughtError {
-                            throw caughtError
-                        }
-                        if objcSucceeded == false {
-                            throw ContractCheckFailure(message: "NSException during command execution")
-                        }
-                    },
-                    checkInvariants: { try spec.checkInvariants() }
-                )
-                if failed {
-                    let result = ContractResult<Spec>(
-                        commands: commands,
-                        trace: trace,
-                        systemUnderTest: spec.systemUnderTest,
-                        seed: nil,
-                        replaySeed: CrockfordBase32.encodeCoverageRow(smokeRow),
-                        discoveryMethod: .smokeTest
-                    )
-                    if config.suppressIssueReporting == false {
-                        let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
-                        let message = renderFailure(result, failureInfo: failureInfo, modelDescription: spec.modelDescription)
-                        reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
-                    }
-                    return result
-                }
-                smokeRow += 1
-                if config.coverageReplayRow != nil { break }
-            } } catch {
-                reportIssue(
-                    "Generator failed during smoke test: \(error)",
-                    fileID: fileID, filePath: filePath, line: line, column: column
-                )
-            }
-        }
-
-        // Ordered coverage
-        if config.shouldRunCoverage {
-            if let scaResult = runConcurrentSCACoverage(
-                seqGen: sequenceGen,
-                commandGen: commandGen,
-                commandLimit: commandLimit,
-                coverageBudget: coverageBudget,
-                concurrencyLevel: config.concurrencyLevel,
-                idleTimeout: config.idleTimeout,
-                skipToRow: config.coverageReplayRow,
-                property: property,
-                identifySkips: identifySkips,
-                lastRunTimedOut: lastRunTimedOut,
-                invocationCounter: invocationCounter
-            ) {
-                if let stats = scaResult.reductionStats {
-                    report.applyReductionStats(stats)
-                }
-                report.reductionInvocations = scaResult.reductionInvocations
-
-                let scaReplaySeed = CrockfordBase32.encodeCoverageRow(Int(scaResult.iteration) - 1)
-                let result = buildPreemptiveResult(
-                    Spec.self,
-                    reduced: scaResult.finalInput,
-                    seed: nil,
-                    replaySeed: scaReplaySeed,
-                    discoveryMethod: .coverage
-                )
-                report.setConcurrentInvocations(
-                    totalInvocations: invocationCounter.value,
-                    coverageThroughReduction: invocationCounter.value,
-                    reduction: scaResult.reductionInvocations,
-                    discoveredDuringCoverage: true
-                )
-
-                if config.suppressIssueReporting == false {
-                    var failureContext = FailureContext()
-                    failureContext.isPreemptive = true
-                    failureContext.specName = "\(Spec.self)"
-                    failureContext.discoveryMethod = .coverage
-                    failureContext.iteration = Int(scaResult.iteration)
-                    failureContext.budget = coverageBudget
-                    failureContext.sequencesTested = invocationCounter.value
-                    failureContext.reductionInvocations = scaResult.reductionInvocations
-                    failureContext.originalCount = scaResult.originalCount
-                    failureContext.replaySeed = CrockfordBase32.encodeCoverageRow(Int(scaResult.iteration) - 1)
-                    failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
-                    let message = renderFailure(scaResult.finalInput, trace: result.trace, context: failureContext)
-                    reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
-                }
-
-                return result
-            }
-        }
-        coverageInvocations = invocationCounter.value
-
-        // Random sampling
-        if config.coverageReplayRow == nil {
-            let startIndex = config.replayIteration.map { UInt64($0 - 1) } ?? 0
-            let maxRuns = config.replayIteration.map { UInt64($0) } ?? samplingBudget
-            var interpreter = ValueAndChoiceTreeInterpreter(
-                sequenceGen,
-                materializePicks: true,
-                seed: config.seed,
-                maxRuns: maxRuns,
-                initialRunIndex: startIndex
-            )
-            let actualSeed = interpreter.baseSeed
-
-            var samplingIteration = 0
-            do { while let (taggedCommands, tree) = try interpreter.next() {
-                samplingIteration += 1
-                let absoluteIteration = Int(startIndex) + samplingIteration
-                if check.execute(taggedCommands) == false {
-                    let reductionResult = check.reduce(
-                        generator: sequenceGen,
-                        tree: tree,
-                        output: taggedCommands,
-                        repetitions: 10
-                    )
-
-                    let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
-                    let samplingReplaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
-                    let result = buildPreemptiveResult(
-                        Spec.self,
-                        reduced: reductionResult.output,
-                        seed: actualSeed,
-                        replaySeed: samplingReplaySeed,
-                        discoveryMethod: discoveryMethod
-                    )
-
-                    report.setInvocations(
-                        coverage: coverageInvocations,
-                        randomSampling: samplingIteration,
-                        reduction: reductionResult.propertyInvocations
-                    )
-                    report.applyReductionStats(reductionResult.stats)
-
-                    if config.suppressIssueReporting == false {
-                        var failureContext = FailureContext()
-                        failureContext.isPreemptive = true
-                        failureContext.specName = "\(Spec.self)"
-                        failureContext.discoveryMethod = discoveryMethod
-                        failureContext.seed = actualSeed
-                        failureContext.iteration = absoluteIteration
-                        failureContext.budget = samplingBudget
-                        failureContext.sequencesTested = samplingIteration
-                        failureContext.reductionInvocations = reductionResult.propertyInvocations
-                        failureContext.originalCount = taggedCommands.count
-                        failureContext.replaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
-                        failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
-                        let message = renderFailure(reductionResult.output, trace: result.trace, context: failureContext)
-                        reportIssue(message, fileID: fileID, filePath: filePath, line: line, column: column)
-                    }
-
-                    return result
-                }
-            } } catch {
-                reportIssue(
-                    "Generator failed during sampling: \(error)",
-                    fileID: fileID, filePath: filePath, line: line, column: column
-                )
-            }
-        }
-
-        report.setInvocations(coverage: coverageInvocations, randomSampling: 0, reduction: 0)
-        return nil
-    }
-}
-
-// MARK: - Result Assembly
-
-private extension __ExhaustRuntime {
-    /// Builds a ``ContractResult`` for a preemptive failure by running the reduced commands sequentially on a fresh spec to capture the oracle SUT state.
-    static func buildPreemptiveResult<Spec: ConcurrentContractSpec>(
-        _: Spec.Type,
-        reduced: [(ScheduleMarker, Spec.Command)],
-        seed: UInt64?,
-        replaySeed: String?,
-        discoveryMethod: ContractDiscoveryMethod
-    ) -> ContractResult<Spec> {
-        let oracleSpec = Spec()
-        for (_, command) in reduced {
-            runCatchingObjC { try? oracleSpec.run(command) }
-        }
-        return ContractResult<Spec>(
-            commands: reduced.map(\.1),
-            trace: buildPreemptiveTrace(reduced),
-            systemUnderTest: oracleSpec.systemUnderTest,
-            seed: seed,
-            replaySeed: replaySeed,
-            discoveryMethod: discoveryMethod
-        )
+        return result
     }
 }
 
@@ -357,12 +95,15 @@ private func runCatchingObjC(_ body: @convention(block) () -> Void) -> Bool {
 
 // MARK: - Checker
 
-/// Encapsulates concurrent execution, oracle comparison, and three-pass reduction for a ``ConcurrentContractSpec``.
-private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
+/// Synchronous ``PreemptiveBackend``: runs each probe directly on GCD threads and compares against a sequential oracle.
+private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
+    /// Idle bound for the concurrent lanes, or `nil` to wait indefinitely. A synchronous SUT deadlock — the exact bug class preemptive testing targets — would otherwise wedge a lane forever and hang the test process with no diagnostic.
+    let idleTimeoutMilliseconds: Int?
+
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
-    /// Returns `true` if the execution passes. Returns `false` if invariants fail or the oracle detects divergence from sequential behavior.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Bool {
+    /// `passed` is `false` when a command throws, an invariant fails, or the oracle detects divergence from sequential behavior. `timedOut` is `true` when the concurrent lanes did not finish within ``idleTimeoutMilliseconds`` — surfaced separately so the caller can skip reduction (every probe would wait out the bound) and report a hang rather than a deterministic failure.
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
@@ -371,16 +112,16 @@ private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
 
         for (_, command) in prefixCommands {
             guard runCommandCatchingObjC(command, on: concurrentSpec) else {
-                return false
+                return Preemptive.Outcome(passed: false, timedOut: false)
             }
             guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return false
+                return Preemptive.Outcome(passed: false, timedOut: false)
             }
         }
 
         for (_, command) in concurrentCommands {
             guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return false
+                return Preemptive.Outcome(passed: false, timedOut: false)
             }
         }
 
@@ -411,19 +152,27 @@ private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
                 group.leave()
             }
         }
-        group.wait()
+        if let idleTimeoutMilliseconds {
+            if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
+                // A lane is wedged (a synchronous deadlock in the SUT). Stop the lanes we can and report a hang rather than blocking the test process forever. Orphaned lanes blocked on the deadlock cannot be reclaimed.
+                commandFailed.value = true
+                return Preemptive.Outcome(passed: false, timedOut: true)
+            }
+        } else {
+            group.wait()
+        }
 
         if caughtException.value != nil || commandFailed.value {
-            return false
+            return Preemptive.Outcome(passed: false, timedOut: false)
         }
 
         do {
             try concurrentSpec.checkInvariants()
         } catch {
-            return false
+            return Preemptive.Outcome(passed: false, timedOut: false)
         }
 
-        return concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest)
+        return Preemptive.Outcome(passed: concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest), timedOut: false)
     }
 
     /// Runs a command on a spec with ObjC exception safety, treating ``ContractSkip`` as a pass.
@@ -445,94 +194,54 @@ private struct PreemptiveChecker<Spec: ConcurrentContractSpec> {
         return true
     }
 
-    struct ReductionResult {
-        let output: [(ScheduleMarker, Spec.Command)]
-        let propertyInvocations: Int
-        let stats: ReductionStats
+    func makeIdentifySkips() -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> {
+        let rawIdentifySkips = Spec.skipIdentifier
+        return { taggedCommands in rawIdentifySkips(taggedCommands.map(\.1)) }
     }
 
-    /// Reduces a counterexample in three passes, each targeting a different encoder set.
-    ///
-    /// The three-pass structure is deliberate: PCCR evaluation is non-deterministic (GCD thread preemption), so each probe requires multiple repetitions to confirm. Phased reduction ensures the most impactful transformations run first before budget is spent on fine-tuning.
-    ///
-    /// **Pass 1 — Lane Collapse.** Drives lane markers to zero, moving commands into the sequential prefix. Prefix commands execute deterministically (no scheduling noise), so a longer prefix produces counterexamples that are easier to reproduce and reason about. Running lane collapse first also reduces the repetition cost of later passes — fewer concurrent commands means less non-deterministic scheduling per evaluation. (The cooperative runner skips this pre-pass because its schedule is choice-encoded and fully deterministic — the unified pass finds the minimal counterexample without prefix bias.)
-    ///
-    /// **Pass 2 — Structural.** Deletion, migration, and substitution. Removes unnecessary commands and simplifies arguments, operating on the already-collapsed trace so deletions target only commands genuinely needed for the failure.
-    ///
-    /// **Pass 3 — Value Minimization.** All remaining encoders (value minimization, reordering, and so on). Simplifies command arguments and values toward their semantic simplest form, improving counterexample readability. Runs with a tighter budget (1 stall, 5s) since the structural shape is already minimal.
-    func reduce(
-        generator: Generator<[(ScheduleMarker, Spec.Command)]>,
-        tree: ChoiceTree,
-        output: [(ScheduleMarker, Spec.Command)],
-        repetitions: Int
-    ) -> ReductionResult {
-        var propertyInvocations = 0
-        let property: ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
-            for _ in 0 ..< repetitions {
-                propertyInvocations += 1
-                if execute(taggedCommands) == false {
-                    return false
+    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, modelDescription: String) {
+        let spec = Spec()
+        let (trace, failed) = __ExhaustRuntime.buildSequentialTrace(
+            commands,
+            run: { command in
+                var caughtError: (any Error)?
+                let objcSucceeded = runCatchingObjC {
+                    do {
+                        try spec.run(command)
+                    } catch {
+                        caughtError = error
+                    }
                 }
-            }
-            return true
-        }
-
-        let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
-        let valueMinimization = Set(EncoderName.allCases).subtracting(structural).subtracting([.laneCollapse])
-
-        var currentOutput = output
-        var currentTree = tree
-        var aggregateStats = ReductionStats()
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 10_000_000_000, enabledEncoders: [.laneCollapse]),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(sequence, reduced) = result.outcome {
-                currentOutput = reduced
-                if case let .success(_, freshTree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
-                ) {
-                    currentTree = freshTree
+                if let caughtError {
+                    throw caughtError
                 }
-            }
-        }
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 30_000_000_000, enabledEncoders: structural),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(sequence, reduced) = result.outcome {
-                currentOutput = reduced
-                if case let .success(_, freshTree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
-                ) {
-                    currentTree = freshTree
+                if objcSucceeded == false {
+                    throw ContractCheckFailure(message: "NSException during command execution")
                 }
-            }
-        }
+            },
+            checkInvariants: { try spec.checkInvariants() }
+        )
+        return (trace, failed, spec.systemUnderTest, spec.modelDescription)
+    }
 
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 1, wallClockDeadlineNanoseconds: 5_000_000_000, enabledEncoders: valueMinimization),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(_, reduced) = result.outcome {
-                currentOutput = reduced
-            }
+    /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state.
+    func buildResult(
+        reduced: [(ScheduleMarker, Spec.Command)],
+        seed: UInt64?,
+        replaySeed: String?,
+        discoveryMethod: ContractDiscoveryMethod
+    ) -> ContractResult<Spec> {
+        let oracleSpec = Spec()
+        for (_, command) in reduced {
+            runCatchingObjC { try? oracleSpec.run(command) }
         }
-
-        return ReductionResult(output: currentOutput, propertyInvocations: propertyInvocations, stats: aggregateStats)
+        return ContractResult<Spec>(
+            commands: reduced.map(\.1),
+            trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),
+            systemUnderTest: oracleSpec.systemUnderTest,
+            seed: seed,
+            replaySeed: replaySeed,
+            discoveryMethod: discoveryMethod
+        )
     }
 }

@@ -14,7 +14,7 @@ struct PreemptiveAsyncOracleTests {
             await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
                 AsyncOracleRacyCounterSpec.self,
                 settings: [
-                    .concurrent(2),
+                    .concurrent(.two),
                     .commandLimit(6),
                     .budget(.custom(coverage: 0, sampling: 200)),
                     .suppress(.issueReporting),
@@ -29,7 +29,7 @@ struct PreemptiveAsyncOracleTests {
         let result = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
             AsyncOracleSafeCounterSpec.self,
             settings: [
-                .concurrent(2),
+                .concurrent(.two),
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
                 .suppress(.issueReporting),
@@ -41,7 +41,7 @@ struct PreemptiveAsyncOracleTests {
 
 // MARK: - Specs
 
-@ConcurrentContract
+@Contract(.threads)
 final class AsyncOracleRacyCounterSpec {
     @SystemUnderTest
     var counter: AsyncRacyReadCounter = .init()
@@ -64,7 +64,7 @@ final class AsyncOracleRacyCounterSpec {
     }
 }
 
-@ConcurrentContract
+@Contract(.threads)
 final class AsyncOracleSafeCounterSpec {
     @SystemUnderTest
     var counter: AsyncSafeCounter = .init()

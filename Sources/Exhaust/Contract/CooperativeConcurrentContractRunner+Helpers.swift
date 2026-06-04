@@ -49,7 +49,12 @@ extension __ExhaustRuntime {
         var idleStopwatch = Stopwatch()
         while done.value == false {
             guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
-                if idleStopwatch.elapsedMilliseconds > Double(idleTimeoutMilliseconds) { return nil }
+                if runQueue.waitForJob(
+                    idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+                    elapsedMilliseconds: idleStopwatch.elapsedMilliseconds
+                ) == false {
+                    return nil
+                }
                 continue
             }
             job.runSynchronously(on: executor.asUnownedTaskExecutor())
@@ -66,7 +71,7 @@ extension __ExhaustRuntime {
     /// Identifies skipped commands and prunes them from the choice tree, returning a shorter value and tree that still fail the property.
     ///
     /// Runs the command sequence through the skip identifier (which executes sequentially on a fresh spec) to find commands whose preconditions are not met. If any are found, those elements are removed from the tree, the tree is rematerialized, and the property is re-checked. If the pruned sequence still fails, the pruned value and tree are returned; otherwise the originals are returned unchanged.
-    static func pruneSkippedCommands<Value>(
+    static func pruneSkippedCommands<Value: Collection>(
         value: Value,
         tree: ChoiceTree,
         generator: Generator<Value>,
@@ -83,7 +88,12 @@ extension __ExhaustRuntime {
         ExhaustLog.notice(
             category: .reducer,
             event: logEvent,
-            metadata: ["skipped_count": "\(skippedIndices.count)"]
+            metadata: [
+                "total_commands": "\(value.count)",
+                "skipped_count": "\(skippedIndices.count)",
+                "skipped_indices": "\(skippedIndices.sorted())",
+                "remaining": "\(value.count - skippedIndices.count)",
+            ]
         )
         let prunedTree = pruneSequenceElements(from: tree, at: skippedIndices)
         let prunedSequence = ChoiceSequence.flatten(prunedTree)
@@ -96,5 +106,30 @@ extension __ExhaustRuntime {
             return (rematerialized, rematerializedTree)
         }
         return (value, tree)
+    }
+
+    /// Runs the choice-graph reducer and unwraps its outcome to the reduced value, or the input unchanged when the reducer makes no improvement or fails to run.
+    ///
+    /// Shared by the sequential SCA failure tail and the concurrent counterexample reducer. Logging stays with each caller — they emit different events — so this is a pure reduce-and-unwrap. `reduced` is `true` only when the reducer produced a strictly simpler value.
+    static func reduceContractCounterexample<Value>(
+        value: Value,
+        tree: ChoiceTree,
+        generator: Generator<Value>,
+        config: Interpreters.ReducerConfiguration,
+        property: @escaping @Sendable (Value) -> Bool
+    ) -> (value: Value, stats: ReductionStats?, reduced: Bool) {
+        guard let result = try? Interpreters.choiceGraphReduceCollectingStats(
+            gen: generator,
+            tree: tree,
+            output: value,
+            config: config,
+            property: property
+        ) else {
+            return (value, nil, false)
+        }
+        if case let .reduced(_, reduced) = result.outcome {
+            return (reduced, result.stats, true)
+        }
+        return (value, result.stats, false)
     }
 }

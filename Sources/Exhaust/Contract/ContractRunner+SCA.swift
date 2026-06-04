@@ -188,50 +188,23 @@ extension __ExhaustRuntime {
             iterations += 1
             if let skipToRow, iterations - 1 < skipToRow { continue }
             if property(value) == false {
-                var reduceValue = value
-                var reduceTree = freshTree
-
-                let skippedIndices = identifySkips(value)
-                if skippedIndices.isEmpty == false {
-                    ExhaustLog.notice(
-                        category: .reducer,
-                        event: "contract_skip_pruning",
-                        metadata: [
-                            "total_commands": "\(value.count)",
-                            "skipped_count": "\(skippedIndices.count)",
-                            "skipped_indices": "\(skippedIndices.sorted())",
-                            "remaining": "\(value.count - skippedIndices.count)",
-                        ]
-                    )
-                    let prunedTree = pruneSequenceElements(from: freshTree, at: skippedIndices)
-                    let prunedSequence = ChoiceSequence.flatten(prunedTree)
-                    let prunedMode = Materializer.Mode.guided(
-                        seed: UInt64(iterations),
-                        fallbackTree: nil
-                    )
-                    if case let .success(rematerializedValue, rematerializedTree, _) = Materializer.materialize(
-                        seqGen, prefix: prunedSequence, mode: prunedMode, fallbackTree: prunedTree
-                    ),
-                        property(rematerializedValue) == false
-                    {
-                        reduceValue = rematerializedValue
-                        reduceTree = rematerializedTree
-                    }
-                }
-
-                if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-                    gen: seqGen,
+                let (reduceValue, reduceTree) = pruneSkippedCommands(
+                    value: value,
+                    tree: freshTree,
+                    generator: seqGen,
+                    seed: UInt64(iterations),
+                    property: property,
+                    identifySkips: identifySkips,
+                    logEvent: "contract_skip_pruning"
+                )
+                let (reduced, stats, _) = reduceContractCounterexample(
+                    value: reduceValue,
                     tree: reduceTree,
-                    output: reduceValue,
+                    generator: seqGen,
                     config: .init(maxStalls: 2),
                     property: property
-                ) {
-                    if case let .reduced(_, reducedValue) = result.outcome {
-                        return .failure(commands: reducedValue, original: value, coverageInvocations: iterations, reductionStats: result.stats)
-                    }
-                    return .failure(commands: reduceValue, original: value, coverageInvocations: iterations, reductionStats: result.stats)
-                }
-                return .failure(commands: reduceValue, original: value, coverageInvocations: iterations, reductionStats: nil)
+                )
+                return .failure(commands: reduced, original: value, coverageInvocations: iterations, reductionStats: stats)
             }
             if skipToRow != nil { break }
         }

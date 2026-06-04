@@ -73,7 +73,7 @@ Because it understands how the parts of an input relate, it can delete an elemen
 
 All of this rests on one design choice: an Exhaust generator is an inspectable data structure, not an opaque closure. Exhaust can look inside it and read its parameters, its branches, and their domains. This capability is **inspection**, and it is what powers everything else. Coverage reads a generator's parameters to find their domain's problematic values. Filter tuning tweaks its branching points. Reduction operates on the recorded choices rather than the output value.
 
-Because the generator is data, Exhaust can run it more than one way. There are three modes. **Generation** runs it forward to produce a value, recording each **choice** (which branch, which integer, which length) as it goes. **Replay** feeds a recorded sequence of choices back in to reproduce a value exactly. And **reflection** runs a generator backward: given a concrete value you already have (from a bug report, say), it recovers the choices that could have produced it, so the reducer can work on them. Reflection is what the `reflecting:` parameter and `#examine`'s round-trip check use. It requires bidirectional transforms (see [Bidirectional transforms](GEN-building-generators.md#bidirectional-transforms)); generators built with forward-only `.map` or `.bind` still generate, reduce, and replay perfectly well.
+Because the generator is data, Exhaust can run it more than one way. There are three modes. **Generation** runs it forward to produce a value, recording each **choice** (which branch, which integer, which length) as it goes. **Replay** feeds a recorded sequence of choices back in to reproduce a value exactly. And **reflection** runs a generator backward: given a concrete value you already have (from a bug report, say), it recovers the choices that could have produced it, so the reducer can work on them. Reflection is what the `reflecting:` parameter and `#examine`'s round-trip check use. It requires bidirectional transforms (see [Bidirectional transforms](GEN-building-generators.md#bidirectional-transforms)). Generators built with forward-only `.map` or `.bind` still generate, reduce, and replay perfectly well.
 
 It helps to think of a generator as a *parser of randomness*. Forward, it parses raw randomness into a structured value. The `reflecting:` path un-parses a value back into the random choices that drove it.
 
@@ -108,7 +108,7 @@ The tools so far test pure functions: one input, one output. Stateful systems fa
 
 Invariants get much simpler if you add a **model**: a simpler reference implementation that the commands update in lockstep, so an invariant becomes "the system agrees with the model." The model is acting as an **oracle**, the trusted source of what the right answer is. For systems whose races hide in real threads rather than at `await` points, a separate **`@Oracle`** compares the concurrent result against a race-free sequential replay.
 
-That split, deterministic interleaving at `await` points versus races between real threads, is the difference between the **cooperative** runner and the **preemptive** one. The cooperative runner drives the tasks itself and interleaves at every `await`, so the same seed reproduces the same run. The preemptive runner hands off to real threads to reach races inside locks and atomics, trading reproducibility for that reach. [Contract testing](EXECUTE-contract-testing.md) covers both.
+The execution mode (`.sequential`, `.tasks`, or `.threads`) tells Exhaust how to run the commands. `.sequential` runs commands one at a time: the right choice for testing logic. `.tasks` runs commands concurrently with deterministic interleaving at every `await`, so the same seed reproduces the same run. `.threads` hands off to real OS threads to reach races inside locks and atomics, trading reproducibility for that reach. [Contract testing](EXECUTE-contract-testing.md) covers all three.
 
 ## Testing without an oracle: metamorphic testing
 
@@ -130,7 +130,7 @@ Reproduce: .replay("7MK2N9-4")
 
 It re-runs generation, so if you change the generator, the same seed lands on a different case. This is true of seeds in every property-based testing library. A seed is a coordinate in a search, and the search depends on the generator.
 
-A **regression seed** is a seed pinned to a test (`.regressions("…")`) so its case runs before the random search every time. While the generator is unchanged it re-tests the same case and catches that regression the moment it returns. To pin an exact input permanently, regardless of later generator changes, commit the literal value and reduce it with `reflecting:` instead.
+A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))`) so its case runs before the random search every time. While the generator is unchanged it re-tests the same case and catches that regression the moment it returns. To pin an exact input permanently, regardless of later generator changes, commit the literal value and reduce it with `reflecting:` instead.
 
 ## Glossary
 
@@ -138,19 +138,19 @@ A **regression seed** is a seed pinned to a test (`.regressions("…")`) so its 
 
 - **Choice**: a single decision a generator records as it runs (which branch, which integer, which length).
 - **Choice Gradient Sampling (CGS)**: the technique that biases a generator toward a goal by measuring which choices lead toward it and reweighting them.
-- **Classification**: a report of how often generated values fall into named buckets; it observes, it does not steer.
-- **Filter**: a constraint that keeps only values satisfying a predicate; Exhaust tunes the generator toward valid values rather than discarding.
-- **Generator**: a description of the shape of inputs to try; the search space.
+- **Classification**: a report of how often generated values fall into named buckets. It observes, it does not steer.
+- **Filter**: a constraint that keeps only values satisfying a predicate. Exhaust tunes the generator toward valid values rather than discarding.
+- **Generator**: a description of the shape of inputs to try. The search space.
 - **Scaling**: how a generator turns the current size into a concrete length or magnitude.
 - **Size**: the 0 to 100 dial Exhaust ramps over a run, so values without explicit ranges start small and grow.
 
 ### The run
 
-- **Counterexample**: an input for which the property fails; after reduction, the minimal counterexample, the simplest input that still fails.
+- **Counterexample**: an input for which the property fails. After reduction, the minimal counterexample, the simplest input that still fails.
 - **Coverage**: the first phase of an `#exhaust` run, testing problematic values pairwise before random sampling. Coverage of the input space, not code coverage.
 - **Pairwise**: covering every pair of problematic values from different parameters in at least one case.
 - **Problematic value**: a value bugs cluster around, from a fixed per-type catalogue (range limits for integers, NaN and the infinities for floats, daylight-saving transitions for dates, troublesome Unicode scalars for characters, short lengths for collections).
-- **Property**: a claim about your code that should hold for every generated input; what `#exhaust` and `#explore` check.
+- **Property**: a claim about your code that should hold for every generated input. What `#exhaust` and `#explore` check.
 - **Random sampling**: the second phase, drawing from the generator's natural distribution.
 - **Reduction**: reducing a failing input to the minimal counterexample, automatically and for every type.
 
@@ -161,8 +161,8 @@ A **regression seed** is a seed pinned to a test (`.regressions("…")`) so its 
 ### Inspection
 
 - **Inspection**: the foundation that makes generators inspectable data structures, so Exhaust can read their parameters, branches, and domains. It powers coverage, CGS, and reduction.
-- **Reflection**: running a generator backward to recover the choices behind a concrete value; what `reflecting:` and `#examine`'s round-trip check use. Requires bidirectional transforms.
-- **Bidirectional**: a transform that supplies both directions (`mapped`, `bound`); a generator built only from these is reflectable.
+- **Reflection**: running a generator backward to recover the choices behind a concrete value. What `reflecting:` and `#examine`'s round-trip check use. Requires bidirectional transforms.
+- **Bidirectional**: a transform that supplies both directions (`mapped`, `bound`). A generator built only from these is reflectable.
 - **Forward-only**: a generator that generates and reduces but cannot reflect, because it contains a one-way `.map` or `.bind`.
 - **Reflection round-trip**: `#examine`'s check that a generated value reflects back to the choices that made it.
 
@@ -171,17 +171,17 @@ A **regression seed** is a seed pinned to a test (`.regressions("…")`) so its 
 - **Bundle**: a store of entities created by earlier commands so later commands can reference them.
 - **Command**: one operation Exhaust may invoke on the SUT.
 - **Contract**: a specification of a stateful system that Exhaust checks by generating command sequences and verifying invariants after each step.
-- **Cooperative / preemptive**: the two concurrent runners. Cooperative interleaves deterministically at `await` points; preemptive uses real threads to reach races in locks and atomics.
+- **Cooperative / preemptive**: the two concurrent runners. Cooperative interleaves deterministically at `await` points. Preemptive uses real threads to reach races in locks and atomics.
 - **Invariant**: a property checked after every command.
 - **Model**: a simpler reference implementation the commands update in lockstep, so invariants can compare the two.
-- **Oracle**: the trusted source of the right answer a contract checks against; the model, or an `@Oracle` method for concurrent contracts.
+- **Oracle**: the trusted source of the right answer a contract checks against. The model, or an `@Oracle` method for concurrent contracts.
 - **System under test (SUT)**: the real implementation a contract exercises.
 
 ### Reproduction
 
 - **Regression seed**: a seed pinned to a test so its case runs before the random search every time.
 - **Replay**: re-running the search from a seed to reproduce a counterexample.
-- **Seed**: a short code that pins a position in Exhaust's search; it carries neither the value nor its choices.
+- **Seed**: a short code that pins a position in Exhaust's search. It carries neither the value nor its choices.
 
 ### Metamorphic
 

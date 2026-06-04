@@ -20,8 +20,8 @@ struct StackTests {
 
 // MARK: - Contract
 
-@Contract
-struct StackSpec {
+@Contract(.sequential)
+final class StackSpec {
     @Model var expected: [Int] = []
     @SystemUnderTest var stack: [Int] = []
 
@@ -31,13 +31,13 @@ struct StackSpec {
     }
 
     @Command(weight: 3, .int(in: 0 ... 9))
-    mutating func push(value: Int) throws {
+    func push(value: Int) throws {
         expected.append(value)
         stack.append(value)
     }
 
     @Command(weight: 2)
-    mutating func pop() throws {
+    func pop() throws {
         guard !expected.isEmpty else { throw skip() }
         let modelValue = expected.removeLast()
         let sutValue = stack.removeLast()
@@ -45,7 +45,7 @@ struct StackSpec {
     }
 
     @Command(weight: 1)
-    mutating func count() throws {
+    func count() throws {
         try check(expected.count == stack.count, "counts should match")
     }
 }

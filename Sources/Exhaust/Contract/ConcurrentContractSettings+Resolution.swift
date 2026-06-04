@@ -1,7 +1,7 @@
-// Parses ConcurrentContractSettings into a resolved configuration struct.
+// Parses ContractSettings into a resolved concurrent configuration struct.
 import ExhaustCore
 
-/// Flattened configuration produced by parsing a `[ConcurrentContractSettings]` array. Holds all resolved values with defaults applied, ready for the concurrent runner to consume without re-interpreting the enum cases.
+/// Flattened configuration produced by parsing a `[ContractSettings]` array for a concurrent contract. Holds all resolved values with defaults applied, ready for the concurrent runner to consume without re-interpreting the enum cases.
 struct ResolvedConcurrentConfig {
     var commandLimit: Int?
     var concurrencyLevel: Int = 2
@@ -15,7 +15,6 @@ struct ResolvedConcurrentConfig {
     var collectOpenPBTStats: Bool = false
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
-    let logFormat: LogFormat = .keyValue
 
     var shouldRunCoverage: Bool {
         replayIteration == nil
@@ -26,17 +25,16 @@ struct ResolvedConcurrentConfig {
     enum ParseResult {
         case success(ResolvedConcurrentConfig)
         case invalidReplaySeed(ReplaySeed)
-        case invalidConcurrencyLevel(Int)
     }
 
-    static func parse(_ settings: [ConcurrentContractSettings]) -> ParseResult {
+    static func parse(_ settings: [ContractSettings]) -> ParseResult {
         var config = ResolvedConcurrentConfig()
         for setting in settings {
             switch setting {
                 case let .concurrent(level):
-                    config.concurrencyLevel = level
-                case let .budget(b):
-                    config.budget = b
+                    config.concurrencyLevel = level.rawValue
+                case let .budget(budget):
+                    config.budget = budget
                 case let .commandLimit(limit):
                     config.commandLimit = limit
                 case let .replay(replaySeed):
@@ -76,11 +74,21 @@ struct ResolvedConcurrentConfig {
                     config.idleTimeout = ms
                 case let .log(level):
                     config.logLevel = level
+                case .includeDiff:
+                    break
             }
         }
-        guard 1 ... 8 ~= config.concurrencyLevel else {
-            return .invalidConcurrencyLevel(config.concurrencyLevel)
-        }
+
+        #if canImport(Testing)
+            // Adopt a suite-level `.budget` trait when no inline `.budget` was passed, matching the sequential resolver. Without this, all three concurrent runners silently ignore a budget set via a Swift Testing trait.
+            if let traitConfig = ExhaustTraitConfiguration.current {
+                let hasInlineBudget = settings.contains { if case .budget = $0 { true } else { false } }
+                if hasInlineBudget == false, let traitBudget = traitConfig.budget {
+                    config.budget = traitBudget
+                }
+            }
+        #endif
+
         return .success(config)
     }
 }

@@ -453,33 +453,35 @@ A few signs you've crossed into `#explore` territory:
 
 ## When the bug is in a sequence of operations: `@Contract`
 
-Everything above this point has been about pure functions — feed in an input, check the output. A lot of real code isn't shaped like that, though. Some bugs only show up after a particular sequence of operations on a stateful object: you can insert fine, delete fine, lookup fine, but do `insert(x); delete(x); lookup(x)` in order and the object is left in a state it shouldn't be reachable to. No single operation is buggy in isolation. The bug lives in the interaction.
+Everything above this point has been about pure functions — feed in an input, check the output. A lot of real code isn't shaped like that, though. Some bugs only show up after a particular sequence of operations on a stateful object: you can insert fine, delete fine, lookup fine, but do `insert(x); delete(x); lookup(x)` in order and the object is left in a state that shouldn't be reachable. No single operation is buggy in isolation. The bug lives in the interaction.
 
-Exhaust has a separate facility for this kind of testing, built around a `@Contract` macro. You declare a struct that describes the system under test (`@SystemUnderTest`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can also declare a reference model (`@Model`) that commands update alongside the real system. Invariants can then check the real system against the model as an oracle. Either way, Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks (or when the model and SUT disagree, if you've provided a model). The shape looks like this:
+Exhaust has a separate facility for this kind of testing, built around a `@Contract` macro. You declare a `final class` (or an `actor`) that describes the system under test (`@SystemUnderTest`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can also declare a reference model (`@Model`) that commands update alongside the real system. Invariants can then check the real system against the model as an oracle. Either way, Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks (or when the model and SUT disagree, if you've provided a model). The shape looks like this:
 
 ```swift
-@Test func specHolds() {
-    #execute(Spec.self)
+@Test func contractHolds() {
+    #execute(MyContract.self)
 }
 
-@Contract
-struct Spec {
+@Contract(.sequential)
+final class MyContract {
     @SystemUnderTest
     var sut = MyType()
 
     @Command
-    mutating func op() { /* mutate sut */ }
+    func op() { /* mutate sut */ }
 
     @Invariant
     func holds() -> Bool { /* check sut */ }
 }
 ```
 
-For async SUTs, the contract becomes a `final class` and the runner tests concurrent interleaving at every `await` boundary — finding data races that sequential testing can't reach:
+The `@Contract` macro takes an execution mode (`.sequential`, `.tasks`, or `.threads`) that tells Exhaust how to run the commands. `.sequential` runs commands one at a time and checks `@Invariant` after each step. `.tasks` runs commands concurrently across multiple lanes with deterministic interleaving at `await` boundaries, for finding reentrancy and ordering bugs in async code. `.threads` dispatches commands to real OS threads for finding data races in locks, dispatch queues, and atomics, checked by an `@Oracle` that compares concurrent state against a sequential replay.
+
+Contracts on an `actor` use `.sequential` because actor isolation serialises all dispatch, so concurrent testing has nowhere to interleave. For `final class` contracts with async commands, `.tasks` tests interleaving across N lanes:
 
 ```swift
 @Test func sutIsSafeUnderConcurrency() async {
-    await #execute(AsyncSpec.self, .concurrent(2))
+    await #execute(AsyncContract.self, .concurrent(.two))
 }
 ```
 

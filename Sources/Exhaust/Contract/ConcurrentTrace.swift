@@ -18,14 +18,42 @@ struct TraceEvent: Sendable {
     var label: String
 }
 
+/// The execution phase of a trace entry. Rendered as a parenthesised suffix on the command at emit time.
+///
+/// Carried as data through ``buildTrace(_:)``'s post-processing so the passes match on `phase` rather than parsing the display string. `prefix` is distinct from `started`/`completed` because a prefix command renders as a single `(prefix)` entry rather than a started/completed pair.
+private enum TracePhase {
+    case prefix
+    case started
+    case completed
+    case suspended
+    case resumed
+
+    var suffix: String {
+        switch self {
+            case .prefix: "(prefix)"
+            case .started: "(started)"
+            case .completed: "(completed)"
+            case .suspended: "(suspended)"
+            case .resumed: "(resumed)"
+        }
+    }
+}
+
+/// One presentable trace entry before final indexing: phase, command label, owning lane, and outcome kept as typed fields.
+private struct TraceEntry {
+    var phase: TracePhase
+    var label: String
+    var lane: String
+    var outcome: TraceStep.Outcome
+}
+
 /// Converts structured trace events into presentable TraceSteps with phase annotations.
 ///
-/// Performs two post-processing passes: (1) removes suspended/resumed pairs where no interleaving actually occurred between them, and (2) collapses adjacent started+completed pairs into a single entry.
+/// Performs two post-processing passes: (1) removes suspended/resumed pairs where no interleaving actually occurred between them, and (2) collapses adjacent started+completed pairs into a single entry. Both passes match on the typed ``TracePhase`` and command label; the parenthesised suffix is composed once at emit time, so rendered output is unchanged.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func buildTrace(_ events: [TraceEvent]) -> [TraceStep] {
-    var steps: [(step: TraceStep, lane: String)] = []
+    var entries: [TraceEntry] = []
     var openCommand: [String: String] = [:]
-    var stepNumber = 0
 
     for event in events {
         switch event.kind {
@@ -33,71 +61,58 @@ func buildTrace(_ events: [TraceEvent]) -> [TraceStep] {
                 if event.lane != "prefix" {
                     openCommand[event.lane] = event.label
                 }
-                stepNumber += 1
-                let phase = event.lane == "prefix" ? "(prefix)" : "(started)"
-                steps.append((TraceStep(index: stepNumber, command: "\(event.label) \(phase)", outcome: .ok), event.lane))
+                let phase: TracePhase = event.lane == "prefix" ? .prefix : .started
+                entries.append(TraceEntry(phase: phase, label: event.label, lane: event.lane, outcome: .ok))
             case .completed:
                 openCommand[event.lane] = nil
                 if event.lane == "prefix" {
-                    if let lastIndex = steps.lastIndex(where: { $0.step.command == "\(event.label) (prefix)" }) {
-                        steps.remove(at: lastIndex)
-                        stepNumber -= 1
+                    if let lastIndex = entries.lastIndex(where: { $0.label == event.label && $0.phase == .prefix }) {
+                        entries.remove(at: lastIndex)
                     }
-                    stepNumber += 1
-                    steps.append((TraceStep(index: stepNumber, command: "\(event.label) (prefix)", outcome: .ok), event.lane))
+                    entries.append(TraceEntry(phase: .prefix, label: event.label, lane: event.lane, outcome: .ok))
                 } else {
-                    stepNumber += 1
-                    steps.append((TraceStep(index: stepNumber, command: "\(event.label) (completed)", outcome: .ok), event.lane))
+                    entries.append(TraceEntry(phase: .completed, label: event.label, lane: event.lane, outcome: .ok))
                 }
             case let .failed(message):
                 openCommand[event.lane] = nil
-                stepNumber += 1
-                let phase = event.lane == "prefix" ? "(prefix)" : "(completed)"
-                let step = TraceStep(
-                    index: stepNumber,
-                    command: "\(event.label) \(phase)",
-                    outcome: .invariantFailed(name: message)
-                )
-                steps.append((step, event.lane))
+                let phase: TracePhase = event.lane == "prefix" ? .prefix : .completed
+                entries.append(TraceEntry(phase: phase, label: event.label, lane: event.lane, outcome: .invariantFailed(name: message)))
             case .suspended:
                 if let current = openCommand[event.lane] {
-                    stepNumber += 1
-                    steps.append((TraceStep(index: stepNumber, command: "\(current) (suspended)", outcome: .ok), event.lane))
+                    entries.append(TraceEntry(phase: .suspended, label: current, lane: event.lane, outcome: .ok))
                 }
             case .resumed:
                 if let current = openCommand[event.lane] {
-                    stepNumber += 1
-                    steps.append((TraceStep(index: stepNumber, command: "\(current) (resumed)", outcome: .ok), event.lane))
+                    entries.append(TraceEntry(phase: .resumed, label: current, lane: event.lane, outcome: .ok))
                 }
         }
     }
 
     // Remove suspended/resumed pairs where no other lane ran between them.
-    var filtered: [(step: TraceStep, lane: String)] = []
+    var filtered: [TraceEntry] = []
     var index = 0
-    while index < steps.count {
-        let entry = steps[index]
-        if entry.step.command.hasSuffix("(suspended)") {
-            let commandBase = entry.step.command.replacingOccurrences(of: " (suspended)", with: "")
+    while index < entries.count {
+        let entry = entries[index]
+        if entry.phase == .suspended {
             var hasInterleaving = false
             var resumeIndex: Int?
-            for ahead in (index + 1) ..< steps.count {
-                let aheadCmd = steps[ahead].step.command
-                if aheadCmd.hasPrefix(commandBase),
-                   aheadCmd.hasSuffix("(resumed)") || aheadCmd.hasSuffix("(completed)")
+            for ahead in (index + 1) ..< entries.count {
+                let aheadEntry = entries[ahead]
+                if aheadEntry.label == entry.label,
+                   aheadEntry.phase == .resumed || aheadEntry.phase == .completed
                 {
                     resumeIndex = ahead
                     break
                 }
-                if steps[ahead].lane != entry.lane {
+                if aheadEntry.lane != entry.lane {
                     hasInterleaving = true
                 }
             }
 
             if hasInterleaving {
                 filtered.append(entry)
-            } else if let ri = resumeIndex, steps[ri].step.command.hasSuffix("(resumed)") {
-                index = ri + 1
+            } else if let resumeIndex, entries[resumeIndex].phase == .resumed {
+                index = resumeIndex + 1
                 continue
             } else {
                 filtered.append(entry)
@@ -108,30 +123,28 @@ func buildTrace(_ events: [TraceEvent]) -> [TraceStep] {
         index += 1
     }
 
-    // Collapse: started immediately followed by completed for the same command
+    // Collapse: started immediately followed by completed for the same command.
     var collapsed: [TraceStep] = []
     index = 0
     while index < filtered.count {
         if index + 1 < filtered.count,
-           filtered[index].step.command.hasSuffix("(started)"),
-           filtered[index + 1].step.command.hasSuffix("(completed)")
+           filtered[index].phase == .started,
+           filtered[index + 1].phase == .completed,
+           filtered[index].label == filtered[index + 1].label
         {
-            let startCmd = filtered[index].step.command.replacingOccurrences(of: " (started)", with: "")
-            let nextCmd = filtered[index + 1].step.command.replacingOccurrences(of: " (completed)", with: "")
-            if startCmd == nextCmd {
-                collapsed.append(TraceStep(
-                    index: collapsed.count + 1,
-                    command: "\(startCmd) (completed)",
-                    outcome: filtered[index + 1].step.outcome
-                ))
-                index += 2
-                continue
-            }
+            collapsed.append(TraceStep(
+                index: collapsed.count + 1,
+                command: "\(filtered[index].label) \(TracePhase.completed.suffix)",
+                outcome: filtered[index + 1].outcome
+            ))
+            index += 2
+            continue
         }
+        let entry = filtered[index]
         collapsed.append(TraceStep(
             index: collapsed.count + 1,
-            command: filtered[index].step.command,
-            outcome: filtered[index].step.outcome
+            command: "\(entry.label) \(entry.phase.suffix)",
+            outcome: entry.outcome
         ))
         index += 1
     }

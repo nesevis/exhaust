@@ -27,7 +27,7 @@ struct AllSkipConcurrentTests {
 
 // MARK: - Spec
 
-@Contract
+@Contract(.tasks)
 final class AlwaysSkipSpec {
     @Model
     var count: Int = 0

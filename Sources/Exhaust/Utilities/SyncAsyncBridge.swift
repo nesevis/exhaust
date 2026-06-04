@@ -66,16 +66,21 @@ extension __ExhaustRuntime {
                 idleStopwatch = Stopwatch()
             } else if let idleTimeoutMilliseconds {
                 // No job to run and the work has not completed — the continuation has suspended onto another executor and will not return to this lane. Bail rather than spin forever. The orphaned Task retains `box`/`done`, so its later resumption only writes to boxes we no longer read.
-                if idleStopwatch.elapsedMilliseconds > Double(idleTimeoutMilliseconds) {
+                if runQueue.waitForJob(
+                    idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+                    elapsedMilliseconds: idleStopwatch.elapsedMilliseconds
+                ) == false {
                     return nil
                 }
+            } else {
+                runQueue.waitForJob()
             }
         }
         return box.value
     }
 
     /// Creates a cooperative-pool task and sleeps the calling thread until it completes. Returns `nil` when `timeoutMilliseconds` is non-nil and the work does not complete within it.
-    private static func _blockingAwaitSemaphore<Result>(
+    package static func _blockingAwaitSemaphore<Result>(
         timeoutMilliseconds: Int?,
         _ work: @Sendable @escaping () async -> Result
     ) -> Result? {

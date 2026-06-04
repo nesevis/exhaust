@@ -13,7 +13,7 @@ struct PreemptiveNonAtomicCounterTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     PreemptiveCounterSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(6),
                         .budget(.custom(coverage: 0, sampling: 200)),
                         .suppress(.issueReporting),
@@ -32,7 +32,7 @@ struct PreemptiveNonAtomicCounterTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     PreemptiveCounterSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(6),
                         .budget(.custom(coverage: 0, sampling: 200)),
                         .suppress(.issueReporting),
@@ -53,7 +53,7 @@ struct PreemptiveNonAtomicCounterTests {
             __ExhaustRuntime.__runPreemptiveConcurrentContract(
                 PreemptiveCounterSpec.self,
                 settings: [
-                    .concurrent(2),
+                    .concurrent(.two),
                     .commandLimit(6),
                     .budget(.custom(coverage: 0, sampling: 200)),
                     .suppress(.issueReporting),
@@ -75,7 +75,7 @@ struct PreemptiveNonAtomicCounterTests {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     PreemptiveCounterSpec.self,
                     settings: [
-                        .concurrent(2),
+                        .concurrent(.two),
                         .commandLimit(8),
                         .budget(.custom(coverage: 0, sampling: 200)),
                         .suppress(.issueReporting),
@@ -90,7 +90,7 @@ struct PreemptiveNonAtomicCounterTests {
 
 // MARK: - Spec
 
-@ConcurrentContract
+@Contract(.threads)
 final class PreemptiveCounterSpec {
     @SystemUnderTest
     var counter: RacyCounter = .init()

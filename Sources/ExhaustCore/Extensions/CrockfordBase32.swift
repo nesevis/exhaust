@@ -20,12 +20,12 @@ package enum CrockfordBase32 {
 
     /// Decodes a replay string into a seed and optional iteration.
     ///
-    /// Accepts both `"1A"` (iteration is nil) and `"1A-7"` (iteration is 7) formats.
+    /// Accepts both `"1A"` (iteration is nil) and `"1A-7"` (iteration is 7) formats. The iteration suffix is 1-based, matching the encoder: replay sites recover the 0-based start index as `iteration - 1`, so `"1A-0"` is rejected rather than decoded into a `UInt64` underflow.
     public static func decodeWithIteration(_ string: String) -> (seed: UInt64, iteration: Int?)? {
         if let dashIndex = string.firstIndex(of: "-") {
             let seedPart = String(string[string.startIndex ..< dashIndex])
             let iterPart = String(string[string.index(after: dashIndex)...])
-            guard let seed = decode(seedPart), let iteration = Int(iterPart), iteration >= 0 else {
+            guard let seed = decode(seedPart), let iteration = Int(iterPart), iteration >= 1 else {
                 return nil
             }
             return (seed: seed, iteration: iteration)
