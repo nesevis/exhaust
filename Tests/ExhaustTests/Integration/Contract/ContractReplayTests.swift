@@ -148,8 +148,8 @@ struct ConcurrentContractReplayTests {
 
 // MARK: - Sequential Spec
 
-@Contract
-struct BrokenModuloSpec {
+@Contract(.tasks)
+final class BrokenModuloSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var counter = ModuloCounter(modulus: 3)
 
@@ -159,13 +159,13 @@ struct BrokenModuloSpec {
     }
 
     @Command(weight: 3)
-    mutating func increment() throws {
+    func increment() throws {
         expected = (expected + 1) % 5
         counter.increment()
     }
 
     @Command(weight: 1)
-    mutating func reset() throws {
+    func reset() throws {
         expected = 0
         counter.reset()
     }
@@ -186,7 +186,7 @@ struct ModuloCounter {
 
 // MARK: - Cooperative Concurrent Spec
 
-@Contract
+@Contract(.tasks)
 final class ReplayableNonAtomicCounterSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var counter: ReplayableNonAtomicCounter = .init()
@@ -235,7 +235,7 @@ actor ReplayableNonAtomicCounter: CustomDebugStringConvertible {
 
 // MARK: - Preemptive Concurrent Spec
 
-@ConcurrentContract
+@Contract(.threads)
 final class PreemptiveReplayableSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var counter: PreemptiveRacyCounter = .init()
@@ -291,7 +291,7 @@ final class PreemptiveRacyCounter: @unchecked Sendable, CustomDebugStringConvert
 
 // MARK: - Preemptive Sequentially Broken Spec
 
-@ConcurrentContract
+@Contract(.threads)
 final class PreemptiveSequentiallyBrokenSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var counter: BrokenDecrementCounter = .init()

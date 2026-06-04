@@ -60,7 +60,7 @@ struct IdleTimeoutConcurrentTests {
 
 // MARK: - Spec
 
-@Contract
+@Contract(.tasks)
 final class SleepingSpec {
     @Model
     var count: Int = 0
@@ -97,7 +97,7 @@ final class SleepingCounter: @unchecked Sendable {
 // MARK: - Async Preemptive Spec
 
 /// A command that sleeps far longer than the idle bound — its drain lane goes quiet, so the preemptive runner's idle timeout must fire and surface it rather than hang. The oracle always agrees; the failure comes purely from the timeout.
-@ConcurrentContract
+@Contract(.threads)
 final class StallingAsyncSpec {
     @SystemUnderTest
     var counter: SleepingAsyncCounter = .init()

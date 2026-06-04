@@ -34,7 +34,7 @@ struct ConcurrencyLevelValidationTests {
 
 // MARK: - Specs
 
-@Contract
+@Contract(.tasks)
 final class ConcurrencyValidationSpec {
     @SystemUnderTest
     var counter: ValidationCounter = .init()
@@ -45,7 +45,7 @@ final class ConcurrencyValidationSpec {
     }
 }
 
-@ConcurrentContract
+@Contract(.threads)
 final class ConcurrencyValidationConcurrentSpec {
     @SystemUnderTest
     var counter: ValidationCounter = .init()

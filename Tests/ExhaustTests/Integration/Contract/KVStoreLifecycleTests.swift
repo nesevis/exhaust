@@ -55,8 +55,8 @@ struct KVStoreLifecycleTests {
 // making it likely that a `get` after reopen returns a stale value that
 // the model does not expect.
 
-@Contract
-struct KVStoreLifecycleContract {
+@Contract(.tasks)
+final class KVStoreLifecycleContract {
     @Model var isOpen = false
     @Model var contents: [Int: Int] = [:]
     @SystemUnderTest var store = BuggyKVStore()
@@ -68,14 +68,14 @@ struct KVStoreLifecycleContract {
     }
 
     @Command(weight: 2)
-    mutating func open() throws {
-        guard !isOpen else { throw skip() }
+    func open() throws {
+        guard isOpen == false else { throw skip() }
         isOpen = true
         store.open()
     }
 
     @Command(weight: 2)
-    mutating func close() throws {
+    func close() throws {
         guard isOpen else { throw skip() }
         isOpen = false
         contents = [:]
@@ -83,14 +83,14 @@ struct KVStoreLifecycleContract {
     }
 
     @Command(weight: 4, .int(in: 0 ... 3), .int(in: 0 ... 99))
-    mutating func put(key: Int, value: Int) throws {
+    func put(key: Int, value: Int) throws {
         guard isOpen else { throw skip() }
         contents[key] = value
         store.put(key, value)
     }
 
     @Command(weight: 3, .int(in: 0 ... 3))
-    mutating func get(key: Int) throws {
+    func get(key: Int) throws {
         guard isOpen else { throw skip() }
         let actual = store.get(key)
         let expected = contents[key]

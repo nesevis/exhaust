@@ -10,6 +10,7 @@
         "SystemUnderTest": SUTMacro.self,
         "Command": CommandMacro.self,
         "Invariant": InvariantMacro.self,
+        "Oracle": OracleMacro.self,
     ]
 
     @Suite(
@@ -17,21 +18,21 @@
         .macros(testMacros, record: .failed)
     )
     struct ContractDeclarationMacroTests {
-        @Test("Synthesizes Command enum, SUT typealias, and conformance")
-        func synthesizesCommandEnumSUTTypealiasAndConformance() {
+        @Test("Missing generator expressions produce diagnostic")
+        func missingGeneratorExpressionsDiagnostic() {
             assertMacro {
                 """
-                @Contract
-                struct QueueSpec {
+                @Contract(.tasks)
+                final class QueueSpec {
                     @Model var contents: [Int] = []
                     @SystemUnderTest var queue: MyQueue
 
                     @Command(weight: 3)
-                    mutating func enqueue(value: Int) throws {
+                    func enqueue(value: Int) throws {
                     }
 
                     @Command(weight: 2)
-                    mutating func dequeue() throws {
+                    func dequeue() throws {
                     }
 
                     @Invariant
@@ -42,18 +43,18 @@
                 """
             } diagnostics: {
                 """
-                @Contract
-                struct QueueSpec {
+                @Contract(.tasks)
+                final class QueueSpec {
                     @Model var contents: [Int] = []
                     @SystemUnderTest var queue: MyQueue
 
                     @Command(weight: 3)
                     ╰─ 🛑 @Command method has parameters but no generator expressions — add generators to the @Command attribute
-                    mutating func enqueue(value: Int) throws {
+                    func enqueue(value: Int) throws {
                     }
 
                     @Command(weight: 2)
-                    mutating func dequeue() throws {
+                    func dequeue() throws {
                     }
 
                     @Invariant
@@ -78,110 +79,24 @@
             }
         }
 
-        @Test("Async command produces AsyncContractSpec conformance and async run/checkInvariants")
-        func asyncCommandProducesAsyncContractSpecConformanceAndAsyncRuncheckInvariants() {
+        @Test("All-sync commands on final class produce ContractSpec conformance")
+        func allSyncCommandsProduceContractSpecConformance() {
             assertMacro {
                 """
-                @Contract
-                struct AsyncSpec {
+                @Contract(.tasks)
+                final class SyncSpec {
                     @SystemUnderTest var counter: MyCounter
 
                     @Command(weight: 1)
-                    mutating func increment() async throws {
-                    }
-
-                    @Command(weight: 1)
-                    mutating func decrement() throws {
-                    }
-
-                    @Invariant
-                    func isValid() -> Bool {
-                        true
-                    }
-                }
-                """
-            } diagnostics: {
-                """
-                @Contract
-                ┬────────
-                ╰─ 🛑 @Contract with async commands or invariants must be a class — use 'final class' instead of 'struct'
-                struct AsyncSpec {
-                    @SystemUnderTest var counter: MyCounter
-
-                    @Command(weight: 1)
-                    mutating func increment() async throws {
-                    }
-
-                    @Command(weight: 1)
-                    mutating func decrement() throws {
-                    }
-
-                    @Invariant
-                    func isValid() -> Bool {
-                        true
-                    }
-                }
-                """
-            }
-        }
-
-        @Test("Async invariant produces AsyncContractSpec conformance")
-        func asyncInvariantProducesAsyncContractSpecConformance() {
-            assertMacro {
-                """
-                @Contract
-                struct AsyncInvSpec {
-                    @SystemUnderTest var counter: MyCounter
-
-                    @Command(weight: 1)
-                    mutating func increment() throws {
-                    }
-
-                    @Invariant
-                    func isValid() async -> Bool {
-                        true
-                    }
-                }
-                """
-            } diagnostics: {
-                """
-                @Contract
-                ┬────────
-                ╰─ 🛑 @Contract with async commands or invariants must be a class — use 'final class' instead of 'struct'
-                struct AsyncInvSpec {
-                    @SystemUnderTest var counter: MyCounter
-
-                    @Command(weight: 1)
-                    mutating func increment() throws {
-                    }
-
-                    @Invariant
-                    func isValid() async -> Bool {
-                        true
-                    }
-                }
-                """
-            }
-        }
-
-        @Test("All-sync commands still produce ContractSpec conformance")
-        func allSyncCommandsStillProduceContractSpecConformance() {
-            assertMacro {
-                """
-                @Contract
-                struct SyncSpec {
-                    @SystemUnderTest var counter: MyCounter
-
-                    @Command(weight: 1)
-                    mutating func increment() throws {
+                    func increment() throws {
                     }
                 }
                 """
             } expansion: {
                 #"""
-                struct SyncSpec {
+                final class SyncSpec {
                     var counter: MyCounter
-                    mutating func increment() throws {
+                    func increment() throws {
                     }
 
                     enum Command: CustomStringConvertible, Sendable {
@@ -207,7 +122,7 @@
                         )
                     }
 
-                    mutating func run(_ command: Command) throws {
+                    func run(_ command: Command) throws {
                         switch command {
                             case .increment:
                             try self.increment()
@@ -224,6 +139,11 @@
                     var sutDescription: String {
                         "counter: \(counter)"
                     }
+
+                    static let concurrencyModel: ConcurrencyModel = .tasks
+
+                    required init() {
+                    }
                 }
 
                 extension SyncSpec: ContractSpec {
@@ -236,20 +156,20 @@
         func commandWithGeneratorExpressionProducesGenInCommandGenerator() {
             assertMacro {
                 """
-                @Contract
-                struct InsertSpec {
+                @Contract(.tasks)
+                final class InsertSpec {
                     @SystemUnderTest var items: [Int]
 
                     @Command(weight: 3, .int(in: 0...99))
-                    mutating func insert(value: Int) throws {
+                    func insert(value: Int) throws {
                     }
                 }
                 """
             } expansion: {
                 #"""
-                struct InsertSpec {
+                final class InsertSpec {
                     var items: [Int]
-                    mutating func insert(value: Int) throws {
+                    func insert(value: Int) throws {
                     }
 
                     enum Command: CustomStringConvertible, Sendable {
@@ -277,7 +197,7 @@
                         )
                     }
 
-                    mutating func run(_ command: Command) throws {
+                    func run(_ command: Command) throws {
                         switch command {
                             case let .insert(value):
                             try self.insert(value: value)
@@ -294,9 +214,583 @@
                     var sutDescription: String {
                         "items: \(items)"
                     }
+
+                    static let concurrencyModel: ConcurrencyModel = .tasks
+
+                    required init() {
+                    }
                 }
 
                 extension InsertSpec: ContractSpec {
+                }
+                """#
+            }
+        }
+
+        @Test("Bare @Contract without mode produces diagnostic")
+        func bareContractWithoutModeProducesDiagnostic() {
+            assertMacro {
+                """
+                @Contract
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract
+                ┬────────
+                ├─ 🛑 @Contract requires a concurrency mode argument: @Contract(.tasks) or @Contract(.threads)
+                ╰─ 🛑 @Contract requires a concurrency mode argument: @Contract(.tasks) or @Contract(.threads)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+                }
+                """
+            }
+        }
+
+        @Test("@Contract(.tasks) on struct produces diagnostic")
+        func contractTasksOnStructProducesDiagnostic() {
+            assertMacro {
+                """
+                @Contract(.tasks)
+                struct Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.tasks)
+                ┬────────────────
+                ├─ 🛑 Contract specs must be a 'final class' or 'actor' — structs are not supported
+                ╰─ 🛑 Contract specs must be a 'final class' or 'actor' — structs are not supported
+                struct Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+                }
+                """
+            }
+        }
+
+        @Test("@Contract(.threads) on final class with @Oracle produces ConcurrentContractSpec conformance")
+        func contractThreadsWithOracleProducesConcurrentConformance() {
+            assertMacro {
+                """
+                @Contract(.threads)
+                final class CounterSpec {
+                    @SystemUnderTest var counter: MyCounter
+
+                    @Command(weight: 3)
+                    func increment() throws {
+                    }
+
+                    @Oracle
+                    func equivalent(to other: MyCounter) -> Bool {
+                        counter.value == other.value
+                    }
+                }
+                """
+            } expansion: {
+                #"""
+                final class CounterSpec {
+                    var counter: MyCounter
+                    func increment() throws {
+                    }
+                    func equivalent(to other: MyCounter) -> Bool {
+                        counter.value == other.value
+                    }
+
+                    enum Command: CustomStringConvertible, Sendable {
+                            case increment
+
+                        var description: String {
+                            switch self {
+                                case .increment:
+                                "increment"
+                            }
+                        }
+                    }
+
+                    typealias SystemUnderTest = MyCounter
+
+                    var systemUnderTest: SystemUnderTest {
+                        counter
+                    }
+
+                    static var commandGenerator: ReflectiveGenerator<Command> {
+                        .oneOf(weighted:
+                                (3, .just(Command.increment))
+                        )
+                    }
+
+                    func run(_ command: Command) throws {
+                        switch command {
+                            case .increment:
+                            try self.increment()
+                        }
+                    }
+
+                    func checkInvariants() throws {
+                    }
+
+                    var modelDescription: String {
+                        "(no model properties)"
+                    }
+
+                    var sutDescription: String {
+                        "counter: \(counter)"
+                    }
+
+                    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool {
+                        equivalent(to: sequentialResult)
+                    }
+
+                    static let concurrencyModel: ConcurrencyModel = .threads
+
+                    required init() {
+                    }
+                }
+
+                extension CounterSpec: ConcurrentContractSpec {
+                }
+                """#
+            }
+        }
+
+        @Test("@Contract(.threads) without @Oracle produces diagnostic")
+        func contractThreadsWithoutOracleProducesDiagnostic() {
+            assertMacro {
+                """
+                @Contract(.threads)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.threads)
+                ┬──────────────────
+                ╰─ 🛑 @Contract(.threads) requires exactly one @Oracle method
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+                }
+                """
+            }
+        }
+
+        @Test("@Contract(.tasks) with @Oracle produces warning")
+        func contractTasksWithOracleProducesWarning() {
+            assertMacro {
+                """
+                @Contract(.tasks)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+
+                    @Oracle
+                    func equiv(to other: MySUT) -> Bool { true }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.tasks)
+                ┬────────────────
+                ╰─ ⚠️ @Oracle is only used with @Contract(.threads). For @Contract(.tasks), use @Invariant and @Model instead
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+
+                    @Oracle
+                    func equiv(to other: MySUT) -> Bool { true }
+                }
+                """
+            } expansion: {
+                #"""
+                final class Spec {
+                    var sut: MySUT
+                    func doSomething() throws {
+                    }
+                    func equiv(to other: MySUT) -> Bool { true }
+
+                    enum Command: CustomStringConvertible, Sendable {
+                            case doSomething
+
+                        var description: String {
+                            switch self {
+                                case .doSomething:
+                                "doSomething"
+                            }
+                        }
+                    }
+
+                    typealias SystemUnderTest = MySUT
+
+                    var systemUnderTest: SystemUnderTest {
+                        sut
+                    }
+
+                    static var commandGenerator: ReflectiveGenerator<Command> {
+                        .oneOf(weighted:
+                                (1, .just(Command.doSomething))
+                        )
+                    }
+
+                    func run(_ command: Command) throws {
+                        switch command {
+                            case .doSomething:
+                            try self.doSomething()
+                        }
+                    }
+
+                    func checkInvariants() throws {
+                    }
+
+                    var modelDescription: String {
+                        "(no model properties)"
+                    }
+
+                    var sutDescription: String {
+                        "sut: \(sut)"
+                    }
+
+                    static let concurrencyModel: ConcurrencyModel = .tasks
+
+                    required init() {
+                    }
+                }
+
+                extension Spec: ContractSpec {
+                }
+                """#
+            }
+        }
+
+        @Test("@Contract(.threads) with @Invariant produces warning")
+        func contractThreadsWithInvariantProducesWarning() {
+            assertMacro {
+                """
+                @Contract(.threads)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+
+                    @Oracle
+                    func equiv(to other: MySUT) -> Bool { true }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.threads)
+                ┬──────────────────
+                ╰─ ⚠️ @Invariant requires deterministic per-step state, which a preemptive run does not have. Use @Contract(.tasks)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+
+                    @Oracle
+                    func equiv(to other: MySUT) -> Bool { true }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            } expansion: {
+                #"""
+                final class Spec {
+                    var sut: MySUT
+                    func doSomething() throws {
+                    }
+                    func equiv(to other: MySUT) -> Bool { true }
+                    func valid() -> Bool { true }
+
+                    enum Command: CustomStringConvertible, Sendable {
+                            case doSomething
+
+                        var description: String {
+                            switch self {
+                                case .doSomething:
+                                "doSomething"
+                            }
+                        }
+                    }
+
+                    typealias SystemUnderTest = MySUT
+
+                    var systemUnderTest: SystemUnderTest {
+                        sut
+                    }
+
+                    static var commandGenerator: ReflectiveGenerator<Command> {
+                        .oneOf(weighted:
+                                (1, .just(Command.doSomething))
+                        )
+                    }
+
+                    func run(_ command: Command) throws {
+                        switch command {
+                            case .doSomething:
+                            try self.doSomething()
+                        }
+                    }
+
+                    func checkInvariants() throws {
+                            try check(valid(), "valid")
+                    }
+
+                    var modelDescription: String {
+                        "(no model properties)"
+                    }
+
+                    var sutDescription: String {
+                        "sut: \(sut)"
+                    }
+
+                    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool {
+                        equiv(to: sequentialResult)
+                    }
+
+                    static let concurrencyModel: ConcurrencyModel = .threads
+
+                    required init() {
+                    }
+                }
+
+                extension Spec: ConcurrentContractSpec {
+                }
+                """#
+            }
+        }
+
+        @Test("@Contract(.threads) with @Model produces warning")
+        func contractThreadsWithModelProducesWarning() {
+            assertMacro {
+                """
+                @Contract(.threads)
+                final class Spec {
+                    @Model var count: Int = 0
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+
+                    @Oracle
+                    func equiv(to other: MySUT) -> Bool { true }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.threads)
+                ┬──────────────────
+                ╰─ ⚠️ @Model requires deterministic per-step state, which a preemptive run does not have. Use @Contract(.tasks)
+                final class Spec {
+                    @Model var count: Int = 0
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+
+                    @Oracle
+                    func equiv(to other: MySUT) -> Bool { true }
+                }
+                """
+            } expansion: {
+                #"""
+                final class Spec {
+                    var count: Int = 0
+                    var sut: MySUT
+                    func doSomething() throws {
+                    }
+                    func equiv(to other: MySUT) -> Bool { true }
+
+                    enum Command: CustomStringConvertible, Sendable {
+                            case doSomething
+
+                        var description: String {
+                            switch self {
+                                case .doSomething:
+                                "doSomething"
+                            }
+                        }
+                    }
+
+                    typealias SystemUnderTest = MySUT
+
+                    var systemUnderTest: SystemUnderTest {
+                        sut
+                    }
+
+                    static var commandGenerator: ReflectiveGenerator<Command> {
+                        .oneOf(weighted:
+                                (1, .just(Command.doSomething))
+                        )
+                    }
+
+                    func run(_ command: Command) throws {
+                        switch command {
+                            case .doSomething:
+                            try self.doSomething()
+                        }
+                    }
+
+                    func checkInvariants() throws {
+                    }
+
+                    var modelDescription: String {
+                        "count: \(count)"
+                    }
+
+                    var sutDescription: String {
+                        "sut: \(sut)"
+                    }
+
+                    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool {
+                        equiv(to: sequentialResult)
+                    }
+
+                    static let concurrencyModel: ConcurrencyModel = .threads
+
+                    required init() {
+                    }
+                }
+
+                extension Spec: ConcurrentContractSpec {
+                }
+                """#
+            }
+        }
+
+        @Test("@Contract(.threads) on actor produces warning")
+        func contractThreadsOnActorProducesWarning() {
+            assertMacro {
+                """
+                @Contract(.threads)
+                actor Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+
+                    @Oracle
+                    func equiv(to other: MySUT) -> Bool { true }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.threads)
+                ┬──────────────────
+                ╰─ ⚠️ Actors are data-race-free; .threads cannot surface races in them. Use @Contract(.tasks)
+                actor Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
+                    func doSomething() throws {
+                    }
+
+                    @Oracle
+                    func equiv(to other: MySUT) -> Bool { true }
+                }
+                """
+            } expansion: {
+                #"""
+                actor Spec {
+                    var sut: MySUT
+                    func doSomething() throws {
+                    }
+                    func equiv(to other: MySUT) -> Bool { true }
+
+                    enum Command: CustomStringConvertible, Sendable {
+                            case doSomething
+
+                        var description: String {
+                            switch self {
+                                case .doSomething:
+                                "doSomething"
+                            }
+                        }
+                    }
+
+                    typealias SystemUnderTest = MySUT
+
+                    var systemUnderTest: SystemUnderTest {
+                        sut
+                    }
+
+                    static var commandGenerator: ReflectiveGenerator<Command> {
+                        .oneOf(weighted:
+                                (1, .just(Command.doSomething))
+                        )
+                    }
+
+                    func run(_ command: Command) async throws {
+                        switch command {
+                            case .doSomething:
+                            try self.doSomething()
+                        }
+                    }
+
+                    func checkInvariants() async throws {
+                    }
+
+                    var modelDescription: String {
+                        "(no model properties)"
+                    }
+
+                    var sutDescription: String {
+                        "sut: \(sut)"
+                    }
+
+                    func oracleCheck(_ sequentialResult: SystemUnderTest) async -> Bool {
+                        equiv(to: sequentialResult)
+                    }
+
+                    static let concurrencyModel: ConcurrencyModel = .threads
+
+                    nonisolated init() {
+                    }
+                }
+
+                extension Spec: @preconcurrency AsyncConcurrentContractSpec {
                 }
                 """#
             }
@@ -308,72 +802,24 @@
         .macros(testMacros, indentationWidth: .tabs(1), record: .failed)
     )
     struct ContractTabIndentationTests {
-        @Test("@Contract with tab indentation synthesizes correctly indented members")
-        func contractWithTabIndentationSynthesizesCorrectlyIndentedMembers() {
-            assertMacro {
-                """
-                @Contract
-                struct QueueSpec {
-                \t@Model var contents: [Int] = []
-                \t@SystemUnderTest var queue: MyQueue
-
-                \t@Command(weight: 3)
-                \tmutating func enqueue(value: Int) throws {
-                \t}
-
-                \t@Command(weight: 2)
-                \tmutating func dequeue() throws {
-                \t}
-
-                \t@Invariant
-                \tfunc countMatches() -> Bool {
-                \t\ttrue
-                \t}
-                }
-                """
-            } diagnostics: {
-                """
-                @Contract
-                struct QueueSpec {
-                	@Model var contents: [Int] = []
-                	@SystemUnderTest var queue: MyQueue
-
-                	@Command(weight: 3)
-                 ╰─ 🛑 @Command method has parameters but no generator expressions — add generators to the @Command attribute
-                	mutating func enqueue(value: Int) throws {
-                	}
-
-                	@Command(weight: 2)
-                	mutating func dequeue() throws {
-                	}
-
-                	@Invariant
-                	func countMatches() -> Bool {
-                		true
-                	}
-                }
-                """
-            }
-        }
-
-        @Test("@Contract with tab indentation and generator expressions")
+        @Test("@Contract(.tasks) with tab indentation and generator expressions")
         func contractWithTabIndentationAndGeneratorExpressions() {
             assertMacro {
                 """
-                @Contract
-                struct InsertSpec {
+                @Contract(.tasks)
+                final class InsertSpec {
                 \t@SystemUnderTest var items: [Int]
 
                 \t@Command(weight: 3, .int(in: 0...99))
-                \tmutating func insert(value: Int) throws {
+                \tfunc insert(value: Int) throws {
                 \t}
                 }
                 """
             } expansion: {
                 #"""
-                struct InsertSpec {
+                final class InsertSpec {
                 	var items: [Int]
-                	mutating func insert(value: Int) throws {
+                	func insert(value: Int) throws {
                 	}
 
                 	enum Command: CustomStringConvertible, Sendable {
@@ -401,7 +847,7 @@
                 	    )
                 	}
 
-                	mutating func run(_ command: Command) throws {
+                	func run(_ command: Command) throws {
                 	    switch command {
                 	        case let .insert(value):
                 	    	try self.insert(value: value)
@@ -418,6 +864,11 @@
                 	var sutDescription: String {
                 		"items: \(items)"
                 	}
+
+                	static let concurrencyModel: ConcurrencyModel = .tasks
+
+                	required init() {
+                	}
                 }
 
                 extension InsertSpec: ContractSpec {
@@ -426,28 +877,28 @@
             }
         }
 
-        @Test("@Contract with tab indentation and multiple model properties")
+        @Test("@Contract(.tasks) with tab indentation and multiple model properties")
         func contractWithTabIndentationAndMultipleModelProperties() {
             assertMacro {
                 """
-                @Contract
-                struct Spec {
+                @Contract(.tasks)
+                final class Spec {
                 \t@Model var count: Int = 0
                 \t@Model var name: String = ""
                 \t@SystemUnderTest var sut: MySUT
 
                 \t@Command(weight: 1)
-                \tmutating func doSomething() throws {
+                \tfunc doSomething() throws {
                 \t}
                 }
                 """
             } expansion: {
                 #"""
-                struct Spec {
+                final class Spec {
                 	var count: Int = 0
                 	var name: String = ""
                 	var sut: MySUT
-                	mutating func doSomething() throws {
+                	func doSomething() throws {
                 	}
 
                 	enum Command: CustomStringConvertible, Sendable {
@@ -473,7 +924,7 @@
                 	    )
                 	}
 
-                	mutating func run(_ command: Command) throws {
+                	func run(_ command: Command) throws {
                 	    switch command {
                 	        case .doSomething:
                 	    	try self.doSomething()
@@ -492,6 +943,11 @@
 
                 	var sutDescription: String {
                 		"sut: \(sut)"
+                	}
+
+                	static let concurrencyModel: ConcurrencyModel = .tasks
+
+                	required init() {
                 	}
                 }
 

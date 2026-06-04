@@ -120,7 +120,7 @@ struct AsyncContractTests {
 
 // MARK: - Contract: Passing async counter
 
-@Contract
+@Contract(.tasks)
 final class AsyncCounterSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var counter: AsyncCounter = .init()
@@ -151,7 +151,7 @@ final class AsyncCounterSpec {
 
 // MARK: - Contract: Failing async counter (invariant violation)
 
-@Contract
+@Contract(.tasks)
 final class BuggyAsyncCounterSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var counter: BuggyAsyncCounter = .init()
@@ -176,7 +176,7 @@ final class BuggyAsyncCounterSpec {
 
 // MARK: - Contract: Async with skip()
 
-@Contract
+@Contract(.tasks)
 final class AsyncSkipSpec {
     @Model var expected: [Int] = []
     @SystemUnderTest var counter: AsyncCounter = .init()
@@ -202,7 +202,7 @@ final class AsyncSkipSpec {
 
 // MARK: - Contract: Mixed sync + async commands
 
-@Contract
+@Contract(.tasks)
 final class MixedAsyncSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var counter: AsyncCounter = .init()

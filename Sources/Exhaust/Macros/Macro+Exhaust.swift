@@ -174,7 +174,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 
 /// Generates command sequences, executes them against a system under test, and verifies that all contracts hold after every step.
 ///
-/// Define a spec with `@Contract`, marking the SUT with `@SystemUnderTest`, model state with `@Model`, transitions with `@Command`, and post-conditions with `@Invariant`. The macro generates sequences of commands, runs them against a fresh SUT instance, and checks invariants after each step. On failure, the sequence is reduced to a minimal counterexample.
+/// Define a contract with `@Contract(.tasks)`, marking the SUT with `@SystemUnderTest`, model state with `@Model`, transitions with `@Command`, and postconditions with `@Invariant`. The macro generates sequences of commands, runs them against a fresh SUT instance, and checks invariants after each step. On failure, the sequence is reduced to a minimal counterexample.
 ///
 /// ```swift
 /// @Test func boundedQueueBehavior() {
@@ -201,7 +201,7 @@ public macro execute<Spec: ContractSpec>(
 
 /// Generates command sequences and executes them across concurrent lanes with deterministic interleaving at `await` boundaries.
 ///
-/// Define a spec with `@Contract` and async `@Command` methods. The cooperative scheduler controls interleaving deterministically at command boundaries — the same seed produces the same lane assignment and command ordering. Commands that suspend multiple times internally consume additional schedule entries; once the schedule is exhausted, continuation-level lane assignment falls back to deterministic round-robin. Commands are distributed across two concurrent lanes by default. On failure, the command sequence and interleaving are reduced to a minimal counterexample.
+/// Define a contract with `@Contract(.tasks)` and async `@Command` methods. The cooperative scheduler controls interleaving deterministically at command boundaries — the same seed produces the same lane assignment and command ordering. Commands that suspend multiple times internally consume additional schedule entries; once the schedule is exhausted, continuation-level lane assignment falls back to deterministic round-robin. Commands are distributed across two concurrent lanes by default. On failure, the command sequence and interleaving are reduced to a minimal counterexample.
 ///
 /// ```swift
 /// @Test func concurrentQueueBehavior() async {
@@ -231,7 +231,7 @@ public macro execute<Spec: AsyncContractSpec>(
 
 /// Generates command sequences and dispatches them across real GCD threads to detect races in synchronous primitives.
 ///
-/// Define a spec with `@ConcurrentContract`, using `@Oracle` instead of `@Model` for correctness checking (model updates inside command bodies would race with each other on real threads). Commands run on real OS threads with non-deterministic scheduling — the same seed does not guarantee the same interleaving. Bug detection relies on repetition across the sampling budget. Use this to catch races in locks, dispatch queues, and atomics that are invisible at `await` suspension points.
+/// Define a spec with `@Contract(.threads)`, using `@Oracle` instead of `@Model` for correctness checking (model updates inside command bodies would race with each other on real threads). Commands run on real OS threads with non-deterministic scheduling — the same seed does not guarantee the same interleaving. Bug detection relies on repetition across the sampling budget. Use this to catch races in locks, dispatch queues, and atomics that are invisible at `await` suspension points.
 ///
 /// ```swift
 /// @Test func counterThreadSafety() {
@@ -259,7 +259,7 @@ public macro execute<Spec: ConcurrentContractSpec>(
 
 /// Generates command sequences and dispatches them across real GCD threads, bridging async command execution via `Task` + semaphore.
 ///
-/// Use this when the spec's `@Command` methods are `async` but the SUT uses synchronous primitives internally (locks, dispatch queues, atomics behind an async facade). Each lane gets a real OS thread; async commands are driven synchronously within that thread. Non-deterministic scheduling — bug detection relies on repetition across the sampling budget.
+/// Use this when the contract's `@Command` methods are `async` but the SUT uses synchronous primitives internally (locks, dispatch queues, atomics behind an async facade). Each lane gets a real OS thread; async commands are driven synchronously within that thread. Non-deterministic scheduling — bug detection relies on repetition across the sampling budget.
 ///
 /// ```swift
 /// @Test func asyncCounterThreadSafety() async {

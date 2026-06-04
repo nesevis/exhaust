@@ -142,7 +142,7 @@ struct NonAtomicCounterConcurrentTests {
 
 // MARK: - Spec
 
-@Contract
+@Contract(.tasks)
 final class NonAtomicCounterSpec {
     @Model
     var expected: Int = 0

@@ -89,8 +89,8 @@ struct ExamGraderTests {
 //
 // The `answersMatchKeyLength` invariant runs after every command and catches bug 1 as soon as a mismatched submission is stored.
 
-@Contract
-struct ExamGraderContract {
+@Contract(.tasks)
+final class ExamGraderContract {
     @SystemUnderTest var grader = BuggyExamGrader()
 
     @Invariant
@@ -99,18 +99,18 @@ struct ExamGraderContract {
     }
 
     @Command(weight: 2, #gen(.int(in: 1 ... 5)))
-    mutating func createExam(keyLength: Int) throws {
+    func createExam(keyLength: Int) throws {
         grader.createExam(name: "exam", answerKey: Array(repeating: keyLength, count: keyLength))
     }
 
     @Command(weight: 3, #gen(.int(in: 0 ... 6)))
-    mutating func submitAnswers(answerCount: Int) throws {
+    func submitAnswers(answerCount: Int) throws {
         guard grader.exams["exam"] != nil else { throw skip() }
         grader.submitAnswers(student: "student", examName: "exam", answers: Array(repeating: answerCount, count: answerCount))
     }
 
     @Command(weight: 1)
-    mutating func gradeLatest() throws {
+    func gradeLatest() throws {
         guard let latest = grader.submissions.last else { throw skip() }
         let score = grader.grade(latest)
         // Postcondition: if every non-blank answer matches the key, the score must be perfect. A correct grader excludes blanks from the denominator, so skipping questions never penalizes a student who answered every attempted question correctly.

@@ -273,7 +273,7 @@ struct ConcurrentContractDrainLoopTests {
 // MARK: - Specs
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-@Contract
+@Contract(.tasks)
 final class YieldingCounterSpec {
     @Model var expected: Int = 0
     @SystemUnderTest var counter: YieldingCounter = .init()
@@ -298,7 +298,7 @@ final class YieldingCounterSpec {
 }
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-@Contract
+@Contract(.tasks)
 final class BundleDrawSpec {
     let tokens = Bundle<Int>()
     @Model var model: [Int] = []

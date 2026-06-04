@@ -44,8 +44,8 @@ struct InvariantOnlyTests {
 /// No `@Model` — the invariant checks a structural property of the SUT alone.
 /// The bug surfaces when `write` is called on a full buffer because there's
 /// no capacity guard in the SUT implementation.
-@Contract
-struct CircularBufferContract {
+@Contract(.tasks)
+final class CircularBufferContract {
     @SystemUnderTest var buffer = CircularBuffer(capacity: 2)
 
     @Invariant
@@ -54,26 +54,26 @@ struct CircularBufferContract {
     }
 
     @Command(weight: 3)
-    mutating func write() throws {
+    func write() throws {
         buffer.write(0)
     }
 
     @Command(weight: 2)
-    mutating func read() throws {
+    func read() throws {
         guard !buffer.isEmpty else { throw skip() }
         _ = buffer.read()
     }
 
     @Command(weight: 1)
-    mutating func clear() throws {
+    func clear() throws {
         buffer.clear()
     }
 }
 
 // MARK: - Contract: Priority queue sorted backing
 
-@Contract
-struct SortedBackingContract {
+@Contract(.tasks)
+final class SortedBackingContract {
     @SystemUnderTest var queue = BuggyPriorityQueue()
 
     @Invariant
@@ -82,12 +82,12 @@ struct SortedBackingContract {
     }
 
     @Command(weight: 3, #gen(.int(in: 0 ... 20)))
-    mutating func enqueue(value: Int) throws {
+    func enqueue(value: Int) throws {
         queue.enqueue(value)
     }
 
     @Command(weight: 2)
-    mutating func dequeue() throws {
+    func dequeue() throws {
         guard !queue.isEmpty else { throw skip() }
         _ = queue.dequeue()
     }

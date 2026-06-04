@@ -3,7 +3,7 @@
 // The macro synthesizes conformance — users never implement this directly.
 import Foundation
 
-/// Shared requirements for both synchronous and asynchronous contract specifications.
+/// Shared requirements for both synchronous and asynchronous contracts.
 ///
 /// Users never conform to this protocol directly — use ``ContractSpec`` or ``AsyncContractSpec`` instead, both synthesized by the `@Contract` macro.
 public protocol ContractSpecBase {
@@ -21,6 +21,9 @@ public protocol ContractSpecBase {
     /// The macro synthesizes this as a ``Gen.pick`` over the command cases, each carrying its argument generators.
     static var commandGenerator: ReflectiveGenerator<Command> { get }
 
+    /// The concurrency model this contract uses, synthesized by the `@Contract` macro.
+    static var concurrencyModel: ConcurrencyModel { get }
+
     /// The system under test instance, for typed access in results and failure reports.
     var systemUnderTest: SystemUnderTest { get }
 
@@ -31,37 +34,42 @@ public protocol ContractSpecBase {
     var sutDescription: String { get }
 }
 
-/// A contract specification that drives sequential, stateful property tests.
+public extension ContractSpecBase {
+    /// Default concurrency model for contracts that do not declare one explicitly.
+    static var concurrencyModel: ConcurrencyModel {
+        .tasks
+    }
+}
+
+/// Drives sequential, stateful contract property tests.
 ///
-/// Users annotate a struct with `@Contract` rather than conforming manually. The macro synthesizes the `Command` enum, the ``commandGenerator`` property, and the `run(_:)` method from the `@Command`-annotated methods on the struct.
+/// Users annotate a `final class` with `@Contract(.tasks)` rather than conforming manually. The macro synthesizes the `Command` enum, the ``commandGenerator`` property, and the `run(_:)` method from the `@Command`-annotated methods on the class.
 ///
 /// ## How It Works
 ///
-/// Each test iteration generates a sequence of commands and executes them against the system under test (the property marked `@SystemUnderTest`). After every command, `@Invariant` methods are checked. Contracts can optionally include `@Model` properties as a reference oracle, or rely solely on invariants and ``check(_:_:)`` postconditions.
-///
-/// ## Example
+/// Each test iteration generates a sequence of commands and executes them against the system under test (the property marked `@SystemUnderTest`). After every command, `@Invariant` methods are checked. Contracts can optionally include `@Model` properties as a reference model, or rely solely on invariants and ``check(_:_:)`` postconditions.
 ///
 /// ```swift
-/// @Contract
-/// struct BoundedQueueSpec {
+/// @Contract(.tasks)
+/// final class BoundedQueueContract {
 ///     @Model var contents: [Int] = []
 ///     @SystemUnderTest
 ///     var queue = BoundedQueue<Int>(capacity: 4)
 ///
 ///     @Command(weight: 3, Gen.int(in: 0...99))
-///     mutating func enqueue(value: Int) throws {
+///     func enqueue(value: Int) throws {
 ///         guard contents.count < 4 else { throw skip() }
 ///         queue.enqueue(value)
 ///         contents.append(value)
 ///     }
 /// }
 /// ```
-public protocol ContractSpec: ContractSpecBase {
+public protocol ContractSpec: ContractSpecBase, AnyObject {
     /// Executes a command against the model and SUT, applying preconditions, postconditions, and invariants.
     ///
     /// - Parameter command: The command to execute.
     /// - Throws: ``ContractSkip`` if a precondition fails, ``ContractCheckFailure`` if a postcondition or invariant fails.
-    mutating func run(_ command: Command) throws
+    func run(_ command: Command) throws
 
     /// Checks all `@Invariant`-annotated methods. Called after every command execution.
     ///
@@ -70,12 +78,12 @@ public protocol ContractSpec: ContractSpecBase {
 }
 
 extension ContractSpec {
-    /// Returns a closure that replays a command sequence on a fresh spec instance and collects the indices of commands that threw ``ContractSkip``.
+    /// Returns a closure that replays a command sequence on a fresh contract instance and collects the indices of commands that threw ``ContractSkip``.
     ///
     /// The returned closure is used by the SCA coverage phase and skip-pruning pass to identify commands whose preconditions are not met for a given sequence, so those elements can be removed from the choice tree before reduction.
     static var skipIdentifier: @Sendable ([Command]) -> Set<Int> {
         { commands in
-            var spec = Self()
+            let spec = Self()
             var skips: Set<Int> = []
             for (index, command) in commands.enumerated() {
                 do {
@@ -92,11 +100,11 @@ extension ContractSpec {
     }
 }
 
-/// An asynchronous contract specification for testing async SUTs (actors, databases, network services).
+/// Drives asynchronous contract property tests for async SUTs (actors, databases, network services).
 ///
-/// Async contracts are class-based reference types. This is required because concurrent testing executes commands from two tasks against the same spec instance — the custom executor controls interleaving at `await` boundaries to deterministically expose data races and reentrancy bugs.
+/// Async contracts are reference types. This is required because concurrent testing executes commands from two tasks against the same contract instance — the custom executor controls interleaving at `await` boundaries to deterministically expose reentrancy bugs.
 ///
-/// The `@Contract` macro emits this conformance automatically when any `@Command` or `@Invariant` method is `async`.
+/// The `@Contract(.tasks)` macro emits this conformance automatically when any `@Command` or `@Invariant` method is `async`.
 ///
 /// ## Skip Identification
 ///
@@ -116,9 +124,9 @@ public protocol AsyncContractSpec: ContractSpecBase, AnyObject {
 
 // MARK: - Concurrent Contract Specs (GCD Backend)
 
-/// A synchronous contract specification with an explicit oracle for GCD-based concurrent testing.
+/// Drives synchronous GCD-based concurrent contract tests with an explicit oracle.
 ///
-/// Extends ``ContractSpec`` with an ``oracleCheck(_:)`` method that compares the concurrent SUT state against a sequentially-replayed reference. The `@ConcurrentContract` macro synthesizes this conformance when all commands are synchronous.
+/// Extends ``ContractSpec`` with an ``oracleCheck(_:)`` method that compares the concurrent SUT state against a sequentially-replayed reference. The `@Contract(.threads)` macro synthesizes this conformance when all commands are synchronous.
 ///
 /// The oracle defines what "equivalent" means for the SUT — element equality for a queue, count equality for a counter, set membership for a cache. The GCD backend calls it after concurrent execution to determine whether the observed behavior is consistent with sequential behavior.
 public protocol ConcurrentContractSpec: ContractSpecBase, AnyObject {
@@ -140,9 +148,9 @@ public protocol ConcurrentContractSpec: ContractSpecBase, AnyObject {
     func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool
 }
 
-/// An asynchronous contract specification with an explicit oracle for GCD-based concurrent testing.
+/// Drives asynchronous GCD-based concurrent contract tests with an explicit oracle.
 ///
-/// Extends ``AsyncContractSpec`` with an ``oracleCheck(_:)`` method. The `@ConcurrentContract` macro synthesizes this conformance when any command or invariant is `async`.
+/// Extends ``AsyncContractSpec`` with an ``oracleCheck(_:)`` method. The `@Contract(.threads)` macro synthesizes this conformance when any command or invariant is `async`.
 public protocol AsyncConcurrentContractSpec: ContractSpecBase, AnyObject {
     /// Executes a command against the model and SUT asynchronously.
     ///
@@ -165,7 +173,11 @@ public protocol AsyncConcurrentContractSpec: ContractSpecBase, AnyObject {
 }
 
 extension ConcurrentContractSpec {
-    /// Returns a closure that replays a command sequence on a fresh spec instance and collects the indices of commands that threw ``ContractSkip``.
+    public static var concurrencyModel: ConcurrencyModel {
+        .threads
+    }
+
+    /// Returns a closure that replays a command sequence on a fresh contract instance and collects the indices of commands that threw ``ContractSkip``.
     static var skipIdentifier: @Sendable ([Command]) -> Set<Int> {
         { commands in
             let spec = Self()
@@ -186,7 +198,11 @@ extension ConcurrentContractSpec {
 }
 
 extension AsyncConcurrentContractSpec {
-    /// Returns a closure that replays a command sequence on a fresh spec instance and collects the indices of commands that threw ``ContractSkip``.
+    public static var concurrencyModel: ConcurrencyModel {
+        .threads
+    }
+
+    /// Returns a closure that replays a command sequence on a fresh contract instance and collects the indices of commands that threw ``ContractSkip``.
     ///
     /// Bridges async execution via ``__ExhaustRuntime/blockingAwait(_:)``. The returned closure is safe to call from a GCD thread.
     static func skipIdentifier(

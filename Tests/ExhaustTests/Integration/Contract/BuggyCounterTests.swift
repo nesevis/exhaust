@@ -103,8 +103,8 @@ struct SCAReductionCoverageTests {
 
 // MARK: - Contract
 
-@Contract
-struct BuggyCounterSpec {
+@Contract(.tasks)
+final class BuggyCounterSpec {
     @Model var expectedValue: Int = 0
     @SystemUnderTest var counter = BuggyCounter(capacity: 3)
 
@@ -114,14 +114,14 @@ struct BuggyCounterSpec {
     }
 
     @Command(weight: 3)
-    mutating func increment() throws {
+    func increment() throws {
         // Model uses capacity 5, SUT uses capacity 3 — diverges after 3 increments
         expectedValue = (expectedValue + 1) % 5
         counter.increment()
     }
 
     @Command(weight: 1)
-    mutating func reset() throws {
+    func reset() throws {
         expectedValue = 0
         counter.reset()
     }
@@ -146,8 +146,8 @@ struct BuggyCounter {
 // MARK: - Pairwise Bug Contract
 
 /// A contract where any sequence containing both `setA` and `setB` triggers the invariant failure. Pairwise SCA at t=2 is guaranteed to produce such a row.
-@Contract
-struct PairwiseBugSpec {
+@Contract(.tasks)
+final class PairwiseBugSpec {
     @Model var modelState: Int = 0
     @SystemUnderTest var sut = PairwiseBugSUT()
 
@@ -157,17 +157,17 @@ struct PairwiseBugSpec {
     }
 
     @Command
-    mutating func setA() throws {
+    func setA() throws {
         sut.flagA = true
     }
 
     @Command
-    mutating func setB() throws {
+    func setB() throws {
         sut.flagB = true
     }
 
     @Command
-    mutating func noop() throws {}
+    func noop() throws {}
 }
 
 struct PairwiseBugSUT {

@@ -54,8 +54,8 @@ struct CircularQueueTests {
 
 // MARK: - Contract
 
-@Contract
-struct CircularQueueContract {
+@Contract(.tasks)
+final class CircularQueueContract {
     @Model var expected: [Int] = []
     @SystemUnderTest var queue = BuggyCircularQueue(capacity: 6)
 
@@ -65,14 +65,14 @@ struct CircularQueueContract {
     }
 
     @Command(weight: 3, #gen(.int(in: 0 ... 20)))
-    mutating func put(value: Int) throws {
+    func put(value: Int) throws {
         guard queue.count < queue.capacity else { throw skip() }
         expected.append(value)
         queue.put(value)
     }
 
     @Command(weight: 3)
-    mutating func get() throws {
+    func get() throws {
         guard !queue.isEmpty else { throw skip() }
         let expectedValue = expected.removeFirst()
         let actual = queue.get()
@@ -80,7 +80,7 @@ struct CircularQueueContract {
     }
 
     @Command(weight: 1)
-    mutating func size() throws {
+    func size() throws {
         try check(queue.size == expected.count, "size must match model element count")
     }
 }

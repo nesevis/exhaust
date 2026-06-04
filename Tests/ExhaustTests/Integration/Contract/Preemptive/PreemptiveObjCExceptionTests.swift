@@ -26,7 +26,7 @@ struct PreemptiveObjCExceptionTests {
 
 // MARK: - Spec
 
-@ConcurrentContract
+@Contract(.threads)
 final class ThrowingObjCSpec {
     @SystemUnderTest
     var store: ObjCThrowingStore = .init()

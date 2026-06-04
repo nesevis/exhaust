@@ -9,12 +9,12 @@ import IssueReporting
 // MARK: - Entry Point
 
 public extension __ExhaustRuntime {
-    /// Runs a contract property test for the given specification type.
+    /// Runs a contract property test for the given contract type.
     ///
     /// Generates command sequences using the spec's synthesized ``commandGenerator``, executes each sequence against a fresh instance, and verifies that invariants hold after every step. When a violation is found, the failing command sequence is reduced to a minimal counterexample.
     ///
     /// - Parameters:
-    ///   - specType: The `@Contract`-annotated specification type.
+    ///   - specType: The `@Contract`-annotated contract type.
     ///   - settings: Configuration options controlling iteration count, coverage, reduction, and command limits.
     @discardableResult
     static func __runContract<Spec: ContractSpec>(
@@ -60,7 +60,7 @@ public extension __ExhaustRuntime {
 
             // The property: execute the command sequence against a fresh spec and check for failures.
             let property: @Sendable ([Spec.Command]) -> Bool = { commands in
-                var spec = Spec()
+                let spec = Spec()
                 for command in commands {
                     do {
                         try spec.run(command)
@@ -386,7 +386,7 @@ private extension __ExhaustRuntime {
         _ commands: [Spec.Command],
         specType _: Spec.Type
     ) -> ([TraceStep], Spec) {
-        var spec = Spec()
+        let spec = Spec()
         let (trace, _) = buildSequentialTrace(
             commands,
             run: { try spec.run($0) },

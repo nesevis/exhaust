@@ -90,7 +90,7 @@ struct PreemptiveNonAtomicCounterTests {
 
 // MARK: - Spec
 
-@ConcurrentContract
+@Contract(.threads)
 final class PreemptiveCounterSpec {
     @SystemUnderTest
     var counter: RacyCounter = .init()

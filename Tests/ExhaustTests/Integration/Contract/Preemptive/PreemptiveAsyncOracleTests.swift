@@ -41,7 +41,7 @@ struct PreemptiveAsyncOracleTests {
 
 // MARK: - Specs
 
-@ConcurrentContract
+@Contract(.threads)
 final class AsyncOracleRacyCounterSpec {
     @SystemUnderTest
     var counter: AsyncRacyReadCounter = .init()
@@ -64,7 +64,7 @@ final class AsyncOracleRacyCounterSpec {
     }
 }
 
-@ConcurrentContract
+@Contract(.threads)
 final class AsyncOracleSafeCounterSpec {
     @SystemUnderTest
     var counter: AsyncSafeCounter = .init()

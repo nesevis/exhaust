@@ -67,7 +67,7 @@ struct DetectionBoundaryTests {
 
 // MARK: - Spec: Silent race (no suspension point at the race)
 
-@Contract
+@Contract(.tasks)
 final class SilentRaceSpec {
     @Model
     var expected: Int = 0
@@ -88,7 +88,7 @@ final class SilentRaceSpec {
 
 // MARK: - Spec: Exposed race (yield at the race point)
 
-@Contract
+@Contract(.tasks)
 final class ExposedRaceSpec {
     @Model
     var expected: Int = 0
@@ -109,7 +109,7 @@ final class ExposedRaceSpec {
 
 // MARK: - Spec: Three-way race (requires 3 lanes)
 
-@Contract
+@Contract(.tasks)
 final class ThreeWayRaceSpec {
     @Model
     var expected: Int = 0

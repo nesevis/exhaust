@@ -59,7 +59,7 @@ struct PreemptiveAsyncFacadeTests {
 
 // MARK: - Spec
 
-@ConcurrentContract
+@Contract(.threads)
 final class AsyncRacyCounterSpec {
     @SystemUnderTest
     var counter: AsyncRacyCounter = .init()
