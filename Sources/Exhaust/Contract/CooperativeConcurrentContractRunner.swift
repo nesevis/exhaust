@@ -541,33 +541,27 @@ extension __ExhaustRuntime {
             logEvent: skipPruningLogEvent
         )
 
-        guard let reduceResult = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: sequenceGen,
+        let (finalInput, stats, reduced) = reduceContractCounterexample(
+            value: reduceValue,
             tree: reduceTree,
-            output: reduceValue,
+            generator: sequenceGen,
             config: reductionConfig,
             property: property
-        ) else {
-            return ConcurrentReduction(finalInput: reduceValue, stats: nil, timedOut: false)
-        }
-
-        let finalInput: [(ScheduleMarker, Command)]
-        if case let .reduced(_, reduced) = reduceResult.outcome {
+        )
+        if reduced {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "concurrent_reduced",
-                metadata: ["from": "\(input.count)", "to": "\(reduced.count)"]
+                metadata: ["from": "\(input.count)", "to": "\(finalInput.count)"]
             )
-            finalInput = reduced
         } else {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "concurrent_reduction_no_improvement"
             )
-            finalInput = reduceValue
         }
 
-        return ConcurrentReduction(finalInput: finalInput, stats: reduceResult.stats, timedOut: false)
+        return ConcurrentReduction(finalInput: finalInput, stats: stats, timedOut: false)
     }
 }
 
