@@ -96,6 +96,8 @@ public protocol ContractSpec: ContractSpecBase, AnyObject {
 
 extension ContractSpec {
     /// Default oracle that traps. Overridden by the `@Contract(.threads)` macro's synthesized `oracleCheck`.
+    ///
+    /// Reaching this trap would be a dispatch bug, not user error. The invariant that keeps it unreachable lives in ``__ExhaustRuntime/__runContractDispatch(_:settings:fileID:filePath:line:column:)``: only `.threads` specs are routed to the preemptive runner that calls `oracleCheck`, and only `@Contract(.threads)` synthesizes a real implementation. `.sequential` and `.tasks` never call it. The safety rests on that dispatch, not on the type system — the unified protocol cannot express "oracle only when `.threads`".
     public func oracleCheck(_: SystemUnderTest) -> Bool {
         fatalError("oracleCheck is only called for .threads contracts")
     }
@@ -155,6 +157,8 @@ public protocol AsyncContractSpec: ContractSpecBase, AnyObject {
 
 public extension AsyncContractSpec {
     /// Default oracle that traps. Overridden by the `@Contract(.threads)` macro's synthesized `oracleCheck`.
+    ///
+    /// Reaching this trap would be a dispatch bug, not user error. The invariant that keeps it unreachable lives in ``__ExhaustRuntime/__runContractDispatchAsync(_:settings:fileID:filePath:line:column:)``: only `.threads` specs are routed to the preemptive runner that calls `oracleCheck`, and only `@Contract(.threads)` synthesizes a real implementation. `.sequential` and `.tasks` never call it. The safety rests on that dispatch, not on the type system — the unified protocol cannot express "oracle only when `.threads`".
     func oracleCheck(_: SystemUnderTest) async -> Bool {
         fatalError("oracleCheck is only called for .threads contracts")
     }

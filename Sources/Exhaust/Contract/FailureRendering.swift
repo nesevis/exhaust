@@ -1,4 +1,7 @@
-// Formats failure reports, timeout diagnostics, and command partitions for the concurrent contract runner. FailureContext is populated incrementally by the runner and passed to renderFailure for final formatting.
+// Formats failure reports for both the sequential and concurrent contract runners.
+//
+// The concurrent path (FailureContext, renderFailure(_:trace:context:), renderTimeout, renderCommandPartition) is populated incrementally by the runner and passed to renderFailure for final formatting. The sequential path (renderFailure(_:failureInfo:modelDescription:includeDiff:), ContractFailureInfo) renders a re-executed trace from a discovered command sequence.
+import CustomDump
 import ExhaustCore
 
 extension __ExhaustRuntime {
@@ -125,5 +128,70 @@ extension __ExhaustRuntime {
                 lines.append("")
             }
         }
+    }
+}
+
+// MARK: - Sequential Failure Rendering
+
+extension __ExhaustRuntime {
+    /// Formats a ``ContractResult`` and its associated failure metadata into a human-readable failure message.
+    static func renderFailure<Spec: ContractSpecBase>(
+        _ result: ContractResult<Spec>,
+        failureInfo: ContractFailureInfo<Spec.Command>,
+        modelDescription: String,
+        includeDiff: Bool = false
+    ) -> String {
+        var lines: [String] = []
+        lines.append("Contract failure (found via \(failureInfo.discoveryMethod))")
+        lines.append("")
+
+        // Show sequence header with reduction info when available.
+        if let original = failureInfo.originalCommands, original.count > result.commands.count {
+            let header =
+                "Command sequence (\(result.commands.count) steps, reduced from \(original.count)):"
+            lines.append(header)
+        } else {
+            lines.append("Command sequence (\(result.commands.count) steps):")
+        }
+
+        for step in result.trace {
+            lines.append("  \(step)")
+        }
+
+        if includeDiff, let original = failureInfo.originalCommands, original.count > result.commands.count {
+            let originalDescriptions = original.map { "\($0)" }
+            let reducedDescriptions = result.commands.map { "\($0)" }
+            if let reductionDiff = diff(originalDescriptions, reducedDescriptions) {
+                lines.append("")
+                lines.append("Reduction diff:")
+                for line in reductionDiff.split(separator: "\n", omittingEmptySubsequences: false) {
+                    lines.append("  \(line)")
+                }
+            }
+        }
+
+        lines.append("")
+        lines.append("Model: \(modelDescription)")
+        lines.append("SUT:   \(result.systemUnderTest)")
+
+        if let seed = result.seed {
+            lines.append("")
+            let encodedSeed = result.replaySeed ?? CrockfordBase32.encode(seed)
+            lines.append("Reproduce: .replay(\"\(encodedSeed)\")")
+        }
+
+        return lines.joined(separator: "\n")
+    }
+}
+
+// MARK: - Sequential Failure Metadata
+
+extension __ExhaustRuntime {
+    /// Captures the original command sequence and the discovery method for a contract failure, used by ``renderFailure(_:failureInfo:modelDescription:)`` to build failure reports.
+    struct ContractFailureInfo<Command> {
+        /// The original failing command sequence before reduction, if available.
+        var originalCommands: [Command]?
+        /// How the failure was discovered.
+        var discoveryMethod: ContractDiscoveryMethod
     }
 }

@@ -248,21 +248,21 @@ extension __ExhaustRuntime {
                 )
 
                 if config.suppressIssueReporting == false {
-                    var failureContext = FailureContext()
-                    failureContext.isPreemptive = true
-                    failureContext.specName = "\(Spec.self)"
-                    failureContext.discoveryMethod = .coverage
-                    failureContext.iteration = Int(scaResult.iteration)
-                    failureContext.budget = coverageBudget
-                    failureContext.sequencesTested = invocationCounter.value
-                    failureContext.reductionInvocations = scaResult.reductionInvocations
-                    failureContext.originalCount = scaResult.originalCount
-                    failureContext.replaySeed = CrockfordBase32.encodeCoverageRow(Int(scaResult.iteration) - 1)
-                    // When set, the renderer emits the timeout diagnostic and ignores the expected-state line below.
-                    failureContext.timedOut = scaResult.timedOut
-                    failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
-                    let message = renderFailure(scaResult.finalInput, trace: result.trace, context: failureContext)
-                    deferredIssues.append(message)
+                    deferredIssues.append(makePreemptiveFailureMessage(
+                        scaResult.finalInput,
+                        trace: result.trace,
+                        specName: "\(Spec.self)",
+                        discoveryMethod: .coverage,
+                        seed: nil,
+                        iteration: Int(scaResult.iteration),
+                        budget: coverageBudget,
+                        sequencesTested: invocationCounter.value,
+                        reductionInvocations: scaResult.reductionInvocations,
+                        originalCount: scaResult.originalCount,
+                        replaySeed: scaReplaySeed,
+                        timedOut: scaResult.timedOut,
+                        oracleState: result.systemUnderTest as Any
+                    ))
                 }
 
                 finalizeReport()
@@ -321,22 +321,21 @@ extension __ExhaustRuntime {
                     report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionInvocations)
 
                     if config.suppressIssueReporting == false {
-                        var failureContext = FailureContext()
-                        failureContext.isPreemptive = true
-                        failureContext.specName = "\(Spec.self)"
-                        failureContext.discoveryMethod = discoveryMethod
-                        failureContext.seed = actualSeed
-                        failureContext.iteration = absoluteIteration
-                        failureContext.budget = samplingBudget
-                        failureContext.sequencesTested = samplingIteration
-                        failureContext.reductionInvocations = reductionInvocations
-                        failureContext.originalCount = taggedCommands.count
-                        failureContext.replaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
-                        // When set, the renderer emits the timeout diagnostic and ignores the expected-state line below.
-                        failureContext.timedOut = outcome.timedOut
-                        failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(result.systemUnderTest)"
-                        let message = renderFailure(reduced, trace: result.trace, context: failureContext)
-                        deferredIssues.append(message)
+                        deferredIssues.append(makePreemptiveFailureMessage(
+                            reduced,
+                            trace: result.trace,
+                            specName: "\(Spec.self)",
+                            discoveryMethod: discoveryMethod,
+                            seed: actualSeed,
+                            iteration: absoluteIteration,
+                            budget: samplingBudget,
+                            sequencesTested: samplingIteration,
+                            reductionInvocations: reductionInvocations,
+                            originalCount: taggedCommands.count,
+                            replaySeed: samplingReplaySeed,
+                            timedOut: outcome.timedOut,
+                            oracleState: result.systemUnderTest as Any
+                        ))
                     }
 
                     finalizeReport()
@@ -350,5 +349,40 @@ extension __ExhaustRuntime {
         report.setInvocations(coverage: coverageInvocations, randomSampling: 0, reduction: 0)
         finalizeReport()
         return (nil, deferredIssues, report)
+    }
+
+    /// Assembles the rendered failure message shared by the coverage and sampling phases.
+    ///
+    /// The two phases differ only in their discovery metadata (seed, iteration, budget, counts, replay seed). Everything else — the preemptive flag, the timeout-diagnostic gate, and the expected-state line built from the sequential oracle replay — is identical, so it lives here rather than being spelled out at each call site.
+    private static func makePreemptiveFailureMessage(
+        _ input: [(ScheduleMarker, some CustomStringConvertible)],
+        trace: [TraceStep],
+        specName: String,
+        discoveryMethod: ContractDiscoveryMethod,
+        seed: UInt64?,
+        iteration: Int,
+        budget: UInt64,
+        sequencesTested: Int,
+        reductionInvocations: Int,
+        originalCount: Int,
+        replaySeed: String,
+        timedOut: Bool,
+        oracleState: Any
+    ) -> String {
+        var failureContext = FailureContext()
+        failureContext.isPreemptive = true
+        failureContext.specName = specName
+        failureContext.discoveryMethod = discoveryMethod
+        failureContext.seed = seed
+        failureContext.iteration = iteration
+        failureContext.budget = budget
+        failureContext.sequencesTested = sequencesTested
+        failureContext.reductionInvocations = reductionInvocations
+        failureContext.originalCount = originalCount
+        failureContext.replaySeed = replaySeed
+        // When set, the renderer emits the timeout diagnostic and ignores the expected-state line below.
+        failureContext.timedOut = timedOut
+        failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(oracleState)"
+        return renderFailure(input, trace: trace, context: failureContext)
     }
 }
