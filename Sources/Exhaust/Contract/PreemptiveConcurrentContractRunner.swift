@@ -383,7 +383,7 @@ private struct PreemptiveChecker<Spec: ContractSpec> {
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// `passed` is `false` when a command throws, an invariant fails, or the oracle detects divergence from sequential behavior. `timedOut` is `true` when the concurrent lanes did not finish within ``idleTimeoutMilliseconds`` — surfaced separately so the caller can skip reduction (every probe would wait out the bound) and report a hang rather than a deterministic failure.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> (passed: Bool, timedOut: Bool) {
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
@@ -392,16 +392,16 @@ private struct PreemptiveChecker<Spec: ContractSpec> {
 
         for (_, command) in prefixCommands {
             guard runCommandCatchingObjC(command, on: concurrentSpec) else {
-                return (passed: false, timedOut: false)
+                return Preemptive.Outcome(passed: false, timedOut: false)
             }
             guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return (passed: false, timedOut: false)
+                return Preemptive.Outcome(passed: false, timedOut: false)
             }
         }
 
         for (_, command) in concurrentCommands {
             guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return (passed: false, timedOut: false)
+                return Preemptive.Outcome(passed: false, timedOut: false)
             }
         }
 
@@ -436,23 +436,23 @@ private struct PreemptiveChecker<Spec: ContractSpec> {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
                 // A lane is wedged (a synchronous deadlock in the SUT). Stop the lanes we can and report a hang rather than blocking the test process forever. Orphaned lanes blocked on the deadlock cannot be reclaimed.
                 commandFailed.value = true
-                return (passed: false, timedOut: true)
+                return Preemptive.Outcome(passed: false, timedOut: true)
             }
         } else {
             group.wait()
         }
 
         if caughtException.value != nil || commandFailed.value {
-            return (passed: false, timedOut: false)
+            return Preemptive.Outcome(passed: false, timedOut: false)
         }
 
         do {
             try concurrentSpec.checkInvariants()
         } catch {
-            return (passed: false, timedOut: false)
+            return Preemptive.Outcome(passed: false, timedOut: false)
         }
 
-        return (passed: concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest), timedOut: false)
+        return Preemptive.Outcome(passed: concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest), timedOut: false)
     }
 
     /// Runs a command on a spec with ObjC exception safety, treating ``ContractSkip`` as a pass.
@@ -474,94 +474,19 @@ private struct PreemptiveChecker<Spec: ContractSpec> {
         return true
     }
 
-    struct ReductionResult {
-        let output: [(ScheduleMarker, Spec.Command)]
-        let propertyInvocations: Int
-        let stats: ReductionStats
-    }
-
-    /// Reduces a counterexample in three passes, each targeting a different encoder set.
-    ///
-    /// The three-pass structure is deliberate: PCCR evaluation is non-deterministic (GCD thread preemption), so each probe requires multiple repetitions to confirm. Phased reduction ensures the most impactful transformations run first before budget is spent on fine-tuning.
-    ///
-    /// **Pass 1 — Lane Collapse.** Drives lane markers to zero, moving commands into the sequential prefix. Prefix commands execute deterministically (no scheduling noise), so a longer prefix produces counterexamples that are easier to reproduce and reason about. Running lane collapse first also reduces the repetition cost of later passes — fewer concurrent commands means less non-deterministic scheduling per evaluation. (The cooperative runner skips this pre-pass because its schedule is choice-encoded and fully deterministic — the unified pass finds the minimal counterexample without prefix bias.)
-    ///
-    /// **Pass 2 — Structural.** Deletion, migration, and substitution. Removes unnecessary commands and simplifies arguments, operating on the already-collapsed trace so deletions target only commands genuinely needed for the failure.
-    ///
-    /// **Pass 3 — Value Minimization.** All remaining encoders (value minimization, reordering, and so on). Simplifies command arguments and values toward their semantic simplest form, improving counterexample readability. Runs with a tighter budget (1 stall, 5s) since the structural shape is already minimal.
+    /// Three-pass reduction. Delegates to the shared ``Preemptive/reduce(generator:tree:output:repetitions:execute:)``.
     func reduce(
         generator: Generator<[(ScheduleMarker, Spec.Command)]>,
         tree: ChoiceTree,
         output: [(ScheduleMarker, Spec.Command)],
         repetitions: Int
-    ) -> ReductionResult {
-        var propertyInvocations = 0
-        let property: ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
-            for _ in 0 ..< repetitions {
-                propertyInvocations += 1
-                if execute(taggedCommands).passed == false {
-                    return false
-                }
-            }
-            return true
-        }
-
-        let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
-        let valueMinimization = Set(EncoderName.allCases).subtracting(structural).subtracting([.laneCollapse])
-
-        var currentOutput = output
-        var currentTree = tree
-        var aggregateStats = ReductionStats()
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 10_000_000_000, enabledEncoders: [.laneCollapse]),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(sequence, reduced) = result.outcome {
-                currentOutput = reduced
-                if case let .success(_, freshTree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
-                ) {
-                    currentTree = freshTree
-                }
-            }
-        }
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 30_000_000_000, enabledEncoders: structural),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(sequence, reduced) = result.outcome {
-                currentOutput = reduced
-                if case let .success(_, freshTree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
-                ) {
-                    currentTree = freshTree
-                }
-            }
-        }
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 1, wallClockDeadlineNanoseconds: 5_000_000_000, enabledEncoders: valueMinimization),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(_, reduced) = result.outcome {
-                currentOutput = reduced
-            }
-        }
-
-        return ReductionResult(output: currentOutput, propertyInvocations: propertyInvocations, stats: aggregateStats)
+    ) -> Preemptive.ReductionResult<Spec.Command> {
+        Preemptive.reduce(
+            generator: generator,
+            tree: tree,
+            output: output,
+            repetitions: repetitions,
+            execute: execute
+        )
     }
 }

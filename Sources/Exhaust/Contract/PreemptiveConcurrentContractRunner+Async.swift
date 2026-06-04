@@ -344,18 +344,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec> {
         return result
     }
 
-    /// Outcome of one concurrent execution.
-    ///
-    /// `timedOut` distinguishes a drain-loop idle bailout (a hang) from a genuine pass or property failure, so the runner can report the hang as a timeout rather than dressing it up as a confirmed race. A timed-out run always has `passed == false`.
-    struct ExecutionOutcome {
-        let passed: Bool
-        let timedOut: Bool
-    }
-
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// Prefix and sequential commands are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> ExecutionOutcome {
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
@@ -367,7 +359,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec> {
             runSequentially(prefixCommands.map(\.1), on: sequentialSpec),
             runSequentially(concurrentCommands.map(\.1), on: sequentialSpec),
         ] where run.succeeded == false {
-            return ExecutionOutcome(passed: false, timedOut: run.timedOut)
+            return Preemptive.Outcome(passed: false, timedOut: run.timedOut)
         }
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
@@ -408,7 +400,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec> {
         group.wait()
 
         if caughtException.value != nil || commandFailed.value {
-            return ExecutionOutcome(passed: false, timedOut: timedOut.value)
+            return Preemptive.Outcome(passed: false, timedOut: timedOut.value)
         }
 
         nonisolated(unsafe) let invariantSpec = concurrentSpec
@@ -421,11 +413,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec> {
                 return false
             }
         }) else {
-            return ExecutionOutcome(passed: false, timedOut: true)
+            return Preemptive.Outcome(passed: false, timedOut: true)
         }
 
         if invariantsPassed == false {
-            return ExecutionOutcome(passed: false, timedOut: false)
+            return Preemptive.Outcome(passed: false, timedOut: false)
         }
 
         nonisolated(unsafe) let oracleSpec = concurrentSpec
@@ -434,14 +426,14 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec> {
         guard let oraclePassed = awaitOrTimeout("oracle", {
             await oracleSpec.oracleCheck(sequentialResult)
         }) else {
-            return ExecutionOutcome(passed: false, timedOut: true)
+            return Preemptive.Outcome(passed: false, timedOut: true)
         }
-        return ExecutionOutcome(passed: oraclePassed, timedOut: false)
+        return Preemptive.Outcome(passed: oraclePassed, timedOut: false)
     }
 
     /// Outcome of a sequential command run.
     ///
-    /// `timedOut` distinguishes a drain-loop idle bailout from a command that threw or trapped, so a hang in the prefix or sequential reference replay propagates to ``ExecutionOutcome/timedOut`` rather than masquerading as a deterministic failure.
+    /// `timedOut` distinguishes a drain-loop idle bailout from a command that threw or trapped, so a hang in the prefix or sequential reference replay propagates to ``Preemptive/Outcome/timedOut`` rather than masquerading as a deterministic failure.
     struct SequentialOutcome {
         let succeeded: Bool
         let timedOut: Bool
@@ -477,86 +469,19 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec> {
         return SequentialOutcome(succeeded: exception == nil && failed.value == false, timedOut: timedOut.value)
     }
 
-    struct ReductionResult {
-        let output: [(ScheduleMarker, Spec.Command)]
-        let propertyInvocations: Int
-        let stats: ReductionStats
-    }
-
-    /// Three-pass reduction (lane collapse, structural, value minimization). See ``PreemptiveChecker/reduce(generator:tree:output:repetitions:)`` for rationale.
+    /// Three-pass reduction. Delegates to the shared ``Preemptive/reduce(generator:tree:output:repetitions:execute:)``.
     func reduce(
         generator: Generator<[(ScheduleMarker, Spec.Command)]>,
         tree: ChoiceTree,
         output: [(ScheduleMarker, Spec.Command)],
         repetitions: Int
-    ) -> ReductionResult {
-        var propertyInvocations = 0
-        let property: ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
-            for _ in 0 ..< repetitions {
-                propertyInvocations += 1
-                if execute(taggedCommands).passed == false {
-                    return false
-                }
-            }
-            return true
-        }
-
-        let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
-        let valueMinimization = Set(EncoderName.allCases).subtracting(structural).subtracting([.laneCollapse])
-
-        var currentOutput = output
-        var currentTree = tree
-        var aggregateStats = ReductionStats()
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 10_000_000_000, enabledEncoders: [.laneCollapse]),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(sequence, reduced) = result.outcome {
-                currentOutput = reduced
-                if case let .success(_, freshTree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
-                ) {
-                    currentTree = freshTree
-                }
-            }
-        }
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 30_000_000_000, enabledEncoders: structural),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(sequence, reduced) = result.outcome {
-                currentOutput = reduced
-                if case let .success(_, freshTree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
-                ) {
-                    currentTree = freshTree
-                }
-            }
-        }
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 1, wallClockDeadlineNanoseconds: 5_000_000_000, enabledEncoders: valueMinimization),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(_, reduced) = result.outcome {
-                currentOutput = reduced
-            }
-        }
-
-        return ReductionResult(output: currentOutput, propertyInvocations: propertyInvocations, stats: aggregateStats)
+    ) -> Preemptive.ReductionResult<Spec.Command> {
+        Preemptive.reduce(
+            generator: generator,
+            tree: tree,
+            output: output,
+            repetitions: repetitions,
+            execute: execute
+        )
     }
 }
