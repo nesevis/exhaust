@@ -30,7 +30,7 @@ await #exhaust(gen) { value in
 }
 ```
 
-Exhaust decides which path to use based on the closure body: single-expression closures that return `Bool` use the predicate path, everything else uses the assertion path.
+Exhaust decides which path to use based on the closure body: single-expression closures that return `Bool` use the predicate path. Everything else uses the assertion path.
 
 ## Using `#expect` and `#require`
 
