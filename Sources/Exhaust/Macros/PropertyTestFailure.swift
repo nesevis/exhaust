@@ -48,9 +48,8 @@ struct PropertyTestFailure<Output> {
 
         var lines: [String] = []
 
-        if let seed {
-            let encodedSeed = CrockfordBase32.encode(seed)
-            lines.append("Property failed (iteration \(iteration)/\(phaseBudget), seed \(encodedSeed))")
+        if let replaySeed = encodedReplaySeed {
+            lines.append("Property failed (iteration \(iteration)/\(phaseBudget), seed \(replaySeed))")
         } else {
             lines.append("Property failed (iteration \(iteration)/\(phaseBudget))")
         }
