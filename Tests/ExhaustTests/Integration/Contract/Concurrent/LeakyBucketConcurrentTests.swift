@@ -66,7 +66,6 @@ struct LeakyBucketConcurrentTests {
 
 @Contract(.tasks)
 final class LeakyBucketSpec {
-    @Model
     var expectedTokens: Int = 0
     @SystemUnderTest
     var bucket: LeakyBucket = .init(capacity: 5)

@@ -9,7 +9,7 @@
 /// ```
 ///
 /// - `.sequential` runs commands one at a time and checks `@Invariant` after each step. The right choice for testing logic without concurrency. Required for `actor` contracts.
-/// - `.tasks` runs commands concurrently with deterministic interleaving at every `await` boundary. The schedule is reproducible. Checks use `@Invariant` (and optionally `@Model`).
+/// - `.tasks` runs commands concurrently with deterministic interleaving at every `await` boundary. The schedule is reproducible. Checks use `@Invariant`.
 /// - `.threads` dispatches commands to real OS threads via GCD. The schedule is non-deterministic; bug detection relies on repetition. Checks use `@Oracle`, which compares the concurrent end state against a sequential replay.
 public enum ExecutionModel: Sendable {
     /// Sequential execution, one command at a time.

@@ -42,7 +42,7 @@ struct RegressionSeedTests {
 
 @Contract(.sequential)
 private final class RegressionCounterContract {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter = RegressionCounter()
 
     @Invariant
@@ -66,7 +66,7 @@ private final class RegressionCounterContract {
 
 @Contract(.tasks)
 private final class RegressionCounterCooperativeContract {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter = RegressionRacyCounter()
 
     @Invariant

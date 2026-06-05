@@ -6,8 +6,8 @@ import Testing
 // @Contract(.threads) instead of @Contract, @Oracle added for sequential comparison.
 // Purpose: verify that the preemptive runner catches the same bugs the cooperative runner does.
 //
-// @Model properties and model-comparing @Invariants are omitted because the preemptive runner
-// dispatches commands to real GCD threads — @Model updates inside command bodies would race
+// properties and model-comparing @Invariants are omitted because the preemptive runner
+// dispatches commands to real GCD threads — updates inside command bodies would race
 // with each other. The @Oracle handles correctness by comparing against a sequential replay.
 
 // MARK: - Non-Atomic Counter

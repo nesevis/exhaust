@@ -41,7 +41,7 @@ struct InvariantOnlyTests {
 
 // MARK: - Contract: Circular buffer capacity
 
-/// No `@Model` — the invariant checks a structural property of the SUT alone.
+/// No reference model — the invariant checks a structural property of the SUT alone.
 /// The bug surfaces when `write` is called on a full buffer because there's
 /// no capacity guard in the SUT implementation.
 @Contract(.sequential)

@@ -6,7 +6,6 @@
 
     private nonisolated(unsafe) let testMacros: [String: any Macro.Type] = [
         "Contract": ContractDeclarationMacro.self,
-        "Model": ModelMacro.self,
         "SystemUnderTest": SUTMacro.self,
         "Command": CommandMacro.self,
         "Invariant": InvariantMacro.self,
@@ -24,7 +23,7 @@
                 """
                 @Contract(.tasks)
                 final class QueueSpec {
-                    @Model var contents: [Int] = []
+                    var contents: [Int] = []
                     @SystemUnderTest var queue: MyQueue
 
                     @Command(weight: 3)
@@ -45,7 +44,7 @@
                 """
                 @Contract(.tasks)
                 final class QueueSpec {
-                    @Model var contents: [Int] = []
+                    var contents: [Int] = []
                     @SystemUnderTest var queue: MyQueue
 
                     @Command(weight: 3)
@@ -62,19 +61,6 @@
                         true
                     }
                 }
-                """
-            }
-        }
-
-        @Test("Marker macros produce no peer declarations")
-        func markerMacrosProduceNoPeerDeclarations() {
-            assertMacro {
-                """
-                @Model var x: Int = 0
-                """
-            } expansion: {
-                """
-                var x: Int = 0
                 """
             }
         }
@@ -132,12 +118,8 @@
                     func checkInvariants() throws {
                     }
 
-                    var modelDescription: String {
-                        "(no model properties)"
-                    }
-
-                    var sutDescription: String {
-                        "counter: \(counter)"
+                    func failureDescription() -> String {
+                        "\(counter)"
                     }
 
                     static let executionModel: ExecutionModel = .tasks
@@ -207,12 +189,8 @@
                     func checkInvariants() throws {
                     }
 
-                    var modelDescription: String {
-                        "(no model properties)"
-                    }
-
-                    var sutDescription: String {
-                        "items: \(items)"
+                    func failureDescription() -> String {
+                        "\(items)"
                     }
 
                     static let executionModel: ExecutionModel = .tasks
@@ -348,12 +326,8 @@
                     func checkInvariants() throws {
                     }
 
-                    var modelDescription: String {
-                        "(no model properties)"
-                    }
-
-                    var sutDescription: String {
-                        "counter: \(counter)"
+                    func failureDescription() -> String {
+                        "\(counter)"
                     }
 
                     func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool {
@@ -421,7 +395,7 @@
                 """
                 @Contract(.tasks)
                 ┬────────────────
-                ╰─ ⚠️ @Oracle is only used with @Contract(.threads). For @Contract(.sequential) or @Contract(.tasks), use @Invariant and @Model instead
+                ╰─ ⚠️ @Oracle is only used with @Contract(.threads). For @Contract(.sequential) or @Contract(.tasks), use @Invariant instead
                 final class Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -474,12 +448,8 @@
                     func checkInvariants() throws {
                     }
 
-                    var modelDescription: String {
-                        "(no model properties)"
-                    }
-
-                    var sutDescription: String {
-                        "sut: \(sut)"
+                    func failureDescription() -> String {
+                        "\(sut)"
                     }
 
                     static let executionModel: ExecutionModel = .tasks
@@ -575,112 +545,8 @@
                             try check(valid(), "valid")
                     }
 
-                    var modelDescription: String {
-                        "(no model properties)"
-                    }
-
-                    var sutDescription: String {
-                        "sut: \(sut)"
-                    }
-
-                    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool {
-                        equiv(to: sequentialResult)
-                    }
-
-                    static let executionModel: ExecutionModel = .threads
-
-                    required init() {
-                    }
-                }
-
-                extension Spec: ContractSpec {
-                }
-                """#
-            }
-        }
-
-        @Test("@Contract(.threads) with @Model produces warning")
-        func contractThreadsWithModelProducesWarning() {
-            assertMacro {
-                """
-                @Contract(.threads)
-                final class Spec {
-                    @Model var count: Int = 0
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-
-                    @Oracle
-                    func equiv(to other: MySUT) -> Bool { true }
-                }
-                """
-            } diagnostics: {
-                """
-                @Contract(.threads)
-                ┬──────────────────
-                ╰─ ⚠️ @Model requires deterministic per-step state, which a preemptive run does not have. Use @Contract(.tasks)
-                final class Spec {
-                    @Model var count: Int = 0
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-
-                    @Oracle
-                    func equiv(to other: MySUT) -> Bool { true }
-                }
-                """
-            } expansion: {
-                #"""
-                final class Spec {
-                    var count: Int = 0
-                    var sut: MySUT
-                    func doSomething() throws {
-                    }
-                    func equiv(to other: MySUT) -> Bool { true }
-
-                    enum Command: CustomStringConvertible, Sendable {
-                            case doSomething
-
-                        var description: String {
-                            switch self {
-                                case .doSomething:
-                                "doSomething"
-                            }
-                        }
-                    }
-
-                    typealias SystemUnderTest = MySUT
-
-                    var systemUnderTest: SystemUnderTest {
-                        sut
-                    }
-
-                    static var commandGenerator: ReflectiveGenerator<Command> {
-                        .oneOf(weighted:
-                                (1, .just(Command.doSomething))
-                        )
-                    }
-
-                    func run(_ command: Command) throws {
-                        switch command {
-                            case .doSomething:
-                            try self.doSomething()
-                        }
-                    }
-
-                    func checkInvariants() throws {
-                    }
-
-                    var modelDescription: String {
-                        "count: \(count)"
-                    }
-
-                    var sutDescription: String {
-                        "sut: \(sut)"
+                    func failureDescription() -> String {
+                        "\(sut)"
                     }
 
                     func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool {
@@ -783,7 +649,7 @@
                 """
                 @Contract(.sequential)
                 ┬─────────────────────
-                ╰─ ⚠️ @Oracle is only used with @Contract(.threads). For @Contract(.sequential) or @Contract(.tasks), use @Invariant and @Model instead
+                ╰─ ⚠️ @Oracle is only used with @Contract(.threads). For @Contract(.sequential) or @Contract(.tasks), use @Invariant instead
                 final class Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -836,12 +702,8 @@
                     func checkInvariants() throws {
                     }
 
-                    var modelDescription: String {
-                        "(no model properties)"
-                    }
-
-                    var sutDescription: String {
-                        "sut: \(sut)"
+                    func failureDescription() -> String {
+                        "\(sut)"
                     }
 
                     static let executionModel: ExecutionModel = .sequential
@@ -862,7 +724,7 @@
                 """
                 @Contract(.sequential)
                 actor Spec {
-                    @Model var expected: Int = 0
+                    var expected: Int = 0
                     @SystemUnderTest var sut: MySUT
 
                     @Invariant
@@ -921,18 +783,14 @@
                             try check(valueMatchesResult, "valueMatches")
                     }
 
-                    var modelDescription: String {
-                        "expected: \(expected)"
-                    }
-
-                    var sutDescription: String {
-                        "sut: \(sut)"
+                    func failureDescription() -> String {
+                        "\(sut)"
                     }
 
                     static let executionModel: ExecutionModel = .sequential
 
                     func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
-                        DiagnosticSnapshot(systemUnderTest: systemUnderTest, modelDescription: modelDescription, sutDescription: sutDescription)
+                        DiagnosticSnapshot(systemUnderTest: systemUnderTest, failureDescription: failureDescription())
                     }
 
                     init() {
@@ -1006,12 +864,8 @@
                 	func checkInvariants() throws {
                 	}
 
-                	var modelDescription: String {
-                		"(no model properties)"
-                	}
-
-                	var sutDescription: String {
-                		"items: \(items)"
+                	func failureDescription() -> String {
+                		"\(items)"
                 	}
 
                 	static let executionModel: ExecutionModel = .tasks
@@ -1026,14 +880,14 @@
             }
         }
 
-        @Test("@Contract(.tasks) with tab indentation and multiple model properties")
-        func contractWithTabIndentationAndMultipleModelProperties() {
+        @Test("@Contract(.tasks) with tab indentation and non-model properties")
+        func contractWithTabIndentationAndNonModelProperties() {
             assertMacro {
                 """
                 @Contract(.tasks)
                 final class Spec {
-                \t@Model var count: Int = 0
-                \t@Model var name: String = ""
+                \tvar count: Int = 0
+                \tvar name: String = ""
                 \t@SystemUnderTest var sut: MySUT
 
                 \t@Command(weight: 1)
@@ -1083,15 +937,8 @@
                 	func checkInvariants() throws {
                 	}
 
-                	var modelDescription: String {
-                		"\n" + [
-                		        "  count: \(count)",
-                		            "  name: \(name)"
-                		    ].joined(separator: "\n")
-                	}
-
-                	var sutDescription: String {
-                		"sut: \(sut)"
+                	func failureDescription() -> String {
+                		"\(sut)"
                 	}
 
                 	static let executionModel: ExecutionModel = .tasks

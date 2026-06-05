@@ -1,6 +1,6 @@
 // Formats failure reports for both the sequential and concurrent contract runners.
 //
-// The concurrent path (FailureContext, renderFailure(_:trace:context:), renderTimeout, renderCommandPartition) is populated incrementally by the runner and passed to renderFailure for final formatting. The sequential path (renderFailure(_:failureInfo:modelDescription:includeDiff:), ContractFailureInfo) renders a re-executed trace from a discovered command sequence.
+// The concurrent path (FailureContext, renderFailure(_:trace:context:), renderTimeout, renderCommandPartition) is populated incrementally by the runner and passed to renderFailure for final formatting. The sequential path (renderFailure(_:failureInfo:failureDescription:includeDiff:), ContractFailureInfo) renders a re-executed trace from a discovered command sequence.
 import CustomDump
 import ExhaustCore
 
@@ -138,7 +138,7 @@ extension __ExhaustRuntime {
     static func renderFailure<Spec: ContractSpecBase>(
         _ result: ContractResult<Spec>,
         failureInfo: ContractFailureInfo<Spec.Command>,
-        modelDescription: String,
+        failureDescription: String,
         includeDiff: Bool = false
     ) -> String {
         var lines: [String] = []
@@ -170,9 +170,9 @@ extension __ExhaustRuntime {
             }
         }
 
+        let indentedDescription = failureDescription.replacingOccurrences(of: "\n", with: "\n  ")
         lines.append("")
-        lines.append("Model: \(modelDescription)")
-        lines.append("SUT:   \(result.systemUnderTest)")
+        lines.append("State: \(indentedDescription)")
 
         if let seed = result.seed {
             lines.append("")
@@ -187,7 +187,7 @@ extension __ExhaustRuntime {
 // MARK: - Sequential Failure Metadata
 
 extension __ExhaustRuntime {
-    /// Captures the original command sequence and the discovery method for a contract failure, used by ``renderFailure(_:failureInfo:modelDescription:)`` to build failure reports.
+    /// Captures the original command sequence and the discovery method for a contract failure, used by ``renderFailure(_:failureInfo:failureDescription:)`` to build failure reports.
     struct ContractFailureInfo<Command> {
         /// The original failing command sequence before reduction, if available.
         var originalCommands: [Command]?

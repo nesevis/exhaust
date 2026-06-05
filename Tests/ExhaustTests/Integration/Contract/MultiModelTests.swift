@@ -2,9 +2,9 @@ import Exhaust
 import ExhaustTestSupport
 import Testing
 
-@Suite("Multiple @Model properties", .serialized, .tags(.contract))
+@Suite("Multiple properties", .serialized, .tags(.contract))
 struct MultiModelTests {
-    @Test("Spec with three @Model properties detects divergence")
+    @Test("Spec with three properties detects divergence")
     func specWithThreeModelPropertiesDetectsDivergence() {
         let result = #execute(
             MultiModelSpec.self,
@@ -26,11 +26,8 @@ struct MultiModelTests {
 
 @Contract(.sequential)
 final class MultiModelSpec {
-    @Model
     var expectedKeys: [String] = []
-    @Model
     var expectedValues: [Int] = []
-    @Model
     var expectedCount: Int = 0
     @SystemUnderTest
     var store: BuggyKeyValueStore = .init()

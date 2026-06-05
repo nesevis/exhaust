@@ -9,16 +9,16 @@ import ExhaustCore
 ///
 /// The required ``ExecutionModel`` argument selects the execution model:
 ///
-/// - `.sequential` runs commands one at a time. Checks use `@Invariant` (and optionally `@Model`).
+/// - `.sequential` runs commands one at a time. Checks use `@Invariant`.
 /// - `.tasks` runs commands concurrently with deterministic interleaving at `await` boundaries. Checks use `@Invariant`.
 /// - `.threads` dispatches commands to real OS threads via GCD. Checks use `@Oracle`, which compares the concurrent end state against a sequential replay.
 ///
-/// ## `.tasks` Contract (Model-Based)
+/// ## `.tasks` Contract
 ///
 /// ```swift
 /// @Contract(.tasks)
 /// final class BoundedQueueContract {
-///     @Model var contents: [Int] = []
+///     var contents: [Int] = []
 ///     @SystemUnderTest
 ///     var queue = BoundedQueue<Int>(capacity: 4)
 ///
@@ -32,6 +32,10 @@ import ExhaustCore
 ///         guard contents.count < 4 else { throw skip() }
 ///         queue.enqueue(value)
 ///         contents.append(value)
+///     }
+///
+///     func failureDescription() -> String {
+///         "expected: \(contents), queue: \(queue)"
 ///     }
 /// }
 /// ```
@@ -65,20 +69,13 @@ import ExhaustCore
     named(checkInvariants),
     named(oracleCheck),
     named(systemUnderTest),
-    named(modelDescription),
-    named(sutDescription),
+    named(failureDescription),
     named(init),
     named(executionModel),
     named(diagnosticSnapshot)
 )
 @attached(extension, conformances: ContractSpec, AsyncContractSpec)
 public macro Contract(_ mode: ExecutionModel) = #externalMacro(module: "ExhaustMacros", type: "ContractDeclarationMacro")
-
-/// Marks a property as model state in a contract.
-///
-/// Model properties represent the abstract state used to verify the system under test. They are included in `modelDescription` for failure reports. Model properties are optional. Contracts can also use `@Invariant` and `check()` without a reference model.
-@attached(peer)
-public macro Model() = #externalMacro(module: "ExhaustMacros", type: "ModelMacro")
 
 /// Marks a property as the system under test in a contract.
 ///

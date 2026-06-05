@@ -62,7 +62,6 @@ struct IdleTimeoutConcurrentTests {
 
 @Contract(.tasks)
 final class SleepingSpec {
-    @Model
     var count: Int = 0
     @SystemUnderTest
     var counter: SleepingCounter = .init()

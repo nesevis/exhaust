@@ -106,7 +106,7 @@ The tools so far test pure functions: one input, one output. Stateful systems fa
 
 `@Contract` searches over sequences. You declare a **system under test** (the real implementation), a set of **commands** Exhaust may call on it, and **invariants** that must hold after every command. Exhaust generates command sequences, runs them, checks the invariants after each step, and when one breaks it reduces the sequence to the few commands that still reproduce the failure.
 
-Invariants get much simpler if you add a **model**: a simpler reference implementation that the commands update in lockstep, so an invariant becomes "the system agrees with the model." The model is acting as an **oracle**, the trusted source of what the right answer is. For systems whose races hide in real threads rather than at `await` points, a separate **`@Oracle`** compares the concurrent result against a race-free sequential replay.
+Invariants get much simpler if you maintain a **model**: a simpler reference implementation that the commands update in lockstep, so an invariant becomes "the system agrees with the model." The model is acting as an **oracle**, the trusted source of what the right answer is. For systems whose races hide in real threads rather than at `await` points, a separate **`@Oracle`** compares the concurrent result against a race-free sequential replay.
 
 The execution mode (`.sequential`, `.tasks`, or `.threads`) tells Exhaust how to run the commands. `.sequential` runs commands one at a time: the right choice for testing logic. `.tasks` runs commands concurrently with deterministic interleaving at every `await`, so the same seed reproduces the same run. `.threads` hands off to real OS threads to reach races inside locks and atomics, trading reproducibility for that reach. [Contract testing](EXECUTE-contract-testing.md) covers all three.
 
@@ -173,8 +173,8 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 - **Contract**: a specification of a stateful system that Exhaust checks by generating command sequences and verifying invariants after each step.
 - **Cooperative / preemptive**: the two concurrent runners. Cooperative interleaves deterministically at `await` points. Preemptive uses real threads to reach races in locks and atomics.
 - **Invariant**: a property checked after every command.
-- **Model**: a simpler reference implementation the commands update in lockstep, so invariants can compare the two.
-- **Oracle**: the trusted source of the right answer a contract checks against. The model, or an `@Oracle` method for concurrent contracts.
+- **Model**: a simpler reference implementation maintained alongside the SUT, so invariants can compare the two. Not a macro — just a pattern for writing effective invariants.
+- **Oracle**: the trusted source of the right answer a contract checks against. For `.threads` contracts, the `@Oracle` method compares the concurrent end state against a sequential replay.
 - **System under test (SUT)**: the real implementation a contract exercises.
 
 ### Reproduction

@@ -49,7 +49,7 @@ struct BudgetAffordabilityTests {
 
 @Contract(.sequential)
 final class BudgetAffordabilitySpec {
-    @Model var wasUnaffordable = false
+    var wasUnaffordable = false
     @SystemUnderTest var items: [BillItem] = []
 
     @Invariant

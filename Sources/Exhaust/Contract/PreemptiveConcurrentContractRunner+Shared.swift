@@ -124,7 +124,7 @@ protocol PreemptiveBackend<Spec>: Sendable {
     func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome
 
     /// Runs a command sequence sequentially on a fresh spec for the smoke phase, capturing the trace, whether it failed, and the resulting oracle state for the report.
-    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, modelDescription: String)
+    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String)
 
     /// Replays the reduced commands sequentially on a fresh spec to capture the expected (race-free) oracle state for a failure result.
     func buildResult(
@@ -200,7 +200,7 @@ extension __ExhaustRuntime {
                     )
                     if config.suppressIssueReporting == false {
                         let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
-                        let message = renderFailure(result, failureInfo: failureInfo, modelDescription: smoke.modelDescription)
+                        let message = renderFailure(result, failureInfo: failureInfo, failureDescription: smoke.failureDescription)
                         deferredIssues.append(message)
                     }
                     finalizeReport()

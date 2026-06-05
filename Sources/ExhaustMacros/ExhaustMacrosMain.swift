@@ -16,7 +16,6 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
         ExhaustContractMacro.self,
         ExhaustAsyncContractMacro.self,
         ContractDeclarationMacro.self,
-        ModelMacro.self,
         SUTMacro.self,
         CommandMacro.self,
         InvariantMacro.self,

@@ -56,7 +56,7 @@ struct CircularQueueTests {
 
 @Contract(.sequential)
 final class CircularQueueContract {
-    @Model var expected: [Int] = []
+    var expected: [Int] = []
     @SystemUnderTest var queue = BuggyCircularQueue(capacity: 6)
 
     @Invariant

@@ -69,7 +69,6 @@ struct DetectionBoundaryTests {
 
 @Contract(.tasks)
 final class SilentRaceSpec {
-    @Model
     var expected: Int = 0
     @SystemUnderTest
     var counter: SilentlyRacyCounter = .init()
@@ -90,7 +89,6 @@ final class SilentRaceSpec {
 
 @Contract(.tasks)
 final class ExposedRaceSpec {
-    @Model
     var expected: Int = 0
     @SystemUnderTest
     var counter: ExposedRacyCounter = .init()
@@ -111,7 +109,6 @@ final class ExposedRaceSpec {
 
 @Contract(.tasks)
 final class ThreeWayRaceSpec {
-    @Model
     var expected: Int = 0
     @SystemUnderTest
     var counter: ThreeWayRacyCounter = .init()

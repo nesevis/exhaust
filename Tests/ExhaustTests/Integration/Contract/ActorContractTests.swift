@@ -46,7 +46,7 @@ actor CounterActor {
 
 @Contract(.sequential)
 actor ActorCounterContract {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter = CounterActor()
 
     @Invariant
@@ -87,7 +87,7 @@ actor BuggyCounterActor {
 
 @Contract(.sequential)
 actor BuggyActorCounterContract {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter = BuggyCounterActor()
 
     @Invariant

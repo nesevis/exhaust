@@ -107,7 +107,7 @@ struct HeapAliasingTests {
 
 @Contract(.sequential)
 final class HeapMergeContract {
-    @Model var expectedContents: [[Int]] = []
+    var expectedContents: [[Int]] = []
     @SystemUnderTest var heaps: [BuggyHeap] = []
     let heapRefs = Bundle<Int>()
 

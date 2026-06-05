@@ -150,7 +150,7 @@ struct ConcurrentContractReplayTests {
 
 @Contract(.sequential)
 final class BrokenModuloSpec {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter = ModuloCounter(modulus: 3)
 
     @Invariant
@@ -188,7 +188,7 @@ struct ModuloCounter {
 
 @Contract(.sequential)
 final class ReplayableNonAtomicCounterSpec {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter: ReplayableNonAtomicCounter = .init()
 
     @Invariant
@@ -237,7 +237,7 @@ actor ReplayableNonAtomicCounter: CustomDebugStringConvertible {
 
 @Contract(.threads)
 final class PreemptiveReplayableSpec {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter: PreemptiveRacyCounter = .init()
 
     @Oracle
@@ -293,7 +293,7 @@ final class PreemptiveRacyCounter: @unchecked Sendable, CustomDebugStringConvert
 
 @Contract(.threads)
 final class PreemptiveSequentiallyBrokenSpec {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter: BrokenDecrementCounter = .init()
 
     @Oracle

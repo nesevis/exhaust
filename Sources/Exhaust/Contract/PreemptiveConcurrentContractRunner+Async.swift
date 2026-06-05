@@ -212,7 +212,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         return { taggedCommands in rawIdentifySkips(taggedCommands.map(\.1)) }
     }
 
-    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, modelDescription: String) {
+    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String) {
         let spec = Spec()
         nonisolated(unsafe) let unsafeSpec = spec
         let (trace, failed) = __ExhaustRuntime.blockingAwait {
@@ -222,7 +222,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 checkInvariants: { try await unsafeSpec.checkInvariants() }
             )
         }
-        return (trace, failed, spec.systemUnderTest, spec.modelDescription)
+        return (trace, failed, spec.systemUnderTest, spec.failureDescription())
     }
 
     /// Replays the reduced commands sequentially on a fresh spec via ``runSequentially(_:on:)`` to capture the oracle SUT state.

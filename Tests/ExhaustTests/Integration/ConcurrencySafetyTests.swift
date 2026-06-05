@@ -275,7 +275,7 @@ struct ConcurrentContractDrainLoopTests {
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @Contract(.sequential)
 final class YieldingCounterSpec {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter: YieldingCounter = .init()
 
     @Invariant
@@ -301,7 +301,7 @@ final class YieldingCounterSpec {
 @Contract(.sequential)
 final class BundleDrawSpec {
     let tokens = Bundle<Int>()
-    @Model var model: [Int] = []
+    var model: [Int] = []
     @SystemUnderTest var store: TokenStore = .init()
 
     @Invariant

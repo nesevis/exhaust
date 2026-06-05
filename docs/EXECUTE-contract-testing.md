@@ -22,7 +22,7 @@ The rest of this guide walks through each case.
 
 ## The shape of a contract
 
-A contract has four parts: a system under test, commands that operate on it, invariants that must always hold, and optionally a model that serves as a reference.
+A contract has three required parts: a system under test, commands that operate on it, and invariants that must always hold. Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two.
 
 ```swift
 @Test func stackBehavesCorrectly() {
@@ -31,7 +31,6 @@ A contract has four parts: a system under test, commands that operate on it, inv
 
 @Contract(.sequential)
 final class StackContract {
-    @Model
     var expected: [Int] = []
     @SystemUnderTest
     var stack = MyStack<Int>()
@@ -54,6 +53,10 @@ final class StackContract {
         let sutValue = stack.pop()
         try check(modelValue == sutValue, "pop values should match")
     }
+
+    func failureDescription() -> String {
+        "expected: \(expected), stack: \(stack)"
+    }
 }
 ```
 
@@ -61,13 +64,21 @@ Each `@Command` method is one operation Exhaust can choose to run. The `weight:`
 
 Contracts must be a `final class` or an `actor`. The `@Contract` macro takes a required execution mode. `.sequential` runs commands one at a time and checks `@Invariant` after each step. It is the most common mode, and the one this guide uses until the concurrency sections. `.tasks` runs commands concurrently with deterministic interleaving at `await` boundaries. `.threads` dispatches commands to real OS threads and checks an `@Oracle` against a sequential replay.
 
-## Model and invariants
+## Models and invariants
 
-The `@Model` annotation marks properties that track expected state. The model doesn't have to be sophisticated. It just needs to agree with the system under test on whatever the invariants check. A model for a bounded queue might be a plain `[Int]` tracking FIFO order. A model for a counter might be a single `Int`.
-
-The model's job is to make invariants trivial to write. Without a model, invariants have to derive expected behaviour from the system under test's current state alone, which is often hard. With a model, the invariant is just `sut.value == model.value`.
+A model is a simpler reference implementation maintained alongside the SUT. It is just a plain property — not a macro or special annotation. The model's job is to make invariants trivial to write: with a model, the invariant is just `sut.value == model.value`. Without one, invariants have to derive expected behaviour from the SUT's current state alone.
 
 You don't have to use a model. Contracts that only need structural invariants (count within bounds, no duplicates, LIFO ordering) work fine without one.
+
+### Failure descriptions
+
+When a contract fails, Exhaust calls `failureDescription()` to include diagnostic state in the failure report. The macro synthesizes a default that dumps the SUT via string interpolation. Override it to include model state, computed diagnostics, or both:
+
+```swift
+func failureDescription() -> String {
+    "expected: \(expected), queue: \(queue)"
+}
+```
 
 ## Commands, skip, and check
 
@@ -123,8 +134,7 @@ Command sequence (4 steps, reduced from 8):
   3. put(5) [ok]
   4. get() ✗ get must return elements in FIFO order
 
-Model: [12, 5]
-SUT:   BuggyCircularQueue(count: 2, capacity: 6)
+State: expected: [12, 5], queue: BuggyCircularQueue(count: 2, capacity: 6)
 
 Reproduce: .replay("3JK4M2-5")
 ```
@@ -140,7 +150,6 @@ When the system under test has async methods (actors, network services, database
 ```swift
 @Contract(.sequential)
 final class AsyncCounterContract {
-    @Model
     var expected: Int = 0
     @SystemUnderTest
     var counter: AsyncCounter = .init()
@@ -279,7 +288,7 @@ final class RacyCounterContract {
 
 The oracle checks final state rather than intermediate states. That's the right tradeoff for non-deterministic scheduling. Intermediate invariants would fail spuriously when the OS happens to interleave in a valid-but-unexpected order.
 
-The oracle is always required for `.threads` contracts and always written by hand. `@Invariant` and `@Model` are not available under `.threads`, because there's no deterministic per-step state to check them against.
+The oracle is always required for `.threads` contracts and always written by hand. `@Invariant` is not available under `.threads`, because there's no deterministic per-step state to check it against.
 
 Running the test:
 
@@ -353,7 +362,7 @@ A few patterns that tend to produce effective contracts:
 
 ## Certifying a fake
 
-The model doesn't have to be a bare value. When `@Model` holds a standalone type that conforms to the same protocol as the SUT, the contract validates it as a faithful stand-in. After the contract passes, other tests can inject the fake instead of the real implementation, backed by every command sequence the contract exercised.
+The model doesn't have to be a bare value. When a model property holds a standalone type that conforms to the same protocol as the SUT, the contract validates it as a faithful stand-in. After the contract passes, other tests can inject the fake instead of the real implementation, backed by every command sequence the contract exercised.
 
 ```swift
 protocol Queue<Element> {
@@ -366,7 +375,7 @@ protocol Queue<Element> {
 
 @Contract(.sequential)
 final class QueueContract {
-    @Model var fake = ListQueue<Int>()
+    var fake = ListQueue<Int>()
     @SystemUnderTest var queue = CircularBufferQueue<Int>(capacity: 8)
 
     @Invariant

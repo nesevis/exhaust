@@ -31,7 +31,6 @@ struct AtomicCounterConcurrentTests {
 
 @Contract(.tasks)
 final class AtomicCounterSpec {
-    @Model
     var expected: Int = 0
     @SystemUnderTest
     var counter: ThreadSafeCounter = .init()
@@ -57,7 +56,6 @@ final class AtomicCounterSpec {
 
 @Contract(.tasks)
 final class NarrowRaceCounterSpec {
-    @Model
     var expected: Int = 0
     @SystemUnderTest
     var counter: NarrowRaceCounter = .init()

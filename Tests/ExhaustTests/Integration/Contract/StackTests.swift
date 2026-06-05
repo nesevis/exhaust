@@ -22,7 +22,7 @@ struct StackTests {
 
 @Contract(.sequential)
 final class StackSpec {
-    @Model var expected: [Int] = []
+    var expected: [Int] = []
     @SystemUnderTest var stack: [Int] = []
 
     @Invariant

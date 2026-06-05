@@ -29,7 +29,6 @@ struct AllSkipConcurrentTests {
 
 @Contract(.tasks)
 final class AlwaysSkipSpec {
-    @Model
     var count: Int = 0
     @SystemUnderTest
     var value: Int = 0

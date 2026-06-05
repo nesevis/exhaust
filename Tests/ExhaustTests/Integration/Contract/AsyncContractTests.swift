@@ -122,7 +122,7 @@ struct AsyncContractTests {
 
 @Contract(.tasks)
 final class AsyncCounterSpec {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter: AsyncCounter = .init()
 
     @Invariant
@@ -153,7 +153,7 @@ final class AsyncCounterSpec {
 
 @Contract(.tasks)
 final class BuggyAsyncCounterSpec {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter: BuggyAsyncCounter = .init()
 
     @Invariant
@@ -178,7 +178,7 @@ final class BuggyAsyncCounterSpec {
 
 @Contract(.tasks)
 final class AsyncSkipSpec {
-    @Model var expected: [Int] = []
+    var expected: [Int] = []
     @SystemUnderTest var counter: AsyncCounter = .init()
 
     @Invariant
@@ -204,7 +204,7 @@ final class AsyncSkipSpec {
 
 @Contract(.tasks)
 final class MixedAsyncSpec {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter: AsyncCounter = .init()
 
     @Invariant

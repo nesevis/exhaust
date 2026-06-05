@@ -38,7 +38,6 @@ struct MultiInvariantTests {
 
 @Contract(.sequential)
 final class FiveInvariantSpec {
-    @Model
     var expected: Int = 0
     @SystemUnderTest
     var counter: BuggyModCounter = .init()
@@ -74,7 +73,6 @@ final class FiveInvariantSpec {
 
 @Contract(.sequential)
 final class PassingFiveInvariantSpec {
-    @Model
     var expected: Int = 0
     @SystemUnderTest
     var counter: CorrectCounter = .init()

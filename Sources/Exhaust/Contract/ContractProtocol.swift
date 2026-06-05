@@ -8,13 +8,11 @@ import Foundation
 /// For actor contracts, these properties can only be read from the actor's executor. ``AsyncContractSpec/diagnosticSnapshot()`` provides an async entry point that hops correctly.
 public struct DiagnosticSnapshot<SystemUnderTest>: @unchecked Sendable {
     public let systemUnderTest: SystemUnderTest
-    public let modelDescription: String
-    public let sutDescription: String
+    public let failureDescription: String
 
-    public init(systemUnderTest: SystemUnderTest, modelDescription: String, sutDescription: String) {
+    public init(systemUnderTest: SystemUnderTest, failureDescription: String) {
         self.systemUnderTest = systemUnderTest
-        self.modelDescription = modelDescription
-        self.sutDescription = sutDescription
+        self.failureDescription = failureDescription
     }
 }
 
@@ -42,11 +40,10 @@ public protocol ContractSpecBase {
     /// The system under test instance, for typed access in results and failure reports.
     var systemUnderTest: SystemUnderTest { get }
 
-    /// A human-readable description of the model state, used in failure reports.
-    var modelDescription: String { get }
-
-    /// A human-readable description of the SUT state, used in failure reports.
-    var sutDescription: String { get }
+    /// Returns a human-readable description of the contract state at the point of failure.
+    ///
+    /// Called when a contract test fails. Include whatever diagnostic information helps identify the bug — model state, SUT state, or both. The returned string appears in the failure report.
+    func failureDescription() -> String
 }
 
 public extension ContractSpecBase {
@@ -58,12 +55,12 @@ public extension ContractSpecBase {
 
 /// Drives synchronous contract property tests for both `.tasks` and `.threads` modes.
 ///
-/// The `@Contract` macro synthesizes this conformance when all commands and invariants are synchronous. For `.tasks`, checks use `@Invariant` (and optionally `@Model`). For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method.
+/// The `@Contract` macro synthesizes this conformance when all commands and invariants are synchronous. For `.tasks`, checks use `@Invariant`. For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method.
 ///
 /// ```swift
 /// @Contract(.tasks)
 /// final class BoundedQueueContract {
-///     @Model var contents: [Int] = []
+///     var contents: [Int] = []
 ///     @SystemUnderTest
 ///     var queue = BoundedQueue<Int>(capacity: 4)
 ///
@@ -72,6 +69,10 @@ public extension ContractSpecBase {
 ///         guard contents.count < 4 else { throw skip() }
 ///         queue.enqueue(value)
 ///         contents.append(value)
+///     }
+///
+///     func failureDescription() -> String {
+///         "expected: \(contents), queue: \(queue)"
 ///     }
 /// }
 /// ```
@@ -126,7 +127,7 @@ extension ContractSpec {
 
 /// Drives asynchronous contract property tests for both `.tasks` and `.threads` modes.
 ///
-/// The `@Contract` macro synthesizes this conformance when any `@Command` or `@Invariant` method is `async`. For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method.
+/// The `@Contract` macro synthesizes this conformance when any `@Command` or `@Invariant` method is `async`. For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method. Override ``failureDescription()`` to include diagnostic state in failure reports.
 ///
 /// ## Skip Identification
 ///
@@ -167,8 +168,7 @@ public extension AsyncContractSpec {
     func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
         DiagnosticSnapshot(
             systemUnderTest: systemUnderTest,
-            modelDescription: modelDescription,
-            sutDescription: sutDescription
+            failureDescription: failureDescription()
         )
     }
 

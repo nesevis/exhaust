@@ -47,7 +47,7 @@ struct PreemptiveSmokeTestTests {
 
 @Contract(.threads)
 final class SequentiallyBrokenSpec {
-    @Model var expected: Int = 0
+    var expected: Int = 0
     @SystemUnderTest var counter: BrokenCounter = .init()
 
     @Oracle

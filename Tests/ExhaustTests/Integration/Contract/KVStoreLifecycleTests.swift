@@ -57,8 +57,8 @@ struct KVStoreLifecycleTests {
 
 @Contract(.sequential)
 final class KVStoreLifecycleContract {
-    @Model var isOpen = false
-    @Model var contents: [Int: Int] = [:]
+    var isOpen = false
+    var contents: [Int: Int] = [:]
     @SystemUnderTest var store = BuggyKVStore()
 
     @Invariant

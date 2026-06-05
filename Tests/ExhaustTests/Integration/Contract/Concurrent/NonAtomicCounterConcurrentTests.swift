@@ -144,7 +144,6 @@ struct NonAtomicCounterConcurrentTests {
 
 @Contract(.tasks)
 final class NonAtomicCounterSpec {
-    @Model
     var expected: Int = 0
     @SystemUnderTest
     var counter: NonAtomicCounter = .init()

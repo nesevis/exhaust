@@ -601,10 +601,8 @@ private extension __ExhaustRuntime {
         failureContext.replaySeed = replaySeed
         failureContext.timedOut = timedOut
         failureContext.oracleDescription = oracle.map { oracle in
-            let hasModel = oracle.modelDescription != "(no model properties)"
-            return hasModel
-                ? "Expected result (from sequential replay of @Model):\n  \(oracle.modelDescription)"
-                : "Expected result (from sequential replay of @SystemUnderTest):\n  \(oracle.sutDescription)"
+            let indented = oracle.failureDescription.replacingOccurrences(of: "\n", with: "\n  ")
+            return "Expected result (from sequential replay):\n  \(indented)"
         }
         let message = renderFailure(finalInput, trace: trace, context: failureContext)
 

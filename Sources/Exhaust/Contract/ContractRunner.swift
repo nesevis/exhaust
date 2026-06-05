@@ -120,7 +120,7 @@ public extension __ExhaustRuntime {
                 identifySkips: Spec.skipIdentifier,
                 finalize: { commands in
                     let (trace, spec) = buildTrace(commands, specType: specType)
-                    return (trace, spec.systemUnderTest, spec.modelDescription)
+                    return (trace, spec.systemUnderTest, spec.failureDescription())
                 }
             ) else {
                 // The test passed
@@ -254,7 +254,7 @@ private extension __ExhaustRuntime {
                     let snapshot = await spec.diagnosticSnapshot()
                     return (trace: trace, snapshot: snapshot)
                 }!
-                return (captured.trace, captured.snapshot.systemUnderTest, captured.snapshot.modelDescription)
+                return (captured.trace, captured.snapshot.systemUnderTest, captured.snapshot.failureDescription)
             }
         ) else {
             return (nil, deferredIssues)
@@ -293,7 +293,7 @@ private extension __ExhaustRuntime {
     ///
     /// Shared by the synchronous and asynchronous sequential runners. They differ only in how commands execute (directly versus bridged through ``blockingAwait(_:)``) and how failure state is captured, both supplied through closures. Returns `nil` when every sequence passes.
     ///
-    /// - Parameter finalize: Re-executes the discovered sequence to produce the trace, SUT snapshot, and model description used in the result and failure report.
+    /// - Parameter finalize: Re-executes the discovered sequence to produce the trace, SUT snapshot, and failure description used in the result and failure report.
     static func runSequentialContract<Spec: ContractSpecBase>(
         _: Spec.Type,
         commandGen: ReflectiveGenerator<Spec.Command>,
@@ -302,7 +302,7 @@ private extension __ExhaustRuntime {
         context: inout ContractContext,
         property: @escaping @Sendable ([Spec.Command]) -> Bool,
         identifySkips: @escaping @Sendable ([Spec.Command]) -> Set<Int>,
-        finalize: ([Spec.Command]) -> (trace: [TraceStep], systemUnderTest: Spec.SystemUnderTest, modelDescription: String)
+        finalize: ([Spec.Command]) -> (trace: [TraceStep], systemUnderTest: Spec.SystemUnderTest, failureDescription: String)
     ) -> (result: ContractResult<Spec>, rendered: String?)? {
         guard let discovery = runCoverageAndSampling(
             commandGen: commandGen,
@@ -330,7 +330,7 @@ private extension __ExhaustRuntime {
             : renderFailure(
                 result,
                 failureInfo: discovery.failureInfo,
-                modelDescription: outcome.modelDescription,
+                failureDescription: outcome.failureDescription,
                 includeDiff: context.includeDiff
             )
         return (result, rendered)
