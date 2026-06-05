@@ -491,7 +491,7 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Element Walk
 
     //
-    // Same as walkTree but for elements within a sequence. Rejects nested sequences and bare branches. Picks within elements are supported and route to the shared walkPick logic.
+    // Same as walkTree but for elements within a sequence. Nested sequences are treated as opaque (parameters not extracted, but analysis continues). Bare branches are rejected. Picks within elements are supported and route to the shared walkPick logic.
     //
     // walkElementChoice differs from walkChoice only in the parameter kind: large-domain elements use .sequenceElement (with elementIndex) instead of .chooseBits. These element parameters are collected into per-slot arrays and embedded in the parent `.compositeSequence` parameter.
 
@@ -535,7 +535,22 @@ package enum ChoiceTreeAnalysis {
             case .getSize:
                 return true
 
-            case .resize, .sequence, .branch:
+            case let .sequence(_, _, metadata):
+                // Nested sequence (for example, a String inside an array of structs). Extracting inner sequence parameters would explode the composite domain, so treat it as opaque — the outer sequence still contributes its own length and non-sequence element parameters.
+                if metadata.validRange != nil { return true }
+                return false
+
+            case let .resize(_, children):
+                for child in children {
+                    guard walkElementTree(
+                        child,
+                        elementIndex: elementIndex,
+                        parameters: &parameters
+                    ) else { return false }
+                }
+                return true
+
+            case .branch:
                 return false
         }
     }

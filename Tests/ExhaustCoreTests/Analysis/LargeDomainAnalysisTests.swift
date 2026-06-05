@@ -287,6 +287,26 @@ struct ChoiceTreeAnalysisTests {
         }
         #expect(profile.parameters.count >= 1)
     }
+
+    @Test("Sequence of elements containing nested sequences is analyzable")
+    func nestedSequenceIsAnalyzable() {
+        let elementGen = Gen.zip(
+            asciiStringGen(length: 1 ... 10),
+            Gen.choose(in: 0 ... 1000)
+        )
+        let gen = Gen.arrayOf(elementGen, within: 1 ... 20, scaling: .constant)
+        let result = ChoiceTreeAnalysis.analyze(gen)
+        guard case let .large(profile) = result else {
+            Issue.record("Expected .large result for array of (String, Int) elements")
+            return
+        }
+        #expect(profile.parameters.count >= 1)
+        let hasCompositeSequence = profile.parameters.contains { param in
+            if case .compositeSequence = param.kind { return true }
+            return false
+        }
+        #expect(hasCompositeSequence, "The outer sequence should produce a compositeSequence parameter")
+    }
 }
 
 // MARK: - Date Problematic Values
