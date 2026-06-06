@@ -4,10 +4,10 @@ import ExhaustCore
 import Foundation
 
 func registerParallelGenerationBenchmarks() {
-    let laneCounts = Array(UInt8(1) ... 8)
+    let laneCounts: [ConcurrencyLevel] = [.one, .two, .three, .four, .five, .six, .seven, .eight]
 
     for lanes in laneCounts {
-        let suffix = lanes == 1 ? "sequential" : "parallel(\(lanes))"
+        let suffix = lanes == .one ? "sequential" : "parallel(\(lanes.rawValue))"
 
         benchmark("ParGen: Parser \(suffix)") {
             _ = #exhaust(

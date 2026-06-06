@@ -181,9 +181,9 @@ public enum PropertySettings {
     /// Uniqueness deduplication (`.unique`) is enforced per-lane, not across lanes.
     ///
     /// ```swift
-    /// #exhaust(gen, .budget(.extensive), .parallel(2)) { value in
+    /// #exhaust(gen, .budget(.extensive), .parallel(.two)) { value in
     ///     expensiveCheck(value)
     /// }
     /// ```
-    case parallel(UInt8)
+    case parallel(ConcurrencyLevel)
 }
