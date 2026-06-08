@@ -2,108 +2,6 @@
 import ExhaustCore
 import Foundation
 
-extension __ExhaustRuntime {
-    /// Extracts pick choices from a command generator when the generator is a top-level ``Gen.pick``.
-    static func extractPickChoices(
-        from gen: Generator<some Any>
-    ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
-        guard case let .impure(operation, _) = gen,
-              case let .pick(choices, _) = operation
-        else { return nil }
-        return choices
-    }
-
-    /// Estimates a default command limit from the command generator's structure and the coverage budget.
-    ///
-    /// Pre-analyzes pick branches to determine the per-position domain size, then computes the sequence length at which SCA rows (at t=2) would exhaust the budget. The result is the larger of this budget ceiling and an exploration floor based on the number of command types, ensuring sequences are long enough for each command to appear several times.
-    static func estimateCommandLimit(
-        commandGen: Generator<some Any>,
-        coverageBudget: UInt64
-    ) -> Int {
-        guard let pickChoices = extractPickChoices(from: commandGen) else {
-            return 10
-        }
-
-        let branchCount = pickChoices.count
-
-        // Pre-analyze branch argument domains to estimate the per-position domain size.
-        // Use sequenceLength=10 as initial estimate for threshold computation; the threshold is under a sqrt so it is not very sensitive to this value.
-        let threshold = SequenceCoveringArray.computeThreshold(
-            budget: coverageBudget,
-            sequenceLength: 10,
-            branchCount: branchCount
-        )
-        let branchProfiles = SequenceCoveringArray.analyzeBranches(
-            pickChoices,
-            threshold: threshold,
-            coverageBudget: coverageBudget
-        )
-        var domainSize: UInt64 = 0
-        for profile in branchProfiles {
-            let contribution: UInt64 = switch profile {
-                case .parameterFree, .unanalyzable:
-                    1
-                case let .analyzed(params):
-                    params.reduce(UInt64(1)) { acc, param in
-                        let (product, overflow) = acc.multipliedReportingOverflow(by: param.domainSize)
-                        return overflow ? .max : product
-                    }
-            }
-            let (sum, overflow) = domainSize.addingReportingOverflow(contribution)
-            domainSize = overflow ? .max : sum
-        }
-
-        // Budget ceiling: at t=2, covering array rows ≈ d² × ln(L).
-        // Solving for L: L = e^(B / d²).
-        // For small domains this is huge (budget is not the bottleneck); for large domains it can be < 2.
-        let d = Double(min(domainSize, UInt64(Int.max)))
-        let d2 = max(d * d, 1.0)
-        let ratio = Double(coverageBudget) / d2
-        let budgetCeiling = ratio > 1 ? Int(min(exp(ratio), 100)) : 2
-
-        // Exploration floor: enough for each command type to appear several times, ensuring the random phase can reach meaningful state depths.
-        let explorationFloor = max(branchCount * 3, 6)
-
-        let limit = max(explorationFloor, budgetCeiling)
-
-        ExhaustLog.notice(
-            category: .propertyTest,
-            event: "estimated_command_limit",
-            metadata: [
-                "command_limit": "\(limit)",
-                "command_types": "\(branchCount)",
-                "domain_size": "\(domainSize)",
-                "budget_ceiling": "\(budgetCeiling)",
-                "exploration_floor": "\(explorationFloor)",
-            ]
-        )
-
-        return limit
-    }
-}
-
-// MARK: - SCA Outcome
-
-extension __ExhaustRuntime {
-    /// Outcome of an SCA coverage run.
-    enum SCAOutcome<Command> {
-        /// SCA found a counterexample.
-        case failure(commands: [Command], original: [Command], coverageInvocations: Int, reductionStats: ReductionStats?)
-        /// SCA ran its covering array to completion without finding a failure.
-        case completed(coverageInvocations: Int)
-        /// SCA was not applicable or was skipped before covering anything.
-        case skipped
-
-        /// Whether SCA ran to completion, covering command orderings.
-        var isCompleted: Bool {
-            switch self {
-                case .completed: true
-                case .failure, .skipped: false
-            }
-        }
-    }
-}
-
 // MARK: - SCA Coverage Runner
 
 extension __ExhaustRuntime {
@@ -247,6 +145,109 @@ extension __ExhaustRuntime {
                 return .resize(newSize: newSize, choices: choices.map { pruneSequenceElements(from: $0, at: indices) })
             default:
                 return tree
+        }
+    }
+}
+
+
+extension __ExhaustRuntime {
+    /// Extracts pick choices from a command generator when the generator is a top-level ``Gen.pick``.
+    static func extractPickChoices(
+        from gen: Generator<some Any>
+    ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
+        guard case let .impure(operation, _) = gen,
+              case let .pick(choices, _) = operation
+        else { return nil }
+        return choices
+    }
+
+    /// Estimates a default command limit from the command generator's structure and the coverage budget.
+    ///
+    /// Pre-analyzes pick branches to determine the per-position domain size, then computes the sequence length at which SCA rows (at t=2) would exhaust the budget. The result is the larger of this budget ceiling and an exploration floor based on the number of command types, ensuring sequences are long enough for each command to appear several times.
+    static func estimateCommandLimit(
+        commandGen: Generator<some Any>,
+        coverageBudget: UInt64
+    ) -> Int {
+        guard let pickChoices = extractPickChoices(from: commandGen) else {
+            return 10
+        }
+
+        let branchCount = pickChoices.count
+
+        // Pre-analyze branch argument domains to estimate the per-position domain size.
+        // Use sequenceLength=10 as initial estimate for threshold computation; the threshold is under a sqrt so it is not very sensitive to this value.
+        let threshold = SequenceCoveringArray.computeThreshold(
+            budget: coverageBudget,
+            sequenceLength: 10,
+            branchCount: branchCount
+        )
+        let branchProfiles = SequenceCoveringArray.analyzeBranches(
+            pickChoices,
+            threshold: threshold,
+            coverageBudget: coverageBudget
+        )
+        var domainSize: UInt64 = 0
+        for profile in branchProfiles {
+            let contribution: UInt64 = switch profile {
+                case .parameterFree, .unanalyzable:
+                    1
+                case let .analyzed(params):
+                    params.reduce(UInt64(1)) { acc, param in
+                        let (product, overflow) = acc.multipliedReportingOverflow(by: param.domainSize)
+                        return overflow ? .max : product
+                    }
+            }
+            let (sum, overflow) = domainSize.addingReportingOverflow(contribution)
+            domainSize = overflow ? .max : sum
+        }
+
+        // Budget ceiling: at t=2, covering array rows ≈ d² × ln(L).
+        // Solving for L: L = e^(B / d²).
+        // For small domains this is huge (budget is not the bottleneck); for large domains it can be < 2.
+        let d = Double(min(domainSize, UInt64(Int.max)))
+        let d2 = max(d * d, 1.0)
+        let ratio = Double(coverageBudget) / d2
+        let budgetCeiling = ratio > 1 ? Int(min(exp(ratio), 100)) : 2
+
+        // Exploration floor: enough for each command type to appear several times, ensuring the random phase can reach meaningful state depths.
+        let explorationFloor = max(branchCount * 3, 6)
+
+        let limit = max(explorationFloor, budgetCeiling)
+
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "estimated_command_limit",
+            metadata: [
+                "command_limit": "\(limit)",
+                "command_types": "\(branchCount)",
+                "domain_size": "\(domainSize)",
+                "budget_ceiling": "\(budgetCeiling)",
+                "exploration_floor": "\(explorationFloor)",
+            ]
+        )
+
+        return limit
+    }
+}
+
+// MARK: - SCA Outcome
+
+extension __ExhaustRuntime {
+    /// Outcome of an SCA coverage run.
+    enum SCAOutcome<Command> {
+        /// SCA found a counterexample.
+        case failure(commands: [Command], original: [Command], coverageInvocations: Int, reductionStats: ReductionStats?)
+        /// SCA ran its covering array to completion without finding a failure.
+        case completed(coverageInvocations: Int)
+        /// SCA was not applicable or was skipped before covering anything.
+        case skipped
+
+        /// Whether SCA ran to completion, covering command orderings.
+        var isCompleted: Bool {
+            switch self {
+                case .completed: true
+                case .failure, .skipped: false
+            }
         }
     }
 }

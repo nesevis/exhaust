@@ -11,7 +11,6 @@ import Foundation
 /// Identifies a logical execution lane in a concurrent contract test.
 ///
 /// Lane indices are zero-based: lane 0 is "a", lane 1 is "b", and so on up to the concurrency level minus one. The label maps index to a lowercase ASCII letter for trace output.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 struct LaneID: Hashable, Sendable {
     let index: UInt8
 
@@ -49,7 +48,6 @@ final class LaneExecutor: TaskExecutor, @unchecked Sendable {
 /// The drain loop calls ``dequeue(preferring:)``, passing the next lane from the generated schedule. If a job for the preferred lane exists, it is returned; otherwise the queue falls back to any available job. This "prefer but don't block" policy means the generated schedule controls interleaving when multiple lanes have pending work, and automatically drains whichever lane is still active when others have no pending continuations.
 ///
 /// Thread-safe: all mutable state is protected by `NSCondition`. In the common case (single-threaded drain loop), the lock is uncontended. When a foreign executor re-enqueues a continuation from another thread, the lock serializes the access. A queue-wide condition wakes the drain loop when it is parked with no runnable jobs; the condition does not participate in lane selection.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 final class RunQueue: @unchecked Sendable {
     private struct Lane {
         var jobs: [UnownedJob] = []

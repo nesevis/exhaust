@@ -78,6 +78,12 @@ package extension FreerMonad {
                 .impure(operation: operation, continuation: continuation)
         }
     }
+
+    /// Returns whether this generator is a terminal ``FreerMonad/pure`` value with no remaining operations. Used as the recursion base in analysis passes (for example ``ChoiceTreeAnalysis``) and by combinators that need to detect constant generators.
+    var isPure: Bool {
+        if case .pure = self { return true }
+        return false
+    }
 }
 
 // MARK: - Sendable

@@ -1,5 +1,3 @@
-// MARK: - Cooperative Drain Loop for Concurrent Contract Execution
-
 //
 // Executes a tagged command sequence through a cooperative scheduler that deterministically controls interleaving at every `await` boundary. The input is a flat [(ScheduleMarker, Command)] array that encodes both the lane partition AND the interleaving order:
 //
@@ -18,37 +16,6 @@
 //
 // Limitation: the schedule array has one entry per non-prefix command, but the drain loop consumes one entry per dequeued job, including continuations from internal suspension points. Commands that suspend multiple times consume schedule entries meant for later commands, causing the schedule to exhaust early. Once exhausted, lane assignment falls back to deterministic round-robin (`scheduleIndex % concurrencyLevel`). Command-level lane assignment and ordering remain fully reducible; continuation-level interleavings are not encoded in the choice sequence because the number of suspension points per command is a runtime property that cannot be known before execution.
 import ExhaustCore
-
-/// Assigns a command to a scheduling lane in a concurrent contract test.
-///
-/// During generation, the marker generator produces values in 0...N (where N is the concurrency level). The reducer's value-minimization pass drives markers toward 0 (prefix), naturally discovering which commands must remain concurrent to reproduce the failure. Commands whose markers reach prefix move to the sequential phase, proving they are not part of the minimal concurrent counterexample.
-///
-/// Value 0 is the sequential prefix. Values 1 through N map to lanes "a" through the Nth letter.
-public struct ScheduleMarker: RawRepresentable, Sendable, Equatable, Hashable, CustomStringConvertible {
-    public let rawValue: UInt8
-
-    public init(rawValue: UInt8) {
-        self.rawValue = rawValue
-    }
-
-    /// The sequential prefix marker. Commands with this marker run before any interleaving begins.
-    public static let prefix = ScheduleMarker(rawValue: 0)
-
-    /// Whether this marker assigns to the sequential prefix rather than a concurrent lane.
-    public var isPrefix: Bool {
-        rawValue == 0
-    }
-
-    /// The zero-based lane index, or nil if this is the prefix marker.
-    var laneIndex: UInt8? {
-        rawValue > 0 ? rawValue - 1 : nil
-    }
-
-    public var description: String {
-        if rawValue == 0 { return "prefix" }
-        return String(UnicodeScalar(UInt8(ascii: "a") + rawValue - 1))
-    }
-}
 
 /// Outcome of draining a single tagged command sequence through the cooperative scheduler.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -138,7 +105,9 @@ func drainSchedule<Spec: AsyncContractSpec>(
                 ) == false {
                     return ConcurrentExecutionResult(
                         passed: false,
-                        trace: recordTrace ? buildTrace(trace.value) : [],
+                        trace: recordTrace
+                            ? __ExhaustRuntime.buildTrace(trace.value)
+                            : [],
                         timedOut: true
                     )
                 }
@@ -148,13 +117,24 @@ func drainSchedule<Spec: AsyncContractSpec>(
             idleStopwatch = Stopwatch()
         }
         if failed.value != nil {
-            return ConcurrentExecutionResult(passed: false, trace: recordTrace ? buildTrace(trace.value) : [])
+            return ConcurrentExecutionResult(
+                passed: false,
+                trace: recordTrace
+                    ? __ExhaustRuntime.buildTrace(trace.value)
+                    : []
+            )
         }
     }
 
-    let hasAnyLaneCommands = laneCommands.contains { $0.isEmpty == false }
+    let hasAnyLaneCommands = laneCommands
+        .contains { $0.isEmpty == false }
     if hasAnyLaneCommands == false {
-        return ConcurrentExecutionResult(passed: true, trace: recordTrace ? buildTrace(trace.value) : [])
+        return ConcurrentExecutionResult(
+            passed: true,
+            trace: recordTrace
+                ? __ExhaustRuntime.buildTrace(trace.value)
+                : []
+        )
     }
 
     for (laneIndex, commands) in laneCommands.enumerated() {
@@ -215,7 +195,9 @@ func drainSchedule<Spec: AsyncContractSpec>(
                 idleTimeoutMilliseconds: idleTimeoutMilliseconds,
                 elapsedMilliseconds: idleStopwatch.elapsedMilliseconds
             ) == false {
-                let finalTrace: [TraceStep] = recordTrace ? buildTrace(trace.value) : []
+                let finalTrace: [TraceStep] = recordTrace
+                    ? __ExhaustRuntime.buildTrace(trace.value)
+                    : []
                 return ConcurrentExecutionResult(passed: false, trace: finalTrace, timedOut: true)
             }
             continue
@@ -247,6 +229,8 @@ func drainSchedule<Spec: AsyncContractSpec>(
         }
     }
 
-    let finalTrace: [TraceStep] = recordTrace ? buildTrace(trace.value) : []
+    let finalTrace: [TraceStep] = recordTrace
+        ? __ExhaustRuntime.buildTrace(trace.value)
+        : []
     return ConcurrentExecutionResult(passed: failed.value == nil, trace: finalTrace)
 }

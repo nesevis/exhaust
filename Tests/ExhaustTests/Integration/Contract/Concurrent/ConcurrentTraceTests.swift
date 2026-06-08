@@ -13,7 +13,7 @@ struct ConcurrentTraceTests {
             TraceEvent(kind: .resumed, lane: "a", label: ""),
             TraceEvent(kind: .completed, lane: "a", label: "1A foo"),
         ]
-        let steps = buildTrace(events)
+        let steps = __ExhaustRuntime.buildTrace(events)
         #expect(steps.count == 1)
         #expect(steps[0].command.hasSuffix("(completed)"))
     }
@@ -29,7 +29,7 @@ struct ConcurrentTraceTests {
             TraceEvent(kind: .resumed, lane: "a", label: ""),
             TraceEvent(kind: .completed, lane: "a", label: "1A foo"),
         ]
-        let steps = buildTrace(events)
+        let steps = __ExhaustRuntime.buildTrace(events)
         let hasSuspended = steps.contains { $0.command.hasSuffix("(suspended)") }
         let hasResumed = steps.contains { $0.command.hasSuffix("(resumed)") }
         #expect(hasSuspended)
@@ -45,7 +45,7 @@ struct ConcurrentTraceTests {
             TraceEvent(kind: .started, lane: "b", label: "1B withdraw"),
             TraceEvent(kind: .completed, lane: "b", label: "1B withdraw"),
         ]
-        let steps = buildTrace(events)
+        let steps = __ExhaustRuntime.buildTrace(events)
         #expect(steps.count == 2)
         #expect(steps[0].command == "1A deposit (completed)")
         #expect(steps[1].command == "1B withdraw (completed)")
@@ -60,7 +60,7 @@ struct ConcurrentTraceTests {
             TraceEvent(kind: .started, lane: "a", label: "1A action"),
             TraceEvent(kind: .completed, lane: "a", label: "1A action"),
         ]
-        let steps = buildTrace(events)
+        let steps = __ExhaustRuntime.buildTrace(events)
         #expect(steps.count == 2)
         #expect(steps[0].command == "setup (prefix)")
         #expect(steps[1].command == "1A action (completed)")
@@ -73,7 +73,7 @@ struct ConcurrentTraceTests {
             TraceEvent(kind: .started, lane: "a", label: "1A increment"),
             TraceEvent(kind: .failed(message: "matchesModel"), lane: "a", label: "1A increment"),
         ]
-        let steps = buildTrace(events)
+        let steps = __ExhaustRuntime.buildTrace(events)
         let failedStep = steps.first { step in
             if case .invariantFailed = step.outcome { return true }
             return false
@@ -91,7 +91,7 @@ struct ConcurrentTraceTests {
             TraceEvent(kind: .started, lane: "a", label: "1A reset(mode:forced)"),
             TraceEvent(kind: .completed, lane: "a", label: "1A reset(mode:forced)"),
         ]
-        let steps = buildTrace(events)
+        let steps = __ExhaustRuntime.buildTrace(events)
         #expect(steps.count == 1)
         #expect(steps[0].command == "1A reset(mode:forced) (completed)")
     }
