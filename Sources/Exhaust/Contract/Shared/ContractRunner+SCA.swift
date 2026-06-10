@@ -1,28 +1,40 @@
-// SCA (Sequence Covering Array) coverage phase for sequential contract testing.
+// SCA (Sequence Covering Array) coverage phase for contract testing.
 import ExhaustCore
 import Foundation
 
-// MARK: - SCA Coverage Runner
+// MARK: - Shared SCA Row Loop
 
 extension __ExhaustRuntime {
-    /// Runs SCA coverage for contract command sequences.
+    /// Raw outcome of the SCA row loop before caller-specific failure handling.
     ///
-    /// Builds a covering array where each position's domain is the flattened union of `(commandType × argumentCombinations)`. Parameter-free branches contribute one domain value each; analyzed branches contribute the product of their parameter domain sizes. When any branch has analyzed arguments, interaction strength caps at t=2 to keep covering array sizes manageable; otherwise higher strengths (up to t=6 for short sequences) are used.
+    /// Each caller (sequential, concurrent) handles the ``failure`` case differently — the sequential path prunes skipped commands and reduces directly, while the concurrent path delegates to ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``.
+    enum SCARowLoopResult<Value> {
+        /// A counterexample was found at the given coverage iteration.
+        case failure(value: Value, tree: ChoiceTree, coverageInvocations: Int)
+        /// The covering array was exhausted without finding a failure.
+        case completed(coverageInvocations: Int)
+        /// SCA was not applicable (generator structure or domain too small).
+        case skipped
+    }
+
+    /// Core SCA coverage row loop shared by the sequential and concurrent contract runners.
     ///
-    /// Returns ``SCAOutcome/skipped`` when domain construction fails or the domain is too small for pairwise coverage, so the caller can fall through to generic coverage and random sampling.
-    static func runSCACoverage<Command>(
-        seqGen: Generator<[Command]>,
-        commandGen: Generator<Command>,
+    /// Builds a covering array where each position's domain is the flattened union of `(commandType x argumentCombinations)`. Parameter-free branches contribute one domain value each; analyzed branches contribute the product of their parameter domain sizes. Interaction strength caps at t=2.
+    ///
+    /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:coverageInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"sca_coverage"` for sequential, `"concurrent_sca_coverage"` for concurrent.
+    static func runSCACoverageRowLoop<Value>(
+        seqGen: Generator<Value>,
+        commandGen: Generator<some Any>,
         commandLimit: Int,
         coverageBudget: UInt64,
-        skipToRow: Int? = nil,
-        property: @escaping @Sendable ([Command]) -> Bool,
-        identifySkips: @escaping @Sendable ([Command]) -> Set<Int>
-    ) -> SCAOutcome<Command> {
+        skipToRow: Int?,
+        logEventPrefix: String,
+        property: @escaping @Sendable (Value) -> Bool
+    ) -> SCARowLoopResult<Value> {
         guard let pickChoices = extractPickChoices(from: commandGen) else {
             ExhaustLog.notice(
                 category: .propertyTest,
-                event: "sca_coverage_skipped",
+                event: "\(logEventPrefix)_skipped",
                 "Command generator is not a top-level pick — SCA not applicable"
             )
             return .skipped
@@ -32,7 +44,7 @@ extension __ExhaustRuntime {
         guard sequenceLength >= 2 else {
             ExhaustLog.notice(
                 category: .propertyTest,
-                event: "sca_coverage_skipped",
+                event: "\(logEventPrefix)_skipped",
                 metadata: [
                     "sequence_length": "\(commandLimit)",
                     "reason": "sequence length must be >= 2 for SCA",
@@ -49,7 +61,7 @@ extension __ExhaustRuntime {
         ) else {
             ExhaustLog.notice(
                 category: .propertyTest,
-                event: "sca_coverage_skipped",
+                event: "\(logEventPrefix)_skipped",
                 "Domain construction failed — branches could not be analyzed"
             )
             return .skipped
@@ -59,7 +71,7 @@ extension __ExhaustRuntime {
         guard domainSizes.count >= 2 else {
             ExhaustLog.notice(
                 category: .propertyTest,
-                event: "sca_coverage_skipped",
+                event: "\(logEventPrefix)_skipped",
                 "Too few parameters for covering array (need >= 2)"
             )
             return .skipped
@@ -89,11 +101,60 @@ extension __ExhaustRuntime {
             iterations += 1
             if let skipToRow, iterations - 1 < skipToRow { continue }
             if property(value) == false {
+                return .failure(value: value, tree: freshTree, coverageInvocations: iterations)
+            }
+            if skipToRow != nil { break }
+        }
+
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: logEventPrefix,
+            metadata: [
+                "command_types": "\(pickChoices.count)",
+                "iterations": "\(iterations)",
+                "rows": "\(iterations)",
+                "sequence_length": "\(sequenceLength)",
+                "strength": "2",
+            ]
+        )
+
+        return .completed(coverageInvocations: iterations)
+    }
+}
+
+// MARK: - Sequential SCA Coverage
+
+extension __ExhaustRuntime {
+    /// Runs SCA coverage for sequential contract command sequences.
+    ///
+    /// Delegates to the shared ``runSCACoverageRowLoop(seqGen:commandGen:commandLimit:coverageBudget:skipToRow:logEventPrefix:property:)`` for the covering array iteration, then prunes skipped commands and reduces any counterexample found.
+    ///
+    /// Returns ``SCAOutcome/skipped`` when domain construction fails or the domain is too small for pairwise coverage, so the caller can fall through to generic coverage and random sampling.
+    static func runSCACoverage<Command>(
+        seqGen: Generator<[Command]>,
+        commandGen: Generator<Command>,
+        commandLimit: Int,
+        coverageBudget: UInt64,
+        skipToRow: Int? = nil,
+        property: @escaping @Sendable ([Command]) -> Bool,
+        identifySkips: @escaping @Sendable ([Command]) -> Set<Int>
+    ) -> SCAOutcome<Command> {
+        let result = runSCACoverageRowLoop(
+            seqGen: seqGen,
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            coverageBudget: coverageBudget,
+            skipToRow: skipToRow,
+            logEventPrefix: "sca_coverage",
+            property: property
+        )
+        switch result {
+            case let .failure(value, tree, coverageInvocations):
                 let (reduceValue, reduceTree) = pruneSkippedCommands(
                     value: value,
-                    tree: freshTree,
+                    tree: tree,
                     generator: seqGen,
-                    seed: UInt64(iterations),
+                    seed: UInt64(coverageInvocations),
                     property: property,
                     identifySkips: identifySkips,
                     logEvent: "contract_skip_pruning"
@@ -105,24 +166,12 @@ extension __ExhaustRuntime {
                     config: .init(maxStalls: 2),
                     property: property
                 )
-                return .failure(commands: reduced, original: value, coverageInvocations: iterations, reductionStats: stats)
-            }
-            if skipToRow != nil { break }
+                return .failure(commands: reduced, original: value, coverageInvocations: coverageInvocations, reductionStats: stats)
+            case let .completed(coverageInvocations):
+                return .completed(coverageInvocations: coverageInvocations)
+            case .skipped:
+                return .skipped
         }
-
-        ExhaustLog.notice(
-            category: .propertyTest,
-            event: "sca_coverage",
-            metadata: [
-                "command_types": "\(pickChoices.count)",
-                "iterations": "\(iterations)",
-                "rows": "\(iterations)",
-                "sequence_length": "\(sequenceLength)",
-                "strength": "2",
-            ]
-        )
-
-        return .completed(coverageInvocations: iterations)
     }
 }
 

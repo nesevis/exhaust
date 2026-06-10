@@ -14,9 +14,9 @@ extension __ExhaustRuntime {
 
     /// Runs SCA coverage for concurrent contract command sequences.
     ///
-    /// Builds a covering array over command-type orderings (the schedule marker is tagged `.laneControl` and excluded from the covering array parameters). Each row materializes a specific command ordering with random lane assignments, testing the property under deterministic interleaving.
+    /// Delegates to the shared ``runSCACoverageRowLoop(seqGen:commandGen:commandLimit:coverageBudget:skipToRow:logEventPrefix:property:)`` for the covering array iteration, then reduces any counterexample through ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``.
     ///
-    /// - Returns: A failure result if a counterexample is found during coverage, or nil if all rows pass.
+    /// - Returns: A failure result if a counterexample is found during coverage, or nil if all rows pass or SCA is not applicable.
     static func runConcurrentSCACoverage<Command>(
         seqGen: Generator<[(ScheduleMarker, Command)]>,
         commandGen: Generator<Command>,
@@ -30,87 +30,34 @@ extension __ExhaustRuntime {
         lastRunTimedOut: UnsafeSendableBox<Bool>,
         invocationCounter: UnsafeSendableBox<Int>
     ) -> SCAFailureResult<Command>? {
-        guard let pickChoices = extractPickChoices(from: commandGen) else {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "concurrent_sca_skipped",
-                "Command generator is not a top-level pick — SCA not applicable"
-            )
-            return nil
-        }
-
-        let sequenceLength = commandLimit
-        guard sequenceLength >= 2 else {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "concurrent_sca_skipped",
-                "Sequence length must be >= 2 for SCA"
-            )
-            return nil
-        }
-
-        guard let domain = SCADomain.build(
-            sequenceLength: sequenceLength,
-            pickChoices: pickChoices,
+        let result = runSCACoverageRowLoop(
+            seqGen: seqGen,
+            commandGen: commandGen,
+            commandLimit: commandLimit,
             coverageBudget: coverageBudget,
-            strengthCap: 2
-        ) else {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "concurrent_sca_skipped",
-                "Domain construction failed"
-            )
-            return nil
-        }
-
-        let domainSizes = domain.profile.domainSizes
-        guard domainSizes.count >= 2 else {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "concurrent_sca_skipped",
-                "Too few parameters for covering array"
-            )
-            return nil
-        }
-
-        let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
-        let lengthRange = UInt64(0) ... UInt64(commandLimit)
-        let reductionConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
-
-        var iterations: UInt64 = 0
-        while iterations < coverageBudget, let row = generator.next() {
-            let tree: ChoiceTree? = domain.buildTree(row: row, sequenceLengthRange: lengthRange)
-            guard let tree else { continue }
-
-            let mode = Materializer.Mode.guided(
-                seed: iterations,
-                fallbackTree: nil
-            )
-            guard case let .success(value, freshTree, _) = Materializer.materialize(
-                seqGen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
-            ) else {
-                continue
-            }
-
-            iterations += 1
-            if let skipToRow, iterations - 1 < skipToRow { continue }
-            if property(value) == false {
+            skipToRow: skipToRow,
+            logEventPrefix: "concurrent_sca_coverage",
+            property: property
+        )
+        switch result {
+            case let .failure(value, tree, coverageInvocations):
                 let timedOut = lastRunTimedOut.value
                 ExhaustLog.notice(
                     category: .propertyTest,
                     event: "concurrent_sca_failure",
-                    metadata: ["iteration": "\(iterations)", "commands": "\(value.count)", "timedOut": "\(timedOut)"]
+                    metadata: ["iteration": "\(coverageInvocations)", "commands": "\(value.count)", "timedOut": "\(timedOut)"]
                 )
 
+                let reductionConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
                 let reductionStartInvocations = invocationCounter.value
                 let reduction = reduceConcurrentCounterexample(
                     input: value,
-                    tree: freshTree,
+                    tree: tree,
                     sequenceGen: seqGen,
                     reductionConfig: reductionConfig,
                     property: property,
                     identifySkips: identifySkips,
-                    seed: iterations,
+                    seed: UInt64(coverageInvocations),
                     skipPruningLogEvent: "concurrent_sca_skip_pruning",
                     timedOut: timedOut
                 )
@@ -119,26 +66,13 @@ extension __ExhaustRuntime {
                 return SCAFailureResult(
                     finalInput: reduction.finalInput,
                     originalCount: value.count,
-                    iteration: iterations,
+                    iteration: UInt64(coverageInvocations),
                     timedOut: reduction.timedOut,
                     reductionStats: reduction.stats,
                     reductionInvocations: reductionInvocations
                 )
-            }
-            if skipToRow != nil { break }
+            case .completed, .skipped:
+                return nil
         }
-
-        ExhaustLog.notice(
-            category: .propertyTest,
-            event: "concurrent_sca_coverage",
-            metadata: [
-                "command_types": "\(pickChoices.count)",
-                "iterations": "\(iterations)",
-                "sequence_length": "\(sequenceLength)",
-                "strength": "2",
-            ]
-        )
-
-        return nil
     }
 }
