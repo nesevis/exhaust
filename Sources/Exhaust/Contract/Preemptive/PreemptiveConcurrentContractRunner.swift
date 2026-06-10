@@ -229,7 +229,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         return (trace, failed, spec.systemUnderTest, spec.failureDescription())
     }
 
-    /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state.
+    /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails — the partial state would mislead debugging.
     func buildResult(
         reduced: [(ScheduleMarker, Spec.Command)],
         seed: UInt64?,
@@ -237,13 +237,27 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         discoveryMethod: ContractDiscoveryMethod
     ) -> ContractResult<Spec> {
         let oracleSpec = Spec()
+        var replaySucceeded = true
         for (_, command) in reduced {
-            runCatchingObjC { try? oracleSpec.run(command) }
+            var exception: NSException?
+            let succeeded = exhaust_runCatchingObjCException({
+                do {
+                    try oracleSpec.run(command)
+                } catch is ContractSkip {
+                    // Skip is expected — continue.
+                } catch {
+                    replaySucceeded = false
+                }
+            }, &exception)
+            if succeeded == false || replaySucceeded == false {
+                replaySucceeded = false
+                break
+            }
         }
         return ContractResult<Spec>(
             commands: reduced.map(\.1),
             trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),
-            systemUnderTest: oracleSpec.systemUnderTest,
+            systemUnderTest: replaySucceeded ? oracleSpec.systemUnderTest : nil,
             seed: seed,
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod

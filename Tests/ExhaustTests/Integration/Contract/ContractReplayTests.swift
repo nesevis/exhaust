@@ -82,8 +82,8 @@ struct ContractReplayTests {
     }
 }
 
-@Suite("Preemptive smoke replay seed resolution", .serialized, .tags(.contract))
-struct PreemptiveSmokeReplayTests {
+@Suite("Preemptive oracle replay", .serialized, .tags(.contract))
+struct PreemptiveOracleReplayTests {
     @Test("Smoke-phase failure replays deterministically through the coverage row path")
     func smokePhaseFailureReplaysDeterministically() throws {
         let initial = try #require(
@@ -110,6 +110,21 @@ struct PreemptiveSmokeReplayTests {
             )
         )
         #expect(replayed.commands.isEmpty == false, "Smoke row replay should reproduce the failure")
+    }
+
+    @Test("Oracle replay returns nil systemUnderTest when the sequential replay throws")
+    func oracleReplayReturnsNilSystemUnderTestWhenSequentialReplayThrows() throws {
+        let result = try #require(
+            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                AlwaysThrowingPreemptiveSpec.self,
+                settings: [
+                    .commandLimit(2),
+                    .budget(.custom(coverage: 0, sampling: 50)),
+                    .suppress(.all),
+                ]
+            )
+        )
+        #expect(result.systemUnderTest == nil, "Oracle replay should throw, producing nil systemUnderTest")
     }
 }
 
@@ -370,3 +385,32 @@ final class BrokenDecrementCounter: @unchecked Sendable, CustomDebugStringConver
         // Bug: no-op
     }
 }
+
+// MARK: - Always-Throwing Preemptive Spec
+
+@Contract(.threads)
+final class AlwaysThrowingPreemptiveSpec {
+    @SystemUnderTest var sut = ThrowingSUT()
+
+    @Oracle
+    func oracleMatches(other _: ThrowingSUT) -> Bool {
+        true
+    }
+
+    @Command(weight: 1)
+    func failingCommand() throws {
+        try sut.alwaysFails()
+    }
+}
+
+final class ThrowingSUT: @unchecked Sendable, CustomDebugStringConvertible {
+    var debugDescription: String {
+        "ThrowingSUT"
+    }
+
+    func alwaysFails() throws {
+        throw AlwaysThrowingError()
+    }
+}
+
+private struct AlwaysThrowingError: Error {}
