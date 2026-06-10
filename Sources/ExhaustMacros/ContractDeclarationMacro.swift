@@ -18,7 +18,7 @@ private enum MacroConcurrencyMode: String {
 
 /// Reads the `ExecutionModel` literal from the `@Contract` attribute argument.
 ///
-/// Returns `nil` when the argument is missing or not a recognised literal.
+/// Returns `nil` when the argument is missing or not a recognized literal.
 private enum ModeExtractionResult {
     case mode(MacroConcurrencyMode)
     case missing
@@ -269,7 +269,14 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         decls.append(synthesizeCommandGenerator(commands: commands, context: context))
         decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: effectiveAsync, isReferenceType: true))
         decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: effectiveAsync))
-        decls.append(synthesizeFailureDescription(sutProps: sutProps))
+        let hasUserFailureDescription = members.contains { member in
+            guard let funcDecl = member.decl.as(FunctionDeclSyntax.self) else { return false }
+            return funcDecl.name.trimmedDescription == "failureDescription"
+                && funcDecl.signature.parameterClause.parameters.isEmpty
+        }
+        if hasUserFailureDescription == false {
+            decls.append(synthesizeFailureDescription(sutProps: sutProps))
+        }
 
         if mode == .threads, let oracle = oracles.first {
             decls.append(synthesizeOracleCheck(oracle: oracle, hasAnyAsync: effectiveAsync))
@@ -694,7 +701,7 @@ enum ContractDiagnostic: String, DiagnosticMessage {
     case invariantUnderThreads = "@Invariant requires deterministic per-step state, which a preemptive run does not have. Use @Contract(.tasks)"
     case noOracle = "@Contract(.threads) requires exactly one @Oracle method"
     case multipleOracles = "@Contract(.threads) allows only one @Oracle method"
-    case actorRequiresSequential = "Actor contracts must use @Contract(.sequential). Actor isolation serialises all dispatch, so concurrent testing has nowhere to interleave"
+    case actorRequiresSequential = "Actor contracts must use @Contract(.sequential). Actor isolation serializes all dispatch, so concurrent testing has nowhere to interleave"
     case actorWithThreads = "Actor contracts must use @Contract(.sequential). Actors are data-race-free, so .threads cannot surface races in them"
     case duplicateCommandName = "Two @Command methods share the same base name — rename one or merge them"
     case invalidCommandWeight = "@Command weight must be a positive integer literal"

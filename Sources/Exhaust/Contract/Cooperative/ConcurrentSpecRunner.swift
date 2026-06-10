@@ -90,7 +90,7 @@ private func runCommandRecordingTrace<Spec: AsyncContractSpec>(
 ///
 /// The drain loop advances one continuation at a time (via `runSynchronously`), picking the lane indicated by the next schedule entry. When a command body hits an `await` (for example, `Task.yield()` inside a non-atomic read-modify-write), the task suspends and re-enqueues its continuation. The drain loop then picks another lane's continuation, producing a deterministic interleaving at that suspension point.
 ///
-/// - Parameter concurrencyLevel: The number of concurrent lanes (1...8). When 1, all non-prefix commands run on a single lane with no interleaving (fast path).
+/// - Parameter concurrencyLevel: The number of concurrent lanes (1...8). When 1, the generator tags every command as prefix, so the entire sequence runs in the sequential prefix phase and the lane drain never executes.
 /// - Parameter recordTrace: When false, trace recording is skipped for performance (used during generation and reduction where only pass/fail matters). When true, the full interleaving trace is captured for the final counterexample report.
 /// - Parameter idleTimeoutMilliseconds: Maximum wall-clock time (in milliseconds) the drain loop waits with no pending jobs before declaring a timeout. Prevents infinite hangs when a continuation escapes to a foreign executor. Pass `Int.max` to disable.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -115,7 +115,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
     let executors: [LaneExecutor] = (0 ..< concurrencyLevel).map { index in
         LaneExecutor(lane: LaneID(index: UInt8(index)), runQueue: runQueue)
     }
-    // Shared mutable state accessed from Task closures and the drain loop. Thread safety relies on the cooperative single-threaded execution model: all Task closures execute via runSynchronously on the drain loop thread, and LaneExecutor.enqueue (the only re-entry point) is called synchronously within runSynchronously's suspension machinery. No concurrent access is possible as long as all continuations flow through LaneExecutor. If a continuation arrives from a foreign executor (custom-executor actor, Task.sleep), RunQueue itself would race first — the UnsafeSendableBox invariant is the same as RunQueue's.
+    // Single-threaded: Task closures are nonisolated with executorPreference, so all box accesses run via runSynchronously on the drain thread. Foreign-executor segments (MainActor, custom-executor actors) execute only user code that never touches these boxes. New box accesses must stay in nonisolated closure code.
     let spec = UnsafeSendableBox(specInit())
     let failed = UnsafeSendableBox<String?>(nil)
     let trace = UnsafeSendableBox<[TraceEvent]>([])

@@ -8,19 +8,20 @@ import Foundation
 /// ## Example
 ///
 /// ```swift
-/// @Contract
-/// struct DatabaseSpec {
+/// @Contract(.sequential)
+/// final class DatabaseSpec {
+///     @SystemUnderTest var db = Database()
 ///     let userIDs = Bundle<UserID>()
 ///
 ///     @Command(weight: 3, .string(), .int(in: 18...65))
-///     mutating func createUser(name: String, age: Int) {
+///     func createUser(name: String, age: Int) {
 ///         let id = db.createUser(name: name, age: age)
 ///         userIDs.add(id)
 ///     }
 ///
-///     @Command(weight: 2)
-///     mutating func deleteUser() throws {
-///         guard let id = userIDs.draw() else { throw skip() }
+///     @Command(weight: 2, .int(in: 0...99))
+///     func deleteUser(index: Int) throws {
+///         guard let id = userIDs.draw(at: index) else { throw skip() }
 ///         db.deleteUser(id: id)
 ///     }
 /// }

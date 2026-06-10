@@ -89,7 +89,7 @@ public extension __ExhaustRuntime {
             }.last
             if let requestedLevel, requestedLevel > 1 {
                 reportIssue(
-                    "Actor isolation serialises all command dispatch. .concurrent(\(requestedLevel)) will be ignored.",
+                    "Actor isolation serializes all command dispatch. .concurrent(\(requestedLevel)) will be ignored.",
                     severity: .warning,
                     fileID: fileID,
                     filePath: filePath,
@@ -502,10 +502,7 @@ private extension __ExhaustRuntime {
 
         let replaySeed: String?
         if let seed {
-            // A regression replay decodes the seed directly (maxRuns: 1) and carries no iteration, so it must round-trip as a bare seed. Only sampling and replay failures, which set a 1-based iteration, take the iteration suffix.
-            replaySeed = failureContext.iteration >= 1
-                ? ReplaySeed.Resolved.sampling(seed: seed, iteration: failureContext.iteration).encoded
-                : ReplaySeed.encodeRawSeed(seed)
+            replaySeed = ReplaySeed.Resolved.sampling(seed: seed, iteration: failureContext.iteration).encoded
         } else if discoveryMethod == .coverage || discoveryMethod == .smokeTest {
             replaySeed = ReplaySeed.Resolved.encodeCoverageIteration(failureContext.iteration)
         } else {

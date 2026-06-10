@@ -615,7 +615,7 @@
                 """
                 @Contract(.tasks)
                 ┬────────────────
-                ╰─ 🛑 Actor contracts must use @Contract(.sequential). Actor isolation serialises all dispatch, so concurrent testing has nowhere to interleave
+                ╰─ 🛑 Actor contracts must use @Contract(.sequential). Actor isolation serializes all dispatch, so concurrent testing has nowhere to interleave
                 actor Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -1164,6 +1164,79 @@
                     func valid() -> Bool { true }
                 }
                 """
+            }
+        }
+
+        @Test("User-defined failureDescription suppresses macro synthesis")
+        func userDefinedFailureDescriptionSuppressesSynthesis() {
+            assertMacro {
+                """
+                @Contract(.tasks)
+                final class Spec {
+                    @SystemUnderTest var counter: MyCounter
+
+                    @Command(weight: 1)
+                    func increment() throws {
+                    }
+
+                    func failureDescription() -> String {
+                        "custom: \\(counter)"
+                    }
+                }
+                """
+            } expansion: {
+                #"""
+                final class Spec {
+                    var counter: MyCounter
+                    func increment() throws {
+                    }
+
+                    func failureDescription() -> String {
+                        "custom: \(counter)"
+                    }
+
+                	enum Command: CustomStringConvertible, Sendable {
+                	        case increment
+
+                	    var description: String {
+                	        switch self {
+                	            case .increment:
+                	        	"increment"
+                	        }
+                	    }
+                	}
+
+                	typealias SystemUnderTest = MyCounter
+
+                	var systemUnderTest: SystemUnderTest {
+                		counter
+                	}
+
+                	static var commandGenerator: ReflectiveGenerator<Command> {
+                	    .oneOf(weighted:
+                	            (1, .just(Command.increment))
+                	    )
+                	}
+
+                	func run(_ command: Command) throws {
+                	    switch command {
+                	        case .increment:
+                	    	try self.increment()
+                	    }
+                	}
+
+                	func checkInvariants() throws {
+                	}
+
+                	static let executionModel: ExecutionModel = .tasks
+
+                	required init() {
+                	}
+                }
+
+                extension Spec: ContractSpec {
+                }
+                """#
             }
         }
     }

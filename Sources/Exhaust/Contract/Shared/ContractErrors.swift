@@ -30,8 +30,8 @@ public extension ContractSpecBase {
     ///
     /// ```swift
     /// @Command(weight: 2)
-    /// mutating func dequeue() throws {
-    ///     guard !contents.isEmpty else { throw skip() }
+    /// func dequeue() throws {
+    ///     guard contents.isEmpty == false else { throw skip() }
     ///     // ...
     /// }
     /// ```
@@ -47,8 +47,8 @@ public extension ContractSpecBase {
     ///
     /// ```swift
     /// @Command(weight: 2)
-    /// mutating func dequeue() throws {
-    ///     guard !contents.isEmpty else { throw skip() }
+    /// func dequeue() throws {
+    ///     guard contents.isEmpty == false else { throw skip() }
     ///     let result = queue.dequeue()
     ///     try check(result == contents.first)
     /// }

@@ -3,9 +3,9 @@
 // `#execute(MyContract.self, .settings...)` runs a contract spec at the call site, dispatching to the runner selected by the contract's `ExecutionModel`. The `@Contract` declaration macro and its markers live in `Macro+Contract.swift`.
 import ExhaustCore
 
-/// Runs a synchronous contract property test, dispatching to the `.tasks` or `.threads` runner based on the contract's ``ExecutionModel``.
+/// Runs a synchronous contract property test, dispatching to the `.sequential`, `.tasks`, or `.threads` runner based on the contract's ``ExecutionModel``.
 ///
-/// For `.tasks` contracts, generates command sequences, executes them sequentially, and checks `@Invariant` after each step. For `.threads` contracts, dispatches commands across real GCD threads and checks the `@Oracle` against a sequential replay. On failure, the sequence is reduced to a minimal counterexample.
+/// `.sequential` and `.tasks` contracts run commands one at a time and check `@Invariant` after each step. A synchronous `.tasks` contract has no suspension points to interleave at, so it executes sequentially — use ``AsyncContractSpec`` (async commands) for cooperative interleaving. `.threads` dispatches commands across real GCD threads and checks the `@Oracle` against a sequential replay. On failure, the sequence is reduced to a minimal counterexample.
 ///
 /// ```swift
 /// @Test func boundedQueueBehavior() {
@@ -23,6 +23,9 @@ import ExhaustCore
 /// - `.onReport(_)`: registers a closure that receives an ``ExhaustReport`` after the test completes.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
+/// - `.includeDiff`: includes a structural diff between the original and reduced command sequences in the failure report.
+/// - `.log(_)`: controls log verbosity. Defaults to `.error`.
+/// - `.collectOpenPBTStats`: collects per-example statistics in the OpenPBTStats JSON Lines format.
 ///
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
@@ -52,6 +55,9 @@ public macro execute<Spec: ContractSpec>(
 /// - `.onReport(_)`: registers a closure that receives an ``ExhaustReport`` after the test completes.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
+/// - `.includeDiff`: includes a structural diff between the original and reduced command sequences in the failure report.
+/// - `.log(_)`: controls log verbosity. Defaults to `.error`.
+/// - `.collectOpenPBTStats`: collects per-example statistics in the OpenPBTStats JSON Lines format.
 ///
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)

@@ -27,7 +27,7 @@ import ExhaustCore
 ///         queue.count == contents.count
 ///     }
 ///
-///     @Command(weight: 3, #gen(.int(in: 0...99)))
+///     @Command(weight: 3, .int(in: 0...99))
 ///     func enqueue(value: Int) throws {
 ///         guard contents.count < 4 else { throw skip() }
 ///         queue.enqueue(value)
