@@ -22,6 +22,20 @@ struct ResolvedConcurrentConfig {
             && budget.coverageBudget > 0
     }
 
+    /// Normalized idle timeout: `nil` when the configured value is non-positive or sentinel-large (``Int/max``), meaning "wait unbounded". Used by the preemptive checkers to distinguish a real timeout from an intentionally disabled one.
+    var resolvedIdleTimeoutMilliseconds: Int? {
+        (idleTimeout > 0 && idleTimeout < Int.max) ? idleTimeout : nil
+    }
+
+    /// Log configuration derived from the resolved settings, shared by all concurrent entry points.
+    var logConfiguration: ExhaustLog.Configuration {
+        ExhaustLog.Configuration(
+            isEnabled: suppressLogs == false,
+            minimumLevel: logLevel,
+            format: .keyValue
+        )
+    }
+
     enum ParseResult {
         case success(ResolvedConcurrentConfig)
         case invalidReplaySeed(ReplaySeed)

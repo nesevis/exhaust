@@ -121,14 +121,8 @@ public extension __ExhaustRuntime {
         #endif
 
         // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop — a deadlock under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD grows its thread pool dynamically, so concurrent drain loops cannot exhaust it.
-        let logConfiguration = ExhaustLog.Configuration(
-            isEnabled: config.suppressLogs == false,
-            minimumLevel: config.logLevel,
-            format: .keyValue
-        )
-
         let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
-            ExhaustLog.withConfiguration(logConfiguration) {
+            ExhaustLog.withConfiguration(config.logConfiguration) {
                 runConcurrentPipeline(
                     Spec.self,
                     config: config,
