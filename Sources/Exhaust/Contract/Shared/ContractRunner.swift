@@ -152,6 +152,11 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column
     ) async -> ContractResult<Spec>? {
+        var regressionSeeds: [String] = []
+        #if canImport(Testing)
+            regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
+        #endif
+
         let logConfiguration = ExhaustLog.Configuration(
             isEnabled: !settings.contains { if case .suppress(.logs) = $0 { true } else if case .suppress(.all) = $0 { true } else { false } },
             minimumLevel: settings.compactMap { if case let .log(level) = $0 { level } else { nil } }.last ?? .error,
@@ -163,6 +168,7 @@ public extension __ExhaustRuntime {
                 runAsyncSequentialPipeline(
                     specType,
                     settings: settings,
+                    regressionSeeds: regressionSeeds,
                     fileID: fileID
                 )
             }
@@ -178,6 +184,7 @@ private extension __ExhaustRuntime {
     static func runAsyncSequentialPipeline<Spec: AsyncContractSpec>(
         _ specType: Spec.Type,
         settings: [ContractSettings],
+        regressionSeeds: [String] = [],
         fileID: StaticString
     ) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
@@ -193,6 +200,38 @@ private extension __ExhaustRuntime {
         guard context.hasInvalidReplaySeed == false else {
             deferredIssues.append("Invalid replay seed")
             return (nil, deferredIssues)
+        }
+
+        if context.isSamplingReplay == false, context.isCoverageReplay == false {
+            for encodedSeed in regressionSeeds {
+                guard CrockfordBase32.decodeWithIteration(encodedSeed) != nil
+                    || CrockfordBase32.decodeCoverageRow(encodedSeed) != nil
+                else {
+                    deferredIssues.append("Invalid regression seed: \(encodedSeed)")
+                    continue
+                }
+
+                let (replayResult, replayIssues) = runAsyncSequentialPipeline(
+                    specType,
+                    settings: [.replay(.encoded(encodedSeed))] + settings,
+                    fileID: fileID
+                )
+                deferredIssues.append(contentsOf: replayIssues)
+
+                if let replayResult {
+                    return (replayResult, deferredIssues)
+                } else {
+                    let suppressIssueReporting = settings.contains {
+                        switch $0 {
+                            case .suppress(.issueReporting), .suppress(.all): true
+                            default: false
+                        }
+                    }
+                    if suppressIssueReporting == false {
+                        deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
+                    }
+                }
+            }
         }
 
         let commandGen = Spec.commandGenerator

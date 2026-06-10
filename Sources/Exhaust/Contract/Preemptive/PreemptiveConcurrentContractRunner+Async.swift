@@ -36,6 +36,11 @@ public extension __ExhaustRuntime {
                 return nil
         }
 
+        var regressionSeeds: [String] = []
+        #if canImport(Testing)
+            regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
+        #endif
+
         // A non-positive or sentinel-large idle timeout (e.g. `Int.max` to disable) means "wait unbounded".
         let idleTimeoutMilliseconds: Int? = (config.idleTimeout > 0 && config.idleTimeout < Int.max)
             ? config.idleTimeout
@@ -45,7 +50,7 @@ public extension __ExhaustRuntime {
         let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: .keyValue)
         let (result, deferredIssues, report): (ContractResult<Spec>?, [String], ExhaustReport) = await __ExhaustRuntime.dispatchToGCD {
             ExhaustLog.withConfiguration(logConfiguration) {
-                runPreemptivePipeline(backend: backend, config: config)
+                runPreemptivePipeline(backend: backend, config: config, regressionSeeds: regressionSeeds)
             }
         }
         config.onReportClosure?(report)

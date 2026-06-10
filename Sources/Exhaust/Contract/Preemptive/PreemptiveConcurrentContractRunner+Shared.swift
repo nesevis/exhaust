@@ -143,7 +143,8 @@ extension __ExhaustRuntime {
     /// Rendered failure messages are returned as deferred issues rather than reported inline, so each entry point can report them in a context where Swift Testing task-locals are available (the pipeline itself runs on a GCD thread). The fully-populated ``ExhaustReport`` is returned for the entry point to deliver to `onReport`.
     static func runPreemptivePipeline<Backend: PreemptiveBackend>(
         backend: Backend,
-        config: ResolvedConcurrentConfig
+        config: ResolvedConcurrentConfig,
+        regressionSeeds: [String] = []
     ) -> (result: ContractResult<Backend.Spec>?, deferredIssues: [String], report: ExhaustReport) {
         typealias Spec = Backend.Spec
         let runStopwatch = Stopwatch()
@@ -178,10 +179,50 @@ extension __ExhaustRuntime {
             return outcome.passed
         }
 
-        // Phase 0: Smoke test
+        // Regression seeds: replay each through the same pipeline with the appropriate replay config.
+        if config.coverageReplayRow == nil, config.seed == nil {
+            for encodedSeed in regressionSeeds {
+                let samplingSeed = CrockfordBase32.decodeWithIteration(encodedSeed)
+                let coverageRow = CrockfordBase32.decodeCoverageRow(encodedSeed)
+                guard samplingSeed != nil || coverageRow != nil else {
+                    deferredIssues.append("Invalid regression seed: \(encodedSeed)")
+                    continue
+                }
+
+                var replayConfig = config
+                if let coverageRow {
+                    replayConfig.coverageReplayRow = coverageRow
+                    let needed = UInt64(coverageRow) + 1
+                    if replayConfig.budget.coverageBudget < needed {
+                        replayConfig.budget = .custom(
+                            coverage: needed,
+                            sampling: replayConfig.budget.samplingBudget
+                        )
+                    }
+                } else if let (seed, iteration) = samplingSeed {
+                    replayConfig.seed = seed
+                    replayConfig.replayIteration = iteration
+                }
+
+                let (replayResult, replayIssues, _) = runPreemptivePipeline(
+                    backend: backend,
+                    config: replayConfig
+                )
+                deferredIssues.append(contentsOf: replayIssues)
+
+                if let replayResult {
+                    finalizeReport()
+                    return (replayResult, deferredIssues, report)
+                } else if config.suppressIssueReporting == false {
+                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
+                }
+            }
+        }
+
+        // Phase 0: Smoke test — deterministically seeded so U-prefixed replay seeds reproduce the same command sequence.
         if config.seed == nil, config.replayIteration == nil {
             let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
-            var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
+            var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, seed: 0, maxRuns: coverageBudget)
             var smokeRow = 0
             do { while let (commands, _) = try smokeIterator.next() {
                 if let coverageReplayRow = config.coverageReplayRow, smokeRow < coverageReplayRow {

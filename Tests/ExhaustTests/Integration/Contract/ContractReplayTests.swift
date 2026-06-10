@@ -82,6 +82,37 @@ struct ContractReplayTests {
     }
 }
 
+@Suite("Preemptive smoke replay seed resolution", .serialized, .tags(.contract))
+struct PreemptiveSmokeReplayTests {
+    @Test("Smoke-phase failure replays deterministically through the coverage row path")
+    func smokePhaseFailureReplaysDeterministically() throws {
+        let initial = try #require(
+            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                PreemptiveSequentiallyBrokenSpec.self,
+                settings: [
+                    .commandLimit(6),
+                    .suppress(.all),
+                ]
+            )
+        )
+        let replaySeed = try #require(initial.replaySeed)
+        #expect(replaySeed.hasPrefix("U"), "Smoke failure replay seed should use U prefix, got: \(replaySeed)")
+        #expect(initial.discoveryMethod == .smokeTest)
+
+        let replayed = try #require(
+            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                PreemptiveSequentiallyBrokenSpec.self,
+                settings: [
+                    .commandLimit(6),
+                    .replay(.encoded(replaySeed)),
+                    .suppress(.all),
+                ]
+            )
+        )
+        #expect(replayed.commands.isEmpty == false, "Smoke row replay should reproduce the failure")
+    }
+}
+
 @Suite("Concurrent contract replay seed resolution", .serialized, .tags(.contract))
 struct ConcurrentContractReplayTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

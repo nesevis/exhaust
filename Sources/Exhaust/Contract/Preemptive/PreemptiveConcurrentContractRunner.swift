@@ -35,6 +35,11 @@ public extension __ExhaustRuntime {
                 return nil
         }
 
+        var regressionSeeds: [String] = []
+        #if canImport(Testing)
+            regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
+        #endif
+
         let idleTimeoutMilliseconds: Int? = (config.idleTimeout > 0 && config.idleTimeout < Int.max)
             ? config.idleTimeout
             : nil
@@ -43,7 +48,7 @@ public extension __ExhaustRuntime {
         let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: .keyValue)
         let (result, deferredIssues, report): (ContractResult<Spec>?, [String], ExhaustReport) = DispatchQueue.global().sync {
             ExhaustLog.withConfiguration(logConfiguration) {
-                runPreemptivePipeline(backend: backend, config: config)
+                runPreemptivePipeline(backend: backend, config: config, regressionSeeds: regressionSeeds)
             }
         }
         config.onReportClosure?(report)
