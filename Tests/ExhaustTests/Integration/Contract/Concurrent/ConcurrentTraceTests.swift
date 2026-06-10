@@ -71,7 +71,7 @@ struct ConcurrentTraceTests {
     func failureStepCarriesTheInvariantName() {
         let events: [TraceEvent] = [
             TraceEvent(kind: .started, lane: "a", label: "1A increment"),
-            TraceEvent(kind: .failed(message: "matchesModel"), lane: "a", label: "1A increment"),
+            TraceEvent(kind: .failed(message: "matchesModel", source: .invariant), lane: "a", label: "1A increment"),
         ]
         let steps = __ExhaustRuntime.buildTrace(events)
         let failedStep = steps.first { step in
@@ -82,6 +82,61 @@ struct ConcurrentTraceTests {
         if case let .invariantFailed(name) = failedStep?.outcome {
             #expect(name == "matchesModel")
         }
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Failing prefix command appears once, not twice")
+    func failingPrefixCommandAppearsOnce() {
+        let events: [TraceEvent] = [
+            TraceEvent(kind: .started, lane: "prefix", label: "enqueue(5)"),
+            TraceEvent(kind: .failed(message: "matchesModel", source: .invariant), lane: "prefix", label: "enqueue(5)"),
+        ]
+        let steps = __ExhaustRuntime.buildTrace(events)
+        #expect(steps.count == 1)
+        if case let .invariantFailed(name) = steps.first?.outcome {
+            #expect(name == "matchesModel")
+        } else {
+            Issue.record("Expected invariantFailed outcome")
+        }
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Check failure renders as checkFailed, not invariantFailed")
+    func checkFailureRendersAsCheckFailed() {
+        let events: [TraceEvent] = [
+            TraceEvent(kind: .started, lane: "a", label: "1A withdraw"),
+            TraceEvent(kind: .failed(message: "balance must match", source: .check), lane: "a", label: "1A withdraw"),
+        ]
+        let steps = __ExhaustRuntime.buildTrace(events)
+        let failedStep = steps.first { step in
+            if case .checkFailed = step.outcome { return true }
+            return false
+        }
+        #expect(failedStep != nil, "check() failure should render as checkFailed, not invariantFailed")
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Skipped command renders as skipped, not ok")
+    func skippedCommandRendersAsSkipped() {
+        let events: [TraceEvent] = [
+            TraceEvent(kind: .started, lane: "a", label: "1A withdraw"),
+            TraceEvent(kind: .skipped, lane: "a", label: "1A withdraw"),
+        ]
+        let steps = __ExhaustRuntime.buildTrace(events)
+        #expect(steps.count == 1)
+        #expect(steps.first?.outcome == .skipped)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Skipped prefix command renders as skipped, not ok")
+    func skippedPrefixCommandRendersAsSkipped() {
+        let events: [TraceEvent] = [
+            TraceEvent(kind: .started, lane: "prefix", label: "withdraw"),
+            TraceEvent(kind: .skipped, lane: "prefix", label: "withdraw"),
+        ]
+        let steps = __ExhaustRuntime.buildTrace(events)
+        #expect(steps.count == 1)
+        #expect(steps.first?.outcome == .skipped)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

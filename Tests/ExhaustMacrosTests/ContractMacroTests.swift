@@ -952,6 +952,116 @@
                 """#
             }
         }
+
+        @Test("Duplicate @Command base names produce diagnostic")
+        func duplicateCommandBaseNamesProduceDiagnostic() {
+            assertMacro {
+                """
+                @Contract(.tasks)
+                final class QueueSpec {
+                    @SystemUnderTest var queue: MyQueue
+
+                    @Command(weight: 1)
+                    func push() throws {
+                    }
+
+                    @Command(weight: 1)
+                    func push() throws {
+                    }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.tasks)
+                final class QueueSpec {
+                    @SystemUnderTest var queue: MyQueue
+
+                    @Command(weight: 1)
+                    func push() throws {
+                    }
+
+                    @Command(weight: 1)
+                    ╰─ 🛑 Two @Command methods share the same base name — rename one or merge them
+                    func push() throws {
+                    }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            }
+        }
+
+        @Test("Zero @Command weight produces diagnostic")
+        func zeroCommandWeightProducesDiagnostic() {
+            assertMacro {
+                """
+                @Contract(.tasks)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command(weight: 0)
+                    func action() throws {
+                    }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.tasks)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command(weight: 0)
+                    ╰─ 🛑 @Command weight must be a positive integer literal
+                    func action() throws {
+                    }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            }
+        }
+
+        @Test("Parameterless @Oracle produces targeted diagnostic instead of noOracle")
+        func parameterlessOracleProducesTargetedDiagnostic() {
+            assertMacro {
+                """
+                @Contract(.threads)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command(weight: 1)
+                    func action() throws {
+                    }
+
+                    @Oracle
+                    func isConsistent() -> Bool { true }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.threads)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command(weight: 1)
+                    func action() throws {
+                    }
+
+                    @Oracle
+                    ╰─ 🛑 @Oracle must take exactly one parameter of the SystemUnderTest type
+                    func isConsistent() -> Bool { true }
+                }
+                """
+            }
+        }
     }
 
 #endif

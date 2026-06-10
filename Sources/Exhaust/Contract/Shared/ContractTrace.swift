@@ -27,10 +27,31 @@ extension __ExhaustRuntime {
                     } else {
                         entries.append(TraceEntry(phase: .completed, label: event.label, lane: event.lane, outcome: .ok))
                     }
-                case let .failed(message):
+                case .skipped:
                     openCommand[event.lane] = nil
-                    let phase: TracePhase = event.lane == "prefix" ? .prefix : .completed
-                    entries.append(TraceEntry(phase: phase, label: event.label, lane: event.lane, outcome: .invariantFailed(name: message)))
+                    if event.lane == "prefix" {
+                        if let lastIndex = entries.lastIndex(where: { $0.label == event.label && $0.phase == .prefix }) {
+                            entries.remove(at: lastIndex)
+                        }
+                        entries.append(TraceEntry(phase: .prefix, label: event.label, lane: event.lane, outcome: .skipped))
+                    } else {
+                        entries.append(TraceEntry(phase: .completed, label: event.label, lane: event.lane, outcome: .skipped))
+                    }
+                case let .failed(message, source):
+                    openCommand[event.lane] = nil
+                    let outcome: TraceStep.Outcome = switch source {
+                        case .check: .checkFailed(message: message)
+                        case .invariant: .invariantFailed(name: message)
+                        case .error: .checkFailed(message: message)
+                    }
+                    if event.lane == "prefix" {
+                        if let lastIndex = entries.lastIndex(where: { $0.label == event.label && $0.phase == .prefix }) {
+                            entries.remove(at: lastIndex)
+                        }
+                        entries.append(TraceEntry(phase: .prefix, label: event.label, lane: event.lane, outcome: outcome))
+                    } else {
+                        entries.append(TraceEntry(phase: .completed, label: event.label, lane: event.lane, outcome: outcome))
+                    }
                 case .suspended:
                     if let current = openCommand[event.lane] {
                         entries.append(TraceEntry(phase: .suspended, label: current, lane: event.lane, outcome: .ok))
@@ -233,9 +254,16 @@ struct TraceEvent: Sendable {
     enum Kind: Sendable {
         case started
         case completed
-        case failed(message: String)
+        case skipped
+        case failed(message: String, source: FailureSource)
         case suspended
         case resumed
+    }
+
+    enum FailureSource: Sendable {
+        case check
+        case invariant
+        case error
     }
 
     var kind: Kind

@@ -151,6 +151,25 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
             ))
         }
 
+        var seenCommandNames = Set<String>()
+        for command in commands {
+            let diagnosticNode = command.syntax.map { Syntax($0) } ?? Syntax(node)
+            if seenCommandNames.contains(command.methodName) == false {
+                seenCommandNames.insert(command.methodName)
+            } else {
+                context.diagnose(Diagnostic(
+                    node: diagnosticNode,
+                    message: ContractDiagnostic.duplicateCommandName
+                ))
+            }
+            if let value = Int(command.weight), value < 1 {
+                context.diagnose(Diagnostic(
+                    node: diagnosticNode,
+                    message: ContractDiagnostic.invalidCommandWeight
+                ))
+            }
+        }
+
         // Mode-specific validation
         switch mode {
             case .sequential, .tasks:
@@ -173,7 +192,14 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
                         message: ContractDiagnostic.invariantUnderThreads
                     ))
                 }
-                if oracles.isEmpty {
+                let badOracles = oracleMethodsWithWrongParameterCount(from: members)
+                for badOracle in badOracles {
+                    context.diagnose(Diagnostic(
+                        node: Syntax(badOracle),
+                        message: ContractDiagnostic.oracleParameterCount
+                    ))
+                }
+                if oracles.isEmpty, badOracles.isEmpty {
                     context.diagnose(Diagnostic(
                         node: Syntax(node),
                         message: ContractDiagnostic.noOracle
@@ -603,7 +629,7 @@ func extractOracles(from members: MemberBlockItemListSyntax) -> [OracleInfo] {
               hasAttribute("Oracle", on: funcDecl)
         else { return nil }
         let params = funcDecl.signature.parameterClause.parameters
-        guard let firstParam = params.first else { return nil }
+        guard params.count == 1, let firstParam = params.first else { return nil }
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
         return OracleInfo(
             methodName: funcDecl.name.trimmedDescription,
@@ -611,6 +637,16 @@ func extractOracles(from members: MemberBlockItemListSyntax) -> [OracleInfo] {
             parameterType: firstParam.type.trimmedDescription,
             isAsync: isAsync
         )
+    }
+}
+
+func oracleMethodsWithWrongParameterCount(from members: MemberBlockItemListSyntax) -> [FunctionDeclSyntax] {
+    members.compactMap { member in
+        guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
+              hasAttribute("Oracle", on: funcDecl)
+        else { return nil }
+        let paramCount = funcDecl.signature.parameterClause.parameters.count
+        return paramCount == 1 ? nil : funcDecl
     }
 }
 
@@ -646,6 +682,9 @@ enum ContractDiagnostic: String, DiagnosticMessage {
     case multipleOracles = "@Contract(.threads) allows only one @Oracle method"
     case actorRequiresSequential = "Actor contracts must use @Contract(.sequential). Actor isolation serialises all dispatch, so concurrent testing has nowhere to interleave"
     case actorWithThreads = "Actor contracts must use @Contract(.sequential). Actors are data-race-free, so .threads cannot surface races in them"
+    case duplicateCommandName = "Two @Command methods share the same base name — rename one or merge them"
+    case invalidCommandWeight = "@Command weight must be a positive integer literal"
+    case oracleParameterCount = "@Oracle must take exactly one parameter of the SystemUnderTest type"
 
     var message: String {
         rawValue
@@ -657,11 +696,12 @@ enum ContractDiagnostic: String, DiagnosticMessage {
 
     var severity: DiagnosticSeverity {
         switch self {
-            case .noCommands, .noSUT, .multipleSUT, .commandMissingGenerators, .structNotAllowed,
-                 .missingMode, .nonLiteralMode, .noOracle, .multipleOracles,
-                 .actorRequiresSequential, .actorWithThreads:
+            case .noCommands, .noSUT, .multipleSUT, .sutTypeNotInferred, .commandMissingGenerators,
+                 .structNotAllowed, .missingMode, .nonLiteralMode, .noOracle, .multipleOracles,
+                 .actorRequiresSequential, .actorWithThreads,
+                 .duplicateCommandName, .invalidCommandWeight, .oracleParameterCount:
                 .error
-            case .sutTypeNotInferred, .oracleRequiresThreads, .invariantUnderThreads:
+            case .oracleRequiresThreads, .invariantUnderThreads:
                 .warning
         }
     }

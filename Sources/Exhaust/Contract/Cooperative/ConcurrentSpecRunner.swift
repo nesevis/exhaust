@@ -74,6 +74,24 @@ func drainSchedule<Spec: AsyncContractSpec>(
                 if recordTrace { trace.value.append(TraceEvent(kind: .started, lane: "prefix", label: label)) }
                 do {
                     try await spec.value.run(command)
+                } catch is ContractSkip {
+                    if recordTrace { trace.value.append(TraceEvent(kind: .skipped, lane: "prefix", label: label)) }
+                    continue
+                } catch let failure as ContractCheckFailure {
+                    let message = failure.message ?? "check failed"
+                    if recordTrace {
+                        trace.value.append(TraceEvent(kind: .failed(message: message, source: .check), lane: "prefix", label: label))
+                    }
+                    failed.value = message
+                    break
+                } catch {
+                    if recordTrace {
+                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .error), lane: "prefix", label: label))
+                    }
+                    failed.value = "\(error)"
+                    break
+                }
+                do {
                     try await spec.value.checkInvariants()
                     if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: "prefix", label: label)) }
                 } catch is ContractSkip {
@@ -81,13 +99,13 @@ func drainSchedule<Spec: AsyncContractSpec>(
                 } catch let failure as ContractCheckFailure {
                     let message = failure.message ?? "check failed"
                     if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: message), lane: "prefix", label: label))
+                        trace.value.append(TraceEvent(kind: .failed(message: message, source: .invariant), lane: "prefix", label: label))
                     }
                     failed.value = message
                     break
                 } catch {
                     if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)"), lane: "prefix", label: label))
+                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .invariant), lane: "prefix", label: label))
                     }
                     failed.value = "\(error)"
                     break
@@ -157,6 +175,24 @@ func drainSchedule<Spec: AsyncContractSpec>(
                 if recordTrace { trace.value.append(TraceEvent(kind: .started, lane: laneLabel, label: label)) }
                 do {
                     try await spec.value.run(command)
+                } catch is ContractSkip {
+                    if recordTrace { trace.value.append(TraceEvent(kind: .skipped, lane: laneLabel, label: label)) }
+                    continue
+                } catch let failure as ContractCheckFailure {
+                    let message = failure.message ?? "check failed"
+                    if recordTrace {
+                        trace.value.append(TraceEvent(kind: .failed(message: message, source: .check), lane: laneLabel, label: label))
+                    }
+                    failed.value = message
+                    return
+                } catch {
+                    if recordTrace {
+                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .error), lane: laneLabel, label: label))
+                    }
+                    failed.value = "\(error)"
+                    return
+                }
+                do {
                     try await spec.value.checkInvariants()
                     if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: laneLabel, label: label)) }
                 } catch is ContractSkip {
@@ -164,13 +200,13 @@ func drainSchedule<Spec: AsyncContractSpec>(
                 } catch let failure as ContractCheckFailure {
                     let message = failure.message ?? "check failed"
                     if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: message), lane: laneLabel, label: label))
+                        trace.value.append(TraceEvent(kind: .failed(message: message, source: .invariant), lane: laneLabel, label: label))
                     }
                     failed.value = message
                     return
                 } catch {
                     if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)"), lane: laneLabel, label: label))
+                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .invariant), lane: laneLabel, label: label))
                     }
                     failed.value = "\(error)"
                     return
