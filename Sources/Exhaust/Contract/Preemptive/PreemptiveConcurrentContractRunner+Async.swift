@@ -96,12 +96,17 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         let prefixCommands = taggedCommands.filter(\.0.isPrefix)
         let concurrentCommands = taggedCommands.filter { $0.0.isPrefix == false }
 
-        for run in [
-            runSequentially(prefixCommands.map(\.1), on: concurrentSpec),
-            runSequentially(prefixCommands.map(\.1), on: sequentialSpec),
-            runSequentially(concurrentCommands.map(\.1), on: sequentialSpec),
-        ] where run.succeeded == false {
-            return Preemptive.Outcome(passed: false, timedOut: run.timedOut)
+        let prefixOnConcurrent = runSequentially(prefixCommands.map(\.1), on: concurrentSpec)
+        if prefixOnConcurrent.succeeded == false {
+            return Preemptive.Outcome(passed: false, timedOut: prefixOnConcurrent.timedOut)
+        }
+        let prefixOnSequential = runSequentially(prefixCommands.map(\.1), on: sequentialSpec)
+        if prefixOnSequential.succeeded == false {
+            return Preemptive.Outcome(passed: false, timedOut: prefixOnSequential.timedOut)
+        }
+        let concurrentOnSequential = runSequentially(concurrentCommands.map(\.1), on: sequentialSpec)
+        if concurrentOnSequential.succeeded == false {
+            return Preemptive.Outcome(passed: false, timedOut: concurrentOnSequential.timedOut)
         }
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }

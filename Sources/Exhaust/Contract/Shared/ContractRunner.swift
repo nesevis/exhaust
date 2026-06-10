@@ -169,7 +169,10 @@ public extension __ExhaustRuntime {
                     specType,
                     settings: settings,
                     regressionSeeds: regressionSeeds,
-                    fileID: fileID
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
                 )
             }
         }
@@ -185,16 +188,19 @@ private extension __ExhaustRuntime {
         _ specType: Spec.Type,
         settings: [ContractSettings],
         regressionSeeds: [String] = [],
-        fileID: StaticString
+        fileID: StaticString,
+        filePath: StaticString = "",
+        line: UInt = 0,
+        column: UInt = 0
     ) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
 
         var context = ContractContext(
             settings: settings,
             fileID: fileID,
-            filePath: "",
-            line: 0,
-            column: 0
+            filePath: filePath,
+            line: line,
+            column: column
         )
 
         guard context.hasInvalidReplaySeed == false else {

@@ -244,6 +244,8 @@ extension __ExhaustRuntime {
                         let message = renderFailure(result, failureInfo: failureInfo, failureDescription: smoke.failureDescription)
                         deferredIssues.append(message)
                     }
+                    report.replaySeed = result.replaySeed
+                    report.setInvocations(coverage: smokeRow + 1, randomSampling: 0, reduction: 0)
                     finalizeReport()
                     return (result, deferredIssues, report)
                 }
@@ -256,11 +258,16 @@ extension __ExhaustRuntime {
 
         // Phase 1: Coverage
         if config.shouldRunCoverage {
+            let effectiveCoverageBudget: UInt64 = if let row = config.coverageReplayRow {
+                max(coverageBudget, UInt64(row) + 1)
+            } else {
+                coverageBudget
+            }
             if let scaResult = runConcurrentSCACoverage(
                 seqGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
-                coverageBudget: coverageBudget,
+                coverageBudget: effectiveCoverageBudget,
                 concurrencyLevel: config.concurrencyLevel,
                 idleTimeout: config.idleTimeout,
                 skipToRow: config.coverageReplayRow,

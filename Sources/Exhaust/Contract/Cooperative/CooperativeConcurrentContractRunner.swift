@@ -321,6 +321,7 @@ private extension __ExhaustRuntime {
                         )
                     } catch {
                         deferredIssues.append("Generator failed during regression replay (seed \(encodedSeed)): \(error)")
+                        continue
                     }
                 }
 
@@ -337,11 +338,16 @@ private extension __ExhaustRuntime {
         var discovery: ConcurrentDiscovery<Spec.Command>?
 
         if config.shouldRunCoverage {
+            let effectiveCoverageBudget: UInt64 = if let row = config.coverageReplayRow {
+                max(coverageBudget, UInt64(row) + 1)
+            } else {
+                coverageBudget
+            }
             if let scaResult = runConcurrentSCACoverage(
                 seqGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: resolvedCommandLimit,
-                coverageBudget: coverageBudget,
+                coverageBudget: effectiveCoverageBudget,
                 concurrencyLevel: concurrencyLevel,
                 idleTimeout: idleTimeout,
                 skipToRow: config.coverageReplayRow,
@@ -448,12 +454,16 @@ private extension __ExhaustRuntime {
 
                 let reductionStartInvocations = invocationCounter.value
                 let reductionStopwatch = Stopwatch()
+                let reductionProperty: @Sendable ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
+                    let passed = property(taggedCommands)
+                    return passed || lastRunTimedOut.value
+                }
                 let reduction = reduceConcurrentCounterexample(
                     input: input,
                     tree: tree,
                     sequenceGen: sequenceGen,
                     reductionConfig: reductionConfig,
-                    property: property,
+                    property: reductionProperty,
                     identifySkips: identifySkips,
                     seed: 0,
                     skipPruningLogEvent: "concurrent_skip_pruning",

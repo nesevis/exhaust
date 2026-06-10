@@ -30,6 +30,8 @@ extension __ExhaustRuntime {
                 do {
                     try await spec.value.run(command)
                     try await spec.value.checkInvariants()
+                } catch is ContractSkip {
+                    continue
                 } catch {
                     passed.value = false
                     break
