@@ -1060,6 +1060,112 @@
                 """
             }
         }
+
+        @Test("@Contract(.typo) produces nonLiteralMode, not missingMode")
+        func contractWithTypoProducesNonLiteralMode() {
+            assertMacro {
+                """
+                @Contract(.task)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command(weight: 1)
+                    func action() throws {
+                    }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.task)
+                ┬───────────────
+                ╰─ 🛑 The execution mode must be a literal ExecutionModel case (.sequential|.tasks|.threads)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command(weight: 1)
+                    func action() throws {
+                    }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            }
+        }
+
+        @Test("Variadic @Command parameter produces diagnostic")
+        func variadicCommandParameterProducesDiagnostic() {
+            assertMacro {
+                """
+                @Contract(.tasks)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command(weight: 1, .int(in: 0...9))
+                    func add(_ values: Int...) throws {
+                    }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.tasks)
+                final class Spec {
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command(weight: 1, .int(in: 0...9))
+                    ╰─ 🛑 @Command parameters must not be inout, variadic, or generic — the synthesized Command enum cannot represent them
+                    func add(_ values: Int...) throws {
+                    }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            }
+        }
+
+        @Test("Multi-binding @SystemUnderTest triggers multipleSUT")
+        func multiBindingSUTTriggersMultipleSUT() {
+            assertMacro {
+                """
+                @Contract(.tasks)
+                final class Spec {
+                    @SystemUnderTest var a: MySUT, b: MySUT
+
+                    @Command(weight: 1)
+                    func action() throws {
+                    }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            } diagnostics: {
+                """
+                @Contract(.tasks)
+                ┬────────────────
+                ╰─ 🛑 @Contract requires exactly one @SystemUnderTest property, but multiple were found
+                final class Spec {
+                    @SystemUnderTest var a: MySUT, b: MySUT
+                    ┬───────────────
+                    ╰─ 🛑 peer macro can only be applied to a single variable
+
+                    @Command(weight: 1)
+                    func action() throws {
+                    }
+
+                    @Invariant
+                    func valid() -> Bool { true }
+                }
+                """
+            }
+        }
     }
 
 #endif
