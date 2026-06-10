@@ -288,17 +288,9 @@ private extension __ExhaustRuntime {
                         invocationCounter: invocationCounter
                     ) {
                         regressionDiscovery = ConcurrentDiscovery(
-                            taggedCommands: scaResult.finalInput,
-                            discoveryMethod: .coverage,
-                            timedOut: scaResult.timedOut,
-                            seed: nil,
-                            originalCount: scaResult.originalCount,
-                            iteration: Int(scaResult.iteration),
-                            budget: coverageBudget,
-                            sequencesTested: invocationCounter.value,
-                            reductionStats: scaResult.reductionStats,
-                            reductionInvocations: scaResult.reductionInvocations,
-                            reductionMilliseconds: 0
+                            scaResult: scaResult,
+                            coverageBudget: coverageBudget,
+                            sequencesTested: invocationCounter.value
                         )
                     }
                 } else if let (seed, iteration) = samplingSeed {
@@ -354,17 +346,9 @@ private extension __ExhaustRuntime {
                 invocationCounter: invocationCounter
             ) {
                 discovery = ConcurrentDiscovery(
-                    taggedCommands: scaResult.finalInput,
-                    discoveryMethod: .coverage,
-                    timedOut: scaResult.timedOut,
-                    seed: nil,
-                    originalCount: scaResult.originalCount,
-                    iteration: Int(scaResult.iteration),
-                    budget: coverageBudget,
-                    sequencesTested: invocationCounter.value,
-                    reductionStats: scaResult.reductionStats,
-                    reductionInvocations: scaResult.reductionInvocations,
-                    reductionMilliseconds: 0
+                    scaResult: scaResult,
+                    coverageBudget: coverageBudget,
+                    sequencesTested: invocationCounter.value
                 )
             }
         }

@@ -14,6 +14,8 @@ extension __ExhaustRuntime {
 
     /// Runs SCA coverage for concurrent contract command sequences.
     ///
+    /// See also: ``ConcurrentDiscovery/init(scaResult:coverageBudget:sequencesTested:)`` for converting a failure result into a discovery.
+    ///
     /// Delegates to the shared ``runSCACoverageRowLoop(seqGen:commandGen:commandLimit:coverageBudget:skipToRow:logEventPrefix:property:)`` for the covering array iteration, then reduces any counterexample through ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``.
     ///
     /// - Returns: A failure result if a counterexample is found during coverage, or nil if all rows pass or SCA is not applicable.
@@ -74,5 +76,32 @@ extension __ExhaustRuntime {
             case .completed, .skipped:
                 return nil
         }
+    }
+}
+
+// MARK: - SCAFailureResult → ConcurrentDiscovery Bridge
+
+extension __ExhaustRuntime.ConcurrentDiscovery {
+    /// Constructs a coverage discovery from an SCA failure result.
+    ///
+    /// Bridges the SCA-specific ``__ExhaustRuntime/SCAFailureResult`` into the pipeline-level ``__ExhaustRuntime/ConcurrentDiscovery`` with `.coverage` as the discovery method. `reductionMilliseconds` is always zero because SCA reduction time is not tracked separately from the row loop.
+    init(
+        scaResult: __ExhaustRuntime.SCAFailureResult<Command>,
+        coverageBudget: UInt64,
+        sequencesTested: Int
+    ) {
+        self.init(
+            taggedCommands: scaResult.finalInput,
+            discoveryMethod: .coverage,
+            timedOut: scaResult.timedOut,
+            seed: nil,
+            originalCount: scaResult.originalCount,
+            iteration: Int(scaResult.iteration),
+            budget: coverageBudget,
+            sequencesTested: sequencesTested,
+            reductionStats: scaResult.reductionStats,
+            reductionInvocations: scaResult.reductionInvocations,
+            reductionMilliseconds: 0
+        )
     }
 }

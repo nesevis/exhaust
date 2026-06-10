@@ -28,6 +28,62 @@ struct ConcurrentExecutionResult {
     var timedOut: Bool = false
 }
 
+/// Outcome of running a single command and checking its invariants inside the drain loop.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+private enum CommandOutcome {
+    case ok
+    case skipped
+    case failed(String)
+}
+
+/// Runs a single command, checks invariants, and records trace events. Returns the outcome so the caller can handle exit flow (`break` in the prefix loop, `return` in a lane Task).
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+private func runCommandRecordingTrace<Spec: AsyncContractSpec>(
+    _ command: Spec.Command,
+    on spec: UnsafeSendableBox<Spec>,
+    lane: String,
+    label: String,
+    trace: UnsafeSendableBox<[TraceEvent]>,
+    recordTrace: Bool
+) async -> CommandOutcome {
+    if recordTrace { trace.value.append(TraceEvent(kind: .started, lane: lane, label: label)) }
+    do {
+        try await spec.value.run(command)
+    } catch is ContractSkip {
+        if recordTrace { trace.value.append(TraceEvent(kind: .skipped, lane: lane, label: label)) }
+        return .skipped
+    } catch let failure as ContractCheckFailure {
+        let message = failure.message ?? "check failed"
+        if recordTrace {
+            trace.value.append(TraceEvent(kind: .failed(message: message, source: .check), lane: lane, label: label))
+        }
+        return .failed(message)
+    } catch {
+        if recordTrace {
+            trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .error), lane: lane, label: label))
+        }
+        return .failed("\(error)")
+    }
+    do {
+        try await spec.value.checkInvariants()
+        if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: lane, label: label)) }
+    } catch is ContractSkip {
+        if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: lane, label: label)) }
+    } catch let failure as ContractCheckFailure {
+        let message = failure.message ?? "check failed"
+        if recordTrace {
+            trace.value.append(TraceEvent(kind: .failed(message: message, source: .invariant), lane: lane, label: label))
+        }
+        return .failed(message)
+    } catch {
+        if recordTrace {
+            trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .invariant), lane: lane, label: label))
+        }
+        return .failed("\(error)")
+    }
+    return .ok
+}
+
 /// Drains a tagged command sequence through the cooperative scheduler with deterministic interleaving.
 ///
 /// Execution proceeds in two phases. First, all prefix commands run sequentially on a single executor — this builds up whatever shared state the concurrent phase needs. Then, lane-assigned commands run concurrently via N Tasks whose continuations are interleaved by the drain loop.
@@ -71,43 +127,12 @@ func drainSchedule<Spec: AsyncContractSpec>(
             for command in prefixCommands {
                 guard failed.value == nil else { break }
                 let label = "\(command)"
-                if recordTrace { trace.value.append(TraceEvent(kind: .started, lane: "prefix", label: label)) }
-                do {
-                    try await spec.value.run(command)
-                } catch is ContractSkip {
-                    if recordTrace { trace.value.append(TraceEvent(kind: .skipped, lane: "prefix", label: label)) }
-                    continue
-                } catch let failure as ContractCheckFailure {
-                    let message = failure.message ?? "check failed"
-                    if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: message, source: .check), lane: "prefix", label: label))
-                    }
+                let outcome = await runCommandRecordingTrace(
+                    command, on: spec, lane: "prefix", label: label,
+                    trace: trace, recordTrace: recordTrace
+                )
+                if case let .failed(message) = outcome {
                     failed.value = message
-                    break
-                } catch {
-                    if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .error), lane: "prefix", label: label))
-                    }
-                    failed.value = "\(error)"
-                    break
-                }
-                do {
-                    try await spec.value.checkInvariants()
-                    if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: "prefix", label: label)) }
-                } catch is ContractSkip {
-                    if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: "prefix", label: label)) }
-                } catch let failure as ContractCheckFailure {
-                    let message = failure.message ?? "check failed"
-                    if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: message, source: .invariant), lane: "prefix", label: label))
-                    }
-                    failed.value = message
-                    break
-                } catch {
-                    if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .invariant), lane: "prefix", label: label))
-                    }
-                    failed.value = "\(error)"
                     break
                 }
             }
@@ -173,43 +198,12 @@ func drainSchedule<Spec: AsyncContractSpec>(
                 commandIndex.value += 1
                 let name = "\(command)".split(separator: "(").first.map(String.init) ?? "\(command)"
                 let label = "\(commandIndex.value)\(laneLabel.uppercased()) \(name)"
-                if recordTrace { trace.value.append(TraceEvent(kind: .started, lane: laneLabel, label: label)) }
-                do {
-                    try await spec.value.run(command)
-                } catch is ContractSkip {
-                    if recordTrace { trace.value.append(TraceEvent(kind: .skipped, lane: laneLabel, label: label)) }
-                    continue
-                } catch let failure as ContractCheckFailure {
-                    let message = failure.message ?? "check failed"
-                    if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: message, source: .check), lane: laneLabel, label: label))
-                    }
+                let outcome = await runCommandRecordingTrace(
+                    command, on: spec, lane: laneLabel, label: label,
+                    trace: trace, recordTrace: recordTrace
+                )
+                if case let .failed(message) = outcome {
                     failed.value = message
-                    return
-                } catch {
-                    if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .error), lane: laneLabel, label: label))
-                    }
-                    failed.value = "\(error)"
-                    return
-                }
-                do {
-                    try await spec.value.checkInvariants()
-                    if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: laneLabel, label: label)) }
-                } catch is ContractSkip {
-                    if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: laneLabel, label: label)) }
-                } catch let failure as ContractCheckFailure {
-                    let message = failure.message ?? "check failed"
-                    if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: message, source: .invariant), lane: laneLabel, label: label))
-                    }
-                    failed.value = message
-                    return
-                } catch {
-                    if recordTrace {
-                        trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .invariant), lane: laneLabel, label: label))
-                    }
-                    failed.value = "\(error)"
                     return
                 }
             }
