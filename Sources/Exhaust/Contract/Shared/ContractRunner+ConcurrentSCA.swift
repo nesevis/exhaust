@@ -1,6 +1,24 @@
 // Concurrent SCA coverage and reduction helpers shared by the cooperative and preemptive runners.
 import ExhaustCore
 
+// MARK: - Sampling Replay Window
+
+extension __ExhaustRuntime {
+    /// Computes the interpreter start index and run count for a sampling or replay pass.
+    ///
+    /// When `replayIteration` is non-nil, the interpreter is positioned to replay exactly that 1-based iteration. When nil, the interpreter runs the full `samplingBudget` from the beginning. Clamps `replayIteration` to >= 1 to prevent a UInt64 underflow on `iteration - 1`.
+    static func samplingReplayWindow(
+        replayIteration: Int?,
+        samplingBudget: UInt64
+    ) -> (startIndex: UInt64, maxRuns: UInt64) {
+        guard let iteration = replayIteration else {
+            return (startIndex: 0, maxRuns: samplingBudget)
+        }
+        let clamped = max(iteration, 1)
+        return (startIndex: UInt64(clamped - 1), maxRuns: UInt64(clamped))
+    }
+}
+
 // MARK: - SCA Failure Result
 
 extension __ExhaustRuntime {
@@ -20,18 +38,16 @@ extension __ExhaustRuntime {
 extension __ExhaustRuntime {
     /// Runs SCA coverage for concurrent contract command sequences.
     ///
-    /// Delegates to the shared ``runSCACoverageRowLoop(seqGen:commandGen:commandLimit:coverageBudget:skipToRow:logEventPrefix:property:)`` for the covering array iteration, then reduces any counterexample through ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``.
+    /// Delegates to the shared ``runSCACoverageRowLoop(sequenceGen:commandGen:commandLimit:coverageBudget:skipToRow:logEventPrefix:property:)`` for the covering array iteration, then reduces any counterexample through ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``.
     ///
     /// See also: ``ConcurrentDiscovery/init(scaResult:coverageBudget:sequencesTested:)`` for converting a failure result into a discovery.
     ///
     /// - Returns: A failure result if a counterexample is found during coverage, or nil if all rows pass or SCA is not applicable.
     static func runConcurrentSCACoverage<Command>(
-        seqGen: Generator<[(ScheduleMarker, Command)]>,
+        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
         commandGen: Generator<Command>,
         commandLimit: Int,
         coverageBudget: UInt64,
-        concurrencyLevel _: Int,
-        idleTimeout _: Int,
         skipToRow: Int? = nil,
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
         identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
@@ -39,7 +55,7 @@ extension __ExhaustRuntime {
         invocationCounter: UnsafeSendableBox<Int>
     ) -> SCAFailureResult<Command>? {
         let result = runSCACoverageRowLoop(
-            seqGen: seqGen,
+            sequenceGen: sequenceGen,
             commandGen: commandGen,
             commandLimit: commandLimit,
             coverageBudget: coverageBudget,
@@ -61,7 +77,7 @@ extension __ExhaustRuntime {
                 let reduction = reduceConcurrentCounterexample(
                     input: value,
                     tree: tree,
-                    sequenceGen: seqGen,
+                    sequenceGen: sequenceGen,
                     reductionConfig: reductionConfig,
                     property: property,
                     identifySkips: identifySkips,

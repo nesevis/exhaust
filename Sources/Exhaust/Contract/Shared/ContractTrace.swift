@@ -127,6 +127,28 @@ extension __ExhaustRuntime {
         return collapsed
     }
 
+    /// Maps a command-run error to a trace outcome. ``TraceStep/Outcome/skipped`` means the command was skipped via ``ContractSkip`` and the caller should continue to the next command without checking invariants.
+    private static func commandRunOutcome(for error: any Error) -> TraceStep.Outcome {
+        switch error {
+            case is ContractSkip:
+                .skipped
+            case let failure as ContractCheckFailure:
+                .checkFailed(message: failure.message)
+            default:
+                .checkFailed(message: "\(error)")
+        }
+    }
+
+    /// Maps an invariant-check error to a trace outcome.
+    private static func invariantCheckOutcome(for error: any Error) -> TraceStep.Outcome {
+        switch error {
+            case let failure as ContractCheckFailure:
+                .invariantFailed(name: failure.message ?? "unknown")
+            default:
+                .invariantFailed(name: "\(error)")
+        }
+    }
+
     /// Builds a sequential execution trace from a command sequence, recording per-command outcomes with invariant failure names. Shared by the sequential contract runner and the preemptive runner's smoke test.
     static func buildSequentialTrace<Command: CustomStringConvertible>(
         _ commands: [Command],
@@ -142,40 +164,17 @@ extension __ExhaustRuntime {
 
             do {
                 try run(command)
-            } catch is ContractSkip {
-                trace.append(TraceStep(index: step, command: description, outcome: .skipped))
-                continue
-            } catch let failure as ContractCheckFailure {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .checkFailed(message: failure.message)
-                ))
-                return (trace, true)
             } catch {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .checkFailed(message: "\(error)")
-                ))
+                let outcome = commandRunOutcome(for: error)
+                trace.append(TraceStep(index: step, command: description, outcome: outcome))
+                if case .skipped = outcome { continue }
                 return (trace, true)
             }
 
             do {
                 try checkInvariants()
-            } catch let failure as ContractCheckFailure {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .invariantFailed(name: failure.message ?? "unknown")
-                ))
-                return (trace, true)
             } catch {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .invariantFailed(name: "\(error)")
-                ))
+                trace.append(TraceStep(index: step, command: description, outcome: invariantCheckOutcome(for: error)))
                 return (trace, true)
             }
 
@@ -200,40 +199,17 @@ extension __ExhaustRuntime {
 
             do {
                 try await run(command)
-            } catch is ContractSkip {
-                trace.append(TraceStep(index: step, command: description, outcome: .skipped))
-                continue
-            } catch let failure as ContractCheckFailure {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .checkFailed(message: failure.message)
-                ))
-                return (trace, true)
             } catch {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .checkFailed(message: "\(error)")
-                ))
+                let outcome = commandRunOutcome(for: error)
+                trace.append(TraceStep(index: step, command: description, outcome: outcome))
+                if case .skipped = outcome { continue }
                 return (trace, true)
             }
 
             do {
                 try await checkInvariants()
-            } catch let failure as ContractCheckFailure {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .invariantFailed(name: failure.message ?? "unknown")
-                ))
-                return (trace, true)
             } catch {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .invariantFailed(name: "\(error)")
-                ))
+                trace.append(TraceStep(index: step, command: description, outcome: invariantCheckOutcome(for: error)))
                 return (trace, true)
             }
 

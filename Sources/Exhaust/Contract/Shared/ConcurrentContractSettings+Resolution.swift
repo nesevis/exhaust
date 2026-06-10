@@ -84,8 +84,8 @@ struct ResolvedConcurrentConfig {
                     } else {
                         config.onReportClosure = closure
                     }
-                case let .idleTimeoutMs(ms):
-                    config.idleTimeout = max(ms, 1)
+                case let .idleTimeoutMs(milliseconds):
+                    config.idleTimeout = max(milliseconds, 1)
                 case let .log(level):
                     config.logLevel = level
                 case .includeDiff:

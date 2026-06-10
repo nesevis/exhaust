@@ -23,7 +23,7 @@ extension __ExhaustRuntime {
     ///
     /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:coverageInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"sca_coverage"` for sequential, `"concurrent_sca_coverage"` for concurrent.
     static func runSCACoverageRowLoop<Value>(
-        seqGen: Generator<Value>,
+        sequenceGen: Generator<Value>,
         commandGen: Generator<some Any>,
         commandLimit: Int,
         coverageBudget: UInt64,
@@ -93,7 +93,7 @@ extension __ExhaustRuntime {
                 fallbackTree: nil
             )
             guard case let .success(value, freshTree, _) = Materializer.materialize(
-                seqGen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                sequenceGen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
             ) else {
                 continue
             }
@@ -127,11 +127,11 @@ extension __ExhaustRuntime {
 extension __ExhaustRuntime {
     /// Runs SCA coverage for sequential contract command sequences.
     ///
-    /// Delegates to the shared ``runSCACoverageRowLoop(seqGen:commandGen:commandLimit:coverageBudget:skipToRow:logEventPrefix:property:)`` for the covering array iteration, then prunes skipped commands and reduces any counterexample found.
+    /// Delegates to the shared ``runSCACoverageRowLoop(sequenceGen:commandGen:commandLimit:coverageBudget:skipToRow:logEventPrefix:property:)`` for the covering array iteration, then prunes skipped commands and reduces any counterexample found.
     ///
     /// Returns ``SCAOutcome/skipped`` when domain construction fails or the domain is too small for pairwise coverage, so the caller can fall through to generic coverage and random sampling.
     static func runSCACoverage<Command>(
-        seqGen: Generator<[Command]>,
+        sequenceGen: Generator<[Command]>,
         commandGen: Generator<Command>,
         commandLimit: Int,
         coverageBudget: UInt64,
@@ -140,7 +140,7 @@ extension __ExhaustRuntime {
         identifySkips: @escaping @Sendable ([Command]) -> Set<Int>
     ) -> SCAOutcome<Command> {
         let result = runSCACoverageRowLoop(
-            seqGen: seqGen,
+            sequenceGen: sequenceGen,
             commandGen: commandGen,
             commandLimit: commandLimit,
             coverageBudget: coverageBudget,
@@ -153,7 +153,7 @@ extension __ExhaustRuntime {
                 let (reduceValue, reduceTree) = pruneSkippedCommands(
                     value: value,
                     tree: tree,
-                    generator: seqGen,
+                    generator: sequenceGen,
                     seed: UInt64(coverageInvocations),
                     property: property,
                     identifySkips: identifySkips,
@@ -162,7 +162,7 @@ extension __ExhaustRuntime {
                 let (reduced, stats, _) = reduceContractCounterexample(
                     value: reduceValue,
                     tree: reduceTree,
-                    generator: seqGen,
+                    generator: sequenceGen,
                     config: .init(maxStalls: 2),
                     property: property
                 )
@@ -310,9 +310,9 @@ extension __ExhaustRuntime {
                 case .parameterFree, .unanalyzable:
                     1
                 case let .analyzed(params):
-                    params.reduce(UInt64(1)) { acc, param in
-                        let (product, overflow) = acc.multipliedReportingOverflow(by: param.domainSize)
-                        return overflow ? .max : product
+                    params.reduce(UInt64(1)) { partialProduct, param in
+                        let (result, overflow) = partialProduct.multipliedReportingOverflow(by: param.domainSize)
+                        return overflow ? .max : result
                     }
             }
             let (sum, overflow) = domainSize.addingReportingOverflow(contribution)
@@ -322,9 +322,9 @@ extension __ExhaustRuntime {
         // Budget ceiling: at t=2, covering array rows ≈ d² × ln(L).
         // Solving for L: L = e^(B / d²).
         // For small domains this is huge (budget is not the bottleneck); for large domains it can be < 2.
-        let d = Double(min(domainSize, UInt64(Int.max)))
-        let d2 = max(d * d, 1.0)
-        let ratio = Double(coverageBudget) / d2
+        let domainSizeEstimate = Double(min(domainSize, UInt64(Int.max)))
+        let domainSizeSquared = max(domainSizeEstimate * domainSizeEstimate, 1.0)
+        let ratio = Double(coverageBudget) / domainSizeSquared
         let budgetCeiling = ratio > 1 ? Int(min(exp(ratio), 100)) : 2
 
         // Exploration floor: enough for each command type to appear several times, ensuring the random phase can reach meaningful state depths.

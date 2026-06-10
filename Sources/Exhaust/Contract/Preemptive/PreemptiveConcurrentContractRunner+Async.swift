@@ -66,7 +66,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
     let idleTimeoutMilliseconds: Int?
 
     /// Bridges async work to the calling thread, bailing with `nil` (and a log) if the drain loop idles past ``idleTimeoutMilliseconds``. Returns the work's result, or `nil` only on timeout.
-    private func awaitOrTimeout<R>(_ label: String, _ work: @Sendable @escaping () async -> R) -> R? {
+    private func awaitOrTimeout<Value>(_ label: String, _ work: @Sendable @escaping () async -> Value) -> Value? {
         guard let idleTimeoutMilliseconds else {
             return __ExhaustRuntime.blockingAwait(work)
         }

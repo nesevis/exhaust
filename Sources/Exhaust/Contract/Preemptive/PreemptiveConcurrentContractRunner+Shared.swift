@@ -157,6 +157,7 @@ extension __ExhaustRuntime {
         }
 
         let commandGen = Spec.commandGenerator.gen
+        // Default 8: lower than the cooperative runner's estimated/40 cap because each preemptive probe repeats 10x, making longer sequences prohibitively slow.
         let commandLimit = config.commandLimit ?? 8
         guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
             deferredIssues.append("Command generator must be a top-level pick (.oneOf) — concurrent testing requires per-command branch structure")
@@ -228,34 +229,36 @@ extension __ExhaustRuntime {
             let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
             var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, seed: 0, maxRuns: coverageBudget)
             var smokeRow = 0
-            do { while let (commands, _) = try smokeIterator.next() {
-                if let coverageReplayRow = config.coverageReplayRow, smokeRow < coverageReplayRow {
-                    smokeRow += 1
-                    continue
-                }
-                let smoke = backend.runSmoke(commands)
-                if smoke.failed {
-                    let result = ContractResult<Spec>(
-                        commands: commands,
-                        trace: smoke.trace,
-                        systemUnderTest: smoke.systemUnderTest,
-                        seed: nil,
-                        replaySeed: CrockfordBase32.encodeCoverageRow(smokeRow),
-                        discoveryMethod: .smokeTest
-                    )
-                    if config.suppressIssueReporting == false {
-                        let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
-                        let message = renderFailure(result, failureInfo: failureInfo, failureDescription: smoke.failureDescription)
-                        deferredIssues.append(message)
+            do {
+                while let (commands, _) = try smokeIterator.next() {
+                    if let coverageReplayRow = config.coverageReplayRow, smokeRow < coverageReplayRow {
+                        smokeRow += 1
+                        continue
                     }
-                    report.replaySeed = result.replaySeed
-                    report.setInvocations(coverage: smokeRow + 1, randomSampling: 0, reduction: 0)
-                    finalizeReport()
-                    return (result, deferredIssues, report)
+                    let smoke = backend.runSmoke(commands)
+                    if smoke.failed {
+                        let result = ContractResult<Spec>(
+                            commands: commands,
+                            trace: smoke.trace,
+                            systemUnderTest: smoke.systemUnderTest,
+                            seed: nil,
+                            replaySeed: CrockfordBase32.encodeCoverageRow(smokeRow),
+                            discoveryMethod: .smokeTest
+                        )
+                        if config.suppressIssueReporting == false {
+                            let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
+                            let message = renderFailure(result, failureInfo: failureInfo, failureDescription: smoke.failureDescription)
+                            deferredIssues.append(message)
+                        }
+                        report.replaySeed = result.replaySeed
+                        report.setInvocations(coverage: smokeRow + 1, randomSampling: 0, reduction: 0)
+                        finalizeReport()
+                        return (result, deferredIssues, report)
+                    }
+                    smokeRow += 1
+                    if config.coverageReplayRow != nil { break }
                 }
-                smokeRow += 1
-                if config.coverageReplayRow != nil { break }
-            } } catch {
+            } catch {
                 deferredIssues.append("Generator failed during smoke test: \(error)")
             }
         }
@@ -268,12 +271,10 @@ extension __ExhaustRuntime {
                 coverageBudget
             }
             if let scaResult = runConcurrentSCACoverage(
-                seqGen: sequenceGen,
+                sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 coverageBudget: effectiveCoverageBudget,
-                concurrencyLevel: config.concurrencyLevel,
-                idleTimeout: config.idleTimeout,
                 skipToRow: config.coverageReplayRow,
                 property: property,
                 identifySkips: identifySkips,
@@ -325,8 +326,10 @@ extension __ExhaustRuntime {
 
         // Phase 2: Sampling
         if config.coverageReplayRow == nil {
-            let startIndex = config.replayIteration.map { UInt64($0 - 1) } ?? 0
-            let maxRuns = config.replayIteration.map { UInt64($0) } ?? samplingBudget
+            let (startIndex, maxRuns) = samplingReplayWindow(
+                replayIteration: config.replayIteration,
+                samplingBudget: samplingBudget
+            )
             var interpreter = ValueAndChoiceTreeInterpreter(
                 sequenceGen,
                 materializePicks: true,
@@ -337,63 +340,65 @@ extension __ExhaustRuntime {
             let actualSeed = interpreter.baseSeed
 
             var samplingIteration = 0
-            do { while let (taggedCommands, tree) = try interpreter.next() {
-                samplingIteration += 1
-                let absoluteIteration = Int(startIndex) + samplingIteration
-                let outcome = backend.execute(taggedCommands)
-                if outcome.passed == false {
-                    // Reduction stays correct on a timeout — the reducer only ever returns a failing schedule — but on a hang every probe waits out the idle bound (idleTimeout × repetitions) and a timing-dependent timeout often will not reproduce, so it is slow and usually fruitless. Skip it and report the original schedule.
-                    let reduced: [(ScheduleMarker, Spec.Command)]
-                    let reductionInvocations: Int
-                    if outcome.timedOut {
-                        reduced = taggedCommands
-                        reductionInvocations = 0
-                    } else {
-                        let reductionResult = Preemptive.reduce(
-                            generator: sequenceGen,
-                            tree: tree,
-                            output: taggedCommands,
-                            repetitions: 10,
-                            execute: backend.execute
-                        )
-                        reduced = reductionResult.output
-                        reductionInvocations = reductionResult.propertyInvocations
-                        report.applyReductionStats(reductionResult.stats)
-                    }
+            do {
+                while let (taggedCommands, tree) = try interpreter.next() {
+                    samplingIteration += 1
+                    let absoluteIteration = Int(startIndex) + samplingIteration
+                    let outcome = backend.execute(taggedCommands)
+                    if outcome.passed == false {
+                        // Reduction stays correct on a timeout — the reducer only ever returns a failing schedule — but on a hang every probe waits out the idle bound (idleTimeout × repetitions) and a timing-dependent timeout often will not reproduce, so it is slow and usually fruitless. Skip it and report the original schedule.
+                        let reduced: [(ScheduleMarker, Spec.Command)]
+                        let reductionInvocations: Int
+                        if outcome.timedOut {
+                            reduced = taggedCommands
+                            reductionInvocations = 0
+                        } else {
+                            let reductionResult = Preemptive.reduce(
+                                generator: sequenceGen,
+                                tree: tree,
+                                output: taggedCommands,
+                                repetitions: 10,
+                                execute: backend.execute
+                            )
+                            reduced = reductionResult.output
+                            reductionInvocations = reductionResult.propertyInvocations
+                            report.applyReductionStats(reductionResult.stats)
+                        }
 
-                    let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
-                    let samplingReplaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
-                    let result = backend.buildResult(
-                        reduced: reduced,
-                        seed: actualSeed,
-                        replaySeed: samplingReplaySeed,
-                        discoveryMethod: discoveryMethod
-                    )
-
-                    report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionInvocations)
-
-                    if config.suppressIssueReporting == false {
-                        deferredIssues.append(makePreemptiveFailureMessage(
-                            reduced,
-                            trace: result.trace,
-                            specName: "\(Spec.self)",
-                            discoveryMethod: discoveryMethod,
+                        let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
+                        let samplingReplaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
+                        let result = backend.buildResult(
+                            reduced: reduced,
                             seed: actualSeed,
-                            iteration: absoluteIteration,
-                            budget: samplingBudget,
-                            sequencesTested: samplingIteration,
-                            reductionInvocations: reductionInvocations,
-                            originalCount: taggedCommands.count,
                             replaySeed: samplingReplaySeed,
-                            timedOut: outcome.timedOut,
-                            oracleState: result.systemUnderTest as Any
-                        ))
-                    }
+                            discoveryMethod: discoveryMethod
+                        )
 
-                    finalizeReport()
-                    return (result, deferredIssues, report)
+                        report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionInvocations)
+
+                        if config.suppressIssueReporting == false {
+                            deferredIssues.append(makePreemptiveFailureMessage(
+                                reduced,
+                                trace: result.trace,
+                                specName: "\(Spec.self)",
+                                discoveryMethod: discoveryMethod,
+                                seed: actualSeed,
+                                iteration: absoluteIteration,
+                                budget: samplingBudget,
+                                sequencesTested: samplingIteration,
+                                reductionInvocations: reductionInvocations,
+                                originalCount: taggedCommands.count,
+                                replaySeed: samplingReplaySeed,
+                                timedOut: outcome.timedOut,
+                                oracleState: result.systemUnderTest as Any
+                            ))
+                        }
+
+                        finalizeReport()
+                        return (result, deferredIssues, report)
+                    }
                 }
-            } } catch {
+            } catch {
                 deferredIssues.append("Generator failed during sampling: \(error)")
             }
         }

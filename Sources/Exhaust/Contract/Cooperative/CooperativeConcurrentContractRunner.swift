@@ -240,12 +240,12 @@ private extension __ExhaustRuntime {
             discoveredDuringCoverage = discovery.discoveryMethod == .coverage
             report.reductionMilliseconds = discovery.reductionMilliseconds
 
-            var ctx = failureContext
-            ctx.seed = discovery.seed
-            ctx.originalCount = discovery.originalCount
-            ctx.iteration = discovery.iteration
-            ctx.budget = discovery.budget
-            ctx.sequencesTested = discovery.sequencesTested
+            var discoveryContext = failureContext
+            discoveryContext.seed = discovery.seed
+            discoveryContext.originalCount = discovery.originalCount
+            discoveryContext.iteration = discovery.iteration
+            discoveryContext.budget = discovery.budget
+            discoveryContext.sequencesTested = discovery.sequencesTested
             let failure = buildFailureResult(
                 finalInput: discovery.taggedCommands,
                 specInit: specInit,
@@ -254,7 +254,7 @@ private extension __ExhaustRuntime {
                 seed: discovery.seed,
                 discoveryMethod: discovery.discoveryMethod,
                 timedOut: discovery.timedOut,
-                failureContext: &ctx
+                failureContext: &discoveryContext
             )
             if config.suppressIssueReporting == false {
                 deferredIssues.append(failure.issueMessage)
@@ -275,12 +275,10 @@ private extension __ExhaustRuntime {
                 var regressionDiscovery: ConcurrentDiscovery<Spec.Command>?
                 if let coverageRow {
                     if let scaResult = runConcurrentSCACoverage(
-                        seqGen: sequenceGen,
+                        sequenceGen: sequenceGen,
                         commandGen: commandGen,
                         commandLimit: resolvedCommandLimit,
                         coverageBudget: max(coverageBudget, UInt64(coverageRow) + 1),
-                        concurrencyLevel: concurrencyLevel,
-                        idleTimeout: idleTimeout,
                         skipToRow: coverageRow,
                         property: property,
                         identifySkips: identifySkips,
@@ -305,7 +303,7 @@ private extension __ExhaustRuntime {
                             seed: seed,
                             replayIteration: iteration,
                             samplingBudget: samplingBudget,
-                            failureContext: failureContext,
+
                             statsAccumulator: statsAccumulator
                         )
                     } catch {
@@ -333,12 +331,10 @@ private extension __ExhaustRuntime {
                 coverageBudget
             }
             if let scaResult = runConcurrentSCACoverage(
-                seqGen: sequenceGen,
+                sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: resolvedCommandLimit,
                 coverageBudget: effectiveCoverageBudget,
-                concurrencyLevel: concurrencyLevel,
-                idleTimeout: idleTimeout,
                 skipToRow: config.coverageReplayRow,
                 property: property,
                 identifySkips: identifySkips,
@@ -369,7 +365,6 @@ private extension __ExhaustRuntime {
                     seed: config.seed,
                     replayIteration: config.replayIteration,
                     samplingBudget: samplingBudget,
-                    failureContext: failureContext,
                     statsAccumulator: statsAccumulator
                 )
             } catch {
@@ -400,11 +395,12 @@ private extension __ExhaustRuntime {
         seed: UInt64?,
         replayIteration: Int?,
         samplingBudget: UInt64,
-        failureContext _: FailureContext,
         statsAccumulator: OpenPBTStatsAccumulator?
     ) throws -> ConcurrentDiscovery<Command>? {
-        let startIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
-        let maxRuns = replayIteration.map { UInt64($0) } ?? samplingBudget
+        let (startIndex, maxRuns) = samplingReplayWindow(
+            replayIteration: replayIteration,
+            samplingBudget: samplingBudget
+        )
         var interpreter = ValueAndChoiceTreeInterpreter(
             sequenceGen,
             materializePicks: true,

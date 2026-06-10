@@ -157,9 +157,16 @@ public extension __ExhaustRuntime {
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
+        let entryContext = ContractContext(
+            settings: settings,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
         let logConfiguration = ExhaustLog.Configuration(
-            isEnabled: !settings.contains { if case .suppress(.logs) = $0 { true } else if case .suppress(.all) = $0 { true } else { false } },
-            minimumLevel: settings.compactMap { if case let .log(level) = $0 { level } else { nil } }.last ?? .error,
+            isEnabled: entryContext.suppressLogs == false,
+            minimumLevel: entryContext.logLevel,
             format: .keyValue
         )
 
@@ -189,9 +196,9 @@ private extension __ExhaustRuntime {
         settings: [ContractSettings],
         regressionSeeds: [String] = [],
         fileID: StaticString,
-        filePath: StaticString = "",
-        line: UInt = 0,
-        column: UInt = 0
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
     ) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
 
@@ -220,7 +227,10 @@ private extension __ExhaustRuntime {
                 let (replayResult, replayIssues) = runAsyncSequentialPipeline(
                     specType,
                     settings: [.replay(.encoded(encodedSeed))] + settings,
-                    fileID: fileID
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
                 )
                 deferredIssues.append(contentsOf: replayIssues)
 
@@ -244,23 +254,7 @@ private extension __ExhaustRuntime {
         let (sequenceGenerator, commandLimit) = makeCommandSequence(commandGen: commandGen, context: context)
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
-        let identifySkips: @Sendable ([Spec.Command]) -> Set<Int> = { commands in
-            __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
-                let spec = specInit()
-                var skips = Set<Int>()
-                for (index, command) in commands.enumerated() {
-                    do {
-                        try await spec.run(command)
-                        try await spec.checkInvariants()
-                    } catch is ContractSkip {
-                        skips.insert(index)
-                    } catch {
-                        break
-                    }
-                }
-                return skips
-            }!
-        }
+        let identifySkips = Spec.skipIdentifier(specInit: specInit)
 
         let property: @Sendable ([Spec.Command]) -> Bool = { commands in
             __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
@@ -455,7 +449,7 @@ private extension __ExhaustRuntime {
     ) -> SCAOutcome<Command> {
         if context.coverageReplayRow != nil {
             return runSCACoverage(
-                seqGen: sequenceGenerator,
+                sequenceGen: sequenceGenerator,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 coverageBudget: context.coverageBudget,
@@ -481,7 +475,7 @@ private extension __ExhaustRuntime {
             return .skipped
         }
         return runSCACoverage(
-            seqGen: sequenceGenerator,
+            sequenceGen: sequenceGenerator,
             commandGen: commandGen,
             commandLimit: commandLimit,
             coverageBudget: context.coverageBudget,
