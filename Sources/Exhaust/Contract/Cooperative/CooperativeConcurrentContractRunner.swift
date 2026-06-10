@@ -474,71 +474,6 @@ private extension __ExhaustRuntime {
     }
 }
 
-// MARK: - Reduction
-
-/// Internal (not fileprivate) so the SCA coverage path in `CooperativeConcurrentContractRunner+SCA.swift` can share this single reducer. Not `@available`-gated: it uses no macOS-15 APIs, so the (ungated) coverage and preemptive paths can call it directly.
-extension __ExhaustRuntime {
-    /// Prunes skipped commands, then runs graph reduction on the failing counterexample. When the failing probe timed out, skips reduction entirely and returns the input unchanged — timed-out schedules produce non-deterministic replay, making reduction unreliable.
-    ///
-    /// Shared by the random-sampling and SCA-coverage paths. Keeps no invocation count of its own: every probe flows through `property`, so the caller measures reduction invocations by snapshotting its own counter around this call.
-    ///
-    /// - Parameters:
-    ///   - seed: Pruning materialization seed (sampling uses `0`; coverage uses the row iteration for determinism per row).
-    ///   - skipPruningLogEvent: Log event name for the skip-pruning pass, distinguishing the two callers in the log stream.
-    ///   - timedOut: The failing probe's timeout status, captured by the caller before reduction. Returned unchanged, so a reduced counterexample reports `false` rather than whatever the reducer probed last.
-    static func reduceConcurrentCounterexample<Command>(
-        input: [(ScheduleMarker, Command)],
-        tree: ChoiceTree,
-        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
-        reductionConfig: Interpreters.ReducerConfiguration,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
-        identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
-        seed: UInt64,
-        skipPruningLogEvent: String,
-        timedOut: Bool
-    ) -> ConcurrentReduction<Command> {
-        guard timedOut == false else {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "concurrent_timeout_skipping_reduction"
-            )
-            return ConcurrentReduction(finalInput: input, stats: nil, timedOut: true)
-        }
-
-        let (reduceValue, reduceTree) = pruneSkippedCommands(
-            value: input,
-            tree: tree,
-            generator: sequenceGen,
-            seed: seed,
-            property: property,
-            identifySkips: identifySkips,
-            logEvent: skipPruningLogEvent
-        )
-
-        let (finalInput, stats, reduced) = reduceContractCounterexample(
-            value: reduceValue,
-            tree: reduceTree,
-            generator: sequenceGen,
-            config: reductionConfig,
-            property: property
-        )
-        if reduced {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "concurrent_reduced",
-                metadata: ["from": "\(input.count)", "to": "\(finalInput.count)"]
-            )
-        } else {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "concurrent_reduction_no_improvement"
-            )
-        }
-
-        return ConcurrentReduction(finalInput: finalInput, stats: stats, timedOut: false)
-    }
-}
-
 // MARK: - Failure Result Assembly
 
 // reportIssue must be called from the Swift Testing async context, not the GCD thread where this function executes — Swift Testing's task-locals are not available on GCD threads, so the caller must collect the rendered message and report it after awaiting dispatchToGCD.
@@ -606,7 +541,6 @@ private extension __ExhaustRuntime {
 
 // MARK: - Supporting Types
 
-/// Not `@available`-gated: `ConcurrentReduction` is returned by the ungated shared reducer, and these are plain data carriers with no macOS-15 dependency.
 extension __ExhaustRuntime {
     /// Carries the failure metadata from the coverage or sampling phase back to the entry point, which uses it to populate ``FailureContext``, call ``buildFailureResult(finalInput:specInit:concurrencyLevel:idleTimeout:seed:discoveryMethod:timedOut:failureContext:)``, and update the ``ExhaustReport``.
     struct ConcurrentDiscovery<Command> {
@@ -621,15 +555,5 @@ extension __ExhaustRuntime {
         let reductionStats: ReductionStats?
         let reductionInvocations: Int
         let reductionMilliseconds: Double
-    }
-
-    /// Outcome of ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``, shared by the sampling and coverage paths.
-    ///
-    /// Carries no invocation count or timing: every reduction probe flows through the caller's `property`, so the caller measures both by snapshotting around the call.
-    struct ConcurrentReduction<Command> {
-        let finalInput: [(ScheduleMarker, Command)]
-        let stats: ReductionStats?
-        /// The failing probe's timeout status, passed through unchanged — a reduced (non-timed-out) counterexample reports `false`, never the reducer's last probe.
-        let timedOut: Bool
     }
 }
