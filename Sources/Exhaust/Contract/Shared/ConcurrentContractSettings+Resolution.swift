@@ -36,7 +36,7 @@ struct ResolvedConcurrentConfig {
                 case let .budget(budget):
                     config.budget = budget
                 case let .commandLimit(limit):
-                    config.commandLimit = limit
+                    config.commandLimit = max(Int(limit), 1)
                 case let .replay(replaySeed):
                     guard let resolved = replaySeed.resolve() else {
                         return .invalidReplaySeed(replaySeed)

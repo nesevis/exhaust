@@ -113,7 +113,7 @@ struct ContractContext {
         for setting in settings {
             switch setting {
                 case let .commandLimit(limit):
-                    commandLimit = limit
+                    commandLimit = max(Int(limit), 1)
                 case let .budget(value):
                     budget = value
                 case let .replay(replaySeed):
