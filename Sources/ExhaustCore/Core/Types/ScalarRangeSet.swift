@@ -10,7 +10,7 @@ import Foundation
 /// A set of `UInt32` ranges representing Unicode scalar values, backed by ``ExhaustRangeSet``.
 /// Provides O(log n) index-to-scalar lookup for single-pick generation.
 ///
-/// When ``bottomCodepoint`` is non-nil, index 0 is reserved for that scalar and all other indices are offset by 1. The bottom codepoint does not need to be a member of the underlying range set. This makes the reducer (which reduces toward bit pattern 0, that is, index 0) converge toward the nominated character without any pipeline changes.
+/// When ``bottomCodepoint`` is non-nil, index 0 is reserved for that scalar and all other indices are offset by 1. The bottom codepoint does not need to be a member of the underlying range set; if it is a member, it is removed from the range set so that index 0 remains its only address — otherwise ``scalar(at:)`` and ``index(of:)`` would disagree on the duplicate index and reflection round-trips would fail. This makes the reducer (which reduces toward bit pattern 0, that is, index 0) converge toward the nominated character without any pipeline changes.
 package struct ScalarRangeSet: @unchecked Sendable {
     /// The underlying set of Unicode scalar value ranges.
     public let rangeSet: ExhaustRangeSet<UInt32>
@@ -39,6 +39,11 @@ package struct ScalarRangeSet: @unchecked Sendable {
     public init(_ rangeSet: ExhaustRangeSet<UInt32>, bottomCodepoint: Unicode.Scalar? = nil) {
         precondition(!rangeSet.isEmpty, "ScalarRangeSet requires a non-empty ExhaustRangeSet")
 
+        var rangeSet = rangeSet
+        if let bottom = bottomCodepoint, rangeSet.contains(bottom.value) {
+            rangeSet.remove(contentsOf: bottom.value ..< bottom.value + 1)
+        }
+
         let rangesArray = Array(rangeSet.ranges)
         var cumulative: [Int] = []
         cumulative.reserveCapacity(rangesArray.count)
@@ -48,7 +53,7 @@ package struct ScalarRangeSet: @unchecked Sendable {
             total += range.count
         }
 
-        let problematicIndices = ProblematicValues.interestingCharacterScalars
+        var problematicIndices = ProblematicValues.interestingCharacterScalars
             .compactMap { candidate -> UInt64? in
                 guard rangeSet.contains(candidate) else {
                     return nil
@@ -60,10 +65,16 @@ package struct ScalarRangeSet: @unchecked Sendable {
                 )
                 return UInt64(bottomCodepoint != nil ? rangeIndex + 1 : rangeIndex)
             }
+        // The bottom codepoint was removed from the range set above, so an interesting bottom scalar is reachable only through its reserved index.
+        if let bottom = bottomCodepoint,
+           ProblematicValues.interestingCharacterScalars.contains(bottom.value)
+        {
+            problematicIndices.insert(0, at: 0)
+        }
 
         self.rangeSet = rangeSet
         self.bottomCodepoint = bottomCodepoint
-        scalarCount = bottomCodepoint != nil ? total + 1 : total
+        scalarCount = total
         cumulativeCounts = cumulative
         self.rangesArray = rangesArray
         self.problematicIndices = problematicIndices
