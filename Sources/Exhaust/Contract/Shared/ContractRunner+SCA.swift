@@ -156,6 +156,7 @@ extension __ExhaustRuntime {
                     reductionPropertyInvocations.value += 1
                     return property(input)
                 }
+                let reductionStopwatch = Stopwatch()
                 let (reduceValue, reduceTree) = pruneSkippedCommands(
                     value: value,
                     tree: tree,
@@ -172,12 +173,14 @@ extension __ExhaustRuntime {
                     config: .init(maxStalls: 2),
                     property: countingProperty
                 )
+                let reductionMilliseconds = reductionStopwatch.elapsedMilliseconds
                 return .failure(
                     commands: reduced,
                     original: value,
                     coverageInvocations: coverageInvocations,
                     reductionStats: stats,
-                    reductionInvocations: reductionPropertyInvocations.value
+                    reductionInvocations: reductionPropertyInvocations.value,
+                    reductionMilliseconds: reductionMilliseconds
                 )
             case let .completed(coverageInvocations):
                 return .completed(coverageInvocations: coverageInvocations)
@@ -366,7 +369,7 @@ extension __ExhaustRuntime {
     /// Outcome of an SCA coverage run.
     enum SCAOutcome<Command> {
         /// SCA found a counterexample.
-        case failure(commands: [Command], original: [Command], coverageInvocations: Int, reductionStats: ReductionStats?, reductionInvocations: Int)
+        case failure(commands: [Command], original: [Command], coverageInvocations: Int, reductionStats: ReductionStats?, reductionInvocations: Int, reductionMilliseconds: Double)
         /// SCA ran its covering array to completion without finding a failure.
         case completed(coverageInvocations: Int)
         /// SCA was not applicable or was skipped before covering anything.

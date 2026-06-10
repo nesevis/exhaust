@@ -30,6 +30,7 @@ extension __ExhaustRuntime {
         var timedOut: Bool
         var reductionStats: ReductionStats?
         var reductionInvocations: Int = 0
+        var reductionMilliseconds: Double = 0
     }
 }
 
@@ -74,6 +75,7 @@ extension __ExhaustRuntime {
 
                 let reductionConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
                 let reductionStartInvocations = invocationCounter.value
+                let reductionStopwatch = Stopwatch()
                 let reduction = reduceConcurrentCounterexample(
                     input: value,
                     tree: tree,
@@ -85,6 +87,7 @@ extension __ExhaustRuntime {
                     skipPruningLogEvent: "concurrent_sca_skip_pruning",
                     timedOut: timedOut
                 )
+                let reductionMilliseconds = reductionStopwatch.elapsedMilliseconds
                 let reductionInvocations = invocationCounter.value - reductionStartInvocations
 
                 return SCAFailureResult(
@@ -93,7 +96,8 @@ extension __ExhaustRuntime {
                     iteration: UInt64(coverageInvocations),
                     timedOut: reduction.timedOut,
                     reductionStats: reduction.stats,
-                    reductionInvocations: reductionInvocations
+                    reductionInvocations: reductionInvocations,
+                    reductionMilliseconds: reductionMilliseconds
                 )
             case .completed, .skipped:
                 return nil
@@ -184,7 +188,7 @@ extension __ExhaustRuntime {
 extension __ExhaustRuntime.ConcurrentDiscovery {
     /// Constructs a coverage discovery from an SCA failure result.
     ///
-    /// Bridges the SCA-specific ``__ExhaustRuntime/SCAFailureResult`` into the pipeline-level ``__ExhaustRuntime/ConcurrentDiscovery`` with `.coverage` as the discovery method. `reductionMilliseconds` is always zero because SCA reduction time is not tracked separately from the row loop.
+    /// Bridges the SCA-specific ``__ExhaustRuntime/SCAFailureResult`` into the pipeline-level ``__ExhaustRuntime/ConcurrentDiscovery`` with `.coverage` as the discovery method.
     init(
         scaResult: __ExhaustRuntime.SCAFailureResult<Command>,
         coverageBudget: UInt64,
@@ -201,7 +205,7 @@ extension __ExhaustRuntime.ConcurrentDiscovery {
             sequencesTested: sequencesTested,
             reductionStats: scaResult.reductionStats,
             reductionInvocations: scaResult.reductionInvocations,
-            reductionMilliseconds: 0
+            reductionMilliseconds: scaResult.reductionMilliseconds
         )
     }
 }

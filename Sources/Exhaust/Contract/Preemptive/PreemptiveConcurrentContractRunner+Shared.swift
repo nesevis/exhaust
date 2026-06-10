@@ -284,6 +284,7 @@ extension __ExhaustRuntime {
                     report.applyReductionStats(stats)
                 }
                 report.reductionInvocations = scaResult.reductionInvocations
+                report.reductionMilliseconds = scaResult.reductionMilliseconds
 
                 let scaReplaySeed = ReplaySeed.Resolved.encodeCoverageIteration(Int(scaResult.iteration))
                 let result = backend.buildResult(

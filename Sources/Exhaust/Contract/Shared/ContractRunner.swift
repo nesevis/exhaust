@@ -403,7 +403,7 @@ private extension __ExhaustRuntime {
         )
 
         switch scaOutcome {
-            case let .failure(commands, original, coverageInvocations, reductionStats, reductionInvocations):
+            case let .failure(commands, original, coverageInvocations, reductionStats, reductionInvocations, reductionMilliseconds):
                 if let onReport = context.onReportClosure {
                     var report = ExhaustReport()
                     report.seed = context.seed
@@ -412,6 +412,7 @@ private extension __ExhaustRuntime {
                         randomSampling: 0,
                         reduction: reductionInvocations
                     )
+                    report.reductionMilliseconds = reductionMilliseconds
                     if let reductionStats {
                         report.applyReductionStats(reductionStats)
                     }
