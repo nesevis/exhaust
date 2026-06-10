@@ -52,16 +52,19 @@ public extension AsyncContractSpec {
 
     /// Returns a closure that re-executes a command sequence and returns the indices of skipped commands.
     ///
-    /// Bridges async execution via ``__ExhaustRuntime/blockingAwait(_:)``. The returned closure is safe to call from a GCD thread.
+    /// Bridges async execution via ``__ExhaustRuntime/blockingAwait(idleTimeoutMilliseconds:_:)``. The returned closure is safe to call from a GCD thread. On drain-loop timeout (a command that suspends onto a foreign executor or deadlocks synchronously), returns an empty set — skip pruning is an optimization, so degrading gracefully is safe.
     ///
-    /// - Parameter specInit: A factory that creates a fresh contract instance. Must be `nonisolated(unsafe)` at the call site to satisfy `@Sendable` capture.
+    /// - Parameters:
+    ///   - specInit: A factory that creates a fresh contract instance. Must be `nonisolated(unsafe)` at the call site to satisfy `@Sendable` capture.
+    ///   - idleTimeoutMilliseconds: Idle bound for the blocking drain loop, or `nil` to wait unbounded.
     internal static func skipIdentifier(
-        specInit: @escaping () -> Self
+        specInit: @escaping () -> Self,
+        idleTimeoutMilliseconds: Int? = nil
     ) -> @Sendable ([Command]) -> Set<Int> {
         nonisolated(unsafe) let specInit = specInit
         return { commands in
             let box = UnsafeSendableBox(specInit())
-            return __ExhaustRuntime.blockingAwait {
+            let work: @Sendable () async -> Set<Int> = {
                 var skips = Set<Int>()
                 for (index, command) in commands.enumerated() {
                     do {
@@ -75,6 +78,10 @@ public extension AsyncContractSpec {
                 }
                 return skips
             }
+            if let idleTimeoutMilliseconds {
+                return __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: idleTimeoutMilliseconds, work) ?? []
+            }
+            return __ExhaustRuntime.blockingAwait(work)
         }
     }
 }

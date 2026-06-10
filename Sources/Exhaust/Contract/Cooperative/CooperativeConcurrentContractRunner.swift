@@ -192,12 +192,15 @@ private extension __ExhaustRuntime {
         // Safe: metatypes are stateless.
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
-        let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit)
+        let concurrencyLevel = config.concurrencyLevel
+        let idleTimeout = config.idleTimeout
+        let rawIdentifySkips = Spec.skipIdentifier(
+            specInit: specInit,
+            idleTimeoutMilliseconds: idleTimeout
+        )
         let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
             rawIdentifySkips(taggedCommands.map(\.1))
         }
-        let concurrencyLevel = config.concurrencyLevel
-        let idleTimeout = config.idleTimeout
         let lastRunTimedOut = UnsafeSendableBox(false)
         let invocationCounter = UnsafeSendableBox(0)
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in

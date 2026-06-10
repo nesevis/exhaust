@@ -139,7 +139,14 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 group.leave()
             }
         }
-        group.wait()
+        if let idleTimeoutMilliseconds {
+            if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
+                commandFailed.value = true
+                return Preemptive.Outcome(passed: false, timedOut: true)
+            }
+        } else {
+            group.wait()
+        }
 
         if caughtException.value != nil || commandFailed.value {
             return Preemptive.Outcome(passed: false, timedOut: timedOut.value)
@@ -213,19 +220,29 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
     func makeIdentifySkips() -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> {
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
-        let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit)
+        let rawIdentifySkips = Spec.skipIdentifier(
+            specInit: specInit,
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds
+        )
         return { taggedCommands in rawIdentifySkips(taggedCommands.map(\.1)) }
     }
 
     func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String) {
         let spec = Spec()
         nonisolated(unsafe) let unsafeSpec = spec
-        let (trace, failed) = __ExhaustRuntime.blockingAwait {
+        let work: @Sendable () async -> ([TraceStep], Bool) = {
             await __ExhaustRuntime.buildAsyncSequentialTrace(
                 commands,
                 run: { try await unsafeSpec.run($0) },
                 checkInvariants: { try await unsafeSpec.checkInvariants() }
             )
+        }
+        let (trace, failed): ([TraceStep], Bool)
+        if let idleTimeoutMilliseconds {
+            (trace, failed) = __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: idleTimeoutMilliseconds, work)
+                ?? ([], true)
+        } else {
+            (trace, failed) = __ExhaustRuntime.blockingAwait(work)
         }
         return (trace, failed, spec.systemUnderTest, spec.failureDescription())
     }
