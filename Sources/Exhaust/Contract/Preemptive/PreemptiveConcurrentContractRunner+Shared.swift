@@ -36,6 +36,7 @@ enum Preemptive {
         repetitions: Int,
         execute: ([(ScheduleMarker, Command)]) -> Outcome
     ) -> ReductionResult<Command> {
+        // Single-threaded: the reducer calls the property sequentially on the pipeline GCD thread.
         var propertyInvocations = 0
         let property: ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
             for _ in 0 ..< repetitions {
@@ -173,6 +174,7 @@ extension __ExhaustRuntime {
         let samplingBudget = config.budget.samplingBudget
         let coverageBudget = config.budget.coverageBudget
         var coverageInvocations = 0
+        // Single-threaded: the reducer and SCA row loop call the property sequentially on the pipeline GCD thread.
         let invocationCounter = UnsafeSendableBox(0)
         let lastRunTimedOut = UnsafeSendableBox(false)
 

@@ -207,11 +207,34 @@ extension __ExhaustRuntime {
                     .map(\.element)
                 return .sequence(length: UInt64(pruned.count), elements: pruned, meta)
             case let .group(children, isOpaque):
-                return .group(children.map { pruneSequenceElements(from: $0, at: indices) }, isOpaque: isOpaque)
+                guard let targetIndex = children.firstIndex(where: { containsSequence($0) }) else {
+                    return tree
+                }
+                var updated = children
+                updated[targetIndex] = pruneSequenceElements(from: updated[targetIndex], at: indices)
+                return .group(updated, isOpaque: isOpaque)
             case let .resize(newSize, choices):
-                return .resize(newSize: newSize, choices: choices.map { pruneSequenceElements(from: $0, at: indices) })
+                guard let targetIndex = choices.firstIndex(where: { containsSequence($0) }) else {
+                    return tree
+                }
+                var updated = choices
+                updated[targetIndex] = pruneSequenceElements(from: updated[targetIndex], at: indices)
+                return .resize(newSize: newSize, choices: updated)
             default:
                 return tree
+        }
+    }
+
+    private static func containsSequence(_ tree: ChoiceTree) -> Bool {
+        switch tree {
+            case .sequence:
+                return true
+            case let .group(children, _):
+                return children.contains(where: { containsSequence($0) })
+            case let .resize(_, choices):
+                return choices.contains(where: { containsSequence($0) })
+            default:
+                return false
         }
     }
 }

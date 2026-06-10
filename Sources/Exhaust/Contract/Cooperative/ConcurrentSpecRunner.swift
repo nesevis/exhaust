@@ -236,7 +236,10 @@ func drainSchedule<Spec: AsyncContractSpec>(
             ? schedule[scheduleIndex]
             : LaneID(index: UInt8(scheduleIndex % concurrencyLevel))
         scheduleIndex += 1
-        guard let (lane, job) = runQueue.dequeue(preferring: preferred) else { break }
+        guard let (lane, job) = runQueue.dequeue(preferring: preferred) else {
+            assertionFailure("dequeue returned nil despite hasPendingJobs being true")
+            break
+        }
         let executor = executors[Int(lane.index)]
 
         if recordTrace {

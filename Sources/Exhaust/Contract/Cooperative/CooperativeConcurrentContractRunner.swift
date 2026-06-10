@@ -198,6 +198,7 @@ private extension __ExhaustRuntime {
         let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
             rawIdentifySkips(taggedCommands.map(\.1))
         }
+        // Single-threaded: the reducer and SCA row loop call the property sequentially on the pipeline GCD thread.
         let lastRunTimedOut = UnsafeSendableBox(false)
         let invocationCounter = UnsafeSendableBox(0)
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
