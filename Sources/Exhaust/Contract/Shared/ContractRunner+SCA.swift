@@ -150,12 +150,18 @@ extension __ExhaustRuntime {
         )
         switch result {
             case let .failure(value, tree, coverageInvocations):
+                // Single-threaded: the reducer calls the property sequentially on the pipeline thread.
+                let reductionPropertyInvocations = UnsafeSendableBox(0)
+                let countingProperty: @Sendable ([Command]) -> Bool = { input in
+                    reductionPropertyInvocations.value += 1
+                    return property(input)
+                }
                 let (reduceValue, reduceTree) = pruneSkippedCommands(
                     value: value,
                     tree: tree,
                     generator: sequenceGen,
                     seed: UInt64(coverageInvocations),
-                    property: property,
+                    property: countingProperty,
                     identifySkips: identifySkips,
                     logEvent: "contract_skip_pruning"
                 )
@@ -164,9 +170,15 @@ extension __ExhaustRuntime {
                     tree: reduceTree,
                     generator: sequenceGen,
                     config: .init(maxStalls: 2),
-                    property: property
+                    property: countingProperty
                 )
-                return .failure(commands: reduced, original: value, coverageInvocations: coverageInvocations, reductionStats: stats)
+                return .failure(
+                    commands: reduced,
+                    original: value,
+                    coverageInvocations: coverageInvocations,
+                    reductionStats: stats,
+                    reductionInvocations: reductionPropertyInvocations.value
+                )
             case let .completed(coverageInvocations):
                 return .completed(coverageInvocations: coverageInvocations)
             case .skipped:
@@ -354,7 +366,7 @@ extension __ExhaustRuntime {
     /// Outcome of an SCA coverage run.
     enum SCAOutcome<Command> {
         /// SCA found a counterexample.
-        case failure(commands: [Command], original: [Command], coverageInvocations: Int, reductionStats: ReductionStats?)
+        case failure(commands: [Command], original: [Command], coverageInvocations: Int, reductionStats: ReductionStats?, reductionInvocations: Int)
         /// SCA ran its covering array to completion without finding a failure.
         case completed(coverageInvocations: Int)
         /// SCA was not applicable or was skipped before covering anything.

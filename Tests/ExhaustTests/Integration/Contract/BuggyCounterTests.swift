@@ -99,6 +99,26 @@ struct SCAReductionCoverageTests {
         #expect(result.discoveryMethod == .coverage)
         #expect(result.trace.isEmpty == false)
     }
+
+    @Test("SCA coverage report counts reduction property invocations, not materializations")
+    func scaCoverageReportCountsReductionPropertyInvocations() throws {
+        var capturedReport: ExhaustReport?
+        let result = try #require(
+            #execute(
+                PairwiseBugSpec.self,
+                .commandLimit(3),
+                .budget(.custom(coverage: 200, sampling: 0)),
+                .suppress(.issueReporting),
+                .onReport { capturedReport = $0 }
+            )
+        )
+        #expect(result.discoveryMethod == .coverage)
+        let report = try #require(capturedReport)
+        #expect(report.coverageInvocations > 0)
+        #expect(report.randomSamplingInvocations == 0)
+        #expect(report.totalMaterializations >= report.reductionInvocations)
+        #expect(report.propertyInvocations == report.coverageInvocations + report.reductionInvocations)
+    }
 }
 
 // MARK: - Contract
