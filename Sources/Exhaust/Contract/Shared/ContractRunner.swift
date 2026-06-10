@@ -217,9 +217,7 @@ private extension __ExhaustRuntime {
 
         if context.isSamplingReplay == false, context.isCoverageReplay == false {
             for encodedSeed in regressionSeeds {
-                guard CrockfordBase32.decodeWithIteration(encodedSeed) != nil
-                    || CrockfordBase32.decodeCoverageRow(encodedSeed) != nil
-                else {
+                guard ReplaySeed.Resolved.decode(encodedSeed) != nil else {
                     deferredIssues.append("Invalid regression seed: \(encodedSeed)")
                     continue
                 }
@@ -422,7 +420,7 @@ private extension __ExhaustRuntime {
                 return ContractDiscovery(
                     commands: commands,
                     failureInfo: ContractFailureInfo(originalCommands: original, discoveryMethod: .coverage),
-                    replaySeed: CrockfordBase32.encodeCoverageRow(coverageInvocations - 1)
+                    replaySeed: ReplaySeed.Resolved.encodeCoverageIteration(coverageInvocations)
                 )
 
             case .completed, .skipped:
@@ -560,9 +558,7 @@ private extension __ExhaustRuntime {
             }
 
             for encodedSeed in traitConfig.regressions {
-                guard CrockfordBase32.decodeWithIteration(encodedSeed) != nil
-                    || CrockfordBase32.decodeCoverageRow(encodedSeed) != nil
-                else {
+                guard ReplaySeed.Resolved.decode(encodedSeed) != nil else {
                     reportIssue(
                         "Invalid regression seed: \(encodedSeed)",
                         fileID: context.fileID,

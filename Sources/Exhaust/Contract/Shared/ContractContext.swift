@@ -68,7 +68,7 @@ struct ContractContext {
             .budget(.custom(coverage: coverageBudget, sampling: samplingBudget)),
         ]
         if let iteration = samplingReplayIteration, let seed {
-            settings.append(.replay(.encoded(CrockfordBase32.encode(seed: seed, iteration: iteration))))
+            settings.append(.replay(.encoded(ReplaySeed.Resolved.sampling(seed: seed, iteration: iteration).encoded)))
         } else if let seed {
             settings.append(.replay(.numeric(seed)))
         }
@@ -87,18 +87,7 @@ struct ContractContext {
     }
 
     var encodedReplaySeed: String? {
-        switch replay {
-            case let .sampling(seed, iteration):
-                if let iteration {
-                    CrockfordBase32.encode(seed: seed, iteration: iteration)
-                } else {
-                    CrockfordBase32.encode(seed)
-                }
-            case let .coverage(row):
-                CrockfordBase32.encodeCoverageRow(row)
-            case nil:
-                seed.map { CrockfordBase32.encode($0) }
-        }
+        replay?.encoded ?? seed.map(ReplaySeed.encodeRawSeed)
     }
 
     init(

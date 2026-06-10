@@ -48,7 +48,7 @@ enum Preemptive {
         }
 
         let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
-        let valueMinimization = Set(EncoderName.allCases).subtracting(structural).subtracting([.laneCollapse])
+        let valueMinimization = Set(EncoderName.allCases.filter(\.isValueMinimizer))
 
         var currentOutput = output
         var currentTree = tree
@@ -187,26 +187,25 @@ extension __ExhaustRuntime {
         // Regression seeds: replay each through the same pipeline with the appropriate replay config.
         if config.coverageReplayRow == nil, config.seed == nil {
             for encodedSeed in regressionSeeds {
-                let samplingSeed = CrockfordBase32.decodeWithIteration(encodedSeed)
-                let coverageRow = CrockfordBase32.decodeCoverageRow(encodedSeed)
-                guard samplingSeed != nil || coverageRow != nil else {
+                guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
                     deferredIssues.append("Invalid regression seed: \(encodedSeed)")
                     continue
                 }
 
                 var replayConfig = config
-                if let coverageRow {
-                    replayConfig.coverageReplayRow = coverageRow
-                    let needed = UInt64(coverageRow) + 1
-                    if replayConfig.budget.coverageBudget < needed {
-                        replayConfig.budget = .custom(
-                            coverage: needed,
-                            sampling: replayConfig.budget.samplingBudget
-                        )
-                    }
-                } else if let (seed, iteration) = samplingSeed {
-                    replayConfig.seed = seed
-                    replayConfig.replayIteration = iteration
+                switch decoded {
+                    case let .coverage(row: row):
+                        replayConfig.coverageReplayRow = row
+                        let needed = UInt64(row) + 1
+                        if replayConfig.budget.coverageBudget < needed {
+                            replayConfig.budget = .custom(
+                                coverage: needed,
+                                sampling: replayConfig.budget.samplingBudget
+                            )
+                        }
+                    case let .sampling(seed, iteration):
+                        replayConfig.seed = seed
+                        replayConfig.replayIteration = iteration
                 }
 
                 let (replayResult, replayIssues, _) = runPreemptivePipeline(
@@ -242,7 +241,7 @@ extension __ExhaustRuntime {
                             trace: smoke.trace,
                             systemUnderTest: smoke.systemUnderTest,
                             seed: nil,
-                            replaySeed: CrockfordBase32.encodeCoverageRow(smokeRow),
+                            replaySeed: ReplaySeed.Resolved.coverage(row: smokeRow).encoded,
                             discoveryMethod: .smokeTest
                         )
                         if config.suppressIssueReporting == false {
@@ -286,7 +285,7 @@ extension __ExhaustRuntime {
                 }
                 report.reductionInvocations = scaResult.reductionInvocations
 
-                let scaReplaySeed = CrockfordBase32.encodeCoverageRow(Int(scaResult.iteration) - 1)
+                let scaReplaySeed = ReplaySeed.Resolved.encodeCoverageIteration(Int(scaResult.iteration))
                 let result = backend.buildResult(
                     reduced: scaResult.finalInput,
                     seed: nil,
@@ -366,7 +365,7 @@ extension __ExhaustRuntime {
                         }
 
                         let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
-                        let samplingReplaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
+                        let samplingReplaySeed = ReplaySeed.Resolved.sampling(seed: actualSeed, iteration: absoluteIteration).encoded
                         let result = backend.buildResult(
                             reduced: reduced,
                             seed: actualSeed,

@@ -92,7 +92,7 @@ public extension __ExhaustRuntime {
         #if canImport(Testing)
             if let traitConfig = ExhaustTraitConfiguration.current {
                 for encodedSeed in traitConfig.regressions {
-                    guard let decoded = CrockfordBase32.decodeWithIteration(encodedSeed) else {
+                    guard let decoded = ReplaySeed.decodeWithIteration(encodedSeed) else {
                         reportIssue(
                             "Invalid regression seed: \(encodedSeed)",
                             fileID: fileID, filePath: filePath, line: line, column: column
@@ -278,7 +278,7 @@ public extension __ExhaustRuntime {
                         try property(counterexample)
                     } catch {}
 
-                    let encoded = CrockfordBase32.encode(seed: report.seed, iteration: report.propertyInvocations)
+                    let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: report.propertyInvocations).encoded
                     reportIssue(
                         "Reproduce: .replay(\"\(encoded)\")",
                         fileID: fileID,
@@ -411,7 +411,7 @@ public extension __ExhaustRuntime {
                             try? await property(valueBox.value)
                         }
 
-                        let encoded = CrockfordBase32.encode(seed: report.seed, iteration: report.propertyInvocations)
+                        let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: report.propertyInvocations).encoded
                         reportIssue(
                             "Reproduce: .replay(\"\(encoded)\")",
                             fileID: fileID,

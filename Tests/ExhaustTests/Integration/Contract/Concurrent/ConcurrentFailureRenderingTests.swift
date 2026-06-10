@@ -21,7 +21,7 @@ struct ConcurrentFailureRenderingTests {
         context.budget = 100
         context.originalCount = 5
         context.sequencesTested = 50
-        context.replaySeed = CrockfordBase32.encode(seed: 42, iteration: 3)
+        context.replaySeed = ReplaySeed.Resolved.sampling(seed: 42, iteration: 3).encoded
 
         let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
         #expect(output.contains("BankSpec failure"))
@@ -107,7 +107,7 @@ struct ConcurrentFailureRenderingTests {
         context.iteration = 1
         context.budget = 200
         context.sequencesTested = 10
-        context.replaySeed = CrockfordBase32.encode(seed: 99, iteration: 1)
+        context.replaySeed = ReplaySeed.Resolved.sampling(seed: 99, iteration: 1).encoded
 
         let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
         #expect(output.contains("Reproduce:"))
@@ -149,7 +149,7 @@ struct ConcurrentFailureRenderingTests {
         context.iteration = 1
         context.budget = 200
         context.sequencesTested = 10
-        context.replaySeed = CrockfordBase32.encode(seed: 99, iteration: 1)
+        context.replaySeed = ReplaySeed.Resolved.sampling(seed: 99, iteration: 1).encoded
 
         let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
         #expect(output.contains("Reproduce:"))

@@ -265,15 +265,13 @@ private extension __ExhaustRuntime {
         // Regression seeds: replay each through the same coverage/sampling machinery as an inline `.replay`, so the printed `U…` (coverage) and `…-N` (sampling) formats round-trip and the failing run is re-materialised at its true position. An explicit `.replay` takes precedence and skips this pass.
         if config.coverageReplayRow == nil, config.seed == nil {
             for encodedSeed in regressionSeeds {
-                let samplingSeed = CrockfordBase32.decodeWithIteration(encodedSeed)
-                let coverageRow = CrockfordBase32.decodeCoverageRow(encodedSeed)
-                guard samplingSeed != nil || coverageRow != nil else {
+                guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
                     deferredIssues.append("Invalid regression seed: \(encodedSeed)")
                     continue
                 }
 
                 var regressionDiscovery: ConcurrentDiscovery<Spec.Command>?
-                if let coverageRow {
+                if case let .coverage(row: coverageRow) = decoded {
                     if let scaResult = runConcurrentSCACoverage(
                         sequenceGen: sequenceGen,
                         commandGen: commandGen,
@@ -291,7 +289,7 @@ private extension __ExhaustRuntime {
                             sequencesTested: invocationCounter.value
                         )
                     }
-                } else if let (seed, iteration) = samplingSeed {
+                } else if case let .sampling(seed, iteration) = decoded {
                     do {
                         regressionDiscovery = try runConcurrentSampling(
                             sequenceGen: sequenceGen,
@@ -505,10 +503,10 @@ private extension __ExhaustRuntime {
         if let seed {
             // A regression replay decodes the seed directly (maxRuns: 1) and carries no iteration, so it must round-trip as a bare seed. Only sampling and replay failures, which set a 1-based iteration, take the iteration suffix.
             replaySeed = failureContext.iteration >= 1
-                ? CrockfordBase32.encode(seed: seed, iteration: failureContext.iteration)
-                : CrockfordBase32.encode(seed)
+                ? ReplaySeed.Resolved.sampling(seed: seed, iteration: failureContext.iteration).encoded
+                : ReplaySeed.encodeRawSeed(seed)
         } else if discoveryMethod == .coverage || discoveryMethod == .smokeTest {
-            replaySeed = CrockfordBase32.encodeCoverageRow(failureContext.iteration - 1)
+            replaySeed = ReplaySeed.Resolved.encodeCoverageIteration(failureContext.iteration)
         } else {
             replaySeed = nil
         }

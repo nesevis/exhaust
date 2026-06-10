@@ -425,8 +425,7 @@ public extension __ExhaustRuntime {
         ) -> (counterexample: Output, replaySeed: String)? {
             guard let traitConfig = ExhaustTraitConfiguration.current else { return nil }
             for encodedSeed in traitConfig.regressions {
-                guard CrockfordBase32.decodeWithIteration(encodedSeed) != nil
-                    || CrockfordBase32.decodeCoverageRow(encodedSeed) != nil
+                guard ReplaySeed.Resolved.decode(encodedSeed) != nil
                 else {
                     reportIssue(
                         "Invalid regression seed: \(encodedSeed)",

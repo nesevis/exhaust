@@ -174,7 +174,7 @@ extension __ExhaustRuntime {
         lines.append("")
         lines.append("State: \(indentedDescription)")
 
-        if let encodedSeed = result.replaySeed ?? result.seed.map(CrockfordBase32.encode) {
+        if let encodedSeed = result.replaySeed ?? result.seed.map(ReplaySeed.encodeRawSeed) {
             lines.append("")
             lines.append("Reproduce: .replay(\"\(encodedSeed)\")")
         }

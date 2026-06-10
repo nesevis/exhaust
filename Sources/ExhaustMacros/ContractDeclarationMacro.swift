@@ -5,10 +5,15 @@ import SwiftSyntaxMacros
 
 // MARK: - Concurrency Mode Parsing
 
-private enum MacroConcurrencyMode {
+private enum MacroConcurrencyMode: String {
     case sequential
     case tasks
     case threads
+
+    /// The `ExecutionModel` literal emitted into synthesized code (for example `".sequential"`).
+    var executionModelLiteral: String {
+        ".\(rawValue)"
+    }
 }
 
 /// Reads the `ExecutionModel` literal from the `@Contract` attribute argument.
@@ -29,12 +34,10 @@ private func extractConcurrencyMode(from node: AttributeSyntax) -> ModeExtractio
     guard let memberAccess = firstArg.expression.as(MemberAccessExprSyntax.self) else {
         return .nonLiteral
     }
-    switch memberAccess.declName.baseName.trimmedDescription {
-        case "sequential": return .mode(.sequential)
-        case "tasks": return .mode(.tasks)
-        case "threads": return .mode(.threads)
-        default: return .nonLiteral
+    if let mode = MacroConcurrencyMode(rawValue: memberAccess.declName.baseName.trimmedDescription) {
+        return .mode(mode)
     }
+    return .nonLiteral
 }
 
 /// Determines whether the contract needs the `AsyncContractSpec` surface based on its members.
@@ -272,12 +275,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
             decls.append(synthesizeOracleCheck(oracle: oracle, hasAnyAsync: effectiveAsync))
         }
 
-        let modeString = switch mode {
-            case .sequential: ".sequential"
-            case .tasks: ".tasks"
-            case .threads: ".threads"
-        }
-        decls.append("static let executionModel: ExecutionModel = \(raw: modeString)")
+        decls.append("static let executionModel: ExecutionModel = \(raw: mode.executionModelLiteral)")
 
         if isActorDecl {
             decls.append("""

@@ -16,7 +16,7 @@ struct ExploreFailure<Output> {
     func render() -> String {
         var lines: [String] = []
 
-        let encodedSeed = CrockfordBase32.encode(seed: seed, iteration: propertyInvocations)
+        let encodedSeed = ReplaySeed.Resolved.sampling(seed: seed, iteration: propertyInvocations).encoded
         lines.append("Property failed (iteration \(propertyInvocations)/\(totalBudget), seed \(encodedSeed))")
 
         if matchedDirections.isEmpty == false {
@@ -62,7 +62,7 @@ struct ExploreFailure<Output> {
         lines.append("Property invoked: \(propertyInvocations) times")
 
         lines.append("")
-        lines.append("Reproduce: .replay(\"\(CrockfordBase32.encode(seed: seed, iteration: propertyInvocations))\")")
+        lines.append("Reproduce: .replay(\"\(ReplaySeed.Resolved.sampling(seed: seed, iteration: propertyInvocations).encoded)\")")
 
         return lines.joined(separator: "\n")
     }

@@ -26,7 +26,7 @@ struct PropertyTestFailure<Output> {
     /// Produces the encoded replay string including the iteration for direct reproduction.
     var encodedReplaySeed: String? {
         guard let seed else { return nil }
-        return CrockfordBase32.encode(seed: seed, iteration: iteration)
+        return ReplaySeed.Resolved.sampling(seed: seed, iteration: iteration).encoded
     }
 
     /// Dispatches to the appropriate renderer based on the configured log format.
@@ -132,7 +132,7 @@ struct PropertyTestFailure<Output> {
 
         let logLine = JSONLLogLine(
             event: "property_failed",
-            seed: seed.map { CrockfordBase32.encode($0) },
+            seed: seed.map { ReplaySeed.encodeRawSeed($0) },
             iteration: iteration,
             phaseBudget: phaseBudget,
             counterexample: transparent ? nil : counterexampleDump,
