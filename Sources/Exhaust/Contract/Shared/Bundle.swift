@@ -12,7 +12,7 @@ import Foundation
 /// struct DatabaseSpec {
 ///     let userIDs = Bundle<UserID>()
 ///
-///     @Command(weight: 3, #gen(.string(), .int(in: 18...65)))
+///     @Command(weight: 3, .string(), .int(in: 18...65))
 ///     mutating func createUser(name: String, age: Int) {
 ///         let id = db.createUser(name: name, age: age)
 ///         userIDs.add(id)

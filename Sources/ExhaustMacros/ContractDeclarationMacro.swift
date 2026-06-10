@@ -391,16 +391,7 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
             for arg in argList {
                 if arg.label?.trimmedDescription == "weight" {
                     weight = arg.expression.trimmedDescription
-                } else if let macroExpr = arg.expression.as(MacroExpansionExprSyntax.self),
-                          macroExpr.macroName.trimmedDescription == "gen",
-                          macroExpr.trailingClosure == nil
-                {
-                    // #gen(.a, .b) without trailing closure — unwrap inner generator arguments
-                    for innerArg in macroExpr.arguments {
-                        generatorExprs.append(innerArg.expression.trimmedDescription)
-                    }
                 } else {
-                    // Unlabeled arguments are generator expressions
                     generatorExprs.append(arg.expression.trimmedDescription)
                 }
             }
