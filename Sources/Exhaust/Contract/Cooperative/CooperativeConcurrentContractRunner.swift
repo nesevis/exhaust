@@ -178,7 +178,10 @@ private extension __ExhaustRuntime {
         let coverageBudget = config.budget.coverageBudget
         let resolvedCommandLimit = config.commandLimit
             ?? min(estimateCommandLimit(commandGen: commandGen, coverageBudget: coverageBudget), 40)
-        let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel)
+        guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
+            deferredIssues.append("Command generator must be a top-level pick (.oneOf) — concurrent testing requires per-command branch structure")
+            return (nil as ContractResult<Spec>?, deferredIssues)
+        }
         let sequenceGen = Gen.arrayOf(
             taggedCommandGen,
             within: 1 ... UInt64(resolvedCommandLimit),

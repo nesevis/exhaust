@@ -69,7 +69,10 @@ extension __ExhaustRuntime {
         let lengthRange = UInt64(0) ... UInt64(commandLimit)
 
         var iterations = 0
-        while iterations < coverageBudget, let row = generator.next() {
+        var attempts: UInt64 = 0
+        let maxAttempts = coverageBudget * 10
+        while iterations < coverageBudget, attempts < maxAttempts, let row = generator.next() {
+            attempts += 1
             let tree: ChoiceTree? = domain.buildTree(row: row, sequenceLengthRange: lengthRange)
             guard let tree else { continue }
 
@@ -148,7 +151,6 @@ extension __ExhaustRuntime {
         }
     }
 }
-
 
 extension __ExhaustRuntime {
     /// Extracts pick choices from a command generator when the generator is a top-level ``Gen.pick``.

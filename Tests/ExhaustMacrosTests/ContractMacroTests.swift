@@ -222,7 +222,6 @@
                 """
                 @Contract
                 ┬────────
-                ├─ 🛑 @Contract requires an execution mode: @Contract(.sequential|.tasks|.threads)
                 ╰─ 🛑 @Contract requires an execution mode: @Contract(.sequential|.tasks|.threads)
                 final class Spec {
                     @SystemUnderTest var sut: MySUT
@@ -252,7 +251,6 @@
                 """
                 @Contract(.tasks)
                 ┬────────────────
-                ├─ 🛑 Contract specs must be a 'final class' or 'actor' — structs are not supported
                 ╰─ 🛑 Contract specs must be a 'final class' or 'actor' — structs are not supported
                 struct Spec {
                     @SystemUnderTest var sut: MySUT

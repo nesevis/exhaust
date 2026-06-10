@@ -73,6 +73,9 @@ struct ContractContext {
             settings.append(.replay(.numeric(seed)))
         }
         settings.append(.suppress(.issueReporting))
+        if suppressLogs {
+            settings.append(.suppress(.logs))
+        }
         if collectOpenPBTStats {
             settings.append(.collectOpenPBTStats)
         }
@@ -144,8 +147,18 @@ struct ContractContext {
                     }
                 case let .log(level):
                     logLevel = level
-                case .concurrent, .idleTimeoutMs:
-                    break
+                case .concurrent:
+                    ExhaustLog.notice(
+                        category: .propertyTest,
+                        event: "setting_ignored",
+                        ".concurrent is only used with .tasks or .threads contracts"
+                    )
+                case .idleTimeoutMs:
+                    ExhaustLog.notice(
+                        category: .propertyTest,
+                        event: "setting_ignored",
+                        ".idleTimeoutMs is only used with .tasks or .threads contracts"
+                    )
             }
         }
 

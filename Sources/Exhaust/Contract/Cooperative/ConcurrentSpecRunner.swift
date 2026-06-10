@@ -166,6 +166,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
         }
 
         Task(executorPreference: executor) { @Sendable [spec, failed, runQueue, trace, commandIndex] in
+            defer { runQueue.markComplete(lane: lane) }
             let laneLabel = lane.label
             for command in commands {
                 guard failed.value == nil else { return }
@@ -212,7 +213,6 @@ func drainSchedule<Spec: AsyncContractSpec>(
                     return
                 }
             }
-            runQueue.markComplete(lane: lane)
         }
     }
 

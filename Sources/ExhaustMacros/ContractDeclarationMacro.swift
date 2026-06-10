@@ -62,13 +62,9 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         attachedTo declaration: some DeclGroupSyntax,
         providingExtensionsOf type: some TypeSyntaxProtocol,
         conformingTo _: [TypeSyntax],
-        in context: some MacroExpansionContext
+        in _: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
         guard let mode = extractConcurrencyMode(from: node) else {
-            context.diagnose(Diagnostic(
-                node: Syntax(node),
-                message: ContractDiagnostic.missingMode
-            ))
             return []
         }
 
@@ -81,11 +77,8 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         let isActorDecl = declaration.is(ActorDeclSyntax.self)
         let isReferenceType = isClassDecl || isActorDecl
 
-        if isReferenceType == false {
-            context.diagnose(Diagnostic(
-                node: Syntax(node),
-                message: ContractDiagnostic.structNotAllowed
-            ))
+        guard isReferenceType else {
+            return []
         }
 
         let hasAnyAsync = contractHasAsyncMember(mode: mode, commands: commands, invariants: invariants, oracles: oracles)
