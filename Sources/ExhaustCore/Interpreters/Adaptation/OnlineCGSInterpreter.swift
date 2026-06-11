@@ -46,6 +46,8 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         /// Compose all frames onto `gen` to produce a full `FinalOutput` generator.
         ///
         /// Frames are stored in push order (oldest first). `apply` iterates in reverse (newest/innermost first) to match the closure chain's nesting: `gen.bind(innerCont).bind(outerCont).map(cast)`.
+        ///
+        /// This composition defines the derivative's semantics. The hot sampling path (`rolloutSample`) interprets the frames directly instead of constructing this generator — building and re-interpreting the bind tower for every sample costs about 20% of warmup sampling throughput.
         public func apply(
             _ gen: AnyGenerator
         ) throws -> Generator<FinalOutput> {
@@ -814,28 +816,20 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
         // 1. Compute fitness via interleaved derivative sampling
         //
-        // Build derivatives only for live choices, then sample in rounds.
-        // This allows adaptive stopping when the relative ranking is decided, rather than exhausting the full budget per choice independently.
-        var derivatives = ContiguousArray<Generator<FinalOutput>>()
-        derivatives.reserveCapacity(liveChoiceIndices.count)
-        for i in liveChoiceIndices {
-            let derivative = try choices[i].generator.bind { innerValue in
-                try continuation(innerValue).erase()
-            }
-            try derivatives.append(derivativeContext.apply(derivative))
-        }
-
+        // Each sample is a defunctionalized rollout (`rolloutSample`): the branch and each derivative frame are value-walked directly. Sampling in rounds across live choices allows adaptive stopping when the relative ranking is decided, rather than exhausting the full budget per choice independently.
         var fitnesses = ContiguousArray(repeating: UInt64(0), count: choiceCount)
         let minRounds = Swift.min(UInt64(8), effectiveSampleCount)
         var completedRounds: UInt64 = 0
 
         sampling: for round in 0 ..< effectiveSampleCount {
             completedRounds = round + 1
-            for (derivIdx, choiceIdx) in liveChoiceIndices.enumerated() {
+            for choiceIdx in liveChoiceIndices {
                 do {
-                    let result = try CGSDerivativeInterpreter.sample(
-                        derivatives[derivIdx],
-                        using: &cgsState.samplingPRNG,
+                    let result = try rolloutSample(
+                        branch: choices[choiceIdx].generator,
+                        pickContinuation: continuation,
+                        frames: derivativeContext.frames,
+                        rng: &cgsState.samplingPRNG,
                         size: currentSize
                     )
                     if let value = result, predicate(value) {
@@ -940,6 +934,70 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             cgsState: &cgsState,
             derivativeContext: derivativeContext
         )
+    }
+
+    // MARK: - Defunctionalized Rollout Sampling
+
+    /// Completes one derivative sample by value-walking the branch and then interpreting each ``DerivativeFrame`` directly, without constructing the composed generator that ``DerivativeContext/apply(_:)`` builds.
+    ///
+    /// `apply` defines the semantics this function must match: sampling `derivativeContext.apply(branch.bind(pickContinuation))` visits the same operations in the same order, so PRNG consumption is identical. Reordering the frame interpretation breaks that parity, and with it the seed determinism of warmup fitness data. The difference is purely mechanical: the tower pays closure dispatch, `.pure` boxing, and `.impure` node allocation at every frame layer for every sample, while the rollout allocates only the component arrays the frames themselves require.
+    ///
+    /// - Returns: The completed value, or `nil` when any sub-generator fails to produce one — a prune rejects, or the final cast to `FinalOutput` fails where `apply`'s tower would trap on its force cast.
+    private static func rolloutSample(
+        branch: AnyGenerator,
+        pickContinuation: (Any) throws -> AnyGenerator,
+        frames: [DerivativeFrame],
+        rng: inout Xoshiro256,
+        size: UInt64
+    ) throws -> FinalOutput? {
+        guard let branchValue = try CGSDerivativeInterpreter.sample(branch, using: &rng, size: size) else {
+            return nil
+        }
+        guard var current = try CGSDerivativeInterpreter.sample(pickContinuation(branchValue), using: &rng, size: size) else {
+            return nil
+        }
+
+        // Newest frame first, matching the nesting order `apply` produces: the innermost bind runs immediately after the branch, the oldest frame runs last.
+        for frame in frames.reversed() {
+            switch frame {
+                case let .bind(continuation):
+                    guard let next = try CGSDerivativeInterpreter.sample(continuation(current), using: &rng, size: size) else {
+                        return nil
+                    }
+                    current = next
+
+                case let .zipComponent(index, completed, allGenerators, continuation):
+                    var components = completed
+                    components.reserveCapacity(allGenerators.count)
+                    components.append(current)
+                    for j in (index + 1) ..< allGenerators.count {
+                        guard let sibling = try CGSDerivativeInterpreter.sample(allGenerators[j], using: &rng, size: size) else {
+                            return nil
+                        }
+                        components.append(sibling)
+                    }
+                    guard let next = try CGSDerivativeInterpreter.sample(continuation(components), using: &rng, size: size) else {
+                        return nil
+                    }
+                    current = next
+
+                case let .sequenceElement(index, completed, totalCount, elementGen, continuation):
+                    var elements = completed
+                    elements.reserveCapacity(totalCount)
+                    elements.append(current)
+                    for _ in (index + 1) ..< totalCount {
+                        guard let element = try CGSDerivativeInterpreter.sample(elementGen, using: &rng, size: size) else {
+                            return nil
+                        }
+                        elements.append(element)
+                    }
+                    guard let next = try CGSDerivativeInterpreter.sample(continuation(elements), using: &rng, size: size) else {
+                        return nil
+                    }
+                    current = next
+            }
+        }
+        return current as? FinalOutput
     }
 
     // MARK: - Vocabulary Elimination
