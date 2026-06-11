@@ -74,7 +74,8 @@ package struct ScalarRangeSet: @unchecked Sendable {
 
         self.rangeSet = rangeSet
         self.bottomCodepoint = bottomCodepoint
-        scalarCount = total
+        // The bottom code point, if present, is always removed from the range set and kept at index 0
+        scalarCount = bottomCodepoint != nil ? total + 1 : total
         cumulativeCounts = cumulative
         self.rangesArray = rangesArray
         self.problematicIndices = problematicIndices
