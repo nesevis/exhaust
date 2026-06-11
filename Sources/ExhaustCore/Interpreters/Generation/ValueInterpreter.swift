@@ -208,78 +208,11 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         // MARK: sequence
 
             case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
-                guard let lengthValue = try generateRecursiveAny(lengthGen.erase(), with: (), context: &context) else {
+                guard let elements = try handleSequence(
+                    lengthGen: lengthGen, elementGen: elementGen,
+                    inputValue: inputValue, context: &context
+                ) else {
                     return nil
-                }
-                // The length spine is `UInt64`-typed by construction; a non-`UInt64` value is a malformed generator, not a recoverable condition.
-                // swiftlint:disable:next force_cast
-                let length = lengthValue as! UInt64
-                let count = try SharedInterpreterHelpers.sequenceElementCount(length)
-                var elements: [Any] = []
-                elements.reserveCapacity(count)
-                // Unwrap a contramap layer before matching: forward generation ignores the backward transform, so contramap-wrapped elements (for example character generators) can take the fused loop below as long as the outer continuation is applied to each element.
-                var fusedElementGen = elementGen
-                var contramapContinuation: ((Any) throws -> AnyGenerator)?
-                if case let .impure(operation: .contramap(_, innerGen), continuation: outerContinuation) = elementGen {
-                    fusedElementGen = innerGen
-                    contramapContinuation = outerContinuation
-                }
-                // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element. Unscaled elements take the same loop with their declared range.
-                if case let .impure(
-                    operation: .chooseBits(min, max, tag, _, scaling, _),
-                    continuation: elementContinuation
-                ) = fusedElementGen, scaling == nil || context.sizeOverride == nil {
-                    let effectiveRange: ClosedRange<UInt64>
-                    if let scaling {
-                        let size = consumeSize(&context)
-                        effectiveRange = Gen.applyScaling(
-                            min: min, max: max, tag: tag, scaling: scaling, size: size
-                        )
-                    } else {
-                        effectiveRange = min ... max
-                    }
-
-                    for _ in 0 ..< count {
-                        let rawBits = context.prng.next(in: effectiveRange)
-                        let randomBits: Any = tag.isFloatingPoint
-                            ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
-                            : rawBits
-                        let nextElementGen = try elementContinuation(randomBits)
-                        var element: Any
-                        if case let .pure(final) = nextElementGen {
-                            element = final
-                        } else {
-                            guard let value = try generateRecursiveAny(
-                                nextElementGen, with: inputValue, context: &context
-                            ) else {
-                                return nil
-                            }
-                            element = value
-                        }
-                        if let contramapContinuation {
-                            let outerGen = try contramapContinuation(element)
-                            if case let .pure(final) = outerGen {
-                                element = final
-                            } else {
-                                guard let value = try generateRecursiveAny(
-                                    outerGen, with: inputValue, context: &context
-                                ) else {
-                                    return nil
-                                }
-                                element = value
-                            }
-                        }
-                        elements.append(element)
-                    }
-                } else {
-                    for _ in 0 ..< count {
-                        guard let element = try generateRecursiveAny(
-                            elementGen, with: inputValue, context: &context
-                        ) else {
-                            return nil
-                        }
-                        elements.append(element)
-                    }
                 }
                 let nextGen = try continuation(elements)
                 if case let .pure(final) = nextGen { return final }
@@ -464,6 +397,90 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 if case let .pure(final) = nextGen { return final }
                 return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
         }
+    }
+
+    // MARK: - Sequence Handler
+
+    @inline(__always)
+    static func handleSequence(
+        lengthGen: Generator<UInt64>,
+        elementGen: AnyGenerator,
+        inputValue: Any,
+        context: inout GenerationContext
+    ) throws -> [Any]? {
+        guard let lengthValue = try generateRecursiveAny(lengthGen.erase(), with: (), context: &context) else {
+            return nil
+        }
+        // swiftlint:disable:next force_cast
+        let length = lengthValue as! UInt64
+        let count = try SharedInterpreterHelpers.sequenceElementCount(length)
+        var elements: [Any] = []
+        elements.reserveCapacity(count)
+        // Unwrap a contramap layer before matching: forward generation ignores the backward transform, so contramap-wrapped elements (for example character generators) can take the fused loop below as long as the outer continuation is applied to each element.
+        var fusedElementGen = elementGen
+        var contramapContinuation: ((Any) throws -> AnyGenerator)?
+        if case let .impure(operation: .contramap(_, innerGen), continuation: outerContinuation) = elementGen {
+            fusedElementGen = innerGen
+            contramapContinuation = outerContinuation
+        }
+        // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element. Unscaled elements take the same loop with their declared range.
+        if case let .impure(
+            operation: .chooseBits(min, max, tag, _, scaling, _),
+            continuation: elementContinuation
+        ) = fusedElementGen, scaling == nil || context.sizeOverride == nil {
+            let effectiveRange: ClosedRange<UInt64>
+            if let scaling {
+                let size = consumeSize(&context)
+                effectiveRange = Gen.applyScaling(
+                    min: min, max: max, tag: tag, scaling: scaling, size: size
+                )
+            } else {
+                effectiveRange = min ... max
+            }
+
+            for _ in 0 ..< count {
+                let rawBits = context.prng.next(in: effectiveRange)
+                let randomBits: Any = tag.isFloatingPoint
+                    ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+                    : rawBits
+                let nextElementGen = try elementContinuation(randomBits)
+                var element: Any
+                if case let .pure(final) = nextElementGen {
+                    element = final
+                } else {
+                    guard let value = try generateRecursiveAny(
+                        nextElementGen, with: inputValue, context: &context
+                    ) else {
+                        return nil
+                    }
+                    element = value
+                }
+                if let contramapContinuation {
+                    let outerGen = try contramapContinuation(element)
+                    if case let .pure(final) = outerGen {
+                        element = final
+                    } else {
+                        guard let value = try generateRecursiveAny(
+                            outerGen, with: inputValue, context: &context
+                        ) else {
+                            return nil
+                        }
+                        element = value
+                    }
+                }
+                elements.append(element)
+            }
+        } else {
+            for _ in 0 ..< count {
+                guard let element = try generateRecursiveAny(
+                    elementGen, with: inputValue, context: &context
+                ) else {
+                    return nil
+                }
+                elements.append(element)
+            }
+        }
+        return elements
     }
 
     @inline(__always)
