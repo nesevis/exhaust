@@ -355,19 +355,36 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 )
                 var attempts = 0 as UInt64
                 let observationDefault = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
+                var filterAttempts = 0
+                var filterPasses = 0
+                var passedResult: (Any, ChoiceTree)?
+                var generatorYieldedNil = false
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let (result, tree) = try Self.generateRecursiveAny(
                         filteredGen, with: inputValue, context: &context
-                    ) else { return nil }
+                    ) else {
+                        generatorYieldedNil = true
+                        break
+                    }
                     let passed = predicate(result)
-                    context.filterObservations[fingerprint, default: observationDefault].recordAttempt(passed: passed)
+                    filterAttempts += 1
+                    if passed { filterPasses += 1 }
                     if passed {
-                        return try runContinuation(
-                            result: result, calleeChoiceTree: tree,
-                            continuation: continuation, inputValue: inputValue, context: &context
-                        )
+                        passedResult = (result, tree)
+                        break
                     }
                     attempts += 1
+                }
+                if filterAttempts > 0 {
+                    context.filterObservations[fingerprint, default: observationDefault]
+                        .merge(FilterObservation(attempts: filterAttempts, passes: filterPasses))
+                }
+                if generatorYieldedNil { return nil }
+                if let (result, tree) = passedResult {
+                    return try runContinuation(
+                        result: result, calleeChoiceTree: tree,
+                        continuation: continuation, inputValue: inputValue, context: &context
+                    )
                 }
                 sourceLocation.onBudgetExhausted?()
                 throw GeneratorError.sparseValidityCondition

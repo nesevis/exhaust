@@ -472,18 +472,19 @@ extension Materializer {
         while zipIndex < generators.count {
             let gen = generators[zipIndex]
             let fb: ChoiceTree? = fallbackChildren?[zipIndex]
-            if canScope, let fb {
-                context.cursor.pushScope(limit: childScopeStart + fb.flattenedEntryCount)
+            let entryCount = fb?.flattenedEntryCount
+            if canScope, let entryCount {
+                context.cursor.pushScope(limit: childScopeStart + entryCount)
             }
             guard let (result, tree) = try generateRecursive(
                 gen, with: inputValue, context: &context, fallbackTree: fb
             ) else {
-                if canScope, fb != nil { context.cursor.popScope() }
+                if canScope, entryCount != nil { context.cursor.popScope() }
                 return nil
             }
-            if canScope, fb != nil { context.cursor.popScope() }
+            if canScope, entryCount != nil { context.cursor.popScope() }
             if canScope { context.cursor.skipGroupCloses() }
-            if let fb { childScopeStart += fb.flattenedEntryCount }
+            if let entryCount { childScopeStart += entryCount }
             results.append(result)
             if context.skipTree == false {
                 choiceTrees.append(tree)

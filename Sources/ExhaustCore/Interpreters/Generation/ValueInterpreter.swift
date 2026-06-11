@@ -299,20 +299,30 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 var attempts = 0 as UInt64
                 var accepted: Any?
                 let observationDefault = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
+                var filterAttempts = 0
+                var filterPasses = 0
+                var generatorYieldedNil = false
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let candidate = try generateRecursiveAny(
                         tunedGen, with: inputValue, context: &context
                     ) else {
-                        return nil
+                        generatorYieldedNil = true
+                        break
                     }
                     let passed = predicate(candidate)
-                    context.filterObservations[fingerprint, default: observationDefault].recordAttempt(passed: passed)
+                    filterAttempts += 1
+                    if passed { filterPasses += 1 }
                     if passed {
                         accepted = candidate
                         break
                     }
                     attempts += 1
                 }
+                if filterAttempts > 0 {
+                    context.filterObservations[fingerprint, default: observationDefault]
+                        .merge(FilterObservation(attempts: filterAttempts, passes: filterPasses))
+                }
+                if generatorYieldedNil { return nil }
                 guard let value = accepted else {
                     sourceLocation.onBudgetExhausted?()
                     throw GeneratorError.sparseValidityCondition
