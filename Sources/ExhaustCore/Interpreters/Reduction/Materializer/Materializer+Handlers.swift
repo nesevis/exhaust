@@ -65,6 +65,7 @@ extension Materializer {
         tag: TypeTag,
         isRangeExplicit: Bool,
         scaling: ChooseBitsScaling?,
+        typeTagPayload: TypeTagPayload?,
         continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
@@ -139,7 +140,7 @@ extension Materializer {
             ? .just
             : .choice(
                 reusedChoice ?? ChoiceValue(randomBits, tag: tag),
-                .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
+                .init(validRange: min ... max, isRangeExplicit: isRangeExplicit, typeTagPayload: typeTagPayload)
             )
         return try runContinuation(
             result: randomBits, calleeChoiceTree: choiceTree,
