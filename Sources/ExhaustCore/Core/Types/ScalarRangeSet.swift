@@ -29,6 +29,15 @@ package struct ScalarRangeSet: @unchecked Sendable {
     /// Cumulative sizes for O(log n) index lookup. `cumulativeCounts[i]` = total scalars in ranges 0..<i.
     private let cumulativeCounts: [Int]
 
+    /// Total number of scalars covered by the ranges alone, excluding the reserved bottom-codepoint index.
+    private let rangeTotal: Int
+
+    /// Right-shift applied to a flat index to find its bucket in ``searchHints``.
+    private let hintShift: Int
+
+    /// Maps each bucket of flat indices to the index of the range containing the bucket's first flat index. Index-to-scalar lookup is on the per-character generation hot path, so ``rangeIndexForFlatIndex(_:)`` uses this table to narrow its binary search to the few ranges a bucket spans — for typical character sets the search collapses to one or two probes.
+    private let searchHints: [Int32]
+
     /// When non-nil, index 0 maps to this scalar and all range-derived indices are offset by 1.
     public let bottomCodepoint: Unicode.Scalar?
 
@@ -72,11 +81,31 @@ package struct ScalarRangeSet: @unchecked Sendable {
             problematicIndices.insert(0, at: 0)
         }
 
+        // Pick the smallest shift that keeps the hint table at no more than four buckets per range — small enough to stay cache-resident, fine enough that most buckets span a single range.
+        var shift = 0
+        while total > 1 && ((total - 1) >> shift) + 1 > 4 * rangesArray.count {
+            shift += 1
+        }
+        let bucketCount = ((total - 1) >> shift) + 1
+        var hints: [Int32] = []
+        hints.reserveCapacity(bucketCount)
+        var hintRangeIndex = 0
+        for bucket in 0 ..< bucketCount {
+            let flatIndex = bucket << shift
+            while hintRangeIndex + 1 < rangesArray.count, cumulative[hintRangeIndex + 1] <= flatIndex {
+                hintRangeIndex += 1
+            }
+            hints.append(Int32(hintRangeIndex))
+        }
+
         self.rangeSet = rangeSet
         self.bottomCodepoint = bottomCodepoint
         // The bottom code point, if present, is always removed from the range set and kept at index 0
         scalarCount = bottomCodepoint != nil ? total + 1 : total
         cumulativeCounts = cumulative
+        rangeTotal = total
+        hintShift = shift
+        searchHints = hints
         self.rangesArray = rangesArray
         self.problematicIndices = problematicIndices
     }
@@ -112,7 +141,6 @@ package struct ScalarRangeSet: @unchecked Sendable {
 
     /// Maps a range-relative index to a Unicode scalar (no bottom-codepoint offset applied).
     private func rangeScalar(at rangeRelativeIndex: Int) -> Unicode.Scalar {
-        let rangeTotal = cumulativeCounts.last.map { $0 + rangesArray.last!.count } ?? 0
         let clamped = min(max(rangeRelativeIndex, 0), rangeTotal - 1)
         let rangeIdx = rangeIndexForFlatIndex(clamped)
         let offsetInRange = clamped - cumulativeCounts[rangeIdx]
@@ -120,10 +148,13 @@ package struct ScalarRangeSet: @unchecked Sendable {
         return Unicode.Scalar(scalarValue)!
     }
 
-    /// Binary search for the range index containing the given flat index.
+    /// Binary search for the range index containing the given flat index, narrowed to the bucket bounds from ``searchHints``.
     private func rangeIndexForFlatIndex(_ index: Int) -> Int {
-        var lo = 0
-        var hi = cumulativeCounts.count - 1
+        let bucket = index >> hintShift
+        var lo = Int(searchHints[bucket])
+        var hi = bucket + 1 < searchHints.count
+            ? Int(searchHints[bucket + 1])
+            : cumulativeCounts.count - 1
         while lo < hi {
             let mid = lo + (hi - lo + 1) / 2
             if cumulativeCounts[mid] <= index {
