@@ -393,6 +393,7 @@ private extension __ExhaustRuntime {
         identifySkips: @escaping @Sendable ([Command]) -> Set<Int>,
         context: inout ContractContext
     ) -> ContractDiscovery<Command>? {
+        let pipelineStopwatch = Stopwatch()
         let scaOutcome = runContractCoverage(
             commandGen: commandGen.gen,
             commandLimit: commandLimit,
@@ -416,6 +417,7 @@ private extension __ExhaustRuntime {
                     if let reductionStats {
                         report.applyReductionStats(reductionStats)
                     }
+                    report.totalMilliseconds = pipelineStopwatch.elapsedMilliseconds
                     onReport(report)
                 }
                 return ContractDiscovery(
