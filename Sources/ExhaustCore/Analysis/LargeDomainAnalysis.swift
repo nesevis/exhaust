@@ -127,23 +127,30 @@ package enum ProblematicValues {
     ]
 
     /// Computes problematic bit-patterns for a `[min, max]` domain using type-specific problematic-value analysis rules.
-    package static func computeProblematicValues(min: UInt64, max: UInt64, tag: TypeTag) -> [UInt64] {
+    package static func computeProblematicValues(min: UInt64, max: UInt64, tag: TypeTag, payload: TypeTagPayload? = nil) -> [UInt64] {
         switch tag {
             case _ where tag.isFloatingPoint:
                 computeFloatProblematicValues(min: min, max: max, tag: tag)
-            case let .date(lowerSeconds, intervalSeconds, timeZoneID):
-                computeDateProblematicValues(
-                    min: min,
-                    max: max,
-                    lowerSeconds: lowerSeconds,
-                    intervalSeconds: intervalSeconds,
-                    timeZoneID: timeZoneID
-                )
+            case .date:
+                if case let .date(lowerSeconds, intervalSeconds, timeZoneID) = payload {
+                    computeDateProblematicValues(
+                        min: min,
+                        max: max,
+                        lowerSeconds: lowerSeconds,
+                        intervalSeconds: intervalSeconds,
+                        timeZoneID: timeZoneID
+                    )
+                } else {
+                    computeIntegerProblematicValues(min: min, max: max, tag: tag)
+                }
             case .bits:
                 [min, max]
-            case let .character(problematicIndices):
-                // The problematic indices correspond to `interestingCharacterScalars`, but in flat array index space. They are clamped to min/max during construction
-                problematicIndices
+            case .character:
+                if case let .character(problematicIndices) = payload {
+                    problematicIndices
+                } else {
+                    [min, max]
+                }
             default:
                 computeIntegerProblematicValues(min: min, max: max, tag: tag)
         }

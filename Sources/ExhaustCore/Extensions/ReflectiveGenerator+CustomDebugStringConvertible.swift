@@ -55,7 +55,7 @@ extension Generator where Operation == ReflectiveOperation {
         depth: Int
     ) -> String {
         switch operation {
-            case let .chooseBits(min, max, tag, isRangeExplicit, scaling):
+            case let .chooseBits(min, max, tag, isRangeExplicit, scaling, _):
                 let range = formatBitRange(min: min, max: max, tag: tag)
                 var suffix = isRangeExplicit ? "" : " [derived]"
                 switch scaling {

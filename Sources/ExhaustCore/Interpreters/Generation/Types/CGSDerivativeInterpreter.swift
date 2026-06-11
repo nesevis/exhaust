@@ -77,7 +77,7 @@ package enum CGSDerivativeInterpreter {
                             inputValue: inputValue, rng: &rng, size: size
                         )
 
-                    case let .chooseBits(min, max, tag, _, scaling):
+                    case let .chooseBits(min, max, tag, _, scaling, _):
                         let effective: ClosedRange<UInt64> = scaling.map {
                             Gen.applyScaling(
                                 min: min, max: max, tag: tag, scaling: $0, size: size

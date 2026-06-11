@@ -323,7 +323,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         // First step (0)
@@ -347,7 +347,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         for bp in values {
@@ -369,7 +369,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         // Reference date (0 seconds) is at step (0 - lower) / interval = 86400
@@ -387,7 +387,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         // Unix epoch is at step (unixEpoch - lower) / interval = 86400
@@ -405,7 +405,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         let adoptionStep = (gregorianAdoption - lower) / interval
@@ -423,7 +423,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         let adoptionStep = (gregorianAdoption - lower) / interval
@@ -443,7 +443,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         let adoptionStep = (gregorianAdoption - lower) / interval
@@ -468,7 +468,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
         )
 
         // These epochs are outside [lower, lower + numSteps], so no valid step index exists
@@ -544,7 +544,8 @@ struct DateDSTProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID)
+            tag: .date,
+            payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID)
         )
 
         let expectedStep = (expectedSeconds - lower) / interval
@@ -574,7 +575,8 @@ struct DateDSTProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID)
+            tag: .date,
+            payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID)
         )
 
         // The transition step and at least one neighbor should be present
@@ -705,14 +707,16 @@ struct CharacterProblematicIndicesTests {
     func coverageReplayProducesOnlyAllowedCharacters() {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "*-._"))
         let srs = allowed.scalarRangeSet()
-        let tag = TypeTag.character(problematicIndices: srs.problematicIndices)
+        let tag = TypeTag.character
+        let payload = TypeTagPayload.character(problematicIndices: srs.problematicIndices)
         let max = UInt64(srs.scalarCount - 1)
 
         let operation = ReflectiveOperation.chooseBits(
             min: 0,
             max: max,
             tag: tag,
-            isRangeExplicit: true
+            isRangeExplicit: true,
+            typeTagPayload: payload
         )
         let charGen: Generator<Character> = Gen.contramap(
             { (char: Character) throws -> UInt32 in

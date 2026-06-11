@@ -65,6 +65,7 @@ extension Materializer {
         tag: TypeTag,
         isRangeExplicit: Bool,
         scaling: ChooseBitsScaling?,
+        typeTagPayload: TypeTagPayload?,
         continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
@@ -139,7 +140,7 @@ extension Materializer {
             ? .just
             : .choice(
                 reusedChoice ?? ChoiceValue(randomBits, tag: tag),
-                .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
+                .init(validRange: min ... max, isRangeExplicit: isRangeExplicit, typeTagPayload: typeTagPayload)
             )
         return try runContinuation(
             result: randomBits, calleeChoiceTree: choiceTree,
@@ -472,18 +473,19 @@ extension Materializer {
         while zipIndex < generators.count {
             let gen = generators[zipIndex]
             let fb: ChoiceTree? = fallbackChildren?[zipIndex]
-            if canScope, let fb {
-                context.cursor.pushScope(limit: childScopeStart + fb.flattenedEntryCount)
+            let entryCount = fb?.flattenedEntryCount
+            if canScope, let entryCount {
+                context.cursor.pushScope(limit: childScopeStart + entryCount)
             }
             guard let (result, tree) = try generateRecursive(
                 gen, with: inputValue, context: &context, fallbackTree: fb
             ) else {
-                if canScope, fb != nil { context.cursor.popScope() }
+                if canScope, entryCount != nil { context.cursor.popScope() }
                 return nil
             }
-            if canScope, fb != nil { context.cursor.popScope() }
+            if canScope, entryCount != nil { context.cursor.popScope() }
             if canScope { context.cursor.skipGroupCloses() }
-            if let fb { childScopeStart += fb.flattenedEntryCount }
+            if let entryCount { childScopeStart += entryCount }
             results.append(result)
             if context.skipTree == false {
                 choiceTrees.append(tree)
@@ -673,11 +675,11 @@ extension Materializer {
     private static func extractLengthMetadata(
         _ lengthGen: Generator<UInt64>
     ) throws -> ChoiceMetadata {
-        if case let .impure(.chooseBits(min, max, _, isRangeExplicit, _), _) = lengthGen {
+        if case let .impure(.chooseBits(min, max, _, isRangeExplicit, _, _), _) = lengthGen {
             return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         }
         if case let .impure(.getSize, sizeContinuation) = lengthGen,
-           case let .impure(.chooseBits(min, max, _, isRangeExplicit, _), _) = try sizeContinuation(100 as Any)
+           case let .impure(.chooseBits(min, max, _, isRangeExplicit, _, _), _) = try sizeContinuation(100 as Any)
         {
             return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         }

@@ -157,12 +157,13 @@ package extension Gen {
             operation: .chooseBits(
                 min: Int64(0).bitPattern64,
                 max: numSteps.bitPattern64,
-                tag: .date(
+                tag: .date,
+                isRangeExplicit: true,
+                typeTagPayload: .date(
                     lowerSeconds: lowerSeconds,
                     intervalSeconds: intervalSeconds,
                     timeZoneID: timeZone.identifier
-                ),
-                isRangeExplicit: true
+                )
             )
         ) { try .pure(Int64(bitPattern64: chooseBitsBitPattern($0))) }
             .wrapped.mapped(
@@ -308,8 +309,9 @@ private func characterGenerator(from srs: ScalarRangeSet) -> Generator<Character
     let operation = ReflectiveOperation.chooseBits(
         min: 0,
         max: UInt64(srs.scalarCount - 1),
-        tag: .character(problematicIndices: srs.problematicIndices),
-        isRangeExplicit: true
+        tag: .character,
+        isRangeExplicit: true,
+        typeTagPayload: .character(problematicIndices: srs.problematicIndices)
     )
     let innerGen = Generator<Character>.impure(operation: operation) { result in
         try .pure(Character(srs.scalar(at: Int(chooseBitsBitPattern(result)))))

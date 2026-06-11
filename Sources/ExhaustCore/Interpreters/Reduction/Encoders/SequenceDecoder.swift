@@ -247,8 +247,7 @@ package enum SequenceDecoder {
     ) {
         guard let report, report.filterObservations.isEmpty == false else { return }
         for (fingerprint, observation) in report.filterObservations {
-            accumulator[fingerprint, default: FilterObservation()].attempts += observation.attempts
-            accumulator[fingerprint, default: FilterObservation()].passes += observation.passes
+            accumulator[fingerprint, default: FilterObservation()].merge(observation)
         }
     }
 }

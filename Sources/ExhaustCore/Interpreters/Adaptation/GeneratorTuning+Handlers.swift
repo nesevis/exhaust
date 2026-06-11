@@ -346,7 +346,7 @@ extension GeneratorTuning {
         // Try to subdivide the length generator if it's a chooseBits (only if we haven't already subdivided)
         if insideSubdividedChooseBits == false,
            case let .impure(
-               .chooseBits(lower, upper, tag, isRangeExplicit, scaling),
+               .chooseBits(lower, upper, tag, isRangeExplicit, scaling, _),
                lengthContinuation
            ) = lengthGen
         {

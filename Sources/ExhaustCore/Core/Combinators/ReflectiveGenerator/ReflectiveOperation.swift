@@ -134,7 +134,8 @@ package enum ReflectiveOperation {
         max: UInt64,
         tag: TypeTag,
         isRangeExplicit: Bool,
-        scaling: ChooseBitsScaling? = nil
+        scaling: ChooseBitsScaling? = nil,
+        typeTagPayload: TypeTagPayload? = nil
     )
 
     /// Generates a variable-length array by first choosing a length, then generating that many elements.
