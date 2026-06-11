@@ -35,15 +35,16 @@ public extension __ExhaustRuntime {
                 return nil
         }
 
-        let idleTimeoutMilliseconds: Int? = (config.idleTimeout > 0 && config.idleTimeout < Int.max)
-            ? config.idleTimeout
-            : nil
-        let backend = PreemptiveChecker<Spec>(idleTimeoutMilliseconds: idleTimeoutMilliseconds)
+        var regressionSeeds: [String] = []
+        #if canImport(Testing)
+            regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
+        #endif
 
-        let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: .keyValue)
+        let backend = PreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
+
         let (result, deferredIssues, report): (ContractResult<Spec>?, [String], ExhaustReport) = DispatchQueue.global().sync {
-            ExhaustLog.withConfiguration(logConfiguration) {
-                runPreemptivePipeline(backend: backend, config: config)
+            ExhaustLog.withConfiguration(config.logConfiguration) {
+                runPreemptivePipeline(backend: backend, config: config, regressionSeeds: regressionSeeds)
             }
         }
         config.onReportClosure?(report)
@@ -224,7 +225,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         return (trace, failed, spec.systemUnderTest, spec.failureDescription())
     }
 
-    /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state.
+    /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails — the partial state would mislead debugging.
     func buildResult(
         reduced: [(ScheduleMarker, Spec.Command)],
         seed: UInt64?,
@@ -232,13 +233,27 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         discoveryMethod: ContractDiscoveryMethod
     ) -> ContractResult<Spec> {
         let oracleSpec = Spec()
+        var replaySucceeded = true
         for (_, command) in reduced {
-            runCatchingObjC { try? oracleSpec.run(command) }
+            var exception: NSException?
+            let succeeded = exhaust_runCatchingObjCException({
+                do {
+                    try oracleSpec.run(command)
+                } catch is ContractSkip {
+                    // Skip is expected — continue.
+                } catch {
+                    replaySucceeded = false
+                }
+            }, &exception)
+            if succeeded == false || replaySucceeded == false {
+                replaySucceeded = false
+                break
+            }
         }
         return ContractResult<Spec>(
             commands: reduced.map(\.1),
             trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),
-            systemUnderTest: oracleSpec.systemUnderTest,
+            systemUnderTest: replaySucceeded ? oracleSpec.systemUnderTest : nil,
             seed: seed,
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod

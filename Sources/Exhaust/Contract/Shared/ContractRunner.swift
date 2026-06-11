@@ -152,18 +152,23 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column
     ) async -> ContractResult<Spec>? {
-        let logConfiguration = ExhaustLog.Configuration(
-            isEnabled: !settings.contains { if case .suppress(.logs) = $0 { true } else if case .suppress(.all) = $0 { true } else { false } },
-            minimumLevel: settings.compactMap { if case let .log(level) = $0 { level } else { nil } }.last ?? .error,
-            format: .keyValue
-        )
+        var regressionSeeds: [String] = []
+        #if canImport(Testing)
+            regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
+        #endif
+
+        let logConfiguration = ContractContext.logConfiguration(from: settings)
 
         let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
             ExhaustLog.withConfiguration(logConfiguration) {
                 runAsyncSequentialPipeline(
                     specType,
                     settings: settings,
-                    fileID: fileID
+                    regressionSeeds: regressionSeeds,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
                 )
             }
         }
@@ -178,16 +183,20 @@ private extension __ExhaustRuntime {
     static func runAsyncSequentialPipeline<Spec: AsyncContractSpec>(
         _ specType: Spec.Type,
         settings: [ContractSettings],
-        fileID: StaticString
+        regressionSeeds: [String] = [],
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
     ) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
 
         var context = ContractContext(
             settings: settings,
             fileID: fileID,
-            filePath: "",
-            line: 0,
-            column: 0
+            filePath: filePath,
+            line: line,
+            column: column
         )
 
         guard context.hasInvalidReplaySeed == false else {
@@ -195,27 +204,44 @@ private extension __ExhaustRuntime {
             return (nil, deferredIssues)
         }
 
+        if context.isSamplingReplay == false, context.isCoverageReplay == false {
+            for encodedSeed in regressionSeeds {
+                guard ReplaySeed.Resolved.decode(encodedSeed) != nil else {
+                    deferredIssues.append("Invalid regression seed: \(encodedSeed)")
+                    continue
+                }
+
+                let (replayResult, replayIssues) = runAsyncSequentialPipeline(
+                    specType,
+                    settings: [.replay(.encoded(encodedSeed))] + settings,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                deferredIssues.append(contentsOf: replayIssues)
+
+                if let replayResult {
+                    return (replayResult, deferredIssues)
+                } else {
+                    let suppressIssueReporting = settings.contains {
+                        switch $0 {
+                            case .suppress(.issueReporting), .suppress(.all): true
+                            default: false
+                        }
+                    }
+                    if suppressIssueReporting == false {
+                        deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
+                    }
+                }
+            }
+        }
+
         let commandGen = Spec.commandGenerator
         let (sequenceGenerator, commandLimit) = makeCommandSequence(commandGen: commandGen, context: context)
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
-        let identifySkips: @Sendable ([Spec.Command]) -> Set<Int> = { commands in
-            __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
-                let spec = specInit()
-                var skips = Set<Int>()
-                for (index, command) in commands.enumerated() {
-                    do {
-                        try await spec.run(command)
-                        try await spec.checkInvariants()
-                    } catch is ContractSkip {
-                        skips.insert(index)
-                    } catch {
-                        break
-                    }
-                }
-                return skips
-            }!
-        }
+        let identifySkips = Spec.skipIdentifier(specInit: specInit)
 
         let property: @Sendable ([Spec.Command]) -> Bool = { commands in
             __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
@@ -356,6 +382,7 @@ private extension __ExhaustRuntime {
         identifySkips: @escaping @Sendable ([Command]) -> Set<Int>,
         context: inout ContractContext
     ) -> ContractDiscovery<Command>? {
+        let pipelineStopwatch = Stopwatch()
         let scaOutcome = runContractCoverage(
             commandGen: commandGen.gen,
             commandLimit: commandLimit,
@@ -366,24 +393,26 @@ private extension __ExhaustRuntime {
         )
 
         switch scaOutcome {
-            case let .failure(commands, original, coverageInvocations, reductionStats):
+            case let .failure(commands, original, coverageInvocations, reductionStats, reductionInvocations, reductionMilliseconds):
                 if let onReport = context.onReportClosure {
                     var report = ExhaustReport()
                     report.seed = context.seed
                     report.setInvocations(
                         coverage: coverageInvocations,
                         randomSampling: 0,
-                        reduction: reductionStats.map(\.totalMaterializations) ?? 0
+                        reduction: reductionInvocations
                     )
+                    report.reductionMilliseconds = reductionMilliseconds
                     if let reductionStats {
                         report.applyReductionStats(reductionStats)
                     }
+                    report.totalMilliseconds = pipelineStopwatch.elapsedMilliseconds
                     onReport(report)
                 }
                 return ContractDiscovery(
                     commands: commands,
                     failureInfo: ContractFailureInfo(originalCommands: original, discoveryMethod: .coverage),
-                    replaySeed: CrockfordBase32.encodeCoverageRow(coverageInvocations - 1)
+                    replaySeed: ReplaySeed.Resolved.encodeCoverageIteration(coverageInvocations)
                 )
 
             case .completed, .skipped:
@@ -410,7 +439,7 @@ private extension __ExhaustRuntime {
     ) -> SCAOutcome<Command> {
         if context.coverageReplayRow != nil {
             return runSCACoverage(
-                seqGen: sequenceGenerator,
+                sequenceGen: sequenceGenerator,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 coverageBudget: context.coverageBudget,
@@ -436,7 +465,7 @@ private extension __ExhaustRuntime {
             return .skipped
         }
         return runSCACoverage(
-            seqGen: sequenceGenerator,
+            sequenceGen: sequenceGenerator,
             commandGen: commandGen,
             commandLimit: commandLimit,
             coverageBudget: context.coverageBudget,
@@ -521,9 +550,7 @@ private extension __ExhaustRuntime {
             }
 
             for encodedSeed in traitConfig.regressions {
-                guard CrockfordBase32.decodeWithIteration(encodedSeed) != nil
-                    || CrockfordBase32.decodeCoverageRow(encodedSeed) != nil
-                else {
+                guard ReplaySeed.Resolved.decode(encodedSeed) != nil else {
                     reportIssue(
                         "Invalid regression seed: \(encodedSeed)",
                         fileID: context.fileID,

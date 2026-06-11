@@ -14,7 +14,7 @@
 public enum ExecutionModel: Sendable {
     /// Sequential execution, one command at a time.
     ///
-    /// Commands run in order with `@Invariant` checked after each step. Use this for testing state-machine logic without concurrency. Required for `actor` contracts, because actor isolation serialises all dispatch.
+    /// Commands run in order with `@Invariant` checked after each step. Use this for testing state-machine logic without concurrency. Required for `actor` contracts, because actor isolation serializes all dispatch.
     case sequential
 
     /// Cooperative concurrent scheduling of Swift Tasks.

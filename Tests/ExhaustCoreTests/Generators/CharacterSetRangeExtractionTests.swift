@@ -178,6 +178,20 @@ struct CharacterSetRangeExtractionTests {
         }
     }
 
+    @Test("ScalarRangeSet index(of:) round-trips with scalar(at:) when the bottom codepoint is a member of the set")
+    func scalarRangeSetIndexOfRoundTripWithMemberBottomCodepoint() {
+        let range: ClosedRange<Unicode.Scalar> = "a" ... "z"
+        let srs = CharacterSet(charactersIn: range).scalarRangeSet(bottomCodepoint: "m")
+        for index in 0 ..< srs.scalarCount {
+            let scalar = srs.scalar(at: index)
+            let roundTripped = srs.index(of: scalar)
+            #expect(
+                roundTripped == index,
+                "scalar(at: \(index)) = '\(scalar)' maps back to index \(roundTripped) — the bottom codepoint must not be addressable at two indices"
+            )
+        }
+    }
+
     // MARK: - Generator tests
 
     @Test("character(from: .decimalDigits) generates only digits")

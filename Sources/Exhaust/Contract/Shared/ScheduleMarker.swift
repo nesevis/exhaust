@@ -25,6 +25,8 @@ public struct ScheduleMarker: RawRepresentable, Sendable, Equatable, Hashable, C
 
     public var description: String {
         if rawValue == 0 { return "prefix" }
-        return String(UnicodeScalar(UInt8(ascii: "a") + rawValue - 1))
+        let index = rawValue - 1
+        if index < 26 { return String(UnicodeScalar(UInt8(ascii: "a") + index)) }
+        return "lane\(index)"
     }
 }

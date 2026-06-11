@@ -1,4 +1,5 @@
 import ExhaustTestSupport
+import Foundation
 import Testing
 @testable import Exhaust
 
@@ -55,6 +56,20 @@ struct IdleTimeoutConcurrentTests {
         #expect(report.reductionInvocations == 0)
         #expect(report.randomSamplingInvocations == 1)
         #expect(report.propertyInvocations == 1)
+    }
+
+    @Test("Async preemptive group.wait bound prevents hang on synchronous SUT deadlock")
+    func asyncPreemptiveGroupWaitBoundPreventsHangOnSynchronousSUTDeadlock() async {
+        _ = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+            DeadlockingAsyncSpec.self,
+            settings: [
+                .concurrent(.two),
+                .commandLimit(2),
+                .idleTimeoutMs(50),
+                .budget(.custom(coverage: 0, sampling: 50)),
+                .suppress(.all),
+            ]
+        )
     }
 }
 
@@ -118,5 +133,53 @@ final class SleepingAsyncCounter: @unchecked Sendable {
     func sleepAndIncrement() async {
         try? await Task.sleep(for: .milliseconds(200))
         _value += 1
+    }
+}
+
+// MARK: - Deadlocking Async Spec
+
+@Contract(.threads)
+final class DeadlockingAsyncSpec {
+    @SystemUnderTest
+    var sut: DeadlockingSUT = .init()
+
+    @Oracle
+    func valuesMatch(other _: DeadlockingSUT) -> Bool {
+        true
+    }
+
+    @Command(weight: 1)
+    func lockAB() async throws {
+        sut.acquireAB()
+    }
+
+    @Command(weight: 1)
+    func lockBA() async throws {
+        sut.acquireBA()
+    }
+}
+
+final class DeadlockingSUT: @unchecked Sendable, CustomDebugStringConvertible {
+    private let lockA = NSLock()
+    private let lockB = NSLock()
+
+    var debugDescription: String {
+        "DeadlockingSUT"
+    }
+
+    func acquireAB() {
+        lockA.lock()
+        Thread.sleep(forTimeInterval: 0.001)
+        lockB.lock()
+        lockB.unlock()
+        lockA.unlock()
+    }
+
+    func acquireBA() {
+        lockB.lock()
+        Thread.sleep(forTimeInterval: 0.001)
+        lockA.lock()
+        lockA.unlock()
+        lockB.unlock()
     }
 }

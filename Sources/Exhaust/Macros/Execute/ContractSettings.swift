@@ -3,8 +3,8 @@ import ExhaustCore
 
 /// Configuration options for `#execute` contract property tests, passed as variadic arguments to control test behavior.
 public enum ContractSettings {
-    /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a limit from the command generator's domain size and the coverage budget, capped at 100.
-    case commandLimit(Int)
+    /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a default from the command generator's domain size and the coverage budget. Defaults vary by mode: `.sequential` uses the estimate uncapped, `.tasks` caps it at 40, and `.threads` uses a flat default of 8.
+    case commandLimit(UInt)
 
     /// Controls iteration budgets for coverage and random sampling. Defaults to `.standard` (200 coverage rows, 200 random samplings).
     case budget(ExhaustBudget)

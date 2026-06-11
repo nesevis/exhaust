@@ -5,6 +5,12 @@ import ExhaustCore
 ///
 /// The two checkers differ only in how a single probe runs — direct GCD execution versus async bridged through a drain loop — so the outcome shape and the three-pass reducer live here and are parameterised by each checker's `execute`.
 enum Preemptive {
+    /// Number of times each reduction probe re-executes the concurrent schedule to probabilistically confirm the race still reproduces.
+    static let confirmationRepetitions = 10
+
+    /// Default command limit for `.threads` contracts. Lower than the cooperative runner's estimated/40 cap because each probe repeats `confirmationRepetitions` times.
+    static let defaultCommandLimit = 8
+
     /// Outcome of one preemptive concurrent execution.
     ///
     /// `timedOut` distinguishes a hang (a wedged lane or a drain-loop idle bailout) from a genuine pass or property failure, so the runner reports the hang as a timeout rather than dressing it up as a confirmed race. A timed-out run always has `passed == false`.
@@ -36,6 +42,7 @@ enum Preemptive {
         repetitions: Int,
         execute: ([(ScheduleMarker, Command)]) -> Outcome
     ) -> ReductionResult<Command> {
+        // Single-threaded: the reducer calls the property sequentially on the pipeline GCD thread.
         var propertyInvocations = 0
         let property: ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
             for _ in 0 ..< repetitions {
@@ -48,58 +55,40 @@ enum Preemptive {
         }
 
         let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
-        let valueMinimization = Set(EncoderName.allCases).subtracting(structural).subtracting([.laneCollapse])
+        let valueMinimization = Set(EncoderName.allCases.filter(\.isValueMinimizer))
+
+        let passes: [(encoders: Set<EncoderName>, maxStalls: Int, deadlineNanoseconds: UInt64, rematerialize: Bool)] = [
+            ([.laneCollapse], 2, 10_000_000_000, true),
+            (structural, 2, 30_000_000_000, true),
+            (valueMinimization, 1, 5_000_000_000, false),
+        ]
 
         var currentOutput = output
         var currentTree = tree
         var aggregateStats = ReductionStats()
 
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 10_000_000_000, enabledEncoders: [.laneCollapse]),
-            property: property
-        ) {
+        for pass in passes {
+            guard let result = try? Interpreters.choiceGraphReduceCollectingStats(
+                gen: generator,
+                tree: currentTree,
+                output: currentOutput,
+                config: .init(
+                    maxStalls: pass.maxStalls,
+                    wallClockDeadlineNanoseconds: pass.deadlineNanoseconds,
+                    enabledEncoders: pass.encoders
+                ),
+                property: property
+            ) else { continue }
             aggregateStats.merge(result.stats)
             if case let .reduced(sequence, reduced) = result.outcome {
                 currentOutput = reduced
-                if case let .success(_, freshTree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
-                ) {
+                if pass.rematerialize,
+                   case let .success(_, freshTree, _) = Materializer.materialize(
+                       generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
+                   )
+                {
                     currentTree = freshTree
                 }
-            }
-        }
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 30_000_000_000, enabledEncoders: structural),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(sequence, reduced) = result.outcome {
-                currentOutput = reduced
-                if case let .success(_, freshTree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
-                ) {
-                    currentTree = freshTree
-                }
-            }
-        }
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 1, wallClockDeadlineNanoseconds: 5_000_000_000, enabledEncoders: valueMinimization),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(_, reduced) = result.outcome {
-                currentOutput = reduced
             }
         }
 
@@ -143,7 +132,8 @@ extension __ExhaustRuntime {
     /// Rendered failure messages are returned as deferred issues rather than reported inline, so each entry point can report them in a context where Swift Testing task-locals are available (the pipeline itself runs on a GCD thread). The fully-populated ``ExhaustReport`` is returned for the entry point to deliver to `onReport`.
     static func runPreemptivePipeline<Backend: PreemptiveBackend>(
         backend: Backend,
-        config: ResolvedConcurrentConfig
+        config: ResolvedConcurrentConfig,
+        regressionSeeds: [String] = []
     ) -> (result: ContractResult<Backend.Spec>?, deferredIssues: [String], report: ExhaustReport) {
         typealias Spec = Backend.Spec
         let runStopwatch = Stopwatch()
@@ -156,8 +146,12 @@ extension __ExhaustRuntime {
         }
 
         let commandGen = Spec.commandGenerator.gen
-        let commandLimit = config.commandLimit ?? 8
-        let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel)
+        let commandLimit = config.commandLimit ?? Preemptive.defaultCommandLimit
+        guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
+            deferredIssues.append("Command generator must be a top-level pick (.oneOf) — concurrent testing requires per-command branch structure")
+            finalizeReport()
+            return (nil, deferredIssues, report)
+        }
         let sequenceGen = Gen.arrayOf(
             taggedCommandGen,
             within: 1 ... UInt64(commandLimit),
@@ -167,6 +161,7 @@ extension __ExhaustRuntime {
         let samplingBudget = config.budget.samplingBudget
         let coverageBudget = config.budget.coverageBudget
         var coverageInvocations = 0
+        // Single-threaded: the reducer and SCA row loop call the property sequentially on the pipeline GCD thread.
         let invocationCounter = UnsafeSendableBox(0)
         let lastRunTimedOut = UnsafeSendableBox(false)
 
@@ -178,50 +173,96 @@ extension __ExhaustRuntime {
             return outcome.passed
         }
 
-        // Phase 0: Smoke test
-        if config.seed == nil, config.replayIteration == nil {
-            let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
-            var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, maxRuns: coverageBudget)
-            var smokeRow = 0
-            do { while let (commands, _) = try smokeIterator.next() {
-                if let coverageReplayRow = config.coverageReplayRow, smokeRow < coverageReplayRow {
-                    smokeRow += 1
+        // Regression seeds: replay each through the same pipeline with the appropriate replay config.
+        if config.coverageReplayRow == nil, config.seed == nil {
+            for encodedSeed in regressionSeeds {
+                guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
+                    deferredIssues.append("Invalid regression seed: \(encodedSeed)")
                     continue
                 }
-                let smoke = backend.runSmoke(commands)
-                if smoke.failed {
-                    let result = ContractResult<Spec>(
-                        commands: commands,
-                        trace: smoke.trace,
-                        systemUnderTest: smoke.systemUnderTest,
-                        seed: nil,
-                        replaySeed: CrockfordBase32.encodeCoverageRow(smokeRow),
-                        discoveryMethod: .smokeTest
-                    )
-                    if config.suppressIssueReporting == false {
-                        let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
-                        let message = renderFailure(result, failureInfo: failureInfo, failureDescription: smoke.failureDescription)
-                        deferredIssues.append(message)
-                    }
-                    finalizeReport()
-                    return (result, deferredIssues, report)
+
+                var replayConfig = config
+                switch decoded {
+                    case let .coverage(row: row):
+                        replayConfig.coverageReplayRow = row
+                        let needed = UInt64(row) + 1
+                        if replayConfig.budget.coverageBudget < needed {
+                            replayConfig.budget = .custom(
+                                coverage: needed,
+                                sampling: replayConfig.budget.samplingBudget
+                            )
+                        }
+                    case let .sampling(seed, iteration):
+                        replayConfig.seed = seed
+                        replayConfig.replayIteration = iteration
                 }
-                smokeRow += 1
-                if config.coverageReplayRow != nil { break }
-            } } catch {
+
+                let (replayResult, replayIssues, _) = runPreemptivePipeline(
+                    backend: backend,
+                    config: replayConfig
+                )
+                deferredIssues.append(contentsOf: replayIssues)
+
+                if let replayResult {
+                    finalizeReport()
+                    return (replayResult, deferredIssues, report)
+                } else if config.suppressIssueReporting == false {
+                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
+                }
+            }
+        }
+
+        // Phase 0: Smoke test — deterministically seeded so U-prefixed replay seeds reproduce the same command sequence.
+        if config.seed == nil, config.replayIteration == nil {
+            let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
+            var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, seed: 0, maxRuns: coverageBudget)
+            var smokeRow = 0
+            do {
+                while let (commands, _) = try smokeIterator.next() {
+                    if let coverageReplayRow = config.coverageReplayRow, smokeRow < coverageReplayRow {
+                        smokeRow += 1
+                        continue
+                    }
+                    let smoke = backend.runSmoke(commands)
+                    if smoke.failed {
+                        let result = ContractResult<Spec>(
+                            commands: commands,
+                            trace: smoke.trace,
+                            systemUnderTest: smoke.systemUnderTest,
+                            seed: nil,
+                            replaySeed: ReplaySeed.Resolved.coverage(row: smokeRow).encoded,
+                            discoveryMethod: .smokeTest
+                        )
+                        if config.suppressIssueReporting == false {
+                            let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
+                            let message = renderFailure(result, failureInfo: failureInfo, failureDescription: smoke.failureDescription)
+                            deferredIssues.append(message)
+                        }
+                        report.replaySeed = result.replaySeed
+                        report.setInvocations(coverage: smokeRow + 1, randomSampling: 0, reduction: 0)
+                        finalizeReport()
+                        return (result, deferredIssues, report)
+                    }
+                    smokeRow += 1
+                    if config.coverageReplayRow != nil { break }
+                }
+            } catch {
                 deferredIssues.append("Generator failed during smoke test: \(error)")
             }
         }
 
         // Phase 1: Coverage
         if config.shouldRunCoverage {
+            let effectiveCoverageBudget: UInt64 = if let row = config.coverageReplayRow {
+                max(coverageBudget, UInt64(row) + 1)
+            } else {
+                coverageBudget
+            }
             if let scaResult = runConcurrentSCACoverage(
-                seqGen: sequenceGen,
+                sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
-                coverageBudget: coverageBudget,
-                concurrencyLevel: config.concurrencyLevel,
-                idleTimeout: config.idleTimeout,
+                coverageBudget: effectiveCoverageBudget,
                 skipToRow: config.coverageReplayRow,
                 property: property,
                 identifySkips: identifySkips,
@@ -232,8 +273,9 @@ extension __ExhaustRuntime {
                     report.applyReductionStats(stats)
                 }
                 report.reductionInvocations = scaResult.reductionInvocations
+                report.reductionMilliseconds = scaResult.reductionMilliseconds
 
-                let scaReplaySeed = CrockfordBase32.encodeCoverageRow(Int(scaResult.iteration) - 1)
+                let scaReplaySeed = ReplaySeed.Resolved.encodeCoverageIteration(Int(scaResult.iteration))
                 let result = backend.buildResult(
                     reduced: scaResult.finalInput,
                     seed: nil,
@@ -273,8 +315,10 @@ extension __ExhaustRuntime {
 
         // Phase 2: Sampling
         if config.coverageReplayRow == nil {
-            let startIndex = config.replayIteration.map { UInt64($0 - 1) } ?? 0
-            let maxRuns = config.replayIteration.map { UInt64($0) } ?? samplingBudget
+            let (startIndex, maxRuns) = samplingReplayWindow(
+                replayIteration: config.replayIteration,
+                samplingBudget: samplingBudget
+            )
             var interpreter = ValueAndChoiceTreeInterpreter(
                 sequenceGen,
                 materializePicks: true,
@@ -285,63 +329,65 @@ extension __ExhaustRuntime {
             let actualSeed = interpreter.baseSeed
 
             var samplingIteration = 0
-            do { while let (taggedCommands, tree) = try interpreter.next() {
-                samplingIteration += 1
-                let absoluteIteration = Int(startIndex) + samplingIteration
-                let outcome = backend.execute(taggedCommands)
-                if outcome.passed == false {
-                    // Reduction stays correct on a timeout — the reducer only ever returns a failing schedule — but on a hang every probe waits out the idle bound (idleTimeout × repetitions) and a timing-dependent timeout often will not reproduce, so it is slow and usually fruitless. Skip it and report the original schedule.
-                    let reduced: [(ScheduleMarker, Spec.Command)]
-                    let reductionInvocations: Int
-                    if outcome.timedOut {
-                        reduced = taggedCommands
-                        reductionInvocations = 0
-                    } else {
-                        let reductionResult = Preemptive.reduce(
-                            generator: sequenceGen,
-                            tree: tree,
-                            output: taggedCommands,
-                            repetitions: 10,
-                            execute: backend.execute
-                        )
-                        reduced = reductionResult.output
-                        reductionInvocations = reductionResult.propertyInvocations
-                        report.applyReductionStats(reductionResult.stats)
-                    }
+            do {
+                while let (taggedCommands, tree) = try interpreter.next() {
+                    samplingIteration += 1
+                    let absoluteIteration = Int(startIndex) + samplingIteration
+                    let outcome = backend.execute(taggedCommands)
+                    if outcome.passed == false {
+                        // Reduction stays correct on a timeout — the reducer only ever returns a failing schedule — but on a hang every probe waits out the idle bound (idleTimeout × repetitions) and a timing-dependent timeout often will not reproduce, so it is slow and usually fruitless. Skip it and report the original schedule.
+                        let reduced: [(ScheduleMarker, Spec.Command)]
+                        let reductionInvocations: Int
+                        if outcome.timedOut {
+                            reduced = taggedCommands
+                            reductionInvocations = 0
+                        } else {
+                            let reductionResult = Preemptive.reduce(
+                                generator: sequenceGen,
+                                tree: tree,
+                                output: taggedCommands,
+                                repetitions: Preemptive.confirmationRepetitions,
+                                execute: backend.execute
+                            )
+                            reduced = reductionResult.output
+                            reductionInvocations = reductionResult.propertyInvocations
+                            report.applyReductionStats(reductionResult.stats)
+                        }
 
-                    let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
-                    let samplingReplaySeed = CrockfordBase32.encode(seed: actualSeed, iteration: absoluteIteration)
-                    let result = backend.buildResult(
-                        reduced: reduced,
-                        seed: actualSeed,
-                        replaySeed: samplingReplaySeed,
-                        discoveryMethod: discoveryMethod
-                    )
-
-                    report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionInvocations)
-
-                    if config.suppressIssueReporting == false {
-                        deferredIssues.append(makePreemptiveFailureMessage(
-                            reduced,
-                            trace: result.trace,
-                            specName: "\(Spec.self)",
-                            discoveryMethod: discoveryMethod,
+                        let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
+                        let samplingReplaySeed = ReplaySeed.Resolved.sampling(seed: actualSeed, iteration: absoluteIteration).encoded
+                        let result = backend.buildResult(
+                            reduced: reduced,
                             seed: actualSeed,
-                            iteration: absoluteIteration,
-                            budget: samplingBudget,
-                            sequencesTested: samplingIteration,
-                            reductionInvocations: reductionInvocations,
-                            originalCount: taggedCommands.count,
                             replaySeed: samplingReplaySeed,
-                            timedOut: outcome.timedOut,
-                            oracleState: result.systemUnderTest as Any
-                        ))
-                    }
+                            discoveryMethod: discoveryMethod
+                        )
 
-                    finalizeReport()
-                    return (result, deferredIssues, report)
+                        report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionInvocations)
+
+                        if config.suppressIssueReporting == false {
+                            deferredIssues.append(makePreemptiveFailureMessage(
+                                reduced,
+                                trace: result.trace,
+                                specName: "\(Spec.self)",
+                                discoveryMethod: discoveryMethod,
+                                seed: actualSeed,
+                                iteration: absoluteIteration,
+                                budget: samplingBudget,
+                                sequencesTested: samplingIteration,
+                                reductionInvocations: reductionInvocations,
+                                originalCount: taggedCommands.count,
+                                replaySeed: samplingReplaySeed,
+                                timedOut: outcome.timedOut,
+                                oracleState: result.systemUnderTest as Any
+                            ))
+                        }
+
+                        finalizeReport()
+                        return (result, deferredIssues, report)
+                    }
                 }
-            } } catch {
+            } catch {
                 deferredIssues.append("Generator failed during sampling: \(error)")
             }
         }

@@ -7,19 +7,20 @@ extension __ExhaustRuntime {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     static func buildTrace(_ events: [TraceEvent]) -> [TraceStep] {
         var entries: [TraceEntry] = []
-        var openCommand: [String: String] = [:]
+        var openCommand: [TraceEvent.Lane: String] = [:]
 
         for event in events {
+            let isPrefix = event.lane == .prefix
             switch event.kind {
                 case .started:
-                    if event.lane != "prefix" {
+                    if isPrefix == false {
                         openCommand[event.lane] = event.label
                     }
-                    let phase: TracePhase = event.lane == "prefix" ? .prefix : .started
+                    let phase: TracePhase = isPrefix ? .prefix : .started
                     entries.append(TraceEntry(phase: phase, label: event.label, lane: event.lane, outcome: .ok))
                 case .completed:
                     openCommand[event.lane] = nil
-                    if event.lane == "prefix" {
+                    if isPrefix {
                         if let lastIndex = entries.lastIndex(where: { $0.label == event.label && $0.phase == .prefix }) {
                             entries.remove(at: lastIndex)
                         }
@@ -27,10 +28,31 @@ extension __ExhaustRuntime {
                     } else {
                         entries.append(TraceEntry(phase: .completed, label: event.label, lane: event.lane, outcome: .ok))
                     }
-                case let .failed(message):
+                case .skipped:
                     openCommand[event.lane] = nil
-                    let phase: TracePhase = event.lane == "prefix" ? .prefix : .completed
-                    entries.append(TraceEntry(phase: phase, label: event.label, lane: event.lane, outcome: .invariantFailed(name: message)))
+                    if isPrefix {
+                        if let lastIndex = entries.lastIndex(where: { $0.label == event.label && $0.phase == .prefix }) {
+                            entries.remove(at: lastIndex)
+                        }
+                        entries.append(TraceEntry(phase: .prefix, label: event.label, lane: event.lane, outcome: .skipped))
+                    } else {
+                        entries.append(TraceEntry(phase: .completed, label: event.label, lane: event.lane, outcome: .skipped))
+                    }
+                case let .failed(message, source):
+                    openCommand[event.lane] = nil
+                    let outcome: TraceStep.Outcome = switch source {
+                        case .check: .checkFailed(message: message)
+                        case .invariant: .invariantFailed(name: message)
+                        case .error: .checkFailed(message: message)
+                    }
+                    if isPrefix {
+                        if let lastIndex = entries.lastIndex(where: { $0.label == event.label && $0.phase == .prefix }) {
+                            entries.remove(at: lastIndex)
+                        }
+                        entries.append(TraceEntry(phase: .prefix, label: event.label, lane: event.lane, outcome: outcome))
+                    } else {
+                        entries.append(TraceEntry(phase: .completed, label: event.label, lane: event.lane, outcome: outcome))
+                    }
                 case .suspended:
                     if let current = openCommand[event.lane] {
                         entries.append(TraceEntry(phase: .suspended, label: current, lane: event.lane, outcome: .ok))
@@ -106,6 +128,28 @@ extension __ExhaustRuntime {
         return collapsed
     }
 
+    /// Maps a command-run error to a trace outcome. ``TraceStep/Outcome/skipped`` means the command was skipped via ``ContractSkip`` and the caller should continue to the next command without checking invariants.
+    private static func commandRunOutcome(for error: any Error) -> TraceStep.Outcome {
+        switch error {
+            case is ContractSkip:
+                .skipped
+            case let failure as ContractCheckFailure:
+                .checkFailed(message: failure.message)
+            default:
+                .checkFailed(message: "\(error)")
+        }
+    }
+
+    /// Maps an invariant-check error to a trace outcome.
+    private static func invariantCheckOutcome(for error: any Error) -> TraceStep.Outcome {
+        switch error {
+            case let failure as ContractCheckFailure:
+                .invariantFailed(name: failure.message ?? "unknown")
+            default:
+                .invariantFailed(name: "\(error)")
+        }
+    }
+
     /// Builds a sequential execution trace from a command sequence, recording per-command outcomes with invariant failure names. Shared by the sequential contract runner and the preemptive runner's smoke test.
     static func buildSequentialTrace<Command: CustomStringConvertible>(
         _ commands: [Command],
@@ -121,40 +165,17 @@ extension __ExhaustRuntime {
 
             do {
                 try run(command)
-            } catch is ContractSkip {
-                trace.append(TraceStep(index: step, command: description, outcome: .skipped))
-                continue
-            } catch let failure as ContractCheckFailure {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .checkFailed(message: failure.message)
-                ))
-                return (trace, true)
             } catch {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .checkFailed(message: "\(error)")
-                ))
+                let outcome = commandRunOutcome(for: error)
+                trace.append(TraceStep(index: step, command: description, outcome: outcome))
+                if case .skipped = outcome { continue }
                 return (trace, true)
             }
 
             do {
                 try checkInvariants()
-            } catch let failure as ContractCheckFailure {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .invariantFailed(name: failure.message ?? "unknown")
-                ))
-                return (trace, true)
             } catch {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .invariantFailed(name: "\(error)")
-                ))
+                trace.append(TraceStep(index: step, command: description, outcome: invariantCheckOutcome(for: error)))
                 return (trace, true)
             }
 
@@ -179,40 +200,17 @@ extension __ExhaustRuntime {
 
             do {
                 try await run(command)
-            } catch is ContractSkip {
-                trace.append(TraceStep(index: step, command: description, outcome: .skipped))
-                continue
-            } catch let failure as ContractCheckFailure {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .checkFailed(message: failure.message)
-                ))
-                return (trace, true)
             } catch {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .checkFailed(message: "\(error)")
-                ))
+                let outcome = commandRunOutcome(for: error)
+                trace.append(TraceStep(index: step, command: description, outcome: outcome))
+                if case .skipped = outcome { continue }
                 return (trace, true)
             }
 
             do {
                 try await checkInvariants()
-            } catch let failure as ContractCheckFailure {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .invariantFailed(name: failure.message ?? "unknown")
-                ))
-                return (trace, true)
             } catch {
-                trace.append(TraceStep(
-                    index: step,
-                    command: description,
-                    outcome: .invariantFailed(name: "\(error)")
-                ))
+                trace.append(TraceStep(index: step, command: description, outcome: invariantCheckOutcome(for: error)))
                 return (trace, true)
             }
 
@@ -225,21 +223,38 @@ extension __ExhaustRuntime {
 
 // MARK: - Inner types
 
-// Converts structured trace events from the cooperative drain loop into presentable TraceSteps. Two post-processing passes: collapse no-op suspend/resume pairs, and merge adjacent started+completed pairs.
-
 /// A raw event emitted by the cooperative drain loop during command execution. These are intermediate records that ``buildTrace(_:)`` post-processes into presentable ``TraceStep`` values — collapsing no-op suspend/resume pairs and merging adjacent started+completed events for the same command.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 struct TraceEvent: Sendable {
     enum Kind: Sendable {
         case started
         case completed
-        case failed(message: String)
+        case skipped
+        case failed(message: String, source: FailureSource)
         case suspended
         case resumed
     }
 
+    enum FailureSource: Sendable {
+        case check
+        case invariant
+        case error
+    }
+
+    enum Lane: Hashable, Sendable, CustomStringConvertible {
+        case prefix
+        case lane(LaneID)
+
+        var description: String {
+            switch self {
+                case .prefix: "prefix"
+                case let .lane(identifier): identifier.label.uppercased()
+            }
+        }
+    }
+
     var kind: Kind
-    var lane: String
+    var lane: Lane
     var label: String
 }
 
@@ -265,9 +280,10 @@ private enum TracePhase {
 }
 
 /// One presentable trace entry before final indexing: phase, command label, owning lane, and outcome kept as typed fields.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 private struct TraceEntry {
     var phase: TracePhase
     var label: String
-    var lane: String
+    var lane: TraceEvent.Lane
     var outcome: TraceStep.Outcome
 }

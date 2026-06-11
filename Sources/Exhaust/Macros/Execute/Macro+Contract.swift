@@ -27,7 +27,7 @@ import ExhaustCore
 ///         queue.count == contents.count
 ///     }
 ///
-///     @Command(weight: 3, #gen(.int(in: 0...99)))
+///     @Command(weight: 3, .int(in: 0...99))
 ///     func enqueue(value: Int) throws {
 ///         guard contents.count < 4 else { throw skip() }
 ///         queue.enqueue(value)
@@ -88,7 +88,7 @@ public macro SystemUnderTest() = #externalMacro(module: "ExhaustMacros", type: "
 /// Each `@Command` method becomes a case in the synthesized `Command` enum. The macro's arguments control command generation:
 ///
 /// - `weight`: Relative frequency for command selection (default 1). Higher weight means the command is selected more often.
-/// - `#gen(...)`: Generators for the method's parameters. Must match the parameter count and types.
+/// - Generators for the method's parameters, passed as trailing variadic arguments. Must match the parameter count and types.
 ///
 /// ```swift
 /// @Command(weight: 3, .int(in: 0...99))

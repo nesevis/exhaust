@@ -129,7 +129,7 @@ final class RunQueue: @unchecked Sendable {
                     return true
                 }
                 if condition.wait(until: deadline) == false {
-                    return lanes.contains(where: \.hasPendingJob)
+                    return lanes.contains(where: \.hasPendingJob) || lanes.allSatisfy(\.isComplete)
                 }
             }
             return true

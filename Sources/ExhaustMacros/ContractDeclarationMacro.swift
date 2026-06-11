@@ -5,28 +5,39 @@ import SwiftSyntaxMacros
 
 // MARK: - Concurrency Mode Parsing
 
-private enum MacroConcurrencyMode {
+private enum MacroConcurrencyMode: String {
     case sequential
     case tasks
     case threads
+
+    /// The `ExecutionModel` literal emitted into synthesized code (for example `".sequential"`).
+    var executionModelLiteral: String {
+        ".\(rawValue)"
+    }
 }
 
 /// Reads the `ExecutionModel` literal from the `@Contract` attribute argument.
 ///
-/// Returns `nil` when the argument is missing or not a recognised literal.
-private func extractConcurrencyMode(from node: AttributeSyntax) -> MacroConcurrencyMode? {
+/// Returns `nil` when the argument is missing or not a recognized literal.
+private enum ModeExtractionResult {
+    case mode(MacroConcurrencyMode)
+    case missing
+    case nonLiteral
+}
+
+private func extractConcurrencyMode(from node: AttributeSyntax) -> ModeExtractionResult {
     guard let argList = node.arguments?.as(LabeledExprListSyntax.self),
-          let firstArg = argList.first,
-          let memberAccess = firstArg.expression.as(MemberAccessExprSyntax.self)
+          let firstArg = argList.first
     else {
-        return nil
+        return .missing
     }
-    switch memberAccess.declName.baseName.trimmedDescription {
-        case "sequential": return .sequential
-        case "tasks": return .tasks
-        case "threads": return .threads
-        default: return nil
+    guard let memberAccess = firstArg.expression.as(MemberAccessExprSyntax.self) else {
+        return .nonLiteral
     }
+    if let mode = MacroConcurrencyMode(rawValue: memberAccess.declName.baseName.trimmedDescription) {
+        return .mode(mode)
+    }
+    return .nonLiteral
 }
 
 /// Determines whether the contract needs the `AsyncContractSpec` surface based on its members.
@@ -62,13 +73,9 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         attachedTo declaration: some DeclGroupSyntax,
         providingExtensionsOf type: some TypeSyntaxProtocol,
         conformingTo _: [TypeSyntax],
-        in context: some MacroExpansionContext
+        in _: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
-        guard let mode = extractConcurrencyMode(from: node) else {
-            context.diagnose(Diagnostic(
-                node: Syntax(node),
-                message: ContractDiagnostic.missingMode
-            ))
+        guard case let .mode(mode) = extractConcurrencyMode(from: node) else {
             return []
         }
 
@@ -81,11 +88,8 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         let isActorDecl = declaration.is(ActorDeclSyntax.self)
         let isReferenceType = isClassDecl || isActorDecl
 
-        if isReferenceType == false {
-            context.diagnose(Diagnostic(
-                node: Syntax(node),
-                message: ContractDiagnostic.structNotAllowed
-            ))
+        guard isReferenceType else {
+            return []
         }
 
         let hasAnyAsync = contractHasAsyncMember(mode: mode, commands: commands, invariants: invariants, oracles: oracles)
@@ -106,12 +110,22 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         conformingTo _: [TypeSyntax],
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
-        guard let mode = extractConcurrencyMode(from: node) else {
-            context.diagnose(Diagnostic(
-                node: Syntax(node),
-                message: ContractDiagnostic.missingMode
-            ))
-            return []
+        let mode: MacroConcurrencyMode
+        switch extractConcurrencyMode(from: node) {
+            case let .mode(resolved):
+                mode = resolved
+            case .missing:
+                context.diagnose(Diagnostic(
+                    node: Syntax(node),
+                    message: ContractDiagnostic.missingMode
+                ))
+                return []
+            case .nonLiteral:
+                context.diagnose(Diagnostic(
+                    node: Syntax(node),
+                    message: ContractDiagnostic.nonLiteralMode
+                ))
+                return []
         }
 
         let members = declaration.memberBlock.members
@@ -151,6 +165,40 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
             ))
         }
 
+        var seenCommandNames = Set<String>()
+        for command in commands {
+            let diagnosticNode = command.syntax.map { Syntax($0) } ?? Syntax(node)
+            if seenCommandNames.contains(command.methodName) == false {
+                seenCommandNames.insert(command.methodName)
+            } else {
+                context.diagnose(Diagnostic(
+                    node: diagnosticNode,
+                    message: ContractDiagnostic.duplicateCommandName
+                ))
+            }
+            if let value = Int(command.weight), value < 1 {
+                context.diagnose(Diagnostic(
+                    node: diagnosticNode,
+                    message: ContractDiagnostic.invalidCommandWeight
+                ))
+            }
+            if let funcDecl = command.syntax {
+                let hasGenericParams = funcDecl.genericParameterClause != nil
+                let hasInoutParam = funcDecl.signature.parameterClause.parameters.contains {
+                    $0.type.as(AttributedTypeSyntax.self)?.specifiers.contains { $0.trimmedDescription == "inout" } ?? false
+                }
+                let hasVariadicParam = funcDecl.signature.parameterClause.parameters.contains {
+                    $0.ellipsis != nil
+                }
+                if hasGenericParams || hasInoutParam || hasVariadicParam {
+                    context.diagnose(Diagnostic(
+                        node: diagnosticNode,
+                        message: ContractDiagnostic.commandHasUnsupportedParameter
+                    ))
+                }
+            }
+        }
+
         // Mode-specific validation
         switch mode {
             case .sequential, .tasks:
@@ -173,7 +221,14 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
                         message: ContractDiagnostic.invariantUnderThreads
                     ))
                 }
-                if oracles.isEmpty {
+                let badOracles = oracleMethodsWithWrongParameterCount(from: members)
+                for badOracle in badOracles {
+                    context.diagnose(Diagnostic(
+                        node: Syntax(badOracle),
+                        message: ContractDiagnostic.oracleParameterCount
+                    ))
+                }
+                if oracles.isEmpty, badOracles.isEmpty {
                     context.diagnose(Diagnostic(
                         node: Syntax(node),
                         message: ContractDiagnostic.noOracle
@@ -212,20 +267,22 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         }
 
         decls.append(synthesizeCommandGenerator(commands: commands, context: context))
-        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: effectiveAsync, isReferenceType: true))
+        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: effectiveAsync))
         decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: effectiveAsync))
-        decls.append(synthesizeFailureDescription(sutProps: sutProps))
+        let hasUserFailureDescription = members.contains { member in
+            guard let funcDecl = member.decl.as(FunctionDeclSyntax.self) else { return false }
+            return funcDecl.name.trimmedDescription == "failureDescription"
+                && funcDecl.signature.parameterClause.parameters.isEmpty
+        }
+        if hasUserFailureDescription == false {
+            decls.append(synthesizeFailureDescription(sutProps: sutProps))
+        }
 
         if mode == .threads, let oracle = oracles.first {
             decls.append(synthesizeOracleCheck(oracle: oracle, hasAnyAsync: effectiveAsync))
         }
 
-        let modeString = switch mode {
-            case .sequential: ".sequential"
-            case .tasks: ".tasks"
-            case .threads: ".threads"
-        }
-        decls.append("static let executionModel: ExecutionModel = \(raw: modeString)")
+        decls.append("static let executionModel: ExecutionModel = \(raw: mode.executionModelLiteral)")
 
         if isActorDecl {
             decls.append("""
@@ -238,6 +295,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         let hasUserInit = members.contains { member in
             guard let initDecl = member.decl.as(InitializerDeclSyntax.self) else { return false }
             return initDecl.signature.parameterClause.parameters.isEmpty
+                && initDecl.optionalMark == nil
         }
         if isReferenceType, hasUserInit == false {
             if isClassDecl {
@@ -286,31 +344,29 @@ struct SUTProperty {
 }
 
 func extractSUTProperties(from members: MemberBlockItemListSyntax) -> [SUTProperty] {
-    members.compactMap { member in
+    members.flatMap { member -> [SUTProperty] in
         guard let varDecl = member.decl.as(VariableDeclSyntax.self),
-              hasAttribute("SystemUnderTest", on: varDecl),
-              let binding = varDecl.bindings.first
-        else { return nil }
+              hasAttribute("SystemUnderTest", on: varDecl)
+        else { return [] }
 
-        let name = binding.pattern.trimmedDescription
+        return varDecl.bindings.map { binding in
+            let name = binding.pattern.trimmedDescription
 
-        // Try explicit type annotation first: `@SystemUnderTest var queue: BoundedQueue<Int>`
-        if let typeAnnotation = binding.typeAnnotation {
-            return SUTProperty(name: name, type: typeAnnotation.type.trimmedDescription)
-        }
-
-        // Fall back to inferring from initializer: `@SystemUnderTest var queue = BoundedQueue<Int>(capacity: 3)` or `@SystemUnderTest var stack = [Int]()`.
-        // Only when the callee is plausibly a type. A factory expression like `makeQueue()` has a non-type callee, so returning it would emit `typealias SystemUnderTest = makeQueue`; instead fall through to nil so the `sutTypeNotInferred` warning tells the user to annotate.
-        if let initializer = binding.initializer,
-           let call = initializer.value.as(FunctionCallExprSyntax.self)
-        {
-            let callee = call.calledExpression.trimmedDescription
-            if isPlausiblyTypeName(callee) {
-                return SUTProperty(name: name, type: callee)
+            if let typeAnnotation = binding.typeAnnotation {
+                return SUTProperty(name: name, type: typeAnnotation.type.trimmedDescription)
             }
-        }
 
-        return SUTProperty(name: name, type: nil)
+            if let initializer = binding.initializer,
+               let call = initializer.value.as(FunctionCallExprSyntax.self)
+            {
+                let callee = call.calledExpression.trimmedDescription
+                if isPlausiblyTypeName(callee) {
+                    return SUTProperty(name: name, type: callee)
+                }
+            }
+
+            return SUTProperty(name: name, type: nil)
+        }
     }
 }
 
@@ -342,16 +398,7 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
             for arg in argList {
                 if arg.label?.trimmedDescription == "weight" {
                     weight = arg.expression.trimmedDescription
-                } else if let macroExpr = arg.expression.as(MacroExpansionExprSyntax.self),
-                          macroExpr.macroName.trimmedDescription == "gen",
-                          macroExpr.trailingClosure == nil
-                {
-                    // #gen(.a, .b) without trailing closure — unwrap inner generator arguments
-                    for innerArg in macroExpr.arguments {
-                        generatorExprs.append(innerArg.expression.trimmedDescription)
-                    }
                 } else {
-                    // Unlabeled arguments are generator expressions
                     generatorExprs.append(arg.expression.trimmedDescription)
                 }
             }
@@ -486,7 +533,7 @@ func synthesizeCommandGenerator(commands: [CommandInfo], context: some MacroExpa
     """
 }
 
-func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isReferenceType: Bool) -> DeclSyntax {
+func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> DeclSyntax {
     var cases: [String] = []
 
     for cmd in commands {
@@ -501,7 +548,6 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isReference
             cases.append("        case .\(cmd.methodName): \(effectKeywords)self.\(cmd.methodName)()")
         } else {
             let bindings = cmd.parameters.map(\.bindingName).joined(separator: ", ")
-            // The call into the user's method uses the external argument label (omitted when the parameter is unlabeled); the value is always the binding name.
             let args = cmd.parameters.map { param in
                 param.externalLabel.map { "\($0): \(param.bindingName)" } ?? param.bindingName
             }.joined(separator: ", ")
@@ -510,10 +556,9 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isReference
     }
 
     let casesBlock = cases.joined(separator: "\n")
-    let mutatingKeyword = isReferenceType ? "" : "mutating "
     let signature = hasAnyAsync
-        ? "\(mutatingKeyword)func run(_ command: Command) async throws"
-        : "\(mutatingKeyword)func run(_ command: Command) throws"
+        ? "func run(_ command: Command) async throws"
+        : "func run(_ command: Command) throws"
 
     return """
     \(raw: signature) {
@@ -603,7 +648,7 @@ func extractOracles(from members: MemberBlockItemListSyntax) -> [OracleInfo] {
               hasAttribute("Oracle", on: funcDecl)
         else { return nil }
         let params = funcDecl.signature.parameterClause.parameters
-        guard let firstParam = params.first else { return nil }
+        guard params.count == 1, let firstParam = params.first else { return nil }
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
         return OracleInfo(
             methodName: funcDecl.name.trimmedDescription,
@@ -611,6 +656,16 @@ func extractOracles(from members: MemberBlockItemListSyntax) -> [OracleInfo] {
             parameterType: firstParam.type.trimmedDescription,
             isAsync: isAsync
         )
+    }
+}
+
+func oracleMethodsWithWrongParameterCount(from members: MemberBlockItemListSyntax) -> [FunctionDeclSyntax] {
+    members.compactMap { member in
+        guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
+              hasAttribute("Oracle", on: funcDecl)
+        else { return nil }
+        let paramCount = funcDecl.signature.parameterClause.parameters.count
+        return paramCount == 1 ? nil : funcDecl
     }
 }
 
@@ -644,8 +699,12 @@ enum ContractDiagnostic: String, DiagnosticMessage {
     case invariantUnderThreads = "@Invariant requires deterministic per-step state, which a preemptive run does not have. Use @Contract(.tasks)"
     case noOracle = "@Contract(.threads) requires exactly one @Oracle method"
     case multipleOracles = "@Contract(.threads) allows only one @Oracle method"
-    case actorRequiresSequential = "Actor contracts must use @Contract(.sequential). Actor isolation serialises all dispatch, so concurrent testing has nowhere to interleave"
+    case actorRequiresSequential = "Actor contracts must use @Contract(.sequential). Actor isolation serializes all dispatch, so concurrent testing has nowhere to interleave"
     case actorWithThreads = "Actor contracts must use @Contract(.sequential). Actors are data-race-free, so .threads cannot surface races in them"
+    case duplicateCommandName = "Two @Command methods share the same base name — rename one or merge them"
+    case invalidCommandWeight = "@Command weight must be a positive integer literal"
+    case oracleParameterCount = "@Oracle must take exactly one parameter of the SystemUnderTest type"
+    case commandHasUnsupportedParameter = "@Command parameters must not be inout, variadic, or generic — the synthesized Command enum cannot represent them"
 
     var message: String {
         rawValue
@@ -657,11 +716,13 @@ enum ContractDiagnostic: String, DiagnosticMessage {
 
     var severity: DiagnosticSeverity {
         switch self {
-            case .noCommands, .noSUT, .multipleSUT, .commandMissingGenerators, .structNotAllowed,
-                 .missingMode, .nonLiteralMode, .noOracle, .multipleOracles,
-                 .actorRequiresSequential, .actorWithThreads:
+            case .noCommands, .noSUT, .multipleSUT, .sutTypeNotInferred, .commandMissingGenerators,
+                 .structNotAllowed, .missingMode, .nonLiteralMode, .noOracle, .multipleOracles,
+                 .actorRequiresSequential, .actorWithThreads,
+                 .duplicateCommandName, .invalidCommandWeight, .oracleParameterCount,
+                 .commandHasUnsupportedParameter:
                 .error
-            case .sutTypeNotInferred, .oracleRequiresThreads, .invariantUnderThreads:
+            case .oracleRequiresThreads, .invariantUnderThreads:
                 .warning
         }
     }

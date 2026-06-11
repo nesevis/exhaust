@@ -68,11 +68,14 @@ struct ContractContext {
             .budget(.custom(coverage: coverageBudget, sampling: samplingBudget)),
         ]
         if let iteration = samplingReplayIteration, let seed {
-            settings.append(.replay(.encoded(CrockfordBase32.encode(seed: seed, iteration: iteration))))
+            settings.append(.replay(.encoded(ReplaySeed.Resolved.sampling(seed: seed, iteration: iteration).encoded)))
         } else if let seed {
             settings.append(.replay(.numeric(seed)))
         }
         settings.append(.suppress(.issueReporting))
+        if suppressLogs {
+            settings.append(.suppress(.logs))
+        }
         if collectOpenPBTStats {
             settings.append(.collectOpenPBTStats)
         }
@@ -83,19 +86,25 @@ struct ContractContext {
         return settings
     }
 
-    var encodedReplaySeed: String? {
-        switch replay {
-            case let .sampling(seed, iteration):
-                if let iteration {
-                    CrockfordBase32.encode(seed: seed, iteration: iteration)
-                } else {
-                    CrockfordBase32.encode(seed)
-                }
-            case let .coverage(row):
-                CrockfordBase32.encodeCoverageRow(row)
-            case nil:
-                seed.map { CrockfordBase32.encode($0) }
+    static func logConfiguration(from settings: [ContractSettings]) -> ExhaustLog.Configuration {
+        var suppressLogs = false
+        var logLevel: LogLevel = .error
+        for setting in settings {
+            switch setting {
+                case let .suppress(option):
+                    if case .logs = option { suppressLogs = true }
+                    if case .all = option { suppressLogs = true }
+                case let .log(level):
+                    logLevel = level
+                default:
+                    break
+            }
         }
+        return ExhaustLog.Configuration(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: .keyValue)
+    }
+
+    var encodedReplaySeed: String? {
+        replay?.encoded ?? seed.map(ReplaySeed.encodeRawSeed)
     }
 
     init(
@@ -113,7 +122,7 @@ struct ContractContext {
         for setting in settings {
             switch setting {
                 case let .commandLimit(limit):
-                    commandLimit = limit
+                    commandLimit = max(Int(limit), 1)
                 case let .budget(value):
                     budget = value
                 case let .replay(replaySeed):
@@ -144,8 +153,18 @@ struct ContractContext {
                     }
                 case let .log(level):
                     logLevel = level
-                case .concurrent, .idleTimeoutMs:
-                    break
+                case .concurrent:
+                    ExhaustLog.notice(
+                        category: .propertyTest,
+                        event: "setting_ignored",
+                        ".concurrent is only used with .tasks or .threads contracts"
+                    )
+                case .idleTimeoutMs:
+                    ExhaustLog.notice(
+                        category: .propertyTest,
+                        event: "setting_ignored",
+                        ".idleTimeoutMs is only used with .tasks or .threads contracts"
+                    )
             }
         }
 

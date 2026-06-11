@@ -1,15 +1,15 @@
-/// Drives synchronous contract property tests for both `.tasks` and `.threads` modes.
+/// Drives synchronous contract property tests for `.sequential` and `.threads` modes.
 ///
-/// The `@Contract` macro synthesizes this conformance when all commands and invariants are synchronous. For `.tasks`, checks use `@Invariant`. For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method.
+/// The `@Contract` macro synthesizes this conformance when all commands and invariants are synchronous. A synchronous `.tasks` contract also conforms to `ContractSpec` and runs sequentially — interleaving requires async commands and the ``AsyncContractSpec`` conformance. For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method.
 ///
 /// ```swift
-/// @Contract(.tasks)
+/// @Contract(.sequential)
 /// final class BoundedQueueContract {
 ///     var contents: [Int] = []
 ///     @SystemUnderTest
 ///     var queue = BoundedQueue<Int>(capacity: 4)
 ///
-///     @Command(weight: 3, Gen.int(in: 0...99))
+///     @Command(weight: 3, .int(in: 0...99))
 ///     func enqueue(value: Int) throws {
 ///         guard contents.count < 4 else { throw skip() }
 ///         queue.enqueue(value)

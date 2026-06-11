@@ -99,6 +99,44 @@ struct SCAReductionCoverageTests {
         #expect(result.discoveryMethod == .coverage)
         #expect(result.trace.isEmpty == false)
     }
+
+    @Test("SCA coverage report counts reduction property invocations, not materializations")
+    func scaCoverageReportCountsReductionPropertyInvocations() throws {
+        var capturedReport: ExhaustReport?
+        let result = try #require(
+            #execute(
+                PairwiseBugSpec.self,
+                .commandLimit(3),
+                .budget(.custom(coverage: 200, sampling: 0)),
+                .suppress(.issueReporting),
+                .onReport { capturedReport = $0 }
+            )
+        )
+        #expect(result.discoveryMethod == .coverage)
+        let report = try #require(capturedReport)
+        #expect(report.coverageInvocations > 0)
+        #expect(report.randomSamplingInvocations == 0)
+        #expect(report.totalMaterializations >= report.reductionInvocations)
+        #expect(report.propertyInvocations == report.coverageInvocations + report.reductionInvocations)
+    }
+
+    @Test("SCA coverage report includes non-zero reduction timing")
+    func scaCoverageReportIncludesReductionTiming() throws {
+        var capturedReport: ExhaustReport?
+        let result = try #require(
+            #execute(
+                PairwiseBugSpec.self,
+                .commandLimit(3),
+                .budget(.custom(coverage: 200, sampling: 0)),
+                .suppress(.issueReporting),
+                .onReport { capturedReport = $0 }
+            )
+        )
+        #expect(result.discoveryMethod == .coverage)
+        let report = try #require(capturedReport)
+        #expect(report.reductionMilliseconds >= 0)
+        #expect(report.totalMilliseconds >= report.reductionMilliseconds)
+    }
 }
 
 // MARK: - Contract

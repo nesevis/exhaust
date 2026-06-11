@@ -89,7 +89,7 @@ public extension __ExhaustRuntime {
             }.last
             if let requestedLevel, requestedLevel > 1 {
                 reportIssue(
-                    "Actor isolation serialises all command dispatch. .concurrent(\(requestedLevel)) will be ignored.",
+                    "Actor isolation serializes all command dispatch. .concurrent(\(requestedLevel)) will be ignored.",
                     severity: .warning,
                     fileID: fileID,
                     filePath: filePath,
@@ -121,14 +121,8 @@ public extension __ExhaustRuntime {
         #endif
 
         // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop — a deadlock under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD grows its thread pool dynamically, so concurrent drain loops cannot exhaust it.
-        let logConfiguration = ExhaustLog.Configuration(
-            isEnabled: config.suppressLogs == false,
-            minimumLevel: config.logLevel,
-            format: .keyValue
-        )
-
         let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
-            ExhaustLog.withConfiguration(logConfiguration) {
+            ExhaustLog.withConfiguration(config.logConfiguration) {
                 runConcurrentPipeline(
                     Spec.self,
                     config: config,
@@ -178,7 +172,10 @@ private extension __ExhaustRuntime {
         let coverageBudget = config.budget.coverageBudget
         let resolvedCommandLimit = config.commandLimit
             ?? min(estimateCommandLimit(commandGen: commandGen, coverageBudget: coverageBudget), 40)
-        let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel)
+        guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
+            deferredIssues.append("Command generator must be a top-level pick (.oneOf) — concurrent testing requires per-command branch structure")
+            return (nil as ContractResult<Spec>?, deferredIssues)
+        }
         let sequenceGen = Gen.arrayOf(
             taggedCommandGen,
             within: 1 ... UInt64(resolvedCommandLimit),
@@ -192,12 +189,16 @@ private extension __ExhaustRuntime {
         // Safe: metatypes are stateless.
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
-        let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit)
+        let concurrencyLevel = config.concurrencyLevel
+        let idleTimeout = config.idleTimeout
+        let rawIdentifySkips = Spec.skipIdentifier(
+            specInit: specInit,
+            idleTimeoutMilliseconds: idleTimeout
+        )
         let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
             rawIdentifySkips(taggedCommands.map(\.1))
         }
-        let concurrencyLevel = config.concurrencyLevel
-        let idleTimeout = config.idleTimeout
+        // Single-threaded: the reducer and SCA row loop call the property sequentially on the pipeline GCD thread.
         let lastRunTimedOut = UnsafeSendableBox(false)
         let invocationCounter = UnsafeSendableBox(0)
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
@@ -240,12 +241,12 @@ private extension __ExhaustRuntime {
             discoveredDuringCoverage = discovery.discoveryMethod == .coverage
             report.reductionMilliseconds = discovery.reductionMilliseconds
 
-            var ctx = failureContext
-            ctx.seed = discovery.seed
-            ctx.originalCount = discovery.originalCount
-            ctx.iteration = discovery.iteration
-            ctx.budget = discovery.budget
-            ctx.sequencesTested = discovery.sequencesTested
+            var discoveryContext = failureContext
+            discoveryContext.seed = discovery.seed
+            discoveryContext.originalCount = discovery.originalCount
+            discoveryContext.iteration = discovery.iteration
+            discoveryContext.budget = discovery.budget
+            discoveryContext.sequencesTested = discovery.sequencesTested
             let failure = buildFailureResult(
                 finalInput: discovery.taggedCommands,
                 specInit: specInit,
@@ -254,7 +255,7 @@ private extension __ExhaustRuntime {
                 seed: discovery.seed,
                 discoveryMethod: discovery.discoveryMethod,
                 timedOut: discovery.timedOut,
-                failureContext: &ctx
+                failureContext: &discoveryContext
             )
             if config.suppressIssueReporting == false {
                 deferredIssues.append(failure.issueMessage)
@@ -265,22 +266,18 @@ private extension __ExhaustRuntime {
         // Regression seeds: replay each through the same coverage/sampling machinery as an inline `.replay`, so the printed `U…` (coverage) and `…-N` (sampling) formats round-trip and the failing run is re-materialised at its true position. An explicit `.replay` takes precedence and skips this pass.
         if config.coverageReplayRow == nil, config.seed == nil {
             for encodedSeed in regressionSeeds {
-                let samplingSeed = CrockfordBase32.decodeWithIteration(encodedSeed)
-                let coverageRow = CrockfordBase32.decodeCoverageRow(encodedSeed)
-                guard samplingSeed != nil || coverageRow != nil else {
+                guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
                     deferredIssues.append("Invalid regression seed: \(encodedSeed)")
                     continue
                 }
 
                 var regressionDiscovery: ConcurrentDiscovery<Spec.Command>?
-                if let coverageRow {
+                if case let .coverage(row: coverageRow) = decoded {
                     if let scaResult = runConcurrentSCACoverage(
-                        seqGen: sequenceGen,
+                        sequenceGen: sequenceGen,
                         commandGen: commandGen,
                         commandLimit: resolvedCommandLimit,
                         coverageBudget: max(coverageBudget, UInt64(coverageRow) + 1),
-                        concurrencyLevel: concurrencyLevel,
-                        idleTimeout: idleTimeout,
                         skipToRow: coverageRow,
                         property: property,
                         identifySkips: identifySkips,
@@ -288,20 +285,12 @@ private extension __ExhaustRuntime {
                         invocationCounter: invocationCounter
                     ) {
                         regressionDiscovery = ConcurrentDiscovery(
-                            taggedCommands: scaResult.finalInput,
-                            discoveryMethod: .coverage,
-                            timedOut: scaResult.timedOut,
-                            seed: nil,
-                            originalCount: scaResult.originalCount,
-                            iteration: Int(scaResult.iteration),
-                            budget: coverageBudget,
-                            sequencesTested: invocationCounter.value,
-                            reductionStats: scaResult.reductionStats,
-                            reductionInvocations: scaResult.reductionInvocations,
-                            reductionMilliseconds: 0
+                            scaResult: scaResult,
+                            coverageBudget: coverageBudget,
+                            sequencesTested: invocationCounter.value
                         )
                     }
-                } else if let (seed, iteration) = samplingSeed {
+                } else if case let .sampling(seed, iteration) = decoded {
                     do {
                         regressionDiscovery = try runConcurrentSampling(
                             sequenceGen: sequenceGen,
@@ -313,11 +302,12 @@ private extension __ExhaustRuntime {
                             seed: seed,
                             replayIteration: iteration,
                             samplingBudget: samplingBudget,
-                            failureContext: failureContext,
+
                             statsAccumulator: statsAccumulator
                         )
                     } catch {
                         deferredIssues.append("Generator failed during regression replay (seed \(encodedSeed)): \(error)")
+                        continue
                     }
                 }
 
@@ -334,13 +324,16 @@ private extension __ExhaustRuntime {
         var discovery: ConcurrentDiscovery<Spec.Command>?
 
         if config.shouldRunCoverage {
+            let effectiveCoverageBudget: UInt64 = if let row = config.coverageReplayRow {
+                max(coverageBudget, UInt64(row) + 1)
+            } else {
+                coverageBudget
+            }
             if let scaResult = runConcurrentSCACoverage(
-                seqGen: sequenceGen,
+                sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: resolvedCommandLimit,
-                coverageBudget: coverageBudget,
-                concurrencyLevel: concurrencyLevel,
-                idleTimeout: idleTimeout,
+                coverageBudget: effectiveCoverageBudget,
                 skipToRow: config.coverageReplayRow,
                 property: property,
                 identifySkips: identifySkips,
@@ -348,17 +341,9 @@ private extension __ExhaustRuntime {
                 invocationCounter: invocationCounter
             ) {
                 discovery = ConcurrentDiscovery(
-                    taggedCommands: scaResult.finalInput,
-                    discoveryMethod: .coverage,
-                    timedOut: scaResult.timedOut,
-                    seed: nil,
-                    originalCount: scaResult.originalCount,
-                    iteration: Int(scaResult.iteration),
-                    budget: coverageBudget,
-                    sequencesTested: invocationCounter.value,
-                    reductionStats: scaResult.reductionStats,
-                    reductionInvocations: scaResult.reductionInvocations,
-                    reductionMilliseconds: 0
+                    scaResult: scaResult,
+                    coverageBudget: coverageBudget,
+                    sequencesTested: invocationCounter.value
                 )
             }
         }
@@ -379,7 +364,6 @@ private extension __ExhaustRuntime {
                     seed: config.seed,
                     replayIteration: config.replayIteration,
                     samplingBudget: samplingBudget,
-                    failureContext: failureContext,
                     statsAccumulator: statsAccumulator
                 )
             } catch {
@@ -410,11 +394,12 @@ private extension __ExhaustRuntime {
         seed: UInt64?,
         replayIteration: Int?,
         samplingBudget: UInt64,
-        failureContext _: FailureContext,
         statsAccumulator: OpenPBTStatsAccumulator?
     ) throws -> ConcurrentDiscovery<Command>? {
-        let startIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
-        let maxRuns = replayIteration.map { UInt64($0) } ?? samplingBudget
+        let (startIndex, maxRuns) = samplingReplayWindow(
+            replayIteration: replayIteration,
+            samplingBudget: samplingBudget
+        )
         var interpreter = ValueAndChoiceTreeInterpreter(
             sequenceGen,
             materializePicks: true,
@@ -445,12 +430,16 @@ private extension __ExhaustRuntime {
 
                 let reductionStartInvocations = invocationCounter.value
                 let reductionStopwatch = Stopwatch()
+                let reductionProperty: @Sendable ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
+                    let passed = property(taggedCommands)
+                    return passed || lastRunTimedOut.value
+                }
                 let reduction = reduceConcurrentCounterexample(
                     input: input,
                     tree: tree,
                     sequenceGen: sequenceGen,
                     reductionConfig: reductionConfig,
-                    property: property,
+                    property: reductionProperty,
                     identifySkips: identifySkips,
                     seed: 0,
                     skipPruningLogEvent: "concurrent_skip_pruning",
@@ -477,71 +466,6 @@ private extension __ExhaustRuntime {
         }
 
         return nil
-    }
-}
-
-// MARK: - Reduction
-
-/// Internal (not fileprivate) so the SCA coverage path in `CooperativeConcurrentContractRunner+SCA.swift` can share this single reducer. Not `@available`-gated: it uses no macOS-15 APIs, so the (ungated) coverage and preemptive paths can call it directly.
-extension __ExhaustRuntime {
-    /// Prunes skipped commands, then runs graph reduction on the failing counterexample. When the failing probe timed out, skips reduction entirely and returns the input unchanged — timed-out schedules produce non-deterministic replay, making reduction unreliable.
-    ///
-    /// Shared by the random-sampling and SCA-coverage paths. Keeps no invocation count of its own: every probe flows through `property`, so the caller measures reduction invocations by snapshotting its own counter around this call.
-    ///
-    /// - Parameters:
-    ///   - seed: Pruning materialization seed (sampling uses `0`; coverage uses the row iteration for determinism per row).
-    ///   - skipPruningLogEvent: Log event name for the skip-pruning pass, distinguishing the two callers in the log stream.
-    ///   - timedOut: The failing probe's timeout status, captured by the caller before reduction. Returned unchanged, so a reduced counterexample reports `false` rather than whatever the reducer probed last.
-    static func reduceConcurrentCounterexample<Command>(
-        input: [(ScheduleMarker, Command)],
-        tree: ChoiceTree,
-        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
-        reductionConfig: Interpreters.ReducerConfiguration,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
-        identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
-        seed: UInt64,
-        skipPruningLogEvent: String,
-        timedOut: Bool
-    ) -> ConcurrentReduction<Command> {
-        guard timedOut == false else {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "concurrent_timeout_skipping_reduction"
-            )
-            return ConcurrentReduction(finalInput: input, stats: nil, timedOut: true)
-        }
-
-        let (reduceValue, reduceTree) = pruneSkippedCommands(
-            value: input,
-            tree: tree,
-            generator: sequenceGen,
-            seed: seed,
-            property: property,
-            identifySkips: identifySkips,
-            logEvent: skipPruningLogEvent
-        )
-
-        let (finalInput, stats, reduced) = reduceContractCounterexample(
-            value: reduceValue,
-            tree: reduceTree,
-            generator: sequenceGen,
-            config: reductionConfig,
-            property: property
-        )
-        if reduced {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "concurrent_reduced",
-                metadata: ["from": "\(input.count)", "to": "\(finalInput.count)"]
-            )
-        } else {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "concurrent_reduction_no_improvement"
-            )
-        }
-
-        return ConcurrentReduction(finalInput: finalInput, stats: stats, timedOut: false)
     }
 }
 
@@ -578,12 +502,9 @@ private extension __ExhaustRuntime {
 
         let replaySeed: String?
         if let seed {
-            // A regression replay decodes the seed directly (maxRuns: 1) and carries no iteration, so it must round-trip as a bare seed. Only sampling and replay failures, which set a 1-based iteration, take the iteration suffix.
-            replaySeed = failureContext.iteration >= 1
-                ? CrockfordBase32.encode(seed: seed, iteration: failureContext.iteration)
-                : CrockfordBase32.encode(seed)
+            replaySeed = ReplaySeed.Resolved.sampling(seed: seed, iteration: failureContext.iteration).encoded
         } else if discoveryMethod == .coverage || discoveryMethod == .smokeTest {
-            replaySeed = CrockfordBase32.encodeCoverageRow(failureContext.iteration - 1)
+            replaySeed = ReplaySeed.Resolved.encodeCoverageIteration(failureContext.iteration)
         } else {
             replaySeed = nil
         }
@@ -612,7 +533,6 @@ private extension __ExhaustRuntime {
 
 // MARK: - Supporting Types
 
-/// Not `@available`-gated: `ConcurrentReduction` is returned by the ungated shared reducer, and these are plain data carriers with no macOS-15 dependency.
 extension __ExhaustRuntime {
     /// Carries the failure metadata from the coverage or sampling phase back to the entry point, which uses it to populate ``FailureContext``, call ``buildFailureResult(finalInput:specInit:concurrencyLevel:idleTimeout:seed:discoveryMethod:timedOut:failureContext:)``, and update the ``ExhaustReport``.
     struct ConcurrentDiscovery<Command> {
@@ -627,15 +547,5 @@ extension __ExhaustRuntime {
         let reductionStats: ReductionStats?
         let reductionInvocations: Int
         let reductionMilliseconds: Double
-    }
-
-    /// Outcome of ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``, shared by the sampling and coverage paths.
-    ///
-    /// Carries no invocation count or timing: every reduction probe flows through the caller's `property`, so the caller measures both by snapshotting around the call.
-    struct ConcurrentReduction<Command> {
-        let finalInput: [(ScheduleMarker, Command)]
-        let stats: ReductionStats?
-        /// The failing probe's timeout status, passed through unchanged — a reduced (non-timed-out) counterexample reports `false`, never the reducer's last probe.
-        let timedOut: Bool
     }
 }

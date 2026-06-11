@@ -13,7 +13,7 @@ public protocol ContractSpecBase {
 
     /// Builds a generator for a single command step, weighted by `@Command` annotations.
     ///
-    /// The macro synthesizes this as a ``Gen.pick`` over the command cases, each carrying its argument generators.
+    /// The macro synthesizes this as a `.oneOf(weighted:)` pick over the command cases, each carrying its argument generators.
     static var commandGenerator: ReflectiveGenerator<Command> { get }
 
     /// The execution model this contract uses, synthesized by the `@Contract` macro.

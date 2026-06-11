@@ -34,9 +34,9 @@ extension __ExhaustRuntime {
     static func zipScheduleMarker<Command>(
         onto commandGen: Generator<Command>,
         concurrencyLevel: Int
-    ) -> Generator<(ScheduleMarker, Command)> {
+    ) -> Generator<(ScheduleMarker, Command)>? {
         guard let choices = extractPickChoices(from: commandGen) else {
-            fatalError("Command generator is in unexpected format")
+            return nil
         }
 
         // Lane markers are always tagged .laneControl so the lane-collapse encoder can target them during reduction. Random sampling with .constant scaling provides sufficient lane diversity without including markers in the covering array.

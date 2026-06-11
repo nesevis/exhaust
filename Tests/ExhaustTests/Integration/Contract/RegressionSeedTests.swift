@@ -1,5 +1,5 @@
-import Exhaust
 import Testing
+@testable import Exhaust
 
 @Suite("Contract regression seed tests", .serialized, .tags(.contract))
 struct RegressionSeedTests {
@@ -34,6 +34,60 @@ struct RegressionSeedTests {
             .budget(.custom(coverage: 0, sampling: 0)),
             .suppress(.issueReporting)
         )
+        #expect(result != nil, "regression seed should reproduce the failure on its own")
+    }
+
+    @Test("Preemptive regression seed reproduces a failure through the trait")
+    func preemptiveRegressionSeedReproduces() throws {
+        let initial = try #require(
+            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                RegressionPreemptiveContract.self,
+                settings: [.commandLimit(6), .suppress(.all)]
+            )
+        )
+        let replaySeed = try #require(initial.replaySeed)
+
+        let result = ExhaustTraitConfiguration.$current.withValue(
+            ExhaustTraitConfiguration(budget: nil, regressions: [replaySeed])
+        ) {
+            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                RegressionPreemptiveContract.self,
+                settings: [
+                    .commandLimit(6),
+                    .budget(.custom(coverage: 0, sampling: 0)),
+                    .suppress(.all),
+                ]
+            )
+        }
+        #expect(result != nil, "regression seed should reproduce the failure on its own")
+    }
+
+    @Test("Async sequential regression seed reproduces a sampling failure through the trait")
+    func asyncSequentialRegressionSeedReproduces() async throws {
+        let initial = try #require(
+            await __ExhaustRuntime.__runContractAsync(
+                RegressionAsyncSequentialContract.self,
+                settings: [
+                    .commandLimit(8),
+                    .budget(.custom(coverage: 0, sampling: 200)),
+                    .suppress(.all),
+                ]
+            )
+        )
+        let replaySeed = try #require(initial.replaySeed)
+
+        let result = await ExhaustTraitConfiguration.$current.withValue(
+            ExhaustTraitConfiguration(budget: nil, regressions: [replaySeed])
+        ) {
+            await __ExhaustRuntime.__runContractAsync(
+                RegressionAsyncSequentialContract.self,
+                settings: [
+                    .commandLimit(8),
+                    .budget(.custom(coverage: 0, sampling: 0)),
+                    .suppress(.all),
+                ]
+            )
+        }
         #expect(result != nil, "regression seed should reproduce the failure on its own")
     }
 }
@@ -112,5 +166,91 @@ private final class RegressionRacyCounter: @unchecked Sendable, CustomDebugStrin
         let current = storedValue
         await Task.yield()
         storedValue = current + 1
+    }
+}
+
+@Contract(.threads)
+private final class RegressionPreemptiveContract {
+    var expected: Int = 0
+    @SystemUnderTest var counter = RegressionBrokenDecrement()
+
+    @Oracle
+    func oracleMatches(other: RegressionBrokenDecrement) -> Bool {
+        counter.value == other.value
+    }
+
+    @Invariant
+    func valueMatches() -> Bool {
+        counter.value == expected
+    }
+
+    @Command(weight: 3)
+    func increment() throws {
+        expected += 1
+        counter.increment()
+    }
+
+    @Command(weight: 2)
+    func decrement() throws {
+        guard expected > 0 else { throw skip() }
+        expected -= 1
+        counter.decrement()
+    }
+}
+
+private final class RegressionBrokenDecrement: @unchecked Sendable, CustomDebugStringConvertible {
+    private var storedValue: Int = 0
+    var value: Int {
+        storedValue
+    }
+
+    var debugDescription: String {
+        "RegressionBrokenDecrement(\(storedValue))"
+    }
+
+    func increment() {
+        storedValue += 1
+    }
+
+    func decrement() {
+        // Bug: no-op when value is 3.
+        if storedValue != 3 { storedValue -= 1 }
+    }
+}
+
+@Contract(.sequential)
+private final class RegressionAsyncSequentialContract {
+    var expected: Int = 0
+    @SystemUnderTest var counter = RegressionAsyncCounter()
+
+    @Invariant
+    func valueMatches() -> Bool {
+        counter.value == expected
+    }
+
+    @Command(weight: 3)
+    func increment() async throws {
+        expected += 1
+        counter.increment()
+    }
+
+    @Command(weight: 2)
+    func decrement() async throws {
+        guard expected > 0 else { throw skip() }
+        expected -= 1
+        counter.decrement()
+    }
+}
+
+private final class RegressionAsyncCounter {
+    private(set) var value: Int = 0
+
+    func increment() {
+        value += 1
+    }
+
+    func decrement() {
+        // Bug: no-op when value is 3.
+        if value != 3 { value -= 1 }
     }
 }

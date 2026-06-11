@@ -41,4 +41,26 @@ public enum EncoderName: String, Hashable, Sendable, CaseIterable {
 
     /// Drives ``TypeTag/laneControl`` chooseBits values toward zero (the sequential prefix). Each lane marker moved to zero removes one command from the concurrent interleaving space.
     case laneCollapse
+
+    /// Whether this encoder minimizes values rather than changing structure. Structural encoders (deletion, migration, substitution) remove or relocate nodes; lane collapse is domain-specific. Everything else simplifies values in place.
+    public var isValueMinimizer: Bool {
+        switch self {
+            case .deletion,
+                 .migration,
+                 .substitution,
+                 .laneCollapse:
+                false
+            case .valueSearch,
+                 .floatSearch,
+                 .boundValueSearch,
+                 .redistribution,
+                 .branchPivot,
+                 .siblingSwap,
+                 .composed,
+                 .lockstep,
+                 .numericReorder,
+                 .convergenceConfirmation:
+                true
+        }
+    }
 }

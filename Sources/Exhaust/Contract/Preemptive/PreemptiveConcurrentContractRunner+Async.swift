@@ -36,16 +36,16 @@ public extension __ExhaustRuntime {
                 return nil
         }
 
-        // A non-positive or sentinel-large idle timeout (e.g. `Int.max` to disable) means "wait unbounded".
-        let idleTimeoutMilliseconds: Int? = (config.idleTimeout > 0 && config.idleTimeout < Int.max)
-            ? config.idleTimeout
-            : nil
-        let backend = AsyncPreemptiveChecker<Spec>(idleTimeoutMilliseconds: idleTimeoutMilliseconds)
+        var regressionSeeds: [String] = []
+        #if canImport(Testing)
+            regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
+        #endif
 
-        let logConfiguration = ExhaustLog.Configuration(isEnabled: config.suppressLogs == false, minimumLevel: config.logLevel, format: .keyValue)
+        let backend = AsyncPreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
+
         let (result, deferredIssues, report): (ContractResult<Spec>?, [String], ExhaustReport) = await __ExhaustRuntime.dispatchToGCD {
-            ExhaustLog.withConfiguration(logConfiguration) {
-                runPreemptivePipeline(backend: backend, config: config)
+            ExhaustLog.withConfiguration(config.logConfiguration) {
+                runPreemptivePipeline(backend: backend, config: config, regressionSeeds: regressionSeeds)
             }
         }
         config.onReportClosure?(report)
@@ -66,7 +66,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
     let idleTimeoutMilliseconds: Int?
 
     /// Bridges async work to the calling thread, bailing with `nil` (and a log) if the drain loop idles past ``idleTimeoutMilliseconds``. Returns the work's result, or `nil` only on timeout.
-    private func awaitOrTimeout<R>(_ label: String, _ work: @Sendable @escaping () async -> R) -> R? {
+    private func awaitOrTimeout<Value>(_ label: String, _ work: @Sendable @escaping () async -> Value) -> Value? {
         guard let idleTimeoutMilliseconds else {
             return __ExhaustRuntime.blockingAwait(work)
         }
@@ -91,12 +91,17 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         let prefixCommands = taggedCommands.filter(\.0.isPrefix)
         let concurrentCommands = taggedCommands.filter { $0.0.isPrefix == false }
 
-        for run in [
-            runSequentially(prefixCommands.map(\.1), on: concurrentSpec),
-            runSequentially(prefixCommands.map(\.1), on: sequentialSpec),
-            runSequentially(concurrentCommands.map(\.1), on: sequentialSpec),
-        ] where run.succeeded == false {
-            return Preemptive.Outcome(passed: false, timedOut: run.timedOut)
+        let prefixOnConcurrent = runSequentially(prefixCommands.map(\.1), on: concurrentSpec)
+        if prefixOnConcurrent.succeeded == false {
+            return Preemptive.Outcome(passed: false, timedOut: prefixOnConcurrent.timedOut)
+        }
+        let prefixOnSequential = runSequentially(prefixCommands.map(\.1), on: sequentialSpec)
+        if prefixOnSequential.succeeded == false {
+            return Preemptive.Outcome(passed: false, timedOut: prefixOnSequential.timedOut)
+        }
+        let concurrentOnSequential = runSequentially(concurrentCommands.map(\.1), on: sequentialSpec)
+        if concurrentOnSequential.succeeded == false {
+            return Preemptive.Outcome(passed: false, timedOut: concurrentOnSequential.timedOut)
         }
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
@@ -134,7 +139,14 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 group.leave()
             }
         }
-        group.wait()
+        if let idleTimeoutMilliseconds {
+            if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
+                commandFailed.value = true
+                return Preemptive.Outcome(passed: false, timedOut: true)
+            }
+        } else {
+            group.wait()
+        }
 
         if caughtException.value != nil || commandFailed.value {
             return Preemptive.Outcome(passed: false, timedOut: timedOut.value)
@@ -208,24 +220,34 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
     func makeIdentifySkips() -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> {
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
-        let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit)
+        let rawIdentifySkips = Spec.skipIdentifier(
+            specInit: specInit,
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds
+        )
         return { taggedCommands in rawIdentifySkips(taggedCommands.map(\.1)) }
     }
 
     func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String) {
         let spec = Spec()
         nonisolated(unsafe) let unsafeSpec = spec
-        let (trace, failed) = __ExhaustRuntime.blockingAwait {
+        let work: @Sendable () async -> ([TraceStep], Bool) = {
             await __ExhaustRuntime.buildAsyncSequentialTrace(
                 commands,
                 run: { try await unsafeSpec.run($0) },
                 checkInvariants: { try await unsafeSpec.checkInvariants() }
             )
         }
+        let (trace, failed): ([TraceStep], Bool)
+        if let idleTimeoutMilliseconds {
+            (trace, failed) = __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: idleTimeoutMilliseconds, work)
+                ?? ([], true)
+        } else {
+            (trace, failed) = __ExhaustRuntime.blockingAwait(work)
+        }
         return (trace, failed, spec.systemUnderTest, spec.failureDescription())
     }
 
-    /// Replays the reduced commands sequentially on a fresh spec via ``runSequentially(_:on:)`` to capture the oracle SUT state.
+    /// Replays the reduced commands sequentially on a fresh spec via ``runSequentially(_:on:)`` to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails or times out — the partial state would mislead debugging.
     func buildResult(
         reduced: [(ScheduleMarker, Spec.Command)],
         seed: UInt64?,
@@ -233,11 +255,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         discoveryMethod: ContractDiscoveryMethod
     ) -> ContractResult<Spec> {
         let oracleSpec = Spec()
-        runSequentially(reduced.map(\.1), on: oracleSpec)
+        let replayOutcome = runSequentially(reduced.map(\.1), on: oracleSpec)
         return ContractResult<Spec>(
             commands: reduced.map(\.1),
             trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),
-            systemUnderTest: oracleSpec.systemUnderTest,
+            systemUnderTest: replayOutcome.succeeded ? oracleSpec.systemUnderTest : nil,
             seed: seed,
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod

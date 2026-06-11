@@ -82,6 +82,52 @@ struct ContractReplayTests {
     }
 }
 
+@Suite("Preemptive oracle replay", .serialized, .tags(.contract))
+struct PreemptiveOracleReplayTests {
+    @Test("Smoke-phase failure replays deterministically through the coverage row path")
+    func smokePhaseFailureReplaysDeterministically() throws {
+        let initial = try #require(
+            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                PreemptiveSequentiallyBrokenSpec.self,
+                settings: [
+                    .commandLimit(6),
+                    .suppress(.all),
+                ]
+            )
+        )
+        let replaySeed = try #require(initial.replaySeed)
+        #expect(replaySeed.hasPrefix("U"), "Smoke failure replay seed should use U prefix, got: \(replaySeed)")
+        #expect(initial.discoveryMethod == .smokeTest)
+
+        let replayed = try #require(
+            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                PreemptiveSequentiallyBrokenSpec.self,
+                settings: [
+                    .commandLimit(6),
+                    .replay(.encoded(replaySeed)),
+                    .suppress(.all),
+                ]
+            )
+        )
+        #expect(replayed.commands.isEmpty == false, "Smoke row replay should reproduce the failure")
+    }
+
+    @Test("Oracle replay returns nil systemUnderTest when the sequential replay throws")
+    func oracleReplayReturnsNilSystemUnderTestWhenSequentialReplayThrows() throws {
+        let result = try #require(
+            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                AlwaysThrowingPreemptiveSpec.self,
+                settings: [
+                    .commandLimit(2),
+                    .budget(.custom(coverage: 0, sampling: 50)),
+                    .suppress(.all),
+                ]
+            )
+        )
+        #expect(result.systemUnderTest == nil, "Oracle replay should throw, producing nil systemUnderTest")
+    }
+}
+
 @Suite("Concurrent contract replay seed resolution", .serialized, .tags(.contract))
 struct ConcurrentContractReplayTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -339,3 +385,32 @@ final class BrokenDecrementCounter: @unchecked Sendable, CustomDebugStringConver
         // Bug: no-op
     }
 }
+
+// MARK: - Always-Throwing Preemptive Spec
+
+@Contract(.threads)
+final class AlwaysThrowingPreemptiveSpec {
+    @SystemUnderTest var sut = ThrowingSUT()
+
+    @Oracle
+    func oracleMatches(other _: ThrowingSUT) -> Bool {
+        true
+    }
+
+    @Command(weight: 1)
+    func failingCommand() throws {
+        try sut.alwaysFails()
+    }
+}
+
+final class ThrowingSUT: @unchecked Sendable, CustomDebugStringConvertible {
+    var debugDescription: String {
+        "ThrowingSUT"
+    }
+
+    func alwaysFails() throws {
+        throw AlwaysThrowingError()
+    }
+}
+
+private struct AlwaysThrowingError: Error {}
