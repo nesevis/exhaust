@@ -267,7 +267,7 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         }
 
         decls.append(synthesizeCommandGenerator(commands: commands, context: context))
-        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: effectiveAsync, isReferenceType: true))
+        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: effectiveAsync))
         decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: effectiveAsync))
         let hasUserFailureDescription = members.contains { member in
             guard let funcDecl = member.decl.as(FunctionDeclSyntax.self) else { return false }
@@ -533,7 +533,7 @@ func synthesizeCommandGenerator(commands: [CommandInfo], context: some MacroExpa
     """
 }
 
-func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isReferenceType: Bool) -> DeclSyntax {
+func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> DeclSyntax {
     var cases: [String] = []
 
     for cmd in commands {
@@ -548,7 +548,6 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isReference
             cases.append("        case .\(cmd.methodName): \(effectKeywords)self.\(cmd.methodName)()")
         } else {
             let bindings = cmd.parameters.map(\.bindingName).joined(separator: ", ")
-            // The call into the user's method uses the external argument label (omitted when the parameter is unlabeled); the value is always the binding name.
             let args = cmd.parameters.map { param in
                 param.externalLabel.map { "\($0): \(param.bindingName)" } ?? param.bindingName
             }.joined(separator: ", ")
@@ -557,10 +556,9 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, isReference
     }
 
     let casesBlock = cases.joined(separator: "\n")
-    let mutatingKeyword = isReferenceType ? "" : "mutating "
     let signature = hasAnyAsync
-        ? "\(mutatingKeyword)func run(_ command: Command) async throws"
-        : "\(mutatingKeyword)func run(_ command: Command) throws"
+        ? "func run(_ command: Command) async throws"
+        : "func run(_ command: Command) throws"
 
     return """
     \(raw: signature) {

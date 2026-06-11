@@ -5,6 +5,12 @@ import ExhaustCore
 ///
 /// The two checkers differ only in how a single probe runs — direct GCD execution versus async bridged through a drain loop — so the outcome shape and the three-pass reducer live here and are parameterised by each checker's `execute`.
 enum Preemptive {
+    /// Number of times each reduction probe re-executes the concurrent schedule to probabilistically confirm the race still reproduces.
+    static let confirmationRepetitions = 10
+
+    /// Default command limit for `.threads` contracts. Lower than the cooperative runner's estimated/40 cap because each probe repeats `confirmationRepetitions` times.
+    static let defaultCommandLimit = 8
+
     /// Outcome of one preemptive concurrent execution.
     ///
     /// `timedOut` distinguishes a hang (a wedged lane or a drain-loop idle bailout) from a genuine pass or property failure, so the runner reports the hang as a timeout rather than dressing it up as a confirmed race. A timed-out run always has `passed == false`.
@@ -51,56 +57,38 @@ enum Preemptive {
         let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
         let valueMinimization = Set(EncoderName.allCases.filter(\.isValueMinimizer))
 
+        let passes: [(encoders: Set<EncoderName>, maxStalls: Int, deadlineNanoseconds: UInt64, rematerialize: Bool)] = [
+            ([.laneCollapse], 2, 10_000_000_000, true),
+            (structural, 2, 30_000_000_000, true),
+            (valueMinimization, 1, 5_000_000_000, false),
+        ]
+
         var currentOutput = output
         var currentTree = tree
         var aggregateStats = ReductionStats()
 
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 10_000_000_000, enabledEncoders: [.laneCollapse]),
-            property: property
-        ) {
+        for pass in passes {
+            guard let result = try? Interpreters.choiceGraphReduceCollectingStats(
+                gen: generator,
+                tree: currentTree,
+                output: currentOutput,
+                config: .init(
+                    maxStalls: pass.maxStalls,
+                    wallClockDeadlineNanoseconds: pass.deadlineNanoseconds,
+                    enabledEncoders: pass.encoders
+                ),
+                property: property
+            ) else { continue }
             aggregateStats.merge(result.stats)
             if case let .reduced(sequence, reduced) = result.outcome {
                 currentOutput = reduced
-                if case let .success(_, freshTree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
-                ) {
+                if pass.rematerialize,
+                   case let .success(_, freshTree, _) = Materializer.materialize(
+                       generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
+                   )
+                {
                     currentTree = freshTree
                 }
-            }
-        }
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 2, wallClockDeadlineNanoseconds: 30_000_000_000, enabledEncoders: structural),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(sequence, reduced) = result.outcome {
-                currentOutput = reduced
-                if case let .success(_, freshTree, _) = Materializer.materialize(
-                    generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
-                ) {
-                    currentTree = freshTree
-                }
-            }
-        }
-
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: currentTree,
-            output: currentOutput,
-            config: .init(maxStalls: 1, wallClockDeadlineNanoseconds: 5_000_000_000, enabledEncoders: valueMinimization),
-            property: property
-        ) {
-            aggregateStats.merge(result.stats)
-            if case let .reduced(_, reduced) = result.outcome {
-                currentOutput = reduced
             }
         }
 
@@ -158,8 +146,7 @@ extension __ExhaustRuntime {
         }
 
         let commandGen = Spec.commandGenerator.gen
-        // Default 8: lower than the cooperative runner's estimated/40 cap because each preemptive probe repeats 10x, making longer sequences prohibitively slow.
-        let commandLimit = config.commandLimit ?? 8
+        let commandLimit = config.commandLimit ?? Preemptive.defaultCommandLimit
         guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
             deferredIssues.append("Command generator must be a top-level pick (.oneOf) — concurrent testing requires per-command branch structure")
             finalizeReport()
@@ -359,7 +346,7 @@ extension __ExhaustRuntime {
                                 generator: sequenceGen,
                                 tree: tree,
                                 output: taggedCommands,
-                                repetitions: 10,
+                                repetitions: Preemptive.confirmationRepetitions,
                                 execute: backend.execute
                             )
                             reduced = reductionResult.output

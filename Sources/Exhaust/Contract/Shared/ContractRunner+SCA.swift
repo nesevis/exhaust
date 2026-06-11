@@ -90,10 +90,10 @@ extension __ExhaustRuntime {
 
             let mode = Materializer.Mode.guided(
                 seed: UInt64(iterations),
-                fallbackTree: nil
+                fallbackTree: tree
             )
             guard case let .success(value, freshTree, _) = Materializer.materialize(
-                sequenceGen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+                sequenceGen, prefix: ChoiceSequence(), mode: mode
             ) else {
                 continue
             }
@@ -269,9 +269,9 @@ extension __ExhaustRuntime {
         )
         let prunedTree = pruneSequenceElements(from: tree, at: skippedIndices)
         let prunedSequence = ChoiceSequence.flatten(prunedTree)
-        let prunedMode = Materializer.Mode.guided(seed: seed, fallbackTree: nil)
+        let prunedMode = Materializer.Mode.guided(seed: seed, fallbackTree: prunedTree)
         if case let .success(rematerialized, rematerializedTree, _) = Materializer.materialize(
-            generator, prefix: prunedSequence, mode: prunedMode, fallbackTree: prunedTree
+            generator, prefix: prunedSequence, mode: prunedMode
         ),
             property(rematerialized) == false
         {

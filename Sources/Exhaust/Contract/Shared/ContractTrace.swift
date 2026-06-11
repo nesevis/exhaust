@@ -7,19 +7,20 @@ extension __ExhaustRuntime {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     static func buildTrace(_ events: [TraceEvent]) -> [TraceStep] {
         var entries: [TraceEntry] = []
-        var openCommand: [String: String] = [:]
+        var openCommand: [TraceEvent.Lane: String] = [:]
 
         for event in events {
+            let isPrefix = event.lane == .prefix
             switch event.kind {
                 case .started:
-                    if event.lane != "prefix" {
+                    if isPrefix == false {
                         openCommand[event.lane] = event.label
                     }
-                    let phase: TracePhase = event.lane == "prefix" ? .prefix : .started
+                    let phase: TracePhase = isPrefix ? .prefix : .started
                     entries.append(TraceEntry(phase: phase, label: event.label, lane: event.lane, outcome: .ok))
                 case .completed:
                     openCommand[event.lane] = nil
-                    if event.lane == "prefix" {
+                    if isPrefix {
                         if let lastIndex = entries.lastIndex(where: { $0.label == event.label && $0.phase == .prefix }) {
                             entries.remove(at: lastIndex)
                         }
@@ -29,7 +30,7 @@ extension __ExhaustRuntime {
                     }
                 case .skipped:
                     openCommand[event.lane] = nil
-                    if event.lane == "prefix" {
+                    if isPrefix {
                         if let lastIndex = entries.lastIndex(where: { $0.label == event.label && $0.phase == .prefix }) {
                             entries.remove(at: lastIndex)
                         }
@@ -44,7 +45,7 @@ extension __ExhaustRuntime {
                         case .invariant: .invariantFailed(name: message)
                         case .error: .checkFailed(message: message)
                     }
-                    if event.lane == "prefix" {
+                    if isPrefix {
                         if let lastIndex = entries.lastIndex(where: { $0.label == event.label && $0.phase == .prefix }) {
                             entries.remove(at: lastIndex)
                         }
@@ -240,8 +241,20 @@ struct TraceEvent: Sendable {
         case error
     }
 
+    enum Lane: Hashable, Sendable, CustomStringConvertible {
+        case prefix
+        case lane(LaneID)
+
+        var description: String {
+            switch self {
+                case .prefix: "prefix"
+                case let .lane(identifier): identifier.label.uppercased()
+            }
+        }
+    }
+
     var kind: Kind
-    var lane: String
+    var lane: Lane
     var label: String
 }
 
@@ -267,9 +280,10 @@ private enum TracePhase {
 }
 
 /// One presentable trace entry before final indexing: phase, command label, owning lane, and outcome kept as typed fields.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 private struct TraceEntry {
     var phase: TracePhase
     var label: String
-    var lane: String
+    var lane: TraceEvent.Lane
     var outcome: TraceStep.Outcome
 }

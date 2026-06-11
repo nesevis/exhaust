@@ -41,7 +41,7 @@ private enum CommandOutcome {
 private func runCommandRecordingTrace<Spec: AsyncContractSpec>(
     _ command: Spec.Command,
     on spec: UnsafeSendableBox<Spec>,
-    lane: String,
+    lane: TraceEvent.Lane,
     label: String,
     trace: UnsafeSendableBox<[TraceEvent]>,
     recordTrace: Bool
@@ -128,7 +128,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
                 guard failed.value == nil else { break }
                 let label = "\(command)"
                 let outcome = await runCommandRecordingTrace(
-                    command, on: spec, lane: "prefix", label: label,
+                    command, on: spec, lane: .prefix, label: label,
                     trace: trace, recordTrace: recordTrace
                 )
                 if case let .failed(message) = outcome {
@@ -192,14 +192,14 @@ func drainSchedule<Spec: AsyncContractSpec>(
 
         Task(executorPreference: executor) { @Sendable [spec, failed, runQueue, trace, commandIndex] in
             defer { runQueue.markComplete(lane: lane) }
-            let laneLabel = lane.label
+            let traceLane = TraceEvent.Lane.lane(lane)
             for command in commands {
                 guard failed.value == nil else { return }
                 commandIndex.value += 1
                 let name = "\(command)".split(separator: "(").first.map(String.init) ?? "\(command)"
-                let label = "\(commandIndex.value)\(laneLabel.uppercased()) \(name)"
+                let label = "\(commandIndex.value)\(traceLane) \(name)"
                 let outcome = await runCommandRecordingTrace(
-                    command, on: spec, lane: laneLabel, label: label,
+                    command, on: spec, lane: traceLane, label: label,
                     trace: trace, recordTrace: recordTrace
                 )
                 if case let .failed(message) = outcome {
@@ -245,10 +245,10 @@ func drainSchedule<Spec: AsyncContractSpec>(
         if recordTrace {
             let switchedLanes = lastDrainedLane != nil && lastDrainedLane != lane
             if switchedLanes, let prev = lastDrainedLane, laneHasOpenCommand[prev] == true {
-                trace.value.append(TraceEvent(kind: .suspended, lane: prev.label, label: ""))
+                trace.value.append(TraceEvent(kind: .suspended, lane: .lane(prev), label: ""))
             }
             if switchedLanes, laneHasOpenCommand[lane] == true {
-                trace.value.append(TraceEvent(kind: .resumed, lane: lane.label, label: ""))
+                trace.value.append(TraceEvent(kind: .resumed, lane: .lane(lane), label: ""))
             }
         }
 
