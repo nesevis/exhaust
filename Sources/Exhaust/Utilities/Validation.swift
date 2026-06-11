@@ -173,13 +173,18 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
             }
         }
 
-        if let tree = representativeTree {
-            lines.append("  Example:")
-            for treeLine in tree.debugDescription.split(separator: "\n", omittingEmptySubsequences: false) {
-                lines.append("    \(treeLine)")
-            }
-        }
+        return lines.joined(separator: "\n")
+    }
 
+    /// Full summary including a representative example tree.
+    ///
+    /// The compact ``description`` omits the tree. Use this property when you want to inspect the generator's structural shape.
+    public var treeDescription: String {
+        guard let tree = representativeTree else { return description }
+        var lines = [description, "  Example:"]
+        for treeLine in tree.debugDescription.split(separator: "\n", omittingEmptySubsequences: false) {
+            lines.append("    \(treeLine)")
+        }
         return lines.joined(separator: "\n")
     }
 

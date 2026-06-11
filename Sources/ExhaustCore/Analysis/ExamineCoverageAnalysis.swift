@@ -254,7 +254,7 @@ private struct DecileAccumulator {
             let values = decodedValues[discriminator] ?? []
             let minValue = values.min() ?? 0
             let maxValue = values.max() ?? 0
-            let meanValue = values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count)
+            let meanValue = values.isEmpty ? 0 : values.reduce(0.0) { $0 + $1 / Double(values.count) }
             return NumericTypeCoverage(
                 type: name,
                 decilesCovered: covered,
