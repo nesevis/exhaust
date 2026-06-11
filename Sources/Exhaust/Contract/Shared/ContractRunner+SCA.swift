@@ -82,6 +82,7 @@ extension __ExhaustRuntime {
 
         var iterations = 0
         var attempts: UInt64 = 0
+        // Cap total attempts at 10× the budget so a pathological buildTree failure rate cannot spin indefinitely.
         let maxAttempts = coverageBudget * 10
         while iterations < coverageBudget, attempts < maxAttempts, let row = generator.next() {
             attempts += 1

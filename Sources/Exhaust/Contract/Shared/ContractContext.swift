@@ -86,6 +86,23 @@ struct ContractContext {
         return settings
     }
 
+    static func logConfiguration(from settings: [ContractSettings]) -> ExhaustLog.Configuration {
+        var suppressLogs = false
+        var logLevel: LogLevel = .error
+        for setting in settings {
+            switch setting {
+                case let .suppress(option):
+                    if case .logs = option { suppressLogs = true }
+                    if case .all = option { suppressLogs = true }
+                case let .log(level):
+                    logLevel = level
+                default:
+                    break
+            }
+        }
+        return ExhaustLog.Configuration(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: .keyValue)
+    }
+
     var encodedReplaySeed: String? {
         replay?.encoded ?? seed.map(ReplaySeed.encodeRawSeed)
     }

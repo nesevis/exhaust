@@ -23,7 +23,7 @@ package struct ScalarRangeSet: @unchecked Sendable {
         rangesArray.count
     }
 
-    /// Total number of scalar values across all ranges, plus one for the bottom codepoint if present.
+    /// Total number of addressable scalar values: the range set count plus the reserved bottom-codepoint index when present.
     public let scalarCount: Int
 
     /// Cumulative sizes for O(log n) index lookup. `cumulativeCounts[i]` = total scalars in ranges 0..<i.
