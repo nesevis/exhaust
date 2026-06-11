@@ -240,7 +240,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         // MARK: chooseBits
 
-            case let .impure(operation: .chooseBits(min, max, tag, isRangeExplicit, scaling), continuation):
+            case let .impure(operation: .chooseBits(min, max, tag, isRangeExplicit, scaling, typeTagPayload), continuation):
                 let effectiveRange: ClosedRange<UInt64>
                 if let scaling {
                     let size = consumeSize(&context)
@@ -256,7 +256,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     : rawBits
                 let calleeTree = ChoiceTree.choice(
                     ChoiceValue(randomBits, tag: tag),
-                    .init(validRange: min ... max, isRangeExplicit: isRangeExplicit)
+                    .init(validRange: min ... max, isRangeExplicit: isRangeExplicit, typeTagPayload: typeTagPayload)
                 )
                 return try runContinuation(
                     result: randomBits, calleeChoiceTree: calleeTree,
@@ -613,14 +613,14 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element.
         if case let .impure(
-            operation: .chooseBits(min, max, tag, isRangeExplicit, .some(scaling)),
+            operation: .chooseBits(min, max, tag, isRangeExplicit, .some(scaling), typeTagPayload),
             continuation: elementContinuation
         ) = elementGen, context.sizeOverride == nil {
             let size = consumeSize(&context)
             let effectiveRange = Gen.applyScaling(
                 min: min, max: max, tag: tag, scaling: scaling, size: size
             )
-            let metadata = ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
+            let metadata = ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit, typeTagPayload: typeTagPayload)
 
             for _ in 0 ..< count {
                 let rawBits = context.prng.next(in: effectiveRange)

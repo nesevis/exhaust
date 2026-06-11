@@ -263,7 +263,7 @@ package enum ChoiceTreeAnalysis {
             parameters.append(param)
         } else {
             let problematicValues = ProblematicValues.computeProblematicValues(
-                min: range.lowerBound, max: range.upperBound, tag: typeTag
+                min: range.lowerBound, max: range.upperBound, tag: typeTag, payload: metadata.typeTagPayload
             )
             let param = CoverageParameter(
                 index: parameters.count,
@@ -581,7 +581,7 @@ package enum ChoiceTreeAnalysis {
             parameters.append(param)
         } else {
             let problematicValues = ProblematicValues.computeProblematicValues(
-                min: range.lowerBound, max: range.upperBound, tag: typeTag
+                min: range.lowerBound, max: range.upperBound, tag: typeTag, payload: metadata.typeTagPayload
             )
             let param = CoverageParameter(
                 index: parameters.count,

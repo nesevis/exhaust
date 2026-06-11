@@ -674,11 +674,11 @@ extension Materializer {
     private static func extractLengthMetadata(
         _ lengthGen: Generator<UInt64>
     ) throws -> ChoiceMetadata {
-        if case let .impure(.chooseBits(min, max, _, isRangeExplicit, _), _) = lengthGen {
+        if case let .impure(.chooseBits(min, max, _, isRangeExplicit, _, _), _) = lengthGen {
             return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         }
         if case let .impure(.getSize, sizeContinuation) = lengthGen,
-           case let .impure(.chooseBits(min, max, _, isRangeExplicit, _), _) = try sizeContinuation(100 as Any)
+           case let .impure(.chooseBits(min, max, _, isRangeExplicit, _, _), _) = try sizeContinuation(100 as Any)
         {
             return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         }

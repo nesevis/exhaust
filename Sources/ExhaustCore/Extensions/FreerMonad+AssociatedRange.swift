@@ -12,7 +12,7 @@ extension FreerMonad where Operation == ReflectiveOperation {
             case .pure:
                 return nil
             case let .impure(op, _):
-                guard case let .chooseBits(min, max, _, isRangeExplicit, _) = op,
+                guard case let .chooseBits(min, max, _, isRangeExplicit, _, _) = op,
                       isRangeExplicit
                 else {
                     return nil

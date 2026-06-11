@@ -6,68 +6,62 @@
 //
 
 /// Identifies the numeric type of a ``ChoiceValue``, used for reconstruction, display, and problematic-value analysis.
+///
+/// TypeTag is a pure discriminator — it carries no per-generator metadata. Analysis-relevant payloads (date parameters, character problematic indices) live in ``TypeTagPayload``, stored alongside the tag in ``ChoiceMetadata`` on ChoiceTree nodes. This keeps TypeTag at one byte so that ``ChoiceValue`` and ``ChoiceSequenceValue`` stay compact in the flat ``ChoiceSequence`` that the reducer copies, hashes, and compares thousands of times per reduction.
 @usableFromInline
-package enum TypeTag: Sendable {
+package enum TypeTag: UInt8, Sendable, Hashable {
     /// Platform-width unsigned integer (`UInt`).
-    case uint
+    case uint = 0
     /// 64-bit unsigned integer.
-    case uint64
+    case uint64 = 1
     /// 32-bit unsigned integer.
-    case uint32
+    case uint32 = 2
     /// 16-bit unsigned integer.
-    case uint16
+    case uint16 = 3
     /// 8-bit unsigned integer.
-    case uint8
+    case uint8 = 4
     /// Platform-width signed integer (`Int`).
-    case int
+    case int = 5
     /// 64-bit signed integer.
-    case int64
+    case int64 = 6
     /// 32-bit signed integer.
-    case int32
+    case int32 = 7
     /// 16-bit signed integer.
-    case int16
+    case int16 = 8
     /// 8-bit signed integer.
-    case int8
+    case int8 = 9
     /// Double-precision floating point.
-    case double
+    case double = 10
     /// Single-precision floating point.
-    case float
+    case float = 11
     /// Half-precision floating point (ARM64 only).
-    case float16
-    /// Date steps: the underlying integer represents step indices, where each step is `intervalSeconds` seconds offset from `lowerSeconds`. Used by problematic-value analysis to compute calendar-meaningful problematic values (month/year boundaries, DST transitions). The `timeZoneID` limits DST problematic values to a single timezone.
-    case date(lowerSeconds: Int64, intervalSeconds: Int64, timeZoneID: String)
+    case float16 = 12
+    /// Date steps: the underlying integer represents step indices. The per-generator parameters (interval, lower bound, timezone) are stored in ``TypeTagPayload/date(lowerSeconds:intervalSeconds:timeZoneID:)`` on the ``ChoiceMetadata``.
+    case date = 13
     /// Raw bit storage used by composite generators (UUID, Int128, UInt128). Problematic-value analysis produces only all-low / all-high values.
-    case bits
-    /// Unicode scalar index: a contiguous integer index into a ``ScalarRangeSet``. Stored as ``UInt32``. The bit pattern is an index, not a Unicode code point. The associated problematic indices are pre-computed by ``ScalarRangeSet`` during construction and used by ``ProblematicValues`` for coverage analysis.
-    case character(problematicIndices: [UInt64])
+    case bits = 14
+    /// Unicode scalar index: a contiguous integer index into a ``ScalarRangeSet``. The pre-computed problematic indices are stored in ``TypeTagPayload/character(problematicIndices:)`` on the ``ChoiceMetadata``.
+    case character = 15
     /// Recursion depth control: selects which pre-built layer of a recursive generator to unfold. Excluded from value search because reducing it collapses recursive layers, destroying structural context (branch pivots, self-similar replacements) in the bound subtree. Structural operations (self-similar replacement, descendant promotion) handle depth reduction while preserving structural integrity.
-    case depthControl
+    case depthControl = 16
     /// Tags a structural scheduling decision that coverage analysis should skip but the reducer should minimize normally. Used for lane assignment in concurrent contract testing — the covering array covers command types without the combinatorial cost of lane combinations, while the reducer drives markers toward 0 (prefix) to discover minimal concurrency.
-    case laneControl
+    case laneControl = 17
+}
+
+/// Per-generator metadata for ``TypeTag`` cases that carry analysis-relevant payloads.
+///
+/// Stored in ``ChoiceMetadata`` on ``ChoiceTree`` nodes (heap-allocated, no stride impact on the flat ``ChoiceSequence``). Consumed only by ``ProblematicValues`` during one-time coverage analysis.
+@usableFromInline
+package enum TypeTagPayload: Hashable, Sendable {
+    /// Date step parameters. Used by ``ProblematicValues`` to compute calendar-meaningful problematic values (month/year boundaries, DST transitions).
+    case date(lowerSeconds: Int64, intervalSeconds: Int64, timeZoneID: String)
+    /// Pre-computed problematic character indices. Corresponds to ``ProblematicValues/interestingCharacterScalars`` in flat array index space, clamped to the valid range during construction.
+    case character(problematicIndices: [UInt64])
 }
 
 package extension TypeTag {
     var discriminator: Int {
-        switch self {
-            case .uint: 0
-            case .uint64: 1
-            case .uint32: 2
-            case .uint16: 3
-            case .uint8: 4
-            case .int: 5
-            case .int64: 6
-            case .int32: 7
-            case .int16: 8
-            case .int8: 9
-            case .double: 10
-            case .float: 11
-            case .float16: 12
-            case .date: 13
-            case .bits: 14
-            case .character: 15
-            case .depthControl: 16
-            case .laneControl: 17
-        }
+        Int(rawValue)
     }
 
     /// Whether this tag represents a signed integer type.
@@ -88,6 +82,11 @@ package extension TypeTag {
             default:
                 false
         }
+    }
+
+    /// Whether this tag represents a character index type.
+    var isCharacter: Bool {
+        self == .character
     }
 
     /// The full bit-pattern range reachable by the underlying type.
@@ -185,7 +184,6 @@ package extension TypeTag {
         var upper = numericDoubleValue(forBitPattern: range.upperBound)
         if lower.isNaN || lower.isInfinite { lower = -Double.greatestFiniteMagnitude }
         if upper.isNaN || upper.isInfinite { upper = Double.greatestFiniteMagnitude }
-        // When the numeric endpoints are equal (for example ±0.0), the lerp collapses to a single point. Fall back to raw bits so bit-pattern-level distinctions are preserved.
         guard lower != upper else { return rawBits }
         let fraction = Double(rawBits &- range.lowerBound) / Double(width)
         let value = lower * (1.0 - fraction) + upper * fraction
@@ -233,63 +231,6 @@ package extension TypeTag {
     }
 }
 
-extension TypeTag: Equatable {
-    public static func == (lhs: TypeTag, rhs: TypeTag) -> Bool {
-        switch (lhs, rhs) {
-            case (.uint, .uint), (.uint64, .uint64), (.uint32, .uint32),
-                 (.uint16, .uint16), (.uint8, .uint8),
-                 (.int, .int), (.int64, .int64), (.int32, .int32),
-                 (.int16, .int16), (.int8, .int8),
-                 (.double, .double), (.float, .float), (.float16, .float16),
-                 (.bits, .bits),
-                 (.depthControl, .depthControl),
-                 (.laneControl, .laneControl):
-                return true
-            case let (.character(lhsIndices), .character(rhsIndices)):
-                return lhsIndices == rhsIndices
-            case let (.date(lhsLower, lhsInterval, lhsTZ), .date(rhsLower, rhsInterval, rhsTZ)):
-                return lhsLower == rhsLower && lhsInterval == rhsInterval && lhsTZ == rhsTZ
-            default:
-                if lhs.discriminator == rhs.discriminator {
-                    preconditionFailure("TypeTag.== missing case for: \(lhs), \(rhs)")
-                }
-                return false
-        }
-    }
-}
-
-extension TypeTag: Hashable {
-    /// Hashes by discriminator only for most cases. `.character` intentionally includes `problematicIndices` because distinct character sets produce distinct generators that must not collide in keyed caches. `.date` includes all three associated values for the same reason.
-    public func hash(into hasher: inout Hasher) {
-        switch self {
-            case .uint: hasher.combine(0)
-            case .uint64: hasher.combine(1)
-            case .uint32: hasher.combine(2)
-            case .uint16: hasher.combine(3)
-            case .uint8: hasher.combine(4)
-            case .int: hasher.combine(5)
-            case .int64: hasher.combine(6)
-            case .int32: hasher.combine(7)
-            case .int16: hasher.combine(8)
-            case .int8: hasher.combine(9)
-            case .double: hasher.combine(10)
-            case .float: hasher.combine(11)
-            case .float16: hasher.combine(12)
-            case let .date(lower, interval, tzID):
-                hasher.combine(13)
-                hasher.combine(lower)
-                hasher.combine(interval)
-                hasher.combine(tzID)
-            case .bits: hasher.combine(14)
-            case let .character(problematicIndices):
-                hasher.combine(15)
-                hasher.combine(problematicIndices)
-            case .depthControl: hasher.combine(16)
-            case .laneControl: hasher.combine(17)
-        }
-    }
-}
-
 extension TypeTag: CustomStringConvertible {
     public var description: String {
         switch self {
@@ -312,13 +253,5 @@ extension TypeTag: CustomStringConvertible {
             case .depthControl: "DepthControl"
             case .laneControl: "Control"
         }
-    }
-}
-
-package extension TypeTag {
-    /// Whether this tag represents a character index type.
-    var isCharacter: Bool {
-        if case .character = self { return true }
-        return false
     }
 }

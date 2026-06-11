@@ -264,7 +264,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
                         // 2a. Check if length generator is a direct .chooseBits with range > 4
                         if case let .impure(
-                            .chooseBits(lower, upper, tag, isRangeExplicit, scaling),
+                            .chooseBits(lower, upper, tag, isRangeExplicit, scaling, _),
                             lengthContinuation
                         ) = lengthGen {
                             let rangeSize = (lower ... upper).saturatingCount
@@ -452,7 +452,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         var innerContinuation: ((Any) throws -> AnyGenerator)?
 
         for choice in choices {
-            guard case let .impure(.chooseBits(lower, upper, choiceTag, choiceExplicit, choiceScaling), choiceContinuation) = choice.generator else {
+            guard case let .impure(.chooseBits(lower, upper, choiceTag, choiceExplicit, choiceScaling, _), choiceContinuation) = choice.generator else {
                 return nil
             }
             globalMin = Swift.min(globalMin, lower)
@@ -495,7 +495,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
         context: SubdivisionContext,
         thresholds: CGSSubdivisionThresholds
     ) throws -> Generator<Output> {
-        guard case let .impure(.chooseBits(lower, upper, tag, isRangeExplicit, scaling), chooseContinuation) = gen else {
+        guard case let .impure(.chooseBits(lower, upper, tag, isRangeExplicit, scaling, _), chooseContinuation) = gen else {
             return gen
         }
         let rangeSize = (lower ... upper).saturatingCount

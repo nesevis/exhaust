@@ -225,7 +225,7 @@ extension Materializer {
                     continuationFallback: continuationFallback
                 )
 
-            case let .impure(.chooseBits(min, max, tag, isRangeExplicit, scaling), continuation):
+            case let .impure(.chooseBits(min, max, tag, isRangeExplicit, scaling, _), continuation):
                 let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try handleChooseBits(
                     min: min, max: max, tag: tag, isRangeExplicit: isRangeExplicit,

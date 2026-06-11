@@ -132,7 +132,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
         // MARK: chooseBits
 
-            case let .impure(operation: .chooseBits(min, max, tag, _, scaling), continuation):
+            case let .impure(operation: .chooseBits(min, max, tag, _, scaling, _), continuation):
                 let effectiveRange: ClosedRange<UInt64>
                 if let scaling {
                     let size = consumeSize(&context)
@@ -219,7 +219,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 elements.reserveCapacity(count)
                 // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element.
                 if case let .impure(
-                    operation: .chooseBits(min, max, tag, _, .some(scaling)),
+                    operation: .chooseBits(min, max, tag, _, .some(scaling), _),
                     continuation: elementContinuation
                 ) = elementGen, context.sizeOverride == nil {
                     let size = consumeSize(&context)

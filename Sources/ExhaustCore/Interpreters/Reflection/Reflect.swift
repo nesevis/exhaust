@@ -108,12 +108,13 @@ extension Interpreters {
             case let .pick(choices, _):
                 return try reflectPickOperation(choices: choices, finalOutput: finalOutput)
 
-            case let .chooseBits(min, max, tag, isRangeExplicit, _):
+            case let .chooseBits(min, max, tag, isRangeExplicit, _, typeTagPayload):
                 return try reflectChooseBitsOperation(
                     min: min,
                     max: max,
                     tag: tag,
                     isRangeExplicit: isRangeExplicit,
+                    typeTagPayload: typeTagPayload,
                     finalOutput: finalOutput
                 )
 
@@ -308,6 +309,7 @@ extension Interpreters {
         max: UInt64,
         tag: TypeTag,
         isRangeExplicit: Bool,
+        typeTagPayload: TypeTagPayload?,
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         var convertibleValue: (any BitPatternConvertible)?
@@ -347,7 +349,8 @@ extension Interpreters {
 
         let metadata = ChoiceMetadata(
             validRange: reflectedRange,
-            isRangeExplicit: isRangeExplicit
+            isRangeExplicit: isRangeExplicit,
+            typeTagPayload: typeTagPayload
         )
         let choiceTree = ChoiceTree.choice(
             .init(convertibleValue, tag: tag),
