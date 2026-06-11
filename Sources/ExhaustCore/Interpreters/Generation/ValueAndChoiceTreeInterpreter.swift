@@ -357,34 +357,26 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 let observationDefault = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
                 var filterAttempts = 0
                 var filterPasses = 0
-                var passedResult: (Any, ChoiceTree)?
-                var generatorYieldedNil = false
+                defer {
+                    if filterAttempts > 0 {
+                        context.filterObservations[fingerprint, default: observationDefault]
+                            .merge(FilterObservation(attempts: filterAttempts, passes: filterPasses))
+                    }
+                }
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let (result, tree) = try Self.generateRecursiveAny(
                         filteredGen, with: inputValue, context: &context
-                    ) else {
-                        generatorYieldedNil = true
-                        break
-                    }
+                    ) else { return nil }
                     let passed = predicate(result)
                     filterAttempts += 1
                     if passed { filterPasses += 1 }
                     if passed {
-                        passedResult = (result, tree)
-                        break
+                        return try runContinuation(
+                            result: result, calleeChoiceTree: tree,
+                            continuation: continuation, inputValue: inputValue, context: &context
+                        )
                     }
                     attempts += 1
-                }
-                if filterAttempts > 0 {
-                    context.filterObservations[fingerprint, default: observationDefault]
-                        .merge(FilterObservation(attempts: filterAttempts, passes: filterPasses))
-                }
-                if generatorYieldedNil { return nil }
-                if let (result, tree) = passedResult {
-                    return try runContinuation(
-                        result: result, calleeChoiceTree: tree,
-                        continuation: continuation, inputValue: inputValue, context: &context
-                    )
                 }
                 sourceLocation.onBudgetExhausted?()
                 throw GeneratorError.sparseValidityCondition

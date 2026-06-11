@@ -297,39 +297,31 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     type: filterType
                 )
                 var attempts = 0 as UInt64
-                var accepted: Any?
                 let observationDefault = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
                 var filterAttempts = 0
                 var filterPasses = 0
-                var generatorYieldedNil = false
+                defer {
+                    if filterAttempts > 0 {
+                        context.filterObservations[fingerprint, default: observationDefault]
+                            .merge(FilterObservation(attempts: filterAttempts, passes: filterPasses))
+                    }
+                }
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let candidate = try generateRecursiveAny(
                         tunedGen, with: inputValue, context: &context
-                    ) else {
-                        generatorYieldedNil = true
-                        break
-                    }
+                    ) else { return nil }
                     let passed = predicate(candidate)
                     filterAttempts += 1
                     if passed { filterPasses += 1 }
                     if passed {
-                        accepted = candidate
-                        break
+                        let nextGen = try continuation(candidate)
+                        if case let .pure(final) = nextGen { return final }
+                        return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
                     }
                     attempts += 1
                 }
-                if filterAttempts > 0 {
-                    context.filterObservations[fingerprint, default: observationDefault]
-                        .merge(FilterObservation(attempts: filterAttempts, passes: filterPasses))
-                }
-                if generatorYieldedNil { return nil }
-                guard let value = accepted else {
-                    sourceLocation.onBudgetExhausted?()
-                    throw GeneratorError.sparseValidityCondition
-                }
-                let nextGen = try continuation(value)
-                if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                sourceLocation.onBudgetExhausted?()
+                throw GeneratorError.sparseValidityCondition
 
         // MARK: classify
 

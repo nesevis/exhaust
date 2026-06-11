@@ -184,6 +184,7 @@ package extension TypeTag {
         var upper = numericDoubleValue(forBitPattern: range.upperBound)
         if lower.isNaN || lower.isInfinite { lower = -Double.greatestFiniteMagnitude }
         if upper.isNaN || upper.isInfinite { upper = Double.greatestFiniteMagnitude }
+        // When the numeric endpoints are equal (for example ±0.0), the lerp collapses to a single point. Fall back to raw bits so bit-pattern-level distinctions are preserved.
         guard lower != upper else { return rawBits }
         let fraction = Double(rawBits &- range.lowerBound) / Double(width)
         let value = lower * (1.0 - fraction) + upper * fraction
