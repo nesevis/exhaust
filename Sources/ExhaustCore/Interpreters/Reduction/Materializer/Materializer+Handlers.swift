@@ -398,21 +398,68 @@ extension Materializer {
             elements.reserveCapacity(Int(length))
         }
 
+        // Unwrap a forward-inert contramap layer once, before the loop: materialization ignores the backward transform, so character-style elements (contramap over chooseBits) can take the fused loop below as long as the wrapper's continuation is applied to each element.
+        var fusedElementGen = elementGen
+        var contramapContinuation: ((Any) throws -> AnyGenerator)?
+        if case let .impure(.contramap(_, innerGen), continuation: outerContinuation) = elementGen {
+            fusedElementGen = innerGen
+            contramapContinuation = outerContinuation
+        }
+
         var elementIndex = 0
         var remaining = length
-        while remaining > 0 {
-            let elFB: ChoiceTree? = elementFallbacks.flatMap { fbs in
-                elementIndex < fbs.count ? fbs[elementIndex] : nil
+        if case let .impure(
+            .chooseBits(elementMin, elementMax, elementTag, elementIsRangeExplicit, elementScaling, elementTypeTagPayload),
+            elementContinuation
+        ) = fusedElementGen {
+            // Fused loop: skips the per-element dispatch through generateRecursive (and the contramap frame when present). Fallback decomposition matches what the dispatch switch performs for a bare chooseBits — handleContramap passes the element fallback through untouched, so decomposing here is equivalent for both shapes.
+            while remaining > 0 {
+                let elementFallback: ChoiceTree? = elementFallbacks.flatMap { fallbacks in
+                    elementIndex < fallbacks.count ? fallbacks[elementIndex] : nil
+                }
+                let (elementCalleeFallback, elementContinuationFallback) = decomposeNonGroupFallback(elementFallback)
+                guard let (innerResult, innerTree) = try handleChooseBits(
+                    min: elementMin, max: elementMax, tag: elementTag,
+                    isRangeExplicit: elementIsRangeExplicit,
+                    scaling: elementScaling, typeTagPayload: elementTypeTagPayload,
+                    continuation: elementContinuation, inputValue: inputValue,
+                    context: &context, calleeFallback: elementCalleeFallback,
+                    continuationFallback: elementContinuationFallback
+                ) else { return nil }
+                let result: Any
+                let element: ChoiceTree
+                if let contramapContinuation {
+                    guard let continued = try runContinuation(
+                        result: innerResult, calleeChoiceTree: innerTree,
+                        continuation: contramapContinuation, inputValue: inputValue,
+                        context: &context, continuationFallback: nil
+                    ) else { return nil }
+                    (result, element) = continued
+                } else {
+                    (result, element) = (innerResult, innerTree)
+                }
+                results.append(result)
+                if context.skipTree == false {
+                    elements.append(element)
+                }
+                elementIndex += 1
+                remaining -= 1
             }
-            guard let (result, element) = try generateRecursive(
-                elementGen, with: inputValue, context: &context, fallbackTree: elFB
-            ) else { return nil }
-            results.append(result)
-            if context.skipTree == false {
-                elements.append(element)
+        } else {
+            while remaining > 0 {
+                let elFB: ChoiceTree? = elementFallbacks.flatMap { fbs in
+                    elementIndex < fbs.count ? fbs[elementIndex] : nil
+                }
+                guard let (result, element) = try generateRecursive(
+                    elementGen, with: inputValue, context: &context, fallbackTree: elFB
+                ) else { return nil }
+                results.append(result)
+                if context.skipTree == false {
+                    elements.append(element)
+                }
+                elementIndex += 1
+                remaining -= 1
             }
-            elementIndex += 1
-            remaining -= 1
         }
 
         context.cursor.skipSequenceClose()
