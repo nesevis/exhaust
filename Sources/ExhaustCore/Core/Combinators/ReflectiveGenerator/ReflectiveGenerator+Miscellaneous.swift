@@ -100,8 +100,32 @@ public extension ReflectiveGenerator {
         noneWeight: Int = 1
     ) -> ReflectiveGenerator<Output?> {
         Gen.pick(choices: [
-            (noneWeight, Gen.just(.none)),
             (someWeight, gen.liftToOptional()),
+            (noneWeight, Gen.just(.none)),
+        ]).wrapped
+    }
+
+    /// Wraps a generator to produce optional values, choosing between `nil` and a generated value.
+    ///
+    /// The `someWeight` and `noneWeight` parameters control the relative frequency of `.some` versus `nil`. The defaults produce `nil` roughly 20% of the time.
+    ///
+    /// ```swift
+    /// let gen = #gen(.optional(.int(in: 0...10)))
+    /// let nilHeavy = #gen(.optional(.int(in: 0...10), someWeight: 1, noneWeight: 3))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - gen: The generator to wrap.
+    ///   - someWeight: Relative weight for generating a value. Defaults to 4.
+    ///   - noneWeight: Relative weight for generating `nil`. Defaults to 1.
+    static func optional(
+        _ gen: ReflectiveGenerator<Output>,
+        someWeight: Int = 4,
+        noneWeight: Int = 1
+    ) -> ReflectiveGenerator<Output?> {
+        Gen.pick(choices: [
+            (someWeight, gen.gen.liftToOptional()),
+            (noneWeight, Gen.just(.none)),
         ]).wrapped
     }
 
