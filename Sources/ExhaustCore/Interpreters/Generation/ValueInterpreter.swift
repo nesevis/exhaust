@@ -59,7 +59,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
         do {
             // swiftlint:disable:next force_cast
-            return try Self.generateRecursiveAny(erasedGenerator!, with: (), context: &context) as! Element?
+            return try Self.generateRecursiveAny(erasedGenerator!, context: &context) as! Element?
         } catch GeneratorError.uniqueBudgetExhausted {
             ExhaustLog.warning(
                 category: .generation,
@@ -101,7 +101,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             runs: initialSize
         )
         swap(&rng, &context.prng)
-        let result = try generateRecursive(gen, with: (), context: &context)
+        let result = try generateRecursive(gen, context: &context)
         swap(&rng, &context.prng)
         return result
     }
@@ -111,11 +111,10 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     /// Typed entry point that erases the generator once at the boundary and casts the result.
     static func generateRecursive<Output>(
         _ gen: Generator<Output>,
-        with inputValue: Any,
         context: inout GenerationContext
     ) throws -> Output? {
         // swiftlint:disable:next force_cast
-        try generateRecursiveAny(gen.erase(), with: inputValue, context: &context) as! Output?
+        try generateRecursiveAny(gen.erase(), context: &context) as! Output?
     }
 
     /// Non-generic recursive engine. One specialization in the binary regardless of Output type.
@@ -123,7 +122,6 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     /// The outer switch matches `.impure(.<operation>, continuation)` directly, enabling single-level dispatch without an intermediate operation variable.
     static func generateRecursiveAny(
         _ gen: AnyGenerator,
-        with inputValue: Any,
         context: inout GenerationContext
     ) throws -> Any? {
         switch gen {
@@ -148,14 +146,14 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     : rawBits
                 let nextGen = try continuation(randomBits)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
 
         // MARK: just
 
             case let .impure(operation: .just(value), continuation):
                 let nextGen = try continuation(value)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
 
         // MARK: getSize
 
@@ -163,31 +161,28 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 let size = consumeSize(&context)
                 let nextGen = try continuation(size)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
 
         // MARK: contramap
 
             case let .impure(operation: .contramap(_, innerGen), continuation):
-                guard let value = try generateRecursiveAny(innerGen, with: inputValue, context: &context) else {
+                guard let value = try generateRecursiveAny(innerGen, context: &context) else {
                     return nil
                 }
                 let nextGen = try continuation(value)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
 
         // MARK: prune
 
             case let .impure(operation: .prune(innerGen), continuation):
-                // Inert guard: forward generation never prunes (reflection-only), and forward inputValue is never Optional.none — kept for symmetry with the reflection/materializer handlers.
-                guard let wrappedValue = InterpreterWrapperHandlers.unwrapPruneInput(inputValue) else {
-                    return nil
-                }
-                guard let value = try generateRecursiveAny(innerGen, with: wrappedValue, context: &context) else {
+                // Forward generation never prunes (reflection-only), so the operation is a pass-through here.
+                guard let value = try generateRecursiveAny(innerGen, context: &context) else {
                     return nil
                 }
                 let nextGen = try continuation(value)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
 
         // MARK: pick
 
@@ -198,25 +193,25 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     return nil
                 }
                 _ = context.prng.next()
-                guard let value = try generateRecursiveAny(selectedChoice.generator, with: inputValue, context: &context) else {
+                guard let value = try generateRecursiveAny(selectedChoice.generator, context: &context) else {
                     return nil
                 }
                 let nextGen = try continuation(value)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
 
         // MARK: sequence
 
             case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
                 guard let elements = try handleSequence(
                     lengthGen: lengthGen, elementGen: elementGen,
-                    inputValue: inputValue, context: &context
+                    context: &context
                 ) else {
                     return nil
                 }
                 let nextGen = try continuation(elements)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
 
         // MARK: zip
 
@@ -225,7 +220,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 results.reserveCapacity(generators.count)
                 for childGen in generators {
                     guard let value = try generateRecursiveAny(
-                        childGen, with: inputValue, context: &context
+                        childGen, context: &context
                     ) else {
                         throw GeneratorError.choiceTreeConstructionFailed
                     }
@@ -233,19 +228,19 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 }
                 let nextGen = try continuation(results)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
 
         // MARK: resize
 
             case let .impure(operation: .resize(newSize, innerGen), continuation):
                 context.sizeOverride = newSize
                 defer { context.sizeOverride = nil }
-                guard let value = try generateRecursiveAny(innerGen, with: inputValue, context: &context) else {
+                guard let value = try generateRecursiveAny(innerGen, context: &context) else {
                     return nil
                 }
                 let nextGen = try continuation(value)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
 
         // MARK: filter
 
@@ -268,7 +263,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 }
                 while attempts < GenerationContext.maxFilterRuns {
                     guard let candidate = try generateRecursiveAny(
-                        tunedGen, with: inputValue, context: &context
+                        tunedGen, context: &context
                     ) else { return nil }
                     let passed = predicate(candidate)
                     filterAttempts += 1
@@ -276,7 +271,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     if passed {
                         let nextGen = try continuation(candidate)
                         if case let .pure(final) = nextGen { return final }
-                        return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                        return try generateRecursiveAny(nextGen, context: &context)
                     }
                     attempts += 1
                 }
@@ -287,7 +282,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
 
             case let .impure(operation: .classify(classifyGen, fingerprint, classifiers), continuation):
                 guard let value = try generateRecursiveAny(
-                    classifyGen, with: inputValue, context: &context
+                    classifyGen, context: &context
                 ) else {
                     return nil
                 }
@@ -296,7 +291,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 }
                 let nextGen = try continuation(value)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
 
         // MARK: transform
 
@@ -305,20 +300,20 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 switch kind {
                     case let .map(forward, _, _):
                         guard let innerValue = try generateRecursiveAny(
-                            inner, with: inputValue, context: &context
+                            inner, context: &context
                         ) else {
                             return nil
                         }
                         transformedValue = try forward(innerValue)
                     case let .bind(_, forward, _, _, _):
                         guard let innerValue = try generateRecursiveAny(
-                            inner, with: inputValue, context: &context
+                            inner, context: &context
                         ) else {
                             return nil
                         }
                         let boundGen = try forward(innerValue)
                         guard let boundValue = try generateRecursiveAny(
-                            boundGen, with: inputValue, context: &context
+                            boundGen, context: &context
                         ) else {
                             return nil
                         }
@@ -326,7 +321,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     case let .metamorphic(transforms, _):
                         let savedState = (context.prng.seed, context.prng.currentState)
                         guard let original = try generateRecursiveAny(
-                            inner, with: inputValue, context: &context
+                            inner, context: &context
                         ) else {
                             return nil
                         }
@@ -335,7 +330,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                         for transform in transforms {
                             context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
                             guard let copy = try generateRecursiveAny(
-                                inner, with: inputValue, context: &context
+                                inner, context: &context
                             ) else {
                                 return nil
                             }
@@ -345,7 +340,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 }
                 let nextGen = try continuation(transformedValue)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
 
         // MARK: unique
 
@@ -355,7 +350,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 while attempts < GenerationContext.maxFilterRuns {
                     if let keyExtractor {
                         guard let candidate = try generateRecursiveAny(
-                            uniqueGen, with: inputValue, context: &context
+                            uniqueGen, context: &context
                         ) else {
                             return nil
                         }
@@ -376,7 +371,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                         )
                         swap(&context.prng, &vactiContext.prng)
                         let vactiResult = try ValueAndChoiceTreeInterpreter<Any>
-                            .generateRecursiveAny(uniqueGen, with: inputValue, context: &vactiContext)
+                            .generateRecursiveAny(uniqueGen, context: &vactiContext)
                         guard let (candidate, tree) = vactiResult else {
                             swap(&context.prng, &vactiContext.prng)
                             return nil
@@ -395,7 +390,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 }
                 let nextGen = try continuation(value)
                 if case let .pure(final) = nextGen { return final }
-                return try generateRecursiveAny(nextGen, with: inputValue, context: &context)
+                return try generateRecursiveAny(nextGen, context: &context)
         }
     }
 
@@ -405,10 +400,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     static func handleSequence(
         lengthGen: Generator<UInt64>,
         elementGen: AnyGenerator,
-        inputValue: Any,
         context: inout GenerationContext
     ) throws -> [Any]? {
-        guard let lengthValue = try generateRecursiveAny(lengthGen.erase(), with: (), context: &context) else {
+        guard let lengthValue = try generateRecursiveAny(lengthGen.erase(), context: &context) else {
             return nil
         }
         // swiftlint:disable:next force_cast
@@ -449,7 +443,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     element = final
                 } else {
                     guard let value = try generateRecursiveAny(
-                        nextElementGen, with: inputValue, context: &context
+                        nextElementGen, context: &context
                     ) else {
                         return nil
                     }
@@ -461,7 +455,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                         element = final
                     } else {
                         guard let value = try generateRecursiveAny(
-                            outerGen, with: inputValue, context: &context
+                            outerGen, context: &context
                         ) else {
                             return nil
                         }
@@ -473,7 +467,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         } else {
             for _ in 0 ..< count {
                 guard let element = try generateRecursiveAny(
-                    elementGen, with: inputValue, context: &context
+                    elementGen, context: &context
                 ) else {
                     return nil
                 }
