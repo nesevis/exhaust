@@ -98,7 +98,7 @@ package enum Materializer {
         switch mode {
             case .exact:
                 seed = precomputedSeed ?? ZobristHash.hash(of: prefix)
-                // In exact mode, the fallback tree is used for `.getSize` extraction only, not for value fallback (all values come from the prefix).
+                // Exact mode never reads the fallback tree at value sites (all values come from the prefix), but handleZip derives cursor scope limits from it. Those limits are load-bearing: they reject structurally misaligned candidates before the property runs — dropping the fallback here nearly doubles materializations on batch cross-sequence removal (Bound25).
                 resolvedFallbackTree = fallbackTree
                 maximizeBoundRegionIndices = nil
             case let .guided(s, fb, indices):
