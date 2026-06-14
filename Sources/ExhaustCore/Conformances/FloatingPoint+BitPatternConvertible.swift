@@ -68,7 +68,7 @@ extension Float: BitPatternConvertible {
 
     /// Creates a `Float` from a `UInt64` with ordering-preserving encoding.
     package init(bitPattern64: UInt64) {
-        let bitPattern32 = UInt32(bitPattern64)
+        let bitPattern32 = UInt32(clamping: bitPattern64)
         // Negative numbers were encoded with ~rawBitPattern, so their encoded values have sign bit clear.
         // Positive numbers were encoded with rawBitPattern ^ signBitMask, so their encoded values have sign bit set.
         let rawBitPattern: UInt32 = bitPattern32 & Self.signBitMask == 0
