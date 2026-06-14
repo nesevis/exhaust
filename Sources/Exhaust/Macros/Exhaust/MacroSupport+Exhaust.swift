@@ -338,8 +338,6 @@ public extension __ExhaustRuntime {
                 }
             } else if coverageBudget == 0 {
                 ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped")
-            } else if seed != nil {
-                ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped (deterministic replay)")
             } else {
                 let outcome: CoverageOutcome<Output> = runCoveragePhase(
                     context: context,
