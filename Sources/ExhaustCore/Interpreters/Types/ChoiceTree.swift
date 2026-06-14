@@ -82,8 +82,8 @@ package extension ChoiceTree {
             case let .branch(b):
                 b.choice.flattenedEntryCount
             case let .group(array, _):
-                if array.allSatisfy(\.isBranch),
-                   case let .branch(b) = array.first(where: \.isSelected), b.isSelected
+                if let selected = array.first(where: \.isSelected),
+                   case let .branch(b) = selected
                 {
                     // group open + branch entry + choice + group close
                     2 + 1 + b.choice.flattenedEntryCount

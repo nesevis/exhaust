@@ -69,7 +69,7 @@ package extension ChoiceSequence {
                 var selectedBranchTree: ChoiceTree?
                 while i < array.count {
                     let candidate = array[i]
-                    if candidate.isSelected, candidate.isBranch {
+                    if candidate.isSelected {
                         selectedBranchTree = candidate
                         break
                     }

@@ -275,6 +275,49 @@ struct ChoiceSequenceTests {
         }
     }
 
+    @Test("flatten().count equals flattenedEntryCount for mixed branch group")
+    func flattenCountMatchesFlattenedEntryCountMixedGroup() {
+        let sibling: ChoiceTree = .sequence(
+            length: 2,
+            elements: [.just, .just],
+            ChoiceMetadata(validRange: nil)
+        )
+        let mixed: ChoiceTree = .group([
+            .branch(
+                fingerprint: 1, weight: 1, id: 0, branchCount: 2,
+                choice: .just,
+                isSelected: true
+            ),
+            sibling,
+        ])
+        let flatCount = ChoiceSequence.flatten(mixed).count
+        let predicted = mixed.flattenedEntryCount
+        #expect(
+            flatCount == predicted,
+            "flatten().count=\(flatCount) but flattenedEntryCount=\(predicted)"
+        )
+    }
+
+    @Test("flatten().count equals flattenedEntryCount for all-branch pick group")
+    func flattenCountMatchesFlattenedEntryCountAllBranch() {
+        let group: ChoiceTree = .group([
+            .branch(
+                fingerprint: 1, weight: 1, id: 0, branchCount: 2,
+                choice: .choice(
+                    ChoiceValue(0, tag: .uint8),
+                    ChoiceMetadata(validRange: 0 ... 255)
+                ),
+                isSelected: true
+            ),
+            .branch(
+                fingerprint: 1, weight: 1, id: 1, branchCount: 2,
+                choice: .just,
+                isSelected: false
+            ),
+        ])
+        #expect(ChoiceSequence.flatten(group).count == group.flattenedEntryCount)
+    }
+
     @Test("Verify group markers are balanced")
     func verifyGroupMarkersBalanced() {
         let tree = ChoiceTree.sequence(
