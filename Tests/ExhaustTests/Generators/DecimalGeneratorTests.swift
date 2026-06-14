@@ -85,6 +85,19 @@ struct DecimalGeneratorTests {
             }
         }
 
+        @Test("Large range near Int64 boundary stays in range")
+        func largeRangeNearInt64Boundary() throws {
+            let lower = Decimal(Int64.max - 20)
+            let upper = Decimal(Int64.max - 10)
+            let gen = #gen(.decimal(in: lower ... upper, precision: 0))
+            let values = try #example(gen, count: 20, seed: 42)
+
+            for value in values {
+                #expect(value >= lower)
+                #expect(value <= upper)
+            }
+        }
+
         @Test("Range spanning zero")
         func spanningZero() throws {
             let lower = Decimal(string: "-10.5")!

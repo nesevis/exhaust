@@ -189,8 +189,19 @@ package extension Gen {
         precision: UInt8
     ) -> ReflectiveGenerator<Decimal> {
         let multiplier = pow(10, Int(precision)) as Decimal
-        let lowerStep = Int64(truncating: (range.lowerBound * multiplier) as NSDecimalNumber)
-        let upperStep = Int64(truncating: (range.upperBound * multiplier) as NSDecimalNumber)
+        let lowerScaled = range.lowerBound * multiplier
+        let upperScaled = range.upperBound * multiplier
+        let int64Min = Decimal(Int64.min)
+        let int64Max = Decimal(Int64.max)
+
+        precondition(
+            lowerScaled >= int64Min && lowerScaled <= int64Max
+                && upperScaled >= int64Min && upperScaled <= int64Max,
+            "Decimal range scaled by 10^\(precision) must fit within Int64 (got \(lowerScaled) ... \(upperScaled))"
+        )
+
+        let lowerStep = Int64(truncating: lowerScaled as NSDecimalNumber)
+        let upperStep = Int64(truncating: upperScaled as NSDecimalNumber)
 
         precondition(
             lowerStep <= upperStep,

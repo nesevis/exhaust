@@ -33,6 +33,16 @@ import Testing
             #expect(values1 == values2)
         }
 
+        @Test("Full-range generation produces finite values")
+        func fullRangeFinite() throws {
+            let gen = #gen(.float16())
+            let values = try #example(gen, count: 60, seed: 42)
+
+            for value in values {
+                #expect(value.isFinite)
+            }
+        }
+
         @Test("Shrinks toward threshold")
         func shrinksTowardThreshold() throws {
             let gen = #gen(.float16(in: Float16(0) ... Float16(100), scaling: .constant))
@@ -45,6 +55,46 @@ import Testing
         }
     }
 #endif
+
+// MARK: - Float Generator
+
+@Suite("Float Generator")
+struct FloatGeneratorTests {
+    @Test("Full-range generation produces finite values")
+    func fullRangeFinite() throws {
+        let gen = #gen(.float())
+        let values = try #example(gen, count: 60, seed: 42)
+
+        for value in values {
+            #expect(value.isFinite)
+        }
+    }
+
+    @Test("Full-range generation under resize produces finite values")
+    func fullRangeFiniteUnderResize() throws {
+        let gen = #gen(.float().resize(100))
+        let values = try #example(gen, count: 20, seed: 42)
+
+        for value in values {
+            #expect(value.isFinite)
+        }
+    }
+}
+
+// MARK: - Double Generator
+
+@Suite("Double Generator")
+struct DoubleGeneratorTests {
+    @Test("Full-range generation produces finite values")
+    func fullRangeFinite() throws {
+        let gen = #gen(.double())
+        let values = try #example(gen, count: 60, seed: 42)
+
+        for value in values {
+            #expect(value.isFinite)
+        }
+    }
+}
 
 // MARK: - CGFloat Generator
 

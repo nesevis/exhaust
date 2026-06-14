@@ -84,6 +84,22 @@ package extension TypeTag {
         }
     }
 
+    /// The greatest finite magnitude of this tag's floating-point type, expressed as a `Double`.
+    ///
+    /// Used by ``linearlyDistributed(rawBits:in:)`` and floating-point scaling to clamp NaN/infinity fallback endpoints to the tag's own representable range, not `Double`'s. Without this, a lerp endpoint of `±1.8e308` overflows `Float`'s maximum (`3.4e38`) and `Float16`'s maximum (`65504`), producing `±infinity` for most samples.
+    var greatestFiniteDoubleMagnitude: Double {
+        switch self {
+            case .double:
+                Double.greatestFiniteMagnitude
+            case .float:
+                Double(Float.greatestFiniteMagnitude)
+            case .float16:
+                65504.0
+            default:
+                fatalError("greatestFiniteDoubleMagnitude requires a floating-point tag, got \(self)")
+        }
+    }
+
     /// Whether this tag represents a character index type.
     var isCharacter: Bool {
         self == .character
@@ -182,8 +198,12 @@ package extension TypeTag {
         guard width > 0 else { return rawBits }
         var lower = numericDoubleValue(forBitPattern: range.lowerBound)
         var upper = numericDoubleValue(forBitPattern: range.upperBound)
-        if lower.isNaN || lower.isInfinite { lower = -Double.greatestFiniteMagnitude }
-        if upper.isNaN || upper.isInfinite { upper = Double.greatestFiniteMagnitude }
+        if lower.isNaN || lower.isInfinite {
+            lower = -greatestFiniteDoubleMagnitude
+        }
+        if upper.isNaN || upper.isInfinite {
+            upper = greatestFiniteDoubleMagnitude
+        }
         // When the numeric endpoints are equal (for example ±0.0), the lerp collapses to a single point. Fall back to raw bits so bit-pattern-level distinctions are preserved.
         guard lower != upper else { return rawBits }
         let fraction = Double(rawBits &- range.lowerBound) / Double(width)

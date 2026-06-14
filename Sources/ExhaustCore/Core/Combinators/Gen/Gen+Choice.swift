@@ -232,8 +232,12 @@ package extension Gen {
     ) -> ClosedRange<UInt64> {
         var numericMin = tag.numericDoubleValue(forBitPattern: min)
         var numericMax = tag.numericDoubleValue(forBitPattern: max)
-        if numericMin.isNaN || numericMin.isInfinite { numericMin = -Double.greatestFiniteMagnitude }
-        if numericMax.isNaN || numericMax.isInfinite { numericMax = Double.greatestFiniteMagnitude }
+        if numericMin.isNaN || numericMin.isInfinite {
+            numericMin = -tag.greatestFiniteDoubleMagnitude
+        }
+        if numericMax.isNaN || numericMax.isInfinite {
+            numericMax = tag.greatestFiniteDoubleMagnitude
+        }
         let resolvedOriginBits = Swift.min(Swift.max(originBits ?? tag.simplestBitPattern, min), max)
         let numericOrigin = tag.numericDoubleValue(forBitPattern: resolvedOriginBits)
 
