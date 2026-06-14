@@ -183,7 +183,7 @@ struct Bound5ShrinkingChallenge {
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .replay("B0ZF4ZX2NK312"),
+            .replay("B0ZF4ZX2NK312-32"),
             .onReport { report = $0 },
             .log(.debug)
         ) { b25 in
@@ -195,8 +195,8 @@ struct Bound5ShrinkingChallenge {
         }
 
         let rep = try #require(report)
-        #expect(rep.propertyInvocations == 106)
-        #expect(rep.totalMaterializations == 262)
+        #expect(rep.propertyInvocations == 119)
+        #expect(rep.totalMaterializations == 272)
 
         let b25 = try #require(output)
         let arr = b25.0.arr + b25.1.arr + b25.2.arr + b25.3.arr + b25.4.arr

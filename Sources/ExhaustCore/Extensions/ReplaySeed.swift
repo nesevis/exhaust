@@ -1,12 +1,12 @@
 /// Identifies a specific failing run for deterministic reproduction, accepting either a raw `UInt64` or an encoded string.
 ///
 /// Three wire formats:
-/// - **Bare seed**: Crockford Base32 encoded `UInt64` (for example, `"3RT5GH8KM2"`). Replays the full sampling budget with the given PRNG seed.
-/// - **Seed + iteration**: Seed with a `-N` suffix (for example, `"3RT5GH8KM2-7"`). Jumps directly to the Nth 1-based iteration.
+/// - **Bare seed**: Crockford Base32 encoded `UInt64` (for example, `"3RT5GH8KM2"`). Runs the full pipeline (coverage + sampling) with the given PRNG seed.
+/// - **Seed + iteration**: Seed with a `-N` suffix (for example, `"3RT5GH8KM2-7"`). Jumps directly to the Nth 1-based iteration, skipping coverage.
 /// - **Coverage row**: `U-N` prefix (for example, `"U-3"`). Replays the Nth 1-based coverage row (internally 0-indexed).
 ///
 /// ```swift
-/// .replay(42)                // UInt64 literal
+/// .replay(42)                // UInt64 literal — full pipeline, deterministic seed
 /// .replay("3RT5GH8KM2")      // seed only, runs full budget
 /// .replay("3RT5GH8KM2-7")    // seed with iteration (reproduces in one step)
 /// .replay("U-3")              // coverage row replay
