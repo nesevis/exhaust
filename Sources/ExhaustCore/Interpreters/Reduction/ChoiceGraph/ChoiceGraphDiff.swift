@@ -16,9 +16,11 @@ package struct ChoiceGraphDiff {
     /// ``ChoicePath``s present in the old graph but not in the new. Encoder state keyed to these paths can be discarded.
     package let removed: Set<ChoicePath>
 
-    /// Whether the graph structure is identical — no added or removed paths.
+    /// Whether the graph structure is identical — no added or removed paths, and all preserved nodes kept their node IDs.
+    ///
+    /// Node IDs can shift even when the set of live ChoicePaths is unchanged: a value change that selects a different pick branch with the same shape leaves the active paths identical but can add or remove inactive nodes, renumbering everything after them. Structural sources (permutation, removal, migration scopes) store raw node IDs, so they are only safe to reuse when IDs are stable.
     package var isStructurallyIdentical: Bool {
-        added.isEmpty && removed.isEmpty
+        added.isEmpty && removed.isEmpty && preserved.allSatisfy { $0.value.oldNodeID == $0.value.newNodeID }
     }
 
     /// Computes the structural diff between two graphs by matching nodes on ``ChoicePath``.
