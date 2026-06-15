@@ -106,6 +106,24 @@ struct GeneratorSynthesizerTests {
         #expect(nicknames.contains(where: { $0 != nil }))
     }
 
+    @Test("Generates primitive optionals (Int, Double, Bool) with both nil and non-nil values")
+    func primitiveOptionals() throws {
+        // Synthesized Codable resolves `decodeIfPresent(Int.self, forKey:)` to the type-specific protocol requirement.
+        // The replay container provides only the generic overload, so this exercises the standard library's default (`contains` + `decodeNil` + `decode`) for each primitive — the path that must stay correct now that the type-specific overloads are gone.
+        let json = """
+        {"name": "Gaute", "count": 7, "ratio": 0.25, "active": true}
+        """
+        let generator = try #gen(WithPrimitiveOptionals.self, from: json)
+        let values = try #example(generator, count: 80)
+
+        #expect(values.contains { $0.count == nil })
+        #expect(values.contains { $0.count != nil })
+        #expect(values.contains { $0.ratio == nil })
+        #expect(values.contains { $0.ratio != nil })
+        #expect(values.contains { $0.active == nil })
+        #expect(values.contains { $0.active != nil })
+    }
+
     @Test("Accepts a Codable instance directly")
     func codableInstance() throws {
         let example = Person(name: "Gaute", age: 30, active: true)
@@ -283,4 +301,11 @@ private struct DoublyNestedDictionaryOnly: Codable {
 
 private struct OptionalArrayOnly: Codable {
     let tags: [String]?
+}
+
+private struct WithPrimitiveOptionals: Codable {
+    let name: String
+    let count: Int?
+    let ratio: Double?
+    let active: Bool?
 }

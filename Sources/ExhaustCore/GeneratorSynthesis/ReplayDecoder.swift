@@ -101,74 +101,16 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
         return typed
     }
 
-    // Type-specific `decodeIfPresent` overloads. Unlike the positional design these were originally written for, key-addressed lookup is non-consuming, so reading a key here cannot desynchronize anything — but the overloads stay because the standard library resolves `decodeIfPresent(String.self, forKey:)` to the type-specific protocol requirement, and routing each through the same lookup keeps behavior explicit. Each returns nil for an absent key or a nil-optional leaf (via `as?`).
-
-    func decodeIfPresent(_: Bool.Type, forKey key: Key) throws -> Bool? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: String.Type, forKey key: Key) throws -> String? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: Double.Type, forKey key: Key) throws -> Double? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: Float.Type, forKey key: Key) throws -> Float? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: Int.Type, forKey key: Key) throws -> Int? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: Int8.Type, forKey key: Key) throws -> Int8? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: Int16.Type, forKey key: Key) throws -> Int16? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: Int32.Type, forKey key: Key) throws -> Int32? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: Int64.Type, forKey key: Key) throws -> Int64? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: UInt.Type, forKey key: Key) throws -> UInt? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: UInt8.Type, forKey key: Key) throws -> UInt8? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: UInt16.Type, forKey key: Key) throws -> UInt16? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: UInt32.Type, forKey key: Key) throws -> UInt32? {
-        present(key)
-    }
-
-    func decodeIfPresent(_: UInt64.Type, forKey key: Key) throws -> UInt64? {
-        present(key)
-    }
+    // No type-specific `decodeIfPresent` overloads, unlike the positional `DiscoveryDecoder`.
+    // There, reading a value consumes the tape, so a missed overload desynchronizes; here lookups are key-addressed and non-consuming.
+    // That lets the standard library's protocol-extension default — `contains(key) && !decodeNil(forKey:)` then `decode(_:forKey:)` — compose correctly for every primitive type.
+    // Only the generic overload remains, for non-primitive optionals.
 
     func decodeIfPresent<T: Decodable>(_: T.Type, forKey key: Key) throws -> T? {
-        present(key)
-    }
-
-    /// Returns the value at `key` cast to `Target`, or nil when the key is absent or holds a nil optional.
-    private func present<Target>(_ key: Key) -> Target? {
         guard case let .leaf(value)? = fields[key.stringValue] else {
             return nil
         }
-        return value as? Target
+        return value as? T
     }
 
     func nestedContainer<NestedKey: CodingKey>(
