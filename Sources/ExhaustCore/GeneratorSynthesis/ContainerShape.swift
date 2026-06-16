@@ -6,8 +6,8 @@ import Foundation
 package enum ContainerShape {
     /// A keyed container: one child per `decode`/`decodeIfPresent`/`nestedContainer(forKey:)` call.
     case keyed([KeyedChild])
-    /// A heterogeneous unkeyed container: a generator per decoded element, in order, with the length fixed to the example (a positional/tuple decode that wants exactly this sequence).
-    case unkeyed([AnyGenerator])
+    /// A heterogeneous unkeyed container: one element per decoded value or nested decoder, in order, with the length fixed to the example (a positional/tuple decode that wants exactly this sequence).
+    case unkeyed([UnkeyedElement])
     /// A homogeneous unkeyed container: every element decoded to the same type, so the length varies like an array rather than being fixed to the example.
     case homogeneousArray(element: AnyGenerator)
     /// A single-value container: one generator.
@@ -36,9 +36,11 @@ package enum ContainerShape {
                     }
                     return .keyed(fields)
                 })
-            case let .unkeyed(generators):
-                return (ContiguousArray(generators), { values in
-                    .unkeyed(values.map(ReplayValue.leaf))
+            case let .unkeyed(elements):
+                return (ContiguousArray(elements.map(\.generator)), { values in
+                    .unkeyed(zip(elements, values).map { element, value in
+                        element.producesReplayValue ? (value as! ReplayValue) : .leaf(value)
+                    })
                 })
             case let .homogeneousArray(element):
                 // Reuse the array combinator's length distribution: one generator produces the whole varying-length array, which the rebuild unpacks into unkeyed leaves.
@@ -63,5 +65,13 @@ package struct KeyedChild {
     /// Generates either the field's built value (when ``producesReplayValue`` is `false`) or a nested ``ReplayValue`` sub-tree (when `true`).
     let generator: AnyGenerator
     /// Whether ``generator`` produces a ``ReplayValue`` directly (a nested container) rather than a value to wrap as a leaf.
+    let producesReplayValue: Bool
+}
+
+/// One positional element of a heterogeneous unkeyed container shape.
+package struct UnkeyedElement {
+    /// Generates either a decoded value (when ``producesReplayValue`` is `false`) or a nested ``ReplayValue`` sub-tree from a `superDecoder()` call (when `true`).
+    let generator: AnyGenerator
+    /// Whether ``generator`` produces a ``ReplayValue`` directly rather than a value to wrap as a leaf.
     let producesReplayValue: Bool
 }

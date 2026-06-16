@@ -8,7 +8,7 @@ package final class DiscoveryDecoder: Decoder {
 
     // The keyed/unkeyed/single fields are populated by whichever container kind the decoded type requested; `nestedDecoders` holds the sub-decoders spawned for inline `nestedContainer(forKey:)` calls on a keyed container. The `shape` getter resolves them into a `ContainerShape`.
     private var keyedChildren: [(key: String, generator: AnyGenerator)] = []
-    private var unkeyedChildren: [(elementType: ObjectIdentifier, generator: AnyGenerator)] = []
+    private var unkeyedEntries: [UnkeyedEntry] = []
     private var singleChild: AnyGenerator?
     private var nestedDecoders: [(key: String, decoder: DiscoveryDecoder)] = []
 
@@ -37,12 +37,30 @@ package final class DiscoveryDecoder: Decoder {
             }
             return .keyed(children)
         }
-        if unkeyedChildren.isEmpty == false {
-            // A single element type across all positions reads as a collection (a loop over homogeneous elements), so the length varies. Mixed types read as a positional/tuple decode that wants exactly this sequence, so the length stays fixed.
-            let isHomogeneous = Set(unkeyedChildren.map(\.elementType)).count == 1
-            return isHomogeneous
-                ? .homogeneousArray(element: unkeyedChildren[0].generator)
-                : .unkeyed(unkeyedChildren.map(\.generator))
+        if unkeyedEntries.isEmpty == false {
+            var elements: [UnkeyedElement] = []
+            var elementTypes = Set<ObjectIdentifier>()
+            var hasNested = false
+
+            for entry in unkeyedEntries {
+                switch entry {
+                    case let .element(elementType, generator):
+                        elementTypes.insert(elementType)
+                        elements.append(UnkeyedElement(generator: generator, producesReplayValue: false))
+                    case let .nested(decoder):
+                        hasNested = true
+                        elements.append(UnkeyedElement(
+                            generator: nestedReplayValueGenerator(for: decoder.shape),
+                            producesReplayValue: true
+                        ))
+                }
+            }
+
+            // A single element type across all positions with no nested decoders reads as a collection (a loop over homogeneous elements), so the length varies. Mixed types or nested decoders read as a positional/tuple decode that wants exactly this sequence, so the length stays fixed.
+            if hasNested == false, elementTypes.count == 1 {
+                return .homogeneousArray(element: elements[0].generator)
+            }
+            return .unkeyed(elements)
         }
         return .empty
     }
@@ -85,7 +103,11 @@ package final class DiscoveryDecoder: Decoder {
     }
 
     func recordUnkeyed(elementType: Any.Type, _ generator: AnyGenerator) {
-        unkeyedChildren.append((ObjectIdentifier(elementType), generator))
+        unkeyedEntries.append(.element(elementType: ObjectIdentifier(elementType), generator: generator))
+    }
+
+    func recordUnkeyedNested(decoder: DiscoveryDecoder) {
+        unkeyedEntries.append(.nested(decoder: decoder))
     }
 
     func recordSingle(_ generator: AnyGenerator) {
@@ -95,6 +117,11 @@ package final class DiscoveryDecoder: Decoder {
     func recordNested(key: String, decoder: DiscoveryDecoder) {
         nestedDecoders.append((key, decoder))
     }
+}
+
+private enum UnkeyedEntry {
+    case element(elementType: ObjectIdentifier, generator: AnyGenerator)
+    case nested(decoder: DiscoveryDecoder)
 }
 
 // MARK: - Keyed Container
@@ -284,17 +311,21 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
     }
 
     func superDecoder() throws -> any Decoder {
-        DiscoveryDecoder(
+        let nested = DiscoveryDecoder(
             jsonValue: dictionary["super"] as Any,
             codingPath: codingPath
         )
+        decoder.recordNested(key: "super", decoder: nested)
+        return nested
     }
 
     func superDecoder(forKey key: Key) throws -> any Decoder {
-        DiscoveryDecoder(
+        let nested = DiscoveryDecoder(
             jsonValue: dictionary[key.stringValue] as Any,
             codingPath: codingPath + [key]
         )
+        decoder.recordNested(key: key.stringValue, decoder: nested)
+        return nested
     }
 }
 
@@ -333,13 +364,44 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
         let jsonValue = array[currentIndex]
         currentIndex += 1
 
-        if let generableType = type as? ExhaustGenerable.Type {
+        if let generableType = type as? ExhaustGenerable.Type,
+           let primitive = try? decodePrimitive(type, from: jsonValue)
+        {
             decoder.recordUnkeyed(elementType: type, generableType.defaultGenerator)
-            return try decodePrimitive(type, from: jsonValue)
+            return primitive
         }
 
         let nested = DiscoveryDecoder(jsonValue: jsonValue, codingPath: codingPath)
-        return try T(from: nested)
+        let decodedValue = try T(from: nested)
+
+        let generator: AnyGenerator
+        if let collectionGenerator = (type as? SynthesizableCollection.Type)?.synthesizedGenerator {
+            generator = collectionGenerator
+        } else if let discoveredCollectionGenerator = makeDiscoveredCollectionGenerator(
+            for: type,
+            fromExample: jsonValue,
+            codingPath: codingPath
+        ) {
+            generator = discoveredCollectionGenerator
+        } else if let generableType = type as? ExhaustGenerable.Type {
+            generator = generableType.defaultGenerator
+        } else if let caseIterable = type as? any(CaseIterable & Decodable).Type,
+                  let caseGenerator = makeCaseIterableGenerator(caseIterable)
+        {
+            generator = caseGenerator
+        } else if type is any RawRepresentable.Type {
+            generator = Gen.just(decodedValue as Any).erase()
+        } else {
+            generator = makeReconstructingGenerator(
+                type,
+                shape: nested.shape,
+                pin: decodedValue as Any,
+                codingPath: codingPath
+            )
+        }
+
+        decoder.recordUnkeyed(elementType: type, generator)
+        return decodedValue
     }
 
     // A nested container opened inside an unkeyed container records into the *parent* unkeyed decoder — there is no fresh sub-decoder here, unlike the keyed `nestedContainer(forKey:)` path. For a hand-written init that decodes structs element-by-element this leaves the parent level with keyed/unkeyed children that do not match the unkeyed container the parent's `init(from:)` reopens at replay, so the value degrades to a pin rather than reconstructing. This is the documented "manual element-by-element unkeyed decoding" limitation.
@@ -376,7 +438,19 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
     }
 
     mutating func superDecoder() throws -> any Decoder {
-        DiscoveryDecoder(jsonValue: array, codingPath: codingPath)
+        guard isAtEnd == false else {
+            throw DecodingError.valueNotFound(
+                Any.self,
+                .init(codingPath: codingPath, debugDescription: "Unkeyed container exhausted")
+            )
+        }
+        let nested = DiscoveryDecoder(
+            jsonValue: array[currentIndex],
+            codingPath: codingPath
+        )
+        currentIndex += 1
+        decoder.recordUnkeyedNested(decoder: nested)
+        return nested
     }
 }
 
@@ -392,13 +466,44 @@ private struct DiscoverySingleValueContainer: SingleValueDecodingContainer {
     }
 
     func decode<T: Decodable>(_ type: T.Type) throws -> T {
-        if let generableType = type as? ExhaustGenerable.Type {
+        if let generableType = type as? ExhaustGenerable.Type,
+           let primitive = try? decodePrimitive(type, from: value)
+        {
             decoder.recordSingle(generableType.defaultGenerator)
-            return try decodePrimitive(type, from: value)
+            return primitive
         }
 
         let nested = DiscoveryDecoder(jsonValue: value, codingPath: codingPath)
-        return try T(from: nested)
+        let decodedValue = try T(from: nested)
+
+        let generator: AnyGenerator
+        if let collectionGenerator = (type as? SynthesizableCollection.Type)?.synthesizedGenerator {
+            generator = collectionGenerator
+        } else if let discoveredCollectionGenerator = makeDiscoveredCollectionGenerator(
+            for: type,
+            fromExample: value,
+            codingPath: codingPath
+        ) {
+            generator = discoveredCollectionGenerator
+        } else if let generableType = type as? ExhaustGenerable.Type {
+            generator = generableType.defaultGenerator
+        } else if let caseIterable = type as? any(CaseIterable & Decodable).Type,
+                  let caseGenerator = makeCaseIterableGenerator(caseIterable)
+        {
+            generator = caseGenerator
+        } else if type is any RawRepresentable.Type {
+            generator = Gen.just(decodedValue as Any).erase()
+        } else {
+            generator = makeReconstructingGenerator(
+                type,
+                shape: nested.shape,
+                pin: decodedValue as Any,
+                codingPath: codingPath
+            )
+        }
+
+        decoder.recordSingle(generator)
+        return decodedValue
     }
 }
 

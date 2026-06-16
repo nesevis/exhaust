@@ -155,6 +155,65 @@ struct GeneratorSynthesizerNestedContainerTests {
     }
 }
 
+/// Regression tests for unkeyed element discovery: a custom `init(from:)` that decodes non-`ExhaustGenerable` types from an unkeyed container records each element's generator, so the shape reflects all positions and every field varies.
+@Suite("Generator Synthesizer — unkeyed non-primitive elements")
+struct SynthesizerUnkeyedElementTests {
+    @Test("Non-primitive elements decoded from an unkeyed container are recorded and vary")
+    func unkeyedNonPrimitiveElementVaries() throws {
+        let generator = try #gen(TaggedRecord.self, from: """
+        ["purchase", {"item": "Socks", "quantity": 3}]
+        """)
+        let values = try #example(generator, count: 50)
+
+        #expect(Set(values.map(\.tag)).count > 1)
+        #expect(Set(values.map(\.detail.item)).count > 1)
+    }
+}
+
+/// Regression tests for keyed `superDecoder()` discovery: a class hierarchy whose subclass calls `superDecoder()` on a keyed container folds the superclass fields into the parent shape, so both subclass and superclass fields vary.
+@Suite("Generator Synthesizer — superDecoder discovery")
+struct SynthesizerSuperDecoderTests {
+    @Test("Fields decoded through superDecoder() are folded into the parent shape and vary")
+    func superDecoderFieldsVary() throws {
+        let generator = try #gen(Hound.self, from: """
+        {"breed": "Labrador", "super": {"name": "Rex", "legs": 4}}
+        """)
+        let values = try #example(generator, count: 50)
+
+        #expect(Set(values.map(\.breed)).count > 1)
+        #expect(Set(values.map(\.name)).count > 1)
+    }
+}
+
+/// Regression tests for single-value element discovery: a newtype wrapper that decodes a non-`ExhaustGenerable` type through a single-value container records the inner type's generator, so the wrapper varies instead of pinning.
+@Suite("Generator Synthesizer — single-value non-primitive")
+struct SynthesizerSingleValueTests {
+    @Test("Non-primitive type decoded through a single-value container varies")
+    func singleValueNonPrimitiveVaries() throws {
+        let generator = try #gen(WrappedPayload.self, from: """
+        {"item": "Socks", "quantity": 3}
+        """)
+        let values = try #example(generator, count: 50)
+
+        #expect(Set(values.map(\.payload.item)).count > 1)
+    }
+}
+
+/// Regression tests for unkeyed `superDecoder()` discovery: a class hierarchy whose subclass calls `superDecoder()` on an unkeyed container reads the current array element, advances the index, and folds the superclass shape into the parent.
+@Suite("Generator Synthesizer — unkeyed superDecoder")
+struct SynthesizerUnkeyedSuperTests {
+    @Test("Fields decoded through unkeyed superDecoder() vary")
+    func unkeyedSuperDecoderFieldsVary() throws {
+        let generator = try #gen(UnkeyedChild.self, from: """
+        ["Alice", {"id": "42"}]
+        """)
+        let values = try #example(generator, count: 50)
+
+        #expect(Set(values.map(\.name)).count > 1)
+        #expect(Set(values.map(\.id)).count > 1)
+    }
+}
+
 // MARK: - Supporting Types
 
 private struct Member: Codable, Hashable {
@@ -282,5 +341,63 @@ private struct InlineList: Decodable {
             try collected.append(nested.decode(Int.self))
         }
         numbers = collected
+    }
+}
+
+private struct Payload: Codable, Equatable {
+    let item: String
+    let quantity: Int
+}
+
+private struct TaggedRecord: Decodable {
+    let tag: String
+    let detail: Payload
+
+    init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        tag = try container.decode(String.self)
+        detail = try container.decode(Payload.self)
+    }
+}
+
+private class Animal: Decodable {
+    let name: String
+    let legs: Int
+}
+
+private final class Hound: Animal {
+    let breed: String
+
+    enum CodingKeys: String, CodingKey {
+        case breed
+    }
+
+    required init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        breed = try container.decode(String.self, forKey: .breed)
+        try super.init(from: container.superDecoder())
+    }
+}
+
+private struct WrappedPayload: Decodable {
+    let payload: Payload
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        payload = try container.decode(Payload.self)
+    }
+}
+
+private class UnkeyedBase: Decodable {
+    let id: String
+}
+
+private final class UnkeyedChild: UnkeyedBase {
+    let name: String
+
+    required init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        name = try container.decode(String.self)
+        try super.init(from: container.superDecoder())
     }
 }
