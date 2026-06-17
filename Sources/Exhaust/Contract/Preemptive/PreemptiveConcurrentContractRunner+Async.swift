@@ -247,10 +247,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         seed: UInt64?,
         replaySeed: String?,
         discoveryMethod: ContractDiscoveryMethod
-    ) -> ContractResult<Spec> {
+    ) -> (result: ContractResult<Spec>, failureDescription: String?) {
         let oracleSpec = Spec()
         let replayOutcome = runSequentially(reduced.map(\.1), on: oracleSpec)
-        return ContractResult<Spec>(
+        let result = ContractResult<Spec>(
             commands: reduced.map(\.1),
             trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),
             systemUnderTest: replayOutcome.succeeded ? oracleSpec.systemUnderTest : nil,
@@ -258,5 +258,6 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod
         )
+        return (result, replayOutcome.succeeded ? oracleSpec.failureDescription() : nil)
     }
 }

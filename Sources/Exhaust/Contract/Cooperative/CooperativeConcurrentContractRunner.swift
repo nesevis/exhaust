@@ -526,6 +526,7 @@ private extension __ExhaustRuntime {
             let indented = description.replacingOccurrences(of: "\n", with: "\n  ")
             return "Expected result (from sequential replay):\n  \(indented)"
         }
+        failureContext.failureDescription = oracle?.failureDescription
         let message = renderFailure(finalInput, trace: trace, context: failureContext)
 
         return (result, message)

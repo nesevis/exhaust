@@ -121,7 +121,7 @@ protocol PreemptiveBackend<Spec>: Sendable {
         seed: UInt64?,
         replaySeed: String?,
         discoveryMethod: ContractDiscoveryMethod
-    ) -> ContractResult<Spec>
+    ) -> (result: ContractResult<Spec>, failureDescription: String?)
 }
 
 // MARK: - Pipeline
@@ -268,7 +268,7 @@ extension __ExhaustRuntime {
                 report.reductionMilliseconds = scaResult.reductionMilliseconds
 
                 let scaReplaySeed = ReplaySeed.Resolved.encodeCoverageIteration(Int(scaResult.iteration))
-                let result = backend.buildResult(
+                let (result, failureDescription) = backend.buildResult(
                     reduced: scaResult.finalInput,
                     seed: nil,
                     replaySeed: scaReplaySeed,
@@ -295,7 +295,8 @@ extension __ExhaustRuntime {
                         originalCount: scaResult.originalCount,
                         replaySeed: scaReplaySeed,
                         timedOut: scaResult.timedOut,
-                        oracleState: result.systemUnderTest as Any
+                        oracleState: result.systemUnderTest as Any,
+                        failureDescription: failureDescription
                     ))
                 }
 
@@ -348,7 +349,7 @@ extension __ExhaustRuntime {
 
                         let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
                         let samplingReplaySeed = ReplaySeed.Resolved.sampling(seed: actualSeed, iteration: absoluteIteration).encoded
-                        let result = backend.buildResult(
+                        let (result, failureDescription) = backend.buildResult(
                             reduced: reduced,
                             seed: actualSeed,
                             replaySeed: samplingReplaySeed,
@@ -371,7 +372,8 @@ extension __ExhaustRuntime {
                                 originalCount: taggedCommands.count,
                                 replaySeed: samplingReplaySeed,
                                 timedOut: outcome.timedOut,
-                                oracleState: result.systemUnderTest as Any
+                                oracleState: result.systemUnderTest as Any,
+                                failureDescription: failureDescription
                             ))
                         }
 
@@ -405,7 +407,8 @@ extension __ExhaustRuntime {
         originalCount: Int,
         replaySeed: String,
         timedOut: Bool,
-        oracleState: Any
+        oracleState: Any,
+        failureDescription: String?
     ) -> String {
         var failureContext = FailureContext()
         failureContext.isPreemptive = true
@@ -418,9 +421,9 @@ extension __ExhaustRuntime {
         failureContext.reductionInvocations = reductionInvocations
         failureContext.originalCount = originalCount
         failureContext.replaySeed = replaySeed
-        // When set, the renderer emits the timeout diagnostic and ignores the expected-state line below.
         failureContext.timedOut = timedOut
         failureContext.oracleDescription = "Expected state (from sequential replay):\n  \(oracleState)"
+        failureContext.failureDescription = failureDescription
         return renderFailure(input, trace: trace, context: failureContext)
     }
 }

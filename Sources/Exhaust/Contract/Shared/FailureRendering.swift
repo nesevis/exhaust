@@ -19,6 +19,7 @@ extension __ExhaustRuntime {
         var isPreemptive: Bool = false
         var replaySeed: String?
         var oracleDescription: String?
+        var failureDescription: String?
     }
 
     /// Formats a concurrent contract failure for reporting.
@@ -56,6 +57,12 @@ extension __ExhaustRuntime {
         if let oracleDescription = context.oracleDescription {
             lines.append("")
             lines.append(oracleDescription)
+        }
+
+        if let failureDescription = context.failureDescription {
+            let indented = failureDescription.replacingOccurrences(of: "\n", with: "\n  ")
+            lines.append("")
+            lines.append("State: \(indented)")
         }
 
         if tagged.isEmpty == false, tagged.allSatisfy(\.0.isPrefix) {
