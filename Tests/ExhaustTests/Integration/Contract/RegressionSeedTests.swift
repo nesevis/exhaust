@@ -225,8 +225,8 @@ private final class RegressionBrokenDecrement: @unchecked Sendable, CustomDebugS
     }
 
     func decrement() {
-        // Bug: no-op when value is 3.
-        if storedValue != 3 { storedValue -= 1 }
+        // Bug: no-op when value is 1.
+        if storedValue != 1 { storedValue -= 1 }
     }
 }
 
