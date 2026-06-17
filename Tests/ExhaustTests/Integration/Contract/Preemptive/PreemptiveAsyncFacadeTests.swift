@@ -84,6 +84,10 @@ final class AsyncRacyCounterSpec {
         guard counter.value > 0 else { throw skip() }
         await counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - SUT

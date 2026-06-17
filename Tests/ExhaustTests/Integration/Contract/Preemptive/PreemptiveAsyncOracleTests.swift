@@ -62,6 +62,10 @@ final class AsyncOracleRacyCounterSpec {
         guard await counter.snapshot() > 0 else { throw skip() }
         await counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 @Contract(.threads)
@@ -77,6 +81,10 @@ final class AsyncOracleSafeCounterSpec {
     @Command(weight: 1)
     func increment() async throws {
         await counter.increment()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 

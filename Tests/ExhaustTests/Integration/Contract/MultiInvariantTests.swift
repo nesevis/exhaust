@@ -67,6 +67,10 @@ final class FiveInvariantSpec {
         expected += 1
         counter.increment()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - Spec: Five invariants, all pass
@@ -107,6 +111,10 @@ final class PassingFiveInvariantSpec {
     func reset() throws {
         expected = 0
         counter.reset()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 

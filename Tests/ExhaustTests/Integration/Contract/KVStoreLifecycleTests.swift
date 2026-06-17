@@ -96,6 +96,10 @@ final class KVStoreLifecycleContract {
         let expected = contents[key]
         try check(actual == expected, "get must return value matching model")
     }
+
+    func failureDescription() -> String? {
+        "\(store)"
+    }
 }
 
 // MARK: - Types

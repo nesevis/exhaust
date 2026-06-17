@@ -113,7 +113,7 @@ protocol PreemptiveBackend<Spec>: Sendable {
     func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome
 
     /// Runs a command sequence sequentially on a fresh spec for the smoke phase, capturing the trace, whether it failed, and the resulting oracle state for the report.
-    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String)
+    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)
 
     /// Replays the reduced commands sequentially on a fresh spec to capture the expected (race-free) oracle state for a failure result.
     func buildResult(

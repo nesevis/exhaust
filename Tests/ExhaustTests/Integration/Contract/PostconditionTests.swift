@@ -87,6 +87,10 @@ final class SetUniquenessContract {
         let unique = Set(uniqueSet.elements).count
         try check(uniqueSet.count == unique, "count must equal unique element count")
     }
+
+    func failureDescription() -> String? {
+        "\(uniqueSet)"
+    }
 }
 
 // MARK: - Contract: Stack LIFO ordering
@@ -113,6 +117,10 @@ final class StackLIFOContract {
         // Postcondition: count decreased by 1
         try check(stack.count == previousCount - 1, "count must decrease by 1")
     }
+
+    func failureDescription() -> String? {
+        "\(stack)"
+    }
 }
 
 // MARK: - Contract: Dictionary consistency
@@ -138,6 +146,10 @@ final class DictionaryConsistencyContract {
         dict.remove(key)
         // Postcondition: the key is gone
         try check(dict.get(key) == nil, "removed key must return nil")
+    }
+
+    func failureDescription() -> String? {
+        "\(dict)"
     }
 }
 

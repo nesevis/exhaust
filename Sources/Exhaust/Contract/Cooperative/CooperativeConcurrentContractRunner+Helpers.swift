@@ -8,7 +8,7 @@ extension __ExhaustRuntime {
     /// Captures the SUT and model state after a sequential (race-free) replay of the failing command sequence. Provides the "expected" baseline in failure reports so the user can see what the system should have produced without the interleaving.
     struct SequentialOracleResult<Spec: AsyncContractSpec> {
         var systemUnderTest: Spec.SystemUnderTest
-        var failureDescription: String
+        var failureDescription: String?
     }
 
     /// Runs the command sequence sequentially on a fresh spec and returns the expected state if all invariants pass.

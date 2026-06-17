@@ -151,6 +151,10 @@ final class HeapMergeContract {
         heaps[tgt].merge(heaps[src])
         expectedContents[tgt] = (expectedContents[tgt] + expectedContents[src]).sorted()
     }
+
+    func failureDescription() -> String? {
+        "\(heaps)"
+    }
 }
 
 // Faithfully reproduces the MacIver article's multi-heap scenario. Both
@@ -210,6 +214,10 @@ final class HeapAliasingContract {
         let merged = heap1.merged(with: heap2)
         allHeaps.append(merged)
         heapRefs.add(merged)
+    }
+
+    func failureDescription() -> String? {
+        "\(allHeaps)"
     }
 }
 

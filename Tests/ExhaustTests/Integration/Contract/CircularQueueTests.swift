@@ -83,6 +83,10 @@ final class CircularQueueContract {
     func size() throws {
         try check(queue.size == expected.count, "size must match model element count")
     }
+
+    func failureDescription() -> String? {
+        "\(queue)"
+    }
 }
 
 // MARK: - Types

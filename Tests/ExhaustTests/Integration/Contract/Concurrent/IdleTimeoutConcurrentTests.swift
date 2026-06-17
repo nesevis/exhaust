@@ -91,6 +91,10 @@ final class SleepingSpec {
         count += 1
         await counter.sleepAndIncrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - SUT
@@ -125,6 +129,10 @@ final class StallingAsyncSpec {
     func doSleep() async throws {
         await counter.sleepAndIncrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 final class SleepingAsyncCounter: @unchecked Sendable {
@@ -156,6 +164,10 @@ final class DeadlockingAsyncSpec {
     @Command(weight: 1)
     func lockBA() async throws {
         sut.acquireBA()
+    }
+
+    func failureDescription() -> String? {
+        "\(sut)"
     }
 }
 

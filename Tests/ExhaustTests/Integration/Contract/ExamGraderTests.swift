@@ -123,6 +123,10 @@ final class ExamGraderContract {
             }
         }
     }
+
+    func failureDescription() -> String? {
+        "\(grader)"
+    }
 }
 
 // MARK: - Dependent generator (Exhaust equivalent of @composite)

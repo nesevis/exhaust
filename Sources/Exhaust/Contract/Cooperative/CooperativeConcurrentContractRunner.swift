@@ -521,8 +521,9 @@ private extension __ExhaustRuntime {
         failureContext.discoveryMethod = discoveryMethod
         failureContext.replaySeed = replaySeed
         failureContext.timedOut = timedOut
-        failureContext.oracleDescription = oracle.map { oracle in
-            let indented = oracle.failureDescription.replacingOccurrences(of: "\n", with: "\n  ")
+        failureContext.oracleDescription = oracle.flatMap { oracle in
+            guard let description = oracle.failureDescription else { return nil }
+            let indented = description.replacingOccurrences(of: "\n", with: "\n  ")
             return "Expected result (from sequential replay):\n  \(indented)"
         }
         let message = renderFailure(finalInput, trace: trace, context: failureContext)

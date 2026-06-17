@@ -83,6 +83,10 @@ final class SilentRaceSpec {
         expected += 1
         await counter.racyIncrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - Spec: Exposed race (yield at the race point)
@@ -103,6 +107,10 @@ final class ExposedRaceSpec {
         expected += 1
         await counter.racyIncrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - Spec: Three-way race (requires 3 lanes)
@@ -122,6 +130,10 @@ final class ThreeWayRaceSpec {
     func increment() async throws {
         expected += 1
         await counter.increment()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 

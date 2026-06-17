@@ -269,14 +269,6 @@ public struct ContractDeclarationMacro: MemberMacro, ExtensionMacro {
         decls.append(synthesizeCommandGenerator(commands: commands, context: context))
         decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: effectiveAsync))
         decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: effectiveAsync))
-        let hasUserFailureDescription = members.contains { member in
-            guard let funcDecl = member.decl.as(FunctionDeclSyntax.self) else { return false }
-            return funcDecl.name.trimmedDescription == "failureDescription"
-                && funcDecl.signature.parameterClause.parameters.isEmpty
-        }
-        if hasUserFailureDescription == false {
-            decls.append(synthesizeFailureDescription(sutProps: sutProps))
-        }
 
         if mode == .threads, let oracle = oracles.first {
             decls.append(synthesizeOracleCheck(oracle: oracle, hasAnyAsync: effectiveAsync))
@@ -599,18 +591,6 @@ func synthesizeCheckInvariants(
     \(raw: signature) {
     \(raw: checksBlock)
     }
-    """
-}
-
-func synthesizeFailureDescription(sutProps: [SUTProperty]) -> DeclSyntax {
-    if let sut = sutProps.first {
-        return """
-        func failureDescription() -> String { "\\(\(raw: sut.name))" }
-        """
-    }
-
-    return """
-    func failureDescription() -> String { "(no SUT)" }
     """
 }
 

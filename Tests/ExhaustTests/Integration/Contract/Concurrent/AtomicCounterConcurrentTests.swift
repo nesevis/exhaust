@@ -52,6 +52,10 @@ final class AtomicCounterSpec {
         expected -= 1
         counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 @Contract(.tasks)
@@ -76,5 +80,9 @@ final class NarrowRaceCounterSpec {
         guard expected > 0 else { throw skip() }
         expected -= 1
         await counter.decrement()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }

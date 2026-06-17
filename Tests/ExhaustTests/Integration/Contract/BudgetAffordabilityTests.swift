@@ -75,6 +75,10 @@ final class BudgetAffordabilitySpec {
             wasUnaffordable = true
         }
     }
+
+    func failureDescription() -> String? {
+        "\(items)"
+    }
 }
 
 // MARK: - Contract: Buggy greedy implementation
@@ -95,6 +99,10 @@ final class BuggyBudgetAffordabilitySpec {
                 == bruteForceCanAfford(budget: testBudget, bill: items),
             "greedy canAfford must agree with brute-force"
         )
+    }
+
+    func failureDescription() -> String? {
+        "\(items)"
     }
 }
 

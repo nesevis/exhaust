@@ -200,7 +200,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         return { taggedCommands in rawIdentifySkips(taggedCommands.map(\.1)) }
     }
 
-    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String) {
+    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
         let spec = Spec()
         let (trace, failed) = __ExhaustRuntime.buildSequentialTrace(
             commands,
@@ -222,7 +222,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             },
             checkInvariants: { try spec.checkInvariants() }
         )
-        return (trace, failed, spec.systemUnderTest, failed ? spec.failureDescription() : "")
+        return (trace, failed, spec.systemUnderTest, failed ? spec.failureDescription() : nil)
     }
 
     /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails, because the partial state would mislead debugging.

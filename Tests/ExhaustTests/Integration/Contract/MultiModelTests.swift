@@ -59,6 +59,10 @@ final class MultiModelSpec {
         expectedCount -= 1
         store.remove(key: key)
     }
+
+    func failureDescription() -> String? {
+        "\(store)"
+    }
 }
 
 // MARK: - SUT

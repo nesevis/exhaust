@@ -45,6 +45,10 @@ final class ThrowingObjCSpec {
     func triggerException() throws {
         store.triggerObjCException()
     }
+
+    func failureDescription() -> String? {
+        "\(store)"
+    }
 }
 
 // MARK: - SUT

@@ -22,10 +22,10 @@ public protocol ContractSpecBase {
     /// The system under test instance, for typed access in results and failure reports.
     var systemUnderTest: SystemUnderTest { get }
 
-    /// Returns a human-readable description of the contract state at the point of failure.
+    /// Returns a human-readable description of the contract state at the point of failure, or `nil` to omit diagnostic state from the report.
     ///
     /// Called when a contract test fails. Include whatever diagnostic information helps identify the bug: model state, SUT state, or both. The returned string appears in the failure report.
-    func failureDescription() -> String
+    func failureDescription() -> String?
 }
 
 public extension ContractSpecBase {

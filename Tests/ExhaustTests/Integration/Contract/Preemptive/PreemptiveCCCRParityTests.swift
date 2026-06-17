@@ -62,6 +62,10 @@ final class PreemptiveNonAtomicCounterParitySpec {
         guard counter.value > 0 else { throw skip() }
         await counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - Leaky Bucket
@@ -106,6 +110,10 @@ final class PreemptiveLeakyBucketParitySpec {
         guard bucket.tokens > 0 else { throw skip() }
         await bucket.tryConsume()
     }
+
+    func failureDescription() -> String? {
+        "\(bucket)"
+    }
 }
 
 // MARK: - Atomic Counter (should pass)
@@ -143,6 +151,10 @@ final class PreemptiveAtomicCounterParitySpec {
     @Command(weight: 2)
     func decrement() async throws {
         counter.decrement()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 
@@ -187,6 +199,10 @@ final class PreemptiveExposedRaceParitySpec {
     func racyIncrement() async throws {
         await counter.racyIncrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 @Contract(.threads)
@@ -202,6 +218,10 @@ final class PreemptiveThreeWayRaceParitySpec {
     @Command(weight: 1)
     func increment() async throws {
         await counter.increment()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 
@@ -251,5 +271,9 @@ final class PreemptiveAlwaysSkipParitySpec {
     @Command(weight: 1)
     func skipAlwaysToo() async throws {
         throw skip()
+    }
+
+    func failureDescription() -> String? {
+        "\(value)"
     }
 }

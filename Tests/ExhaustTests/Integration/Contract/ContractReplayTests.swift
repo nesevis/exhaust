@@ -112,8 +112,8 @@ struct PreemptiveOracleReplayTests {
         #expect(replayed.commands.isEmpty == false, "Smoke row replay should reproduce the failure")
     }
 
-    @Test("Oracle replay returns nil systemUnderTest when the sequential replay throws")
-    func oracleReplayReturnsNilSystemUnderTestWhenSequentialReplayThrows() throws {
+    @Test("Smoke catches sequentially broken spec before concurrent execution")
+    func smokeCatchesSequentiallyBrokenSpecBeforeConcurrentExecution() throws {
         let result = try #require(
             __ExhaustRuntime.__runPreemptiveConcurrentContract(
                 AlwaysThrowingPreemptiveSpec.self,
@@ -124,7 +124,8 @@ struct PreemptiveOracleReplayTests {
                 ]
             )
         )
-        #expect(result.systemUnderTest == nil, "Oracle replay should throw, producing nil systemUnderTest")
+        #expect(result.discoveryMethod == .smokeTest)
+        #expect(result.systemUnderTest != nil, "Smoke returns the SUT state at the point of failure")
     }
 }
 
@@ -215,6 +216,10 @@ final class BrokenModuloSpec {
         expected = 0
         counter.reset()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 struct ModuloCounter {
@@ -253,6 +258,10 @@ final class ReplayableNonAtomicCounterSpec {
         guard expected > 0 else { throw skip() }
         expected -= 1
         await counter.decrement()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 
@@ -307,6 +316,10 @@ final class PreemptiveReplayableSpec {
         guard expected > 0 else { throw skip() }
         expected -= 1
         counter.decrement()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 
@@ -364,6 +377,10 @@ final class PreemptiveSequentiallyBrokenSpec {
         expected -= 1
         counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 final class BrokenDecrementCounter: @unchecked Sendable, CustomDebugStringConvertible {
@@ -400,6 +417,10 @@ final class AlwaysThrowingPreemptiveSpec {
     @Command(weight: 1)
     func failingCommand() throws {
         try sut.alwaysFails()
+    }
+
+    func failureDescription() -> String? {
+        "\(sut)"
     }
 }
 

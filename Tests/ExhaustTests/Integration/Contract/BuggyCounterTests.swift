@@ -163,6 +163,10 @@ final class BuggyCounterSpec {
         expectedValue = 0
         counter.reset()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - Types
@@ -206,6 +210,10 @@ final class PairwiseBugSpec {
 
     @Command
     func noop() throws {}
+
+    func failureDescription() -> String? {
+        "\(sut)"
+    }
 }
 
 struct PairwiseBugSUT {

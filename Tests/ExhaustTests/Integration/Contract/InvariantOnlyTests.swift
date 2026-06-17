@@ -68,6 +68,10 @@ final class CircularBufferContract {
     func clear() throws {
         buffer.clear()
     }
+
+    func failureDescription() -> String? {
+        "\(buffer)"
+    }
 }
 
 // MARK: - Contract: Priority queue sorted backing
@@ -90,6 +94,10 @@ final class SortedBackingContract {
     func dequeue() throws {
         guard !queue.isEmpty else { throw skip() }
         _ = queue.dequeue()
+    }
+
+    func failureDescription() -> String? {
+        "\(queue)"
     }
 }
 

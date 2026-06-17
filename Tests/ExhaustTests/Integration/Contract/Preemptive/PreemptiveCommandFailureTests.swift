@@ -92,6 +92,10 @@ final class SyncPrefixFailingSpec {
         counter.increment()
         try check(counter.value < counter.threshold, "value must stay below threshold")
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 /// Concurrent lane command throws a postcondition failure. The oracle always passes —
@@ -113,6 +117,10 @@ final class SyncLaneFailingSpec {
 
     @Command(weight: 1)
     func noop() throws {}
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - Async Specs
@@ -131,6 +139,10 @@ final class AsyncPrefixFailingSpec {
     func increment() async throws {
         counter.increment()
         try check(counter.value < counter.threshold, "value must stay below threshold")
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 
@@ -152,6 +164,10 @@ final class AsyncLaneFailingSpec {
 
     @Command(weight: 1)
     func noop() async throws {}
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - Types

@@ -65,6 +65,10 @@ actor ActorCounterContract {
         expected -= 1
         await counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - Failing Actor Contract
@@ -105,5 +109,9 @@ actor BuggyActorCounterContract {
     func decrement() async throws {
         expected -= 1
         await counter.decrement()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }

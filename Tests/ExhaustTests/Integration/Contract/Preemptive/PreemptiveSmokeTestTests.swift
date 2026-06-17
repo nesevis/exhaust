@@ -72,6 +72,10 @@ final class SequentiallyBrokenSpec {
         expected -= 1
         counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - SUT

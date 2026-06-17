@@ -15,10 +15,10 @@ let etnaCoverageBudget: UInt64 = 0
 let etnaSamplingBudget: UInt64 = 200_000_000
 
 // registerShrinkingChallengeBenchmarks()
-// registerECOOPBenchmarks()
+registerECOOPBenchmarks()
 // registerComplexGrammarBenchmarks()
 // registerGenerationBenchmarks()
-registerSynthesizedGeneratorBenchmarks()
+// registerSynthesizedGeneratorBenchmarks()
 // registerParallelGenerationBenchmarks()
 // registerStringGenerationBenchmarks()
 // registerCoveringArrayBenchmarks()

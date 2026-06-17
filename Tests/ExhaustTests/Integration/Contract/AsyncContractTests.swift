@@ -147,6 +147,10 @@ final class AsyncCounterSpec {
         expected = 0
         await counter.reset()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - Contract: Failing async counter (invariant violation)
@@ -171,6 +175,10 @@ final class BuggyAsyncCounterSpec {
     func decrement() async throws {
         expected -= 1
         await counter.decrement()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 
@@ -198,6 +206,10 @@ final class AsyncSkipSpec {
         expected.append(expected.last! - 1)
         await counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - Contract: Mixed sync + async commands
@@ -222,6 +234,10 @@ final class MixedAsyncSpec {
     func increment() async throws {
         expected += 1
         await counter.increment()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 

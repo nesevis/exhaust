@@ -138,7 +138,7 @@ extension __ExhaustRuntime {
     static func renderFailure<Spec: ContractSpecBase>(
         _ result: ContractResult<Spec>,
         failureInfo: ContractFailureInfo<Spec.Command>,
-        failureDescription: String,
+        failureDescription: String?,
         includeDiff: Bool = false
     ) -> String {
         var lines: [String] = []
@@ -170,9 +170,11 @@ extension __ExhaustRuntime {
             }
         }
 
-        let indentedDescription = failureDescription.replacingOccurrences(of: "\n", with: "\n  ")
-        lines.append("")
-        lines.append("State: \(indentedDescription)")
+        if let failureDescription {
+            let indentedDescription = failureDescription.replacingOccurrences(of: "\n", with: "\n  ")
+            lines.append("")
+            lines.append("State: \(indentedDescription)")
+        }
 
         if let encodedSeed = result.replaySeed ?? result.seed.map(ReplaySeed.encodeRawSeed) {
             lines.append("")

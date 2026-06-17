@@ -48,4 +48,8 @@ final class StackSpec {
     func count() throws {
         try check(expected.count == stack.count, "counts should match")
     }
+
+    func failureDescription() -> String? {
+        "\(stack)"
+    }
 }

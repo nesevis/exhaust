@@ -93,4 +93,8 @@ final class LeakyBucketSpec {
         expectedTokens -= 1
         await bucket.tryConsume()
     }
+
+    func failureDescription() -> String? {
+        "\(bucket)"
+    }
 }

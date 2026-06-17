@@ -227,7 +227,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         return { taggedCommands in rawIdentifySkips(taggedCommands.map(\.1)) }
     }
 
-    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String) {
+    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
         let spec = Spec()
         nonisolated(unsafe) let unsafeSpec = spec
         let work: @Sendable () async -> ([TraceStep], Bool) = {
@@ -237,14 +237,8 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 checkInvariants: { try await unsafeSpec.checkInvariants() }
             )
         }
-        let (trace, failed): ([TraceStep], Bool)
-        if let idleTimeoutMilliseconds {
-            (trace, failed) = __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: idleTimeoutMilliseconds, work)
-                ?? ([], true)
-        } else {
-            (trace, failed) = __ExhaustRuntime.blockingAwait(work)
-        }
-        return (trace, failed, spec.systemUnderTest, failed ? spec.failureDescription() : "")
+        let (trace, failed) = __ExhaustRuntime.blockingAwait(work)
+        return (trace, failed, spec.systemUnderTest, failed ? spec.failureDescription() : nil)
     }
 
     /// Replays the reduced commands sequentially on a fresh spec via ``runSequentially(_:on:)`` to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails or times out, because the partial state would mislead debugging.

@@ -328,7 +328,7 @@ private extension __ExhaustRuntime {
         context: inout ContractContext,
         property: @escaping @Sendable ([Spec.Command]) -> Bool,
         identifySkips: @escaping @Sendable ([Spec.Command]) -> Set<Int>,
-        finalize: ([Spec.Command]) -> (trace: [TraceStep], systemUnderTest: Spec.SystemUnderTest, failureDescription: String)
+        finalize: ([Spec.Command]) -> (trace: [TraceStep], systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)
     ) -> (result: ContractResult<Spec>, rendered: String?)? {
         guard let discovery = runCoverageAndSampling(
             commandGen: commandGen,

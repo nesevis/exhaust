@@ -116,6 +116,10 @@ private final class RegressionCounterContract {
         expected -= 1
         counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 @Contract(.tasks)
@@ -132,6 +136,10 @@ private final class RegressionCounterCooperativeContract {
     func increment() async throws {
         expected += 1
         await counter.increment()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 
@@ -196,6 +204,10 @@ private final class RegressionPreemptiveContract {
         expected -= 1
         counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 private final class RegressionBrokenDecrement: @unchecked Sendable, CustomDebugStringConvertible {
@@ -239,6 +251,10 @@ private final class RegressionAsyncSequentialContract {
         guard expected > 0 else { throw skip() }
         expected -= 1
         counter.decrement()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 

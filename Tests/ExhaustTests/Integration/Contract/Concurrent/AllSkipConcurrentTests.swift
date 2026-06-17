@@ -47,4 +47,8 @@ final class AlwaysSkipSpec {
     func skipAlwaysToo() async throws {
         throw skip()
     }
+
+    func failureDescription() -> String? {
+        "\(value)"
+    }
 }

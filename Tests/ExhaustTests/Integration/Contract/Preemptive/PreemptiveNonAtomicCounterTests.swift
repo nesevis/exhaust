@@ -115,6 +115,10 @@ final class PreemptiveCounterSpec {
         guard counter.value > 0 else { throw skip() }
         counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 // MARK: - SUT

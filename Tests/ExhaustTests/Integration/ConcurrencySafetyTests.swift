@@ -295,6 +295,10 @@ final class YieldingCounterSpec {
         expected -= 1
         await counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -322,6 +326,10 @@ final class BundleDrawSpec {
         guard let index = model.firstIndex(of: token) else { throw skip() }
         model.remove(at: index)
         await store.withdraw(token)
+    }
+
+    func failureDescription() -> String? {
+        "\(store)"
     }
 }
 

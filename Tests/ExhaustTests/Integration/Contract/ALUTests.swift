@@ -80,6 +80,10 @@ final class ALUSpec {
         expected = 0
         alu.clear()
     }
+
+    func failureDescription() -> String? {
+        "\(alu)"
+    }
 }
 
 // MARK: - Types

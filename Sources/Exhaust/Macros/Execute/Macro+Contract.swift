@@ -57,6 +57,10 @@ import ExhaustCore
 ///     func equivalent(to other: Counter) -> Bool {
 ///         counter.value == other.value
 ///     }
+///
+///     func failureDescription() -> String {
+///         "counter: \(counter)"
+///     }
 /// }
 /// ```
 @attached(
@@ -69,7 +73,6 @@ import ExhaustCore
     named(checkInvariants),
     named(oracleCheck),
     named(systemUnderTest),
-    named(failureDescription),
     named(init),
     named(executionModel),
     named(diagnosticSnapshot)

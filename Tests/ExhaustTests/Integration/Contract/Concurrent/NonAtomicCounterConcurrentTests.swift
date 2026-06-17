@@ -165,4 +165,8 @@ final class NonAtomicCounterSpec {
         expected -= 1
         await counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
