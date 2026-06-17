@@ -20,11 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Select Xcode 26.2
-        run: sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
-
-      - name: Work around Swift 6.2 prebuilt swift-syntax linker bug (SPM#9495)
-        run: swift package edit swift-syntax
+      - name: Select Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
 
       - name: Run tests (source)
         run: |
