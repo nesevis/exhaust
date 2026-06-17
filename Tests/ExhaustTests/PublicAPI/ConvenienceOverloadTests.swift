@@ -57,4 +57,27 @@ struct ConvenienceOverloadTests {
         let value = try #example(.int(in: 0 ... 1000).resize(50))
         #expect(value >= 0 && value <= 1000)
     }
+
+    // MARK: - data(prefix:) overloads
+
+    @Test("data(prefix:) produces data starting with prefix")
+    func dataWithPrefix() throws {
+        let value = try #example(.data(prefix: .png))
+        #expect(Array(value.prefix([UInt8].png.count)) == .png)
+    }
+
+    @Test("data(prefix:length:) accepts Int range literal")
+    func dataWithPrefixIntRange() throws {
+        let value = try #example(.data(prefix: .jpeg, length: 16 ... 64))
+        let suffixLength = value.count - [UInt8].jpeg.count
+        #expect(suffixLength >= 16 && suffixLength <= 64)
+        #expect(Array(value.prefix([UInt8].jpeg.count)) == .jpeg)
+    }
+
+    @Test("data(prefix:length:) accepts Int literal")
+    func dataWithPrefixIntLength() throws {
+        let value = try #example(.data(prefix: .pdf, length: 32))
+        #expect(value.count == [UInt8].pdf.count + 32)
+        #expect(Array(value.prefix([UInt8].pdf.count)) == .pdf)
+    }
 }

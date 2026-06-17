@@ -131,6 +131,45 @@ struct FoundationGeneratorTests {
         #expect(tree != nil, "data(length:) should be reflectable")
     }
 
+    // MARK: - Data with Prefix
+
+    @Test("data(prefix:length:) prefixes with prefix and produces correct total length")
+    func dataWithPrefixFixedLength() throws {
+        let prefix: [UInt8] = [0x89, 0x50, 0x4E, 0x47]
+        let suffixLength: UInt64 = 16
+        let gen = Gen.data(prefix: prefix, length: suffixLength).gen
+        var iterator = ValueInterpreter(gen, seed: 42)
+        let value = try #require(try iterator.next())
+
+        #expect(value.count == prefix.count + Int(suffixLength))
+        #expect(Array(value.prefix(prefix.count)) == prefix)
+    }
+
+    @Test("data(prefix:within:) stays within range and starts with prefix")
+    func dataWithPrefixRange() throws {
+        let prefix: [UInt8] = [0xFF, 0xD8, 0xFF]
+        let gen = Gen.data(prefix: prefix, within: 8 ... 32).gen
+        var iterator = ValueInterpreter(gen, seed: 42)
+
+        for _ in 0 ..< 20 {
+            let value = try #require(try iterator.next())
+            let suffixLength = value.count - prefix.count
+            #expect(suffixLength >= 8 && suffixLength <= 32)
+            #expect(Array(value.prefix(prefix.count)) == prefix)
+        }
+    }
+
+    @Test("data(prefix:) reflects correctly")
+    func dataWithPrefixReflects() throws {
+        let prefix: [UInt8] = [0x25, 0x50, 0x44, 0x46, 0x2D]
+        let gen = Gen.data(prefix: prefix, length: 8).gen
+        var iterator = ValueInterpreter(gen, seed: 42)
+        let value = try #require(try iterator.next())
+
+        let tree = try Interpreters.reflect(gen, with: value)
+        #expect(tree != nil, "data(prefix:length:) should be reflectable")
+    }
+
     // MARK: - defaultGenerator conformances
 
     @Test("Decimal.defaultGenerator no longer traps and stays in range")

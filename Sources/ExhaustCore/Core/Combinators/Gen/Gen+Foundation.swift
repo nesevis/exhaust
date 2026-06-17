@@ -414,6 +414,47 @@ package extension Gen {
             backward: { Array($0) }
         )
     }
+
+    /// Generates `Data` with `prefix` followed by a size-scaled random suffix.
+    static func data(
+        prefix: [UInt8]
+    ) -> ReflectiveGenerator<Data> {
+        Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)).wrapped
+            .mapped(
+                forward: { Data(prefix + $0) },
+                backward: { Array($0.dropFirst(prefix.count)) }
+            )
+    }
+
+    /// Generates `Data` with `prefix` followed by a random suffix with length in `range`.
+    static func data(
+        prefix: [UInt8],
+        within range: ClosedRange<UInt64>,
+        scaling: SizeScaling<UInt64> = .linear
+    ) -> ReflectiveGenerator<Data> {
+        Gen.arrayOf(
+            Gen.choose(in: UInt8.min ... UInt8.max),
+            within: range,
+            scaling: scaling
+        ).wrapped.mapped(
+            forward: { Data(prefix + $0) },
+            backward: { Array($0.dropFirst(prefix.count)) }
+        )
+    }
+
+    /// Generates `Data` with `prefix` followed by exactly `length` random bytes.
+    static func data(
+        prefix: [UInt8],
+        length: UInt64
+    ) -> ReflectiveGenerator<Data> {
+        Gen.arrayOf(
+            Gen.choose(in: UInt8.min ... UInt8.max),
+            exactly: length
+        ).wrapped.mapped(
+            forward: { Data(prefix + $0) },
+            backward: { Array($0.dropFirst(prefix.count)) }
+        )
+    }
 }
 
 // MARK: - CharacterSet Extensions
