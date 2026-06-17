@@ -37,7 +37,7 @@ public protocol AsyncContractSpec: ContractSpecBase, AnyObject {
 public extension AsyncContractSpec {
     /// Default oracle that traps. Overridden by the `@Contract(.threads)` macro's synthesized `oracleCheck`.
     ///
-    /// Reaching this trap would be a dispatch bug, not user error. The invariant that keeps it unreachable lives in ``__ExhaustRuntime/__runContractDispatchAsync(_:settings:fileID:filePath:line:column:)``: only `.threads` specs are routed to the preemptive runner that calls `oracleCheck`, and only `@Contract(.threads)` synthesizes a real implementation. `.sequential` and `.tasks` never call it. The safety rests on that dispatch, not on the type system — the unified protocol cannot express "oracle only when `.threads`".
+    /// Reaching this trap would be a dispatch bug, not user error. The invariant that keeps it unreachable lives in ``__ExhaustRuntime/__runContractDispatchAsync(_:settings:fileID:filePath:line:column:)``: only `.threads` specs are routed to the preemptive runner that calls `oracleCheck`, and only `@Contract(.threads)` synthesizes a real implementation. `.sequential` and `.tasks` never call it. The safety rests on that dispatch, not on the type system, because the unified protocol cannot express "oracle only when `.threads`".
     func oracleCheck(_: SystemUnderTest) async -> Bool {
         fatalError("oracleCheck is only called for .threads contracts")
     }
@@ -52,7 +52,7 @@ public extension AsyncContractSpec {
 
     /// Returns a closure that re-executes a command sequence and returns the indices of skipped commands.
     ///
-    /// Bridges async execution via ``__ExhaustRuntime/blockingAwait(idleTimeoutMilliseconds:_:)``. The returned closure is safe to call from a GCD thread. On drain-loop timeout (a command that suspends onto a foreign executor or deadlocks synchronously), returns an empty set — skip pruning is an optimization, so degrading gracefully is safe.
+    /// Bridges async execution via ``__ExhaustRuntime/blockingAwait(idleTimeoutMilliseconds:_:)``. The returned closure is safe to call from a GCD thread. On drain-loop timeout (a command that suspends onto a foreign executor or deadlocks synchronously), returns an empty set. Skip pruning is an optimization, so degrading gracefully is safe.
     ///
     /// - Parameters:
     ///   - specInit: A factory that creates a fresh contract instance. Must be `nonisolated(unsafe)` at the call site to satisfy `@Sendable` capture.

@@ -108,7 +108,7 @@ extension __ExhaustRuntime {
 // MARK: - Concurrent Counterexample Reduction
 
 extension __ExhaustRuntime {
-    /// Prunes skipped commands, then runs reduction on the failing counterexample. When the failing probe timed out, skips reduction entirely and returns the input unchanged — timed-out schedules produce non-deterministic replay, making reduction unreliable.
+    /// Prunes skipped commands, then runs reduction on the failing counterexample. When the failing probe timed out, skips reduction entirely and returns the input unchanged. Timed-out schedules produce non-deterministic replay, making reduction unreliable.
     ///
     /// Shared by the random-sampling and SCA-coverage paths. Keeps no invocation count of its own: every probe flows through `property`, so the caller measures reduction invocations by snapshotting its own counter around this call.
     ///
@@ -178,7 +178,7 @@ extension __ExhaustRuntime {
     struct ConcurrentReduction<Command> {
         let finalInput: [(ScheduleMarker, Command)]
         let stats: ReductionStats?
-        /// The failing probe's timeout status, passed through unchanged — a reduced (non-timed-out) counterexample reports `false`, never the reducer's last probe.
+        /// The failing probe's timeout status, passed through unchanged. A reduced (non-timed-out) counterexample reports `false`, never the reducer's last probe.
         let timedOut: Bool
     }
 }

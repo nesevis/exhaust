@@ -24,7 +24,7 @@ public protocol ContractSpecBase {
 
     /// Returns a human-readable description of the contract state at the point of failure.
     ///
-    /// Called when a contract test fails. Include whatever diagnostic information helps identify the bug — model state, SUT state, or both. The returned string appears in the failure report.
+    /// Called when a contract test fails. Include whatever diagnostic information helps identify the bug: model state, SUT state, or both. The returned string appears in the failure report.
     func failureDescription() -> String
 }
 

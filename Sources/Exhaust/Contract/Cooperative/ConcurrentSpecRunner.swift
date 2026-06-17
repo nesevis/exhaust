@@ -86,7 +86,7 @@ private func runCommandRecordingTrace<Spec: AsyncContractSpec>(
 
 /// Drains a tagged command sequence through the cooperative scheduler with deterministic interleaving.
 ///
-/// Execution proceeds in two phases. First, all prefix commands run sequentially on a single executor — this builds up whatever shared state the concurrent phase needs. Then, lane-assigned commands run concurrently via N Tasks whose continuations are interleaved by the drain loop.
+/// Execution proceeds in two phases. First, all prefix commands run sequentially on a single executor to build up whatever shared state the concurrent phase needs. Then, lane-assigned commands run concurrently via N Tasks whose continuations are interleaved by the drain loop.
 ///
 /// The drain loop advances one continuation at a time (via `runSynchronously`), picking the lane indicated by the next schedule entry. When a command body hits an `await` (for example, `Task.yield()` inside a non-atomic read-modify-write), the task suspends and re-enqueues its continuation. The drain loop then picks another lane's continuation, producing a deterministic interleaving at that suspension point.
 ///

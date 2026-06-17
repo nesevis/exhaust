@@ -231,7 +231,7 @@ private extension __ExhaustRuntime {
                         }
                     }
                     if suppressIssueReporting == false {
-                        deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
+                        deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
                     }
                 }
             }
@@ -299,7 +299,7 @@ private extension __ExhaustRuntime {
 private extension __ExhaustRuntime {
     /// Builds the command-sequence generator and resolves the command limit shared by the sync and async sequential runners.
     ///
-    /// The sequence uses 0 as its lower length bound so the reducer can shrink sequences below the user's requested minimum — the minimum is a generation hint, not a reduction floor.
+    /// The sequence uses 0 as its lower length bound so the reducer can shrink sequences below the user's requested minimum. The minimum is a generation hint, not a reduction floor.
     static func makeCommandSequence<Command>(
         commandGen: ReflectiveGenerator<Command>,
         context: ContractContext
@@ -532,7 +532,7 @@ private extension __ExhaustRuntime {
 private extension __ExhaustRuntime {
     /// Replays each regression seed from the Swift Testing trait configuration, returning the first failure as a ``ContractResult``. Returns nil when all seeds pass, none are configured, or Swift Testing is unavailable.
     ///
-    /// Each seed is replayed through the same path as an inline `.replay(...)`, so coverage-row (`U…`) and iteration-suffixed (`…-N`) seeds — the exact strings the runner prints — round-trip and the failing run is re-materialised at its true position rather than only the first value.
+    /// Each seed is replayed through the same path as an inline `.replay(...)`, so coverage-row (`U…`) and iteration-suffixed (`…-N`) seeds (the exact strings the runner prints) round-trip and the failing run is re-materialised at its true position rather than only the first value.
     static func runRegressionSeeds<Spec: ContractSpec>(
         specType: Spec.Type,
         settings: [ContractSettings],
@@ -571,7 +571,7 @@ private extension __ExhaustRuntime {
                     return result
                 } else if context.suppressIssueReporting == false {
                     reportIssue(
-                        "Regression seed \"\(encodedSeed)\" now passes — consider removing it.",
+                        "Regression seed \"\(encodedSeed)\" now passes. Consider removing it.",
                         fileID: context.fileID,
                         filePath: context.filePath,
                         line: context.line,

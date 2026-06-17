@@ -13,7 +13,7 @@ extension __ExhaustRuntime {
 
     /// Runs the command sequence sequentially on a fresh spec and returns the expected state if all invariants pass.
     ///
-    /// Provides the "expected" state in the failure report — what the system should have produced without the race. If the sequential replay also fails, returns nil (the bug exists even without concurrency).
+    /// Provides the "expected" state in the failure report: what the system should have produced without the race. If the sequential replay also fails, returns nil (the bug exists even without concurrency).
     static func sequentialOracle<Spec: AsyncContractSpec>(
         commands: [Spec.Command],
         specInit: () -> Spec,

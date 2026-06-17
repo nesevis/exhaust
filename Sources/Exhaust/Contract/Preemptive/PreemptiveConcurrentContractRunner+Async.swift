@@ -12,7 +12,7 @@ import IssueReporting
 public extension __ExhaustRuntime {
     /// Runs a preemptive concurrent contract test for the given async specification type.
     ///
-    /// Dispatches commands across real GCD threads and bridges async command execution via Task+semaphore. This catches races in synchronous primitives (locks, dispatch queues, atomics) hidden behind async facades — the cooperative runner's deterministic interleaving only reaches `await` suspension points.
+    /// Dispatches commands across real GCD threads and bridges async command execution via Task+semaphore. This catches races in synchronous primitives (locks, dispatch queues, atomics) hidden behind async facades. The cooperative runner's deterministic interleaving only reaches `await` suspension points.
     ///
     /// The outer loop runs on a GCD thread (via ``__ExhaustRuntime/dispatchToGCD(_:)``) to avoid starving the cooperative pool during parallel test runs. Issue reporting is deferred to the async return context where Swift Testing's task-locals are available.
     @discardableResult
@@ -60,7 +60,7 @@ public extension __ExhaustRuntime {
 
 /// Async ``PreemptiveBackend``: bridges async command execution to GCD threads via Task+semaphore.
 ///
-/// Each lane gets a real OS thread, and within that thread async commands are driven synchronously — the cooperative pool handles the Task's continuations while the GCD thread blocks on the semaphore. This provides real thread-level preemption for synchronous primitives (locks, dispatch queues) hidden behind async facades.
+/// Each lane gets a real OS thread, and within that thread async commands are driven synchronously. The cooperative pool handles the Task's continuations while the GCD thread blocks on the semaphore. This provides real thread-level preemption for synchronous primitives (locks, dispatch queues) hidden behind async facades.
 private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBackend {
     /// Idle-timeout bound (milliseconds) for the blocking drain loop, or `nil` to wait unbounded. A command that suspends onto a foreign executor never returns to the drain lane; without this bound the loop spins a CPU core forever.
     let idleTimeoutMilliseconds: Int?
@@ -244,10 +244,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         } else {
             (trace, failed) = __ExhaustRuntime.blockingAwait(work)
         }
-        return (trace, failed, spec.systemUnderTest, spec.failureDescription())
+        return (trace, failed, spec.systemUnderTest, failed ? spec.failureDescription() : "")
     }
 
-    /// Replays the reduced commands sequentially on a fresh spec via ``runSequentially(_:on:)`` to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails or times out — the partial state would mislead debugging.
+    /// Replays the reduced commands sequentially on a fresh spec via ``runSequentially(_:on:)`` to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails or times out, because the partial state would mislead debugging.
     func buildResult(
         reduced: [(ScheduleMarker, Spec.Command)],
         seed: UInt64?,

@@ -223,7 +223,7 @@ extension __ExhaustRuntime {
 
 // MARK: - Inner types
 
-/// A raw event emitted by the cooperative drain loop during command execution. These are intermediate records that ``buildTrace(_:)`` post-processes into presentable ``TraceStep`` values — collapsing no-op suspend/resume pairs and merging adjacent started+completed events for the same command.
+/// A raw event emitted by the cooperative drain loop during command execution. These are intermediate records that ``buildTrace(_:)`` post-processes into presentable ``TraceStep`` values, collapsing no-op suspend/resume pairs and merging adjacent started+completed events for the same command.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 struct TraceEvent: Sendable {
     enum Kind: Sendable {

@@ -7,7 +7,7 @@ import Foundation
 extension __ExhaustRuntime {
     /// Raw outcome of the SCA row loop before caller-specific failure handling.
     ///
-    /// Each caller (sequential, concurrent) handles the ``failure`` case differently — the sequential path prunes skipped commands and reduces directly, while the concurrent path delegates to ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``.
+    /// Each caller (sequential, concurrent) handles the ``failure`` case differently. The sequential path prunes skipped commands and reduces directly, while the concurrent path delegates to ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``.
     enum SCARowLoopResult<Value> {
         /// A counterexample was found at the given coverage iteration.
         case failure(value: Value, tree: ChoiceTree, coverageInvocations: Int)
@@ -35,7 +35,7 @@ extension __ExhaustRuntime {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "\(logEventPrefix)_skipped",
-                "Command generator is not a top-level pick — SCA not applicable"
+                "Command generator is not a top-level pick. SCA not applicable."
             )
             return .skipped
         }
@@ -62,7 +62,7 @@ extension __ExhaustRuntime {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "\(logEventPrefix)_skipped",
-                "Domain construction failed — branches could not be analyzed"
+                "Domain construction failed. Branches could not be analyzed."
             )
             return .skipped
         }
@@ -283,7 +283,7 @@ extension __ExhaustRuntime {
 
     /// Runs the reducer and unwraps its outcome to the reduced value, or the input unchanged when the reducer makes no improvement or fails to run.
     ///
-    /// Shared by the sequential SCA failure tail and the concurrent counterexample reducer. Logging stays with each caller — they emit different events — so this is a pure reduce-and-unwrap. `reduced` is `true` only when the reducer produced a strictly simpler value.
+    /// Shared by the sequential SCA failure tail and the concurrent counterexample reducer. Logging stays with each caller (they emit different events), so this is a pure reduce-and-unwrap. `reduced` is `true` only when the reducer produced a strictly simpler value.
     static func reduceContractCounterexample<Value>(
         value: Value,
         tree: ChoiceTree,

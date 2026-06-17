@@ -3,7 +3,7 @@ import ExhaustCore
 
 /// Namespace for machinery shared by ``PreemptiveChecker`` (synchronous) and ``AsyncPreemptiveChecker``.
 ///
-/// The two checkers differ only in how a single probe runs — direct GCD execution versus async bridged through a drain loop — so the outcome shape and the three-pass reducer live here and are parameterised by each checker's `execute`.
+/// The two checkers differ only in how a single probe runs (direct GCD execution versus async bridged through a drain loop), so the outcome shape and the three-pass reducer live here and are parameterised by each checker's `execute`.
 enum Preemptive {
     /// Number of times each reduction probe re-executes the concurrent schedule to probabilistically confirm the race still reproduces.
     static let confirmationRepetitions = 10
@@ -30,11 +30,11 @@ enum Preemptive {
     ///
     /// The three-pass structure is deliberate: preemptive evaluation is non-deterministic (GCD thread preemption), so each probe requires multiple repetitions to confirm. Phased reduction ensures the most impactful transformations run first before budget is spent on fine-tuning.
     ///
-    /// **Pass 1 — Lane Collapse.** Drives lane markers to zero, moving commands into the sequential prefix. Prefix commands execute deterministically (no scheduling noise), so a longer prefix produces counterexamples that are easier to reproduce and reason about. Running lane collapse first also reduces the repetition cost of later passes — fewer concurrent commands means less non-deterministic scheduling per evaluation. (The cooperative runner skips this pre-pass because its schedule is choice-encoded and fully deterministic.)
+    /// **Pass 1: Lane Collapse.** Drives lane markers to zero, moving commands into the sequential prefix. Prefix commands execute deterministically (no scheduling noise), so a longer prefix produces counterexamples that are easier to reproduce and reason about. Running lane collapse first also reduces the repetition cost of later passes, because fewer concurrent commands means less non-deterministic scheduling per evaluation. (The cooperative runner skips this pre-pass because its schedule is choice-encoded and fully deterministic.)
     ///
-    /// **Pass 2 — Structural.** Deletion, migration, and substitution. Removes unnecessary commands and simplifies arguments, operating on the already-collapsed trace so deletions target only commands genuinely needed for the failure.
+    /// **Pass 2: Structural.** Deletion, migration, and substitution. Removes unnecessary commands and simplifies arguments, operating on the already-collapsed trace so deletions target only commands genuinely needed for the failure.
     ///
-    /// **Pass 3 — Value Minimization.** All remaining encoders. Simplifies command arguments toward their semantic simplest form. Runs with a tighter budget (1 stall, 5s) since the structural shape is already minimal.
+    /// **Pass 3: Value Minimization.** All remaining encoders. Simplifies command arguments toward their semantic simplest form. Runs with a tighter budget (1 stall, 5s) since the structural shape is already minimal.
     static func reduce<Command>(
         generator: Generator<[(ScheduleMarker, Command)]>,
         tree: ChoiceTree,
@@ -100,7 +100,7 @@ enum Preemptive {
 
 /// The per-probe operations that differ between the synchronous and async preemptive runners.
 ///
-/// Everything else — phase ordering, smoke, SCA coverage, sampling, reduction, and failure assembly — is shared in ``__ExhaustRuntime/runPreemptivePipeline(backend:config:)``. The synchronous backend runs commands directly on GCD threads; the async backend bridges each probe through a drain loop.
+/// Everything else (phase ordering, smoke, SCA coverage, sampling, reduction, and failure assembly) is shared in ``__ExhaustRuntime/runPreemptivePipeline(backend:config:)``. The synchronous backend runs commands directly on GCD threads; the async backend bridges each probe through a drain loop.
 ///
 /// Conformers are captured into the `@Sendable` property closure handed to the SCA coverage and reduction passes, so they must be `Sendable`. Both checkers store only an `Int?` timeout, so this is unconditional.
 protocol PreemptiveBackend<Spec>: Sendable {
@@ -127,7 +127,7 @@ protocol PreemptiveBackend<Spec>: Sendable {
 // MARK: - Pipeline
 
 extension __ExhaustRuntime {
-    /// Runs the shared preemptive pipeline — smoke, SCA coverage, then random sampling with three-pass reduction — over a backend that supplies per-probe execution, the smoke trace, and oracle replay.
+    /// Runs the shared preemptive pipeline (smoke, SCA coverage, then random sampling with three-pass reduction) over a backend that supplies per-probe execution, the smoke trace, and oracle replay.
     ///
     /// Rendered failure messages are returned as deferred issues rather than reported inline, so each entry point can report them in a context where Swift Testing task-locals are available (the pipeline itself runs on a GCD thread). The fully-populated ``ExhaustReport`` is returned for the entry point to deliver to `onReport`.
     static func runPreemptivePipeline<Backend: PreemptiveBackend>(
@@ -148,7 +148,7 @@ extension __ExhaustRuntime {
         let commandGen = Spec.commandGenerator.gen
         let commandLimit = config.commandLimit ?? Preemptive.defaultCommandLimit
         guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
-            deferredIssues.append("Command generator must be a top-level pick (.oneOf) — concurrent testing requires per-command branch structure")
+            deferredIssues.append("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure.")
             finalizeReport()
             return (nil, deferredIssues, report)
         }
@@ -207,48 +207,40 @@ extension __ExhaustRuntime {
                     finalizeReport()
                     return (replayResult, deferredIssues, report)
                 } else if config.suppressIssueReporting == false {
-                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
+                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
                 }
             }
         }
 
-        // Phase 0: Smoke test — deterministically seeded so U-prefixed replay seeds reproduce the same command sequence.
-        if config.seed == nil, config.replayIteration == nil {
+        // Phase 0: Smoke test. Run the first deterministic command sequence sequentially.
+        // If the spec is broken without concurrency, fail fast before investing in concurrent probing.
+        do {
             let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
-            var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, seed: 0, maxRuns: coverageBudget)
-            var smokeRow = 0
-            do {
-                while let (commands, _) = try smokeIterator.next() {
-                    if let coverageReplayRow = config.coverageReplayRow, smokeRow < coverageReplayRow {
-                        smokeRow += 1
-                        continue
+            var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, seed: 0, maxRuns: 1)
+            if let (commands, _) = try smokeIterator.next() {
+                let smoke = backend.runSmoke(commands)
+                if smoke.failed {
+                    let result = ContractResult<Spec>(
+                        commands: commands,
+                        trace: smoke.trace,
+                        systemUnderTest: smoke.systemUnderTest,
+                        seed: nil,
+                        replaySeed: ReplaySeed.Resolved.coverage(row: 0).encoded,
+                        discoveryMethod: .smokeTest
+                    )
+                    if config.suppressIssueReporting == false {
+                        let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
+                        let message = renderFailure(result, failureInfo: failureInfo, failureDescription: smoke.failureDescription)
+                        deferredIssues.append(message)
                     }
-                    let smoke = backend.runSmoke(commands)
-                    if smoke.failed {
-                        let result = ContractResult<Spec>(
-                            commands: commands,
-                            trace: smoke.trace,
-                            systemUnderTest: smoke.systemUnderTest,
-                            seed: nil,
-                            replaySeed: ReplaySeed.Resolved.coverage(row: smokeRow).encoded,
-                            discoveryMethod: .smokeTest
-                        )
-                        if config.suppressIssueReporting == false {
-                            let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
-                            let message = renderFailure(result, failureInfo: failureInfo, failureDescription: smoke.failureDescription)
-                            deferredIssues.append(message)
-                        }
-                        report.replaySeed = result.replaySeed
-                        report.setInvocations(coverage: smokeRow + 1, randomSampling: 0, reduction: 0)
-                        finalizeReport()
-                        return (result, deferredIssues, report)
-                    }
-                    smokeRow += 1
-                    if config.coverageReplayRow != nil { break }
+                    report.replaySeed = result.replaySeed
+                    report.setInvocations(coverage: 1, randomSampling: 0, reduction: 0)
+                    finalizeReport()
+                    return (result, deferredIssues, report)
                 }
-            } catch {
-                deferredIssues.append("Generator failed during smoke test: \(error)")
             }
+        } catch {
+            deferredIssues.append("Generator failed during smoke test: \(error)")
         }
 
         // Phase 1: Coverage
@@ -335,7 +327,7 @@ extension __ExhaustRuntime {
                     let absoluteIteration = Int(startIndex) + samplingIteration
                     let outcome = backend.execute(taggedCommands)
                     if outcome.passed == false {
-                        // Reduction stays correct on a timeout — the reducer only ever returns a failing schedule — but on a hang every probe waits out the idle bound (idleTimeout × repetitions) and a timing-dependent timeout often will not reproduce, so it is slow and usually fruitless. Skip it and report the original schedule.
+                        // Reduction stays correct on a timeout (the reducer only ever returns a failing schedule), but on a hang every probe waits out the idle bound (idleTimeout × repetitions) and a timing-dependent timeout often will not reproduce, so it is slow and usually fruitless. Skip it and report the original schedule.
                         let reduced: [(ScheduleMarker, Spec.Command)]
                         let reductionInvocations: Int
                         if outcome.timedOut {
@@ -399,7 +391,7 @@ extension __ExhaustRuntime {
 
     /// Assembles the rendered failure message shared by the coverage and sampling phases.
     ///
-    /// The two phases differ only in their discovery metadata (seed, iteration, budget, counts, replay seed). Everything else — the preemptive flag, the timeout-diagnostic gate, and the expected-state line built from the sequential oracle replay — is identical, so it lives here rather than being spelled out at each call site.
+    /// The two phases differ only in their discovery metadata (seed, iteration, budget, counts, replay seed). Everything else (the preemptive flag, the timeout-diagnostic gate, and the expected-state line built from the sequential oracle replay) is identical, so it lives here rather than being spelled out at each call site.
     private static func makePreemptiveFailureMessage(
         _ input: [(ScheduleMarker, some CustomStringConvertible)],
         trace: [TraceStep],

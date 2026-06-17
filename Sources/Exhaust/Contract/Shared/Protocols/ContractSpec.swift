@@ -1,6 +1,6 @@
 /// Drives synchronous contract property tests for `.sequential` and `.threads` modes.
 ///
-/// The `@Contract` macro synthesizes this conformance when all commands and invariants are synchronous. A synchronous `.tasks` contract also conforms to `ContractSpec` and runs sequentially — interleaving requires async commands and the ``AsyncContractSpec`` conformance. For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method.
+/// The `@Contract` macro synthesizes this conformance when all commands and invariants are synchronous. A synchronous `.tasks` contract also conforms to `ContractSpec` and runs sequentially; interleaving requires async commands and the ``AsyncContractSpec`` conformance. For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method.
 ///
 /// ```swift
 /// @Contract(.sequential)
@@ -43,7 +43,7 @@ public protocol ContractSpec: ContractSpecBase, AnyObject {
 extension ContractSpec {
     /// Default oracle that traps. Overridden by the `@Contract(.threads)` macro's synthesized `oracleCheck`.
     ///
-    /// Reaching this trap would be a dispatch bug, not user error. The invariant that keeps it unreachable lives in ``__ExhaustRuntime/__runContractDispatch(_:settings:fileID:filePath:line:column:)``: only `.threads` specs are routed to the preemptive runner that calls `oracleCheck`, and only `@Contract(.threads)` synthesizes a real implementation. `.sequential` and `.tasks` never call it. The safety rests on that dispatch, not on the type system — the unified protocol cannot express "oracle only when `.threads`".
+    /// Reaching this trap would be a dispatch bug, not user error. The invariant that keeps it unreachable lives in ``__ExhaustRuntime/__runContractDispatch(_:settings:fileID:filePath:line:column:)``: only `.threads` specs are routed to the preemptive runner that calls `oracleCheck`, and only `@Contract(.threads)` synthesizes a real implementation. `.sequential` and `.tasks` never call it. The safety rests on that dispatch, not on the type system, because the unified protocol cannot express "oracle only when `.threads`".
     public func oracleCheck(_: SystemUnderTest) -> Bool {
         fatalError("oracleCheck is only called for .threads contracts")
     }

@@ -5,7 +5,7 @@
 // This implementation adapts the approach to Swift Concurrency:
 // - Schedule markers encoded as reducible chooseBits replace PULSE's external schedule.
 // - A cooperative TaskExecutor-based drain loop replaces the Erlang VM instrumentation.
-// - The schedule is part of the generated input (not an external random choice), so reduction operates on schedule and commands jointly — no separate ?ALWAYS(N, Prop) wrapper is needed for reduction stability.
+// - The schedule is part of the generated input (not an external random choice), so reduction operates on schedule and commands jointly. No separate ?ALWAYS(N, Prop) wrapper is needed for reduction stability.
 import ExhaustCore
 import IssueReporting
 
@@ -120,7 +120,7 @@ public extension __ExhaustRuntime {
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
-        // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop — a deadlock under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD grows its thread pool dynamically, so concurrent drain loops cannot exhaust it.
+        // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop. This deadlocks under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD grows its thread pool dynamically, so concurrent drain loops cannot exhaust it.
         let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
             ExhaustLog.withConfiguration(config.logConfiguration) {
                 runConcurrentPipeline(
@@ -142,7 +142,7 @@ public extension __ExhaustRuntime {
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 private extension __ExhaustRuntime {
-    /// Executes the full concurrent contract pipeline: regression replay, SCA coverage, random sampling with reduction. Runs on a GCD thread — the caller handles ``dispatchToGCD(_:)`` and deferred issue reporting.
+    /// Executes the full concurrent contract pipeline: regression replay, SCA coverage, random sampling with reduction. Runs on a GCD thread; the caller handles ``dispatchToGCD(_:)`` and deferred issue reporting.
     static func runConcurrentPipeline<Spec: AsyncContractSpec>(
         _: Spec.Type,
         config: ResolvedConcurrentConfig,
@@ -173,7 +173,7 @@ private extension __ExhaustRuntime {
         let resolvedCommandLimit = config.commandLimit
             ?? min(estimateCommandLimit(commandGen: commandGen, coverageBudget: coverageBudget), 40)
         guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
-            deferredIssues.append("Command generator must be a top-level pick (.oneOf) — concurrent testing requires per-command branch structure")
+            deferredIssues.append("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure.")
             return (nil as ContractResult<Spec>?, deferredIssues)
         }
         let sequenceGen = Gen.arrayOf(
@@ -314,7 +314,7 @@ private extension __ExhaustRuntime {
                 if let regressionDiscovery {
                     return finishDiscovery(regressionDiscovery)
                 } else if config.suppressIssueReporting == false {
-                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes — consider removing it.")
+                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
                 }
             }
         }
@@ -471,7 +471,7 @@ private extension __ExhaustRuntime {
 
 // MARK: - Failure Result Assembly
 
-// reportIssue must be called from the Swift Testing async context, not the GCD thread where this function executes — Swift Testing's task-locals are not available on GCD threads, so the caller must collect the rendered message and report it after awaiting dispatchToGCD.
+// reportIssue must be called from the Swift Testing async context, not the GCD thread where this function executes. Swift Testing's task-locals are not available on GCD threads, so the caller must collect the rendered message and report it after awaiting dispatchToGCD.
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 private extension __ExhaustRuntime {
@@ -497,7 +497,7 @@ private extension __ExhaustRuntime {
         )
         let trace = traceResult.trace
 
-        // Run the commands sequentially on a fresh spec. If the sequential replay passes, the resulting state is the expected outcome — what the system should have produced without the race.
+        // Run the commands sequentially on a fresh spec. If the sequential replay passes, the resulting state is the expected outcome, what the system should have produced without the race.
         let oracle = timedOut ? nil : sequentialOracle(commands: finalInput.map(\.1), specInit: specInit, idleTimeoutMilliseconds: idleTimeout)
 
         let replaySeed: String?

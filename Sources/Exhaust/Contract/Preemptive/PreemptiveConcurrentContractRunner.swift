@@ -2,7 +2,7 @@
 //
 // Based on eqc_par_statem from Claessen et al., "Finding Race Conditions in Erlang with QuickCheck and PULSE" (ICFP 2009). That work generates a sequential prefix followed by concurrent command groups, then compares the concurrent outcome against a sequential oracle. PULSE adds deterministic replay via a user-level scheduler; this runner omits replay and relies on OS thread scheduling for non-deterministic interleaving, compensating with repetition across the sampling budget.
 //
-// The cooperative runner (CooperativeConcurrentContractRunner) implements the PULSE half — a TaskExecutor-based drain loop that makes interleavings deterministic and reducible. This runner targets bugs that require real thread-level preemption: races in locks, dispatch queues, and atomics that are invisible at `await` suspension points.
+// The cooperative runner (CooperativeConcurrentContractRunner) implements the PULSE half, a TaskExecutor-based drain loop that makes interleavings deterministic and reducible. This runner targets bugs that require real thread-level preemption: races in locks, dispatch queues, and atomics that are invisible at `await` suspension points.
 import ExhaustCore
 import ExhaustObjCSupport
 import Foundation
@@ -13,7 +13,7 @@ import IssueReporting
 public extension __ExhaustRuntime {
     /// Runs a preemptive concurrent contract test for the given synchronous specification type.
     ///
-    /// Dispatches commands across real GCD threads and uses the spec's ``ContractSpec/oracleCheck(_:)`` to verify consistency with sequential behavior. Non-deterministic scheduling means the same seed does not guarantee the same interleaving — bug detection is probabilistic, relying on repetition across the sampling budget.
+    /// Dispatches commands across real GCD threads and uses the spec's ``ContractSpec/oracleCheck(_:)`` to verify consistency with sequential behavior. Non-deterministic scheduling means the same seed does not guarantee the same interleaving, so bug detection is probabilistic and relies on repetition across the sampling budget.
     @discardableResult
     static func __runPreemptiveConcurrentContract<Spec: ContractSpec>(
         _: Spec.Type,
@@ -58,7 +58,7 @@ public extension __ExhaustRuntime {
 // MARK: - Trace Building
 
 extension __ExhaustRuntime {
-    /// Builds a trace from a preemptive execution's reduced command sequence in input order. No interleaving annotations — preemptive scheduling is non-deterministic, so actual execution order may differ from the listed order.
+    /// Builds a trace from a preemptive execution's reduced command sequence in input order. No interleaving annotations are included because preemptive scheduling is non-deterministic, so actual execution order may differ from the listed order.
     static func buildPreemptiveTrace(
         _ reduced: [(ScheduleMarker, some CustomStringConvertible)]
     ) -> [TraceStep] {
@@ -87,7 +87,7 @@ extension __ExhaustRuntime {
 
 // MARK: - ObjC Exception Helper
 
-/// Executes a closure inside the ObjC `@try`/`@catch` wrapper. Returns `true` if the closure completed normally, `false` if an `NSException` was caught. Discards the exception — use the lane-level `caughtException` box when the identity matters.
+/// Executes a closure inside the ObjC `@try`/`@catch` wrapper. Returns `true` if the closure completed normally, `false` if an `NSException` was caught. Discards the exception; use the lane-level `caughtException` box when the identity matters.
 @discardableResult
 private func runCatchingObjC(_ body: @convention(block) () -> Void) -> Bool {
     var exception: NSException?
@@ -98,12 +98,12 @@ private func runCatchingObjC(_ body: @convention(block) () -> Void) -> Bool {
 
 /// Synchronous ``PreemptiveBackend``: runs each probe directly on GCD threads and compares against a sequential oracle.
 private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
-    /// Idle bound for the concurrent lanes, or `nil` to wait indefinitely. A synchronous SUT deadlock — the exact bug class preemptive testing targets — would otherwise wedge a lane forever and hang the test process with no diagnostic.
+    /// Idle bound for the concurrent lanes, or `nil` to wait indefinitely. Without a bound, a synchronous SUT deadlock (the exact bug class preemptive testing targets) would wedge a lane forever and hang the test process with no diagnostic.
     let idleTimeoutMilliseconds: Int?
 
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
-    /// `passed` is `false` when a command throws, an invariant fails, or the oracle detects divergence from sequential behavior. `timedOut` is `true` when the concurrent lanes did not finish within ``idleTimeoutMilliseconds`` — surfaced separately so the caller can skip reduction (every probe would wait out the bound) and report a hang rather than a deterministic failure.
+    /// `passed` is `false` when a command throws, an invariant fails, or the oracle detects divergence from sequential behavior. `timedOut` is `true` when the concurrent lanes did not finish within ``idleTimeoutMilliseconds``, surfaced separately so the caller can skip reduction (every probe would wait out the bound) and report a hang rather than a deterministic failure.
     func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
@@ -222,10 +222,10 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             },
             checkInvariants: { try spec.checkInvariants() }
         )
-        return (trace, failed, spec.systemUnderTest, spec.failureDescription())
+        return (trace, failed, spec.systemUnderTest, failed ? spec.failureDescription() : "")
     }
 
-    /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails — the partial state would mislead debugging.
+    /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails, because the partial state would mislead debugging.
     func buildResult(
         reduced: [(ScheduleMarker, Spec.Command)],
         seed: UInt64?,
@@ -240,7 +240,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                 do {
                     try oracleSpec.run(command)
                 } catch is ContractSkip {
-                    // Skip is expected — continue.
+                    // Skip is expected, continue.
                 } catch {
                     replaySucceeded = false
                 }
