@@ -310,6 +310,8 @@ struct CommandInfo {
     let generatorExprs: [String]
     let isAsync: Bool
     let isThrows: Bool
+    /// The return type as written in source, or `nil` for void-returning commands.
+    let returnType: String?
     let syntax: FunctionDeclSyntax?
 }
 
@@ -398,6 +400,7 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
 
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
         let isThrows = funcDecl.signature.effectSpecifiers?.throwsClause != nil
+        let returnType = funcDecl.signature.returnClause?.type.trimmedDescription
 
         return CommandInfo(
             methodName: methodName,
@@ -406,6 +409,7 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
             generatorExprs: generatorExprs,
             isAsync: isAsync,
             isThrows: isThrows,
+            returnType: returnType,
             syntax: funcDecl
         )
     }
@@ -536,21 +540,44 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> DeclSynt
             case (false, true): effectKeywords = "await "
             case (false, false): effectKeywords = ""
         }
+
+        let call: String
+        let pattern: String
         if cmd.parameters.isEmpty {
-            cases.append("        case .\(cmd.methodName): \(effectKeywords)self.\(cmd.methodName)()")
+            call = "\(effectKeywords)self.\(cmd.methodName)()"
+            pattern = "case .\(cmd.methodName)"
         } else {
             let bindings = cmd.parameters.map(\.bindingName).joined(separator: ", ")
             let args = cmd.parameters.map { param in
                 param.externalLabel.map { "\($0): \(param.bindingName)" } ?? param.bindingName
             }.joined(separator: ", ")
-            cases.append("        case let .\(cmd.methodName)(\(bindings)): \(effectKeywords)self.\(cmd.methodName)(\(args))")
+            call = "\(effectKeywords)self.\(cmd.methodName)(\(args))"
+            pattern = "case let .\(cmd.methodName)(\(bindings))"
+        }
+
+        if cmd.returnType != nil {
+            cases.append(
+                """
+                        \(pattern):
+                            let result = \(call)
+                            return CommandResponse(commandDescription: command.description, returnValue: result)
+                """
+            )
+        } else {
+            cases.append(
+                """
+                        \(pattern):
+                            \(call)
+                            return CommandResponse(commandDescription: command.description, returnValue: nil)
+                """
+            )
         }
     }
 
     let casesBlock = cases.joined(separator: "\n")
     let signature = hasAnyAsync
-        ? "func run(_ command: Command) async throws"
-        : "func run(_ command: Command) throws"
+        ? "@discardableResult func run(_ command: Command) async throws -> CommandResponse"
+        : "@discardableResult func run(_ command: Command) throws -> CommandResponse"
 
     return """
     \(raw: signature) {

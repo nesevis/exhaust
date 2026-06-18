@@ -79,7 +79,7 @@
                 }
                 """
             } expansion: {
-                #"""
+                """
                 final class SyncSpec {
                     var counter: MyCounter
                     func increment() throws {
@@ -108,10 +108,11 @@
                         )
                     }
 
-                    func run(_ command: Command) throws {
+                    @discardableResult func run(_ command: Command) throws -> CommandResponse {
                         switch command {
                             case .increment:
-                            try self.increment()
+                                try self.increment()
+                                return CommandResponse(commandDescription: command.description, returnValue: nil)
                         }
                     }
 
@@ -126,7 +127,7 @@
 
                 extension SyncSpec: ContractSpec {
                 }
-                """#
+                """
             }
         }
 
@@ -175,10 +176,11 @@
                         )
                     }
 
-                    func run(_ command: Command) throws {
+                    @discardableResult func run(_ command: Command) throws -> CommandResponse {
                         switch command {
                             case let .insert(value):
-                            try self.insert(value: value)
+                                try self.insert(value: value)
+                                return CommandResponse(commandDescription: command.description, returnValue: nil)
                         }
                     }
 
@@ -274,7 +276,7 @@
                 }
                 """
             } expansion: {
-                #"""
+                """
                 final class CounterSpec {
                     var counter: MyCounter
                     func increment() throws {
@@ -306,10 +308,11 @@
                         )
                     }
 
-                    func run(_ command: Command) throws {
+                    @discardableResult func run(_ command: Command) throws -> CommandResponse {
                         switch command {
                             case .increment:
-                            try self.increment()
+                                try self.increment()
+                                return CommandResponse(commandDescription: command.description, returnValue: nil)
                         }
                     }
 
@@ -328,7 +331,7 @@
 
                 extension CounterSpec: ContractSpec {
                 }
-                """#
+                """
             }
         }
 
@@ -394,7 +397,7 @@
                 }
                 """
             } expansion: {
-                #"""
+                """
                 final class Spec {
                     var sut: MySUT
                     func doSomething() throws {
@@ -424,10 +427,11 @@
                         )
                     }
 
-                    func run(_ command: Command) throws {
+                    @discardableResult func run(_ command: Command) throws -> CommandResponse {
                         switch command {
                             case .doSomething:
-                            try self.doSomething()
+                                try self.doSomething()
+                                return CommandResponse(commandDescription: command.description, returnValue: nil)
                         }
                     }
 
@@ -442,7 +446,7 @@
 
                 extension Spec: ContractSpec {
                 }
-                """#
+                """
             }
         }
 
@@ -485,7 +489,7 @@
                 }
                 """
             } expansion: {
-                #"""
+                """
                 final class Spec {
                     var sut: MySUT
                     func doSomething() throws {
@@ -516,10 +520,11 @@
                         )
                     }
 
-                    func run(_ command: Command) throws {
+                    @discardableResult func run(_ command: Command) throws -> CommandResponse {
                         switch command {
                             case .doSomething:
-                            try self.doSomething()
+                                try self.doSomething()
+                                return CommandResponse(commandDescription: command.description, returnValue: nil)
                         }
                     }
 
@@ -539,7 +544,7 @@
 
                 extension Spec: ContractSpec {
                 }
-                """#
+                """
             }
         }
 
@@ -640,7 +645,7 @@
                 }
                 """
             } expansion: {
-                #"""
+                """
                 final class Spec {
                     var sut: MySUT
                     func doSomething() throws {
@@ -670,10 +675,11 @@
                         )
                     }
 
-                    func run(_ command: Command) throws {
+                    @discardableResult func run(_ command: Command) throws -> CommandResponse {
                         switch command {
                             case .doSomething:
-                            try self.doSomething()
+                                try self.doSomething()
+                                return CommandResponse(commandDescription: command.description, returnValue: nil)
                         }
                     }
 
@@ -688,7 +694,7 @@
 
                 extension Spec: ContractSpec {
                 }
-                """#
+                """
             }
         }
 
@@ -712,7 +718,7 @@
                 }
                 """
             } expansion: {
-                #"""
+                """
                 actor Spec {
                     var expected: Int = 0
                     var sut: MySUT
@@ -745,10 +751,11 @@
                         )
                     }
 
-                    func run(_ command: Command) async throws {
+                    @discardableResult func run(_ command: Command) async throws -> CommandResponse {
                         switch command {
                             case .doSomething:
-                            try await self.doSomething()
+                                try await self.doSomething()
+                                return CommandResponse(commandDescription: command.description, returnValue: nil)
                         }
                     }
 
@@ -769,7 +776,7 @@
 
                 extension Spec: @preconcurrency AsyncContractSpec {
                 }
-                """#
+                """
             }
         }
     }
@@ -824,10 +831,11 @@
                 	    )
                 	}
 
-                	func run(_ command: Command) throws {
+                	@discardableResult func run(_ command: Command) throws -> CommandResponse {
                 	    switch command {
                 	        case let .insert(value):
-                	    	try self.insert(value: value)
+                	            try self.insert(value: value)
+                	            return CommandResponse(commandDescription: command.description, returnValue: nil)
                 	    }
                 	}
 
@@ -862,7 +870,7 @@
                 }
                 """
             } expansion: {
-                #"""
+                """
                 final class Spec {
                 	var count: Int = 0
                 	var name: String = ""
@@ -893,10 +901,11 @@
                 	    )
                 	}
 
-                	func run(_ command: Command) throws {
+                	@discardableResult func run(_ command: Command) throws -> CommandResponse {
                 	    switch command {
                 	        case .doSomething:
-                	    	try self.doSomething()
+                	            try self.doSomething()
+                	            return CommandResponse(commandDescription: command.description, returnValue: nil)
                 	    }
                 	}
 
@@ -911,7 +920,7 @@
 
                 extension Spec: ContractSpec {
                 }
-                """#
+                """
             }
         }
 

@@ -11,11 +11,15 @@ import Foundation
 ///
 /// Use ``skipIdentifier(specInit:)`` to obtain a synchronous closure for identifying skipped commands. The closure bridges async execution via `Task` + semaphore, matching the pattern used by the async contract runner's property closure.
 public protocol AsyncContractSpec: ContractSpecBase, AnyObject {
-    /// Executes a command against the model and SUT asynchronously.
+    /// Executes a command against the model and SUT asynchronously, returning a ``CommandResponse`` for linearizability checking.
+    ///
+    /// The preemptive runner captures responses per-lane for linearizability confirmation; sequential and cooperative runners discard the return value.
     ///
     /// - Parameter command: The command to execute.
+    /// - Returns: The command's description paired with its return value (or `nil` for void commands).
     /// - Throws: ``ContractSkip`` if a precondition fails, ``ContractCheckFailure`` if a postcondition or invariant fails.
-    func run(_ command: Command) async throws
+    @discardableResult
+    func run(_ command: Command) async throws -> CommandResponse
 
     /// Checks all `@Invariant`-annotated methods asynchronously. Called after every command execution.
     ///
