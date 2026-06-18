@@ -96,7 +96,7 @@ struct PreemptiveOracleReplayTests {
             )
         )
         let replaySeed = try #require(initial.replaySeed)
-        #expect(replaySeed.hasPrefix("U"), "Smoke failure replay seed should use U prefix, got: \(replaySeed)")
+        #expect(replaySeed == "0-1")
         #expect(initial.discoveryMethod == .smokeTest)
 
         let replayed = try #require(

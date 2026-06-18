@@ -297,92 +297,155 @@ extension __ExhaustRuntime {
             deferredIssues.append("Generator failed during smoke test: \(error)")
         }
 
-        // Phase 1: Coverage
+        // Phase 1: Coverage — same post-discovery pipeline as sampling (linearizability confirmation, lane-collapse with oracle, structural reduction with linearizability).
         if config.shouldRunCoverage {
             let effectiveCoverageBudget: UInt64 = if let row = config.coverageReplayRow {
                 max(coverageBudget, UInt64(row) + 1)
             } else {
                 coverageBudget
             }
-            if let scaResult = runConcurrentSCACoverage(
+            let scaRowResult = runSCACoverageRowLoop(
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 coverageBudget: effectiveCoverageBudget,
                 skipToRow: config.coverageReplayRow,
-                property: property,
-                identifySkips: identifySkips,
-                lastRunTimedOut: lastRunTimedOut,
-                invocationCounter: invocationCounter,
-                lastFailingOutcome: lastFailingOutcome
-            ) {
-                // Confirm the original SCA hit is a genuine linearizability violation using the captured outcome (no re-execution). The property closure stashed the outcome on failure, and runConcurrentSCACoverage snapshotted it before reduction could overwrite it. The prefix must come from the original input (pre-reduction), not finalInput — lane-collapse promotes commands into the prefix, and the original lane responses were observed under the original prefix.
-                var isReal = false
-                var coverageEvidence: (laneResponseValues: [UInt8: [String?]], note: String?)?
-                if let originalOutcome = scaResult.originalOutcome,
-                   let laneResponses = originalOutcome.laneResponses,
-                   let concurrentSpec = originalOutcome.concurrentSpec
-                {
-                    let originalPrefix = scaResult.originalInput ?? scaResult.finalInput
-                    let prefixCommands = originalPrefix.filter(\.0.isPrefix).map(\.1)
-                    let linearizability = backend.checkLinearizability(
-                        prefix: prefixCommands,
-                        laneResponses: laneResponses,
-                        concurrentSpec: concurrentSpec
-                    )
-                    if case .notLinearizable = linearizability {
-                        isReal = true
-                        coverageEvidence = extractEvidence(from: originalOutcome)
+                logEventPrefix: "concurrent_sca_coverage",
+                property: property
+            )
+            if case let .failure(taggedCommands, tree, coverageIterations) = scaRowResult {
+                let originalOutcome = lastFailingOutcome.value
+                let originalCount = taggedCommands.count
+
+                if lastRunTimedOut.value == false {
+                    var originalEvidence: (laneResponseValues: [UInt8: [String?]], note: String?)?
+                    if let laneResponses = originalOutcome?.laneResponses, let concurrentSpec = originalOutcome?.concurrentSpec {
+                        let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
+                        let linearizability = backend.checkLinearizability(
+                            prefix: prefixCommands,
+                            laneResponses: laneResponses,
+                            concurrentSpec: concurrentSpec
+                        )
+                        switch linearizability {
+                            case .linearizable:
+                                coverageInvocations = invocationCounter.value
+                            // Fall through to sampling — the SCA hit was a false positive.
+                            case let .notLinearizable(closestOrdering, divergenceStep):
+                                if let typedResponses = laneResponses as? [[ObservedResponse<Spec.Command>]] {
+                                    var values: [UInt8: [String?]] = [:]
+                                    for laneArray in typedResponses {
+                                        for response in laneArray {
+                                            values[response.lane, default: []].append(response.outcome.displayValue)
+                                        }
+                                    }
+                                    var note = "No sequential ordering reproduces these responses and the final state."
+                                    if closestOrdering.isEmpty == false {
+                                        note += "\nClosest ordering: [\(closestOrdering.joined(separator: ", "))] (diverges at step \(divergenceStep))"
+                                    }
+                                    originalEvidence = (values, note)
+                                }
+
+                                let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
+                                let laneCollapseResult = Preemptive.reduceSinglePass(
+                                    generator: sequenceGen,
+                                    tree: tree,
+                                    output: taggedCommands,
+                                    encoders: [.laneCollapse],
+                                    maxStalls: 2,
+                                    deadlineNanoseconds: 10_000_000_000,
+                                    rematerialize: true,
+                                    repetitions: Preemptive.confirmationRepetitions,
+                                    tuning: noRelax,
+                                    execute: backend.execute
+                                )
+                                report.applyReductionStats(laneCollapseResult.stats)
+                                var reductionInvocations = laneCollapseResult.propertyInvocations
+
+                                let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
+                                var coverageLastFailingOutcome: Preemptive.Outcome?
+                                let linearizableExecute: ([(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome = { probeCommands in
+                                    let probeOutcome = backend.execute(probeCommands)
+                                    if probeOutcome.passed {
+                                        return probeOutcome
+                                    }
+                                    guard let probeLaneResponses = probeOutcome.laneResponses,
+                                          let probeConcurrentSpec = probeOutcome.concurrentSpec
+                                    else {
+                                        coverageLastFailingOutcome = probeOutcome
+                                        return probeOutcome
+                                    }
+                                    let probePrefixCommands = probeCommands.filter(\.0.isPrefix).map(\.1)
+                                    let probeLinearizability = backend.checkLinearizability(
+                                        prefix: probePrefixCommands,
+                                        laneResponses: probeLaneResponses,
+                                        concurrentSpec: probeConcurrentSpec
+                                    )
+                                    if case .linearizable = probeLinearizability {
+                                        return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+                                    }
+                                    coverageLastFailingOutcome = probeOutcome
+                                    return probeOutcome
+                                }
+                                let structuralResult = Preemptive.reduceSinglePass(
+                                    generator: sequenceGen,
+                                    tree: laneCollapseResult.tree,
+                                    output: laneCollapseResult.output,
+                                    encoders: structural,
+                                    maxStalls: 2,
+                                    deadlineNanoseconds: 15_000_000_000,
+                                    rematerialize: true,
+                                    repetitions: Preemptive.confirmationRepetitions,
+                                    tuning: noRelax,
+                                    execute: linearizableExecute
+                                )
+                                report.applyReductionStats(structuralResult.stats)
+                                reductionInvocations += structuralResult.propertyInvocations
+
+                                let reduced: [(ScheduleMarker, Spec.Command)] = if confirmRealFailure(structuralResult.output).isReal {
+                                    structuralResult.output
+                                } else {
+                                    taggedCommands.filter(\.0.isPrefix) + taggedCommands.filter { $0.0.isPrefix == false }
+                                }
+                                let scaReplaySeed = ReplaySeed.Resolved.encodeCoverageIteration(coverageIterations)
+                                let (result, failureDescription) = backend.buildResult(
+                                    reduced: reduced,
+                                    seed: nil,
+                                    replaySeed: scaReplaySeed,
+                                    discoveryMethod: .coverage
+                                )
+                                report.setConcurrentInvocations(
+                                    totalInvocations: invocationCounter.value,
+                                    coverageThroughReduction: invocationCounter.value,
+                                    reduction: reductionInvocations,
+                                    discoveredDuringCoverage: true
+                                )
+
+                                if config.suppressIssueReporting == false {
+                                    let evidence = extractEvidence(from: coverageLastFailingOutcome) ?? originalEvidence
+                                    deferredIssues.append(makePreemptiveFailureMessage(
+                                        reduced,
+                                        specName: "\(Spec.self)",
+                                        discoveryMethod: .coverage,
+                                        seed: nil,
+                                        iteration: coverageIterations,
+                                        budget: coverageBudget,
+                                        sequencesTested: invocationCounter.value,
+                                        reductionInvocations: reductionInvocations,
+                                        originalCount: originalCount,
+                                        replaySeed: scaReplaySeed,
+                                        timedOut: false,
+                                        expectedDescription: failureDescription,
+                                        actualDescription: (coverageLastFailingOutcome?.concurrentSpec as? Spec)?.failureDescription()
+                                            ?? (originalOutcome?.concurrentSpec as? Spec)?.failureDescription(),
+                                        laneResponseValues: evidence?.laneResponseValues,
+                                        linearizabilityNote: evidence?.note
+                                    ))
+                                }
+
+                                finalizeReport()
+                                return (result, deferredIssues, report)
+                        }
                     }
-                } else if let originalOutcome = scaResult.originalOutcome, originalOutcome.passed == false {
-                    // Oracle failure without lane responses (invariant or exception failure) — real by construction.
-                    isReal = true
-                }
-
-                if isReal {
-                    if let stats = scaResult.reductionStats {
-                        report.applyReductionStats(stats)
-                    }
-                    report.reductionInvocations = scaResult.reductionInvocations
-                    report.reductionMilliseconds = scaResult.reductionMilliseconds
-
-                    let reportedInput = scaResult.finalInput.filter(\.0.isPrefix) + scaResult.finalInput.filter { $0.0.isPrefix == false }
-                    let scaReplaySeed = ReplaySeed.Resolved.encodeCoverageIteration(Int(scaResult.iteration))
-                    let (result, failureDescription) = backend.buildResult(
-                        reduced: reportedInput,
-                        seed: nil,
-                        replaySeed: scaReplaySeed,
-                        discoveryMethod: .coverage
-                    )
-                    report.setConcurrentInvocations(
-                        totalInvocations: invocationCounter.value,
-                        coverageThroughReduction: invocationCounter.value,
-                        reduction: scaResult.reductionInvocations,
-                        discoveredDuringCoverage: true
-                    )
-
-                    if config.suppressIssueReporting == false {
-                        deferredIssues.append(makePreemptiveFailureMessage(
-                            reportedInput,
-                            specName: "\(Spec.self)",
-                            discoveryMethod: .coverage,
-                            seed: nil,
-                            iteration: Int(scaResult.iteration),
-                            budget: coverageBudget,
-                            sequencesTested: invocationCounter.value,
-                            reductionInvocations: scaResult.reductionInvocations,
-                            originalCount: scaResult.originalCount,
-                            replaySeed: scaReplaySeed,
-                            timedOut: scaResult.timedOut,
-                            expectedDescription: failureDescription,
-                            actualDescription: (scaResult.originalOutcome?.concurrentSpec as? Spec)?.failureDescription(),
-                            laneResponseValues: coverageEvidence?.laneResponseValues,
-                            linearizabilityNote: coverageEvidence?.note
-                        ))
-                    }
-
-                    finalizeReport()
-                    return (result, deferredIssues, report)
                 }
             }
         }
