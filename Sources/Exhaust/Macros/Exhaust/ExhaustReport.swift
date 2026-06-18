@@ -146,15 +146,15 @@ public struct ExhaustReport: Sendable {
 
     /// Populates reduction statistics from a ``ReductionStats`` value.
     package mutating func applyReductionStats(_ stats: ReductionStats) {
-        encoderProbes = stats.encoderProbes
-        encoderProbesAccepted = stats.encoderProbesAccepted
-        encoderProbesRejectedByCache = stats.encoderProbesRejectedByCache
-        encoderProbesRejectedByDecoder = stats.encoderProbesRejectedByDecoder
-        totalMaterializations = stats.totalMaterializations
-        cycles = stats.cycles
-        filterObservations = stats.filterObservations
+        encoderProbes.merge(stats.encoderProbes) { existing, new in existing + new }
+        encoderProbesAccepted.merge(stats.encoderProbesAccepted) { existing, new in existing + new }
+        encoderProbesRejectedByCache.merge(stats.encoderProbesRejectedByCache) { existing, new in existing + new }
+        encoderProbesRejectedByDecoder.merge(stats.encoderProbesRejectedByDecoder) { existing, new in existing + new }
+        totalMaterializations += stats.totalMaterializations
+        cycles += stats.cycles
+        filterObservations.merge(stats.filterObservations) { _, new in new }
         graphStats = stats.graphStats
         stepTimings = stats.stepTimings
-        reductionWasCapped = stats.reductionWasCapped
+        reductionWasCapped = reductionWasCapped || stats.reductionWasCapped
     }
 }

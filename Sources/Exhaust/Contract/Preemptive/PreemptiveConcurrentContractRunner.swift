@@ -113,16 +113,16 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
         for (_, command) in prefixCommands {
             guard runCommandCatchingObjC(command, on: concurrentSpec) else {
-                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil)
+                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
             }
             guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil)
+                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
             }
         }
 
         for (_, command) in concurrentCommands {
             guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil)
+                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
             }
         }
 
@@ -191,28 +191,28 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
                 commandFailed.value = true
-                return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil)
+                return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
             }
         } else {
             group.wait()
         }
 
         if caughtException.value != nil || commandFailed.value {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil)
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
 
         do {
             try concurrentSpec.checkInvariants()
         } catch {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil)
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
 
         let oraclePassed = concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest)
         if oraclePassed {
-            return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil)
+            return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
         let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
-        return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses)
+        return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
     }
 
     /// Runs a command on a spec with ObjC exception safety, treating ``ContractSkip`` as a pass.
@@ -232,6 +232,24 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             return false
         }
         return true
+    }
+
+    func checkLinearizability(
+        prefix: [Spec.Command],
+        laneResponses: Any,
+        concurrentSpec: Any
+    ) -> LinearizabilityResult {
+        guard let typedResponses = laneResponses as? [[ObservedResponse<Spec.Command>]],
+              let typedSpec = concurrentSpec as? Spec
+        else {
+            return .linearizable
+        }
+        let checker = LinearizabilityChecker(
+            prefix: prefix,
+            laneResponses: typedResponses,
+            concurrentSpec: typedSpec
+        )
+        return checker.check()
     }
 
     func makeIdentifySkips() -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> {

@@ -60,9 +60,8 @@ extension __ExhaustRuntime {
         }
 
         if let failureDescription = context.failureDescription {
-            let indented = failureDescription.replacingOccurrences(of: "\n", with: "\n  ")
             lines.append("")
-            lines.append("State: \(indented)")
+            lines.append(failureDescription)
         }
 
         if tagged.isEmpty == false, tagged.allSatisfy(\.0.isPrefix) {
