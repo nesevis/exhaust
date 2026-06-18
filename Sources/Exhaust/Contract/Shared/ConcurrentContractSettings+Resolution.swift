@@ -9,7 +9,7 @@ struct ResolvedConcurrentConfig {
     var seed: UInt64?
     var replayIteration: Int?
     var coverageReplayRow: Int?
-    var idleTimeout: Int = 1000
+    var idleTimeout: Int = 2000
     var suppressIssueReporting: Bool = false
     var suppressLogs: Bool = false
     var collectOpenPBTStats: Bool = false
