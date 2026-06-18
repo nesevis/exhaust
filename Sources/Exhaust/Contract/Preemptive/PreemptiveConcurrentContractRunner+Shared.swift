@@ -3,7 +3,7 @@ import ExhaustCore
 
 /// Namespace for machinery shared by ``PreemptiveChecker`` (synchronous) and ``AsyncPreemptiveChecker``.
 ///
-/// The two checkers differ only in how a single probe runs (direct GCD execution versus async bridged through a drain loop), so the outcome shape and the three-pass reducer live here and are parameterised by each checker's `execute`.
+/// The two checkers differ only in how a single probe runs (direct GCD execution versus async bridged through a drain loop), so the outcome shape, single-pass reducer, and pipeline live here and are parameterised by each checker's `execute`.
 enum Preemptive {
     /// Number of times each reduction probe re-executes the concurrent schedule to probabilistically confirm the race still reproduces.
     static let confirmationRepetitions = 10
@@ -32,75 +32,6 @@ enum Preemptive {
         let tree: ChoiceTree
         let propertyInvocations: Int
         let stats: ReductionStats
-    }
-
-    /// Reduces a counterexample in three passes, each targeting a different encoder set. The only thing that varies between the two checkers is `execute`.
-    ///
-    /// The three-pass structure is deliberate: preemptive evaluation is non-deterministic (GCD thread preemption), so each probe requires multiple repetitions to confirm. Phased reduction ensures the most impactful transformations run first before budget is spent on fine-tuning.
-    ///
-    /// **Pass 1: Lane Collapse.** Drives lane markers to zero, moving commands into the sequential prefix. Prefix commands execute deterministically (no scheduling noise), so a longer prefix produces counterexamples that are easier to reproduce and reason about. Running lane collapse first also reduces the repetition cost of later passes, because fewer concurrent commands means less non-deterministic scheduling per evaluation. (The cooperative runner skips this pre-pass because its schedule is choice-encoded and fully deterministic.)
-    ///
-    /// **Pass 2: Structural.** Deletion, migration, and substitution. Removes unnecessary commands and simplifies arguments, operating on the already-collapsed trace so deletions target only commands genuinely needed for the failure.
-    ///
-    /// **Pass 3: Value Minimization.** All remaining encoders. Simplifies command arguments toward their semantic simplest form. Runs with a tighter budget (1 stall, 5s) since the structural shape is already minimal.
-    static func reduce<Command>(
-        generator: Generator<[(ScheduleMarker, Command)]>,
-        tree: ChoiceTree,
-        output: [(ScheduleMarker, Command)],
-        repetitions: Int,
-        execute: ([(ScheduleMarker, Command)]) -> Outcome
-    ) -> ReductionResult<Command> {
-        // Single-threaded: the reducer calls the property sequentially on the pipeline GCD thread.
-        var propertyInvocations = 0
-        let property: ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
-            for _ in 0 ..< repetitions {
-                propertyInvocations += 1
-                if execute(taggedCommands).passed == false {
-                    return false
-                }
-            }
-            return true
-        }
-
-        let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
-        let valueMinimization = Set(EncoderName.allCases.filter(\.isValueMinimizer))
-
-        let passes: [(encoders: Set<EncoderName>, maxStalls: Int, deadlineNanoseconds: UInt64, rematerialize: Bool)] = [
-            ([.laneCollapse], 2, 10_000_000_000, true),
-            (structural, 2, 30_000_000_000, true),
-            (valueMinimization, 1, 5_000_000_000, false),
-        ]
-
-        var currentOutput = output
-        var currentTree = tree
-        var aggregateStats = ReductionStats()
-
-        for pass in passes {
-            guard let result = try? Interpreters.choiceGraphReduceCollectingStats(
-                gen: generator,
-                tree: currentTree,
-                output: currentOutput,
-                config: .init(
-                    maxStalls: pass.maxStalls,
-                    wallClockDeadlineNanoseconds: pass.deadlineNanoseconds,
-                    enabledEncoders: pass.encoders
-                ),
-                property: property
-            ) else { continue }
-            aggregateStats.merge(result.stats)
-            if case let .reduced(sequence, reduced) = result.outcome {
-                currentOutput = reduced
-                if pass.rematerialize,
-                   case let .success(_, freshTree, _) = Materializer.materialize(
-                       generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
-                   )
-                {
-                    currentTree = freshTree
-                }
-            }
-        }
-
-        return ReductionResult(output: currentOutput, tree: currentTree, propertyInvocations: propertyInvocations, stats: aggregateStats)
     }
 
     /// Runs a single reduction pass with the given encoder set and property function.
