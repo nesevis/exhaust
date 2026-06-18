@@ -53,8 +53,10 @@ struct IdleTimeoutConcurrentTests {
 
         // The stalling command always exceeds the idle bound, so the first sampling run times out. The runner must route that to the timeout path: flag the failure (so it renders as a timeout rather than a confirmed race) and skip reduction (slow and usually fruitless on a hang). Zero reduction probes is the regression signal — a failure misclassified as a race would have run the three-pass reducer, leaving `reductionInvocations > 0`.
         let report = try #require(deliveredReport)
+        #expect(report.replaySeed == "0-1")
         #expect(report.reductionInvocations == 0)
         #expect(report.randomSamplingInvocations == 1)
+        #expect(report.coverageInvocations == 0)
         #expect(report.propertyInvocations == 1)
     }
 

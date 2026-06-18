@@ -177,11 +177,15 @@ extension __ExhaustRuntime {
         let lastRunTimedOut = UnsafeSendableBox(false)
 
         let identifySkips = backend.makeIdentifySkips()
+        let lastFailingOutcome = UnsafeSendableBox<Preemptive.Outcome?>(nil)
         // Oracle-based property: the fast entry filter for sampling and SCA coverage. Over-reports (false positives from valid interleavings), but never misses a real failure. Linearizability confirmation runs after lane-collapse on every candidate this filter flags.
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             invocationCounter.value += 1
             let outcome = backend.execute(taggedCommands)
             lastRunTimedOut.value = outcome.timedOut
+            if outcome.passed == false {
+                lastFailingOutcome.value = outcome
+            }
             return outcome.passed
         }
 
@@ -275,7 +279,7 @@ extension __ExhaustRuntime {
                         trace: smoke.trace,
                         systemUnderTest: smoke.systemUnderTest,
                         seed: nil,
-                        replaySeed: ReplaySeed.Resolved.coverage(row: 0).encoded,
+                        replaySeed: ReplaySeed.Resolved.sampling(seed: 0, iteration: 1).encoded,
                         discoveryMethod: .smokeTest
                     )
                     if config.suppressIssueReporting == false {
@@ -284,7 +288,7 @@ extension __ExhaustRuntime {
                         deferredIssues.append(message)
                     }
                     report.replaySeed = result.replaySeed
-                    report.setInvocations(coverage: 1, randomSampling: 0, reduction: 0)
+                    report.setInvocations(coverage: 0, randomSampling: 1, reduction: 0)
                     finalizeReport()
                     return (result, deferredIssues, report)
                 }
@@ -309,19 +313,39 @@ extension __ExhaustRuntime {
                 property: property,
                 identifySkips: identifySkips,
                 lastRunTimedOut: lastRunTimedOut,
-                invocationCounter: invocationCounter
+                invocationCounter: invocationCounter,
+                lastFailingOutcome: lastFailingOutcome
             ) {
-                // Confirm the coverage hit over repetitions before reporting. A single re-execution can miss the race, and an unconfirmed report would surface linearizable interleavings as failures.
-                let confirmation = confirmRealFailure(scaResult.finalInput)
+                // Confirm the original SCA hit is a genuine linearizability violation using the captured outcome (no re-execution). The property closure stashed the outcome on failure, and runConcurrentSCACoverage snapshotted it before reduction could overwrite it. The prefix must come from the original input (pre-reduction), not finalInput — lane-collapse promotes commands into the prefix, and the original lane responses were observed under the original prefix.
+                var isReal = false
+                var coverageEvidence: (laneResponseValues: [UInt8: [String?]], note: String?)?
+                if let originalOutcome = scaResult.originalOutcome,
+                   let laneResponses = originalOutcome.laneResponses,
+                   let concurrentSpec = originalOutcome.concurrentSpec
+                {
+                    let originalPrefix = scaResult.originalInput ?? scaResult.finalInput
+                    let prefixCommands = originalPrefix.filter(\.0.isPrefix).map(\.1)
+                    let linearizability = backend.checkLinearizability(
+                        prefix: prefixCommands,
+                        laneResponses: laneResponses,
+                        concurrentSpec: concurrentSpec
+                    )
+                    if case .notLinearizable = linearizability {
+                        isReal = true
+                        coverageEvidence = extractEvidence(from: originalOutcome)
+                    }
+                } else if let originalOutcome = scaResult.originalOutcome, originalOutcome.passed == false {
+                    // Oracle failure without lane responses (invariant or exception failure) — real by construction.
+                    isReal = true
+                }
 
-                if confirmation.isReal {
+                if isReal {
                     if let stats = scaResult.reductionStats {
                         report.applyReductionStats(stats)
                     }
                     report.reductionInvocations = scaResult.reductionInvocations
                     report.reductionMilliseconds = scaResult.reductionMilliseconds
 
-                    // Canonicalize prefix-first for the report. A no-op when the coverage reduction already ran lane-collapse (which canonicalizes), but the SCA hit can also be reported without that pass, in raw generation order; execution runs the whole prefix before any lane regardless.
                     let reportedInput = scaResult.finalInput.filter(\.0.isPrefix) + scaResult.finalInput.filter { $0.0.isPrefix == false }
                     let scaReplaySeed = ReplaySeed.Resolved.encodeCoverageIteration(Int(scaResult.iteration))
                     let (result, failureDescription) = backend.buildResult(
@@ -351,7 +375,9 @@ extension __ExhaustRuntime {
                             replaySeed: scaReplaySeed,
                             timedOut: scaResult.timedOut,
                             expectedDescription: failureDescription,
-                            actualDescription: (confirmation.spec as? Spec)?.failureDescription()
+                            actualDescription: (scaResult.originalOutcome?.concurrentSpec as? Spec)?.failureDescription(),
+                            laneResponseValues: coverageEvidence?.laneResponseValues,
+                            linearizabilityNote: coverageEvidence?.note
                         ))
                     }
 
