@@ -5,8 +5,9 @@ import Foundation
 /// Per-lane arrays of these are collected during concurrent execution and merged by timestamp on failure to reconstruct the actual execution order. The timestamps also establish the partial order for linearizability checking: if one response's timestamp precedes another's, the first must precede the second in any valid linearization.
 ///
 /// Marked `@unchecked Sendable` because `Outcome.returned` carries `Any`, which is not `Sendable`. The values are command return values produced and consumed on GCD threads within a single `execute()` call and never shared beyond the runner.
-struct ObservedResponse: @unchecked Sendable {
+struct ObservedResponse<Command>: @unchecked Sendable {
     let lane: UInt8
+    let command: Command
     let commandDescription: String
     let outcome: Outcome
     let timestamp: UInt64

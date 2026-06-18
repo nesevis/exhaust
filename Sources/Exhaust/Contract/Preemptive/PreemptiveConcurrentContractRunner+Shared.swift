@@ -15,11 +15,11 @@ enum Preemptive {
     ///
     /// `timedOut` distinguishes a hang (a wedged lane or a drain-loop idle bailout) from a genuine pass or property failure, so the runner reports the hang as a timeout rather than dressing it up as a confirmed race. A timed-out run always has `passed == false`.
     ///
-    /// On failure, `laneResponses` carries the per-lane observed responses for linearizability confirmation. On pass or timeout, `laneResponses` is `nil` because responses are only worth preserving when the oracle flags a potential violation.
+    /// On failure, `laneResponses` carries the per-lane observed responses for linearizability confirmation. On pass or timeout, `laneResponses` is `nil` because responses are only worth preserving when the oracle flags a potential violation. The inner type is erased to `Any` so `Outcome` stays non-generic across the reduction pipeline. Callers cast to `[[ObservedResponse<Command>]]` when consuming.
     struct Outcome {
         let passed: Bool
         let timedOut: Bool
-        let laneResponses: [[ObservedResponse]]?
+        let laneResponses: Any?
     }
 
     /// Result of the three-pass preemptive reducer.

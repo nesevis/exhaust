@@ -128,7 +128,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
         let laneCount = laneGroups.count
-        let perLaneResponses = (0 ..< laneCount).map { _ in SendableBox<[ObservedResponse]>([]) }
+        let perLaneResponses = (0 ..< laneCount).map { _ in SendableBox<[ObservedResponse<Spec.Command>]>([]) }
         let laneIndexByRawValue: [UInt8: Int] = {
             var mapping: [UInt8: Int] = [:]
             for (index, rawValue) in laneGroups.keys.sorted().enumerated() {
@@ -153,13 +153,14 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                         let timestamp = mach_absolute_time()
                         do {
                             let response = try concurrentSpec.run(command)
-                            let outcome: ObservedResponse.Outcome =
+                            let outcome: ObservedResponse<Spec.Command>.Outcome =
                                 response.returnValue != nil
                                     ? .returned(response.returnValue!)
                                     : .returnedVoid
                             responseBox.withValue { responses in
-                                responses.append(ObservedResponse(
+                                responses.append(ObservedResponse<Spec.Command>(
                                     lane: laneID,
+                                    command: command,
                                     commandDescription: response.commandDescription,
                                     outcome: outcome,
                                     timestamp: timestamp
@@ -167,8 +168,9 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                             }
                         } catch is ContractSkip {
                             responseBox.withValue { responses in
-                                responses.append(ObservedResponse(
+                                responses.append(ObservedResponse<Spec.Command>(
                                     lane: laneID,
+                                    command: command,
                                     commandDescription: command.description,
                                     outcome: .skipped,
                                     timestamp: timestamp
@@ -209,7 +211,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         if oraclePassed {
             return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil)
         }
-        let collectedResponses = perLaneResponses.map(\.value)
+        let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
         return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses)
     }
 
