@@ -102,6 +102,7 @@ extension __ExhaustRuntime {
         var lines: [String] = []
         lines.append("Concurrent contract timed out: the drain loop stalled with no pending continuations.")
         lines.append("This typically means a command body suspended to a foreign executor (custom-executor actor, Task.sleep, or blocking I/O) that does not flow through the cooperative scheduler.")
+        lines.append("If the timeout is caused by thread contention from parallel tests, increase the budget with .idleTimeoutMs(_:).")
         lines.append("")
 
         renderCommandPartition(tagged, into: &lines)

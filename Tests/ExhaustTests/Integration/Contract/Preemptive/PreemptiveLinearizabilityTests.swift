@@ -10,6 +10,7 @@ struct PreemptiveLinearizabilityTests {
             AtomicLastWriterWinsSpec.self,
             .concurrent(.two),
             .commandLimit(4),
+            .idleTimeoutMs(5000),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "A correctly synchronized SUT should not produce failures. The fixed-ordering oracle would false-positive here; linearizability should accept both orderings.")
