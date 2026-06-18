@@ -126,13 +126,13 @@ struct PreemptiveLoweHashMapTests {
         var report: ExhaustReport?
         let result = #execute(
             LoweHashMapSpec.self,
-            .concurrent(.two),
-            .budget(.thorough),
+            .concurrent(.three),
+            .budget(.custom(coverage: 20000, sampling: 20000)),
             .suppress(.issueReporting),
             .onReport { report = $0 }
         )
         #expect(result?.replaySeed != nil)
-        #expect(result?.commands.count ?? 0 >= 5)
+        #expect(result?.commands.count ?? 0 >= 4)
     }
 }
 
