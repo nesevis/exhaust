@@ -93,15 +93,15 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
         let prefixOnConcurrent = runSequentially(prefixCommands.map(\.1), on: concurrentSpec)
         if prefixOnConcurrent.succeeded == false {
-            return Preemptive.Outcome(passed: false, timedOut: prefixOnConcurrent.timedOut)
+            return Preemptive.Outcome(passed: false, timedOut: prefixOnConcurrent.timedOut, laneResponses: nil)
         }
         let prefixOnSequential = runSequentially(prefixCommands.map(\.1), on: sequentialSpec)
         if prefixOnSequential.succeeded == false {
-            return Preemptive.Outcome(passed: false, timedOut: prefixOnSequential.timedOut)
+            return Preemptive.Outcome(passed: false, timedOut: prefixOnSequential.timedOut, laneResponses: nil)
         }
         let concurrentOnSequential = runSequentially(concurrentCommands.map(\.1), on: sequentialSpec)
         if concurrentOnSequential.succeeded == false {
-            return Preemptive.Outcome(passed: false, timedOut: concurrentOnSequential.timedOut)
+            return Preemptive.Outcome(passed: false, timedOut: concurrentOnSequential.timedOut, laneResponses: nil)
         }
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
@@ -142,14 +142,14 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
                 commandFailed.value = true
-                return Preemptive.Outcome(passed: false, timedOut: true)
+                return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil)
             }
         } else {
             group.wait()
         }
 
         if caughtException.value != nil || commandFailed.value {
-            return Preemptive.Outcome(passed: false, timedOut: timedOut.value)
+            return Preemptive.Outcome(passed: false, timedOut: timedOut.value, laneResponses: nil)
         }
 
         nonisolated(unsafe) let invariantSpec = concurrentSpec
@@ -162,11 +162,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 return false
             }
         }) else {
-            return Preemptive.Outcome(passed: false, timedOut: true)
+            return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil)
         }
 
         if invariantsPassed == false {
-            return Preemptive.Outcome(passed: false, timedOut: false)
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil)
         }
 
         nonisolated(unsafe) let oracleSpec = concurrentSpec
@@ -175,9 +175,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         guard let oraclePassed = awaitOrTimeout("oracle", {
             await oracleSpec.oracleCheck(sequentialResult)
         }) else {
-            return Preemptive.Outcome(passed: false, timedOut: true)
+            return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil)
         }
-        return Preemptive.Outcome(passed: oraclePassed, timedOut: false)
+        return Preemptive.Outcome(passed: oraclePassed, timedOut: false, laneResponses: nil)
     }
 
     /// Outcome of a sequential command run.

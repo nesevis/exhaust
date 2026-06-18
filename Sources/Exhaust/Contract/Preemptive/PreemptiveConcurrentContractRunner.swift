@@ -113,34 +113,67 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
         for (_, command) in prefixCommands {
             guard runCommandCatchingObjC(command, on: concurrentSpec) else {
-                return Preemptive.Outcome(passed: false, timedOut: false)
+                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil)
             }
             guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return Preemptive.Outcome(passed: false, timedOut: false)
+                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil)
             }
         }
 
         for (_, command) in concurrentCommands {
             guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return Preemptive.Outcome(passed: false, timedOut: false)
+                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil)
             }
         }
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
+        let laneCount = laneGroups.count
+        let perLaneResponses = (0 ..< laneCount).map { _ in SendableBox<[ObservedResponse]>([]) }
+        let laneIndexByRawValue: [UInt8: Int] = {
+            var mapping: [UInt8: Int] = [:]
+            for (index, rawValue) in laneGroups.keys.sorted().enumerated() {
+                mapping[rawValue] = index
+            }
+            return mapping
+        }()
+
         let commandFailed = SendableBox(false)
         let caughtException = SendableBox<NSException?>(nil)
         let group = DispatchGroup()
-        for (_, laneCommands) in laneGroups {
+        for (rawValue, laneCommands) in laneGroups {
+            let laneIndex = laneIndexByRawValue[rawValue]!
+            let responseBox = perLaneResponses[laneIndex]
+            let laneID = rawValue
             group.enter()
             DispatchQueue.global().async {
                 var exception: NSException?
                 let succeeded = exhaust_runCatchingObjCException({
                     for (_, command) in laneCommands {
                         if commandFailed.value { break }
+                        let timestamp = mach_absolute_time()
                         do {
-                            try concurrentSpec.run(command)
+                            let response = try concurrentSpec.run(command)
+                            let outcome: ObservedResponse.Outcome =
+                                response.returnValue != nil
+                                    ? .returned(response.returnValue!)
+                                    : .returnedVoid
+                            responseBox.withValue { responses in
+                                responses.append(ObservedResponse(
+                                    lane: laneID,
+                                    commandDescription: response.commandDescription,
+                                    outcome: outcome,
+                                    timestamp: timestamp
+                                ))
+                            }
                         } catch is ContractSkip {
-                            continue
+                            responseBox.withValue { responses in
+                                responses.append(ObservedResponse(
+                                    lane: laneID,
+                                    commandDescription: command.description,
+                                    outcome: .skipped,
+                                    timestamp: timestamp
+                                ))
+                            }
                         } catch {
                             commandFailed.value = true
                             break
@@ -155,25 +188,29 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         }
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
-                // A lane is wedged (a synchronous deadlock in the SUT). Stop the lanes we can and report a hang rather than blocking the test process forever. Orphaned lanes blocked on the deadlock cannot be reclaimed.
                 commandFailed.value = true
-                return Preemptive.Outcome(passed: false, timedOut: true)
+                return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil)
             }
         } else {
             group.wait()
         }
 
         if caughtException.value != nil || commandFailed.value {
-            return Preemptive.Outcome(passed: false, timedOut: false)
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil)
         }
 
         do {
             try concurrentSpec.checkInvariants()
         } catch {
-            return Preemptive.Outcome(passed: false, timedOut: false)
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil)
         }
 
-        return Preemptive.Outcome(passed: concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest), timedOut: false)
+        let oraclePassed = concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest)
+        if oraclePassed {
+            return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil)
+        }
+        let collectedResponses = perLaneResponses.map(\.value)
+        return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses)
     }
 
     /// Runs a command on a spec with ObjC exception safety, treating ``ContractSkip`` as a pass.
