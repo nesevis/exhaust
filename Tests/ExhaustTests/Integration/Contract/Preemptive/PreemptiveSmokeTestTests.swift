@@ -13,8 +13,8 @@ struct PreemptiveSmokeTestTests {
                     SequentiallyBrokenSpec.self,
                     settings: [
                         .concurrent(.two),
-                        .commandLimit(4),
-                        .budget(.custom(coverage: 0, sampling: 50)),
+                        .commandLimit(10),
+                        .budget(.custom(coverage: 0, sampling: 0)),
                         .suppress(.issueReporting),
                     ]
                 )
@@ -23,8 +23,8 @@ struct PreemptiveSmokeTestTests {
         #expect(result.commands.isEmpty == false)
     }
 
-    @Test("Smoke test failure has replay seed")
-    func smokeTestFailureHasReplaySeed() async throws {
+    @Test("Smoke test failure carries U-prefixed replay seed")
+    func smokeTestFailureCarriesUPrefixedReplaySeed() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
@@ -32,13 +32,14 @@ struct PreemptiveSmokeTestTests {
                     settings: [
                         .concurrent(.two),
                         .commandLimit(10),
-                        .budget(.custom(coverage: 0, sampling: 50)),
+                        .budget(.custom(coverage: 0, sampling: 0)),
                         .suppress(.issueReporting),
                     ]
                 )
             }
         )
-        #expect(result.replaySeed != nil)
+        let replaySeed = try #require(result.replaySeed)
+        #expect(replaySeed.hasPrefix("U"), "Smoke test replay seed should have U prefix")
     }
 }
 

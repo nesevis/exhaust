@@ -20,6 +20,10 @@ extension __ExhaustRuntime {
         var replaySeed: String?
         var oracleDescription: String?
         var failureDescription: String?
+        /// Observed return values per lane (keyed by ``ScheduleMarker/rawValue``), in per-lane execution order, used to annotate each lane command with what it returned. A `nil` entry is a void command (no annotation).
+        var laneResponseValues: [UInt8: [String?]]?
+        /// The linearizability verdict block (closest ordering and divergence point), shown when a non-linearizable counterexample was confirmed.
+        var linearizabilityNote: String?
     }
 
     /// Formats a concurrent contract failure for reporting.
@@ -47,7 +51,7 @@ extension __ExhaustRuntime {
             lines.append("")
         }
 
-        renderCommandPartition(tagged, into: &lines)
+        renderCommandPartition(tagged, into: &lines, laneResponseValues: context.laneResponseValues)
 
         lines.append("Execution trace:")
         for step in trace {
@@ -62,6 +66,11 @@ extension __ExhaustRuntime {
         if let failureDescription = context.failureDescription {
             lines.append("")
             lines.append(failureDescription)
+        }
+
+        if let linearizabilityNote = context.linearizabilityNote {
+            lines.append("")
+            lines.append(linearizabilityNote)
         }
 
         if tagged.isEmpty == false, tagged.allSatisfy(\.0.isPrefix) {
@@ -108,9 +117,12 @@ extension __ExhaustRuntime {
     }
 
     /// Renders the command partition (prefix, lane A, lane B, ...) into the output lines.
+    ///
+    /// When `laneResponseValues` is supplied, each lane command is annotated with the value it returned during the concurrent execution (`getOrElse(0) → 5`), which is where a response-level linearizability violation is visible. Prefix commands are not annotated because they run deterministically.
     static func renderCommandPartition(
         _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
-        into lines: inout [String]
+        into lines: inout [String],
+        laneResponseValues: [UInt8: [String?]]? = nil
     ) {
         let prefixCommands = tagged.filter(\.0.isPrefix).map(\.1)
         if prefixCommands.isEmpty == false {
@@ -127,9 +139,15 @@ extension __ExhaustRuntime {
             let laneCommands = tagged.filter { $0.0 == marker }.map(\.1)
             if laneCommands.isEmpty == false {
                 let label = marker.description.uppercased()
+                let values = laneResponseValues?[laneValue]
                 lines.append("Lane \(label):")
                 for (index, command) in laneCommands.enumerated() {
-                    lines.append("  \(index + 1)\(label). \(command)")
+                    let annotation = if let values, index < values.count, let value = values[index] {
+                        " → \(value)"
+                    } else {
+                        ""
+                    }
+                    lines.append("  \(index + 1)\(label). \(command)\(annotation)")
                 }
                 lines.append("")
             }

@@ -20,10 +20,7 @@ struct PreemptiveLinearizabilityTests {
 
 /// Two concurrent `setValue` commands on the same key with different values.
 ///
-/// The SUT is correctly synchronized (NSLock). Either ordering is valid, but
-/// the fixed-ordering oracle compares against array order, which may differ
-/// from the GCD execution order. Without linearizability confirmation, this
-/// produces a false positive roughly 50% of the time.
+/// The SUT is correctly synchronized (NSLock). Either ordering is valid, but the fixed-ordering oracle compares against array order, which may differ from the GCD execution order. Without linearizability confirmation, this produces a false positive roughly 50% of the time.
 @Contract(.threads)
 final class AtomicLastWriterWinsSpec {
     @SystemUnderTest
@@ -71,12 +68,8 @@ struct PreemptiveLinearizabilityRaceTests {
 
 /// Account where deposits are atomic but withdrawals race.
 ///
-/// The `withdraw` path does an unsynchronized read-modify-write, so two
-/// concurrent withdrawals can both read the same balance and each subtract
-/// from it, losing an update. The `deposit` path is lock-protected, so a
-/// sequence of deposits must run before any withdrawal is valid. This
-/// forces the reducer to keep some prefix commands and gives the pipeline
-/// enough depth to exercise lane-collapse before the linearizability check.
+/// The `withdraw` path does an unsynchronized read-modify-write, so two concurrent withdrawals can both read the same balance and each subtract from it, losing an update.
+/// The `deposit` path is lock-protected, so a sequence of deposits must run before any withdrawal is valid. This forces the reducer to keep some prefix commands and gives the pipeline enough depth to exercise lane-collapse before the linearizability check.
 @Contract(.threads)
 final class RacyAccountSpec {
     @SystemUnderTest
@@ -105,20 +98,15 @@ final class RacyAccountSpec {
 
 // MARK: - Lowe hash map bug (five-operation race)
 
-/// Reproduces the hardest bug from Lowe, "Testing for Linearizability" (2017).
+/// Reproduces the bug from Lowe, "Testing for Linearizability" (2017).
 ///
-/// A concurrent hash map uses assignment instead of CAS to set slot status
-/// to `deleted`. The race requires five operations across two threads:
+/// A concurrent hash map uses assignment instead of CAS to set slot status to `deleted`. This produces two manifestations of the same underlying bug:
 ///
-/// 1. Thread A: `update(0, v1)` reads status as `stored`, begins CAS to `updating`.
-/// 2. Thread B: `delete(0)` sets status to `deleted` via assignment.
-/// 3. Thread B: `update(0, v2)` writes value, sets status to `stored`.
-/// 4. Thread B: `delete(0)` sets status to `deleted` via assignment.
-/// 5. Thread A: `update(0, v1)` resumes, writes value, sets status to `stored`.
+/// **State-level ghost (2+ commands total).** `update(key, value)` is in progress (status is `.updating`) when `delete(key)` blindly writes `.deleted`. The update resumes and writes `.stored`, resurrecting the deleted key. The final state has a key that no valid sequential ordering produces. Caught by the oracle's state comparison alone.
 ///
-/// Result: key 0 appears stored with value v1, but was deleted at step 4.
-/// `getOrElse(0, default)` returns v1 instead of default. No valid sequential
-/// ordering produces this state.
+/// **Response-level ghost (5+ commands total).** Same race, but the ghost is observed through `getOrElse(key)` returning a value for a key that should have been deleted. The final state may coincidentally match some valid ordering (putting the update last), but no ordering produces the observed `getOrElse` return value. The additional commands are prefix setup (populating the slot before the race) and the observing `getOrElse`. Caught by response comparison.
+///
+/// Lowe's paper describes the five-operation response-level variant. Our checker catches both because it checks responses and final state via the oracle across all valid orderings.
 @Suite("Preemptive linearizability: Lowe hash map five-operation race", .serialized, .tags(.contract))
 struct PreemptiveLoweHashMapTests {
     @Test("Detects ghost entry from assignment-instead-of-CAS delete")
@@ -126,15 +114,18 @@ struct PreemptiveLoweHashMapTests {
         var report: ExhaustReport?
         let result = #execute(
             LoweHashMapSpec.self,
-            .concurrent(.three),
-            .budget(.custom(coverage: 20000, sampling: 20000)),
+            .concurrent(.two),
+            .commandLimit(8),
+            .budget(.extensive),
             .suppress(.issueReporting),
             .onReport { report = $0 }
         )
         #expect(result?.replaySeed != nil)
-        #expect(result?.commands.count ?? 0 >= 4)
+        #expect(result?.commands.count ?? 0 >= 2, "Need at least 2 concurrent commands to trigger a race")
     }
 }
+
+// MARK: - Contract
 
 @Contract(.threads)
 final class LoweHashMapSpec {
@@ -202,16 +193,49 @@ final class BuggyHashMap: @unchecked Sendable {
         case deleted = 3
     }
 
-    struct Slot {
-        var status: SlotStatus = .empty
-        var key: Int = 0
-        var value: Int = 0
+    /// Reference type so the backing array never mutates its buffer, and each field access is individually
+    /// locked so concurrent operations race at the operation level (the intended ghost-entry bug) without a
+    /// low-level data race on the fields themselves. A raw `var` would be UB under concurrent access and can
+    /// corrupt unrelated slots; per-field locking keeps every read and write atomic while leaving `update`
+    /// and `delete` free to interleave (neither holds a lock across its whole body), which is the actual race.
+    final class Slot {
+        private let lock = NSLock()
+        private var _status: SlotStatus = .empty
+        private var _key: Int = 0
+        private var _value: Int = 0
+
+        var status: SlotStatus {
+            get {
+                lock.withLock { _status }
+            }
+            set {
+                lock.withLock { _status = newValue }
+            }
+        }
+
+        var key: Int {
+            get {
+                lock.withLock { _key }
+            }
+            set {
+                lock.withLock { _key = newValue }
+            }
+        }
+
+        var value: Int {
+            get {
+                lock.withLock { _value }
+            }
+            set {
+                lock.withLock { _value = newValue }
+            }
+        }
     }
 
-    private var slots: [Slot]
+    private let slots: [Slot]
 
     init(capacity: Int) {
-        slots = Array(repeating: Slot(), count: capacity)
+        slots = (0 ..< capacity).map { _ in Slot() }
     }
 
     var snapshot: [Int: Int] {
@@ -227,6 +251,8 @@ final class BuggyHashMap: @unchecked Sendable {
         slots[index].status = .updating
         slots[index].key = key
         slots[index].value = value
+        // Widen the window before the final status write so a concurrent delete can set `.deleted` here and have it overwritten back to `.stored` below — the ghost-entry preemption point. The issue is still discoverable without it, but is much rarer.
+        sched_yield()
         slots[index].status = .stored
     }
 

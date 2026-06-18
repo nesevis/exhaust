@@ -38,4 +38,16 @@ extension ObservedResponse.Outcome {
                 return false
         }
     }
+
+    /// A human-readable rendering of the return value for failure reports, or `nil` for void commands (which carry no response to show).
+    var displayValue: String? {
+        switch self {
+            case let .returned(value):
+                return "\(value)"
+            case .skipped:
+                return "skipped"
+            case .returnedVoid:
+                return nil
+        }
+    }
 }

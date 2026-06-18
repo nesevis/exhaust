@@ -58,9 +58,10 @@ public extension __ExhaustRuntime {
 // MARK: - Trace Building
 
 extension __ExhaustRuntime {
-    /// Builds a trace from a preemptive execution's reduced command sequence in input order. No interleaving annotations are included because preemptive scheduling is non-deterministic, so actual execution order may differ from the listed order.
+    /// Builds a trace from a preemptive execution's reduced command sequence in input order. Lane commands are annotated with the value they returned (from `laneResponseValues`, keyed by lane and per-lane order) rather than a completion marker: the runner does not track suspension points, so a `(completed)` marker would assert ordering information it does not have, whereas the return value is observable and is where a response-level violation shows.
     static func buildPreemptiveTrace(
-        _ reduced: [(ScheduleMarker, some CustomStringConvertible)]
+        _ reduced: [(ScheduleMarker, some CustomStringConvertible)],
+        laneResponseValues: [UInt8: [String?]]? = nil
     ) -> [TraceStep] {
         var laneCounts: [UInt8: Int] = [:]
         return reduced.enumerated().map { index, tagged in
@@ -75,9 +76,15 @@ extension __ExhaustRuntime {
                 let laneLabel = marker.description.uppercased()
                 laneCounts[marker.rawValue, default: 0] += 1
                 let laneIndex = laneCounts[marker.rawValue]!
+                let values = laneResponseValues?[marker.rawValue]
+                let annotation = if let values, laneIndex - 1 < values.count, let value = values[laneIndex - 1] {
+                    " → \(value)"
+                } else {
+                    ""
+                }
                 return TraceStep(
                     index: index + 1,
-                    command: "\(laneIndex)\(laneLabel) \(command) (completed)",
+                    command: "\(laneIndex)\(laneLabel) \(command)\(annotation)",
                     outcome: .ok
                 )
             }
@@ -279,7 +286,22 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             },
             checkInvariants: { try spec.checkInvariants() }
         )
-        return (trace, failed, spec.systemUnderTest, failed ? spec.failureDescription() : nil)
+        if failed {
+            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+        }
+        // A .threads spec expresses its self-consistency check through the @Oracle, because the macro rejects @Invariant under .threads, and smoke never runs the concurrent phase.
+        // Replay the sequence on a fresh reference and call the oracle once at the end, so a spec that is already broken under sequential execution fails here before any concurrent probing.
+        // The reference is a distinct spec so the oracle's relational comparison is between two independent runs rather than the SUT against itself.
+        let reference = Spec()
+        for command in commands {
+            guard runCommandCatchingObjC(command, on: reference) else {
+                return (trace, true, spec.systemUnderTest, spec.failureDescription())
+            }
+        }
+        if spec.oracleCheck(reference.systemUnderTest) == false {
+            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+        }
+        return (trace, false, spec.systemUnderTest, nil)
     }
 
     /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails, because the partial state would mislead debugging.

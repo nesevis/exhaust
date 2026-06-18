@@ -247,7 +247,25 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
             )
         }
         let (trace, failed) = __ExhaustRuntime.blockingAwait(work)
-        return (trace, failed, spec.systemUnderTest, failed ? spec.failureDescription() : nil)
+        if failed {
+            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+        }
+        // A .threads spec expresses its self-consistency check through the @Oracle, because the macro rejects @Invariant under .threads, and smoke never runs the concurrent phase.
+        // Replay the sequence on a fresh reference and call the oracle once at the end, so a spec that is already broken under sequential execution fails here before any concurrent probing.
+        // The reference is a distinct spec so the oracle's relational comparison is between two independent runs rather than the SUT against itself.
+        let reference = Spec()
+        if runSequentially(commands, on: reference).succeeded == false {
+            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+        }
+        nonisolated(unsafe) let referenceResult = reference.systemUnderTest
+        nonisolated(unsafe) let oracleSpec = spec
+        let oracleHeld = __ExhaustRuntime.blockingAwait {
+            await oracleSpec.oracleCheck(referenceResult)
+        }
+        if oracleHeld == false {
+            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+        }
+        return (trace, false, spec.systemUnderTest, nil)
     }
 
     /// Replays the reduced commands sequentially on a fresh spec via ``runSequentially(_:on:)`` to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails or times out, because the partial state would mislead debugging.
