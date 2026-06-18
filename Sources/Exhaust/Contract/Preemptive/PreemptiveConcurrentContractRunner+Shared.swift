@@ -8,9 +8,6 @@ enum Preemptive {
     /// Number of times each reduction probe re-executes the concurrent schedule to probabilistically confirm the race still reproduces.
     static let confirmationRepetitions = 10
 
-    /// Re-execution budget for capturing failure-rendering evidence (per-command responses and the closest ordering). Larger than ``confirmationRepetitions`` because it runs once per reported failure rather than per reduction probe, so it can afford more attempts to reproduce a rare race before falling back to an unannotated report.
-    static let evidenceCaptureRepetitions = 100
-
     /// Default command limit for `.threads` contracts. Lower than the cooperative runner's estimated/40 cap because each probe repeats `confirmationRepetitions` times.
     static let defaultCommandLimit = 8
 
@@ -224,42 +221,6 @@ extension __ExhaustRuntime {
                 }
             }
             return (values, nil)
-        }
-
-        /// Re-executes the reported schedule to capture a non-linearizable execution's per-lane responses and the checker's closest-ordering verdict, for failure rendering. Returns nil when no reproduction within the budget is non-linearizable (a rare race that did not re-fire), in which case the report omits the annotations rather than showing stale or mismatched values.
-        func captureLinearizabilityEvidence(_ input: [(ScheduleMarker, Spec.Command)]) -> (laneResponseValues: [UInt8: [String?]], note: String?)? {
-            let prefixCommands = input.filter(\.0.isPrefix).map(\.1)
-            for _ in 0 ..< Preemptive.evidenceCaptureRepetitions {
-                let outcome = backend.execute(input)
-                guard outcome.passed == false,
-                      let laneResponsesAny = outcome.laneResponses,
-                      let concurrentSpec = outcome.concurrentSpec,
-                      let typedResponses = laneResponsesAny as? [[ObservedResponse<Spec.Command>]]
-                else {
-                    continue
-                }
-                guard case let .notLinearizable(closestOrdering, divergenceStep) = backend.checkLinearizability(
-                    prefix: prefixCommands,
-                    laneResponses: laneResponsesAny,
-                    concurrentSpec: concurrentSpec
-                ) else {
-                    continue
-                }
-
-                var laneResponseValues: [UInt8: [String?]] = [:]
-                for laneArray in typedResponses {
-                    for response in laneArray {
-                        laneResponseValues[response.lane, default: []].append(response.outcome.displayValue)
-                    }
-                }
-
-                var note = "No sequential ordering reproduces these responses and the final state."
-                if closestOrdering.isEmpty == false {
-                    note += "\nClosest ordering: [\(closestOrdering.joined(separator: ", "))] (diverges at step \(divergenceStep))"
-                }
-                return (laneResponseValues, note)
-            }
-            return nil
         }
 
         // Regression seeds: replay each through the same pipeline with the appropriate replay config.
