@@ -131,6 +131,72 @@
             }
         }
 
+        @Test("An explicit Void return clause normalizes to the nil-response path")
+        func explicitVoidReturnNormalizesToNilResponse() {
+            assertMacro {
+                """
+                @Contract(.tasks)
+                final class VoidReturnSpec {
+                    @SystemUnderTest var counter: MyCounter
+
+                    @Command(weight: 1)
+                    func increment() throws -> Void {
+                    }
+                }
+                """
+            } expansion: {
+                """
+                final class VoidReturnSpec {
+                    var counter: MyCounter
+                    func increment() throws -> Void {
+                    }
+
+                    enum Command: CustomStringConvertible, Sendable {
+                            case increment
+
+                        var description: String {
+                            switch self {
+                                case .increment:
+                                "increment"
+                            }
+                        }
+                    }
+
+                    typealias SystemUnderTest = MyCounter
+
+                    var systemUnderTest: SystemUnderTest {
+                        counter
+                    }
+
+                    static var commandGenerator: ReflectiveGenerator<Command> {
+                        .oneOf(weighted:
+                                (1, .just(Command.increment))
+                        )
+                    }
+
+                    @discardableResult func run(_ command: Command) throws -> CommandResponse {
+                        switch command {
+                            case .increment:
+                                try self.increment()
+                                return CommandResponse(commandDescription: command.description, returnValue: nil)
+                        }
+                    }
+
+                    func checkInvariants() throws {
+                    }
+
+                    static let executionModel: ExecutionModel = .tasks
+
+                    required init() {
+                    }
+                }
+
+                extension VoidReturnSpec: ContractSpec {
+                }
+                """
+            }
+        }
+
         @Test("@Command with generator expression produces #gen in commandGenerator")
         func commandWithGeneratorExpressionProducesGenInCommandGenerator() {
             assertMacro {

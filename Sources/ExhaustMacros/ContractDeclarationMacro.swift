@@ -310,7 +310,7 @@ struct CommandInfo {
     let generatorExprs: [String]
     let isAsync: Bool
     let isThrows: Bool
-    /// The return type as written in source, or `nil` for void-returning commands.
+    /// The return type as written in source, or `nil` for void-returning commands. An explicit Void clause (`-> Void`, `-> ()`, `-> Swift.Void`) normalizes to `nil` so the synthesized `run` reports no response value.
     let returnType: String?
     let syntax: FunctionDeclSyntax?
 }
@@ -400,7 +400,12 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
 
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
         let isThrows = funcDecl.signature.effectSpecifiers?.throwsClause != nil
-        let returnType = funcDecl.signature.returnClause?.type.trimmedDescription
+        // An explicit Void return clause (-> Void, -> (), -> Swift.Void) carries no response value, so normalize it to the no-clause path. Capturing `()` as a real return value would compare two empty tuples through structurallyEqual, which rejects them and fabricates a response-level linearizability violation.
+        let voidReturnSpellings: Set = ["Void", "()", "Swift.Void"]
+        let declaredReturnType = funcDecl.signature.returnClause?.type.trimmedDescription
+        let returnType = declaredReturnType.flatMap { spelling -> String? in
+            voidReturnSpellings.contains(spelling) ? nil : spelling
+        }
 
         return CommandInfo(
             methodName: methodName,
