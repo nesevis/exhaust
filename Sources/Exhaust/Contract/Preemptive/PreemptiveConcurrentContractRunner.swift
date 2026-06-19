@@ -251,12 +251,82 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         else {
             return .linearizable
         }
-        let checker = LinearizabilityChecker(
+        return Self.runLinearizabilityCheck(
             prefix: prefix,
             laneResponses: typedResponses,
             concurrentSpec: typedSpec
         )
-        return checker.check()
+    }
+
+    static func runLinearizabilityCheck(
+        prefix: [Spec.Command],
+        laneResponses: [[ObservedResponse<Spec.Command>]],
+        concurrentSpec: Spec
+    ) -> LinearizabilityResult {
+        var replaySpec: Spec?
+        let checker = Self.makeChecker(from: laneResponses)
+        let result = checker.check(
+            prefix: prefix,
+            replayPrefix: { prefixCommands in
+                let fresh = Spec()
+                for command in prefixCommands {
+                    do {
+                        try fresh.run(command)
+                    } catch {
+                        return false
+                    }
+                }
+                replaySpec = fresh
+                return true
+            },
+            replayCommand: { command in
+                guard let spec = replaySpec else { return nil }
+                return Self.replaySync(command, on: spec)
+            },
+            checkOracle: {
+                guard let spec = replaySpec else { return false }
+                return concurrentSpec.oracleCheck(spec.systemUnderTest)
+            }
+        )
+        return LinearizabilityResult(result)
+    }
+
+    private static func makeChecker(
+        from laneResponses: [[ObservedResponse<Spec.Command>]]
+    ) -> LinearizabilityChecker<Spec.Command> {
+        let observations = laneResponses.map { lane in
+            lane.map { response in
+                LinearizabilityChecker<Spec.Command>.Observation(
+                    command: response.command,
+                    commandDescription: response.commandDescription,
+                    returnValue: response.outcome.returnValue,
+                    isSkipped: response.outcome.isSkipped
+                )
+            }
+        }
+        return LinearizabilityChecker(laneObservations: observations)
+    }
+
+    private static func replaySync(
+        _ command: Spec.Command,
+        on spec: Spec
+    ) -> LinearizabilityChecker<Spec.Command>.ReplayResponse? {
+        do {
+            let response = try spec.run(command)
+            return .init(
+                commandDescription: response.commandDescription,
+                returnValue: response.returnValue,
+                isSkipped: false
+            )
+        } catch is ContractSkip {
+            return .init(
+                commandDescription: command.description,
+                returnValue: nil,
+                isSkipped: true
+            )
+        } catch {
+            return nil
+        }
     }
 
     func makeIdentifySkips() -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> {
