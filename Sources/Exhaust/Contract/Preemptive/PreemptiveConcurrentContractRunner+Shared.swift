@@ -287,7 +287,7 @@ extension __ExhaustRuntime {
             )
             report.applyReductionStats(structuralResult.stats)
 
-            // Lane collapse (oracle property) runs last: it grows the deterministic prefix on the already-minimized command set. Nothing downstream needs the race to reproduce after this, so shrinking the concurrent set here is harmless.
+            // Lane collapse (oracle property) grows the deterministic prefix on the minimized set. It shrinks the concurrent set, which lowers the race's reproduction rate, so the collapsed schedule often cannot be re-confirmed. Lane collapse never runs against deletion here, so it cannot reintroduce the decode failure that motivated running structural first.
             let laneCollapseResult = Preemptive.reduceSinglePass(
                 generator: sequenceGen,
                 tree: structuralResult.tree,
@@ -302,17 +302,29 @@ extension __ExhaustRuntime {
             )
             report.applyReductionStats(laneCollapseResult.stats)
 
-            // Only report a schedule that is itself confirmed non-linearizable. Lane collapse can promote a race-essential command into the prefix and leave a linearizable tail. Re-confirm the collapsed candidate. When it cannot be re-confirmed, fall back to the original input — not the reduced schedule — because the caller's evidence (lane responses, actual state) for the fallback comes from the original discovering run; reporting the reduced schedule against original-run evidence misattributes return values and shows phantom state from commands no longer present.
-            let confirmation = confirmRealFailure(laneCollapseResult.output)
-            let candidate = confirmation == nil ? taggedCommands : laneCollapseResult.output
+            // The structural output is already validated as non-linearizable by the structural pass (it ran with linearizableExecute, so the final schedule reproduced the violation when the last deletion was accepted). It is a genuine counterexample even when too flaky to reproduce on demand, so report it unconditionally — never discard the reduction back to the original input.
+            //
+            // confirmRealFailure serves two different roles here:
+            //   - For the lane-collapsed candidate it is a real gate. Lane collapse uses the oracle, which over-reports (it fails on commutative races that are actually linearizable), so the collapsed schedule must be re-checked against true linearizability before it is adopted.
+            //   - For the structural candidate it only fetches a fresh reproducing execution to supply the report's evidence (lane responses, actual state). Validity is already established; a failure to reproduce just means the evidence is best-effort and the report falls back to expected-state-only. A nil reportedOutcome must therefore leave the evidence empty rather than borrow the original discovering run's, whose schedule no longer matches.
+            let collapseConfirmation = confirmRealFailure(laneCollapseResult.output)
+            let candidate: [(ScheduleMarker, Spec.Command)]
+            let reportedOutcome: (outcome: Preemptive.Outcome, witness: ResponseWitness?)?
+            if let collapseConfirmation {
+                candidate = laneCollapseResult.output
+                reportedOutcome = collapseConfirmation
+            } else {
+                candidate = structuralResult.output
+                reportedOutcome = confirmRealFailure(structuralResult.output)
+            }
             // Present prefix-first. The runner runs all prefix commands sequentially before any lane (execute() partitions by marker, not array position), so reordering is execution-equivalent and makes the execution trace honest. Structural reduction (migration in particular) can leave prefix markers interleaved with lane markers in array order.
             let reduced = candidate.filter(\.0.isPrefix) + candidate.filter { $0.0.isPrefix == false }
 
             return (
                 reduced,
                 structuralResult.propertyInvocations + laneCollapseResult.propertyInvocations,
-                confirmation?.witness,
-                confirmation?.outcome
+                reportedOutcome?.witness,
+                reportedOutcome?.outcome
             )
         }
 
@@ -403,9 +415,7 @@ extension __ExhaustRuntime {
                 property: property
             )
             if case let .failure(taggedCommands, tree, coverageIterations) = scaRowResult {
-                let originalOutcome = lastFailingOutcome.value
                 let originalCount = taggedCommands.count
-                let originalEvidence = laneResponseValues(from: originalOutcome)
 
                 let reduction = reduceConfirmedFailure(
                     taggedCommands: taggedCommands,
@@ -428,7 +438,7 @@ extension __ExhaustRuntime {
                 )
 
                 if config.suppressIssueReporting == false {
-                    let evidence = laneResponseValues(from: reduction.reportedOutcome) ?? originalEvidence
+                    // Evidence comes only from the reported schedule's own confirming run; when it could not be reproduced, the report shows expected-state only rather than borrowing the original discovering run's (mismatched) evidence.
                     deferredIssues.append(makePreemptiveFailureMessage(
                         reduction.reduced,
                         specName: "\(Spec.self)",
@@ -442,9 +452,8 @@ extension __ExhaustRuntime {
                         replaySeed: scaReplaySeed,
                         timedOut: false,
                         expectedDescription: failureDescription,
-                        actualDescription: (reduction.reportedOutcome?.concurrentSpec as? Spec)?.failureDescription()
-                            ?? (originalOutcome?.concurrentSpec as? Spec)?.failureDescription(),
-                        laneResponseValues: evidence,
+                        actualDescription: (reduction.reportedOutcome?.concurrentSpec as? Spec)?.failureDescription(),
+                        laneResponseValues: laneResponseValues(from: reduction.reportedOutcome),
                         linearizabilityWitness: reduction.witness
                     ))
                 }
@@ -512,9 +521,6 @@ extension __ExhaustRuntime {
                         return (result, deferredIssues, report)
                     }
 
-                    let originalOutcome = lastFailingOutcome.value
-                    let originalEvidence = laneResponseValues(from: originalOutcome)
-
                     let reduction = reduceConfirmedFailure(
                         taggedCommands: taggedCommands,
                         tree: tree,
@@ -533,7 +539,7 @@ extension __ExhaustRuntime {
                     report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reduction.reductionInvocations)
 
                     if config.suppressIssueReporting == false {
-                        let evidence = laneResponseValues(from: reduction.reportedOutcome) ?? originalEvidence
+                        // Evidence comes only from the reported schedule's own confirming run; when it could not be reproduced, the report shows expected-state only rather than borrowing the original discovering run's (mismatched) evidence.
                         deferredIssues.append(makePreemptiveFailureMessage(
                             reduction.reduced,
                             specName: "\(Spec.self)",
@@ -547,9 +553,8 @@ extension __ExhaustRuntime {
                             replaySeed: samplingReplaySeed,
                             timedOut: false,
                             expectedDescription: failureDescription,
-                            actualDescription: (reduction.reportedOutcome?.concurrentSpec as? Spec)?.failureDescription()
-                                ?? (originalOutcome?.concurrentSpec as? Spec)?.failureDescription(),
-                            laneResponseValues: evidence,
+                            actualDescription: (reduction.reportedOutcome?.concurrentSpec as? Spec)?.failureDescription(),
+                            laneResponseValues: laneResponseValues(from: reduction.reportedOutcome),
                             linearizabilityWitness: reduction.witness
                         ))
                     }
