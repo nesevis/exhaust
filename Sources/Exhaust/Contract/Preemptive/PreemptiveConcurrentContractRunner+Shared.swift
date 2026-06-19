@@ -178,51 +178,44 @@ extension __ExhaustRuntime {
 
         let identifySkips = backend.makeIdentifySkips()
         let lastFailingOutcome = UnsafeSendableBox<Preemptive.Outcome?>(nil)
-        // Linearizability-integrated property: executes, checks the oracle (fast filter), then checks linearizability on oracle failures. Returns `true` for passing or linearizable executions — only genuinely non-linearizable failures return `false`. Used by both SCA coverage and sampling so false positives are transparently skipped everywhere.
+        // Classifies one execution against linearizability — the single decision shared by the sampling/coverage property, the reduction probe, and failure confirmation. Returns the failing outcome (and any response-level witness) for a genuine violation: a non-linearizable execution, or an oracle failure with no lane responses (invariant/exception/timeout, real by construction). Returns nil when the execution passed the oracle or was confirmed linearizable (a false positive to skip). The prefix is taken from `taggedCommands` itself so the lane responses fed to the checker match the schedule being classified.
+        let classifyFailure: @Sendable ([(ScheduleMarker, Spec.Command)], Preemptive.Outcome) -> (outcome: Preemptive.Outcome, witness: ResponseWitness?)? = { taggedCommands, outcome in
+            if outcome.passed {
+                return nil
+            }
+            guard let laneResponses = outcome.laneResponses, let concurrentSpec = outcome.concurrentSpec else {
+                return (outcome, nil)
+            }
+            let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
+            guard case let .notLinearizable(witness) = backend.checkLinearizability(
+                prefix: prefixCommands,
+                laneResponses: laneResponses,
+                concurrentSpec: concurrentSpec
+            ) else {
+                return nil
+            }
+            return (outcome, witness)
+        }
+
+        // Linearizability-integrated property used by SCA coverage and sampling: returns false only for a genuine non-linearizable (or no-lane-response) failure, so passing and merely-linearizable executions are transparently skipped. Records the failing outcome for evidence rendering.
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             invocationCounter.value += 1
             let outcome = backend.execute(taggedCommands)
             lastRunTimedOut.value = outcome.timedOut
-            if outcome.passed {
+            guard let failure = classifyFailure(taggedCommands, outcome) else {
                 return true
             }
-            guard let laneResponses = outcome.laneResponses, let concurrentSpec = outcome.concurrentSpec else {
-                lastFailingOutcome.value = outcome
-                return false
-            }
-            let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
-            let linearizability = backend.checkLinearizability(
-                prefix: prefixCommands,
-                laneResponses: laneResponses,
-                concurrentSpec: concurrentSpec
-            )
-            if case .linearizable = linearizability {
-                return true
-            }
-            lastFailingOutcome.value = outcome
+            lastFailingOutcome.value = failure.outcome
             return false
         }
 
-        /// Confirms whether `input` is a genuine failure by re-executing it and running the linearizability check on the result.
-        /// Preemptive execution is non-deterministic, so a single re-execution can draw a passing (or merely linearizable) interleaving and miss the race; re-run up to confirmationRepetitions times and accept the first reproduction that is confirmed non-linearizable. The prefix is derived from `input` itself, so the lane responses fed to the checker always match the schedule being confirmed (a stale prefix would replay promoted commands twice and corrupt the verdict).
-        /// Returns the confirming execution's outcome (so its lane responses and final state render coherently with the verdict) and the response-level witness, or `nil` when no run reproduced a genuine violation. Oracle failures lacking lane responses (invariant or exception failures) are real by construction and carry no response witness.
+        /// Confirms whether `input` is a genuine failure by re-executing it up to confirmationRepetitions times and accepting the first reproduction classified non-linearizable.
+        /// Preemptive execution is non-deterministic, so a single re-execution can draw a passing (or merely linearizable) interleaving and miss the race.
+        /// Returns the confirming execution's outcome (so its lane responses and final state render coherently with the verdict) and the response-level witness, or `nil` when no run reproduced a genuine violation.
         func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)]) -> (outcome: Preemptive.Outcome, witness: ResponseWitness?)? {
-            let prefixCommands = input.filter(\.0.isPrefix).map(\.1)
             for _ in 0 ..< Preemptive.confirmationRepetitions {
-                let outcome = backend.execute(input)
-                if outcome.passed {
-                    continue
-                }
-                guard let laneResponses = outcome.laneResponses, let concurrentSpec = outcome.concurrentSpec else {
-                    return (outcome, nil)
-                }
-                let linearizability = backend.checkLinearizability(
-                    prefix: prefixCommands,
-                    laneResponses: laneResponses,
-                    concurrentSpec: concurrentSpec
-                )
-                if case let .notLinearizable(witness) = linearizability {
-                    return (outcome, witness)
+                if let confirmed = classifyFailure(input, backend.execute(input)) {
+                    return confirmed
                 }
             }
             return nil
@@ -231,23 +224,12 @@ extension __ExhaustRuntime {
         /// Reduction property in ``Preemptive/Outcome`` form: a probe "passes" when its execution is linearizable, so structural reduction keeps only commands whose removal would dissolve a genuine response-level violation. (A bare oracle property would strip commands whose return values carry the response-level evidence.)
         func linearizableExecute(_ probeCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome {
             let probeOutcome = backend.execute(probeCommands)
-            if probeOutcome.passed {
+            guard classifyFailure(probeCommands, probeOutcome) == nil else {
                 return probeOutcome
             }
-            guard let probeLaneResponses = probeOutcome.laneResponses,
-                  let probeConcurrentSpec = probeOutcome.concurrentSpec
-            else {
-                return probeOutcome
-            }
-            let probePrefixCommands = probeCommands.filter(\.0.isPrefix).map(\.1)
-            if case .linearizable = backend.checkLinearizability(
-                prefix: probePrefixCommands,
-                laneResponses: probeLaneResponses,
-                concurrentSpec: probeConcurrentSpec
-            ) {
-                return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
-            }
-            return probeOutcome
+            return probeOutcome.passed
+                ? probeOutcome
+                : Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
 
         /// Per-lane observed return values for failure annotation, keyed by ``ScheduleMarker/rawValue`` in per-lane execution order.
@@ -262,6 +244,70 @@ extension __ExhaustRuntime {
                 }
             }
             return values
+        }
+
+        /// Reduces a discovered failure to its reported form, shared by the coverage and sampling phases (which differ only in discovery metadata).
+        ///
+        /// Prunes skipped commands, grows the deterministic prefix (lane collapse, oracle property), simplifies structurally under the linearizability property, then re-confirms and canonicalizes prefix-first. Applies reduction stats to the report. Returns the reported schedule, its total reduction-probe count, the response witness, and the confirming execution's outcome (for evidence and actual-state rendering). `reportedOutcome` is nil when reduction dissolved the violation and the pruned schedule is reported as a fallback.
+        func reduceConfirmedFailure(
+            taggedCommands: [(ScheduleMarker, Spec.Command)],
+            tree: ChoiceTree,
+            pruneSeed: UInt64
+        ) -> (reduced: [(ScheduleMarker, Spec.Command)], reductionInvocations: Int, witness: ResponseWitness?, reportedOutcome: Preemptive.Outcome?) {
+            // Prune commands whose preconditions were not met: a skipped command is a no-op, so removing it up front keeps reduction on the minimal command set and the reported counterexample carries no skipped commands. The prune is reverted if removing the skips dissolves the violation.
+            let (prunedCommands, prunedTree) = pruneSkippedCommands(
+                value: taggedCommands,
+                tree: tree,
+                generator: sequenceGen,
+                seed: pruneSeed,
+                property: property,
+                identifySkips: identifySkips,
+                logEvent: "preemptive_skip_pruning"
+            )
+
+            // Lane collapse (oracle property) grows the deterministic prefix; structural reduction then runs with linearizability as its property so the final counterexample stays genuine.
+            let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
+            let laneCollapseResult = Preemptive.reduceSinglePass(
+                generator: sequenceGen,
+                tree: prunedTree,
+                output: prunedCommands,
+                encoders: [.laneCollapse],
+                maxStalls: 2,
+                deadlineNanoseconds: 10_000_000_000,
+                rematerialize: true,
+                repetitions: Preemptive.confirmationRepetitions,
+                tuning: noRelax,
+                execute: backend.execute
+            )
+            report.applyReductionStats(laneCollapseResult.stats)
+
+            let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
+            let structuralResult = Preemptive.reduceSinglePass(
+                generator: sequenceGen,
+                tree: laneCollapseResult.tree,
+                output: laneCollapseResult.output,
+                encoders: structural,
+                maxStalls: 2,
+                deadlineNanoseconds: 15_000_000_000,
+                rematerialize: true,
+                repetitions: Preemptive.confirmationRepetitions,
+                tuning: noRelax,
+                execute: linearizableExecute
+            )
+            report.applyReductionStats(structuralResult.stats)
+
+            // Only report a schedule that is itself confirmed non-linearizable. Lane collapse can promote a race-essential command into the prefix and leave a linearizable tail; structural reduction can over-reduce on a noisy probe. Re-confirm the reduced candidate; fall back to the pruned schedule (still confirmed non-linearizable) when reduction dissolved the violation.
+            let confirmation = confirmRealFailure(structuralResult.output)
+            let candidate = confirmation == nil ? prunedCommands : structuralResult.output
+            // Present prefix-first. The runner runs all prefix commands sequentially before any lane (execute() partitions by marker, not array position), so reordering is execution-equivalent and makes the execution trace honest. Structural reduction (migration in particular) can leave prefix markers interleaved with lane markers in array order.
+            let reduced = candidate.filter(\.0.isPrefix) + candidate.filter { $0.0.isPrefix == false }
+
+            return (
+                reduced,
+                laneCollapseResult.propertyInvocations + structuralResult.propertyInvocations,
+                confirmation?.witness,
+                confirmation?.outcome
+            )
         }
 
         // Regression seeds: replay each through the same pipeline with the appropriate replay config.
@@ -355,58 +401,15 @@ extension __ExhaustRuntime {
                 let originalCount = taggedCommands.count
                 let originalEvidence = laneResponseValues(from: originalOutcome)
 
-                // Prune commands whose preconditions were not met: a skipped command is a no-op, so removing it up front keeps reduction working on the minimal command set and the reported counterexample carries no skipped commands. The prune is reverted if removing the skips dissolves the violation.
-                let (prunedCommands, prunedTree) = pruneSkippedCommands(
-                    value: taggedCommands,
+                let reduction = reduceConfirmedFailure(
+                    taggedCommands: taggedCommands,
                     tree: tree,
-                    generator: sequenceGen,
-                    seed: UInt64(coverageIterations),
-                    property: property,
-                    identifySkips: identifySkips,
-                    logEvent: "preemptive_skip_pruning"
+                    pruneSeed: UInt64(coverageIterations)
                 )
-
-                let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
-                let laneCollapseResult = Preemptive.reduceSinglePass(
-                    generator: sequenceGen,
-                    tree: prunedTree,
-                    output: prunedCommands,
-                    encoders: [.laneCollapse],
-                    maxStalls: 2,
-                    deadlineNanoseconds: 10_000_000_000,
-                    rematerialize: true,
-                    repetitions: Preemptive.confirmationRepetitions,
-                    tuning: noRelax,
-                    execute: backend.execute
-                )
-                report.applyReductionStats(laneCollapseResult.stats)
-                var reductionInvocations = laneCollapseResult.propertyInvocations
-
-                let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
-                let structuralResult = Preemptive.reduceSinglePass(
-                    generator: sequenceGen,
-                    tree: laneCollapseResult.tree,
-                    output: laneCollapseResult.output,
-                    encoders: structural,
-                    maxStalls: 2,
-                    deadlineNanoseconds: 15_000_000_000,
-                    rematerialize: true,
-                    repetitions: Preemptive.confirmationRepetitions,
-                    tuning: noRelax,
-                    execute: linearizableExecute
-                )
-                report.applyReductionStats(structuralResult.stats)
-                reductionInvocations += structuralResult.propertyInvocations
-
-                // Only report a schedule that is itself confirmed non-linearizable. Lane-collapse uses the oracle as its property, so it can promote a race-essential command into the prefix and leave a concurrent tail that is actually linearizable; structural reduction can likewise over-reduce on a noisy probe. Re-confirm the reduced candidate, and fall back to the pruned coverage schedule (still confirmed non-linearizable) when reduction dissolved the violation.
-                let confirmation = confirmRealFailure(structuralResult.output)
-                let candidate = confirmation == nil ? prunedCommands : structuralResult.output
-                // Present prefix-first. The runner runs all prefix commands sequentially before any lane (execute() partitions by marker, not array position), so reordering is execution-equivalent and makes the execution trace honest. Structural reduction (migration in particular) can leave prefix markers interleaved with lane markers in array order, which the trace would otherwise render as if the prefix ran mid-interleaving.
-                let reduced = candidate.filter(\.0.isPrefix) + candidate.filter { $0.0.isPrefix == false }
 
                 let scaReplaySeed = ReplaySeed.Resolved.encodeCoverageIteration(coverageIterations)
                 let (result, failureDescription) = backend.buildResult(
-                    reduced: reduced,
+                    reduced: reduction.reduced,
                     seed: nil,
                     replaySeed: scaReplaySeed,
                     discoveryMethod: .coverage
@@ -415,28 +418,28 @@ extension __ExhaustRuntime {
                 report.setInvocations(
                     coverage: invocationCounter.value,
                     randomSampling: 0,
-                    reduction: reductionInvocations
+                    reduction: reduction.reductionInvocations
                 )
 
                 if config.suppressIssueReporting == false {
-                    let evidence = laneResponseValues(from: confirmation?.outcome) ?? originalEvidence
+                    let evidence = laneResponseValues(from: reduction.reportedOutcome) ?? originalEvidence
                     deferredIssues.append(makePreemptiveFailureMessage(
-                        reduced,
+                        reduction.reduced,
                         specName: "\(Spec.self)",
                         discoveryMethod: .coverage,
                         seed: nil,
                         iteration: coverageIterations,
                         budget: coverageBudget,
                         sequencesTested: invocationCounter.value,
-                        reductionInvocations: reductionInvocations,
+                        reductionInvocations: reduction.reductionInvocations,
                         originalCount: originalCount,
                         replaySeed: scaReplaySeed,
                         timedOut: false,
                         expectedDescription: failureDescription,
-                        actualDescription: (confirmation?.outcome.concurrentSpec as? Spec)?.failureDescription()
+                        actualDescription: (reduction.reportedOutcome?.concurrentSpec as? Spec)?.failureDescription()
                             ?? (originalOutcome?.concurrentSpec as? Spec)?.failureDescription(),
                         laneResponseValues: evidence,
-                        linearizabilityWitness: confirmation?.witness
+                        linearizabilityWitness: reduction.witness
                     ))
                 }
 
@@ -506,86 +509,42 @@ extension __ExhaustRuntime {
                     let originalOutcome = lastFailingOutcome.value
                     let originalEvidence = laneResponseValues(from: originalOutcome)
 
-                    // Prune commands whose preconditions were not met before reduction: a skipped command is a no-op, so removing it keeps reduction on the minimal command set and the reported counterexample carries no skipped commands. The prune is reverted if removing the skips dissolves the violation.
-                    let (prunedCommands, prunedTree) = pruneSkippedCommands(
-                        value: taggedCommands,
+                    let reduction = reduceConfirmedFailure(
+                        taggedCommands: taggedCommands,
                         tree: tree,
-                        generator: sequenceGen,
-                        seed: UInt64(absoluteIteration),
-                        property: property,
-                        identifySkips: identifySkips,
-                        logEvent: "preemptive_skip_pruning"
+                        pruneSeed: UInt64(absoluteIteration)
                     )
-
-                    // Confirmed non-linearizable. Lane-collapse (oracle property) grows the deterministic prefix; structural reduction then runs with linearizability as its property so the final counterexample stays genuine.
-                    let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
-                    let laneCollapseResult = Preemptive.reduceSinglePass(
-                        generator: sequenceGen,
-                        tree: prunedTree,
-                        output: prunedCommands,
-                        encoders: [.laneCollapse],
-                        maxStalls: 2,
-                        deadlineNanoseconds: 10_000_000_000,
-                        rematerialize: true,
-                        repetitions: Preemptive.confirmationRepetitions,
-                        tuning: noRelax,
-                        execute: backend.execute
-                    )
-                    report.applyReductionStats(laneCollapseResult.stats)
-                    var reductionInvocations = laneCollapseResult.propertyInvocations
-
-                    let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
-                    let structuralResult = Preemptive.reduceSinglePass(
-                        generator: sequenceGen,
-                        tree: laneCollapseResult.tree,
-                        output: laneCollapseResult.output,
-                        encoders: structural,
-                        maxStalls: 2,
-                        deadlineNanoseconds: 15_000_000_000,
-                        rematerialize: true,
-                        repetitions: Preemptive.confirmationRepetitions,
-                        tuning: noRelax,
-                        execute: linearizableExecute
-                    )
-                    report.applyReductionStats(structuralResult.stats)
-                    reductionInvocations += structuralResult.propertyInvocations
-
-                    // Only report a schedule that is itself confirmed non-linearizable. Lane-collapse uses the oracle as its property, so it can promote a race-essential command into the prefix and leave a concurrent tail that is actually linearizable. Structural reduction can likewise over-reduce on a noisy probe. Re-confirm the reduced candidate, and fall back to the pruned sampled schedule (still confirmed non-linearizable) when reduction dissolved the violation.
-                    let confirmation = confirmRealFailure(structuralResult.output)
-                    let candidate = confirmation == nil ? prunedCommands : structuralResult.output
-                    // Present prefix-first. The runner runs all prefix commands sequentially before any lane (execute() partitions by marker, not array position), so reordering is execution-equivalent and makes the execution trace honest. Structural reduction (migration in particular) can leave prefix markers interleaved with lane markers in array order, which the trace would otherwise render as if the prefix ran mid-interleaving.
-                    let reduced = candidate.filter(\.0.isPrefix) + candidate.filter { $0.0.isPrefix == false }
 
                     let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
                     let samplingReplaySeed = ReplaySeed.Resolved.sampling(seed: actualSeed, iteration: absoluteIteration).encoded
                     let (result, failureDescription) = backend.buildResult(
-                        reduced: reduced,
+                        reduced: reduction.reduced,
                         seed: actualSeed,
                         replaySeed: samplingReplaySeed,
                         discoveryMethod: discoveryMethod
                     )
 
-                    report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reductionInvocations)
+                    report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reduction.reductionInvocations)
 
                     if config.suppressIssueReporting == false {
-                        let evidence = laneResponseValues(from: confirmation?.outcome) ?? originalEvidence
+                        let evidence = laneResponseValues(from: reduction.reportedOutcome) ?? originalEvidence
                         deferredIssues.append(makePreemptiveFailureMessage(
-                            reduced,
+                            reduction.reduced,
                             specName: "\(Spec.self)",
                             discoveryMethod: discoveryMethod,
                             seed: actualSeed,
                             iteration: absoluteIteration,
                             budget: samplingBudget,
                             sequencesTested: coverageInvocations + samplingIteration,
-                            reductionInvocations: reductionInvocations,
+                            reductionInvocations: reduction.reductionInvocations,
                             originalCount: taggedCommands.count,
                             replaySeed: samplingReplaySeed,
                             timedOut: false,
                             expectedDescription: failureDescription,
-                            actualDescription: (confirmation?.outcome.concurrentSpec as? Spec)?.failureDescription()
+                            actualDescription: (reduction.reportedOutcome?.concurrentSpec as? Spec)?.failureDescription()
                                 ?? (originalOutcome?.concurrentSpec as? Spec)?.failureDescription(),
                             laneResponseValues: evidence,
-                            linearizabilityWitness: confirmation?.witness
+                            linearizabilityWitness: reduction.witness
                         ))
                     }
 

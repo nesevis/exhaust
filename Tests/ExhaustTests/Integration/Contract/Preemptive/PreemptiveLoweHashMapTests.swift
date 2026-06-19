@@ -15,13 +15,16 @@ import Testing
 struct PreemptiveLoweHashMapTests {
     @Test("Detects ghost entry from assignment-instead-of-CAS delete")
     func detectsGhostEntryFromBuggyDelete() {
+        var report: ExhaustReport?
         let result = #execute(
             LoweHashMapSpec.self,
             .concurrent(.two),
             .commandLimit(8),
             .budget(.extensive),
-            .suppress(.issueReporting)
+            .suppress(.issueReporting),
+            .onReport { report = $0 }
         )
+        print(report?.profilingSummary)
         #expect(result?.replaySeed != nil)
         #expect(result?.commands.count ?? 0 >= 2, "Need at least 2 concurrent commands to trigger a race")
     }
