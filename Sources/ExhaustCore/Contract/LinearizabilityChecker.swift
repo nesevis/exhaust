@@ -5,9 +5,9 @@
 /// The checker runs post-lane-collapse, so the concurrent phase is typically two to four commands across two lanes (two to six valid orderings).
 ///
 /// Both synchronous and asynchronous replay are supported. The interleaving search and response comparison are shared; only the replay-and-verify step differs.
-package struct LinearizabilityChecker<Command> {
+package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     /// One command's observed result during a concurrent execution, recorded per-lane.
-    package struct Observation {
+    package struct Observation: @unchecked Sendable {
         package let command: Command
         package let commandDescription: String
         package let returnValue: Any?
