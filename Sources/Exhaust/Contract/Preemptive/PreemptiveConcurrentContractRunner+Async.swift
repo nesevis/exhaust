@@ -131,20 +131,15 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                     let completed: Void? = awaitOrTimeout("lane") {
                         for (_, command) in laneCommands {
                             if commandFailed.value { break }
-                            let timestamp = mach_absolute_time()
                             do {
                                 let response = try await spec.run(command)
-                                let outcome: ObservedResponse<Spec.Command>.Outcome =
-                                    response.returnValue != nil
-                                        ? .returned(response.returnValue!)
-                                        : .returnedVoid
+                                let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
                                 responseBox.withValue { responses in
                                     responses.append(ObservedResponse<Spec.Command>(
                                         lane: laneID,
                                         command: command,
                                         commandDescription: response.commandDescription,
-                                        outcome: outcome,
-                                        timestamp: timestamp
+                                        outcome: outcome
                                     ))
                                 }
                             } catch is ContractSkip {
@@ -153,8 +148,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                                         lane: laneID,
                                         command: command,
                                         commandDescription: command.description,
-                                        outcome: .skipped,
-                                        timestamp: timestamp
+                                        outcome: .skipped
                                     ))
                                 }
                             } catch {
@@ -320,7 +314,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 }
             )
         }
-        return LinearizabilityResult(result)
+        return makeLinearizabilityResult(result, laneObservations: typedResponses)
     }
 
     func makeIdentifySkips() -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> {
@@ -329,7 +323,15 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
             specInit: specInit,
             idleTimeoutMilliseconds: idleTimeoutMilliseconds
         )
-        return { taggedCommands in rawIdentifySkips(taggedCommands.map(\.1)) }
+        return { taggedCommands in
+            // Skip identification replays the commands on a fresh spec via a blocking drain, outside the ObjC guard that wraps lane execution. A synchronously-thrown NSException would otherwise propagate out of the drain and abort, so degrade to "no skips identified" (pruning becomes a no-op and the actual execution catches and reports it).
+            var skipped: Set<Int> = []
+            var exception: NSException?
+            let completed = exhaust_runCatchingObjCException({
+                skipped = rawIdentifySkips(taggedCommands.map(\.1))
+            }, &exception)
+            return completed ? skipped : []
+        }
     }
 
     func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {

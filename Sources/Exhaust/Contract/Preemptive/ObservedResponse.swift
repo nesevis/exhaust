@@ -1,8 +1,6 @@
-import Foundation
-
-/// A single command's observed result during a preemptive concurrent execution, recorded per-lane with a monotonic timestamp.
+/// A single command's observed result during a preemptive concurrent execution, recorded per-lane.
 ///
-/// Per-lane arrays of these are collected during concurrent execution and merged by timestamp on failure to reconstruct the actual execution order. The timestamps also establish the partial order for linearizability checking: if one response's timestamp precedes another's, the first must precede the second in any valid linearization.
+/// Per-lane arrays of these (one array per lane, in per-lane execution order) feed the linearizability checker, which enumerates the order-preserving interleavings of the lanes. The per-lane order is the only ordering constraint the checker needs, so no cross-lane timestamp is recorded.
 ///
 /// Marked `@unchecked Sendable` because `Outcome.returned` carries `Any`, which is not `Sendable`. The values are command return values produced and consumed on GCD threads within a single `execute()` call and never shared beyond the runner.
 struct ObservedResponse<Command>: @unchecked Sendable {
@@ -10,7 +8,6 @@ struct ObservedResponse<Command>: @unchecked Sendable {
     let command: Command
     let commandDescription: String
     let outcome: Outcome
-    let timestamp: UInt64
 
     enum Outcome: @unchecked Sendable {
         case returned(Any)
