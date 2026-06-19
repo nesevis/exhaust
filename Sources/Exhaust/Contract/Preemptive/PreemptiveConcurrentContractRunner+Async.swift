@@ -254,7 +254,21 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         // Replay the sequence on a fresh reference and call the oracle once at the end, so a spec that is already broken under sequential execution fails here before any concurrent probing.
         // The reference is a distinct spec so the oracle's relational comparison is between two independent runs rather than the SUT against itself.
         let reference = Spec()
-        if runSequentially(commands, on: reference).succeeded == false {
+        nonisolated(unsafe) let unsafeReference = reference
+        let smokeTimeout = (idleTimeoutMilliseconds ?? ResolvedConcurrentConfig.defaultIdleTimeout) * 5
+        let referenceFailed: Bool? = __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: smokeTimeout) {
+            for command in commands {
+                do {
+                    try await unsafeReference.run(command)
+                } catch is ContractSkip {
+                    continue
+                } catch {
+                    return true
+                }
+            }
+            return false
+        }
+        if referenceFailed != false {
             return (trace, true, spec.systemUnderTest, spec.failureDescription())
         }
         nonisolated(unsafe) let referenceResult = reference.systemUnderTest
