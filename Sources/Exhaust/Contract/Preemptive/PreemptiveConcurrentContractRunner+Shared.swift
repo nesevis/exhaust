@@ -302,6 +302,54 @@ extension __ExhaustRuntime {
             )
         }
 
+        /// Builds the result, records invocation counts, renders the failure issue, and finalizes the report for a reduced failure. The coverage and sampling phases run this identical six-step sequence after ``reduceConfirmedFailure`` and differ only in discovery metadata, so it lives here rather than being spelled out at each phase.
+        func assembleReducedFailure(
+            reduction: (reduced: [(ScheduleMarker, Spec.Command)], reductionInvocations: Int, witness: ResponseWitness?, reportedOutcome: Preemptive.Outcome?),
+            discoveryMethod: ContractDiscoveryMethod,
+            seed: UInt64?,
+            iteration: Int,
+            budget: UInt64,
+            sequencesTested: Int,
+            originalCount: Int,
+            replaySeed: String,
+            coverageInvocations: Int,
+            randomSamplingInvocations: Int
+        ) -> (result: ContractResult<Spec>?, deferredIssues: [String], report: ExhaustReport) {
+            let (result, failureDescription) = backend.buildResult(
+                reduced: reduction.reduced,
+                seed: seed,
+                replaySeed: replaySeed,
+                discoveryMethod: discoveryMethod
+            )
+            report.setInvocations(
+                coverage: coverageInvocations,
+                randomSampling: randomSamplingInvocations,
+                reduction: reduction.reductionInvocations
+            )
+            if config.suppressIssueReporting == false {
+                // Evidence comes only from the reported schedule's own confirming run; when it could not be reproduced, the report shows expected-state only rather than borrowing the original discovering run's (mismatched) evidence.
+                deferredIssues.append(makePreemptiveFailureMessage(
+                    reduction.reduced,
+                    specName: "\(Spec.self)",
+                    discoveryMethod: discoveryMethod,
+                    seed: seed,
+                    iteration: iteration,
+                    budget: budget,
+                    sequencesTested: sequencesTested,
+                    reductionInvocations: reduction.reductionInvocations,
+                    originalCount: originalCount,
+                    replaySeed: replaySeed,
+                    timedOut: false,
+                    expectedDescription: failureDescription,
+                    actualDescription: (reduction.reportedOutcome?.concurrentSpec as? Spec)?.failureDescription(),
+                    laneResponseValues: laneResponseValues(from: reduction.reportedOutcome),
+                    linearizabilityWitness: reduction.witness
+                ))
+            }
+            finalizeReport()
+            return (result, deferredIssues, report)
+        }
+
         // Regression seeds: replay each through the same pipeline with the appropriate replay config.
         if config.coverageReplayRow == nil, config.seed == nil {
             for encodedSeed in regressionSeeds {
@@ -389,51 +437,24 @@ extension __ExhaustRuntime {
                 property: property
             )
             if case let .failure(taggedCommands, tree, coverageIterations) = scaRowResult {
-                let originalCount = taggedCommands.count
-
                 let reduction = reduceConfirmedFailure(
                     taggedCommands: taggedCommands,
                     tree: tree,
                     pruneSeed: UInt64(coverageIterations)
                 )
-
-                let scaReplaySeed = ReplaySeed.Resolved.encodeCoverageIteration(coverageIterations)
-                let (result, failureDescription) = backend.buildResult(
-                    reduced: reduction.reduced,
+                // Reduction probes run through reduceSinglePass's own counter, not the shared invocationCounter, so the three buckets are already disjoint: coverage takes the shared counter, sampling is zero, reduction its own count. (setConcurrentInvocations assumes reduction flows through the shared counter, which would drive coverage negative here.)
+                return assembleReducedFailure(
+                    reduction: reduction,
+                    discoveryMethod: .coverage,
                     seed: nil,
-                    replaySeed: scaReplaySeed,
-                    discoveryMethod: .coverage
+                    iteration: coverageIterations,
+                    budget: coverageBudget,
+                    sequencesTested: invocationCounter.value,
+                    originalCount: taggedCommands.count,
+                    replaySeed: ReplaySeed.Resolved.encodeCoverageIteration(coverageIterations),
+                    coverageInvocations: invocationCounter.value,
+                    randomSamplingInvocations: 0
                 )
-                // Reduction probes run through reduceSinglePass's own counter, not the shared invocationCounter, so the three buckets are already disjoint. Set them directly rather than peeling reduction back out of coverage (setConcurrentInvocations assumes reduction flows through the shared counter, which would drive coverage negative here).
-                report.setInvocations(
-                    coverage: invocationCounter.value,
-                    randomSampling: 0,
-                    reduction: reduction.reductionInvocations
-                )
-
-                if config.suppressIssueReporting == false {
-                    // Evidence comes only from the reported schedule's own confirming run; when it could not be reproduced, the report shows expected-state only rather than borrowing the original discovering run's (mismatched) evidence.
-                    deferredIssues.append(makePreemptiveFailureMessage(
-                        reduction.reduced,
-                        specName: "\(Spec.self)",
-                        discoveryMethod: .coverage,
-                        seed: nil,
-                        iteration: coverageIterations,
-                        budget: coverageBudget,
-                        sequencesTested: invocationCounter.value,
-                        reductionInvocations: reduction.reductionInvocations,
-                        originalCount: originalCount,
-                        replaySeed: scaReplaySeed,
-                        timedOut: false,
-                        expectedDescription: failureDescription,
-                        actualDescription: (reduction.reportedOutcome?.concurrentSpec as? Spec)?.failureDescription(),
-                        laneResponseValues: laneResponseValues(from: reduction.reportedOutcome),
-                        linearizabilityWitness: reduction.witness
-                    ))
-                }
-
-                finalizeReport()
-                return (result, deferredIssues, report)
             }
         }
         coverageInvocations = invocationCounter.value
@@ -500,41 +521,19 @@ extension __ExhaustRuntime {
                         tree: tree,
                         pruneSeed: UInt64(absoluteIteration)
                     )
-
                     let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
-                    let samplingReplaySeed = ReplaySeed.Resolved.sampling(seed: actualSeed, iteration: absoluteIteration).encoded
-                    let (result, failureDescription) = backend.buildResult(
-                        reduced: reduction.reduced,
+                    return assembleReducedFailure(
+                        reduction: reduction,
+                        discoveryMethod: discoveryMethod,
                         seed: actualSeed,
-                        replaySeed: samplingReplaySeed,
-                        discoveryMethod: discoveryMethod
+                        iteration: absoluteIteration,
+                        budget: samplingBudget,
+                        sequencesTested: coverageInvocations + samplingIteration,
+                        originalCount: taggedCommands.count,
+                        replaySeed: ReplaySeed.Resolved.sampling(seed: actualSeed, iteration: absoluteIteration).encoded,
+                        coverageInvocations: coverageInvocations,
+                        randomSamplingInvocations: samplingIteration
                     )
-
-                    report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: reduction.reductionInvocations)
-
-                    if config.suppressIssueReporting == false {
-                        // Evidence comes only from the reported schedule's own confirming run; when it could not be reproduced, the report shows expected-state only rather than borrowing the original discovering run's (mismatched) evidence.
-                        deferredIssues.append(makePreemptiveFailureMessage(
-                            reduction.reduced,
-                            specName: "\(Spec.self)",
-                            discoveryMethod: discoveryMethod,
-                            seed: actualSeed,
-                            iteration: absoluteIteration,
-                            budget: samplingBudget,
-                            sequencesTested: coverageInvocations + samplingIteration,
-                            reductionInvocations: reduction.reductionInvocations,
-                            originalCount: taggedCommands.count,
-                            replaySeed: samplingReplaySeed,
-                            timedOut: false,
-                            expectedDescription: failureDescription,
-                            actualDescription: (reduction.reportedOutcome?.concurrentSpec as? Spec)?.failureDescription(),
-                            laneResponseValues: laneResponseValues(from: reduction.reportedOutcome),
-                            linearizabilityWitness: reduction.witness
-                        ))
-                    }
-
-                    finalizeReport()
-                    return (result, deferredIssues, report)
                 }
             } catch {
                 deferredIssues.append("Generator failed during sampling: \(error)")
