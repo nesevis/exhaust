@@ -217,7 +217,7 @@ extension __ExhaustRuntime {
         }
 
         /// Confirms whether `input` is a genuine failure by re-executing it up to ``Preemptive/finalConfirmationRepetitions`` times and accepting the first reproduction classified non-linearizable.
-        /// Preemptive execution is non-deterministic, so a single re-execution can draw a passing (or merely linearizable) interleaving and miss the race. This is the terminal confirmation (once per reported failure, not per reduction probe), so it uses the larger repetition budget: a timing-fragile race that the 10-rep reduction loop could not re-trigger often still reproduces here, attaching the actual-state line and witness to the report.
+        /// Preemptive execution is non-deterministic, so a single re-execution can draw a passing (or merely linearizable) interleaving and miss the race. This is the terminal confirmation (once per reported failure, not per reduction probe), so it uses the larger repetition budget: a timing-fragile race that the reduction loop's ``Preemptive/confirmationRepetitions`` probes could not re-trigger often still reproduces here, attaching the actual-state line and witness to the report.
         /// Returns the confirming execution's outcome (so its lane responses and final state render coherently with the verdict) and the response-level witness, or `nil` when no run reproduced a genuine violation.
         func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)]) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?)? {
             for _ in 0 ..< Preemptive.finalConfirmationRepetitions {

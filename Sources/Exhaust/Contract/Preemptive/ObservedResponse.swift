@@ -1,3 +1,5 @@
+import ExhaustCore
+
 /// A single command's observed result during a preemptive concurrent execution, recorded per-lane.
 ///
 /// Per-lane arrays of these (one array per lane, in per-lane execution order) feed the linearizability checker, which enumerates the order-preserving interleavings of the lanes. The per-lane order is the only ordering constraint the checker needs, so no cross-lane timestamp is recorded.
@@ -46,5 +48,21 @@ extension ObservedResponse.Outcome {
             case .returnedVoid:
                 return nil
         }
+    }
+}
+
+extension LinearizabilityChecker {
+    /// Builds a checker from the per-lane responses captured during a preemptive run, mapping each ``ObservedResponse`` to a checker observation. Shared by the synchronous and asynchronous preemptive backends.
+    init(laneResponses: [[ObservedResponse<Command>]]) {
+        self.init(laneObservations: laneResponses.map { lane in
+            lane.map { response in
+                Observation(
+                    command: response.command,
+                    commandDescription: response.commandDescription,
+                    returnValue: response.outcome.returnValue,
+                    isSkipped: response.outcome.isSkipped
+                )
+            }
+        })
     }
 }

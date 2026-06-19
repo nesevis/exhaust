@@ -256,7 +256,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
         var replaySpec: Spec?
-        let checker = Self.makeChecker(from: laneResponses)
+        let checker = LinearizabilityChecker(laneResponses: laneResponses)
         let result = checker.check(
             prefix: prefix,
             replayPrefix: { prefixCommands in
@@ -281,22 +281,6 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             }
         )
         return makeLinearizabilityResult(result, laneObservations: laneResponses)
-    }
-
-    private static func makeChecker(
-        from laneResponses: [[ObservedResponse<Spec.Command>]]
-    ) -> LinearizabilityChecker<Spec.Command> {
-        let observations = laneResponses.map { lane in
-            lane.map { response in
-                LinearizabilityChecker<Spec.Command>.Observation(
-                    command: response.command,
-                    commandDescription: response.commandDescription,
-                    returnValue: response.outcome.returnValue,
-                    isSkipped: response.outcome.isSkipped
-                )
-            }
-        }
-        return LinearizabilityChecker(laneObservations: observations)
     }
 
     private static func replaySync(

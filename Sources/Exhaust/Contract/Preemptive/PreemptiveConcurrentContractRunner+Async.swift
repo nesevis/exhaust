@@ -256,17 +256,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
-        let observations = laneResponses.map { lane in
-            lane.map { response in
-                LinearizabilityChecker<Spec.Command>.Observation(
-                    command: response.command,
-                    commandDescription: response.commandDescription,
-                    returnValue: response.outcome.returnValue,
-                    isSkipped: response.outcome.isSkipped
-                )
-            }
-        }
-        let checker = LinearizabilityChecker(laneObservations: observations)
+        let checker = LinearizabilityChecker(laneResponses: laneResponses)
         nonisolated(unsafe) let unsafeSpec = concurrentSpec
         let result: LinearizabilityChecker<Spec.Command>.Result = __ExhaustRuntime.blockingAwait {
             var replaySpec: Spec?
