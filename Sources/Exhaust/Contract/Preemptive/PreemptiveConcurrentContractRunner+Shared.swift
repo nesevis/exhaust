@@ -5,8 +5,11 @@ import ExhaustCore
 ///
 /// The two checkers differ only in how a single probe runs (direct GCD execution versus async bridged through a drain loop), so the outcome shape, single-pass reducer, and pipeline live here and are parameterised by each checker's `execute`.
 enum Preemptive {
-    /// Number of times each reduction probe re-executes the concurrent schedule to probabilistically confirm the race still reproduces.
-    static let confirmationRepetitions = 10
+    /// Number of times each reduction probe re-executes the concurrent schedule to probabilistically confirm the race still reproduces. Runs once per candidate inside the reduction loop, so this is kept small.
+    static let confirmationRepetitions = 25
+
+    /// Number of times the terminal ``confirmRealFailure`` re-executes the reported schedule to reproduce the race for evidence and final confirmation. This runs at most once per reported failure (not per reduction probe), so it can afford far more attempts than ``confirmationRepetitions``: catching a timing-fragile race here is what attaches the actual-state line and witness to the report. For a race that reproduces with probability `p` per run, the chance of catching it scales as `1 - (1 - p)^n`.
+    static let finalConfirmationRepetitions = 50
 
     /// Default command limit for `.threads` contracts. Lower than the cooperative runner's estimated/40 cap because each probe repeats `confirmationRepetitions` times.
     static let defaultCommandLimit = 8
@@ -213,11 +216,11 @@ extension __ExhaustRuntime {
             return false
         }
 
-        /// Confirms whether `input` is a genuine failure by re-executing it up to confirmationRepetitions times and accepting the first reproduction classified non-linearizable.
-        /// Preemptive execution is non-deterministic, so a single re-execution can draw a passing (or merely linearizable) interleaving and miss the race.
+        /// Confirms whether `input` is a genuine failure by re-executing it up to ``Preemptive/finalConfirmationRepetitions`` times and accepting the first reproduction classified non-linearizable.
+        /// Preemptive execution is non-deterministic, so a single re-execution can draw a passing (or merely linearizable) interleaving and miss the race. This is the terminal confirmation (once per reported failure, not per reduction probe), so it uses the larger repetition budget: a timing-fragile race that the 10-rep reduction loop could not re-trigger often still reproduces here, attaching the actual-state line and witness to the report.
         /// Returns the confirming execution's outcome (so its lane responses and final state render coherently with the verdict) and the response-level witness, or `nil` when no run reproduced a genuine violation.
         func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)]) -> (outcome: Preemptive.Outcome, witness: ResponseWitness?)? {
-            for _ in 0 ..< Preemptive.confirmationRepetitions {
+            for _ in 0 ..< Preemptive.finalConfirmationRepetitions {
                 if let confirmed = classifyFailure(input, backend.execute(input)) {
                     return confirmed
                 }
@@ -269,15 +272,14 @@ extension __ExhaustRuntime {
                 logEvent: "preemptive_skip_pruning"
             )
 
-            // Structural reduction runs first, on the un-collapsed tree, with linearizability as its property. Lane collapse moves commands into the deterministic prefix, which shrinks the concurrent set and so lowers the race's per-run reproduction rate; running it before structural makes deletion's property pass on almost every probe (the race rarely reproduces against a one- or two-command concurrent tail) and nothing gets removed. Deleting first, while the concurrent set is still large enough to reproduce the race, lets the genuinely-unnecessary commands fall away.
+            // Single combined pass: deletion, lane collapse and value minimisation together, all under the linearizability property. The graph reducer emits removal candidates before lane-collapse candidates each cycle (CandidateSource.buildSources order) and re-runs across cycles, so deletions and prefix-growth interleave and can compound. Only deletion and lane collapse are enabled: substitution needs recursive/self-similar structure a flat command pick lacks, and migration restructures the concurrent set, suppressing the race for later deletion probes.
+            // Running lane collapse under linearizableExecute (not the oracle) makes every accepted collapse self-validate as non-linearizable — so the combined output is already a confirmed counterexample, with no need for a separate collapse re-confirmation gate. Within one pass, lane collapse's reorder triggers a full graph rebuild before the next cycle's deletion candidates are built, so it does not reintroduce the cross-pass decode failure that previously forced the split.
             let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
-            // Deletion only. Substitution needs recursive/self-similar generator structure, which a flat command pick has none of; migration restructures the concurrent set, which can suppress the race for later deletion probes. Both would also share deletion's stall budget and bail the pass early on property-passing probes. Argument/value minimization, if wanted, belongs in a separate later pass.
-            let structural: Set<EncoderName> = [.deletion]
-            let structuralResult = Preemptive.reduceSinglePass(
+            let combinedResult = Preemptive.reduceSinglePass(
                 generator: sequenceGen,
                 tree: prunedTree,
                 output: prunedCommands,
-                encoders: structural,
+                encoders: [.deletion, .laneCollapse, .valueSearch, .floatSearch],
                 maxStalls: 2,
                 deadlineNanoseconds: 15_000_000_000,
                 rematerialize: true,
@@ -285,44 +287,16 @@ extension __ExhaustRuntime {
                 tuning: noRelax,
                 execute: linearizableExecute
             )
-            report.applyReductionStats(structuralResult.stats)
+            report.applyReductionStats(combinedResult.stats)
 
-            // Lane collapse (oracle property) grows the deterministic prefix on the minimized set. It shrinks the concurrent set, which lowers the race's reproduction rate, so the collapsed schedule often cannot be re-confirmed. Lane collapse never runs against deletion here, so it cannot reintroduce the decode failure that motivated running structural first.
-            let laneCollapseResult = Preemptive.reduceSinglePass(
-                generator: sequenceGen,
-                tree: structuralResult.tree,
-                output: structuralResult.output,
-                encoders: [.laneCollapse],
-                maxStalls: 2,
-                deadlineNanoseconds: 10_000_000_000,
-                rematerialize: true,
-                repetitions: Preemptive.confirmationRepetitions,
-                tuning: noRelax,
-                execute: backend.execute
-            )
-            report.applyReductionStats(laneCollapseResult.stats)
-
-            // The structural output is already validated as non-linearizable by the structural pass (it ran with linearizableExecute, so the final schedule reproduced the violation when the last deletion was accepted). It is a genuine counterexample even when too flaky to reproduce on demand, so report it unconditionally — never discard the reduction back to the original input.
-            //
-            // confirmRealFailure serves two different roles here:
-            //   - For the lane-collapsed candidate it is a real gate. Lane collapse uses the oracle, which over-reports (it fails on commutative races that are actually linearizable), so the collapsed schedule must be re-checked against true linearizability before it is adopted.
-            //   - For the structural candidate it only fetches a fresh reproducing execution to supply the report's evidence (lane responses, actual state). Validity is already established; a failure to reproduce just means the evidence is best-effort and the report falls back to expected-state-only. A nil reportedOutcome must therefore leave the evidence empty rather than borrow the original discovering run's, whose schedule no longer matches.
-            let collapseConfirmation = confirmRealFailure(laneCollapseResult.output)
-            let candidate: [(ScheduleMarker, Spec.Command)]
-            let reportedOutcome: (outcome: Preemptive.Outcome, witness: ResponseWitness?)?
-            if let collapseConfirmation {
-                candidate = laneCollapseResult.output
-                reportedOutcome = collapseConfirmation
-            } else {
-                candidate = structuralResult.output
-                reportedOutcome = confirmRealFailure(structuralResult.output)
-            }
-            // Present prefix-first. The runner runs all prefix commands sequentially before any lane (execute() partitions by marker, not array position), so reordering is execution-equivalent and makes the execution trace honest. Structural reduction (migration in particular) can leave prefix markers interleaved with lane markers in array order.
-            let reduced = candidate.filter(\.0.isPrefix) + candidate.filter { $0.0.isPrefix == false }
+            // The combined output is already validated as non-linearizable by the pass (every accepted probe, deletion or collapse, kept it failing under linearizableExecute). Report it unconditionally — never discard the reduction. confirmRealFailure is evidence-only here: a reproducing run supplies coherent lane responses and actual state; a failure to reproduce leaves the evidence empty (the report shows expected-state only) rather than borrowing the original discovering run's, whose schedule no longer matches.
+            let reportedOutcome = confirmRealFailure(combinedResult.output)
+            // Present prefix-first. The runner runs all prefix commands sequentially before any lane (execute() partitions by marker, not array position), so reordering is execution-equivalent and makes the execution trace honest.
+            let reduced = combinedResult.output.filter(\.0.isPrefix) + combinedResult.output.filter { $0.0.isPrefix == false }
 
             return (
                 reduced,
-                structuralResult.propertyInvocations + laneCollapseResult.propertyInvocations,
+                combinedResult.propertyInvocations,
                 reportedOutcome?.witness,
                 reportedOutcome?.outcome
             )
