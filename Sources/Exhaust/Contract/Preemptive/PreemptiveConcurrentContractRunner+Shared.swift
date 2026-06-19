@@ -185,7 +185,9 @@ extension __ExhaustRuntime {
 
         let identifySkips = backend.makeIdentifySkips()
         let lastFailingOutcome = UnsafeSendableBox<Preemptive.Outcome<Spec>?>(nil)
-        // Classifies one execution against linearizability — the single decision shared by the sampling/coverage property, the reduction probe, and failure confirmation. Returns the failing outcome (and any response-level witness) for a genuine violation: a non-linearizable execution, or an oracle failure with no lane responses (invariant/exception/timeout, real by construction). Returns nil when the execution passed the oracle or was confirmed linearizable (a false positive to skip). The prefix is taken from `taggedCommands` itself so the lane responses fed to the checker match the schedule being classified.
+        // Classifies one execution against linearizability — the single decision shared by the sampling/coverage property, the reduction probe, and failure confirmation.
+        // Returns the failing outcome (and any response-level witness) for a genuine violation: a non-linearizable execution, or an oracle failure with no lane responses (invariant/exception/timeout, real by construction).
+        // Returns nil when the execution passed the oracle or was confirmed linearizable (a false positive to skip). The prefix is taken from `taggedCommands` itself so the lane responses fed to the checker match the schedule being classified.
         let classifyFailure: @Sendable ([(ScheduleMarker, Spec.Command)], Preemptive.Outcome<Spec>) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?)? = { taggedCommands, outcome in
             if outcome.passed {
                 return nil
@@ -384,7 +386,11 @@ extension __ExhaustRuntime {
         // Phase 0: Smoke test. Run the first deterministic command sequence sequentially.
         // If the spec is broken without concurrency, fail fast before investing in concurrent probing.
         do {
-            let smokeGen = Gen.arrayOf(commandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
+            let smokeGen = Gen.arrayOf(
+                commandGen,
+                within: 1 ... UInt64(commandLimit),
+                scaling: .constant
+            )
             var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, seed: 0, maxRuns: 1)
             if let (commands, _) = try smokeIterator.next() {
                 let smoke = backend.runSmoke(commands)
@@ -477,7 +483,9 @@ extension __ExhaustRuntime {
 
                     // The property returned false — either a confirmed non-linearizable execution or a timeout/exception (no lane responses). The outcome is in lastFailingOutcome.
                     if lastRunTimedOut.value {
-                        let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
+                        let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil
+                            ? .replay
+                            : .randomSampling
                         let samplingReplaySeed = ReplaySeed.Resolved.sampling(seed: actualSeed, iteration: absoluteIteration).encoded
                         let reportedInput = taggedCommands.filter(\.0.isPrefix) + taggedCommands.filter { $0.0.isPrefix == false }
                         let (result, failureDescription) = backend.buildResult(

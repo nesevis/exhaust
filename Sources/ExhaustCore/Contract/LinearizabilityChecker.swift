@@ -1,15 +1,8 @@
-// MARK: - Academic Background
-
-//
-// Linearizability is the correctness condition of Herlihy and Wing, "Linearizability: A Correctness Condition for Concurrent Objects" (ACM TOPLAS, 1990). A concurrent history is linearizable when its operations can be put in some one-at-a-time order that produces the same results (their condition L1) and respects the real-time order of any two operations that did not overlap (their condition L2).
-//
-// The interleaving search follows the testing approach of Lowe, "Testing for Linearizability" (Concurrency and Computation: Practice and Experience, 2017), which records a concurrent history and searches for a sequential order that reproduces it. That work builds on the earlier Wing and Gong algorithm, whose replay-and-compare loop this checker mirrors.
-//
-// The preemptive runner produces a restricted history: every concurrent command overlaps every command on another lane, so the only real-time constraint is each lane's own command order. Enumerating the interleavings that keep per-lane order therefore covers exactly the candidate linearizations, which is why no cross-lane timestamps are recorded.
-
 /// Tests whether a concurrent execution's observed responses are consistent with some valid sequential ordering.
 ///
 /// The checker enumerates valid interleavings that preserve per-lane command order. For each ordering, it replays the commands via the caller's closures, compares per-step responses via ``structurallyEqual(_:_:)``, and checks the oracle against the concurrent execution's final state. If any ordering produces matching responses and passes the oracle, the execution is linearizable.
+///
+/// The preemptive runner produces a fully overlapping history: every concurrent command overlaps every command on another lane, so the only ordering constraint is each lane's own command order. Enumerating the interleavings that preserve per-lane order therefore covers exactly the candidate orderings, which is why no cross-lane timestamps are recorded.
 ///
 /// On failure, the checker reports the ``Witness``: the concurrent command whose observed response no ordering reproduces. This pins a response-level violation to a single command, the case the final-state diff cannot show, because the end state may coincidentally match a valid ordering even though no ordering yields the observed return value. When divergence is only in the final state (the oracle), there is no command witness and ``Witness`` is `nil`; that case is already visible in the expected-versus-actual state diff.
 ///

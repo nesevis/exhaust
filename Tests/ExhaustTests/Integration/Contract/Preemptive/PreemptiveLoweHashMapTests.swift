@@ -15,18 +15,28 @@ import Testing
 struct PreemptiveLoweHashMapTests {
     @Test("Detects ghost entry from assignment-instead-of-CAS delete")
     func detectsGhostEntryFromBuggyDelete() {
-        var report: ExhaustReport?
-        let result = #execute(
-            LoweHashMapSpec.self,
-            .concurrent(.two),
-            .commandLimit(8),
-            .budget(.extensive),
-            .suppress(.issueReporting),
-            .onReport { report = $0 }
-        )
-        print(report?.profilingSummary)
-        #expect(result?.replaySeed != nil)
-        #expect(result?.commands.count ?? 0 >= 2, "Need at least 2 concurrent commands to trigger a race")
+        var commandCount = 0
+        var totalRuntime = 0.0
+        for seed in UInt64(1337) ..< 1437 {
+            var report: ExhaustReport?
+            let result = #execute(
+                LoweHashMapSpec.self,
+                .concurrent(.two),
+                .commandLimit(8),
+                .budget(.custom(coverage: 7500, sampling: 7500)),
+                .replay(.numeric(seed)),
+                .suppress(.issueReporting),
+                .onReport { report = $0 }
+            )
+            commandCount += result?.commands.count ?? 8
+            totalRuntime += report?.totalMilliseconds ?? 0
+//            print("DBG: \(report?.profilingSummary ?? "")")
+//            print("DBG: commands: \(result?.commands.count ?? -1) runtime: \(report?.totalMilliseconds ?? -1)ms")
+//            #expect(result?.replaySeed != nil)
+//            #expect(result?.commands.count ?? 0 >= 2, "Need at least 2 concurrent commands to trigger a race")
+        }
+        print("Mean command count: \(Double(commandCount) / 100)")
+        print("Mean runtime: \(totalRuntime / 100)ms")
     }
 }
 

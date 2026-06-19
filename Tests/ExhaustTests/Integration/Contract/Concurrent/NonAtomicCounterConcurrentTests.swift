@@ -67,7 +67,14 @@ struct NonAtomicCounterConcurrentTests {
         var deliveredReport: ExhaustReport?
         _ = await __ExhaustRuntime.__runContractConcurrent(
             NonAtomicCounterSpec.self,
-            settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 50)), .replay(.numeric(42)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
+            settings: [
+                .commandLimit(4),
+                .budget(.custom(coverage: 0, sampling: 50)),
+                .replay(.numeric(42)),
+                .suppress(.issueReporting),
+                .onReport { deliveredReport = $0
+                },
+            ]
         )
         let report = try #require(deliveredReport, "onReport closure should be called")
         #expect(report.propertyInvocations == 15)

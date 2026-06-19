@@ -41,14 +41,14 @@ struct LinearizabilityCheckerTests {
         #expect(witness == nil)
     }
 
-    @Test("Witness points at the command reached only after the deepest matching prefix")
+    @Test("Witness names the impossible command via the deepest matching prefix, not the first mismatch")
     func witnessPicksDeepestDivergence() {
-        // Lane A's pop reports 7, a value never pushed. Lane B pushes 5 then pops 5 (both fine). The order that matches the most commands before failing is push(5), pop→5, then A's pop, which fails at the third step. The witness is that pop, the only impossible command, found via the longest matching prefix rather than an earlier, shallower mismatch.
-        let lanes = [[popReturning(7)], [push(5), popReturning(5)]]
+        // Lane A pushes 1 then pops expecting 2, but 2 is never pushed, so A's pop is the one impossible command. Lane B pops expecting 1, which is fine after the push. The orderings fail at different depths: starting with B's pop hits an empty stack at the first command (a shallow mismatch on a command that is innocent — it only failed because it ran first), whereas push(1), B's pop→1, then A's pop reproduces two commands before A's pop fails on the now-empty stack. The checker keeps the command at the deepest matching prefix, so the witness is A's pop (lane 0, command 1). A shallowest-divergence policy would instead name lane B's pop (lane 1, command 0), so this history distinguishes the two.
+        let lanes = [[push(1), popReturning(2)], [popReturning(1)]]
         let (linearizable, witness) = verdict(check(lanes: lanes, finalState: []))
         #expect(linearizable == false)
         #expect(witness?.lane == 0)
-        #expect(witness?.command == 0)
+        #expect(witness?.command == 1)
     }
 
     @Test("Pops that skip on an empty stack in both lanes are linearizable")
