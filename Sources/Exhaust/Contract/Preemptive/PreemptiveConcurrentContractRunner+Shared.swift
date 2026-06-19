@@ -18,12 +18,12 @@ enum Preemptive {
     ///
     /// `timedOut` distinguishes a hang (a wedged lane or a drain-loop idle bailout) from a genuine pass or property failure, so the runner reports the hang as a timeout rather than dressing it up as a confirmed race. A timed-out run always has `passed == false`.
     ///
-    /// On failure, `laneResponses` carries the per-lane observed responses for linearizability confirmation. On pass or timeout, `laneResponses` is `nil` because responses are only worth preserving when the oracle flags a potential violation. The inner type is erased to `Any` so `Outcome` stays non-generic across the reduction pipeline. Callers cast to `[[ObservedResponse<Command>]]` when consuming.
-    struct Outcome {
+    /// On failure, `laneResponses` carries the per-lane observed responses for linearizability confirmation. On pass or timeout, `laneResponses` is `nil` because responses are only worth preserving when the oracle flags a potential violation.
+    struct Outcome<Spec: ContractSpecBase> {
         let passed: Bool
         let timedOut: Bool
-        let laneResponses: Any?
-        let concurrentSpec: Any?
+        let laneResponses: [[ObservedResponse<Spec.Command>]]?
+        let concurrentSpec: Spec?
     }
 
     /// Result of a preemptive reduction pass.
@@ -45,13 +45,13 @@ enum Preemptive {
         rematerialize: Bool,
         repetitions: Int,
         tuning: SchedulerTuning = .init(),
-        execute: ([(ScheduleMarker, Command)]) -> Outcome
+        execute: ([(ScheduleMarker, Command)]) -> Bool
     ) -> ReductionResult<Command> {
         var propertyInvocations = 0
         let property: ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
             for _ in 0 ..< repetitions {
                 propertyInvocations += 1
-                if execute(taggedCommands).passed == false {
+                if execute(taggedCommands) == false {
                     return false
                 }
             }
@@ -109,7 +109,7 @@ protocol PreemptiveBackend<Spec>: Sendable {
     func makeIdentifySkips() -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>
 
     /// Runs one tagged command sequence concurrently and reports whether invariants and the oracle held.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome<Spec>
 
     /// Runs a command sequence sequentially on a fresh spec for the smoke phase, capturing the trace, whether it failed, and the resulting oracle state for the report.
     func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)
@@ -120,13 +120,13 @@ protocol PreemptiveBackend<Spec>: Sendable {
     ///
     /// - Parameters:
     ///   - prefix: The sequential prefix commands.
-    ///   - laneResponses: The type-erased per-lane observed responses from `Outcome.laneResponses`. Callers cast internally.
+    ///   - laneResponses: The per-lane observed responses from `Outcome.laneResponses`.
     ///   - concurrentSpec: The concurrent spec instance after execution, kept alive for oracle calls.
     /// - Returns: The linearizability verdict with closest-ordering information on failure.
     func checkLinearizability(
         prefix: [Spec.Command],
-        laneResponses: Any,
-        concurrentSpec: Any
+        laneResponses: [[ObservedResponse<Spec.Command>]],
+        concurrentSpec: Spec
     ) -> LinearizabilityResult
 
     /// Replays the reduced commands sequentially on a fresh spec to capture the expected (race-free) oracle state for a failure result.
@@ -184,9 +184,9 @@ extension __ExhaustRuntime {
         let lastRunTimedOut = UnsafeSendableBox(false)
 
         let identifySkips = backend.makeIdentifySkips()
-        let lastFailingOutcome = UnsafeSendableBox<Preemptive.Outcome?>(nil)
+        let lastFailingOutcome = UnsafeSendableBox<Preemptive.Outcome<Spec>?>(nil)
         // Classifies one execution against linearizability — the single decision shared by the sampling/coverage property, the reduction probe, and failure confirmation. Returns the failing outcome (and any response-level witness) for a genuine violation: a non-linearizable execution, or an oracle failure with no lane responses (invariant/exception/timeout, real by construction). Returns nil when the execution passed the oracle or was confirmed linearizable (a false positive to skip). The prefix is taken from `taggedCommands` itself so the lane responses fed to the checker match the schedule being classified.
-        let classifyFailure: @Sendable ([(ScheduleMarker, Spec.Command)], Preemptive.Outcome) -> (outcome: Preemptive.Outcome, witness: ResponseWitness?)? = { taggedCommands, outcome in
+        let classifyFailure: @Sendable ([(ScheduleMarker, Spec.Command)], Preemptive.Outcome<Spec>) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?)? = { taggedCommands, outcome in
             if outcome.passed {
                 return nil
             }
@@ -219,7 +219,7 @@ extension __ExhaustRuntime {
         /// Confirms whether `input` is a genuine failure by re-executing it up to ``Preemptive/finalConfirmationRepetitions`` times and accepting the first reproduction classified non-linearizable.
         /// Preemptive execution is non-deterministic, so a single re-execution can draw a passing (or merely linearizable) interleaving and miss the race. This is the terminal confirmation (once per reported failure, not per reduction probe), so it uses the larger repetition budget: a timing-fragile race that the 10-rep reduction loop could not re-trigger often still reproduces here, attaching the actual-state line and witness to the report.
         /// Returns the confirming execution's outcome (so its lane responses and final state render coherently with the verdict) and the response-level witness, or `nil` when no run reproduced a genuine violation.
-        func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)]) -> (outcome: Preemptive.Outcome, witness: ResponseWitness?)? {
+        func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)]) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?)? {
             for _ in 0 ..< Preemptive.finalConfirmationRepetitions {
                 if let confirmed = classifyFailure(input, backend.execute(input)) {
                     return confirmed
@@ -228,22 +228,14 @@ extension __ExhaustRuntime {
             return nil
         }
 
-        /// Reduction property in ``Preemptive/Outcome`` form: a probe "passes" when its execution is linearizable, so structural reduction keeps only commands whose removal would dissolve a genuine response-level violation. (A bare oracle property would strip commands whose return values carry the response-level evidence.)
-        func linearizableExecute(_ probeCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome {
-            let probeOutcome = backend.execute(probeCommands)
-            guard classifyFailure(probeCommands, probeOutcome) == nil else {
-                return probeOutcome
-            }
-            return probeOutcome.passed
-                ? probeOutcome
-                : Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+        /// Reduction property: a probe "passes" (stays reducible) when its execution is linearizable, so structural reduction keeps only commands whose removal would dissolve a genuine response-level violation. (A bare oracle property would strip commands whose return values carry the response-level evidence.)
+        func linearizableProbe(_ probeCommands: [(ScheduleMarker, Spec.Command)]) -> Bool {
+            classifyFailure(probeCommands, backend.execute(probeCommands)) == nil
         }
 
         /// Per-lane observed return values for failure annotation, keyed by ``ScheduleMarker/rawValue`` in per-lane execution order.
-        func laneResponseValues(from outcome: Preemptive.Outcome?) -> [UInt8: [String?]]? {
-            guard let outcome,
-                  let typedResponses = outcome.laneResponses as? [[ObservedResponse<Spec.Command>]]
-            else { return nil }
+        func laneResponseValues(from outcome: Preemptive.Outcome<Spec>?) -> [UInt8: [String?]]? {
+            guard let outcome, let typedResponses = outcome.laneResponses else { return nil }
             var values: [UInt8: [String?]] = [:]
             for laneArray in typedResponses {
                 for response in laneArray {
@@ -260,7 +252,7 @@ extension __ExhaustRuntime {
             taggedCommands: [(ScheduleMarker, Spec.Command)],
             tree: ChoiceTree,
             pruneSeed: UInt64
-        ) -> (reduced: [(ScheduleMarker, Spec.Command)], reductionInvocations: Int, witness: ResponseWitness?, reportedOutcome: Preemptive.Outcome?) {
+        ) -> (reduced: [(ScheduleMarker, Spec.Command)], reductionInvocations: Int, witness: ResponseWitness?, reportedOutcome: Preemptive.Outcome<Spec>?) {
             // Prune commands whose preconditions were not met: a skipped command is a no-op, so removing it up front keeps reduction on the minimal command set and the reported counterexample carries no skipped commands. The prune is reverted if removing the skips dissolves the violation.
             let (prunedCommands, prunedTree) = pruneSkippedCommands(
                 value: taggedCommands,
@@ -285,7 +277,7 @@ extension __ExhaustRuntime {
                 rematerialize: true,
                 repetitions: Preemptive.confirmationRepetitions,
                 tuning: noRelax,
-                execute: linearizableExecute
+                execute: linearizableProbe
             )
             report.applyReductionStats(combinedResult.stats)
 
@@ -304,7 +296,7 @@ extension __ExhaustRuntime {
 
         /// Builds the result, records invocation counts, renders the failure issue, and finalizes the report for a reduced failure. The coverage and sampling phases run this identical six-step sequence after ``reduceConfirmedFailure`` and differ only in discovery metadata, so it lives here rather than being spelled out at each phase.
         func assembleReducedFailure(
-            reduction: (reduced: [(ScheduleMarker, Spec.Command)], reductionInvocations: Int, witness: ResponseWitness?, reportedOutcome: Preemptive.Outcome?),
+            reduction: (reduced: [(ScheduleMarker, Spec.Command)], reductionInvocations: Int, witness: ResponseWitness?, reportedOutcome: Preemptive.Outcome<Spec>?),
             discoveryMethod: ContractDiscoveryMethod,
             seed: UInt64?,
             iteration: Int,
@@ -341,7 +333,7 @@ extension __ExhaustRuntime {
                     replaySeed: replaySeed,
                     timedOut: false,
                     expectedDescription: failureDescription,
-                    actualDescription: (reduction.reportedOutcome?.concurrentSpec as? Spec)?.failureDescription(),
+                    actualDescription: reduction.reportedOutcome?.concurrentSpec?.failureDescription(),
                     laneResponseValues: laneResponseValues(from: reduction.reportedOutcome),
                     linearizabilityWitness: reduction.witness
                 ))

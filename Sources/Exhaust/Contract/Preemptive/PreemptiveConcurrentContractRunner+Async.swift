@@ -84,7 +84,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// Prefix and sequential commands are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome {
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome<Spec> {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
@@ -253,15 +253,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
     func checkLinearizability(
         prefix: [Spec.Command],
-        laneResponses: Any,
-        concurrentSpec: Any
+        laneResponses: [[ObservedResponse<Spec.Command>]],
+        concurrentSpec: Spec
     ) -> LinearizabilityResult {
-        guard let typedResponses = laneResponses as? [[ObservedResponse<Spec.Command>]],
-              let typedSpec = concurrentSpec as? Spec
-        else {
-            return .linearizable
-        }
-        let observations = typedResponses.map { lane in
+        let observations = laneResponses.map { lane in
             lane.map { response in
                 LinearizabilityChecker<Spec.Command>.Observation(
                     command: response.command,
@@ -272,7 +267,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
             }
         }
         let checker = LinearizabilityChecker(laneObservations: observations)
-        nonisolated(unsafe) let unsafeSpec = typedSpec
+        nonisolated(unsafe) let unsafeSpec = concurrentSpec
         let result: LinearizabilityChecker<Spec.Command>.Result = __ExhaustRuntime.blockingAwait {
             var replaySpec: Spec?
             return await checker.checkAsync(
@@ -314,7 +309,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 }
             )
         }
-        return makeLinearizabilityResult(result, laneObservations: typedResponses)
+        return makeLinearizabilityResult(result, laneObservations: laneResponses)
     }
 
     func makeIdentifySkips() -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> {

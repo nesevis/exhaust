@@ -114,7 +114,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// `passed` is `false` when a command throws, an invariant fails, or the oracle detects divergence from sequential behavior. `timedOut` is `true` when the concurrent lanes did not finish within ``idleTimeoutMilliseconds``, surfaced separately so the caller can skip reduction (every probe would wait out the bound) and report a hang rather than a deterministic failure.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome {
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome<Spec> {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
@@ -240,18 +240,13 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
     func checkLinearizability(
         prefix: [Spec.Command],
-        laneResponses: Any,
-        concurrentSpec: Any
+        laneResponses: [[ObservedResponse<Spec.Command>]],
+        concurrentSpec: Spec
     ) -> LinearizabilityResult {
-        guard let typedResponses = laneResponses as? [[ObservedResponse<Spec.Command>]],
-              let typedSpec = concurrentSpec as? Spec
-        else {
-            return .linearizable
-        }
-        return Self.runLinearizabilityCheck(
+        Self.runLinearizabilityCheck(
             prefix: prefix,
-            laneResponses: typedResponses,
-            concurrentSpec: typedSpec
+            laneResponses: laneResponses,
+            concurrentSpec: concurrentSpec
         )
     }
 
