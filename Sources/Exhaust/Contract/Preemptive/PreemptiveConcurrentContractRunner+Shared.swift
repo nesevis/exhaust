@@ -74,12 +74,16 @@ enum Preemptive {
             stats.merge(result.stats)
             if case let .reduced(sequence, reduced) = result.outcome {
                 currentOutput = reduced
+                // Rebuild the tree from the reduced sequence so the next pass starts from a consistent (output, tree) pair, using the rematerialized value and tree together. Exact replay is sufficient: structural deletion runs first on the pruned tree (see reduceConfirmedFailure), before any rematerialize here, so no pass has to compute removal spans against this tree.
                 if rematerialize,
-                   case let .success(_, freshTree, _) = Materializer.materialize(
-                       generator, prefix: sequence, mode: .exact, fallbackTree: currentTree, materializePicks: true
+                   case let .success(value, tree, _) = Materializer.materialize(
+                       generator,
+                       prefix: sequence,
+                       mode: .exact
                    )
                 {
-                    currentTree = freshTree
+                    currentOutput = value
+                    currentTree = tree
                 }
             }
         }
@@ -265,27 +269,14 @@ extension __ExhaustRuntime {
                 logEvent: "preemptive_skip_pruning"
             )
 
-            // Lane collapse (oracle property) grows the deterministic prefix; structural reduction then runs with linearizability as its property so the final counterexample stays genuine.
+            // Structural reduction runs first, on the un-collapsed tree, with linearizability as its property. Lane collapse moves commands into the deterministic prefix, which shrinks the concurrent set and so lowers the race's per-run reproduction rate; running it before structural makes deletion's property pass on almost every probe (the race rarely reproduces against a one- or two-command concurrent tail) and nothing gets removed. Deleting first, while the concurrent set is still large enough to reproduce the race, lets the genuinely-unnecessary commands fall away.
             let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
-            let laneCollapseResult = Preemptive.reduceSinglePass(
+            // Deletion only. Substitution needs recursive/self-similar generator structure, which a flat command pick has none of; migration restructures the concurrent set, which can suppress the race for later deletion probes. Both would also share deletion's stall budget and bail the pass early on property-passing probes. Argument/value minimization, if wanted, belongs in a separate later pass.
+            let structural: Set<EncoderName> = [.deletion]
+            let structuralResult = Preemptive.reduceSinglePass(
                 generator: sequenceGen,
                 tree: prunedTree,
                 output: prunedCommands,
-                encoders: [.laneCollapse],
-                maxStalls: 2,
-                deadlineNanoseconds: 10_000_000_000,
-                rematerialize: true,
-                repetitions: Preemptive.confirmationRepetitions,
-                tuning: noRelax,
-                execute: backend.execute
-            )
-            report.applyReductionStats(laneCollapseResult.stats)
-
-            let structural: Set<EncoderName> = [.deletion, .migration, .substitution]
-            let structuralResult = Preemptive.reduceSinglePass(
-                generator: sequenceGen,
-                tree: laneCollapseResult.tree,
-                output: laneCollapseResult.output,
                 encoders: structural,
                 maxStalls: 2,
                 deadlineNanoseconds: 15_000_000_000,
@@ -296,15 +287,30 @@ extension __ExhaustRuntime {
             )
             report.applyReductionStats(structuralResult.stats)
 
-            // Only report a schedule that is itself confirmed non-linearizable. Lane collapse can promote a race-essential command into the prefix and leave a linearizable tail; structural reduction can over-reduce on a noisy probe. Re-confirm the reduced candidate; fall back to the pruned schedule (still confirmed non-linearizable) when reduction dissolved the violation.
-            let confirmation = confirmRealFailure(structuralResult.output)
-            let candidate = confirmation == nil ? prunedCommands : structuralResult.output
+            // Lane collapse (oracle property) runs last: it grows the deterministic prefix on the already-minimized command set. Nothing downstream needs the race to reproduce after this, so shrinking the concurrent set here is harmless.
+            let laneCollapseResult = Preemptive.reduceSinglePass(
+                generator: sequenceGen,
+                tree: structuralResult.tree,
+                output: structuralResult.output,
+                encoders: [.laneCollapse],
+                maxStalls: 2,
+                deadlineNanoseconds: 10_000_000_000,
+                rematerialize: true,
+                repetitions: Preemptive.confirmationRepetitions,
+                tuning: noRelax,
+                execute: backend.execute
+            )
+            report.applyReductionStats(laneCollapseResult.stats)
+
+            // Only report a schedule that is itself confirmed non-linearizable. Lane collapse can promote a race-essential command into the prefix and leave a linearizable tail. Re-confirm the collapsed candidate. When it cannot be re-confirmed, fall back to the original input — not the reduced schedule — because the caller's evidence (lane responses, actual state) for the fallback comes from the original discovering run; reporting the reduced schedule against original-run evidence misattributes return values and shows phantom state from commands no longer present.
+            let confirmation = confirmRealFailure(laneCollapseResult.output)
+            let candidate = confirmation == nil ? taggedCommands : laneCollapseResult.output
             // Present prefix-first. The runner runs all prefix commands sequentially before any lane (execute() partitions by marker, not array position), so reordering is execution-equivalent and makes the execution trace honest. Structural reduction (migration in particular) can leave prefix markers interleaved with lane markers in array order.
             let reduced = candidate.filter(\.0.isPrefix) + candidate.filter { $0.0.isPrefix == false }
 
             return (
                 reduced,
-                laneCollapseResult.propertyInvocations + structuralResult.propertyInvocations,
+                structuralResult.propertyInvocations + laneCollapseResult.propertyInvocations,
                 confirmation?.witness,
                 confirmation?.outcome
             )
