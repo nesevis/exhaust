@@ -13,8 +13,8 @@ struct PreemptiveSmokeTestTests {
                     SequentiallyBrokenSpec.self,
                     settings: [
                         .concurrent(.two),
-                        .commandLimit(4),
-                        .budget(.custom(coverage: 0, sampling: 50)),
+                        .commandLimit(10),
+                        .budget(.custom(coverage: 0, sampling: 0)),
                         .suppress(.issueReporting),
                     ]
                 )
@@ -23,23 +23,23 @@ struct PreemptiveSmokeTestTests {
         #expect(result.commands.isEmpty == false)
     }
 
-    @Test("Smoke test failure carries U-prefixed replay seed")
-    func smokeTestFailureCarriesUPrefixedReplaySeed() async throws {
+    @Test("Smoke test failure carries specific replay seed")
+    func smokeTestFailureCarriesSpecificReplaySeed() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
                 __ExhaustRuntime.__runPreemptiveConcurrentContract(
                     SequentiallyBrokenSpec.self,
                     settings: [
                         .concurrent(.two),
-                        .commandLimit(4),
-                        .budget(.custom(coverage: 200, sampling: 0)),
+                        .commandLimit(10),
+                        .budget(.custom(coverage: 0, sampling: 0)),
                         .suppress(.issueReporting),
                     ]
                 )
             }
         )
         let replaySeed = try #require(result.replaySeed)
-        #expect(replaySeed.hasPrefix("U"), "Smoke test replay seed should have U prefix")
+        #expect(replaySeed == "0-1")
     }
 }
 
@@ -52,12 +52,7 @@ final class SequentiallyBrokenSpec {
 
     @Oracle
     func valuesMatch(other: BrokenCounter) -> Bool {
-        counter.value == other.value
-    }
-
-    @Invariant
-    func matchesModel() -> Bool {
-        counter.value == expected
+        counter.value == other.value && counter.value == expected
     }
 
     @Command(weight: 3)

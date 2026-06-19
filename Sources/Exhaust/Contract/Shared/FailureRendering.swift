@@ -5,6 +5,9 @@ import CustomDump
 import ExhaustCore
 
 extension __ExhaustRuntime {
+    /// Suffix appended to the lane command (in both the command partition and the execution trace) whose observed response no valid sequential ordering reproduces.
+    static let linearizabilityWitnessMarker = "  ← no sequential ordering reproduces this response"
+
     /// Metadata accumulated during a concurrent contract run, passed to ``renderFailure(_:trace:context:)`` for final formatting.
     struct FailureContext {
         var specName: String = ""
@@ -20,6 +23,10 @@ extension __ExhaustRuntime {
         var replaySeed: String?
         var oracleDescription: String?
         var failureDescription: String?
+        /// Observed return values per lane (keyed by ``ScheduleMarker/rawValue``), in per-lane execution order, used to annotate each lane command with what it returned. A `nil` entry is a void command (no annotation).
+        var laneResponseValues: [UInt8: [String?]]?
+        /// The lane command whose observed response no valid sequential ordering reproduces, marked inline in the command partition. `nil` when the violation is only in final state (already shown by the expected-versus-actual state diff).
+        var linearizabilityWitness: ResponseWitness?
     }
 
     /// Formats a concurrent contract failure for reporting.
@@ -47,7 +54,12 @@ extension __ExhaustRuntime {
             lines.append("")
         }
 
-        renderCommandPartition(tagged, into: &lines)
+        renderCommandPartition(
+            tagged,
+            into: &lines,
+            laneResponseValues: context.laneResponseValues,
+            linearizabilityWitness: context.linearizabilityWitness
+        )
 
         lines.append("Execution trace:")
         for step in trace {
@@ -60,9 +72,8 @@ extension __ExhaustRuntime {
         }
 
         if let failureDescription = context.failureDescription {
-            let indented = failureDescription.replacingOccurrences(of: "\n", with: "\n  ")
             lines.append("")
-            lines.append("State: \(indented)")
+            lines.append(failureDescription)
         }
 
         if tagged.isEmpty == false, tagged.allSatisfy(\.0.isPrefix) {
@@ -94,6 +105,7 @@ extension __ExhaustRuntime {
         var lines: [String] = []
         lines.append("Concurrent contract timed out: the drain loop stalled with no pending continuations.")
         lines.append("This typically means a command body suspended to a foreign executor (custom-executor actor, Task.sleep, or blocking I/O) that does not flow through the cooperative scheduler.")
+        lines.append("If the timeout is caused by thread contention from parallel tests, increase the budget with .idleTimeoutMs(_:).")
         lines.append("")
 
         renderCommandPartition(tagged, into: &lines)
@@ -109,9 +121,13 @@ extension __ExhaustRuntime {
     }
 
     /// Renders the command partition (prefix, lane A, lane B, ...) into the output lines.
+    ///
+    /// When `laneResponseValues` is supplied, each lane command is annotated with the value it returned during the concurrent execution (`getOrElse(0) → 5`), which is where a response-level linearizability violation is visible. Prefix commands are not annotated because they run deterministically. When `linearizabilityWitness` identifies a lane command, that command is marked as the one whose response no valid ordering reproduces.
     static func renderCommandPartition(
         _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
-        into lines: inout [String]
+        into lines: inout [String],
+        laneResponseValues: [UInt8: [String?]]? = nil,
+        linearizabilityWitness: ResponseWitness? = nil
     ) {
         let prefixCommands = tagged.filter(\.0.isPrefix).map(\.1)
         if prefixCommands.isEmpty == false {
@@ -128,9 +144,17 @@ extension __ExhaustRuntime {
             let laneCommands = tagged.filter { $0.0 == marker }.map(\.1)
             if laneCommands.isEmpty == false {
                 let label = marker.description.uppercased()
+                let values = laneResponseValues?[laneValue]
                 lines.append("Lane \(label):")
                 for (index, command) in laneCommands.enumerated() {
-                    lines.append("  \(index + 1)\(label). \(command)")
+                    let annotation = if let values, index < values.count, let value = values[index] {
+                        " → \(value)"
+                    } else {
+                        ""
+                    }
+                    let isWitness = linearizabilityWitness?.lane == laneValue && linearizabilityWitness?.index == index
+                    let witnessMarker = isWitness ? linearizabilityWitnessMarker : ""
+                    lines.append("  \(index + 1)\(label). \(command)\(annotation)\(witnessMarker)")
                 }
                 lines.append("")
             }

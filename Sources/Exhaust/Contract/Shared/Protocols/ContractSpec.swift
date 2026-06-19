@@ -22,11 +22,15 @@
 /// }
 /// ```
 public protocol ContractSpec: ContractSpecBase, AnyObject {
-    /// Executes a command against the model and SUT, applying preconditions, postconditions, and invariants.
+    /// Executes a command against the model and SUT, returning a ``CommandResponse`` for linearizability checking.
+    ///
+    /// The preemptive runner captures responses per-lane for linearizability confirmation. Sequential and cooperative runners discard the return value.
     ///
     /// - Parameter command: The command to execute.
+    /// - Returns: The command's description paired with its return value (or `nil` for void commands).
     /// - Throws: ``ContractSkip`` if a precondition fails, ``ContractCheckFailure`` if a postcondition or invariant fails.
-    func run(_ command: Command) throws
+    @discardableResult
+    func run(_ command: Command) throws -> CommandResponse
 
     /// Checks all `@Invariant`-annotated methods. Called after every command execution.
     ///

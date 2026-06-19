@@ -84,7 +84,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// Prefix and sequential commands are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome {
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome<Spec> {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
@@ -93,23 +93,36 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
         let prefixOnConcurrent = runSequentially(prefixCommands.map(\.1), on: concurrentSpec)
         if prefixOnConcurrent.succeeded == false {
-            return Preemptive.Outcome(passed: false, timedOut: prefixOnConcurrent.timedOut)
+            return Preemptive.Outcome(passed: false, timedOut: prefixOnConcurrent.timedOut, laneResponses: nil, concurrentSpec: nil)
         }
         let prefixOnSequential = runSequentially(prefixCommands.map(\.1), on: sequentialSpec)
         if prefixOnSequential.succeeded == false {
-            return Preemptive.Outcome(passed: false, timedOut: prefixOnSequential.timedOut)
+            return Preemptive.Outcome(passed: false, timedOut: prefixOnSequential.timedOut, laneResponses: nil, concurrentSpec: nil)
         }
         let concurrentOnSequential = runSequentially(concurrentCommands.map(\.1), on: sequentialSpec)
         if concurrentOnSequential.succeeded == false {
-            return Preemptive.Outcome(passed: false, timedOut: concurrentOnSequential.timedOut)
+            return Preemptive.Outcome(passed: false, timedOut: concurrentOnSequential.timedOut, laneResponses: nil, concurrentSpec: nil)
         }
 
         let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
+        let laneCount = laneGroups.count
+        let perLaneResponses = (0 ..< laneCount).map { _ in SendableBox<[ObservedResponse<Spec.Command>]>([]) }
+        let laneIndexByRawValue: [UInt8: Int] = {
+            var mapping: [UInt8: Int] = [:]
+            for (index, rawValue) in laneGroups.keys.sorted().enumerated() {
+                mapping[rawValue] = index
+            }
+            return mapping
+        }()
+
         let commandFailed = SendableBox(false)
         let timedOut = SendableBox(false)
         let caughtException = SendableBox<NSException?>(nil)
         let group = DispatchGroup()
-        for (_, laneCommands) in laneGroups {
+        for (rawValue, laneCommands) in laneGroups {
+            let laneIndex = laneIndexByRawValue[rawValue]!
+            let responseBox = perLaneResponses[laneIndex]
+            let laneID = rawValue
             group.enter()
             DispatchQueue.global().async {
                 var exception: NSException?
@@ -119,9 +132,25 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                         for (_, command) in laneCommands {
                             if commandFailed.value { break }
                             do {
-                                try await spec.run(command)
+                                let response = try await spec.run(command)
+                                let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
+                                responseBox.withValue { responses in
+                                    responses.append(ObservedResponse<Spec.Command>(
+                                        lane: laneID,
+                                        command: command,
+                                        commandDescription: response.commandDescription,
+                                        outcome: outcome
+                                    ))
+                                }
                             } catch is ContractSkip {
-                                continue
+                                responseBox.withValue { responses in
+                                    responses.append(ObservedResponse<Spec.Command>(
+                                        lane: laneID,
+                                        command: command,
+                                        commandDescription: command.description,
+                                        outcome: .skipped
+                                    ))
+                                }
                             } catch {
                                 commandFailed.value = true
                                 break
@@ -142,14 +171,14 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
                 commandFailed.value = true
-                return Preemptive.Outcome(passed: false, timedOut: true)
+                return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
             }
         } else {
             group.wait()
         }
 
         if caughtException.value != nil || commandFailed.value {
-            return Preemptive.Outcome(passed: false, timedOut: timedOut.value)
+            return Preemptive.Outcome(passed: false, timedOut: timedOut.value, laneResponses: nil, concurrentSpec: nil)
         }
 
         nonisolated(unsafe) let invariantSpec = concurrentSpec
@@ -162,11 +191,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 return false
             }
         }) else {
-            return Preemptive.Outcome(passed: false, timedOut: true)
+            return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
         }
 
         if invariantsPassed == false {
-            return Preemptive.Outcome(passed: false, timedOut: false)
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
 
         nonisolated(unsafe) let oracleSpec = concurrentSpec
@@ -175,9 +204,13 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         guard let oraclePassed = awaitOrTimeout("oracle", {
             await oracleSpec.oracleCheck(sequentialResult)
         }) else {
-            return Preemptive.Outcome(passed: false, timedOut: true)
+            return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
         }
-        return Preemptive.Outcome(passed: oraclePassed, timedOut: false)
+        if oraclePassed {
+            return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+        }
+        let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
+        return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
     }
 
     /// Outcome of a sequential command run.
@@ -218,13 +251,72 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         return SequentialOutcome(succeeded: exception == nil && failed.value == false, timedOut: timedOut.value)
     }
 
+    func checkLinearizability(
+        prefix: [Spec.Command],
+        laneResponses: [[ObservedResponse<Spec.Command>]],
+        concurrentSpec: Spec
+    ) -> LinearizabilityResult {
+        let checker = LinearizabilityChecker(laneResponses: laneResponses)
+        nonisolated(unsafe) let unsafeSpec = concurrentSpec
+        let result: LinearizabilityChecker<Spec.Command>.Result = __ExhaustRuntime.blockingAwait {
+            var replaySpec: Spec?
+            return await checker.checkAsync(
+                prefix: prefix,
+                replayPrefix: { prefixCommands in
+                    let fresh = Spec()
+                    for command in prefixCommands {
+                        do {
+                            try await fresh.run(command)
+                        } catch {
+                            return false
+                        }
+                    }
+                    replaySpec = fresh
+                    return true
+                },
+                replayCommand: { command in
+                    guard let spec = replaySpec else { return nil }
+                    do {
+                        let response = try await spec.run(command)
+                        return .init(
+                            commandDescription: response.commandDescription,
+                            returnValue: response.returnValue,
+                            isSkipped: false
+                        )
+                    } catch is ContractSkip {
+                        return .init(
+                            commandDescription: command.description,
+                            returnValue: nil,
+                            isSkipped: true
+                        )
+                    } catch {
+                        return nil
+                    }
+                },
+                checkOracle: {
+                    guard let spec = replaySpec else { return false }
+                    return await unsafeSpec.oracleCheck(spec.systemUnderTest)
+                }
+            )
+        }
+        return makeLinearizabilityResult(result, laneObservations: laneResponses)
+    }
+
     func makeIdentifySkips() -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> {
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
         let rawIdentifySkips = Spec.skipIdentifier(
             specInit: specInit,
             idleTimeoutMilliseconds: idleTimeoutMilliseconds
         )
-        return { taggedCommands in rawIdentifySkips(taggedCommands.map(\.1)) }
+        return { taggedCommands in
+            // Skip identification replays the commands on a fresh spec via a blocking drain, outside the ObjC guard that wraps lane execution. A synchronously-thrown NSException would otherwise propagate out of the drain and abort, so degrade to "no skips identified" (pruning becomes a no-op and the actual execution catches and reports it).
+            var skipped: Set<Int> = []
+            var exception: NSException?
+            let completed = exhaust_runCatchingObjCException({
+                skipped = rawIdentifySkips(taggedCommands.map(\.1))
+            }, &exception)
+            return completed ? skipped : []
+        }
     }
 
     func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
@@ -238,7 +330,39 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
             )
         }
         let (trace, failed) = __ExhaustRuntime.blockingAwait(work)
-        return (trace, failed, spec.systemUnderTest, failed ? spec.failureDescription() : nil)
+        if failed {
+            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+        }
+        // A .threads spec expresses its self-consistency check through the @Oracle, because the macro rejects @Invariant under .threads, and smoke never runs the concurrent phase.
+        // Replay the sequence on a fresh reference and call the oracle once at the end, so a spec that is already broken under sequential execution fails here before any concurrent probing.
+        // The reference is a distinct spec so the oracle's relational comparison is between two independent runs rather than the SUT against itself.
+        let reference = Spec()
+        nonisolated(unsafe) let unsafeReference = reference
+        let smokeTimeout = (idleTimeoutMilliseconds ?? ResolvedConcurrentConfig.defaultIdleTimeout) * 5
+        let referenceFailed: Bool? = __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: smokeTimeout) {
+            for command in commands {
+                do {
+                    try await unsafeReference.run(command)
+                } catch is ContractSkip {
+                    continue
+                } catch {
+                    return true
+                }
+            }
+            return false
+        }
+        if referenceFailed != false {
+            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+        }
+        nonisolated(unsafe) let referenceResult = reference.systemUnderTest
+        nonisolated(unsafe) let oracleSpec = spec
+        let oracleHeld = __ExhaustRuntime.blockingAwait {
+            await oracleSpec.oracleCheck(referenceResult)
+        }
+        if oracleHeld == false {
+            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+        }
+        return (trace, false, spec.systemUnderTest, nil)
     }
 
     /// Replays the reduced commands sequentially on a fresh spec via ``runSequentially(_:on:)`` to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails or times out, because the partial state would mislead debugging.

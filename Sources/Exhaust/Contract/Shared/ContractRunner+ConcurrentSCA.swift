@@ -73,7 +73,10 @@ extension __ExhaustRuntime {
                     metadata: ["iteration": "\(coverageInvocations)", "commands": "\(value.count)", "timedOut": "\(timedOut)"]
                 )
 
-                let reductionConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
+                let reductionConfig = Interpreters.ReducerConfiguration(
+                    maxStalls: 2,
+                    tuning: SchedulerTuning(relaxMaterializationBudget: 0)
+                )
                 let reductionStartInvocations = invocationCounter.value
                 let reductionStopwatch = Stopwatch()
                 let reduction = reduceConcurrentCounterexample(

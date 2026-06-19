@@ -55,6 +55,7 @@ struct IdleTimeoutConcurrentTests {
         let report = try #require(deliveredReport)
         #expect(report.reductionInvocations == 0)
         #expect(report.randomSamplingInvocations == 1)
+        #expect(report.coverageInvocations == 0)
         #expect(report.propertyInvocations == 1)
     }
 

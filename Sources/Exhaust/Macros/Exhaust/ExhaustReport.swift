@@ -144,7 +144,7 @@ public struct ExhaustReport: Sendable {
         return "cycles=\(cycles) invocations=\(coverageInvocations)cov/\(randomSamplingInvocations)gen/\(reductionInvocations)red materializations=\(totalMaterializations)\(graphLabel)\(encoderLabel)\(timingLabel)"
     }
 
-    /// Populates reduction statistics from a ``ReductionStats`` value.
+    /// Populates reduction statistics from a ``ReductionStats`` value. Each call overwrites the previous stats; the reducer runs a single reduction pass per report, so there is nothing to accumulate.
     package mutating func applyReductionStats(_ stats: ReductionStats) {
         encoderProbes = stats.encoderProbes
         encoderProbesAccepted = stats.encoderProbesAccepted
