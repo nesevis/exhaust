@@ -62,7 +62,7 @@ final class StackContract {
 
 Each `@Command` method is one operation Exhaust can choose to run. The `weight:` parameter controls how often it appears relative to other commands. A weight-3 command shows up roughly three times as often as a weight-1 command. After every command, all `@Invariant` methods are checked automatically.
 
-Contracts must be a `final class` or an `actor`. The `@Contract` macro takes a required execution mode. `.sequential` runs commands one at a time and checks `@Invariant` after each step. It is the most common mode, and the one this guide uses until the concurrency sections. `.tasks` runs commands concurrently with deterministic interleaving at `await` boundaries. `.threads` dispatches commands to real OS threads and checks an `@Oracle` against a sequential replay.
+Contracts must be a `final class` or an `actor`. The `@Contract` macro takes a required execution mode. `.sequential` runs commands one at a time and checks `@Invariant` after each step. It is the most common mode, and the one this guide uses until the concurrency sections. `.tasks` runs commands concurrently with deterministic interleaving at `await` boundaries. `.threads` dispatches commands to real OS threads and confirms each failure by checking the run against every valid sequential ordering (linearizability), comparing the result through an `@Oracle`.
 
 ## Models and invariants
 
@@ -141,7 +141,7 @@ Reproduce: .replay("3JK4M2-5")
 
 The replay seed lets you re-run the exact same sequence deterministically for debugging.
 
-`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget (capped at 100 for sequential contracts, 40 for concurrent). Longer sequences explore deeper states but take longer to test and to reduce. The overhead scales linearly with command limit. Contracts with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
+`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget, capped at 100 for sequential contracts and 40 for `.tasks` concurrent contracts; `.threads` contracts instead default to a flat 8, because each sequence is re-run many times to reproduce the race. Longer sequences explore deeper states but take longer to test and to reduce. The overhead scales linearly with command limit. Contracts with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
 
 ## Your SUT uses async/await
 
@@ -248,7 +248,7 @@ SUTs that have races at suspension points (the `let v = state; await Task.yield(
 
 ### Idle timeout
 
-If a command body suspends to an executor outside the cooperative scheduler (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeoutMs(ms)` setting (default 1000ms) detects this and reports the stalling command sequence without attempting reduction.
+If a command body suspends to an executor outside the cooperative scheduler (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeoutMs(ms)` setting (default 2000ms) detects this and reports the stalling command sequence without attempting reduction.
 
 ## Finding concurrency bugs in threaded code
 
@@ -256,11 +256,15 @@ Some systems use synchronous concurrency primitives internally (`os_unfair_lock`
 
 `@Contract(.threads)` dispatches commands to real GCD threads, letting the OS scheduler interleave at any instruction. This reaches races inside the synchronous primitives that `.tasks` cannot see.
 
-The tradeoff is determinism. The OS chooses the interleaving, so the same seed no longer reproduces the same run. Exhaust compensates with repetition during reduction (running each candidate sequence multiple times to confirm the failure), and with a different checking mechanism: instead of `@Invariant`, `.threads` contracts use `@Oracle`.
+The tradeoff is determinism. The OS chooses the interleaving, so the same seed no longer reproduces the same run. Exhaust compensates with repetition: during reduction it runs each candidate sequence many times to keep the race reproducing, and it confirms every reported failure by replaying it across all valid orderings before believing it.
 
-### Oracles
+That confirmation is what stands in for the per-step `@Invariant` checking of `.sequential`. Real-thread scheduling leaves no deterministic intermediate state to check, so `.threads` contracts check a weaker but well-defined property instead: linearizability.
 
-An `@Oracle` method defines what "equivalent" means for the SUT. Exhaust runs the command sequence concurrently, then replays the same commands sequentially on a fresh instance. The oracle receives the sequential (race-free) result and returns whether the concurrent state matches:
+### Oracles and linearizability
+
+A concurrent run is correct when everything it observed could have come from running the same commands one at a time, in some order that keeps each lane's own commands in the order that lane issued them. That property is called linearizability, and it is what `.threads` checks.
+
+Two things get compared against each candidate ordering: what every command returned, and the final state. Exhaust captures the return values for you — a `@Command` that returns a value (`func getOrElse(key:) -> Int`) has its result recorded per lane during the concurrent run. The final state is compared through an `@Oracle` you write:
 
 ```swift
 @Contract(.threads)
@@ -286,9 +290,55 @@ final class RacyCounterContract {
 }
 ```
 
-The oracle checks final state rather than intermediate states. That's the right tradeoff for non-deterministic scheduling. Intermediate invariants would fail spuriously when the OS happens to interleave in a valid-but-unexpected order.
+An `@Oracle` method defines what "equal final state" means for the SUT. To confirm a suspected failure, Exhaust enumerates the valid sequential orderings, replays the commands on a fresh instance for each one, and checks both the recorded return values and — through the oracle — the final state. If any ordering reproduces what the concurrent run observed, that run was linearizable and Exhaust discards it. If none does, the bug is real.
 
-The oracle is always required for `.threads` contracts and always written by hand. `@Invariant` is not available under `.threads`, because there's no deterministic per-step state to check it against.
+Checking every ordering, instead of one fixed order, is what keeps order-independent operations from reporting false positives. Two `set("key", to:)` commands on a lock-synchronised store can land in either order. Both are valid, so whichever the threads chose, some ordering reproduces it. A check that only compared against array order would flag the other half of those runs as failures.
+
+Capturing return values is what catches bugs the final state hides. A hash map whose buggy `delete` resurrects a key can settle into a final state that coincidentally matches a valid ordering, while a `getOrElse` caught mid-race returns a value no ordering would ever produce. The final-state comparison alone passes that run. The recorded response does not.
+
+When no ordering reproduces a return value, the report names the command that returned it:
+
+```
+LoweHashMapSpec failure (iteration 141/2000, found via random sampling, seed 1C3-141)
+
+Reduced from 8 to 5 commands.
+
+Sequential prefix:
+  1. update(1, 4)
+
+Lane A:
+  1A. update(0, 0)
+  2A. getOrElse(1) → -1  ← no sequential ordering reproduces this response
+
+Lane B:
+  1B. update(1, 0)
+  2B. delete(0)
+
+Execution trace:
+  1. update(1, 4) (prefix)
+  2. 1B update(1, 0)
+  3. 2B delete(0)
+  4. 1A update(0, 0)
+  5. 2A getOrElse(1) → -1  ← no sequential ordering reproduces this response
+
+Expected state (from sequential replay):
+  map: [0: 0, 1: 0]
+
+Actual state (from concurrent execution):
+  map: [1: 0]
+
+Command sequences tested: 792
+
+Reproduce: .replay("1C3-141")
+
+* Preemptive scheduling depends on OS thread timing and may not reproduce on every run. Run the test repeatedly to reproduce.
+```
+
+The `→` annotation on each lane command shows what it returned during the concurrent run. The marked command is the one whose response no valid ordering reproduces: `getOrElse(1)` returned `-1` (not found) because it ran while the racing `update(1, 0)` had left key 1's slot mid-write, and no sequential ordering of these commands ever loses key 1. When the divergence is only in the final state, with no single command to blame, there is no marker and only the expected-versus-actual block appears.
+
+The oracle compares final state rather than intermediate state. That is the right tradeoff for non-deterministic scheduling: intermediate invariants would fail spuriously whenever the OS interleaved in a valid but unexpected order, whereas a command's return value is a real observation that some valid ordering has to be able to explain.
+
+The oracle is always required for `.threads` contracts and always written by hand. `@Invariant` is not available under `.threads`, because there is no deterministic per-step state to check it against.
 
 Running the test:
 
@@ -335,10 +385,10 @@ All settings are passed as variadic arguments to `#execute`:
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `.commandLimit(N)` | auto-estimated | Maximum commands per generated sequence. Capped at 100 (sequential) or 40 (concurrent). |
+| `.commandLimit(N)` | auto-estimated (`.threads`: 8) | Maximum commands per generated sequence. Capped at 100 (sequential) or 40 (`.tasks`); `.threads` defaults to a flat 8. |
 | `.concurrent(N)` | 2 | Number of concurrent lanes (1 through 8). |
 | `.budget(.thorough)` | `.standard` | Controls coverage rows and random sampling iterations. |
-| `.idleTimeoutMs(ms)` | 1000 | Milliseconds before declaring a drain-loop stall (`.tasks` concurrent only). |
+| `.idleTimeoutMs(ms)` | 2000 | Milliseconds before a stalled run is reported without reduction: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. |
 | `.replay("seed")` | — | Deterministic replay from a failure report seed. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
 | `.includeDiff` | off | Includes a structural diff between the original and reduced command sequences. |

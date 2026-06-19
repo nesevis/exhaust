@@ -144,17 +144,17 @@ public struct ExhaustReport: Sendable {
         return "cycles=\(cycles) invocations=\(coverageInvocations)cov/\(randomSamplingInvocations)gen/\(reductionInvocations)red materializations=\(totalMaterializations)\(graphLabel)\(encoderLabel)\(timingLabel)"
     }
 
-    /// Populates reduction statistics from a ``ReductionStats`` value.
+    /// Populates reduction statistics from a ``ReductionStats`` value. Each call overwrites the previous stats; the reducer runs a single reduction pass per report, so there is nothing to accumulate.
     package mutating func applyReductionStats(_ stats: ReductionStats) {
-        encoderProbes.merge(stats.encoderProbes) { existing, new in existing + new }
-        encoderProbesAccepted.merge(stats.encoderProbesAccepted) { existing, new in existing + new }
-        encoderProbesRejectedByCache.merge(stats.encoderProbesRejectedByCache) { existing, new in existing + new }
-        encoderProbesRejectedByDecoder.merge(stats.encoderProbesRejectedByDecoder) { existing, new in existing + new }
-        totalMaterializations += stats.totalMaterializations
-        cycles += stats.cycles
-        filterObservations.merge(stats.filterObservations) { _, new in new }
+        encoderProbes = stats.encoderProbes
+        encoderProbesAccepted = stats.encoderProbesAccepted
+        encoderProbesRejectedByCache = stats.encoderProbesRejectedByCache
+        encoderProbesRejectedByDecoder = stats.encoderProbesRejectedByDecoder
+        totalMaterializations = stats.totalMaterializations
+        cycles = stats.cycles
+        filterObservations = stats.filterObservations
         graphStats = stats.graphStats
         stepTimings = stats.stepTimings
-        reductionWasCapped = reductionWasCapped || stats.reductionWasCapped
+        reductionWasCapped = stats.reductionWasCapped
     }
 }
