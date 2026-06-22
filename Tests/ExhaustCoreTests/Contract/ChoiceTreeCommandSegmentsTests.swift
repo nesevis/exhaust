@@ -102,6 +102,48 @@ struct ChoiceTreeCommandSegmentsTests {
             #expect(segments[0] != segments[1])
         }
     }
+
+    @Test("Segments reconstruct the sequence content of the full flatten across seeds and structures")
+    func segmentsAlwaysReconstruct() throws {
+        let elementGen: Generator<Int> = Gen.pick(choices: [
+            (1, Gen.just(0)),
+            (1, Gen.choose(in: 1 ... 100)),
+        ])
+        let arrayGen = Gen.arrayOf(elementGen, within: 0 ... 8, scaling: .constant)
+
+        var interpreter = ValueAndChoiceTreeInterpreter(arrayGen, materializePicks: true, seed: 0, maxRuns: 200)
+        while let (value, tree) = try interpreter.next() {
+            guard let segments = tree.perElementSegments() else {
+                Issue.record("perElementSegments() returned nil for a Gen.arrayOf tree")
+                continue
+            }
+            #expect(segments.count == value.count)
+
+            let concatenated = segments.flatMap(\.self)
+            let sequenceContent = extractSequenceContent(from: ChoiceSequence.flatten(tree))
+            #expect(
+                concatenated.count == sequenceContent.count,
+                "Segment count mismatch: \(concatenated.count) vs \(sequenceContent.count) for \(value.count)-element array"
+            )
+            for (segValue, fullValue) in zip(concatenated, sequenceContent) {
+                #expect(segValue == fullValue)
+            }
+        }
+    }
+
+    @Test("Identical elements produce identical segment hashes")
+    func identicalElementsProduceIdenticalHashes() throws {
+        let elementGen: Generator<Int> = Gen.just(42)
+        let arrayGen = Gen.arrayOf(elementGen, within: 3 ... 3, scaling: .constant)
+
+        var interpreter = ValueAndChoiceTreeInterpreter(arrayGen, materializePicks: true, seed: 0, maxRuns: 1)
+        let (_, tree) = try #require(try interpreter.next())
+        let segments = try #require(tree.perElementSegments())
+        let hashes = segments.map { ZobristHash.hash(of: $0) }
+
+        #expect(hashes[0] == hashes[1])
+        #expect(hashes[1] == hashes[2])
+    }
 }
 
 // MARK: - Helpers
