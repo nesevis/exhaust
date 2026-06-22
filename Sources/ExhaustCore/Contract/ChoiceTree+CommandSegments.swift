@@ -1,15 +1,15 @@
-extension ChoiceTree {
+package extension ChoiceTree {
     /// Extracts per-element ``ChoiceSequence`` segments from the first `.sequence` node in the tree.
     ///
     /// The tree from `Gen.arrayOf(taggedCommandGen)` wraps a `.sequence` node inside length-generator binds and groups. This method walks through that wrapping to find the sequence, then flattens each element subtree independently. Each returned segment is the ChoiceSequence recipe that produced one command — a stable identity for cache fingerprinting regardless of how the command is later pruned or reordered.
     ///
     /// Returns `nil` if no `.sequence` node is found.
-    package func perElementSegments() -> [ChoiceSequence]? {
+    func perElementSegments() -> [ChoiceSequence]? {
         guard let elements = Self.findSequenceElements(in: self) else { return nil }
         return elements.map { ChoiceSequence.flatten($0) }
     }
 
-    private static func findSequenceElements(in tree: ChoiceTree) -> [ChoiceTree]? {
+    static func findSequenceElements(in tree: ChoiceTree) -> [ChoiceTree]? {
         switch tree {
             case let .sequence(_, elements, _):
                 return elements

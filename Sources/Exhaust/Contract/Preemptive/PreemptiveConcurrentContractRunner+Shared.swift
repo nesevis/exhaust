@@ -36,7 +36,7 @@ enum Preemptive {
 
     /// Runs a single reduction pass with the given encoder set and property function.
     ///
-    /// When `reductionTreeBox` is non-nil, the current tree is written to it before each property invocation and after rematerialization, so the `execute` closure can reconcile commands with their ChoiceSequence segments for cache fingerprinting.
+    /// The `execute` closure receives the materialized commands **and** the ChoiceTree from which they were produced, so the linearizability checker can derive per-command observation hashes from the reduced tree rather than the stale original.
     static func reduceSinglePass<Command>(
         generator: Generator<[(ScheduleMarker, Command)]>,
         tree: ChoiceTree,
@@ -47,14 +47,14 @@ enum Preemptive {
         rematerialize: Bool,
         repetitions: Int,
         tuning: SchedulerTuning = .init(),
-        reductionTreeBox: UnsafeSendableBox<ChoiceTree?>? = nil,
-        execute: ([(ScheduleMarker, Command)]) -> Bool
+        execute: @escaping ([(ScheduleMarker, Command)], ChoiceTree) -> Bool
     ) -> ReductionResult<Command> {
         var propertyInvocations = 0
-        let property: ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
+        let reductionProperty: ReductionProperty = .contract { output, probeTree in
+            let taggedCommands = output as! [(ScheduleMarker, Command)] // swiftlint:disable:this force_cast
             for _ in 0 ..< repetitions {
                 propertyInvocations += 1
-                if execute(taggedCommands) == false {
+                if execute(taggedCommands, probeTree) == false {
                     return false
                 }
             }
@@ -64,7 +64,6 @@ enum Preemptive {
         var currentOutput = output
         var currentTree = tree
         var stats = ReductionStats()
-        reductionTreeBox?.value = currentTree
 
         if let result = try? Interpreters.choiceGraphReduceCollectingStats(
             gen: generator,
@@ -76,14 +75,12 @@ enum Preemptive {
                 enabledEncoders: encoders,
                 tuning: tuning
             ),
-            property: property
+            property: reductionProperty
         ) {
             stats.merge(result.stats)
             if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
                 currentOutput = reduced
                 currentTree = reducedTree
-                reductionTreeBox?.value = currentTree
-                // Rebuild the tree from the reduced sequence so the next pass starts from a consistent (output, tree) pair, using the rematerialized value and tree together. Exact replay is sufficient: structural deletion runs first on the pruned tree (see reduceConfirmedFailure), before any rematerialize here, so no pass has to compute removal spans against this tree.
                 if rematerialize,
                    case let .success(value, tree, _) = Materializer.materialize(
                        generator,
@@ -93,7 +90,6 @@ enum Preemptive {
                 {
                     currentOutput = value
                     currentTree = tree
-                    reductionTreeBox?.value = currentTree
                 }
             }
         }

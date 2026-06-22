@@ -105,17 +105,42 @@ extension __ExhaustRuntime {
             return nil
         }
 
-        // The current reduction tree, set by reduceSinglePass before each property invocation so linearizableProbe can reconcile commands with their ChoiceSequence segments.
-        let reductionTreeBox = UnsafeSendableBox<ChoiceTree?>(nil)
-
         /// Reduction property: a probe "passes" (stays reducible) when its execution is linearizable, so structural reduction keeps only commands whose removal would dissolve a genuine response-level violation. (A bare oracle property would strip commands whose return values carry the response-level evidence.)
-        func linearizableProbe(_ probeCommands: [(ScheduleMarker, Spec.Command)]) -> Bool {
-            let triples: [TaggedCommandWithSegment<Spec.Command>] = if let tree = reductionTreeBox.value {
-                reconcileCommandsWithTree(probeCommands, tree: tree)
-            } else {
-                probeCommands.map { (marker: $0.0, command: $0.1, segment: ChoiceSequence()) }
+        ///
+        /// Receives the ChoiceTree from the materializer for this specific probe, so per-command observation hashes are derived from the reduced tree's subtrees rather than the stale original.
+        func linearizableProbe(_ probeCommands: [(ScheduleMarker, Spec.Command)], probeTree: ChoiceTree) -> Bool {
+            let triples: [TaggedCommandWithSegment<Spec.Command>] = probeCommands.map {
+                (marker: $0.0, command: $0.1, segment: ChoiceSequence())
             }
-            return classifyFailure(triples, backend.execute(probeCommands)) == nil
+            let outcome = backend.execute(probeCommands)
+            guard outcome.passed == false,
+                  let laneResponses = outcome.laneResponses,
+                  let concurrentSpec = outcome.concurrentSpec
+            else {
+                return true
+            }
+            let prefixCommands = triples.compactMap { triple -> Spec.Command? in
+                guard triple.marker.isPrefix else {
+                    return nil
+                }
+                return triple.command
+            }
+            let observationHashes = computeObservationHashesFromTree(
+                probeTree: probeTree,
+                taggedCommands: probeCommands,
+                laneResponses: laneResponses
+            )
+            guard case let .notLinearizable(witness) = backend.checkLinearizability(
+                prefix: prefixCommands,
+                laneResponses: laneResponses,
+                concurrentSpec: concurrentSpec,
+                observationHashes: observationHashes,
+                prefixCache: &prefixCacheBox.value
+            ) else {
+                return true
+            }
+            _ = witness
+            return false
         }
 
         /// Per-lane observed return values for failure annotation, keyed by ``ScheduleMarker/rawValue`` in per-lane execution order.
@@ -162,7 +187,6 @@ extension __ExhaustRuntime {
                 rematerialize: true,
                 repetitions: Preemptive.confirmationRepetitions,
                 tuning: noRelax,
-                reductionTreeBox: reductionTreeBox,
                 execute: linearizableProbe
             )
 
@@ -177,14 +201,11 @@ extension __ExhaustRuntime {
                 rematerialize: true,
                 repetitions: Preemptive.confirmationRepetitions,
                 tuning: noRelax,
-                reductionTreeBox: reductionTreeBox,
                 execute: linearizableProbe
             )
             var stats = collapseResult.stats
             stats.merge(combinedResult.stats)
             report.applyReductionStats(stats)
-
-            reductionTreeBox.value = nil
 
 //            print("DBG: Reduction stats laneCollapse: \(collapseResult.stats) deletion: \(combinedResult.stats)")
 
@@ -547,7 +568,7 @@ private func computeObservationHashes<Command>(
             switch response.outcome {
                 case let .returned(value):
                     guard let hashable = value as? AnyHashable else { return nil }
-                    responseHash = splitmix64(UInt64(bitPattern: Int64(hashable.hashValue)))
+                    responseHash = ZobristHash.mix(hashable.hashValue.bitPattern64, at: 0)
                 case .returnedVoid:
                     responseHash = 0xA
                 case .skipped:
@@ -560,10 +581,46 @@ private func computeObservationHashes<Command>(
     return result
 }
 
-private func splitmix64(_ seed: UInt64) -> UInt64 {
-    var value = seed
-    value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
-    value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
-    value ^= value >> 31
-    return value
+/// Computes per-observation fingerprints from the probe's own ChoiceTree, hashing each command's subtree directly rather than flattening to a ChoiceSequence.
+///
+/// Contracts don't materialize picks, so each element subtree in the tree's `.sequence` node is a stable structural identity for the command that was generated from it. Returns `nil` if any response has a non-hashable `.returned(Any)` outcome or the tree has no `.sequence` node.
+private func computeObservationHashesFromTree<Command>(
+    probeTree: ChoiceTree,
+    taggedCommands: [(ScheduleMarker, Command)],
+    laneResponses: [[ObservedResponse<Command>]]
+) -> [[UInt64]]? {
+    guard let subtrees = ChoiceTree.findSequenceElements(in: probeTree) else { return nil }
+
+    var subtreesByLane: [UInt8: [ChoiceTree]] = [:]
+    for (index, pair) in taggedCommands.enumerated() where pair.0.isPrefix == false {
+        let subtree = index < subtrees.count ? subtrees[index] : .just
+        subtreesByLane[pair.0.rawValue, default: []].append(subtree)
+    }
+
+    var result: [[UInt64]] = []
+    for laneArray in laneResponses {
+        guard let laneSubtrees = subtreesByLane[laneArray.first?.lane ?? 0],
+              laneSubtrees.count == laneArray.count
+        else {
+            return nil
+        }
+
+        var laneHashes: [UInt64] = []
+        for (index, response) in laneArray.enumerated() {
+            let subtreeHash = ZobristHash.mix(laneSubtrees[index].hashValue.bitPattern64, at: 0)
+            let responseHash: UInt64
+            switch response.outcome {
+                case let .returned(value):
+                    guard let hashable = value as? AnyHashable else { return nil }
+                    responseHash = ZobristHash.mix(hashable.hashValue.bitPattern64, at: 0)
+                case .returnedVoid:
+                    responseHash = 0xA
+                case .skipped:
+                    responseHash = 0xB
+            }
+            laneHashes.append(subtreeHash ^ responseHash)
+        }
+        result.append(laneHashes)
+    }
+    return result
 }
