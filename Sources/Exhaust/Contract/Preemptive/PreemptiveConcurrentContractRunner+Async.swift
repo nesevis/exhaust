@@ -138,7 +138,6 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                                     responses.append(ObservedResponse<Spec.Command>(
                                         lane: laneID,
                                         command: command,
-                                        commandDescription: response.commandDescription,
                                         outcome: outcome
                                     ))
                                 }
@@ -147,7 +146,6 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                                     responses.append(ObservedResponse<Spec.Command>(
                                         lane: laneID,
                                         command: command,
-                                        commandDescription: command.description,
                                         outcome: .skipped
                                     ))
                                 }

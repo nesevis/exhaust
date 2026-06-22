@@ -8,7 +8,6 @@ import ExhaustCore
 struct ObservedResponse<Command>: @unchecked Sendable {
     let lane: UInt8
     let command: Command
-    let commandDescription: String
     let outcome: Outcome
 
     enum Outcome: @unchecked Sendable {
@@ -53,12 +52,14 @@ extension ObservedResponse.Outcome {
 
 extension LinearizabilityChecker {
     /// Builds a checker from the per-lane responses captured during a preemptive run, mapping each ``ObservedResponse`` to a checker observation. Shared by the synchronous and asynchronous preemptive backends.
+    ///
+    /// Command descriptions are computed lazily here rather than during probe execution, so the `String(describing:)` cost is paid only when building the checker for a confirmed failure — not on every reduction probe.
     init(laneResponses: [[ObservedResponse<Command>]]) {
         self.init(laneObservations: laneResponses.map { lane in
             lane.map { response in
                 Observation(
                     command: response.command,
-                    commandDescription: response.commandDescription,
+                    commandDescription: "\(response.command)",
                     returnValue: response.outcome.returnValue,
                     isSkipped: response.outcome.isSkipped
                 )
