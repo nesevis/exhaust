@@ -1,6 +1,6 @@
-// MARK: - Pipeline
-
 extension __ExhaustRuntime {
+    /// A tagged command with its ChoiceSequence segment — the generation recipe that produced this command. The segment is a stable identity for cache fingerprinting: equal segments imply equal commands regardless of which lane they appear on.
+    typealias TaggedCommandWithSegment<Command> = (marker: ScheduleMarker, command: Command, segment: ChoiceSequence)
     /// Runs the shared preemptive pipeline (smoke, SCA coverage, then random sampling with reduction) over a backend that supplies per-probe execution, the smoke trace, and oracle replay.
     ///
     /// The pipeline uses two levels of correctness checking. The fixed-ordering oracle is the fast entry filter: it compares the concurrent SUT's final state against one sequential replay (array order), which is cheap but can false-positive when GCD picks a valid but different ordering. Linearizability is the authority: it tries all valid orderings, comparing both per-command responses and final state via the oracle. The oracle is never bypassed. It runs inside each linearizability check as the state comparator.
@@ -48,14 +48,14 @@ extension __ExhaustRuntime {
         // Classifies one execution against linearizability — the single decision shared by the sampling/coverage property, the reduction probe, and failure confirmation.
         // Returns the failing outcome (and any response-level witness) for a genuine violation: a non-linearizable execution, or an oracle failure with no lane responses (invariant/exception/timeout, real by construction).
         // Returns nil when the execution passed the oracle or was confirmed linearizable (a false positive to skip). The prefix is taken from `taggedCommands` itself so the lane responses fed to the checker match the schedule being classified.
-        let classifyFailure: @Sendable ([(ScheduleMarker, Spec.Command)], Preemptive.Outcome<Spec>) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?)? = { taggedCommands, outcome in
+        let classifyFailure: @Sendable ([TaggedCommandWithSegment<Spec.Command>], Preemptive.Outcome<Spec>) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?)? = { triples, outcome in
             if outcome.passed {
                 return nil
             }
             guard let laneResponses = outcome.laneResponses, let concurrentSpec = outcome.concurrentSpec else {
                 return (outcome, nil)
             }
-            let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
+            let prefixCommands = triples.filter(\.marker.isPrefix).map(\.command)
             guard case let .notLinearizable(witness) = backend.checkLinearizability(
                 prefix: prefixCommands,
                 laneResponses: laneResponses,
@@ -66,12 +66,20 @@ extension __ExhaustRuntime {
             return (outcome, witness)
         }
 
+        // The current generation tree, set by the sampling/coverage loop before each property call so classifyFailure can reconcile commands with their ChoiceSequence segments.
+        let currentTree = UnsafeSendableBox<ChoiceTree?>(nil)
+
         // Linearizability-integrated property used by SCA coverage and sampling: returns false only for a genuine non-linearizable (or no-lane-response) failure, so passing and merely-linearizable executions are transparently skipped. Records the failing outcome for evidence rendering.
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             invocationCounter.value += 1
-            let outcome = backend.execute(taggedCommands)
+            let triples: [TaggedCommandWithSegment<Spec.Command>] = if let tree = currentTree.value {
+                reconcileCommandsWithTree(taggedCommands, tree: tree)
+            } else {
+                taggedCommands.map { (marker: $0.0, command: $0.1, segment: ChoiceSequence()) }
+            }
+            let outcome = backend.execute(triples.strippingSegments())
             lastRunTimedOut.value = outcome.timedOut
-            guard let failure = classifyFailure(taggedCommands, outcome) else {
+            guard let failure = classifyFailure(triples, outcome) else {
                 return true
             }
             lastFailingOutcome.value = failure.outcome
@@ -82,8 +90,9 @@ extension __ExhaustRuntime {
         /// Preemptive execution is non-deterministic, so a single re-execution can draw a passing (or merely linearizable) interleaving and miss the race. This is the terminal confirmation (once per reported failure, not per reduction probe), so it uses the larger repetition budget: a timing-fragile race that the reduction loop's ``Preemptive/confirmationRepetitions`` probes could not re-trigger often still reproduces here, attaching the actual-state line and witness to the report.
         /// Returns the confirming execution's outcome (so its lane responses and final state render coherently with the verdict) and the response-level witness, or `nil` when no run reproduced a genuine violation.
         func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)]) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?)? {
+            let triples: [TaggedCommandWithSegment<Spec.Command>] = input.map { (marker: $0.0, command: $0.1, segment: ChoiceSequence()) }
             for _ in 0 ..< Preemptive.finalConfirmationRepetitions {
-                if let confirmed = classifyFailure(input, backend.execute(input)) {
+                if let confirmed = classifyFailure(triples, backend.execute(input)) {
                     return confirmed
                 }
             }
@@ -92,7 +101,8 @@ extension __ExhaustRuntime {
 
         /// Reduction property: a probe "passes" (stays reducible) when its execution is linearizable, so structural reduction keeps only commands whose removal would dissolve a genuine response-level violation. (A bare oracle property would strip commands whose return values carry the response-level evidence.)
         func linearizableProbe(_ probeCommands: [(ScheduleMarker, Spec.Command)]) -> Bool {
-            classifyFailure(probeCommands, backend.execute(probeCommands)) == nil
+            let triples: [TaggedCommandWithSegment<Spec.Command>] = probeCommands.map { (marker: $0.0, command: $0.1, segment: ChoiceSequence()) }
+            return classifyFailure(triples, backend.execute(probeCommands)) == nil
         }
 
         /// Per-lane observed return values for failure annotation, keyed by ``ScheduleMarker/rawValue`` in per-lane execution order.
@@ -111,10 +121,11 @@ extension __ExhaustRuntime {
         ///
         /// Prunes skipped commands, grows the deterministic prefix (lane collapse, oracle property), simplifies structurally under the linearizability property, then re-confirms and canonicalizes prefix-first. Applies reduction stats to the report. Returns the reported schedule, its total reduction-probe count, the response witness, and the confirming execution's outcome (for evidence and actual-state rendering). `reportedOutcome` is nil when reduction dissolved the violation and the pruned schedule is reported as a fallback.
         func reduceConfirmedFailure(
-            taggedCommands: [(ScheduleMarker, Spec.Command)],
+            triples: [TaggedCommandWithSegment<Spec.Command>],
             tree: ChoiceTree,
             pruneSeed: UInt64
         ) -> (reduced: [(ScheduleMarker, Spec.Command)], reductionInvocations: Int, witness: ResponseWitness?, reportedOutcome: Preemptive.Outcome<Spec>?) {
+            let taggedCommands = triples.strippingSegments()
             // Prune commands whose preconditions were not met: a skipped command is a no-op, so removing it up front keeps reduction on the minimal command set and the reported counterexample carries no skipped commands. The prune is reverted if removing the skips dissolves the violation.
             let (prunedCommands, prunedTree) = pruneSkippedCommands(
                 value: taggedCommands,
@@ -295,8 +306,9 @@ extension __ExhaustRuntime {
                 property: property
             )
             if case let .failure(taggedCommands, tree, coverageIterations) = scaRowResult {
+                let triples = reconcileCommandsWithTree(taggedCommands, tree: tree)
                 let reduction = reduceConfirmedFailure(
-                    taggedCommands: taggedCommands,
+                    triples: triples,
                     tree: tree,
                     pruneSeed: UInt64(coverageIterations)
                 )
@@ -337,6 +349,7 @@ extension __ExhaustRuntime {
                 while let (taggedCommands, tree) = try interpreter.next() {
                     samplingIteration += 1
                     let absoluteIteration = Int(startIndex) + samplingIteration
+                    currentTree.value = tree
                     if property(taggedCommands) {
                         continue
                     }
@@ -376,8 +389,9 @@ extension __ExhaustRuntime {
                         return (result, deferredIssues, report)
                     }
 
+                    let triples = reconcileCommandsWithTree(taggedCommands, tree: tree)
                     let reduction = reduceConfirmedFailure(
-                        taggedCommands: taggedCommands,
+                        triples: triples,
                         tree: tree,
                         pruneSeed: UInt64(absoluteIteration)
                     )
@@ -447,5 +461,26 @@ extension __ExhaustRuntime {
             linearizabilityWitness: linearizabilityWitness
         )
         return renderFailure(input, trace: trace, context: failureContext)
+    }
+
+    /// Reconciles a command array with its generation tree, producing one triple per command.
+    ///
+    /// Each element of the tree's `.sequence` node is the subtree that generated one command. Flattening that subtree gives the ChoiceSequence segment — the recipe that produced the command. When the tree has no `.sequence` node (should not happen for `Gen.arrayOf` output), falls back to empty segments.
+    static func reconcileCommandsWithTree<Command>(
+        _ taggedCommands: [(ScheduleMarker, Command)],
+        tree: ChoiceTree
+    ) -> [TaggedCommandWithSegment<Command>] {
+        let segments = tree.perElementSegments()
+        return taggedCommands.enumerated().map { index, pair in
+            let segment = segments.flatMap { $0.indices.contains(index) ? $0[index] : nil } ?? ChoiceSequence()
+            return (marker: pair.0, command: pair.1, segment: segment)
+        }
+    }
+}
+
+extension Collection {
+    /// Strips the ChoiceSequence segments, returning the `(ScheduleMarker, Command)` pairs that the execution path expects.
+    func strippingSegments<Command>() -> [(ScheduleMarker, Command)] where Element == __ExhaustRuntime.TaggedCommandWithSegment<Command> {
+        map { ($0.marker, $0.command) }
     }
 }
