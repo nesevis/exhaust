@@ -285,13 +285,11 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         do {
             let response = try spec.run(command)
             return .init(
-                commandDescription: response.commandDescription,
                 returnValue: response.returnValue,
                 isSkipped: false
             )
         } catch is ContractSkip {
             return .init(
-                commandDescription: command.description,
                 returnValue: nil,
                 isSkipped: true
             )

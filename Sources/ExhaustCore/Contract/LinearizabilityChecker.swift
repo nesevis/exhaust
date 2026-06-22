@@ -44,12 +44,10 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
     /// The response from replaying a single command on a fresh sequential instance.
     package struct ReplayResponse {
-        package let commandDescription: String
         package let returnValue: Any?
         package let isSkipped: Bool
 
-        package init(commandDescription: String, returnValue: Any?, isSkipped: Bool) {
-            self.commandDescription = commandDescription
+        package init(returnValue: Any?, isSkipped: Bool) {
             self.returnValue = returnValue
             self.isSkipped = isSkipped
         }
@@ -513,10 +511,6 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     }
 
     private func responsesMatch(observed: Observation, replay: ReplayResponse) -> Bool {
-        if replay.commandDescription != "\(observed.command)" {
-            return false
-        }
-
         switch (observed.returnValue, replay.returnValue) {
             case (nil, nil):
                 return true

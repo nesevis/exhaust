@@ -104,12 +104,12 @@ private final class Stack {
         switch command {
             case let .push(value):
                 elements.append(value)
-                return .init(commandDescription: command.description, returnValue: nil, isSkipped: false)
+                return .init(returnValue: nil, isSkipped: false)
             case .pop:
                 guard elements.isEmpty == false else {
-                    return .init(commandDescription: command.description, returnValue: nil, isSkipped: true)
+                    return .init(returnValue: nil, isSkipped: true)
                 }
-                return .init(commandDescription: command.description, returnValue: elements.removeLast(), isSkipped: false)
+                return .init(returnValue: elements.removeLast(), isSkipped: false)
         }
     }
 }
