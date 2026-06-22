@@ -56,12 +56,13 @@ extension __ExhaustRuntime {
             guard let laneResponses = outcome.laneResponses, let concurrentSpec = outcome.concurrentSpec else {
                 return (outcome, nil)
             }
-            let observationHashes = tree.flatMap { computeObservationHashesFromTree(probeTree: $0, taggedCommands: taggedCommands, laneResponses: laneResponses) }
+            let hashes = tree.flatMap { computeObservationHashesFromTree(probeTree: $0, taggedCommands: taggedCommands, laneResponses: laneResponses) }
             guard case let .notLinearizable(witness) = backend.checkLinearizability(
                 taggedCommands: taggedCommands,
                 laneResponses: laneResponses,
                 concurrentSpec: concurrentSpec,
-                observationHashes: observationHashes,
+                observationHashes: hashes?.observationHashes,
+                prefixFingerprint: hashes?.prefixFingerprint ?? 0,
                 prefixCache: &prefixCacheBox.value
             ) else {
                 return nil
@@ -477,17 +478,29 @@ extension __ExhaustRuntime {
     }
 }
 
+private struct ObservationHashResult {
+    let observationHashes: [[UInt64]]
+    let prefixFingerprint: UInt64
+}
+
 /// Computes per-observation fingerprints from the probe's own ChoiceTree, hashing each command's subtree directly rather than flattening to a ChoiceSequence.
 ///
-/// Contracts don't materialize picks, so each element subtree in the tree's `.sequence` node is a stable structural identity for the command that was generated from it. Returns `nil` if any response has a non-hashable `.returned(Any)` outcome or the tree has no `.sequence` node.
+/// Contracts don't materialize picks, so each element subtree in the tree's `.sequence` node is a stable structural identity for the command that was generated from it. The prefix fingerprint is an XOR of prefix commands' subtree hashes, so the linearizability cache distinguishes probes that differ only in their prefix. Returns `nil` if any response has a non-hashable `.returned(Any)` outcome or the tree has no `.sequence` node.
 private func computeObservationHashesFromTree<Command>(
     probeTree: ChoiceTree,
     taggedCommands: [(ScheduleMarker, Command)],
     laneResponses: [[ObservedResponse<Command>]]
-) -> [[UInt64]]? {
+) -> ObservationHashResult? {
     guard let subtrees = ChoiceTree.findSequenceElements(in: probeTree) else { return nil }
 
+    var prefixFingerprint: UInt64 = 0
+    for (index, pair) in taggedCommands.enumerated() where pair.0.isPrefix {
+        let subtree = index < subtrees.count ? subtrees[index] : .just
+        prefixFingerprint ^= ZobristHash.mix(subtree.hashValue.bitPattern64, at: index)
+    }
+
     var result: [[UInt64]] = []
+    result.reserveCapacity(laneResponses.count)
     for laneArray in laneResponses {
         guard let laneID = laneArray.first?.lane else {
             result.append([])
@@ -495,8 +508,8 @@ private func computeObservationHashesFromTree<Command>(
         }
         var subtreeIndex = 0
         var laneHashes: [UInt64] = []
-        for (index, pair) in taggedCommands.enumerated() where pair.0.isPrefix == false {
-            guard pair.0.rawValue == laneID else { continue }
+        laneHashes.reserveCapacity(laneArray.count)
+        for (index, pair) in taggedCommands.enumerated() where pair.0.isPrefix == false && pair.0.rawValue == laneID {
             let subtree = index < subtrees.count ? subtrees[index] : .just
             guard subtreeIndex < laneArray.count else { return nil }
             let response = laneArray[subtreeIndex]
@@ -517,5 +530,5 @@ private func computeObservationHashesFromTree<Command>(
         guard subtreeIndex == laneArray.count else { return nil }
         result.append(laneHashes)
     }
-    return result
+    return ObservationHashResult(observationHashes: result, prefixFingerprint: prefixFingerprint)
 }

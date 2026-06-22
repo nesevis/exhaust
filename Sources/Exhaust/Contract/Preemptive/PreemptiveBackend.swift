@@ -31,6 +31,7 @@ protocol PreemptiveBackend<Spec>: Sendable {
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec,
         observationHashes: [[UInt64]]?,
+        prefixFingerprint: UInt64,
         prefixCache: inout LinearizabilityPrefixCache?
     ) -> LinearizabilityResult
 

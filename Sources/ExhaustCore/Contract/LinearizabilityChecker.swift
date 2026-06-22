@@ -111,6 +111,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         replayCommand: (Command) -> ReplayResponse?,
         checkOracle: () -> Bool,
         observationHashes: [[UInt64]]?,
+        prefixFingerprint: UInt64 = 0,
         prefixCache: inout LinearizabilityPrefixCache?
     ) -> Result {
         let laneCount = laneObservations.count
@@ -120,7 +121,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
         let totalCommands = laneObservations.reduce(0) { $0 + $1.count }
         let cachingEnabled = observationHashes != nil && prefixCache != nil
-        let observationSetHash = computeObservationSetHash(observationHashes)
+        let observationSetHash = computeObservationSetHash(observationHashes) ^ prefixFingerprint
 
         var state = SearchState(laneCount: laneCount, totalCommands: totalCommands, prefixCache: prefixCache)
 
@@ -316,6 +317,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         replayCommand: (Command) async -> ReplayResponse?,
         checkOracle: () async -> Bool,
         observationHashes: [[UInt64]]?,
+        prefixFingerprint: UInt64 = 0,
         prefixCache: inout LinearizabilityPrefixCache?
     ) async -> Result {
         let laneCount = laneObservations.count
@@ -325,7 +327,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
         let totalCommands = laneObservations.reduce(0) { $0 + $1.count }
         let cachingEnabled = observationHashes != nil && prefixCache != nil
-        let observationSetHash = computeObservationSetHash(observationHashes)
+        let observationSetHash = computeObservationSetHash(observationHashes) ^ prefixFingerprint
 
         var state = SearchState(laneCount: laneCount, totalCommands: totalCommands, prefixCache: prefixCache)
 

@@ -231,6 +231,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec,
         observationHashes: [[UInt64]]?,
+        prefixFingerprint: UInt64,
         prefixCache: inout LinearizabilityPrefixCache?
     ) -> LinearizabilityResult {
         Self.runLinearizabilityCheck(
@@ -238,6 +239,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             laneResponses: laneResponses,
             concurrentSpec: concurrentSpec,
             observationHashes: observationHashes,
+            prefixFingerprint: prefixFingerprint,
             prefixCache: &prefixCache
         )
     }
@@ -247,6 +249,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec,
         observationHashes: [[UInt64]]?,
+        prefixFingerprint: UInt64,
         prefixCache: inout LinearizabilityPrefixCache?
     ) -> LinearizabilityResult {
         var replaySpec: Spec?
@@ -273,6 +276,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                 return concurrentSpec.oracleCheck(spec.systemUnderTest)
             },
             observationHashes: observationHashes,
+            prefixFingerprint: prefixFingerprint,
             prefixCache: &prefixCache
         )
         return makeLinearizabilityResult(result, laneObservations: laneResponses)

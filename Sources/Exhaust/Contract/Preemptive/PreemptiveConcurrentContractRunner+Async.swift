@@ -280,6 +280,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec,
         observationHashes: [[UInt64]]?,
+        prefixFingerprint: UInt64,
         prefixCache: inout LinearizabilityPrefixCache?
     ) -> LinearizabilityResult {
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
@@ -322,6 +323,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                     return await unsafeSpec.oracleCheck(spec.systemUnderTest)
                 },
                 observationHashes: observationHashes,
+                prefixFingerprint: prefixFingerprint,
                 prefixCache: &cacheBox
             )
         }
