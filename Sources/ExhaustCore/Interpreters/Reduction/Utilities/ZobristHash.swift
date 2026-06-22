@@ -56,10 +56,19 @@ package enum ZobristHash {
         }
     }
 
+    /// Position-dependent hash contribution of a raw `UInt64` value.
+    @inline(__always)
+    package static func mix(_ value: UInt64, at position: Int) -> UInt64 {
+        var bits = value ^ (UInt64(position) &* 0x9E37_79B9_7F4A_7C15)
+        bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
+        bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
+        bits ^= bits >> 31
+        return bits
+    }
+
     /// Position-dependent hash contribution of a single element.
-    /// Uses splitmix64 mixing for good avalanche with XOR combination.
     static func contribution(at position: Int, _ value: ChoiceSequenceValue) -> UInt64 {
-        var bits: UInt64 = switch value {
+        let bits: UInt64 = switch value {
             case let .value(v):
                 v.choice.bitPattern64 ^ (UInt64(v.choice.tag.discriminator) << 48)
             case .sequence(true, validRange: _, isLengthExplicit: true):
@@ -83,10 +92,6 @@ package enum ZobristHash {
             case .just:
                 7
         }
-        bits ^= UInt64(position) &* 0x9E37_79B9_7F4A_7C15
-        bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
-        bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
-        bits ^= bits >> 31
-        return bits
+        return mix(bits, at: position)
     }
 }

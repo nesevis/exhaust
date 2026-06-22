@@ -129,74 +129,52 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
         let totalCommands = laneObservations.reduce(0) { $0 + $1.count }
         let cachingEnabled = observationHashes != nil && prefixCache != nil
+        let observationSetHash = computeObservationSetHash(observationHashes)
 
-        // Observation set hash: constant for this check, distinguishes checks with different observations.
-        var observationSetHash: UInt64 = 0
-        if let observationHashes {
-            for (laneIndex, lane) in observationHashes.enumerated() {
-                for (commandIndex, hash) in lane.enumerated() {
-                    observationSetHash ^= mixPositionDependent(hash, position: laneIndex &* 256 &+ commandIndex)
-                }
-            }
-        }
-
-        var cursors = Array(repeating: 0, count: laneCount)
-        var currentOrdering: [Placed] = []
-        currentOrdering.reserveCapacity(totalCommands)
-        var closestMatchDepth = -1
-        var closestOrdering: [Placed] = []
-
-        var prefixHash: UInt64 = 0
-        var cursorHash: UInt64 = 0
-        var cacheHits = 0
-        var cacheMisses = 0
-        var nodesVisited = 0
-        var nodesPruned = 0
+        var state = SearchState(laneCount: laneCount, totalCommands: totalCommands, prefixCache: prefixCache)
 
         let found = searchIncrementally(
             prefix: prefix,
-            cursors: &cursors,
-            currentOrdering: &currentOrdering,
             totalCommands: totalCommands,
-            closestMatchDepth: &closestMatchDepth,
-            closestOrdering: &closestOrdering,
-            replayPrefix: replayPrefix,
-            replayCommand: replayCommand,
-            checkOracle: checkOracle,
             observationHashes: observationHashes,
-            prefixCache: &prefixCache,
             cachingEnabled: cachingEnabled,
             observationSetHash: observationSetHash,
-            prefixHash: &prefixHash,
-            cursorHash: &cursorHash,
-            cacheHits: &cacheHits,
-            cacheMisses: &cacheMisses,
-            nodesVisited: &nodesVisited,
-            nodesPruned: &nodesPruned
+            state: &state,
+            replayPrefix: replayPrefix,
+            replayCommand: replayCommand,
+            checkOracle: checkOracle
         )
 
-        if cacheHits + cacheMisses > 0 {
-            ExhaustLog.debug(
-                category: .propertyTest,
-                event: "linearizability_cache",
-                metadata: [
-                    "commands": "\(totalCommands)",
-                    "hits": "\(cacheHits)",
-                    "misses": "\(cacheMisses)",
-                    "nodes_visited": "\(nodesVisited)",
-                    "nodes_pruned": "\(nodesPruned)",
-                    "cache_entries": "\(prefixCache?.entries.count ?? 0)",
-                    "result": found ? "linearizable" : "not_linearizable",
-                ]
-            )
-        }
+        prefixCache = state.prefixCache
+        logCacheStats(state: state, totalCommands: totalCommands, found: found)
+        return makeResult(found: found, closestMatchDepth: state.closestMatchDepth, closestOrdering: state.closestOrdering)
+    }
 
-        return makeResult(found: found, closestMatchDepth: closestMatchDepth, closestOrdering: closestOrdering)
+    // MARK: - Search State
+
+    private struct SearchState {
+        var cursors: [Int]
+        var currentOrdering: [Placed]
+        var closestMatchDepth: Int = -1
+        var closestOrdering: [Placed] = []
+        var prefixHash: UInt64 = 0
+        var cursorHash: UInt64 = 0
+        var prefixCache: LinearizabilityPrefixCache?
+        var cacheHits: Int = 0
+        var cacheMisses: Int = 0
+        var nodesVisited: Int = 0
+        var nodesPruned: Int = 0
+
+        init(laneCount: Int, totalCommands: Int, prefixCache: LinearizabilityPrefixCache?) {
+            cursors = Array(repeating: 0, count: laneCount)
+            currentOrdering = []
+            currentOrdering.reserveCapacity(totalCommands)
+            self.prefixCache = prefixCache
+        }
     }
 
     // MARK: - Incremental Search
 
-    /// Replays the sequential prefix and the first `depth` commands of `currentOrdering` to restore the spec to the state at `depth`. Every sibling at the same depth needs the spec in the parent's state before its own command is applied.
     private func replayToDepth(
         _ depth: Int,
         prefix: [Command],
@@ -211,142 +189,115 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         return true
     }
 
-    /// Depth-first search with incremental verification. Each placed command is replayed immediately; mismatches prune the subtree. Cache lookups and insertions happen when `cachingEnabled` is true.
     private func searchIncrementally(
         prefix: [Command],
-        cursors: inout [Int],
-        currentOrdering: inout [Placed],
         totalCommands: Int,
-        closestMatchDepth: inout Int,
-        closestOrdering: inout [Placed],
-        replayPrefix: ([Command]) -> Bool,
-        replayCommand: (Command) -> ReplayResponse?,
-        checkOracle: () -> Bool,
         observationHashes: [[UInt64]]?,
-        prefixCache: inout LinearizabilityPrefixCache?,
         cachingEnabled: Bool,
         observationSetHash: UInt64,
-        prefixHash: inout UInt64,
-        cursorHash: inout UInt64,
-        cacheHits: inout Int,
-        cacheMisses: inout Int,
-        nodesVisited: inout Int,
-        nodesPruned: inout Int
+        state: inout SearchState,
+        replayPrefix: ([Command]) -> Bool,
+        replayCommand: (Command) -> ReplayResponse?,
+        checkOracle: () -> Bool
     ) -> Bool {
-        let depth = currentOrdering.count
-        nodesVisited += 1
+        let depth = state.currentOrdering.count
+        state.nodesVisited += 1
 
         if depth == totalCommands {
-            // All commands verified incrementally. Ensure spec state is valid (handles totalCommands == 0 where no incremental replays occurred), then check the oracle.
             if depth == 0 {
                 guard replayPrefix(prefix) else { return false }
             }
             let oraclePassed = checkOracle()
             if oraclePassed == false {
-                updateClosest(currentOrdering, matchDepth: depth, closestMatchDepth: &closestMatchDepth, closestOrdering: &closestOrdering)
+                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
             }
             return oraclePassed
         }
 
-        // Cache lookup: if this (observation set, prefix, cursor) was already exhausted, prune.
         if cachingEnabled {
-            let cacheKey = mixCacheKey(observationSetHash, prefixHash, cursorHash)
-            if prefixCache?.contains(cacheKey) == true {
-                cacheHits += 1
-                nodesPruned += 1
+            let cacheKey = mixCacheKey(observationSetHash, state.prefixHash, state.cursorHash)
+            if state.prefixCache?.contains(cacheKey) == true {
+                state.cacheHits += 1
+                state.nodesPruned += 1
                 return false
             }
-            cacheMisses += 1
+            state.cacheMisses += 1
         }
 
         var childrenTried = 0
 
         for laneIndex in 0 ..< laneObservations.count {
-            let cursor = cursors[laneIndex]
+            let cursor = state.cursors[laneIndex]
             guard cursor < laneObservations[laneIndex].count else { continue }
 
             let observation = laneObservations[laneIndex][cursor]
 
-            // Restore spec state to this depth. The first child at each depth needs replay too — the spec has no guaranteed state at entry.
             if childrenTried > 0 || depth == 0 {
-                guard replayToDepth(depth, prefix: prefix, currentOrdering: currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
+                guard replayToDepth(depth, prefix: prefix, currentOrdering: state.currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
                     continue
                 }
             }
             childrenTried += 1
 
-            // Incremental check: replay this one command and compare.
             let placed = Placed(laneIndex: laneIndex, commandIndex: cursor, observation: observation)
 
             guard let replay = replayCommand(observation.command) else {
-                currentOrdering.append(placed)
-                updateClosest(currentOrdering, matchDepth: depth, closestMatchDepth: &closestMatchDepth, closestOrdering: &closestOrdering)
-                currentOrdering.removeLast()
-                nodesPruned += 1
+                state.currentOrdering.append(placed)
+                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
+                state.currentOrdering.removeLast()
+                state.nodesPruned += 1
                 continue
             }
 
             if stepMismatches(observed: observation, replay: replay) {
-                currentOrdering.append(placed)
-                updateClosest(currentOrdering, matchDepth: depth, closestMatchDepth: &closestMatchDepth, closestOrdering: &closestOrdering)
-                currentOrdering.removeLast()
-                nodesPruned += 1
+                state.currentOrdering.append(placed)
+                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
+                state.currentOrdering.removeLast()
+                state.nodesPruned += 1
                 continue
             }
 
             if observation.isSkipped == false, responsesMatch(observed: observation, replay: replay) == false {
-                currentOrdering.append(placed)
-                updateClosest(currentOrdering, matchDepth: depth, closestMatchDepth: &closestMatchDepth, closestOrdering: &closestOrdering)
-                currentOrdering.removeLast()
-                nodesPruned += 1
+                state.currentOrdering.append(placed)
+                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
+                state.currentOrdering.removeLast()
+                state.nodesPruned += 1
                 continue
             }
 
-            // Match at this depth — descend.
             let observationHash = observationHashes?[laneIndex][cursor] ?? 0
-            let prefixContribution = mixPositionDependent(observationHash, position: depth)
-            let oldCursorContribution = mixPositionDependent(UInt64(cursor), position: laneIndex)
-            let newCursorContribution = mixPositionDependent(UInt64(cursor &+ 1), position: laneIndex)
+            let prefixContribution = ZobristHash.mix(observationHash, at: depth)
+            let oldCursorContribution = ZobristHash.mix(UInt64(cursor), at: laneIndex)
+            let newCursorContribution = ZobristHash.mix(UInt64(cursor &+ 1), at: laneIndex)
 
-            prefixHash ^= prefixContribution
-            cursorHash ^= oldCursorContribution ^ newCursorContribution
-            cursors[laneIndex] += 1
-            currentOrdering.append(placed)
+            state.prefixHash ^= prefixContribution
+            state.cursorHash ^= oldCursorContribution ^ newCursorContribution
+            state.cursors[laneIndex] += 1
+            state.currentOrdering.append(placed)
 
             let found = searchIncrementally(
                 prefix: prefix,
-                cursors: &cursors,
-                currentOrdering: &currentOrdering,
                 totalCommands: totalCommands,
-                closestMatchDepth: &closestMatchDepth,
-                closestOrdering: &closestOrdering,
-                replayPrefix: replayPrefix,
-                replayCommand: replayCommand,
-                checkOracle: checkOracle,
                 observationHashes: observationHashes,
-                prefixCache: &prefixCache,
                 cachingEnabled: cachingEnabled,
                 observationSetHash: observationSetHash,
-                prefixHash: &prefixHash,
-                cursorHash: &cursorHash,
-                cacheHits: &cacheHits,
-                cacheMisses: &cacheMisses,
-                nodesVisited: &nodesVisited,
-                nodesPruned: &nodesPruned
+                state: &state,
+                replayPrefix: replayPrefix,
+                replayCommand: replayCommand,
+                checkOracle: checkOracle
             )
 
-            currentOrdering.removeLast()
-            cursors[laneIndex] -= 1
-            prefixHash ^= prefixContribution
-            cursorHash ^= oldCursorContribution ^ newCursorContribution
+            state.currentOrdering.removeLast()
+            state.cursors[laneIndex] -= 1
+            state.prefixHash ^= prefixContribution
+            state.cursorHash ^= oldCursorContribution ^ newCursorContribution
 
             if found { return true }
         }
 
-        // All children exhausted with no valid completion — insert into cache.
         if cachingEnabled {
-            let cacheKey = mixCacheKey(observationSetHash, prefixHash, cursorHash)
-            prefixCache?.insert(cacheKey)
+            let cacheKey = mixCacheKey(observationSetHash, state.prefixHash, state.cursorHash)
+            state.prefixCache?.insert(cacheKey)
         }
 
         return false
@@ -354,44 +305,226 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
     // MARK: - Asynchronous
 
-    /// Checks linearizability using asynchronous replay closures.
-    ///
-    /// Same algorithm as ``check(prefix:replayPrefix:replayCommand:checkOracle:)`` but awaits each replay step, avoiding thread blocking in async contract runners.
+    /// Checks linearizability using asynchronous replay closures, without caching.
     package func checkAsync(
         prefix: [Command],
         replayPrefix: ([Command]) async -> Bool,
         replayCommand: (Command) async -> ReplayResponse?,
         checkOracle: () async -> Bool
     ) async -> Result {
+        var noCache: LinearizabilityPrefixCache?
+        return await checkAsync(
+            prefix: prefix,
+            replayPrefix: replayPrefix,
+            replayCommand: replayCommand,
+            checkOracle: checkOracle,
+            observationHashes: nil,
+            prefixCache: &noCache
+        )
+    }
+
+    /// Checks linearizability using asynchronous replay closures with incremental verification and prefix caching.
+    ///
+    /// Async equivalent of ``check(prefix:replayPrefix:replayCommand:checkOracle:observationHashes:prefixCache:)``. Folds verification into the DFS with pruning on mismatch and Zobrist-hashed cache lookups.
+    package func checkAsync(
+        prefix: [Command],
+        replayPrefix: ([Command]) async -> Bool,
+        replayCommand: (Command) async -> ReplayResponse?,
+        checkOracle: () async -> Bool,
+        observationHashes: [[UInt64]]?,
+        prefixCache: inout LinearizabilityPrefixCache?
+    ) async -> Result {
         let laneCount = laneObservations.count
         guard laneCount > 0 else {
             return .linearizable
         }
 
-        var cursors = Array(repeating: 0, count: laneCount)
         let totalCommands = laneObservations.reduce(0) { $0 + $1.count }
-        var currentOrdering: [Placed] = []
-        currentOrdering.reserveCapacity(totalCommands)
+        let cachingEnabled = observationHashes != nil && prefixCache != nil
+        let observationSetHash = computeObservationSetHash(observationHashes)
 
-        var closestMatchDepth = -1
-        var closestOrdering: [Placed] = []
+        var state = SearchState(laneCount: laneCount, totalCommands: totalCommands, prefixCache: prefixCache)
 
-        let found = await searchOrderingsAsync(
+        let found = await searchIncrementallyAsync(
             prefix: prefix,
-            cursors: &cursors,
-            currentOrdering: &currentOrdering,
             totalCommands: totalCommands,
-            closestMatchDepth: &closestMatchDepth,
-            closestOrdering: &closestOrdering,
+            observationHashes: observationHashes,
+            cachingEnabled: cachingEnabled,
+            observationSetHash: observationSetHash,
+            state: &state,
             replayPrefix: replayPrefix,
             replayCommand: replayCommand,
             checkOracle: checkOracle
         )
 
-        return makeResult(found: found, closestMatchDepth: closestMatchDepth, closestOrdering: closestOrdering)
+        prefixCache = state.prefixCache
+        logCacheStats(state: state, totalCommands: totalCommands, found: found)
+        return makeResult(found: found, closestMatchDepth: state.closestMatchDepth, closestOrdering: state.closestOrdering)
     }
 
-    // MARK: - Shared Search
+    // MARK: - Async Incremental Search
+
+    private func replayToDepthAsync(
+        _ depth: Int,
+        prefix: [Command],
+        currentOrdering: [Placed],
+        replayPrefix: ([Command]) async -> Bool,
+        replayCommand: (Command) async -> ReplayResponse?
+    ) async -> Bool {
+        guard await replayPrefix(prefix) else { return false }
+        for index in 0 ..< depth {
+            guard await replayCommand(currentOrdering[index].observation.command) != nil else { return false }
+        }
+        return true
+    }
+
+    private func searchIncrementallyAsync(
+        prefix: [Command],
+        totalCommands: Int,
+        observationHashes: [[UInt64]]?,
+        cachingEnabled: Bool,
+        observationSetHash: UInt64,
+        state: inout SearchState,
+        replayPrefix: ([Command]) async -> Bool,
+        replayCommand: (Command) async -> ReplayResponse?,
+        checkOracle: () async -> Bool
+    ) async -> Bool {
+        let depth = state.currentOrdering.count
+        state.nodesVisited += 1
+
+        if depth == totalCommands {
+            if depth == 0 {
+                guard await replayPrefix(prefix) else { return false }
+            }
+            let oraclePassed = await checkOracle()
+            if oraclePassed == false {
+                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
+            }
+            return oraclePassed
+        }
+
+        if cachingEnabled {
+            let cacheKey = mixCacheKey(observationSetHash, state.prefixHash, state.cursorHash)
+            if state.prefixCache?.contains(cacheKey) == true {
+                state.cacheHits += 1
+                state.nodesPruned += 1
+                return false
+            }
+            state.cacheMisses += 1
+        }
+
+        var childrenTried = 0
+
+        for laneIndex in 0 ..< laneObservations.count {
+            let cursor = state.cursors[laneIndex]
+            guard cursor < laneObservations[laneIndex].count else { continue }
+
+            let observation = laneObservations[laneIndex][cursor]
+
+            if childrenTried > 0 || depth == 0 {
+                guard await replayToDepthAsync(depth, prefix: prefix, currentOrdering: state.currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
+                    continue
+                }
+            }
+            childrenTried += 1
+
+            let placed = Placed(laneIndex: laneIndex, commandIndex: cursor, observation: observation)
+
+            guard let replay = await replayCommand(observation.command) else {
+                state.currentOrdering.append(placed)
+                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
+                state.currentOrdering.removeLast()
+                state.nodesPruned += 1
+                continue
+            }
+
+            if stepMismatches(observed: observation, replay: replay) {
+                state.currentOrdering.append(placed)
+                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
+                state.currentOrdering.removeLast()
+                state.nodesPruned += 1
+                continue
+            }
+
+            if observation.isSkipped == false, responsesMatch(observed: observation, replay: replay) == false {
+                state.currentOrdering.append(placed)
+                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
+                state.currentOrdering.removeLast()
+                state.nodesPruned += 1
+                continue
+            }
+
+            let observationHash = observationHashes?[laneIndex][cursor] ?? 0
+            let prefixContribution = ZobristHash.mix(observationHash, at: depth)
+            let oldCursorContribution = ZobristHash.mix(UInt64(cursor), at: laneIndex)
+            let newCursorContribution = ZobristHash.mix(UInt64(cursor &+ 1), at: laneIndex)
+
+            state.prefixHash ^= prefixContribution
+            state.cursorHash ^= oldCursorContribution ^ newCursorContribution
+            state.cursors[laneIndex] += 1
+            state.currentOrdering.append(placed)
+
+            let found = await searchIncrementallyAsync(
+                prefix: prefix,
+                totalCommands: totalCommands,
+                observationHashes: observationHashes,
+                cachingEnabled: cachingEnabled,
+                observationSetHash: observationSetHash,
+                state: &state,
+                replayPrefix: replayPrefix,
+                replayCommand: replayCommand,
+                checkOracle: checkOracle
+            )
+
+            state.currentOrdering.removeLast()
+            state.cursors[laneIndex] -= 1
+            state.prefixHash ^= prefixContribution
+            state.cursorHash ^= oldCursorContribution ^ newCursorContribution
+
+            if found { return true }
+        }
+
+        if cachingEnabled {
+            let cacheKey = mixCacheKey(observationSetHash, state.prefixHash, state.cursorHash)
+            state.prefixCache?.insert(cacheKey)
+        }
+
+        return false
+    }
+
+    // MARK: - Shared Helpers (Search)
+
+    private func computeObservationSetHash(_ observationHashes: [[UInt64]]?) -> UInt64 {
+        var hash: UInt64 = 0
+        if let observationHashes {
+            for (laneIndex, lane) in observationHashes.enumerated() {
+                for (commandIndex, commandHash) in lane.enumerated() {
+                    hash ^= ZobristHash.mix(commandHash, at: laneIndex &* 256 &+ commandIndex)
+                }
+            }
+        }
+        return hash
+    }
+
+    private func logCacheStats(state: SearchState, totalCommands: Int, found: Bool) {
+        if state.cacheHits + state.cacheMisses > 0 {
+            ExhaustLog.debug(
+                category: .propertyTest,
+                event: "linearizability_cache",
+                metadata: [
+                    "commands": "\(totalCommands)",
+                    "hits": "\(state.cacheHits)",
+                    "misses": "\(state.cacheMisses)",
+                    "nodes_visited": "\(state.nodesVisited)",
+                    "nodes_pruned": "\(state.nodesPruned)",
+                    "cache_entries": "\(state.prefixCache?.entries.count ?? 0)",
+                    "result": found ? "linearizable" : "not_linearizable",
+                ]
+            )
+        }
+    }
+
+    // MARK: - Shared Search (Legacy)
 
     /// Depth-first search over valid interleavings. At each step, tries advancing each lane's cursor in turn. Calls `verify` for each complete ordering.
     private func searchOrderings(
@@ -601,25 +734,12 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     }
 }
 
-// MARK: - Zobrist Mixing for Prefix Cache
-
-/// Position-dependent hash mixing using splitmix64, matching ``ZobristHash/contribution(at:_:)``.
-private func mixPositionDependent(_ value: UInt64, position: Int) -> UInt64 {
-    var bits = value ^ (UInt64(position) &* 0x9E37_79B9_7F4A_7C15)
-    bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
-    bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
-    bits ^= bits >> 31
-    return bits
-}
+// MARK: - Cache Key Mixing
 
 /// Combines the three cache key components into a single 64-bit key.
 private func mixCacheKey(_ observationSetHash: UInt64, _ prefixHash: UInt64, _ cursorHash: UInt64) -> UInt64 {
     var combined = observationSetHash
     combined ^= prefixHash &* 0x9E37_79B9_7F4A_7C15
     combined ^= cursorHash &* 0x517C_C1B7_2722_0A95
-    var bits = combined
-    bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
-    bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
-    bits ^= bits >> 31
-    return bits
+    return ZobristHash.mix(combined, at: 0)
 }
