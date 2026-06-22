@@ -141,7 +141,7 @@ Reproduce: .replay("3JK4M2-5")
 
 The replay seed lets you re-run the exact same sequence deterministically for debugging.
 
-`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget, capped at 100 for sequential contracts and 40 for `.tasks` concurrent contracts; `.threads` contracts instead default to a flat 8, because each sequence is re-run many times to reproduce the race. Longer sequences explore deeper states but take longer to test and to reduce. The overhead scales linearly with command limit. Contracts with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
+`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget, capped at 100 for sequential contracts and 40 for `.tasks` concurrent contracts; `.threads` contracts instead default to a flat 20, because each sequence is re-run many times to reproduce the race. Longer sequences explore deeper states but take longer to test and to reduce. For `.threads` contracts, linearizability checking cost explodes with longer sequences because the checker must try all valid orderings. Contracts with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
 
 ## Your SUT uses async/await
 
@@ -385,7 +385,7 @@ All settings are passed as variadic arguments to `#execute`:
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `.commandLimit(N)` | auto-estimated (`.threads`: 8) | Maximum commands per generated sequence. Capped at 100 (sequential) or 40 (`.tasks`); `.threads` defaults to a flat 8. |
+| `.commandLimit(N)` | auto-estimated (`.threads`: 20) | Maximum commands per generated sequence. Capped at 100 (sequential) or 40 (`.tasks`); `.threads` defaults to a flat 20. |
 | `.concurrent(N)` | 2 | Number of concurrent lanes (1 through 8). |
 | `.budget(.thorough)` | `.standard` | Controls coverage rows and random sampling iterations. |
 | `.idleTimeoutMs(ms)` | 2000 | Milliseconds before a stalled run is reported without reduction: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. |
