@@ -227,14 +227,14 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
     }
 
     func checkLinearizability(
-        prefix: [Spec.Command],
+        taggedCommands: [(ScheduleMarker, Spec.Command)],
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec,
         observationHashes: [[UInt64]]?,
         prefixCache: inout LinearizabilityPrefixCache?
     ) -> LinearizabilityResult {
         Self.runLinearizabilityCheck(
-            prefix: prefix,
+            taggedCommands: taggedCommands,
             laneResponses: laneResponses,
             concurrentSpec: concurrentSpec,
             observationHashes: observationHashes,
@@ -243,7 +243,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
     }
 
     static func runLinearizabilityCheck(
-        prefix: [Spec.Command],
+        taggedCommands: [(ScheduleMarker, Spec.Command)],
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec,
         observationHashes: [[UInt64]]?,
@@ -252,10 +252,9 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         var replaySpec: Spec?
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
         let result = checker.check(
-            prefix: prefix,
-            replayPrefix: { prefixCommands in
+            replayPrefix: {
                 let fresh = Spec()
-                for command in prefixCommands {
+                for (marker, command) in taggedCommands where marker.isPrefix {
                     do {
                         try fresh.run(command)
                     } catch {

@@ -127,10 +127,9 @@ private func check(
     let checker = LinearizabilityChecker(laneObservations: lanes)
     var replayStack: Stack?
     return checker.check(
-        prefix: prefix,
-        replayPrefix: { prefixCommands in
+        replayPrefix: {
             let fresh = Stack()
-            for command in prefixCommands {
+            for command in prefix {
                 fresh.apply(command)
             }
             replayStack = fresh

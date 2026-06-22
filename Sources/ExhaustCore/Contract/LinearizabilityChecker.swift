@@ -84,14 +84,12 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
     /// Checks linearizability without caching.
     package func check(
-        prefix: [Command],
-        replayPrefix: ([Command]) -> Bool,
+        replayPrefix: () -> Bool,
         replayCommand: (Command) -> ReplayResponse?,
         checkOracle: () -> Bool
     ) -> Result {
         var noCache: LinearizabilityPrefixCache?
         return check(
-            prefix: prefix,
             replayPrefix: replayPrefix,
             replayCommand: replayCommand,
             checkOracle: checkOracle,
@@ -105,15 +103,13 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     /// Folds verification into the DFS: each placed command is replayed immediately and the subtree is pruned on mismatch. When `observationHashes` and `prefixCache` are both non-nil, exhausted subtrees are memoized via Zobrist-hashed (observation set, prefix, cursor state) keys, and cache hits prune without replay. Aggregate hit/miss counts are logged under the `linearizability` category when logging is enabled.
     ///
     /// - Parameters:
-    ///   - prefix: The sequential prefix commands to replay before each candidate ordering.
-    ///   - replayPrefix: Replays all prefix commands on a fresh sequential instance. Returns `false` if any prefix command fails.
+    ///   - replayPrefix: Replays all prefix commands on a fresh sequential instance. Returns `false` if any prefix command fails. The closure captures its own prefix data.
     ///   - replayCommand: Replays a single concurrent command on the sequential instance. Returns `nil` if the command threw a non-skip error.
     ///   - checkOracle: Checks whether the sequential instance's final state matches the concurrent execution's final state.
     ///   - observationHashes: Per-observation fingerprints (same shape as ``laneObservations``), precomputed from ChoiceSequence segments and response outcomes. `nil` disables caching.
     ///   - prefixCache: Cross-run cache of exhausted subtrees. `nil` disables caching.
     package func check(
-        prefix: [Command],
-        replayPrefix: ([Command]) -> Bool,
+        replayPrefix: () -> Bool,
         replayCommand: (Command) -> ReplayResponse?,
         checkOracle: () -> Bool,
         observationHashes: [[UInt64]]?,
@@ -131,7 +127,6 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         var state = SearchState(laneCount: laneCount, totalCommands: totalCommands, prefixCache: prefixCache)
 
         let found = searchIncrementally(
-            prefix: prefix,
             totalCommands: totalCommands,
             observationHashes: observationHashes,
             cachingEnabled: cachingEnabled,
@@ -174,12 +169,11 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
     private func replayToDepth(
         _ depth: Int,
-        prefix: [Command],
         currentOrdering: [Placed],
-        replayPrefix: ([Command]) -> Bool,
+        replayPrefix: () -> Bool,
         replayCommand: (Command) -> ReplayResponse?
     ) -> Bool {
-        guard replayPrefix(prefix) else { return false }
+        guard replayPrefix() else { return false }
         for index in 0 ..< depth {
             guard replayCommand(currentOrdering[index].observation.command) != nil else { return false }
         }
@@ -187,13 +181,12 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     }
 
     private func searchIncrementally(
-        prefix: [Command],
         totalCommands: Int,
         observationHashes: [[UInt64]]?,
         cachingEnabled: Bool,
         observationSetHash: UInt64,
         state: inout SearchState,
-        replayPrefix: ([Command]) -> Bool,
+        replayPrefix: () -> Bool,
         replayCommand: (Command) -> ReplayResponse?,
         checkOracle: () -> Bool
     ) -> Bool {
@@ -202,7 +195,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
         if depth == totalCommands {
             if depth == 0 {
-                guard replayPrefix(prefix) else { return false }
+                guard replayPrefix() else { return false }
             }
             let oraclePassed = checkOracle()
             if oraclePassed == false {
@@ -230,7 +223,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
             let observation = laneObservations[laneIndex][cursor]
 
             if childrenTried > 0 || depth == 0 {
-                guard replayToDepth(depth, prefix: prefix, currentOrdering: state.currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
+                guard replayToDepth(depth, currentOrdering: state.currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
                     continue
                 }
             }
@@ -273,7 +266,6 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
             state.currentOrdering.append(placed)
 
             let found = searchIncrementally(
-                prefix: prefix,
                 totalCommands: totalCommands,
                 observationHashes: observationHashes,
                 cachingEnabled: cachingEnabled,
@@ -304,14 +296,12 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
     /// Checks linearizability using asynchronous replay closures, without caching.
     package func checkAsync(
-        prefix: [Command],
-        replayPrefix: ([Command]) async -> Bool,
+        replayPrefix: () async -> Bool,
         replayCommand: (Command) async -> ReplayResponse?,
         checkOracle: () async -> Bool
     ) async -> Result {
         var noCache: LinearizabilityPrefixCache?
         return await checkAsync(
-            prefix: prefix,
             replayPrefix: replayPrefix,
             replayCommand: replayCommand,
             checkOracle: checkOracle,
@@ -322,10 +312,9 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
     /// Checks linearizability using asynchronous replay closures with incremental verification and prefix caching.
     ///
-    /// Async equivalent of ``check(prefix:replayPrefix:replayCommand:checkOracle:observationHashes:prefixCache:)``. Folds verification into the DFS with pruning on mismatch and Zobrist-hashed cache lookups.
+    /// Async equivalent of ``check(replayPrefix:replayCommand:checkOracle:observationHashes:prefixCache:)``. Folds verification into the DFS with pruning on mismatch and Zobrist-hashed cache lookups.
     package func checkAsync(
-        prefix: [Command],
-        replayPrefix: ([Command]) async -> Bool,
+        replayPrefix: () async -> Bool,
         replayCommand: (Command) async -> ReplayResponse?,
         checkOracle: () async -> Bool,
         observationHashes: [[UInt64]]?,
@@ -343,7 +332,6 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         var state = SearchState(laneCount: laneCount, totalCommands: totalCommands, prefixCache: prefixCache)
 
         let found = await searchIncrementallyAsync(
-            prefix: prefix,
             totalCommands: totalCommands,
             observationHashes: observationHashes,
             cachingEnabled: cachingEnabled,
@@ -363,12 +351,11 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
     private func replayToDepthAsync(
         _ depth: Int,
-        prefix: [Command],
         currentOrdering: [Placed],
-        replayPrefix: ([Command]) async -> Bool,
+        replayPrefix: () async -> Bool,
         replayCommand: (Command) async -> ReplayResponse?
     ) async -> Bool {
-        guard await replayPrefix(prefix) else { return false }
+        guard await replayPrefix() else { return false }
         for index in 0 ..< depth {
             guard await replayCommand(currentOrdering[index].observation.command) != nil else { return false }
         }
@@ -376,13 +363,12 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     }
 
     private func searchIncrementallyAsync(
-        prefix: [Command],
         totalCommands: Int,
         observationHashes: [[UInt64]]?,
         cachingEnabled: Bool,
         observationSetHash: UInt64,
         state: inout SearchState,
-        replayPrefix: ([Command]) async -> Bool,
+        replayPrefix: () async -> Bool,
         replayCommand: (Command) async -> ReplayResponse?,
         checkOracle: () async -> Bool
     ) async -> Bool {
@@ -391,7 +377,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
         if depth == totalCommands {
             if depth == 0 {
-                guard await replayPrefix(prefix) else { return false }
+                guard await replayPrefix() else { return false }
             }
             let oraclePassed = await checkOracle()
             if oraclePassed == false {
@@ -419,7 +405,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
             let observation = laneObservations[laneIndex][cursor]
 
             if childrenTried > 0 || depth == 0 {
-                guard await replayToDepthAsync(depth, prefix: prefix, currentOrdering: state.currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
+                guard await replayToDepthAsync(depth, currentOrdering: state.currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
                     continue
                 }
             }
@@ -462,7 +448,6 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
             state.currentOrdering.append(placed)
 
             let found = await searchIncrementallyAsync(
-                prefix: prefix,
                 totalCommands: totalCommands,
                 observationHashes: observationHashes,
                 cachingEnabled: cachingEnabled,

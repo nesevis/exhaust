@@ -27,7 +27,7 @@ protocol PreemptiveBackend<Spec>: Sendable {
     ///   - concurrentSpec: The concurrent spec instance after execution, kept alive for oracle calls.
     /// - Returns: The linearizability verdict with closest-ordering information on failure.
     func checkLinearizability(
-        prefix: [Spec.Command],
+        taggedCommands: [(ScheduleMarker, Spec.Command)],
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec,
         observationHashes: [[UInt64]]?,

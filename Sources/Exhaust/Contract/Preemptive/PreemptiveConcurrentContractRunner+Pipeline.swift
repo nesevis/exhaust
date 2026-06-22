@@ -56,10 +56,9 @@ extension __ExhaustRuntime {
             guard let laneResponses = outcome.laneResponses, let concurrentSpec = outcome.concurrentSpec else {
                 return (outcome, nil)
             }
-            let prefixCommands = taggedCommands.compactMap { $0.0.isPrefix ? $0.1 : nil }
             let observationHashes = tree.flatMap { computeObservationHashesFromTree(probeTree: $0, taggedCommands: taggedCommands, laneResponses: laneResponses) }
             guard case let .notLinearizable(witness) = backend.checkLinearizability(
-                prefix: prefixCommands,
+                taggedCommands: taggedCommands,
                 laneResponses: laneResponses,
                 concurrentSpec: concurrentSpec,
                 observationHashes: observationHashes,
@@ -172,7 +171,7 @@ extension __ExhaustRuntime {
             // The combined output is already validated as non-linearizable by the pass (every accepted probe, deletion or collapse, kept it failing under linearizableExecute). Report it unconditionally — never discard the reduction. confirmRealFailure is evidence-only here: a reproducing run supplies coherent lane responses and actual state; a failure to reproduce leaves the evidence empty (the report shows expected-state only) rather than borrowing the original discovering run's, whose schedule no longer matches.
             let reportedOutcome = confirmRealFailure(combinedResult.output)
             // Present prefix-first. The runner runs all prefix commands sequentially before any lane (execute() partitions by marker, not array position), so reordering is execution-equivalent and makes the execution trace honest.
-            let reduced = combinedResult.output.filter(\.0.isPrefix) + combinedResult.output.filter { $0.0.isPrefix == false }
+            let reduced = combinedResult.output.sorted { $0.0.isPrefix && $1.0.isPrefix == false }
 
             return (
                 reduced,
@@ -488,23 +487,20 @@ private func computeObservationHashesFromTree<Command>(
 ) -> [[UInt64]]? {
     guard let subtrees = ChoiceTree.findSequenceElements(in: probeTree) else { return nil }
 
-    var subtreesByLane: [UInt8: [ChoiceTree]] = [:]
-    for (index, pair) in taggedCommands.enumerated() where pair.0.isPrefix == false {
-        let subtree = index < subtrees.count ? subtrees[index] : .just
-        subtreesByLane[pair.0.rawValue, default: []].append(subtree)
-    }
-
     var result: [[UInt64]] = []
     for laneArray in laneResponses {
-        guard let laneSubtrees = subtreesByLane[laneArray.first?.lane ?? 0],
-              laneSubtrees.count == laneArray.count
-        else {
-            return nil
+        guard let laneID = laneArray.first?.lane else {
+            result.append([])
+            continue
         }
-
+        var subtreeIndex = 0
         var laneHashes: [UInt64] = []
-        for (index, response) in laneArray.enumerated() {
-            let subtreeHash = ZobristHash.mix(laneSubtrees[index].hashValue.bitPattern64, at: 0)
+        for (index, pair) in taggedCommands.enumerated() where pair.0.isPrefix == false {
+            guard pair.0.rawValue == laneID else { continue }
+            let subtree = index < subtrees.count ? subtrees[index] : .just
+            guard subtreeIndex < laneArray.count else { return nil }
+            let response = laneArray[subtreeIndex]
+            let subtreeHash = ZobristHash.mix(subtree.hashValue.bitPattern64, at: 0)
             let responseHash: UInt64
             switch response.outcome {
                 case let .returned(value):
@@ -516,7 +512,9 @@ private func computeObservationHashesFromTree<Command>(
                     responseHash = 0xB
             }
             laneHashes.append(subtreeHash ^ responseHash)
+            subtreeIndex += 1
         }
+        guard subtreeIndex == laneArray.count else { return nil }
         result.append(laneHashes)
     }
     return result
