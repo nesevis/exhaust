@@ -230,8 +230,8 @@ package struct ReductionMachine: ProbeSessionState {
         // swiftlint:disable:next force_cast
         let typedOutput = output as! Output
         let outcome: ReductionOutcome<Output> = sequence != initialSequence
-            ? .reduced(sequence, typedOutput)
-            : .unreduced(sequence, typedOutput)
+            ? .reduced(sequence, tree, typedOutput)
+            : .unreduced(sequence, tree, typedOutput)
         return (outcome: outcome, stats: finalStats)
     }
 

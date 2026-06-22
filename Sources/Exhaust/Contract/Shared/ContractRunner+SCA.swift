@@ -300,7 +300,7 @@ extension __ExhaustRuntime {
         ) else {
             return (value, nil, false)
         }
-        if case let .reduced(_, reduced) = result.outcome {
+        if case let .reduced(_, _, reduced) = result.outcome {
             return (reduced, result.stats, true)
         }
         return (value, result.stats, false)

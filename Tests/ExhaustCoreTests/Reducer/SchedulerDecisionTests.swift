@@ -21,7 +21,7 @@ struct SchedulerDecisionTests {
         ) { _ in true }
 
         let original = ChoiceSequence.flatten(tree)
-        if case let .reduced(reduced, _) = result {
+        if case let .reduced(reduced, _, _) = result {
             #expect(reduced == original, "Property always passes — sequence should be unchanged")
         }
         // .unreduced / .failure is also valid — means the reducer found no counterexample to work with

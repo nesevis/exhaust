@@ -146,7 +146,7 @@ struct ReductionPropertyTests {
         )
 
         let originalSequence = ChoiceSequence.flatten(tree)
-        if case let .reduced(reduced, _) = result {
+        if case let .reduced(reduced, _, _) = result {
             #expect(reduced == originalSequence, "Minimal value should not change during reduction")
         }
         // .unreduced / .failure is also acceptable — it means the reducer found no improvement

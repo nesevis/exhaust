@@ -8,10 +8,10 @@
 /// Describes the result of a reduction pass.
 package enum ReductionOutcome<Output> {
     /// Reduction improved the counterexample.
-    case reduced(ChoiceSequence, Output)
+    case reduced(ChoiceSequence, ChoiceTree, Output)
 
     /// Reduction ran but could not improve the counterexample.
-    case unreduced(ChoiceSequence, Output)
+    case unreduced(ChoiceSequence, ChoiceTree, Output)
 
     /// Reduction could not produce a result (for example, materialization of the input failed).
     case failure
@@ -19,8 +19,8 @@ package enum ReductionOutcome<Output> {
     /// The counterexample and its choice sequence, regardless of whether reduction improved it.
     package var counterexample: (ChoiceSequence, Output)? {
         switch self {
-            case let .reduced(sequence, output): (sequence, output)
-            case let .unreduced(sequence, output): (sequence, output)
+            case let .reduced(sequence, _, output): (sequence, output)
+            case let .unreduced(sequence, _, output): (sequence, output)
             case .failure: nil
         }
     }
