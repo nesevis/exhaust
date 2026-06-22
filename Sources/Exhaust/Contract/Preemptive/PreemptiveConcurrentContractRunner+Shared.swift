@@ -12,7 +12,7 @@ enum Preemptive {
     static let finalConfirmationRepetitions = 50
 
     /// Default command limit for `.threads` contracts. Lower than the cooperative runner's estimated/40 cap because each probe repeats `confirmationRepetitions` times.
-    static let defaultCommandLimit = 8
+    static let defaultCommandLimit = 20
 
     /// Outcome of one preemptive concurrent execution.
     ///
@@ -35,6 +35,8 @@ enum Preemptive {
     }
 
     /// Runs a single reduction pass with the given encoder set and property function.
+    ///
+    /// When `reductionTreeBox` is non-nil, the current tree is written to it before each property invocation and after rematerialization, so the `execute` closure can reconcile commands with their ChoiceSequence segments for cache fingerprinting.
     static func reduceSinglePass<Command>(
         generator: Generator<[(ScheduleMarker, Command)]>,
         tree: ChoiceTree,
@@ -45,6 +47,7 @@ enum Preemptive {
         rematerialize: Bool,
         repetitions: Int,
         tuning: SchedulerTuning = .init(),
+        reductionTreeBox: UnsafeSendableBox<ChoiceTree?>? = nil,
         execute: ([(ScheduleMarker, Command)]) -> Bool
     ) -> ReductionResult<Command> {
         var propertyInvocations = 0
@@ -61,6 +64,7 @@ enum Preemptive {
         var currentOutput = output
         var currentTree = tree
         var stats = ReductionStats()
+        reductionTreeBox?.value = currentTree
 
         if let result = try? Interpreters.choiceGraphReduceCollectingStats(
             gen: generator,
@@ -75,8 +79,10 @@ enum Preemptive {
             property: property
         ) {
             stats.merge(result.stats)
-            if case let .reduced(sequence, _, reduced) = result.outcome {
+            if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
                 currentOutput = reduced
+                currentTree = reducedTree
+                reductionTreeBox?.value = currentTree
                 // Rebuild the tree from the reduced sequence so the next pass starts from a consistent (output, tree) pair, using the rematerialized value and tree together. Exact replay is sufficient: structural deletion runs first on the pruned tree (see reduceConfirmedFailure), before any rematerialize here, so no pass has to compute removal spans against this tree.
                 if rematerialize,
                    case let .success(value, tree, _) = Materializer.materialize(
@@ -87,6 +93,7 @@ enum Preemptive {
                 {
                     currentOutput = value
                     currentTree = tree
+                    reductionTreeBox?.value = currentTree
                 }
             }
         }

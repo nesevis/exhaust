@@ -47,7 +47,7 @@ extension __ExhaustRuntime {
 
         let identifySkips = backend.makeIdentifySkips()
         let lastFailingOutcome = UnsafeSendableBox<Preemptive.Outcome<Spec>?>(nil)
-        let prefixCacheBox = UnsafeSendableBox<LinearizabilityPrefixCache?>(nil)
+        let prefixCacheBox = UnsafeSendableBox<LinearizabilityPrefixCache?>(LinearizabilityPrefixCache())
         // Classifies one execution against linearizability — the single decision shared by the sampling/coverage property, the reduction probe, and failure confirmation.
         // Returns the failing outcome (and any response-level witness) for a genuine violation: a non-linearizable execution, or an oracle failure with no lane responses (invariant/exception/timeout, real by construction).
         // Returns nil when the execution passed the oracle or was confirmed linearizable (a false positive to skip). The prefix is taken from `taggedCommands` itself so the lane responses fed to the checker match the schedule being classified.
@@ -105,9 +105,16 @@ extension __ExhaustRuntime {
             return nil
         }
 
+        // The current reduction tree, set by reduceSinglePass before each property invocation so linearizableProbe can reconcile commands with their ChoiceSequence segments.
+        let reductionTreeBox = UnsafeSendableBox<ChoiceTree?>(nil)
+
         /// Reduction property: a probe "passes" (stays reducible) when its execution is linearizable, so structural reduction keeps only commands whose removal would dissolve a genuine response-level violation. (A bare oracle property would strip commands whose return values carry the response-level evidence.)
         func linearizableProbe(_ probeCommands: [(ScheduleMarker, Spec.Command)]) -> Bool {
-            let triples: [TaggedCommandWithSegment<Spec.Command>] = probeCommands.map { (marker: $0.0, command: $0.1, segment: ChoiceSequence()) }
+            let triples: [TaggedCommandWithSegment<Spec.Command>] = if let tree = reductionTreeBox.value {
+                reconcileCommandsWithTree(probeCommands, tree: tree)
+            } else {
+                probeCommands.map { (marker: $0.0, command: $0.1, segment: ChoiceSequence()) }
+            }
             return classifyFailure(triples, backend.execute(probeCommands)) == nil
         }
 
@@ -143,22 +150,43 @@ extension __ExhaustRuntime {
                 logEvent: "preemptive_skip_pruning"
             )
 
-            // Single combined pass: deletion, lane collapse and value minimisation together, all under the linearizability property. The graph reducer emits removal candidates before lane-collapse candidates each cycle (CandidateSource.buildSources order) and re-runs across cycles, so deletions and prefix-growth interleave and can compound. Only deletion and lane collapse are enabled: substitution needs recursive/self-similar structure a flat command pick lacks, and migration restructures the concurrent set, suppressing the race for later deletion probes.
-            // Running lane collapse under linearizableExecute (not the oracle) makes every accepted collapse self-validate as non-linearizable — so the combined output is already a confirmed counterexample, with no need for a separate collapse re-confirmation gate. Within one pass, lane collapse's reorder triggers a full graph rebuild before the next cycle's deletion candidates are built, so it does not reintroduce the cross-pass decode failure that previously forced the split.
+            // Pass 1: lane collapse. Moves concurrent commands into the sequential prefix, reducing the number of lanes and the interleaving space before the checker-heavy deletion pass. Each accepted collapse self-validates as non-linearizable under linearizableProbe.
             let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
-            let combinedResult = Preemptive.reduceSinglePass(
+            let collapseResult = Preemptive.reduceSinglePass(
                 generator: sequenceGen,
                 tree: prunedTree,
                 output: prunedCommands,
-                encoders: [.deletion, .laneCollapse, .valueSearch, .floatSearch],
+                encoders: [.laneCollapse],
                 maxStalls: 2,
-                deadlineNanoseconds: 15_000_000_000,
+                deadlineNanoseconds: 7_500_000_000,
                 rematerialize: true,
                 repetitions: Preemptive.confirmationRepetitions,
                 tuning: noRelax,
+                reductionTreeBox: reductionTreeBox,
                 execute: linearizableProbe
             )
-            report.applyReductionStats(combinedResult.stats)
+
+            // Pass 2: deletion and value reduction on the collapsed schedule. The tighter interleaving space (fewer concurrent commands) makes each linearizability check cheaper and the prefix cache more effective — fewer distinct observation sets, more cross-check hits.
+            let combinedResult = Preemptive.reduceSinglePass(
+                generator: sequenceGen,
+                tree: collapseResult.tree,
+                output: collapseResult.output,
+                encoders: [.deletion, .valueSearch, .floatSearch],
+                maxStalls: 2,
+                deadlineNanoseconds: 7_500_000_000,
+                rematerialize: true,
+                repetitions: Preemptive.confirmationRepetitions,
+                tuning: noRelax,
+                reductionTreeBox: reductionTreeBox,
+                execute: linearizableProbe
+            )
+            var stats = collapseResult.stats
+            stats.merge(combinedResult.stats)
+            report.applyReductionStats(stats)
+
+            reductionTreeBox.value = nil
+
+//            print("DBG: Reduction stats laneCollapse: \(collapseResult.stats) deletion: \(combinedResult.stats)")
 
             // The combined output is already validated as non-linearizable by the pass (every accepted probe, deletion or collapse, kept it failing under linearizableExecute). Report it unconditionally — never discard the reduction. confirmRealFailure is evidence-only here: a reproducing run supplies coherent lane responses and actual state; a failure to reproduce leaves the evidence empty (the report shows expected-state only) rather than borrowing the original discovering run's, whose schedule no longer matches.
             let reportedOutcome = confirmRealFailure(combinedResult.output)
@@ -167,7 +195,7 @@ extension __ExhaustRuntime {
 
             return (
                 reduced,
-                combinedResult.propertyInvocations,
+                combinedResult.propertyInvocations + collapseResult.propertyInvocations,
                 reportedOutcome?.witness,
                 reportedOutcome?.outcome
             )
@@ -309,6 +337,7 @@ extension __ExhaustRuntime {
                 coverageBudget: effectiveCoverageBudget,
                 skipToRow: config.coverageReplayRow,
                 logEventPrefix: "concurrent_sca_coverage",
+                concurrencyLevel: config.concurrencyLevel,
                 property: property
             )
             if case let .failure(taggedCommands, tree, coverageIterations) = scaRowResult {
@@ -343,7 +372,7 @@ extension __ExhaustRuntime {
             )
             var interpreter = ValueAndChoiceTreeInterpreter(
                 sequenceGen,
-                materializePicks: true,
+                materializePicks: false,
                 seed: config.seed,
                 maxRuns: maxRuns,
                 initialRunIndex: startIndex

@@ -103,7 +103,9 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         )
     }
 
-    /// Checks linearizability using synchronous replay closures.
+    /// Checks linearizability using synchronous replay closures with incremental verification and prefix caching.
+    ///
+    /// Folds verification into the DFS: each placed command is replayed immediately and the subtree is pruned on mismatch. When `observationHashes` and `prefixCache` are both non-nil, exhausted subtrees are memoized via Zobrist-hashed (observation set, prefix, cursor state) keys, and cache hits prune without replay. Aggregate hit/miss counts are logged under the `linearizability` category when logging is enabled.
     ///
     /// - Parameters:
     ///   - prefix: The sequential prefix commands to replay before each candidate ordering.
@@ -117,41 +119,237 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         replayPrefix: ([Command]) -> Bool,
         replayCommand: (Command) -> ReplayResponse?,
         checkOracle: () -> Bool,
-        observationHashes _: [[UInt64]]?,
-        prefixCache _: inout LinearizabilityPrefixCache?
+        observationHashes: [[UInt64]]?,
+        prefixCache: inout LinearizabilityPrefixCache?
     ) -> Result {
         let laneCount = laneObservations.count
         guard laneCount > 0 else {
             return .linearizable
         }
 
-        var cursors = Array(repeating: 0, count: laneCount)
         let totalCommands = laneObservations.reduce(0) { $0 + $1.count }
+        let cachingEnabled = observationHashes != nil && prefixCache != nil
+
+        // Observation set hash: constant for this check, distinguishes checks with different observations.
+        var observationSetHash: UInt64 = 0
+        if let observationHashes {
+            for (laneIndex, lane) in observationHashes.enumerated() {
+                for (commandIndex, hash) in lane.enumerated() {
+                    observationSetHash ^= mixPositionDependent(hash, position: laneIndex &* 256 &+ commandIndex)
+                }
+            }
+        }
+
+        var cursors = Array(repeating: 0, count: laneCount)
         var currentOrdering: [Placed] = []
         currentOrdering.reserveCapacity(totalCommands)
-
         var closestMatchDepth = -1
         var closestOrdering: [Placed] = []
 
-        let verify: ([Placed]) -> Bool = { ordering in
-            guard replayPrefix(prefix) else { return false }
-            return verifyOrdering(
-                ordering,
-                replayCommand: replayCommand,
-                checkOracle: checkOracle,
-                closestMatchDepth: &closestMatchDepth,
-                closestOrdering: &closestOrdering
-            )
-        }
+        var prefixHash: UInt64 = 0
+        var cursorHash: UInt64 = 0
+        var cacheHits = 0
+        var cacheMisses = 0
+        var nodesVisited = 0
+        var nodesPruned = 0
 
-        let found = searchOrderings(
+        let found = searchIncrementally(
+            prefix: prefix,
             cursors: &cursors,
             currentOrdering: &currentOrdering,
             totalCommands: totalCommands,
-            verify: verify
+            closestMatchDepth: &closestMatchDepth,
+            closestOrdering: &closestOrdering,
+            replayPrefix: replayPrefix,
+            replayCommand: replayCommand,
+            checkOracle: checkOracle,
+            observationHashes: observationHashes,
+            prefixCache: &prefixCache,
+            cachingEnabled: cachingEnabled,
+            observationSetHash: observationSetHash,
+            prefixHash: &prefixHash,
+            cursorHash: &cursorHash,
+            cacheHits: &cacheHits,
+            cacheMisses: &cacheMisses,
+            nodesVisited: &nodesVisited,
+            nodesPruned: &nodesPruned
         )
 
+        if cacheHits + cacheMisses > 0 {
+            ExhaustLog.debug(
+                category: .propertyTest,
+                event: "linearizability_cache",
+                metadata: [
+                    "commands": "\(totalCommands)",
+                    "hits": "\(cacheHits)",
+                    "misses": "\(cacheMisses)",
+                    "nodes_visited": "\(nodesVisited)",
+                    "nodes_pruned": "\(nodesPruned)",
+                    "cache_entries": "\(prefixCache?.entries.count ?? 0)",
+                    "result": found ? "linearizable" : "not_linearizable",
+                ]
+            )
+        }
+
         return makeResult(found: found, closestMatchDepth: closestMatchDepth, closestOrdering: closestOrdering)
+    }
+
+    // MARK: - Incremental Search
+
+    /// Replays the sequential prefix and the first `depth` commands of `currentOrdering` to restore the spec to the state at `depth`. Every sibling at the same depth needs the spec in the parent's state before its own command is applied.
+    private func replayToDepth(
+        _ depth: Int,
+        prefix: [Command],
+        currentOrdering: [Placed],
+        replayPrefix: ([Command]) -> Bool,
+        replayCommand: (Command) -> ReplayResponse?
+    ) -> Bool {
+        guard replayPrefix(prefix) else { return false }
+        for index in 0 ..< depth {
+            guard replayCommand(currentOrdering[index].observation.command) != nil else { return false }
+        }
+        return true
+    }
+
+    /// Depth-first search with incremental verification. Each placed command is replayed immediately; mismatches prune the subtree. Cache lookups and insertions happen when `cachingEnabled` is true.
+    private func searchIncrementally(
+        prefix: [Command],
+        cursors: inout [Int],
+        currentOrdering: inout [Placed],
+        totalCommands: Int,
+        closestMatchDepth: inout Int,
+        closestOrdering: inout [Placed],
+        replayPrefix: ([Command]) -> Bool,
+        replayCommand: (Command) -> ReplayResponse?,
+        checkOracle: () -> Bool,
+        observationHashes: [[UInt64]]?,
+        prefixCache: inout LinearizabilityPrefixCache?,
+        cachingEnabled: Bool,
+        observationSetHash: UInt64,
+        prefixHash: inout UInt64,
+        cursorHash: inout UInt64,
+        cacheHits: inout Int,
+        cacheMisses: inout Int,
+        nodesVisited: inout Int,
+        nodesPruned: inout Int
+    ) -> Bool {
+        let depth = currentOrdering.count
+        nodesVisited += 1
+
+        if depth == totalCommands {
+            // All commands verified incrementally. Ensure spec state is valid (handles totalCommands == 0 where no incremental replays occurred), then check the oracle.
+            if depth == 0 {
+                guard replayPrefix(prefix) else { return false }
+            }
+            let oraclePassed = checkOracle()
+            if oraclePassed == false {
+                updateClosest(currentOrdering, matchDepth: depth, closestMatchDepth: &closestMatchDepth, closestOrdering: &closestOrdering)
+            }
+            return oraclePassed
+        }
+
+        // Cache lookup: if this (observation set, prefix, cursor) was already exhausted, prune.
+        if cachingEnabled {
+            let cacheKey = mixCacheKey(observationSetHash, prefixHash, cursorHash)
+            if prefixCache?.contains(cacheKey) == true {
+                cacheHits += 1
+                nodesPruned += 1
+                return false
+            }
+            cacheMisses += 1
+        }
+
+        var childrenTried = 0
+
+        for laneIndex in 0 ..< laneObservations.count {
+            let cursor = cursors[laneIndex]
+            guard cursor < laneObservations[laneIndex].count else { continue }
+
+            let observation = laneObservations[laneIndex][cursor]
+
+            // Restore spec state to this depth. The first child at each depth needs replay too — the spec has no guaranteed state at entry.
+            if childrenTried > 0 || depth == 0 {
+                guard replayToDepth(depth, prefix: prefix, currentOrdering: currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
+                    continue
+                }
+            }
+            childrenTried += 1
+
+            // Incremental check: replay this one command and compare.
+            let placed = Placed(laneIndex: laneIndex, commandIndex: cursor, observation: observation)
+
+            guard let replay = replayCommand(observation.command) else {
+                currentOrdering.append(placed)
+                updateClosest(currentOrdering, matchDepth: depth, closestMatchDepth: &closestMatchDepth, closestOrdering: &closestOrdering)
+                currentOrdering.removeLast()
+                nodesPruned += 1
+                continue
+            }
+
+            if stepMismatches(observed: observation, replay: replay) {
+                currentOrdering.append(placed)
+                updateClosest(currentOrdering, matchDepth: depth, closestMatchDepth: &closestMatchDepth, closestOrdering: &closestOrdering)
+                currentOrdering.removeLast()
+                nodesPruned += 1
+                continue
+            }
+
+            if observation.isSkipped == false, responsesMatch(observed: observation, replay: replay) == false {
+                currentOrdering.append(placed)
+                updateClosest(currentOrdering, matchDepth: depth, closestMatchDepth: &closestMatchDepth, closestOrdering: &closestOrdering)
+                currentOrdering.removeLast()
+                nodesPruned += 1
+                continue
+            }
+
+            // Match at this depth — descend.
+            let observationHash = observationHashes?[laneIndex][cursor] ?? 0
+            let prefixContribution = mixPositionDependent(observationHash, position: depth)
+            let oldCursorContribution = mixPositionDependent(UInt64(cursor), position: laneIndex)
+            let newCursorContribution = mixPositionDependent(UInt64(cursor &+ 1), position: laneIndex)
+
+            prefixHash ^= prefixContribution
+            cursorHash ^= oldCursorContribution ^ newCursorContribution
+            cursors[laneIndex] += 1
+            currentOrdering.append(placed)
+
+            let found = searchIncrementally(
+                prefix: prefix,
+                cursors: &cursors,
+                currentOrdering: &currentOrdering,
+                totalCommands: totalCommands,
+                closestMatchDepth: &closestMatchDepth,
+                closestOrdering: &closestOrdering,
+                replayPrefix: replayPrefix,
+                replayCommand: replayCommand,
+                checkOracle: checkOracle,
+                observationHashes: observationHashes,
+                prefixCache: &prefixCache,
+                cachingEnabled: cachingEnabled,
+                observationSetHash: observationSetHash,
+                prefixHash: &prefixHash,
+                cursorHash: &cursorHash,
+                cacheHits: &cacheHits,
+                cacheMisses: &cacheMisses,
+                nodesVisited: &nodesVisited,
+                nodesPruned: &nodesPruned
+            )
+
+            currentOrdering.removeLast()
+            cursors[laneIndex] -= 1
+            prefixHash ^= prefixContribution
+            cursorHash ^= oldCursorContribution ^ newCursorContribution
+
+            if found { return true }
+        }
+
+        // All children exhausted with no valid completion — insert into cache.
+        if cachingEnabled {
+            let cacheKey = mixCacheKey(observationSetHash, prefixHash, cursorHash)
+            prefixCache?.insert(cacheKey)
+        }
+
+        return false
     }
 
     // MARK: - Asynchronous
@@ -401,4 +599,27 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         let placed = closestOrdering[closestMatchDepth]
         return .notLinearizable(witness: Witness(laneIndex: placed.laneIndex, commandIndex: placed.commandIndex))
     }
+}
+
+// MARK: - Zobrist Mixing for Prefix Cache
+
+/// Position-dependent hash mixing using splitmix64, matching ``ZobristHash/contribution(at:_:)``.
+private func mixPositionDependent(_ value: UInt64, position: Int) -> UInt64 {
+    var bits = value ^ (UInt64(position) &* 0x9E37_79B9_7F4A_7C15)
+    bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
+    bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
+    bits ^= bits >> 31
+    return bits
+}
+
+/// Combines the three cache key components into a single 64-bit key.
+private func mixCacheKey(_ observationSetHash: UInt64, _ prefixHash: UInt64, _ cursorHash: UInt64) -> UInt64 {
+    var combined = observationSetHash
+    combined ^= prefixHash &* 0x9E37_79B9_7F4A_7C15
+    combined ^= cursorHash &* 0x517C_C1B7_2722_0A95
+    var bits = combined
+    bits = (bits ^ (bits >> 30)) &* 0xBF58_476D_1CE4_E5B9
+    bits = (bits ^ (bits >> 27)) &* 0x94D0_49BB_1331_11EB
+    bits ^= bits >> 31
+    return bits
 }

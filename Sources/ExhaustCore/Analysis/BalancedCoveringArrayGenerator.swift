@@ -41,16 +41,19 @@ package final class BalancedCoveringArrayGenerator {
 
     /// Creates a balanced covering array generator for pairwise coverage.
     ///
-    /// Values above ``maxDomainSize`` are clamped to prevent excessive memory allocation in pairwise bit vectors. When any clamped domain exceeds ``greedyThreshold``, the generator uses a deterministic spread instead of greedy pairwise optimization.
+    /// Values above ``maxDomainSize`` are clamped to prevent excessive memory allocation in pairwise bit vectors. When any clamped domain exceeds the greedy threshold, the generator uses a deterministic spread instead of greedy pairwise optimization.
     ///
-    /// - Parameter domainSizes: The number of distinct values for each parameter, in original order.
-    package init(domainSizes: [UInt64]) {
+    /// - Parameters:
+    ///   - domainSizes: The number of distinct values for each parameter, in original order.
+    ///   - greedyThreshold: Per-domain size above which the generator falls back to deterministic spread. Defaults to ``greedyThreshold``. Pass a higher value when the parameter count is small enough that the pairwise bit vector memory (proportional to `paramCount² × maxDomain²`) is acceptable.
+    package init(domainSizes: [UInt64], greedyThreshold: Int? = nil) {
+        let effectiveThreshold = greedyThreshold ?? Self.greedyThreshold
         paramCount = domainSizes.count
         let perParamCap = Self.maxDomainSize / max(paramCount, 1)
         self.domainSizes = domainSizes.map { min(Int($0), perParamCap) }
 
         let maxDomain = self.domainSizes.max() ?? 0
-        useGreedy = maxDomain <= Self.greedyThreshold
+        useGreedy = maxDomain <= effectiveThreshold
 
         guard useGreedy else {
             spreadStrides = self.domainSizes.enumerated().map { param, domain in
