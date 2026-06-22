@@ -1,3 +1,5 @@
+import ExhaustCore
+
 /// The per-probe operations that differ between the synchronous and async preemptive runners.
 ///
 /// Everything else (phase ordering, smoke, SCA coverage, sampling, reduction, and failure assembly) is shared in ``__ExhaustRuntime/runPreemptivePipeline(backend:config:)``. The synchronous backend runs commands directly on GCD threads; the async backend bridges each probe through a drain loop.
@@ -27,7 +29,9 @@ protocol PreemptiveBackend<Spec>: Sendable {
     func checkLinearizability(
         prefix: [Spec.Command],
         laneResponses: [[ObservedResponse<Spec.Command>]],
-        concurrentSpec: Spec
+        concurrentSpec: Spec,
+        observationHashes: [[UInt64]]?,
+        prefixCache: inout LinearizabilityPrefixCache?
     ) -> LinearizabilityResult
 
     /// Replays the reduced commands sequentially on a fresh spec to capture the expected (race-free) oracle state for a failure result.

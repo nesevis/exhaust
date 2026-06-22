@@ -1,3 +1,5 @@
+import ExhaustCore
+
 extension __ExhaustRuntime {
     /// A tagged command with its ChoiceSequence segment — the generation recipe that produced this command. The segment is a stable identity for cache fingerprinting: equal segments imply equal commands regardless of which lane they appear on.
     typealias TaggedCommandWithSegment<Command> = (marker: ScheduleMarker, command: Command, segment: ChoiceSequence)
@@ -45,6 +47,7 @@ extension __ExhaustRuntime {
 
         let identifySkips = backend.makeIdentifySkips()
         let lastFailingOutcome = UnsafeSendableBox<Preemptive.Outcome<Spec>?>(nil)
+        let prefixCacheBox = UnsafeSendableBox<LinearizabilityPrefixCache?>(nil)
         // Classifies one execution against linearizability — the single decision shared by the sampling/coverage property, the reduction probe, and failure confirmation.
         // Returns the failing outcome (and any response-level witness) for a genuine violation: a non-linearizable execution, or an oracle failure with no lane responses (invariant/exception/timeout, real by construction).
         // Returns nil when the execution passed the oracle or was confirmed linearizable (a false positive to skip). The prefix is taken from `taggedCommands` itself so the lane responses fed to the checker match the schedule being classified.
@@ -56,10 +59,13 @@ extension __ExhaustRuntime {
                 return (outcome, nil)
             }
             let prefixCommands = triples.filter(\.marker.isPrefix).map(\.command)
+            let observationHashes = computeObservationHashes(triples: triples, laneResponses: laneResponses)
             guard case let .notLinearizable(witness) = backend.checkLinearizability(
                 prefix: prefixCommands,
                 laneResponses: laneResponses,
-                concurrentSpec: concurrentSpec
+                concurrentSpec: concurrentSpec,
+                observationHashes: observationHashes,
+                prefixCache: &prefixCacheBox.value
             ) else {
                 return nil
             }
@@ -483,4 +489,52 @@ extension Collection {
     func strippingSegments<Command>() -> [(ScheduleMarker, Command)] where Element == __ExhaustRuntime.TaggedCommandWithSegment<Command> {
         map { ($0.marker, $0.command) }
     }
+}
+
+/// Computes per-observation fingerprints by combining each command's ChoiceSequence segment hash with its response outcome hash. Returns `nil` if any response has a non-hashable `.returned(Any)` outcome.
+///
+/// The triples carry the generation-time segment for each command. The lane responses carry the execution-time outcome for each command, grouped by lane. This function matches them by lane marker and per-lane position, producing `[[UInt64]]` with the same shape as `laneResponses`.
+private func computeObservationHashes<Command>(
+    triples: [__ExhaustRuntime.TaggedCommandWithSegment<Command>],
+    laneResponses: [[ObservedResponse<Command>]]
+) -> [[UInt64]]? {
+    var segmentsByLane: [UInt8: [ChoiceSequence]] = [:]
+    for triple in triples where triple.marker.isPrefix == false {
+        segmentsByLane[triple.marker.rawValue, default: []].append(triple.segment)
+    }
+
+    var result: [[UInt64]] = []
+    for laneArray in laneResponses {
+        guard let segments = segmentsByLane[laneArray.first?.lane ?? 0],
+              segments.count == laneArray.count
+        else {
+            return nil
+        }
+
+        var laneHashes: [UInt64] = []
+        for (index, response) in laneArray.enumerated() {
+            let segmentHash = ZobristHash.hash(of: segments[index])
+            let responseHash: UInt64
+            switch response.outcome {
+                case let .returned(value):
+                    guard let hashable = value as? AnyHashable else { return nil }
+                    responseHash = splitmix64(UInt64(bitPattern: Int64(hashable.hashValue)))
+                case .returnedVoid:
+                    responseHash = 0xA
+                case .skipped:
+                    responseHash = 0xB
+            }
+            laneHashes.append(segmentHash ^ responseHash)
+        }
+        result.append(laneHashes)
+    }
+    return result
+}
+
+private func splitmix64(_ seed: UInt64) -> UInt64 {
+    var value = seed
+    value = (value ^ (value >> 30)) &* 0xBF58_476D_1CE4_E5B9
+    value = (value ^ (value >> 27)) &* 0x94D0_49BB_1331_11EB
+    value ^= value >> 31
+    return value
 }

@@ -1,3 +1,20 @@
+/// Cross-run cache for the linearizability checker's prefix memoization.
+///
+/// Stores 64-bit Zobrist hashes of (observation set, prefix, cursor state) triples whose subtrees have been fully explored with no valid completion. Caller-owned: the reduction loop creates one cache at the start of a pass and feeds it to every ``LinearizabilityChecker/check(prefix:replayPrefix:replayCommand:checkOracle:observationHashes:prefixCache:)`` call within that pass.
+package struct LinearizabilityPrefixCache: Sendable {
+    package private(set) var entries: Set<UInt64> = []
+
+    package init() {}
+
+    package func contains(_ key: UInt64) -> Bool {
+        entries.contains(key)
+    }
+
+    package mutating func insert(_ key: UInt64) {
+        entries.insert(key)
+    }
+}
+
 /// Tests whether a concurrent execution's observed responses are consistent with some valid sequential ordering.
 ///
 /// The checker enumerates valid interleavings that preserve per-lane command order. For each ordering, it replays the commands via the caller's closures, compares per-step responses via ``structurallyEqual(_:_:)``, and checks the oracle against the concurrent execution's final state. If any ordering produces matching responses and passes the oracle, the execution is linearizable.
@@ -68,6 +85,24 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
     // MARK: - Synchronous
 
+    /// Checks linearizability without caching.
+    package func check(
+        prefix: [Command],
+        replayPrefix: ([Command]) -> Bool,
+        replayCommand: (Command) -> ReplayResponse?,
+        checkOracle: () -> Bool
+    ) -> Result {
+        var noCache: LinearizabilityPrefixCache?
+        return check(
+            prefix: prefix,
+            replayPrefix: replayPrefix,
+            replayCommand: replayCommand,
+            checkOracle: checkOracle,
+            observationHashes: nil,
+            prefixCache: &noCache
+        )
+    }
+
     /// Checks linearizability using synchronous replay closures.
     ///
     /// - Parameters:
@@ -75,11 +110,15 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     ///   - replayPrefix: Replays all prefix commands on a fresh sequential instance. Returns `false` if any prefix command fails.
     ///   - replayCommand: Replays a single concurrent command on the sequential instance. Returns `nil` if the command threw a non-skip error.
     ///   - checkOracle: Checks whether the sequential instance's final state matches the concurrent execution's final state.
+    ///   - observationHashes: Per-observation fingerprints (same shape as ``laneObservations``), precomputed from ChoiceSequence segments and response outcomes. `nil` disables caching.
+    ///   - prefixCache: Cross-run cache of exhausted subtrees. `nil` disables caching.
     package func check(
         prefix: [Command],
         replayPrefix: ([Command]) -> Bool,
         replayCommand: (Command) -> ReplayResponse?,
-        checkOracle: () -> Bool
+        checkOracle: () -> Bool,
+        observationHashes _: [[UInt64]]?,
+        prefixCache _: inout LinearizabilityPrefixCache?
     ) -> Result {
         let laneCount = laneObservations.count
         guard laneCount > 0 else {

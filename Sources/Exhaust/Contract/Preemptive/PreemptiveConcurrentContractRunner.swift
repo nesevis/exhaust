@@ -241,19 +241,25 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
     func checkLinearizability(
         prefix: [Spec.Command],
         laneResponses: [[ObservedResponse<Spec.Command>]],
-        concurrentSpec: Spec
+        concurrentSpec: Spec,
+        observationHashes: [[UInt64]]?,
+        prefixCache: inout LinearizabilityPrefixCache?
     ) -> LinearizabilityResult {
         Self.runLinearizabilityCheck(
             prefix: prefix,
             laneResponses: laneResponses,
-            concurrentSpec: concurrentSpec
+            concurrentSpec: concurrentSpec,
+            observationHashes: observationHashes,
+            prefixCache: &prefixCache
         )
     }
 
     static func runLinearizabilityCheck(
         prefix: [Spec.Command],
         laneResponses: [[ObservedResponse<Spec.Command>]],
-        concurrentSpec: Spec
+        concurrentSpec: Spec,
+        observationHashes: [[UInt64]]?,
+        prefixCache: inout LinearizabilityPrefixCache?
     ) -> LinearizabilityResult {
         var replaySpec: Spec?
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
@@ -278,7 +284,9 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             checkOracle: {
                 guard let spec = replaySpec else { return false }
                 return concurrentSpec.oracleCheck(spec.systemUnderTest)
-            }
+            },
+            observationHashes: observationHashes,
+            prefixCache: &prefixCache
         )
         return makeLinearizabilityResult(result, laneObservations: laneResponses)
     }

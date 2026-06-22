@@ -11,7 +11,7 @@
 package enum ZobristHash {
     /// Computes a Zobrist hash: XOR of position-dependent contributions for each element.
     /// Enables O(1) incremental updates when single elements change.
-    static func hash(of sequence: ChoiceSequence) -> UInt64 {
+    package static func hash(of sequence: ChoiceSequence) -> UInt64 {
         sequence.withUnsafeBufferPointer { buffer in
             var hash: UInt64 = 0
             var i = 0

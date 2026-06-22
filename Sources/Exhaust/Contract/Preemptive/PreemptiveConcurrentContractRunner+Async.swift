@@ -254,7 +254,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
     func checkLinearizability(
         prefix: [Spec.Command],
         laneResponses: [[ObservedResponse<Spec.Command>]],
-        concurrentSpec: Spec
+        concurrentSpec: Spec,
+        observationHashes _: [[UInt64]]?,
+        prefixCache _: inout LinearizabilityPrefixCache?
     ) -> LinearizabilityResult {
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
         nonisolated(unsafe) let unsafeSpec = concurrentSpec
