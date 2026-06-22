@@ -88,74 +88,68 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
-        let prefixCommands = taggedCommands.filter(\.0.isPrefix)
-        let concurrentCommands = taggedCommands.filter { $0.0.isPrefix == false }
-
-        let prefixOnConcurrent = runSequentially(prefixCommands.map(\.1), on: concurrentSpec)
+        let prefixOnConcurrent = runSequentially(taggedCommands, selectPrefix: true, on: concurrentSpec)
         if prefixOnConcurrent.succeeded == false {
             return Preemptive.Outcome(passed: false, timedOut: prefixOnConcurrent.timedOut, laneResponses: nil, concurrentSpec: nil)
         }
-        let prefixOnSequential = runSequentially(prefixCommands.map(\.1), on: sequentialSpec)
+        let prefixOnSequential = runSequentially(taggedCommands, selectPrefix: true, on: sequentialSpec)
         if prefixOnSequential.succeeded == false {
             return Preemptive.Outcome(passed: false, timedOut: prefixOnSequential.timedOut, laneResponses: nil, concurrentSpec: nil)
         }
-        let concurrentOnSequential = runSequentially(concurrentCommands.map(\.1), on: sequentialSpec)
+        let concurrentOnSequential = runSequentially(taggedCommands, selectPrefix: false, on: sequentialSpec)
         if concurrentOnSequential.succeeded == false {
             return Preemptive.Outcome(passed: false, timedOut: concurrentOnSequential.timedOut, laneResponses: nil, concurrentSpec: nil)
         }
 
-        let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
-        let laneCount = laneGroups.count
-        let perLaneResponses = (0 ..< laneCount).map { _ in SendableBox<[ObservedResponse<Spec.Command>]>([]) }
-        let laneIndexByRawValue: [UInt8: Int] = {
-            var mapping: [UInt8: Int] = [:]
-            for (index, rawValue) in laneGroups.keys.sorted().enumerated() {
-                mapping[rawValue] = index
+        var laneIDs: [UInt8] = []
+        for (marker, _) in taggedCommands where marker.isPrefix == false {
+            if laneIDs.contains(marker.rawValue) == false {
+                laneIDs.append(marker.rawValue)
             }
-            return mapping
-        }()
+        }
+        laneIDs.sort()
 
-        let commandFailed = SendableBox(false)
-        let timedOut = SendableBox(false)
-        let caughtException = SendableBox<NSException?>(nil)
+        let perLaneResponses = laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
+        let commandFailed = UnsafeSendableBox(false)
+        let timedOut = UnsafeSendableBox(false)
+        let caughtException = UnsafeSendableBox<NSException?>(nil)
         let group = DispatchGroup()
-        for (rawValue, laneCommands) in laneGroups {
-            let laneIndex = laneIndexByRawValue[rawValue]!
-            let responseBox = perLaneResponses[laneIndex]
-            let laneID = rawValue
+
+        for (offset, laneID) in laneIDs.enumerated() {
+            let responseBox = perLaneResponses[offset]
             group.enter()
             DispatchQueue.global().async {
                 var exception: NSException?
                 nonisolated(unsafe) let spec = concurrentSpec
                 let succeeded = exhaust_runCatchingObjCException({
-                    let completed: Void? = awaitOrTimeout("lane") {
-                        for (_, command) in laneCommands {
+                    let responses: [ObservedResponse<Spec.Command>]? = awaitOrTimeout("lane") {
+                        var results: [ObservedResponse<Spec.Command>] = []
+                        for (marker, command) in taggedCommands where marker.rawValue == laneID {
                             if commandFailed.value { break }
                             do {
                                 let response = try await spec.run(command)
                                 let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
-                                responseBox.withValue { responses in
-                                    responses.append(ObservedResponse<Spec.Command>(
-                                        lane: laneID,
-                                        command: command,
-                                        outcome: outcome
-                                    ))
-                                }
+                                results.append(ObservedResponse<Spec.Command>(
+                                    lane: laneID,
+                                    command: command,
+                                    outcome: outcome
+                                ))
                             } catch is ContractSkip {
-                                responseBox.withValue { responses in
-                                    responses.append(ObservedResponse<Spec.Command>(
-                                        lane: laneID,
-                                        command: command,
-                                        outcome: .skipped
-                                    ))
-                                }
+                                results.append(ObservedResponse<Spec.Command>(
+                                    lane: laneID,
+                                    command: command,
+                                    outcome: .skipped
+                                ))
                             } catch {
                                 commandFailed.value = true
                                 break
                             }
                         }
+                        return results
                     }
-                    if completed == nil {
+                    if let responses {
+                        responseBox.value = responses
+                    } else {
                         commandFailed.value = true
                         timedOut.value = true
                     }
@@ -166,9 +160,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 group.leave()
             }
         }
+
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
-                commandFailed.value = true
                 return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
             }
         } else {
@@ -225,12 +219,44 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
     @discardableResult
     func runSequentially(_ commands: [Spec.Command], on spec: Spec) -> SequentialOutcome {
         var exception: NSException?
-        let failed = SendableBox(false)
-        let timedOut = SendableBox(false)
+        let failed = UnsafeSendableBox(false)
+        let timedOut = UnsafeSendableBox(false)
         nonisolated(unsafe) let spec = spec
         exhaust_runCatchingObjCException({
             let completed: Void? = awaitOrTimeout("sequential") {
                 for command in commands {
+                    do {
+                        try await spec.run(command)
+                    } catch is ContractSkip {
+                        continue
+                    } catch {
+                        failed.value = true
+                        break
+                    }
+                }
+            }
+            if completed == nil {
+                failed.value = true
+                timedOut.value = true
+            }
+        }, &exception)
+        return SequentialOutcome(succeeded: exception == nil && failed.value == false, timedOut: timedOut.value)
+    }
+
+    /// Runs tagged commands sequentially on a spec, filtering by marker type to avoid intermediate array allocations.
+    @discardableResult
+    func runSequentially(
+        _ taggedCommands: [(ScheduleMarker, Spec.Command)],
+        selectPrefix: Bool,
+        on spec: Spec
+    ) -> SequentialOutcome {
+        var exception: NSException?
+        let failed = UnsafeSendableBox(false)
+        let timedOut = UnsafeSendableBox(false)
+        nonisolated(unsafe) let spec = spec
+        exhaust_runCatchingObjCException({
+            let completed: Void? = awaitOrTimeout("sequential") {
+                for (marker, command) in taggedCommands where marker.isPrefix == selectPrefix {
                     do {
                         try await spec.run(command)
                     } catch is ContractSkip {

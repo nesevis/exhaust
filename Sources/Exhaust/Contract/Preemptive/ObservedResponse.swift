@@ -59,7 +59,6 @@ extension LinearizabilityChecker {
             lane.map { response in
                 Observation(
                     command: response.command,
-                    commandDescription: "\(response.command)",
                     returnValue: response.outcome.returnValue,
                     isSkipped: response.outcome.isSkipped
                 )

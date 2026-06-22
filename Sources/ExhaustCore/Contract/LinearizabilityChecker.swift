@@ -28,18 +28,15 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     /// One command's observed result during a concurrent execution, recorded per-lane.
     package struct Observation: @unchecked Sendable {
         package let command: Command
-        package let commandDescription: String
         package let returnValue: Any?
         package let isSkipped: Bool
 
         package init(
             command: Command,
-            commandDescription: String,
             returnValue: Any?,
             isSkipped: Bool
         ) {
             self.command = command
-            self.commandDescription = commandDescription
             self.returnValue = returnValue
             self.isSkipped = isSkipped
         }
@@ -531,8 +528,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     }
 
     private func responsesMatch(observed: Observation, replay: ReplayResponse) -> Bool {
-        // The same command is replayed, so for macro-generated specs (whose description derives from the command alone) the descriptions always match and this is a no-op. It guards a hand-written `run` whose description varies with state.
-        if observed.commandDescription != replay.commandDescription {
+        if replay.commandDescription != "\(observed.command)" {
             return false
         }
 

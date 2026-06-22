@@ -158,13 +158,13 @@ private func verdict(
 }
 
 private func push(_ value: Int) -> Observation {
-    Observation(command: .push(value), commandDescription: "push(\(value))", returnValue: nil, isSkipped: false)
+    Observation(command: .push(value), returnValue: nil, isSkipped: false)
 }
 
 private func popReturning(_ value: Int) -> Observation {
-    Observation(command: .pop, commandDescription: "pop", returnValue: value, isSkipped: false)
+    Observation(command: .pop, returnValue: value, isSkipped: false)
 }
 
 private func popSkipped() -> Observation {
-    Observation(command: .pop, commandDescription: "pop", returnValue: nil, isSkipped: true)
+    Observation(command: .pop, returnValue: nil, isSkipped: true)
 }
