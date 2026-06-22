@@ -53,10 +53,18 @@ extension __ExhaustRuntime {
             if outcome.passed {
                 return nil
             }
-            guard let laneResponses = outcome.laneResponses, let concurrentSpec = outcome.concurrentSpec else {
+            guard let laneResponses = outcome.laneResponses,
+                  let concurrentSpec = outcome.concurrentSpec
+            else {
                 return (outcome, nil)
             }
-            let hashes = tree.flatMap { computeObservationHashesFromTree(probeTree: $0, taggedCommands: taggedCommands, laneResponses: laneResponses) }
+            let hashes = tree.flatMap {
+                computeObservationHashesFromTree(
+                    probeTree: $0,
+                    taggedCommands: taggedCommands,
+                    laneResponses: laneResponses
+                )
+            }
             guard case let .notLinearizable(witness) = backend.checkLinearizability(
                 taggedCommands: taggedCommands,
                 laneResponses: laneResponses,
@@ -494,41 +502,42 @@ private func computeObservationHashesFromTree<Command>(
     guard let subtrees = ChoiceTree.findSequenceElements(in: probeTree) else { return nil }
 
     var prefixFingerprint: UInt64 = 0
-    for (index, pair) in taggedCommands.enumerated() where pair.0.isPrefix {
-        let subtree = index < subtrees.count ? subtrees[index] : .just
-        prefixFingerprint ^= ZobristHash.mix(subtree.hashValue.bitPattern64, at: index)
+    var result = laneResponses.map { lane in
+        var hashes: [UInt64] = []
+        hashes.reserveCapacity(lane.count)
+        return hashes
     }
+    var laneCursors = Array(repeating: 0, count: laneResponses.count)
 
-    var result: [[UInt64]] = []
-    result.reserveCapacity(laneResponses.count)
-    for laneArray in laneResponses {
-        guard let laneID = laneArray.first?.lane else {
-            result.append([])
+    for index in 0 ..< taggedCommands.count {
+        let marker = taggedCommands[index].0
+        let subtreeHash = subtrees[index].hashValue.bitPattern64
+
+        if marker.isPrefix {
+            prefixFingerprint ^= ZobristHash.mix(subtreeHash, at: index)
             continue
         }
-        var subtreeIndex = 0
-        var laneHashes: [UInt64] = []
-        laneHashes.reserveCapacity(laneArray.count)
-        for (index, pair) in taggedCommands.enumerated() where pair.0.isPrefix == false && pair.0.rawValue == laneID {
-            let subtree = index < subtrees.count ? subtrees[index] : .just
-            guard subtreeIndex < laneArray.count else { return nil }
-            let response = laneArray[subtreeIndex]
-            let subtreeHash = ZobristHash.mix(subtree.hashValue.bitPattern64, at: 0)
-            let responseHash: UInt64
-            switch response.outcome {
-                case let .returned(value):
-                    guard let hashable = value as? AnyHashable else { return nil }
-                    responseHash = ZobristHash.mix(hashable.hashValue.bitPattern64, at: 0)
-                case .returnedVoid:
-                    responseHash = 0xA
-                case .skipped:
-                    responseHash = 0xB
-            }
-            laneHashes.append(subtreeHash ^ responseHash)
-            subtreeIndex += 1
+
+        guard let laneIndex = laneResponses.firstIndex(where: { $0.first?.lane == marker.rawValue }) else { continue }
+        let cursor = laneCursors[laneIndex]
+        guard cursor < laneResponses[laneIndex].count else { return nil }
+        let response = laneResponses[laneIndex][cursor]
+        let responseHash: UInt64
+        switch response.outcome {
+            case let .returned(value):
+                guard let hashable = value as? AnyHashable else { return nil }
+                responseHash = ZobristHash.mix(hashable.hashValue.bitPattern64, at: 0)
+            case .returnedVoid:
+                responseHash = 0xA
+            case .skipped:
+                responseHash = 0xB
         }
-        guard subtreeIndex == laneArray.count else { return nil }
-        result.append(laneHashes)
+        result[laneIndex].append(ZobristHash.mix(subtreeHash, at: 0) ^ responseHash)
+        laneCursors[laneIndex] = cursor + 1
+    }
+
+    for index in 0 ..< laneResponses.count {
+        guard laneCursors[index] == laneResponses[index].count else { return nil }
     }
     return ObservationHashResult(observationHashes: result, prefixFingerprint: prefixFingerprint)
 }
