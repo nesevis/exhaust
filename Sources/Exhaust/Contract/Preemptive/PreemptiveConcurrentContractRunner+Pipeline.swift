@@ -96,8 +96,8 @@ extension __ExhaustRuntime {
         /// Confirms whether `input` is a genuine failure by re-executing it up to ``Preemptive/finalConfirmationRepetitions`` times and accepting the first reproduction classified non-linearizable.
         /// Preemptive execution is non-deterministic, so a single re-execution can draw a passing (or merely linearizable) interleaving and miss the race. This is the terminal confirmation (once per reported failure, not per reduction probe), so it uses the larger repetition budget: a timing-fragile race that the reduction loop's ``Preemptive/confirmationRepetitions`` probes could not re-trigger often still reproduces here, attaching the actual-state line and witness to the report.
         /// Returns the confirming execution's outcome (so its lane responses and final state render coherently with the verdict) and the response-level witness, or `nil` when no run reproduced a genuine violation.
-        func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)]) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?)? {
-            for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions {
+        func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)], discoveryIterations: Int) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?)? {
+            for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
                 if let confirmed = classifyFailure(input, nil, backend.execute(input)) {
                     return confirmed
                 }
@@ -130,8 +130,10 @@ extension __ExhaustRuntime {
         func reduceConfirmedFailure(
             taggedCommands: [(ScheduleMarker, Spec.Command)],
             tree: ChoiceTree,
-            pruneSeed: UInt64
+            pruneSeed: UInt64,
+            discoveryIterations: Int
         ) -> (reduced: [(ScheduleMarker, Spec.Command)], reductionInvocations: Int, witness: ResponseWitness?, reportedOutcome: Preemptive.Outcome<Spec>?) {
+            let repetitions = PreemptiveReduction.confirmationRepetitions(discoveryIterations: discoveryIterations)
             // Prune commands whose preconditions were not met: a skipped command is a no-op, so removing it up front keeps reduction on the minimal command set and the reported counterexample carries no skipped commands. The prune is reverted if removing the skips dissolves the violation.
             let (prunedCommands, prunedTree) = pruneSkippedCommands(
                 value: taggedCommands,
@@ -153,7 +155,7 @@ extension __ExhaustRuntime {
                 maxStalls: 2,
                 deadlineNanoseconds: 7_500_000_000,
                 rematerialize: true,
-                repetitions: PreemptiveReduction.confirmationRepetitions,
+                repetitions: repetitions,
                 tuning: noRelax,
                 execute: linearizableProbe
             )
@@ -167,7 +169,7 @@ extension __ExhaustRuntime {
                 maxStalls: 2,
                 deadlineNanoseconds: 7_500_000_000,
                 rematerialize: true,
-                repetitions: PreemptiveReduction.confirmationRepetitions,
+                repetitions: repetitions,
                 tuning: noRelax,
                 execute: linearizableProbe
             )
@@ -175,10 +177,8 @@ extension __ExhaustRuntime {
             stats.merge(combinedResult.stats)
             report.applyReductionStats(stats)
 
-//            print("DBG: Reduction stats laneCollapse: \(collapseResult.stats) deletion: \(combinedResult.stats)")
-
-            // The combined output is already validated as non-linearizable by the pass (every accepted probe, deletion or collapse, kept it failing under linearizableExecute). Report it unconditionally — never discard the reduction. confirmRealFailure is evidence-only here: a reproducing run supplies coherent lane responses and actual state; a failure to reproduce leaves the evidence empty (the report shows expected-state only) rather than borrowing the original discovering run's, whose schedule no longer matches.
-            let reportedOutcome = confirmRealFailure(combinedResult.output)
+            // The combined output is already validated as non-linearizable by the pass (every accepted probe, deletion or collapse, kept it failing under linearizableExecute). Report it unconditionally — never discard the reduction. confirmRealFailure is evidence-only here: a reproducing run supplies coherent lane responses and actual state; a failure to reproduce leaves the evidence empty (the report shows expected-state only).
+            let reportedOutcome = confirmRealFailure(combinedResult.output, discoveryIterations: discoveryIterations)
             // Present prefix-first. The runner runs all prefix commands sequentially before any lane (execute() partitions by marker, not array position), so reordering is execution-equivalent and makes the execution trace honest.
             let reduced = combinedResult.output.sorted { $0.0.isPrefix && $1.0.isPrefix == false }
 
@@ -333,7 +333,8 @@ extension __ExhaustRuntime {
                 let reduction = reduceConfirmedFailure(
                     taggedCommands: taggedCommands,
                     tree: tree,
-                    pruneSeed: UInt64(coverageIterations)
+                    pruneSeed: UInt64(coverageIterations),
+                    discoveryIterations: coverageIterations
                 )
                 // Reduction probes run through reduceSinglePass's own counter, not the shared invocationCounter, so the three buckets are already disjoint: coverage takes the shared counter, sampling is zero, reduction its own count. (setConcurrentInvocations assumes reduction flows through the shared counter, which would drive coverage negative here.)
                 return assembleReducedFailure(
@@ -415,7 +416,8 @@ extension __ExhaustRuntime {
                     let reduction = reduceConfirmedFailure(
                         taggedCommands: taggedCommands,
                         tree: tree,
-                        pruneSeed: UInt64(absoluteIteration)
+                        pruneSeed: UInt64(absoluteIteration),
+                        discoveryIterations: coverageInvocations + samplingIteration
                     )
                     let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
                     return assembleReducedFailure(

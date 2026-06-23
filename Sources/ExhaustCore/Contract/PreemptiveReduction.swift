@@ -2,11 +2,33 @@
 ///
 /// The two preemptive backends (synchronous and async) differ only in how a single probe runs. The reduction algorithm and its result type are backend-independent and live here for whole-module optimization.
 package enum PreemptiveReduction {
-    /// Number of times each reduction probe re-executes the concurrent schedule to probabilistically confirm the race still reproduces. Runs once per candidate inside the reduction loop, so this is kept small.
-    package static let confirmationRepetitions = 25
+    /// Maximum confirmation repetitions, used for failures discovered within 1,000 iterations.
+    package static let confirmationRepetitionsCeiling = 100
 
-    /// Number of times the terminal confirmation re-executes the reported schedule to reproduce the race for evidence and final confirmation. This runs at most once per reported failure (not per reduction probe), so it can afford far more attempts than ``confirmationRepetitions``.
-    package static let finalConfirmationRepetitions = 150
+    /// Minimum confirmation repetitions, used for failures discovered at or beyond 10,000 iterations.
+    package static let confirmationRepetitionsFloor = 25
+
+    /// Computes the number of confirmation repetitions per reduction probe, scaled by how quickly the failure was discovered.
+    ///
+    /// Failures found within 1,000 total iterations (coverage + sampling) get ``confirmationRepetitionsCeiling`` repetitions. The count scales linearly down to ``confirmationRepetitionsFloor`` by 10,000 iterations, then stays at the floor. Races that reproduce easily (low iteration count) get more attempts per probe, so the reducer can confidently strip commands. Races that took many iterations to surface are inherently harder to reproduce, and additional repetitions beyond the floor yield diminishing returns against the per-probe cost.
+    package static func confirmationRepetitions(discoveryIterations: Int) -> Int {
+        if discoveryIterations <= 1000 {
+            return confirmationRepetitionsCeiling
+        }
+        if discoveryIterations >= 10000 {
+            return confirmationRepetitionsFloor
+        }
+        let range = confirmationRepetitionsCeiling - confirmationRepetitionsFloor
+        let scaled = range * (discoveryIterations - 1000) / (10000 - 1000)
+        return confirmationRepetitionsCeiling - scaled
+    }
+
+    /// Computes the number of terminal confirmation repetitions, scaled by how quickly the failure was discovered.
+    ///
+    /// The terminal confirmation runs once per reported failure (not per reduction probe), so it can afford more attempts than the per-probe count. Uses 3x the per-probe count, floored at 150 — easy races get up to 300 attempts to attach the actual-state evidence line, while hard races stay at 150 (where more attempts would be wasted anyway).
+    package static func finalConfirmationRepetitions(discoveryIterations: Int) -> Int {
+        max(150, confirmationRepetitions(discoveryIterations: discoveryIterations) * 3)
+    }
 
     /// Default command limit for `.threads` contracts.
     package static let defaultCommandLimit = 20
