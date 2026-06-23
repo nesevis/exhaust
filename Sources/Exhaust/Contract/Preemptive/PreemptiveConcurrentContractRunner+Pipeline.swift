@@ -24,7 +24,7 @@ extension __ExhaustRuntime {
         }
 
         let commandGen = Spec.commandGenerator.gen
-        let commandLimit = config.commandLimit ?? Preemptive.defaultCommandLimit
+        let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
         guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
             deferredIssues.append("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure.")
             finalizeReport()
@@ -97,7 +97,7 @@ extension __ExhaustRuntime {
         /// Preemptive execution is non-deterministic, so a single re-execution can draw a passing (or merely linearizable) interleaving and miss the race. This is the terminal confirmation (once per reported failure, not per reduction probe), so it uses the larger repetition budget: a timing-fragile race that the reduction loop's ``Preemptive/confirmationRepetitions`` probes could not re-trigger often still reproduces here, attaching the actual-state line and witness to the report.
         /// Returns the confirming execution's outcome (so its lane responses and final state render coherently with the verdict) and the response-level witness, or `nil` when no run reproduced a genuine violation.
         func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)]) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?)? {
-            for _ in 0 ..< Preemptive.finalConfirmationRepetitions {
+            for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions {
                 if let confirmed = classifyFailure(input, nil, backend.execute(input)) {
                     return confirmed
                 }
@@ -145,7 +145,7 @@ extension __ExhaustRuntime {
 
             // Pass 1: lane collapse. Moves concurrent commands into the sequential prefix, reducing the number of lanes and the interleaving space before the checker-heavy deletion pass. Each accepted collapse self-validates as non-linearizable under linearizableProbe.
             let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
-            let collapseResult = Preemptive.reduceSinglePass(
+            let collapseResult = PreemptiveReduction.reduceSinglePass(
                 generator: sequenceGen,
                 tree: prunedTree,
                 output: prunedCommands,
@@ -153,13 +153,13 @@ extension __ExhaustRuntime {
                 maxStalls: 2,
                 deadlineNanoseconds: 7_500_000_000,
                 rematerialize: true,
-                repetitions: Preemptive.confirmationRepetitions,
+                repetitions: PreemptiveReduction.confirmationRepetitions,
                 tuning: noRelax,
                 execute: linearizableProbe
             )
 
             // Pass 2: deletion and value reduction on the collapsed schedule. The tighter interleaving space (fewer concurrent commands) makes each linearizability check cheaper and the prefix cache more effective — fewer distinct observation sets, more cross-check hits.
-            let combinedResult = Preemptive.reduceSinglePass(
+            let combinedResult = PreemptiveReduction.reduceSinglePass(
                 generator: sequenceGen,
                 tree: collapseResult.tree,
                 output: collapseResult.output,
@@ -167,7 +167,7 @@ extension __ExhaustRuntime {
                 maxStalls: 2,
                 deadlineNanoseconds: 7_500_000_000,
                 rematerialize: true,
-                repetitions: Preemptive.confirmationRepetitions,
+                repetitions: PreemptiveReduction.confirmationRepetitions,
                 tuning: noRelax,
                 execute: linearizableProbe
             )
@@ -484,60 +484,4 @@ extension __ExhaustRuntime {
         )
         return renderFailure(input, trace: trace, context: failureContext)
     }
-}
-
-private struct ObservationHashResult {
-    let observationHashes: [[UInt64]]
-    let prefixFingerprint: UInt64
-}
-
-/// Computes per-observation fingerprints from the probe's own ChoiceTree, hashing each command's subtree directly rather than flattening to a ChoiceSequence.
-///
-/// Contracts don't materialize picks, so each element subtree in the tree's `.sequence` node is a stable structural identity for the command that was generated from it. The prefix fingerprint is an XOR of prefix commands' subtree hashes, so the linearizability cache distinguishes probes that differ only in their prefix. Returns `nil` if any response has a non-hashable `.returned(Any)` outcome or the tree has no `.sequence` node.
-private func computeObservationHashesFromTree<Command>(
-    probeTree: ChoiceTree,
-    taggedCommands: [(ScheduleMarker, Command)],
-    laneResponses: [[ObservedResponse<Command>]]
-) -> ObservationHashResult? {
-    guard let subtrees = ChoiceTree.findSequenceElements(in: probeTree) else { return nil }
-
-    var prefixFingerprint: UInt64 = 0
-    var result = laneResponses.map { lane in
-        var hashes: [UInt64] = []
-        hashes.reserveCapacity(lane.count)
-        return hashes
-    }
-    var laneCursors = Array(repeating: 0, count: laneResponses.count)
-
-    for index in 0 ..< taggedCommands.count {
-        let marker = taggedCommands[index].0
-        let subtreeHash = subtrees[index].hashValue.bitPattern64
-
-        if marker.isPrefix {
-            prefixFingerprint ^= ZobristHash.mix(subtreeHash, at: index)
-            continue
-        }
-
-        guard let laneIndex = laneResponses.firstIndex(where: { $0.first?.lane == marker.rawValue }) else { continue }
-        let cursor = laneCursors[laneIndex]
-        guard cursor < laneResponses[laneIndex].count else { return nil }
-        let response = laneResponses[laneIndex][cursor]
-        let responseHash: UInt64
-        switch response.outcome {
-            case let .returned(value):
-                guard let hashable = value as? AnyHashable else { return nil }
-                responseHash = ZobristHash.mix(hashable.hashValue.bitPattern64, at: 0)
-            case .returnedVoid:
-                responseHash = 0xA
-            case .skipped:
-                responseHash = 0xB
-        }
-        result[laneIndex].append(ZobristHash.mix(subtreeHash, at: 0) ^ responseHash)
-        laneCursors[laneIndex] = cursor + 1
-    }
-
-    for index in 0 ..< laneResponses.count {
-        guard laneCursors[index] == laneResponses[index].count else { return nil }
-    }
-    return ObservationHashResult(observationHashes: result, prefixFingerprint: prefixFingerprint)
 }
