@@ -118,10 +118,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
-        let prefixCommands = taggedCommands.filter(\.0.isPrefix)
-        let concurrentCommands = taggedCommands.filter { $0.0.isPrefix == false }
-
-        for (_, command) in prefixCommands {
+        for (marker, command) in taggedCommands where marker.isPrefix {
             guard runCommandCatchingObjC(command, on: concurrentSpec) else {
                 return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
             }
@@ -130,56 +127,46 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             }
         }
 
-        for (_, command) in concurrentCommands {
+        var laneIDs: [UInt8] = []
+        for (marker, command) in taggedCommands where marker.isPrefix == false {
+            if laneIDs.contains(marker.rawValue) == false {
+                laneIDs.append(marker.rawValue)
+            }
             guard runCommandCatchingObjC(command, on: sequentialSpec) else {
                 return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
             }
         }
+        laneIDs.sort()
 
-        let laneGroups = Dictionary(grouping: concurrentCommands) { $0.0.rawValue }
-        let laneCount = laneGroups.count
-        let perLaneResponses = (0 ..< laneCount).map { _ in SendableBox<[ObservedResponse<Spec.Command>]>([]) }
-        let laneIndexByRawValue: [UInt8: Int] = {
-            var mapping: [UInt8: Int] = [:]
-            for (index, rawValue) in laneGroups.keys.sorted().enumerated() {
-                mapping[rawValue] = index
-            }
-            return mapping
-        }()
-
-        let commandFailed = SendableBox(false)
-        let caughtException = SendableBox<NSException?>(nil)
+        let perLaneResponses = laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
+        let commandFailed = UnsafeSendableBox(false)
+        let caughtException = UnsafeSendableBox<NSException?>(nil)
         let group = DispatchGroup()
-        for (rawValue, laneCommands) in laneGroups {
-            let laneIndex = laneIndexByRawValue[rawValue]!
-            let responseBox = perLaneResponses[laneIndex]
-            let laneID = rawValue
+
+        nonisolated(unsafe) let unsafeConcurrentSpec = concurrentSpec
+        for (offset, laneID) in laneIDs.enumerated() {
+            let responseBox = perLaneResponses[offset]
             group.enter()
             DispatchQueue.global().async {
+                var localResponses: [ObservedResponse<Spec.Command>] = []
                 var exception: NSException?
                 let succeeded = exhaust_runCatchingObjCException({
-                    for (_, command) in laneCommands {
+                    for (marker, command) in taggedCommands where marker.rawValue == laneID {
                         if commandFailed.value { break }
                         do {
-                            let response = try concurrentSpec.run(command)
+                            let response = try unsafeConcurrentSpec.run(command)
                             let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
-                            responseBox.withValue { responses in
-                                responses.append(ObservedResponse<Spec.Command>(
-                                    lane: laneID,
-                                    command: command,
-                                    commandDescription: response.commandDescription,
-                                    outcome: outcome
-                                ))
-                            }
+                            localResponses.append(ObservedResponse<Spec.Command>(
+                                lane: laneID,
+                                command: command,
+                                outcome: outcome
+                            ))
                         } catch is ContractSkip {
-                            responseBox.withValue { responses in
-                                responses.append(ObservedResponse<Spec.Command>(
-                                    lane: laneID,
-                                    command: command,
-                                    commandDescription: command.description,
-                                    outcome: .skipped
-                                ))
-                            }
+                            localResponses.append(ObservedResponse<Spec.Command>(
+                                lane: laneID,
+                                command: command,
+                                outcome: .skipped
+                            ))
                         } catch {
                             commandFailed.value = true
                             break
@@ -189,12 +176,13 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                 if succeeded == false {
                     caughtException.value = exception
                 }
+                responseBox.value = localResponses
                 group.leave()
             }
         }
+
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
-                commandFailed.value = true
                 return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
             }
         } else {
@@ -239,31 +227,41 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
     }
 
     func checkLinearizability(
-        prefix: [Spec.Command],
+        taggedCommands: [(ScheduleMarker, Spec.Command)],
         laneResponses: [[ObservedResponse<Spec.Command>]],
-        concurrentSpec: Spec
+        concurrentSpec: Spec,
+        observationHashes: [[UInt64]]?,
+        prefixFingerprint: UInt64,
+        prefixCache: inout LinearizabilityPrefixCache?
     ) -> LinearizabilityResult {
         Self.runLinearizabilityCheck(
-            prefix: prefix,
+            taggedCommands: taggedCommands,
             laneResponses: laneResponses,
-            concurrentSpec: concurrentSpec
+            concurrentSpec: concurrentSpec,
+            observationHashes: observationHashes,
+            prefixFingerprint: prefixFingerprint,
+            prefixCache: &prefixCache
         )
     }
 
     static func runLinearizabilityCheck(
-        prefix: [Spec.Command],
+        taggedCommands: [(ScheduleMarker, Spec.Command)],
         laneResponses: [[ObservedResponse<Spec.Command>]],
-        concurrentSpec: Spec
+        concurrentSpec: Spec,
+        observationHashes: [[UInt64]]?,
+        prefixFingerprint: UInt64,
+        prefixCache: inout LinearizabilityPrefixCache?
     ) -> LinearizabilityResult {
         var replaySpec: Spec?
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
         let result = checker.check(
-            prefix: prefix,
-            replayPrefix: { prefixCommands in
+            replayPrefix: {
                 let fresh = Spec()
-                for command in prefixCommands {
+                for (marker, command) in taggedCommands where marker.isPrefix {
                     do {
                         try fresh.run(command)
+                    } catch is ContractSkip {
+                        continue
                     } catch {
                         return false
                     }
@@ -278,7 +276,10 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             checkOracle: {
                 guard let spec = replaySpec else { return false }
                 return concurrentSpec.oracleCheck(spec.systemUnderTest)
-            }
+            },
+            observationHashes: observationHashes,
+            prefixFingerprint: prefixFingerprint,
+            prefixCache: &prefixCache
         )
         return makeLinearizabilityResult(result, laneObservations: laneResponses)
     }
@@ -290,13 +291,11 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         do {
             let response = try spec.run(command)
             return .init(
-                commandDescription: response.commandDescription,
                 returnValue: response.returnValue,
                 isSkipped: false
             )
         } catch is ContractSkip {
             return .init(
-                commandDescription: command.description,
                 returnValue: nil,
                 isSkipped: true
             )

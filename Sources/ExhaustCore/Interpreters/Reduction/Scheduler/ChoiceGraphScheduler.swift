@@ -22,6 +22,19 @@ enum ChoiceGraphScheduler {
         config: Interpreters.ReducerConfiguration,
         property: @escaping (Output) -> Bool
     ) throws -> ReductionOutcome<Output> {
+        // swiftlint:disable:next force_cast
+        let wrappedProperty: ReductionProperty = .property { property($0 as! Output) }
+        return try run(gen: gen, initialTree: initialTree, initialOutput: initialOutput, config: config, property: wrappedProperty)
+    }
+
+    /// Reduces a failing counterexample by constructing and driving a ``ReductionMachine`` to completion.
+    static func run<Output>(
+        gen: Generator<Output>,
+        initialTree: ChoiceTree,
+        initialOutput: Output,
+        config: Interpreters.ReducerConfiguration,
+        property: ReductionProperty
+    ) throws -> ReductionOutcome<Output> {
         var machine = ReductionMachine(
             gen: gen,
             initialTree: initialTree,
@@ -41,6 +54,19 @@ enum ChoiceGraphScheduler {
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,
         property: @escaping (Output) -> Bool
+    ) throws -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
+        // swiftlint:disable:next force_cast
+        let wrappedProperty: ReductionProperty = .property { property($0 as! Output) }
+        return try runCollectingStats(gen: gen, initialTree: initialTree, initialOutput: initialOutput, config: config, property: wrappedProperty)
+    }
+
+    /// Reduces a failing counterexample with per-step wall-time measurement, returning both the reduced result and accumulated ``ReductionStats`` including ``ReductionStats/StepTimings``.
+    static func runCollectingStats<Output>(
+        gen: Generator<Output>,
+        initialTree: ChoiceTree,
+        initialOutput: Output,
+        config: Interpreters.ReducerConfiguration,
+        property: ReductionProperty
     ) throws -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
         var machine = ReductionMachine(
             gen: gen,

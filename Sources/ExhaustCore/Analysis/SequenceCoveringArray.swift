@@ -84,6 +84,62 @@ package enum SequenceCoveringArray {
         )
     }
 
+    // MARK: - Lane-Aware API (Contract Tests)
+
+    /// Converts a covering array row into a ``ChoiceTree`` encoding both command type and lane assignment per position.
+    ///
+    /// Each domain value `v` decomposes as `branchIndex = v / laneCount`, `laneValue = v % laneCount`. The tree for each element is a group containing a `.laneControl` chooseBits node (the lane marker) followed by the pick-site group (the command selection). This matches the `zip(laneMarker, pick(command))` structure that the materializer expects from `zipScheduleMarker`.
+    package static func buildTreeWithLanes(
+        row: CoveringArrayRow,
+        profile: EnumerableDomainProfile,
+        laneConfig: SCALaneConfig,
+        sequenceLengthRange: ClosedRange<UInt64>
+    ) -> ChoiceTree? {
+        guard row.values.count == profile.parameters.count else { return nil }
+
+        let laneCount = laneConfig.laneCount
+        let branchCount = laneConfig.pickChoices.count
+
+        var elementTrees: [ChoiceTree] = []
+        elementTrees.reserveCapacity(row.values.count)
+
+        for flatValue in row.values {
+            let branchIndex = Int(flatValue) / laneCount
+            let laneValue = Int(flatValue) % laneCount
+
+            guard branchIndex < branchCount else { return nil }
+
+            let chosen = laneConfig.pickChoices[branchIndex]
+
+            let laneChoice = ChoiceTree.choice(
+                ChoiceValue(UInt64(laneValue), tag: .laneControl),
+                ChoiceMetadata(
+                    validRange: 0 ... UInt64(laneCount - 1),
+                    isRangeExplicit: true
+                )
+            )
+
+            let branch = ChoiceTree.branch(
+                fingerprint: chosen.fingerprint,
+                weight: chosen.weight,
+                id: chosen.id,
+                branchCount: UInt64(branchCount),
+                choice: .just
+            )
+
+            elementTrees.append(.group([laneChoice, .group([branch.selecting()])]))
+        }
+
+        return .sequence(
+            length: UInt64(elementTrees.count),
+            elements: elementTrees,
+            ChoiceMetadata(
+                validRange: sequenceLengthRange,
+                isRangeExplicit: true
+            )
+        )
+    }
+
     // MARK: - Argument-Aware API
 
     /// Analyzes each branch's sub-generator to determine its argument domain.

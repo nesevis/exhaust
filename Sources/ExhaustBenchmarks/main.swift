@@ -16,6 +16,7 @@ let etnaSamplingBudget: UInt64 = 200_000_000
 
 // registerShrinkingChallengeBenchmarks()
 registerECOOPBenchmarks()
+// registerPreemptiveLoweHashMapBenchmarks()
 // registerComplexGrammarBenchmarks()
 // registerGenerationBenchmarks()
 // registerSynthesizedGeneratorBenchmarks()

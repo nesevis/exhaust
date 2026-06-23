@@ -49,6 +49,7 @@ extension __ExhaustRuntime {
         commandGen: Generator<Command>,
         commandLimit: Int,
         coverageBudget: UInt64,
+        concurrencyLevel: Int,
         skipToRow: Int? = nil,
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
         identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
@@ -62,6 +63,7 @@ extension __ExhaustRuntime {
             coverageBudget: coverageBudget,
             skipToRow: skipToRow,
             logEventPrefix: "concurrent_sca_coverage",
+            concurrencyLevel: concurrencyLevel,
             property: property
         )
         switch result {

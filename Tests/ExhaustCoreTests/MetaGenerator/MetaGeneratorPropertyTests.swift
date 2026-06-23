@@ -142,7 +142,7 @@ struct MetaGeneratorPropertyTests {
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
             while let (value, tree) = try valueIter.next() {
                 guard !property(value) else { continue }
-                guard case let .reduced(_, shrunk) = try? Interpreters.choiceGraphReduce(
+                guard case let .reduced(_, _, shrunk) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else { continue }
                 #expect(

@@ -19,7 +19,7 @@ extension __ExhaustRuntime {
 
     /// Core SCA coverage row loop shared by the sequential and concurrent contract runners.
     ///
-    /// Builds a covering array where each position's domain is the flattened union of `(commandType x argumentCombinations)`. Parameter-free branches contribute one domain value each; analyzed branches contribute the product of their parameter domain sizes. Interaction strength caps at t=2.
+    /// Builds covering arrays at multiple sequence lengths to cover both short and long command sequences. Budget is split across length tiers: 50% at `min + 4`, 25% at `max / 2`, 25% at `max`, with duplicate lengths collapsed and their budgets merged. Tiers run shortest-first so minimal counterexamples are found early.
     ///
     /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:coverageInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"sca_coverage"` for sequential, `"concurrent_sca_coverage"` for concurrent.
     static func runSCACoverageRowLoop<Value>(
@@ -29,6 +29,7 @@ extension __ExhaustRuntime {
         coverageBudget: UInt64,
         skipToRow: Int?,
         logEventPrefix: String,
+        concurrencyLevel: Int? = nil,
         property: @escaping @Sendable (Value) -> Bool
     ) -> SCARowLoopResult<Value> {
         guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -40,8 +41,7 @@ extension __ExhaustRuntime {
             return .skipped
         }
 
-        let sequenceLength = commandLimit
-        guard sequenceLength >= 2 else {
+        guard commandLimit >= 2 else {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "\(logEventPrefix)_skipped",
@@ -53,58 +53,64 @@ extension __ExhaustRuntime {
             return .skipped
         }
 
-        guard let domain = SCADomain.build(
-            sequenceLength: sequenceLength,
-            pickChoices: pickChoices,
-            coverageBudget: coverageBudget,
-            strengthCap: 2
-        ) else {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "\(logEventPrefix)_skipped",
-                "Domain construction failed. Branches could not be analyzed."
-            )
-            return .skipped
-        }
+        let tiers = buildCoverageTiers(commandLimit: commandLimit, totalBudget: coverageBudget)
 
-        let domainSizes = domain.profile.domainSizes
-        guard domainSizes.count >= 2 else {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "\(logEventPrefix)_skipped",
-                "Too few parameters for covering array (need >= 2)"
-            )
-            return .skipped
-        }
-
-        let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
+        var totalIterations = 0
         let lengthRange = UInt64(0) ... UInt64(commandLimit)
 
-        var iterations = 0
-        var attempts: UInt64 = 0
-        // Cap total attempts at 10× the budget so a pathological buildTree failure rate cannot spin indefinitely.
-        let maxAttempts = coverageBudget * 10
-        while iterations < coverageBudget, attempts < maxAttempts, let row = generator.next() {
-            attempts += 1
-            let tree: ChoiceTree? = domain.buildTree(row: row, sequenceLengthRange: lengthRange)
-            guard let tree else { continue }
-
-            let mode = Materializer.Mode.guided(
-                seed: UInt64(iterations),
-                fallbackTree: tree
-            )
-            guard case let .success(value, freshTree, _) = Materializer.materialize(
-                sequenceGen, prefix: ChoiceSequence(), mode: mode
-            ) else {
-                continue
+        for tier in tiers {
+            let domain: SCADomain
+            if let concurrencyLevel {
+                domain = SCADomain.buildForContract(
+                    sequenceLength: tier.length,
+                    pickChoices: pickChoices,
+                    concurrencyLevel: concurrencyLevel,
+                    strengthCap: 2
+                )
+            } else {
+                guard let built = SCADomain.build(
+                    sequenceLength: tier.length,
+                    pickChoices: pickChoices,
+                    coverageBudget: tier.budget,
+                    strengthCap: 2
+                ) else {
+                    continue
+                }
+                domain = built
             }
 
-            iterations += 1
-            if let skipToRow, iterations - 1 < skipToRow { continue }
-            if property(value) == false {
-                return .failure(value: value, tree: freshTree, coverageInvocations: iterations)
+            let domainSizes = domain.profile.domainSizes
+            guard domainSizes.count >= 2 else { continue }
+
+            let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
+            var tierIterations: UInt64 = 0
+            var tierAttempts: UInt64 = 0
+            let maxAttempts = tier.budget * 10
+
+            while tierIterations < tier.budget, tierAttempts < maxAttempts, let row = generator.next() {
+                tierAttempts += 1
+                guard let tree = domain.buildTree(row: row, sequenceLengthRange: lengthRange) else {
+                    continue
+                }
+
+                let mode = Materializer.Mode.guided(
+                    seed: UInt64(totalIterations),
+                    fallbackTree: tree
+                )
+                guard case let .success(value, freshTree, _) = Materializer.materialize(
+                    sequenceGen, prefix: ChoiceSequence(), mode: mode
+                ) else {
+                    continue
+                }
+
+                tierIterations += 1
+                totalIterations += 1
+                if let skipToRow, totalIterations - 1 < skipToRow { continue }
+                if property(value) == false {
+                    return .failure(value: value, tree: freshTree, coverageInvocations: totalIterations)
+                }
+                if skipToRow != nil { return .completed(coverageInvocations: totalIterations) }
             }
-            if skipToRow != nil { break }
         }
 
         ExhaustLog.notice(
@@ -112,14 +118,61 @@ extension __ExhaustRuntime {
             event: logEventPrefix,
             metadata: [
                 "command_types": "\(pickChoices.count)",
-                "iterations": "\(iterations)",
-                "rows": "\(iterations)",
-                "sequence_length": "\(sequenceLength)",
+                "iterations": "\(totalIterations)",
+                "command_limit": "\(commandLimit)",
+                "tiers": "\(tiers.count)",
                 "strength": "2",
             ]
         )
 
-        return .completed(coverageInvocations: iterations)
+        return .completed(coverageInvocations: totalIterations)
+    }
+
+    /// Computes coverage tiers with deduplicated lengths and proportional budget allocation.
+    ///
+    /// Raw tiers: 50% at `min(min + 4, max)`, 25% at `max(min + 4, max / 2)`, 25% at `max`. Tiers with duplicate lengths are collapsed and their budgets merged. The minimum sequence length for any tier is 2 (pairwise coverage requires at least 2 parameters).
+    private static func buildCoverageTiers(
+        commandLimit: Int,
+        totalBudget: UInt64
+    ) -> [(length: Int, budget: UInt64)] {
+        let shortLength = min(5, commandLimit)
+        let rawTiers: [(length: Int, fraction: UInt64, denominator: UInt64)] = [
+            (length: shortLength, fraction: 1, denominator: 2),
+            (length: max(shortLength, commandLimit / 2), fraction: 1, denominator: 4),
+            (length: commandLimit, fraction: 1, denominator: 4),
+        ]
+        let minLength = 2
+
+        var merged: [(length: Int, fraction: UInt64, denominator: UInt64)] = []
+        for raw in rawTiers {
+            guard raw.length >= minLength else { continue }
+            if let existingIndex = merged.firstIndex(where: { $0.length == raw.length }) {
+                let existing = merged[existingIndex]
+                let combinedNumerator = existing.fraction * raw.denominator + raw.fraction * existing.denominator
+                let combinedDenominator = existing.denominator * raw.denominator
+                merged[existingIndex] = (length: raw.length, fraction: combinedNumerator, denominator: combinedDenominator)
+            } else {
+                merged.append(raw)
+            }
+        }
+
+        merged.sort { $0.length < $1.length }
+
+        var result: [(length: Int, budget: UInt64)] = []
+        var allocated: UInt64 = 0
+        for (index, tier) in merged.enumerated() {
+            let budget: UInt64
+            if index == merged.count - 1 {
+                budget = totalBudget - allocated
+            } else {
+                budget = totalBudget * tier.fraction / tier.denominator
+            }
+            guard budget > 0 else { continue }
+            result.append((length: tier.length, budget: budget))
+            allocated += budget
+        }
+
+        return result
     }
 }
 
@@ -300,7 +353,7 @@ extension __ExhaustRuntime {
         ) else {
             return (value, nil, false)
         }
-        if case let .reduced(_, reduced) = result.outcome {
+        if case let .reduced(_, _, reduced) = result.outcome {
             return (reduced, result.stats, true)
         }
         return (value, result.stats, false)

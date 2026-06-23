@@ -8,10 +8,10 @@
 /// Describes the result of a reduction pass.
 package enum ReductionOutcome<Output> {
     /// Reduction improved the counterexample.
-    case reduced(ChoiceSequence, Output)
+    case reduced(ChoiceSequence, ChoiceTree, Output)
 
     /// Reduction ran but could not improve the counterexample.
-    case unreduced(ChoiceSequence, Output)
+    case unreduced(ChoiceSequence, ChoiceTree, Output)
 
     /// Reduction could not produce a result (for example, materialization of the input failed).
     case failure
@@ -19,8 +19,8 @@ package enum ReductionOutcome<Output> {
     /// The counterexample and its choice sequence, regardless of whether reduction improved it.
     package var counterexample: (ChoiceSequence, Output)? {
         switch self {
-            case let .reduced(sequence, output): (sequence, output)
-            case let .unreduced(sequence, output): (sequence, output)
+            case let .reduced(sequence, _, output): (sequence, output)
+            case let .unreduced(sequence, _, output): (sequence, output)
             case .failure: nil
         }
     }
@@ -47,20 +47,32 @@ package extension Interpreters {
         config: ReducerConfiguration,
         property: (Output) -> Bool
     ) throws -> ReductionOutcome<Output> {
+        try withoutActuallyEscaping(property) { escapingProperty in
+            // swiftlint:disable:next force_cast
+            let wrapped: ReductionProperty = .property { escapingProperty($0 as! Output) }
+            return try choiceGraphReduce(gen: gen, tree: tree, output: output, config: config, property: wrapped)
+        }
+    }
+
+    static func choiceGraphReduce<Output>(
+        gen: Generator<Output>,
+        tree: ChoiceTree,
+        output: Output,
+        config: ReducerConfiguration,
+        property: ReductionProperty
+    ) throws -> ReductionOutcome<Output> {
         if config.visualize {
             print("── Before reduction ──")
             print(tree.visualization(width: 100))
         }
 
-        let outcome = try withoutActuallyEscaping(property) { escapingProperty in
-            try ChoiceGraphScheduler.run(
-                gen: gen,
-                initialTree: tree,
-                initialOutput: output,
-                config: config,
-                property: escapingProperty
-            )
-        }
+        let outcome = try ChoiceGraphScheduler.run(
+            gen: gen,
+            initialTree: tree,
+            initialOutput: output,
+            config: config,
+            property: property
+        )
 
         if config.visualize, let (resultSequence, _) = outcome.counterexample {
             let resultTree = Materializer.materialize(
@@ -88,20 +100,31 @@ package extension Interpreters {
         config: ReducerConfiguration,
         property: (Output) -> Bool
     ) throws -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
+        try withoutActuallyEscaping(property) { escapingProperty in
+            let wrapped: ReductionProperty = .property { escapingProperty($0 as! Output) } // swiftlint:disable:this force_cast
+            return try choiceGraphReduceCollectingStats(gen: gen, tree: tree, output: output, config: config, property: wrapped)
+        }
+    }
+
+    static func choiceGraphReduceCollectingStats<Output>(
+        gen: Generator<Output>,
+        tree: ChoiceTree,
+        output: Output,
+        config: ReducerConfiguration,
+        property: ReductionProperty
+    ) throws -> (outcome: ReductionOutcome<Output>, stats: ReductionStats) {
         if config.visualize {
             print("── Before reduction ──")
             print(tree.visualization(width: 100))
         }
 
-        let result = try withoutActuallyEscaping(property) { escapingProperty in
-            try ChoiceGraphScheduler.runCollectingStats(
-                gen: gen,
-                initialTree: tree,
-                initialOutput: output,
-                config: config,
-                property: escapingProperty
-            )
-        }
+        let result = try ChoiceGraphScheduler.runCollectingStats(
+            gen: gen,
+            initialTree: tree,
+            initialOutput: output,
+            config: config,
+            property: property
+        )
 
         if config.visualize, let (resultSequence, _) = result.outcome.counterexample {
             let resultTree = Materializer.materialize(

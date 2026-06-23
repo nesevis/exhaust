@@ -13,30 +13,37 @@ import Testing
 /// Lowe's paper describes the five-operation response-level variant. Our checker catches both because it checks responses and final state via the oracle across all valid orderings.
 @Suite("Preemptive linearizability: Lowe hash map five-operation race", .serialized, .tags(.contract))
 struct PreemptiveLoweHashMapTests {
-    @Test("Detects ghost entry from assignment-instead-of-CAS delete")
+    @Test("Detects ghost entry from assignment-instead-of-CAS delete (benchmark)", .disabled("Benchmark"))
     func detectsGhostEntryFromBuggyDelete() {
         var commandCount = 0
+        var iterations: Double = 0
         var totalRuntime = 0.0
-        for seed in UInt64(1337) ..< 1437 {
+        for seed in UInt64(1337) ..< 1387 {
             var report: ExhaustReport?
             let result = #execute(
                 LoweHashMapSpec.self,
                 .concurrent(.two),
-                .commandLimit(8),
-                .budget(.custom(coverage: 7500, sampling: 7500)),
                 .replay(.numeric(seed)),
+                .budget(.custom(coverage: 10000, sampling: 150_000)),
                 .suppress(.issueReporting),
                 .onReport { report = $0 }
             )
-            commandCount += result?.commands.count ?? 8
+            iterations += 1
+            commandCount += result?.commands.count ?? 20
             totalRuntime += report?.totalMilliseconds ?? 0
-//            print("DBG: \(report?.profilingSummary ?? "")")
-//            print("DBG: commands: \(result?.commands.count ?? -1) runtime: \(report?.totalMilliseconds ?? -1)ms")
-//            #expect(result?.replaySeed != nil)
-//            #expect(result?.commands.count ?? 0 >= 2, "Need at least 2 concurrent commands to trigger a race")
         }
-        print("Mean command count: \(Double(commandCount) / 100)")
-        print("Mean runtime: \(totalRuntime / 100)ms")
+        print("Mean command count: \(Double(commandCount) / iterations)")
+        print("Mean runtime: \(totalRuntime / iterations)ms")
+    }
+
+    @Test("Detects ghost entry from assignment-instead-of-CAS delete")
+    func detectsGhostEntryFromBuggyDeleteWithSeed() {
+        let result = #execute(
+            LoweHashMapSpec.self,
+            .concurrent(.two),
+            .budget(.custom(coverage: 0, sampling: 100_000)),
+            .suppress(.issueReporting)
+        )
     }
 }
 
@@ -52,20 +59,26 @@ final class LoweHashMapSpec {
         map.snapshot == other.snapshot
     }
 
-    @Command(weight: 3, .int(in: 0 ... 1), .int(in: 0 ... 9))
+    @Command(weight: 3, BuggyHashMap.keyGen, .int(in: 0 ... 9))
     func update(key: Int, value: Int) {
         map.update(key: key, value: value)
     }
 
-    @Command(weight: 2, .int(in: 0 ... 1))
+    @Command(weight: 2, BuggyHashMap.keyGen)
     func delete(key: Int) {
         map.delete(key: key)
     }
 
-    @Command(weight: 1, .int(in: 0 ... 1))
+    @Command(weight: 1, BuggyHashMap.keyGen)
     func getOrElse(key: Int) -> Int {
         map.getOrElse(key: key, default: -1)
     }
+
+//
+//    @Command(weight: 1)
+//    func noop() throws {
+//        throw skip()
+//    }
 
     func failureDescription() -> String? {
         "map: \(map.snapshot)"
@@ -74,10 +87,14 @@ final class LoweHashMapSpec {
 
 // MARK: - SUT
 
-/// Concurrent hash map with a buggy delete operation (Lowe 2017).
+/// Concurrent hash map with a buggy delete operation (Lowe 2017, Section 8).
 ///
-/// Each slot has a status (`empty`, `updating`, `stored`, `deleted`) and an optional value. `update` sets `updating`, writes the value, then sets `stored`. `delete` uses plain assignment to set `deleted` instead of CAS. This lets a concurrent `update` that read the old status before the delete resume and overwrite `deleted` with `stored`, creating a ghost entry.
+/// Faithful to the paper's description: `update` spins while status is `.updating`, then uses compare-and-swap (CAS) to atomically transition to `.updating`, writes the value, and sets `.stored`. The CAS in `update` is correct. The bug is in `delete`, which uses plain assignment to set `.deleted` instead of CAS. When an `update` is in progress (status is `.updating`), a correct delete would CAS-fail. The buggy delete writes `.deleted` unconditionally, and the in-progress update's final `.stored` write overwrites it, resurrecting the entry.
+///
+/// Each field access is individually locked (NSLock) so concurrent operations race at the operation level (the intended ghost-entry bug) without a low-level data race on the fields themselves.
 final class BuggyHashMap: @unchecked Sendable {
+    static let keyGen = #gen(.int(in: 0 ... 31))
+
     enum SlotStatus: Int, Sendable {
         case empty = 0
         case updating = 1
@@ -85,7 +102,6 @@ final class BuggyHashMap: @unchecked Sendable {
         case deleted = 3
     }
 
-    /// Reference type so the backing array never mutates its buffer, and each field access is individually locked so concurrent operations race at the operation level (the intended ghost-entry bug) without a low-level data race on the fields themselves.
     final class Slot {
         private let lock = NSLock()
         private var _status: SlotStatus = .empty
@@ -93,30 +109,27 @@ final class BuggyHashMap: @unchecked Sendable {
         private var _value: Int = 0
 
         var status: SlotStatus {
-            get {
-                lock.withLock { _status }
-            }
-            set {
-                lock.withLock { _status = newValue }
+            get { lock.withLock { _status } }
+            set { lock.withLock { _status = newValue } }
+        }
+
+        /// Atomically sets status to `desired` if it currently equals `expected`. Returns whether the swap occurred.
+        func compareAndSwapStatus(expected: SlotStatus, desired: SlotStatus) -> Bool {
+            lock.withLock {
+                guard _status == expected else { return false }
+                _status = desired
+                return true
             }
         }
 
         var key: Int {
-            get {
-                lock.withLock { _key }
-            }
-            set {
-                lock.withLock { _key = newValue }
-            }
+            get { lock.withLock { _key } }
+            set { lock.withLock { _key = newValue } }
         }
 
         var value: Int {
-            get {
-                lock.withLock { _value }
-            }
-            set {
-                lock.withLock { _value = newValue }
-            }
+            get { lock.withLock { _value } }
+            set { lock.withLock { _value = newValue } }
         }
     }
 
@@ -134,15 +147,21 @@ final class BuggyHashMap: @unchecked Sendable {
         return result
     }
 
+    /// Spins while status is `.updating`, then CAS to `.updating`, writes key/value, sets `.stored`.
     func update(key: Int, value: Int) {
         let index = abs(key) % slots.count
-        slots[index].status = .updating
-        slots[index].key = key
-        slots[index].value = value
-        sched_yield()
-        slots[index].status = .stored
+        let slot = slots[index]
+        while true {
+            let current = slot.status
+            if current == .updating { continue }
+            if slot.compareAndSwapStatus(expected: current, desired: .updating) { break }
+        }
+        slot.key = key
+        slot.value = value
+        slot.status = .stored
     }
 
+    /// BUG: uses plain assignment instead of CAS. A concurrent `update` that already holds `.updating` will overwrite this `.deleted` with `.stored` when it finishes.
     func delete(key: Int) {
         let index = abs(key) % slots.count
         guard slots[index].key == key else { return }

@@ -21,7 +21,7 @@ package func findMinimalCounterexample<Value>(
         let outcome = try Interpreters.choiceGraphReduce(
             gen: gen, tree: tree, config: .init(maxStalls: maxStalls), property: property
         )
-        if case let .reduced(_, reduced) = outcome {
+        if case let .reduced(_, _, reduced) = outcome {
             return reduced
         }
         return value

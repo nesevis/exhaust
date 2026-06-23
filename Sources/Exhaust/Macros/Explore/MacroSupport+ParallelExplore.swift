@@ -305,7 +305,7 @@ extension __ExhaustRuntime {
                 config: .init(maxStalls: 2),
                 property: { reductionPredicate($0) == false }
             )
-            if case let .reduced(reducedSequence, reducedValue) = outcome {
+            if case let .reduced(reducedSequence, _, reducedValue) = outcome {
                 return (reducedValue, failure.value, reducedSequence)
             }
         } catch {

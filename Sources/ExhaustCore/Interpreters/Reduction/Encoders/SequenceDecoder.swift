@@ -25,7 +25,7 @@ package enum SequenceDecoder {
         gen: AnyGenerator,
         tree: ChoiceTree,
         originalSequence: ChoiceSequence,
-        property: (Any) -> Bool,
+        property: ReductionProperty,
         filterObservations: inout [UInt64: FilterObservation],
         precomputedHash: UInt64? = nil
     ) throws -> ReductionResult<Any>? {
@@ -64,31 +64,60 @@ package enum SequenceDecoder {
         gen: AnyGenerator,
         fallbackTree: ChoiceTree,
         originalSequence _: ChoiceSequence,
-        property: (Any) -> Bool,
+        property: ReductionProperty,
         materializePicks: Bool,
         filterObservations: inout [UInt64: FilterObservation],
         precomputedHash: UInt64? = nil
     ) -> ReductionResult<Any>? {
-        let candidateForPhase2 = copy candidate
-
-        switch Materializer.materializeAny(
-            gen, prefix: consume candidate,
-            mode: .exact, fallbackTree: fallbackTree,
-            materializePicks: false,
-            precomputedSeed: precomputedHash,
-            skipTree: true
-        ) {
-            case let .success(output, _, decodingReport):
-                mergeFilterObservations(from: decodingReport, into: &filterObservations)
-                guard property(output) == false else { return nil }
+        switch property {
+            case let .property(check):
+                let candidateForPhase2 = copy candidate
 
                 switch Materializer.materializeAny(
-                    gen, prefix: candidateForPhase2,
+                    gen, prefix: consume candidate,
+                    mode: .exact, fallbackTree: fallbackTree,
+                    materializePicks: false,
+                    precomputedSeed: precomputedHash,
+                    skipTree: true
+                ) {
+                    case let .success(output, _, decodingReport):
+                        mergeFilterObservations(from: decodingReport, into: &filterObservations)
+                        guard check(output) == false else { return nil }
+
+                        switch Materializer.materializeAny(
+                            gen, prefix: candidateForPhase2,
+                            mode: .exact, fallbackTree: fallbackTree,
+                            materializePicks: materializePicks,
+                            precomputedSeed: precomputedHash
+                        ) {
+                            case let .success(_, freshTree, _):
+                                let freshSequence = ChoiceSequence(freshTree)
+                                return ReductionResult(
+                                    sequence: freshSequence,
+                                    tree: freshTree,
+                                    output: output,
+                                    evaluations: 1,
+                                    decodingReport: nil
+                                )
+                            case .rejected, .failed:
+                                return nil
+                        }
+
+                    case let .rejected(decodingReport), let .failed(decodingReport):
+                        mergeFilterObservations(from: decodingReport, into: &filterObservations)
+                        return nil
+                }
+
+            case let .contract(check):
+                switch Materializer.materializeAny(
+                    gen, prefix: consume candidate,
                     mode: .exact, fallbackTree: fallbackTree,
                     materializePicks: materializePicks,
                     precomputedSeed: precomputedHash
                 ) {
-                    case let .success(_, freshTree, _):
+                    case let .success(output, freshTree, decodingReport):
+                        mergeFilterObservations(from: decodingReport, into: &filterObservations)
+                        guard check(output, freshTree) == false else { return nil }
                         let freshSequence = ChoiceSequence(freshTree)
                         return ReductionResult(
                             sequence: freshSequence,
@@ -97,13 +126,11 @@ package enum SequenceDecoder {
                             evaluations: 1,
                             decodingReport: nil
                         )
-                    case .rejected, .failed:
+
+                    case let .rejected(decodingReport), let .failed(decodingReport):
+                        mergeFilterObservations(from: decodingReport, into: &filterObservations)
                         return nil
                 }
-
-            case let .rejected(decodingReport), let .failed(decodingReport):
-                mergeFilterObservations(from: decodingReport, into: &filterObservations)
-                return nil
         }
     }
 
@@ -113,7 +140,7 @@ package enum SequenceDecoder {
         fallbackTree: ChoiceTree?,
         maximizeBoundRegionIndices: Set<Int>? = nil,
         originalSequence: ChoiceSequence,
-        property: (Any) -> Bool,
+        property: ReductionProperty,
         materializePicks: Bool,
         skipShortlexCheck: Bool = false,
         prngSalt: UInt64 = 0,
@@ -121,33 +148,71 @@ package enum SequenceDecoder {
         precomputedHash: UInt64? = nil
     ) -> ReductionResult<Any>? {
         let seed = (precomputedHash ?? ZobristHash.hash(of: candidate)) &+ prngSalt
-        let candidateForPhase2 = copy candidate
 
-        switch Materializer.materializeAny(
-            gen,
-            prefix: consume candidate,
-            mode: .guided(
-                seed: seed,
-                fallbackTree: fallbackTree,
-                maximizeBoundRegionIndices: maximizeBoundRegionIndices
-            ),
-            materializePicks: false,
-            skipTree: true
-        ) {
-            case let .success(output, _, decodingReport):
-                mergeFilterObservations(from: decodingReport, into: &filterObservations)
-                guard property(output) == false else {
-                    logDecoderRejection(
-                        reason: "property_passed",
-                        probeHash: precomputedHash,
-                        extra: ["output": String(describing: output)]
-                    )
-                    return nil
-                }
+        switch property {
+            case let .property(check):
+                let candidateForPhase2 = copy candidate
 
                 switch Materializer.materializeAny(
                     gen,
-                    prefix: candidateForPhase2,
+                    prefix: consume candidate,
+                    mode: .guided(
+                        seed: seed,
+                        fallbackTree: fallbackTree,
+                        maximizeBoundRegionIndices: maximizeBoundRegionIndices
+                    ),
+                    materializePicks: false,
+                    skipTree: true
+                ) {
+                    case let .success(output, _, decodingReport):
+                        mergeFilterObservations(from: decodingReport, into: &filterObservations)
+                        guard check(output) == false else {
+                            logDecoderRejection(
+                                reason: "property_passed",
+                                probeHash: precomputedHash,
+                                extra: ["output": String(describing: output)]
+                            )
+                            return nil
+                        }
+
+                        switch Materializer.materializeAny(
+                            gen,
+                            prefix: candidateForPhase2,
+                            mode: .guided(
+                                seed: seed,
+                                fallbackTree: fallbackTree,
+                                maximizeBoundRegionIndices: maximizeBoundRegionIndices
+                            ),
+                            materializePicks: materializePicks
+                        ) {
+                            case let .success(_, freshTree, phase2Report):
+                                return acceptGuidedResult(
+                                    output: output,
+                                    freshTree: freshTree,
+                                    phase2Report: phase2Report,
+                                    originalSequence: originalSequence,
+                                    skipShortlexCheck: skipShortlexCheck,
+                                    precomputedHash: precomputedHash
+                                )
+                            case .rejected, .failed:
+                                return nil
+                        }
+
+                    case let .rejected(decodingReport):
+                        mergeFilterObservations(from: decodingReport, into: &filterObservations)
+                        logDecoderRejection(reason: "materialization_rejected", probeHash: precomputedHash)
+                        return nil
+
+                    case let .failed(decodingReport):
+                        mergeFilterObservations(from: decodingReport, into: &filterObservations)
+                        logDecoderRejection(reason: "materialization_failed", probeHash: precomputedHash)
+                        return nil
+                }
+
+            case let .contract(check):
+                switch Materializer.materializeAny(
+                    gen,
+                    prefix: consume candidate,
                     mode: .guided(
                         seed: seed,
                         fallbackTree: fallbackTree,
@@ -155,67 +220,92 @@ package enum SequenceDecoder {
                     ),
                     materializePicks: materializePicks
                 ) {
-                    case let .success(_, freshTree, phase2Report):
-                        let freshSequence = ChoiceSequence(freshTree)
-                        if skipShortlexCheck == false {
-                            let passes = freshSequence.shortLexPrecedes(originalSequence)
-                            if ExhaustLog.isEnabled(.debug, for: .reducer) {
-                                ExhaustLog.debug(
-                                    category: .reducer,
-                                    event: "shortlex_check",
-                                    metadata: [
-                                        "passes": "\(passes)",
-                                        "fresh_len": "\(freshSequence.count)",
-                                        "original_len": "\(originalSequence.count)",
-                                        "fresh_seq": freshSequence.shortString,
-                                        "original_seq": originalSequence.shortString,
-                                        "output": String(describing: output),
-                                    ]
-                                )
-                            }
-                            guard passes else {
-                                logDecoderRejection(
-                                    reason: "not_shortlex",
-                                    probeHash: precomputedHash,
-                                    extra: [
-                                        "fresh_seq_len": "\(freshSequence.count)",
-                                        "output": String(describing: output),
-                                    ]
-                                )
-                                return nil
-                            }
-                        }
-                        if let report = phase2Report, ExhaustLog.isEnabled(.debug, for: .reducer) {
-                            ExhaustLog.debug(
-                                category: .reducer,
-                                event: "guided_materialization_fidelity",
-                                metadata: [
-                                    "fidelity": String(format: "%.3f", report.fidelity),
-                                    "coverage": String(format: "%.3f", report.coverage),
-                                ]
+                    case let .success(output, freshTree, decodingReport):
+                        mergeFilterObservations(from: decodingReport, into: &filterObservations)
+                        guard check(output, freshTree) == false else {
+                            logDecoderRejection(
+                                reason: "property_passed",
+                                probeHash: precomputedHash,
+                                extra: ["output": String(describing: output)]
                             )
+                            return nil
                         }
-                        return ReductionResult(
-                            sequence: freshSequence,
-                            tree: freshTree,
+                        return acceptGuidedResult(
                             output: output,
-                            evaluations: 1,
-                            decodingReport: phase2Report
+                            freshTree: freshTree,
+                            phase2Report: decodingReport,
+                            originalSequence: originalSequence,
+                            skipShortlexCheck: skipShortlexCheck,
+                            precomputedHash: precomputedHash
                         )
-                    case .rejected, .failed:
+
+                    case let .rejected(decodingReport):
+                        mergeFilterObservations(from: decodingReport, into: &filterObservations)
+                        logDecoderRejection(reason: "materialization_rejected", probeHash: precomputedHash)
+                        return nil
+
+                    case let .failed(decodingReport):
+                        mergeFilterObservations(from: decodingReport, into: &filterObservations)
+                        logDecoderRejection(reason: "materialization_failed", probeHash: precomputedHash)
                         return nil
                 }
-
-            case let .rejected(decodingReport):
-                mergeFilterObservations(from: decodingReport, into: &filterObservations)
-                logDecoderRejection(reason: "materialization_rejected", probeHash: precomputedHash)
-                return nil
-
-            case let .failed(decodingReport):
-                mergeFilterObservations(from: decodingReport, into: &filterObservations)
-                logDecoderRejection(reason: "materialization_failed", probeHash: precomputedHash)
-                return nil
         }
+    }
+
+    private func acceptGuidedResult(
+        output: Any,
+        freshTree: ChoiceTree,
+        phase2Report: DecodingReport?,
+        originalSequence: ChoiceSequence,
+        skipShortlexCheck: Bool,
+        precomputedHash: UInt64?
+    ) -> ReductionResult<Any>? {
+        let freshSequence = ChoiceSequence(freshTree)
+        if skipShortlexCheck == false {
+            let passes = freshSequence.shortLexPrecedes(originalSequence)
+            if ExhaustLog.isEnabled(.debug, for: .reducer) {
+                ExhaustLog.debug(
+                    category: .reducer,
+                    event: "shortlex_check",
+                    metadata: [
+                        "passes": "\(passes)",
+                        "fresh_len": "\(freshSequence.count)",
+                        "original_len": "\(originalSequence.count)",
+                        "fresh_seq": freshSequence.shortString,
+                        "original_seq": originalSequence.shortString,
+                        "output": String(describing: output),
+                    ]
+                )
+            }
+            guard passes else {
+                logDecoderRejection(
+                    reason: "not_shortlex",
+                    probeHash: precomputedHash,
+                    extra: [
+                        "fresh_seq_len": "\(freshSequence.count)",
+                        "output": String(describing: output),
+                    ]
+                )
+                return nil
+            }
+        }
+        if let report = phase2Report, ExhaustLog.isEnabled(.debug, for: .reducer) {
+            ExhaustLog.debug(
+                category: .reducer,
+                event: "guided_materialization_fidelity",
+                metadata: [
+                    "fidelity": String(format: "%.3f", report.fidelity),
+                    "coverage": String(format: "%.3f", report.coverage),
+                ]
+            )
+        }
+        return ReductionResult(
+            sequence: freshSequence,
+            tree: freshTree,
+            output: output,
+            evaluations: 1,
+            decodingReport: phase2Report
+        )
     }
 
     /// Emits a `graph_decoder_rejected` debug event so the upstream probe-loop's `graph_probe_rejected` entry can be correlated with the decoder-side rejection reason via `probe_hash`.

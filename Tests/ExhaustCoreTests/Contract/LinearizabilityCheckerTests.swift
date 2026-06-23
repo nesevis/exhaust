@@ -104,12 +104,12 @@ private final class Stack {
         switch command {
             case let .push(value):
                 elements.append(value)
-                return .init(commandDescription: command.description, returnValue: nil, isSkipped: false)
+                return .init(returnValue: nil, isSkipped: false)
             case .pop:
                 guard elements.isEmpty == false else {
-                    return .init(commandDescription: command.description, returnValue: nil, isSkipped: true)
+                    return .init(returnValue: nil, isSkipped: true)
                 }
-                return .init(commandDescription: command.description, returnValue: elements.removeLast(), isSkipped: false)
+                return .init(returnValue: elements.removeLast(), isSkipped: false)
         }
     }
 }
@@ -127,10 +127,9 @@ private func check(
     let checker = LinearizabilityChecker(laneObservations: lanes)
     var replayStack: Stack?
     return checker.check(
-        prefix: prefix,
-        replayPrefix: { prefixCommands in
+        replayPrefix: {
             let fresh = Stack()
-            for command in prefixCommands {
+            for command in prefix {
                 fresh.apply(command)
             }
             replayStack = fresh
@@ -158,13 +157,13 @@ private func verdict(
 }
 
 private func push(_ value: Int) -> Observation {
-    Observation(command: .push(value), commandDescription: "push(\(value))", returnValue: nil, isSkipped: false)
+    Observation(command: .push(value), returnValue: nil, isSkipped: false)
 }
 
 private func popReturning(_ value: Int) -> Observation {
-    Observation(command: .pop, commandDescription: "pop", returnValue: value, isSkipped: false)
+    Observation(command: .pop, returnValue: value, isSkipped: false)
 }
 
 private func popSkipped() -> Observation {
-    Observation(command: .pop, commandDescription: "pop", returnValue: nil, isSkipped: true)
+    Observation(command: .pop, returnValue: nil, isSkipped: true)
 }

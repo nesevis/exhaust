@@ -1,24 +1,27 @@
-import ExhaustCore
-
 /// A single command's observed result during a preemptive concurrent execution, recorded per-lane.
 ///
 /// Per-lane arrays of these (one array per lane, in per-lane execution order) feed the linearizability checker, which enumerates the order-preserving interleavings of the lanes. The per-lane order is the only ordering constraint the checker needs, so no cross-lane timestamp is recorded.
 ///
 /// Marked `@unchecked Sendable` because `Outcome.returned` carries `Any`, which is not `Sendable`. The values are command return values produced and consumed on GCD threads within a single `execute()` call and never shared beyond the runner.
-struct ObservedResponse<Command>: @unchecked Sendable {
-    let lane: UInt8
-    let command: Command
-    let commandDescription: String
-    let outcome: Outcome
+package struct ObservedResponse<Command>: @unchecked Sendable {
+    package let lane: UInt8
+    package let command: Command
+    package let outcome: Outcome
 
-    enum Outcome: @unchecked Sendable {
+    package init(lane: UInt8, command: Command, outcome: Outcome) {
+        self.lane = lane
+        self.command = command
+        self.outcome = outcome
+    }
+
+    package enum Outcome: @unchecked Sendable {
         case returned(Any)
         case returnedVoid
         case skipped
     }
 }
 
-extension ObservedResponse.Outcome {
+package extension ObservedResponse.Outcome {
     /// The return value for response comparison, or `nil` for void and skipped commands.
     var returnValue: Any? {
         switch self {
@@ -51,14 +54,15 @@ extension ObservedResponse.Outcome {
     }
 }
 
-extension LinearizabilityChecker {
+package extension LinearizabilityChecker {
     /// Builds a checker from the per-lane responses captured during a preemptive run, mapping each ``ObservedResponse`` to a checker observation. Shared by the synchronous and asynchronous preemptive backends.
+    ///
+    /// Command descriptions are computed lazily here rather than during probe execution, so the `String(describing:)` cost is paid only when building the checker for a confirmed failure — not on every reduction probe.
     init(laneResponses: [[ObservedResponse<Command>]]) {
         self.init(laneObservations: laneResponses.map { lane in
             lane.map { response in
                 Observation(
                     command: response.command,
-                    commandDescription: response.commandDescription,
                     returnValue: response.outcome.returnValue,
                     isSkipped: response.outcome.isSkipped
                 )

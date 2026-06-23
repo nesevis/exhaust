@@ -78,7 +78,7 @@ struct EnabledEncoderFilterTests {
 
         let result = try Interpreters.choiceGraphReduce(gen: gen, tree: tree, config: config, property: property)
 
-        if case let .reduced(_, output) = result {
+        if case let .reduced(_, _, output) = result {
             #expect(output == value, "No encoders enabled means the result should be unchanged")
         }
         // .unreduced / .failure is also acceptable — it means no improvement was found
