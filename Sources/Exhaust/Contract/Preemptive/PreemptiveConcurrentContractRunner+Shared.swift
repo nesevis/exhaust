@@ -9,7 +9,7 @@ enum Preemptive {
     static let confirmationRepetitions = 15
 
     /// Number of times the terminal ``confirmRealFailure`` re-executes the reported schedule to reproduce the race for evidence and final confirmation. This runs at most once per reported failure (not per reduction probe), so it can afford far more attempts than ``confirmationRepetitions``: catching a timing-fragile race here is what attaches the actual-state line and witness to the report. For a race that reproduces with probability `p` per run, the chance of catching it scales as `1 - (1 - p)^n`.
-    static let finalConfirmationRepetitions = 30
+    static let finalConfirmationRepetitions = 150
 
     /// Default command limit for `.threads` contracts. Lower than the cooperative runner's estimated/40 cap because each probe repeats `confirmationRepetitions` times.
     static let defaultCommandLimit = 20
