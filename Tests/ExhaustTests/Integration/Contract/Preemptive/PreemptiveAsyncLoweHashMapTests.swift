@@ -10,11 +10,10 @@ struct PreemptiveAsyncLoweHashMapTests {
         let result = await #execute(
             AsyncLoweHashMapSpec.self,
             .concurrent(.two),
-            .commandLimit(8),
             .replay(.numeric(1337)),
             // Very high budget due to the non-deterministic interleaving.
             // Most failures are found after ~1100 iterations
-            .budget(.custom(coverage: 10000, sampling: 10000)),
+            .budget(.custom(coverage: 10000, sampling: 150_000)),
             .suppress(.issueReporting)
         )
         #expect(result?.replaySeed != nil)
@@ -34,17 +33,17 @@ final class AsyncLoweHashMapSpec {
         map.snapshot == other.snapshot
     }
 
-    @Command(weight: 3, .int(in: 0 ... 1), .int(in: 0 ... 9))
+    @Command(weight: 3, BuggyHashMap.keyGen, .int(in: 0 ... 9))
     func update(key: Int, value: Int) async {
         map.update(key: key, value: value)
     }
 
-    @Command(weight: 2, .int(in: 0 ... 1))
+    @Command(weight: 2, BuggyHashMap.keyGen)
     func delete(key: Int) async {
         map.delete(key: key)
     }
 
-    @Command(weight: 1, .int(in: 0 ... 1))
+    @Command(weight: 1, BuggyHashMap.keyGen)
     func getOrElse(key: Int) async -> Int {
         map.getOrElse(key: key, default: -1)
     }
