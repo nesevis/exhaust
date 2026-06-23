@@ -260,6 +260,8 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                 for (marker, command) in taggedCommands where marker.isPrefix {
                     do {
                         try fresh.run(command)
+                    } catch is ContractSkip {
+                        continue
                     } catch {
                         return false
                     }

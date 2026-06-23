@@ -294,6 +294,8 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                     for (marker, command) in taggedCommands where marker.isPrefix {
                         do {
                             try await fresh.run(command)
+                        } catch is ContractSkip {
+                            continue
                         } catch {
                             return false
                         }
