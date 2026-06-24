@@ -1,5 +1,7 @@
 import ExhaustCore
 
+// MARK: - Entry Point
+
 extension __ExhaustRuntime {
     /// Runs the shared preemptive pipeline (smoke, SCA coverage, then random sampling with reduction) over a backend that supplies per-probe execution, the smoke trace, and oracle replay.
     ///
@@ -8,292 +10,126 @@ extension __ExhaustRuntime {
     /// Sampling and lane-collapse use the oracle as their property function (fast, over-reports). Once a candidate survives lane-collapse, linearizability confirms it. Structural reduction uses linearizability as its property function, so commands whose return values carry response-level evidence are not stripped.
     ///
     /// Rendered failure messages are returned as deferred issues rather than reported inline, so each entry point can report them in a context where Swift Testing task-locals are available (the pipeline itself runs on a GCD thread). The fully-populated ``ExhaustReport`` is returned for the entry point to deliver to `onReport`.
-    /// Evidence from a single failing execution: the outcome, response-level witness, and human-readable description of the expected state.
-    private struct FailureEvidence<Spec: ContractSpecBase> {
-        let outcome: Preemptive.Outcome<Spec>
-        let witness: ResponseWitness?
-        let failureDescription: String?
-    }
-
-    /// Result of reducing a confirmed failure to its reported form.
-    private struct ReducedFailure<Spec: ContractSpecBase> {
-        let reduced: [(ScheduleMarker, Spec.Command)]
-        let reductionInvocations: Int
-        let witness: ResponseWitness?
-        let reportedOutcome: Preemptive.Outcome<Spec>?
-        let failureDescription: String?
-    }
-
     static func runPreemptivePipeline<Backend: PreemptiveBackend>(
         backend: Backend,
         config: ResolvedConcurrentConfig,
         regressionSeeds: [String] = []
     ) -> (result: ContractResult<Backend.Spec>?, deferredIssues: [String], report: ExhaustReport) {
         typealias Spec = Backend.Spec
-        let runStopwatch = Stopwatch()
+
         var report = ExhaustReport()
         report.seed = config.seed
-        var deferredIssues: [String] = []
-        func finalizeReport() {
-            report.totalMilliseconds = runStopwatch.elapsedMilliseconds
-        }
 
         let commandGen = Spec.commandGenerator.gen
         let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
         guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
-            deferredIssues.append("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure.")
-            finalizeReport()
-            return (nil, deferredIssues, report)
+            report.totalMilliseconds = 0
+            return (nil, ["Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure."], report)
         }
-        let sequenceGen = Gen.arrayOf(
-            taggedCommandGen,
-            within: 1 ... UInt64(commandLimit),
-            scaling: .constant
+
+        var failureContext = FailureContext()
+        failureContext.specName = "\(Spec.self)"
+        failureContext.isPreemptive = true
+
+        var context = PreemptivePipelineContext(
+            backend: backend,
+            config: config,
+            regressionSeeds: regressionSeeds,
+            sequenceGen: Gen.arrayOf(taggedCommandGen, within: 1 ... UInt64(commandLimit), scaling: .constant),
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            samplingBudget: config.budget.samplingBudget,
+            coverageBudget: config.budget.coverageBudget,
+            identifySkips: backend.makeIdentifySkips(),
+            runStopwatch: Stopwatch(),
+            invocationCounter: UnsafeSendableBox(0),
+            lastRunTimedOut: UnsafeSendableBox(false),
+            report: report,
+            deferredIssues: [],
+            failureContext: failureContext
         )
 
-        let samplingBudget = config.budget.samplingBudget
-        let coverageBudget = config.budget.coverageBudget
-        var coverageInvocations = 0
-        // Single-threaded: the reducer and SCA row loop call the property sequentially on the pipeline GCD thread.
-        let invocationCounter = UnsafeSendableBox(0)
-        let lastRunTimedOut = UnsafeSendableBox(false)
+        if let result = runRegressionSeeds(&context) { return result }
+        if let result = runSmokeTest(&context) { return result }
 
-        let identifySkips = backend.makeIdentifySkips()
-        let lastFailingOutcome = UnsafeSendableBox<Preemptive.Outcome<Spec>?>(nil)
-        let classifyFailure: @Sendable ([(ScheduleMarker, Spec.Command)], Preemptive.Outcome<Spec>) -> FailureEvidence<Spec>? = { taggedCommands, outcome in
-            if outcome.passed {
-                return nil
-            }
-            guard let laneResponses = outcome.laneResponses,
-                  let concurrentSpec = outcome.concurrentSpec
-            else {
-                return FailureEvidence(outcome: outcome, witness: nil, failureDescription: nil)
-            }
-            guard case let .notLinearizable(witness, failure) = backend.checkLinearizability(
-                taggedCommands: taggedCommands,
-                laneResponses: laneResponses,
-                concurrentSpec: concurrentSpec
-            ) else {
-                return nil
-            }
-            return FailureEvidence(outcome: outcome, witness: witness, failureDescription: failure)
+        let property = makeProperty(&context)
+        let linearizableProbe = makeLinearizableProbe(&context)
+
+        if let result = runCoveragePhase(&context, property: property, linearizableProbe: linearizableProbe) {
+            return result
+        }
+        context.coverageInvocations = context.invocationCounter.value
+
+        if let result = runSamplingPhase(&context, property: property, linearizableProbe: linearizableProbe) {
+            return result
         }
 
-        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
-            invocationCounter.value += 1
-            let outcome = backend.execute(taggedCommands)
-            lastRunTimedOut.value = outcome.timedOut
-            guard let failure = classifyFailure(taggedCommands, outcome) else {
-                return true
-            }
-            lastFailingOutcome.value = failure.outcome
-            return false
-        }
+        context.report.setInvocations(coverage: context.coverageInvocations, randomSampling: 0, reduction: 0)
+        finalizeReport(&context)
+        return (nil, context.deferredIssues, context.report)
+    }
+}
 
-        func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)], discoveryIterations: Int) -> FailureEvidence<Spec>? {
-            for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
-                if let confirmed = classifyFailure(input, backend.execute(input)) {
-                    return confirmed
-                }
-            }
-            return nil
-        }
+// MARK: - Pipeline Phases
 
-        func linearizableProbe(_ probeCommands: [(ScheduleMarker, Spec.Command)], probeTree _: ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureEvidence<Spec>?) {
-            guard let failure = classifyFailure(probeCommands, backend.execute(probeCommands)) else {
-                return (true, nil, nil, nil)
+private extension __ExhaustRuntime {
+    /// Replays each regression seed by re-invoking the pipeline with modified config, returning early on the first reproduction.
+    static func runRegressionSeeds<Backend: PreemptiveBackend>(
+        _ context: inout PreemptivePipelineContext<Backend>
+    ) -> PreemptivePipelineContext<Backend>.PipelineResult? {
+        guard context.config.coverageReplayRow == nil, context.config.seed == nil else { return nil }
+        for encodedSeed in context.regressionSeeds {
+            guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
+                context.deferredIssues.append("Invalid regression seed: \(encodedSeed)")
+                continue
             }
-            return (false, failure.witness, failure.failureDescription, failure)
-        }
 
-        /// Per-lane observed return values for failure annotation, keyed by ``ScheduleMarker/rawValue`` in per-lane execution order.
-        func laneResponseValues(from outcome: Preemptive.Outcome<Spec>?) -> [UInt8: [String?]]? {
-            guard let outcome, let typedResponses = outcome.laneResponses else { return nil }
-            var values: [UInt8: [String?]] = [:]
-            for laneArray in typedResponses {
-                for response in laneArray {
-                    values[response.lane, default: []].append(response.outcome.displayValue)
-                }
+            var replayConfig = context.config
+            switch decoded {
+                case let .coverage(row: row):
+                    replayConfig.coverageReplayRow = row
+                    let needed = UInt64(row) + 1
+                    if replayConfig.budget.coverageBudget < needed {
+                        replayConfig.budget = .custom(
+                            coverage: needed,
+                            sampling: replayConfig.budget.samplingBudget
+                        )
+                    }
+                case let .sampling(seed, iteration):
+                    replayConfig.seed = seed
+                    replayConfig.replayIteration = iteration
             }
-            return values
-        }
 
-        /// Reduces a discovered failure to its reported form, shared by the coverage and sampling phases (which differ only in discovery metadata).
-        ///
-        /// Prunes skipped commands, grows the deterministic prefix (lane collapse, oracle property), simplifies structurally under the linearizability property, then re-confirms and canonicalizes prefix-first. Applies reduction stats to the report. Returns the reported schedule, its total reduction-probe count, the response witness, and the confirming execution's outcome (for evidence and actual-state rendering). `reportedOutcome` is nil when reduction dissolved the violation and the pruned schedule is reported as a fallback.
-        func reduceConfirmedFailure(
-            taggedCommands: [(ScheduleMarker, Spec.Command)],
-            tree: ChoiceTree,
-            pruneSeed: UInt64,
-            discoveryIterations: Int
-        ) -> ReducedFailure<Spec> {
-            let repetitions = PreemptiveReduction.confirmationRepetitions(discoveryIterations: discoveryIterations)
-            // Prune commands whose preconditions were not met: a skipped command is a no-op, so removing it up front keeps reduction on the minimal command set and the reported counterexample carries no skipped commands. The prune is reverted if removing the skips dissolves the violation.
-            let (prunedCommands, prunedTree) = pruneSkippedCommands(
-                value: taggedCommands,
-                tree: tree,
-                generator: sequenceGen,
-                seed: pruneSeed,
-                property: property,
-                identifySkips: identifySkips,
-                logEvent: "preemptive_skip_pruning"
+            let (replayResult, replayIssues, _) = runPreemptivePipeline(
+                backend: context.backend,
+                config: replayConfig
             )
+            context.deferredIssues.append(contentsOf: replayIssues)
 
-            // Pass 1: lane collapse. Moves concurrent commands into the sequential prefix, reducing the number of lanes and the interleaving space before the checker-heavy deletion pass. Each accepted collapse self-validates as non-linearizable under linearizableProbe.
-            let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
-            let collapseResult = PreemptiveReduction.reduceSinglePass(
-                generator: sequenceGen,
-                tree: prunedTree,
-                output: prunedCommands,
-                encoders: [.laneCollapse],
-                maxStalls: 2,
-                deadlineNanoseconds: 7_500_000_000,
-                rematerialize: true,
-                repetitions: repetitions,
-                tuning: noRelax,
-                execute: linearizableProbe
-            )
-
-            // Pass 2: deletion and value reduction on the collapsed schedule. The tighter interleaving space (fewer concurrent commands) makes each linearizability check cheaper.
-            let combinedResult = PreemptiveReduction.reduceSinglePass(
-                generator: sequenceGen,
-                tree: collapseResult.tree,
-                output: collapseResult.output,
-                encoders: [.deletion, .valueSearch, .floatSearch],
-                maxStalls: 2,
-                deadlineNanoseconds: 7_500_000_000,
-                rematerialize: true,
-                repetitions: repetitions,
-                tuning: noRelax,
-                execute: linearizableProbe
-            )
-            var stats = collapseResult.stats
-            stats.merge(combinedResult.stats)
-            report.applyReductionStats(stats)
-
-            // Present prefix-first. The runner runs all prefix commands sequentially before any lane (execute() partitions by marker, not array position), so reordering is execution-equivalent and makes the execution trace honest.
-            let reduced = combinedResult.output.sorted { $0.0.isPrefix && $1.0.isPrefix == false }
-            let totalInvocations = combinedResult.propertyInvocations + collapseResult.propertyInvocations
-
-            // Evidence priority: (1) reduction cache from the deletion pass, (2) reduction cache from the lane collapse pass, (3) confirmRealFailure re-execution as last resort when no reduction probe reproduced the race.
-            let cached = combinedResult.failureOutcome ?? collapseResult.failureOutcome
-            if let cached {
-                return ReducedFailure(
-                    reduced: reduced,
-                    reductionInvocations: totalInvocations,
-                    witness: combinedResult.witness ?? collapseResult.witness,
-                    reportedOutcome: cached.outcome,
-                    failureDescription: combinedResult.failureDescription ?? collapseResult.failureDescription
-                )
-            }
-            let confirmed = confirmRealFailure(reduced, discoveryIterations: discoveryIterations)
-            return ReducedFailure(
-                reduced: reduced,
-                reductionInvocations: totalInvocations,
-                witness: confirmed?.witness,
-                reportedOutcome: confirmed?.outcome,
-                failureDescription: confirmed?.failureDescription
-            )
-        }
-
-        /// Builds the result, records invocation counts, renders the failure issue, and finalizes the report for a reduced failure. The coverage and sampling phases run this identical six-step sequence after ``reduceConfirmedFailure`` and differ only in discovery metadata, so it lives here rather than being spelled out at each phase.
-        func assembleReducedFailure(
-            reduction: ReducedFailure<Spec>,
-            discoveryMethod: ContractDiscoveryMethod,
-            seed: UInt64?,
-            iteration: Int,
-            budget: UInt64,
-            sequencesTested: Int,
-            originalCount: Int,
-            replaySeed: String,
-            coverageInvocations: Int,
-            randomSamplingInvocations: Int
-        ) -> (result: ContractResult<Spec>?, deferredIssues: [String], report: ExhaustReport) {
-            let (result, failureDescription) = backend.buildResult(
-                reduced: reduction.reduced,
-                seed: seed,
-                replaySeed: replaySeed,
-                discoveryMethod: discoveryMethod
-            )
-            report.setInvocations(
-                coverage: coverageInvocations,
-                randomSampling: randomSamplingInvocations,
-                reduction: reduction.reductionInvocations
-            )
-            if config.suppressIssueReporting == false {
-                // Evidence comes only from the reported schedule's own confirming run; when it could not be reproduced, the report shows expected-state only rather than borrowing the original discovering run's (mismatched) evidence.
-                deferredIssues.append(makePreemptiveFailureMessage(
-                    reduction.reduced,
-                    specName: "\(Spec.self)",
-                    discoveryMethod: discoveryMethod,
-                    seed: seed,
-                    iteration: iteration,
-                    budget: budget,
-                    sequencesTested: sequencesTested,
-                    reductionInvocations: reduction.reductionInvocations,
-                    originalCount: originalCount,
-                    replaySeed: replaySeed,
-                    timedOut: false,
-                    expectedDescription: failureDescription,
-                    actualDescription: reduction.failureDescription ?? reduction.reportedOutcome?.concurrentSpec?.failureDescription(),
-                    laneResponseValues: laneResponseValues(from: reduction.reportedOutcome),
-                    linearizabilityWitness: reduction.witness
-                ))
-            }
-            finalizeReport()
-            return (result, deferredIssues, report)
-        }
-
-        // Regression seeds: replay each through the same pipeline with the appropriate replay config.
-        if config.coverageReplayRow == nil, config.seed == nil {
-            for encodedSeed in regressionSeeds {
-                guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
-                    deferredIssues.append("Invalid regression seed: \(encodedSeed)")
-                    continue
-                }
-
-                var replayConfig = config
-                switch decoded {
-                    case let .coverage(row: row):
-                        replayConfig.coverageReplayRow = row
-                        let needed = UInt64(row) + 1
-                        if replayConfig.budget.coverageBudget < needed {
-                            replayConfig.budget = .custom(
-                                coverage: needed,
-                                sampling: replayConfig.budget.samplingBudget
-                            )
-                        }
-                    case let .sampling(seed, iteration):
-                        replayConfig.seed = seed
-                        replayConfig.replayIteration = iteration
-                }
-
-                let (replayResult, replayIssues, _) = runPreemptivePipeline(
-                    backend: backend,
-                    config: replayConfig
-                )
-                deferredIssues.append(contentsOf: replayIssues)
-
-                if let replayResult {
-                    finalizeReport()
-                    return (replayResult, deferredIssues, report)
-                } else if config.suppressIssueReporting == false {
-                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
-                }
+            if let replayResult {
+                finalizeReport(&context)
+                return (replayResult, context.deferredIssues, context.report)
+            } else if context.config.suppressIssueReporting == false {
+                context.deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
             }
         }
+        return nil
+    }
 
-        // Phase 0: Smoke test. Run the first deterministic command sequence sequentially.
-        // If the spec is broken without concurrency, fail fast before investing in concurrent probing.
+    /// Runs the smoke test (seed 0, one iteration) and returns an early-exit result on failure.
+    static func runSmokeTest<Backend: PreemptiveBackend>(
+        _ context: inout PreemptivePipelineContext<Backend>
+    ) -> PreemptivePipelineContext<Backend>.PipelineResult? {
+        typealias Spec = Backend.Spec
         do {
             let smokeGen = Gen.arrayOf(
-                commandGen,
-                within: 1 ... UInt64(commandLimit),
+                context.commandGen,
+                within: 1 ... UInt64(context.commandLimit),
                 scaling: .constant
             )
             var smokeIterator = ValueAndChoiceTreeInterpreter(smokeGen, materializePicks: false, seed: 0, maxRuns: 1)
             if let (commands, _) = try smokeIterator.next() {
-                let smoke = backend.runSmoke(commands)
+                let smoke = context.backend.runSmoke(commands)
                 if smoke.failed {
                     let result = ContractResult<Spec>(
                         commands: commands,
@@ -303,192 +139,441 @@ extension __ExhaustRuntime {
                         replaySeed: ReplaySeed.Resolved.sampling(seed: 0, iteration: 1).encoded,
                         discoveryMethod: .smokeTest
                     )
-                    if config.suppressIssueReporting == false {
+                    if context.config.suppressIssueReporting == false {
                         let failureInfo = ContractFailureInfo<Spec.Command>(discoveryMethod: .smokeTest)
                         let message = renderFailure(result, failureInfo: failureInfo, failureDescription: smoke.failureDescription)
-                        deferredIssues.append(message)
+                        context.deferredIssues.append(message)
                     }
-                    report.replaySeed = result.replaySeed
-                    report.setInvocations(coverage: 0, randomSampling: 1, reduction: 0)
-                    finalizeReport()
-                    return (result, deferredIssues, report)
+                    context.report.replaySeed = result.replaySeed
+                    context.report.setInvocations(coverage: 0, randomSampling: 1, reduction: 0)
+                    finalizeReport(&context)
+                    return (result, context.deferredIssues, context.report)
                 }
             }
         } catch {
-            deferredIssues.append("Generator failed during smoke test: \(error)")
+            context.deferredIssues.append("Generator failed during smoke test: \(error)")
         }
-
-        // Phase 1: Coverage — the property integrates linearizability so the row loop skips false positives and only stops on genuine violations.
-        if config.shouldRunCoverage {
-            let effectiveCoverageBudget: UInt64 = if let row = config.coverageReplayRow {
-                max(coverageBudget, UInt64(row) + 1)
-            } else {
-                coverageBudget
-            }
-            let scaRowResult = runSCACoverageRowLoop(
-                sequenceGen: sequenceGen,
-                commandGen: commandGen,
-                commandLimit: commandLimit,
-                coverageBudget: effectiveCoverageBudget,
-                skipToRow: config.coverageReplayRow,
-                logEventPrefix: "concurrent_sca_coverage",
-                concurrencyLevel: config.concurrencyLevel,
-                property: property
-            )
-            if case let .failure(taggedCommands, tree, coverageIterations) = scaRowResult {
-                let reduction = reduceConfirmedFailure(
-                    taggedCommands: taggedCommands,
-                    tree: tree,
-                    pruneSeed: UInt64(coverageIterations),
-                    discoveryIterations: coverageIterations
-                )
-                // Reduction probes run through reduceSinglePass's own counter, not the shared invocationCounter, so the three buckets are already disjoint: coverage takes the shared counter, sampling is zero, reduction its own count. (setConcurrentInvocations assumes reduction flows through the shared counter, which would drive coverage negative here.)
-                return assembleReducedFailure(
-                    reduction: reduction,
-                    discoveryMethod: .coverage,
-                    seed: nil,
-                    iteration: coverageIterations,
-                    budget: coverageBudget,
-                    sequencesTested: invocationCounter.value,
-                    originalCount: taggedCommands.count,
-                    replaySeed: ReplaySeed.Resolved.encodeCoverageIteration(coverageIterations),
-                    coverageInvocations: invocationCounter.value,
-                    randomSamplingInvocations: 0
-                )
-            }
-        }
-        coverageInvocations = invocationCounter.value
-
-        // Phase 2: Sampling
-        if config.coverageReplayRow == nil {
-            let (startIndex, maxRuns) = samplingReplayWindow(
-                replayIteration: config.replayIteration,
-                samplingBudget: samplingBudget
-            )
-            var interpreter = ValueAndChoiceTreeInterpreter(
-                sequenceGen,
-                materializePicks: false,
-                seed: config.seed,
-                maxRuns: maxRuns,
-                initialRunIndex: startIndex
-            )
-            let actualSeed = interpreter.baseSeed
-
-            var samplingIteration = 0
-            do {
-                while let (taggedCommands, tree) = try interpreter.next() {
-                    samplingIteration += 1
-                    let absoluteIteration = Int(startIndex) + samplingIteration
-                    if property(taggedCommands) {
-                        continue
-                    }
-
-                    // The property returned false — either a confirmed non-linearizable execution or a timeout/exception (no lane responses). The outcome is in lastFailingOutcome.
-                    if lastRunTimedOut.value {
-                        let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil
-                            ? .replay
-                            : .randomSampling
-                        let samplingReplaySeed = ReplaySeed.Resolved.sampling(seed: actualSeed, iteration: absoluteIteration).encoded
-                        let reportedInput = taggedCommands.filter(\.0.isPrefix) + taggedCommands.filter { $0.0.isPrefix == false }
-                        let (result, failureDescription) = backend.buildResult(
-                            reduced: reportedInput,
-                            seed: actualSeed,
-                            replaySeed: samplingReplaySeed,
-                            discoveryMethod: discoveryMethod
-                        )
-                        report.setInvocations(coverage: coverageInvocations, randomSampling: samplingIteration, reduction: 0)
-                        if config.suppressIssueReporting == false {
-                            deferredIssues.append(makePreemptiveFailureMessage(
-                                reportedInput,
-                                specName: "\(Spec.self)",
-                                discoveryMethod: discoveryMethod,
-                                seed: actualSeed,
-                                iteration: absoluteIteration,
-                                budget: samplingBudget,
-                                sequencesTested: coverageInvocations + samplingIteration,
-                                reductionInvocations: 0,
-                                originalCount: taggedCommands.count,
-                                replaySeed: samplingReplaySeed,
-                                timedOut: true,
-                                expectedDescription: failureDescription,
-                                actualDescription: nil
-                            ))
-                        }
-                        finalizeReport()
-                        return (result, deferredIssues, report)
-                    }
-
-                    let reduction = reduceConfirmedFailure(
-                        taggedCommands: taggedCommands,
-                        tree: tree,
-                        pruneSeed: UInt64(absoluteIteration),
-                        discoveryIterations: coverageInvocations + samplingIteration
-                    )
-                    let discoveryMethod: ContractDiscoveryMethod = config.replayIteration != nil ? .replay : .randomSampling
-                    return assembleReducedFailure(
-                        reduction: reduction,
-                        discoveryMethod: discoveryMethod,
-                        seed: actualSeed,
-                        iteration: absoluteIteration,
-                        budget: samplingBudget,
-                        sequencesTested: coverageInvocations + samplingIteration,
-                        originalCount: taggedCommands.count,
-                        replaySeed: ReplaySeed.Resolved.sampling(seed: actualSeed, iteration: absoluteIteration).encoded,
-                        coverageInvocations: coverageInvocations,
-                        randomSamplingInvocations: samplingIteration
-                    )
-                }
-            } catch {
-                deferredIssues.append("Generator failed during sampling: \(error)")
-            }
-        }
-
-        report.setInvocations(coverage: coverageInvocations, randomSampling: 0, reduction: 0)
-        finalizeReport()
-        return (nil, deferredIssues, report)
+        return nil
     }
 
-    /// Assembles the rendered failure message shared by the coverage and sampling phases.
-    ///
-    /// The two phases differ only in their discovery metadata (seed, iteration, budget, counts, replay seed). Everything else (the preemptive flag, the timeout-diagnostic gate, and the expected-state line built from the sequential oracle replay) is identical, so it lives here rather than being spelled out at each call site.
-    private static func makePreemptiveFailureMessage(
+    /// Runs the SCA coverage row loop and reduces the first failure found, if any.
+    static func runCoveragePhase<Backend: PreemptiveBackend>(
+        _ context: inout PreemptivePipelineContext<Backend>,
+        property: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Bool,
+        linearizableProbe: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?)
+    ) -> PreemptivePipelineContext<Backend>.PipelineResult? {
+        guard context.config.shouldRunCoverage else { return nil }
+        let effectiveCoverageBudget: UInt64 = if let row = context.config.coverageReplayRow {
+            max(context.coverageBudget, UInt64(row) + 1)
+        } else {
+            context.coverageBudget
+        }
+        let scaRowResult = runSCACoverageRowLoop(
+            sequenceGen: context.sequenceGen,
+            commandGen: context.commandGen,
+            commandLimit: context.commandLimit,
+            coverageBudget: effectiveCoverageBudget,
+            skipToRow: context.config.coverageReplayRow,
+            logEventPrefix: "concurrent_sca_coverage",
+            concurrencyLevel: context.config.concurrencyLevel,
+            property: property
+        )
+        guard case let .failure(taggedCommands, tree, coverageIterations) = scaRowResult else {
+            return nil
+        }
+        let reduction = reduceConfirmedFailure(
+            &context,
+            taggedCommands: taggedCommands,
+            tree: tree,
+            pruneSeed: UInt64(coverageIterations),
+            discoveryIterations: coverageIterations,
+            property: property,
+            linearizableProbe: linearizableProbe
+        )
+        return assembleReducedFailure(
+            &context,
+            reduction: reduction,
+            discoveryMethod: .coverage,
+            seed: nil,
+            iteration: coverageIterations,
+            budget: context.coverageBudget,
+            sequencesTested: context.invocationCounter.value,
+            originalCount: taggedCommands.count,
+            replaySeed: ReplaySeed.Resolved.encodeCoverageIteration(coverageIterations),
+            coverageInvocations: context.invocationCounter.value,
+            randomSamplingInvocations: 0
+        )
+    }
+
+    /// Runs the random sampling loop, short-circuiting on timeout (no reduction) or reducing the first confirmed failure.
+    static func runSamplingPhase<Backend: PreemptiveBackend>(
+        _ context: inout PreemptivePipelineContext<Backend>,
+        property: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Bool,
+        linearizableProbe: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?)
+    ) -> PreemptivePipelineContext<Backend>.PipelineResult? {
+        guard context.config.coverageReplayRow == nil else { return nil }
+        let (startIndex, maxRuns) = samplingReplayWindow(
+            replayIteration: context.config.replayIteration,
+            samplingBudget: context.samplingBudget
+        )
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            context.sequenceGen,
+            materializePicks: false,
+            seed: context.config.seed,
+            maxRuns: maxRuns,
+            initialRunIndex: startIndex
+        )
+        let actualSeed = interpreter.baseSeed
+
+        var samplingIteration = 0
+        do {
+            while let (taggedCommands, tree) = try interpreter.next() {
+                samplingIteration += 1
+                let absoluteIteration = Int(startIndex) + samplingIteration
+                if property(taggedCommands) {
+                    continue
+                }
+
+                if context.lastRunTimedOut.value {
+                    let discoveryMethod: ContractDiscoveryMethod = context.config.replayIteration != nil
+                        ? .replay
+                        : .randomSampling
+                    let samplingReplaySeed = ReplaySeed.Resolved.sampling(seed: actualSeed, iteration: absoluteIteration).encoded
+                    let reportedInput: [(ScheduleMarker, Backend.Spec.Command)] = taggedCommands.filter(\.0.isPrefix) + taggedCommands.filter { $0.0.isPrefix == false }
+                    let (result, failureDescription) = context.backend.buildResult(
+                        reduced: reportedInput,
+                        seed: actualSeed,
+                        replaySeed: samplingReplaySeed,
+                        discoveryMethod: discoveryMethod
+                    )
+                    context.report.setInvocations(coverage: context.coverageInvocations, randomSampling: samplingIteration, reduction: 0)
+                    if context.config.suppressIssueReporting == false {
+                        context.failureContext.discoveryMethod = discoveryMethod
+                        context.failureContext.seed = actualSeed
+                        context.failureContext.iteration = absoluteIteration
+                        context.failureContext.budget = context.samplingBudget
+                        context.failureContext.sequencesTested = context.coverageInvocations + samplingIteration
+                        context.failureContext.originalCount = taggedCommands.count
+                        context.failureContext.replaySeed = samplingReplaySeed
+                        context.failureContext.timedOut = true
+                        context.failureContext.oracleDescription = failureDescription.map { "Expected state (from sequential replay):\n  \($0)" }
+                        context.deferredIssues.append(renderFailureMessage(reportedInput, context: context.failureContext))
+                    }
+                    finalizeReport(&context)
+                    return (result, context.deferredIssues, context.report)
+                }
+
+                let reduction = reduceConfirmedFailure(
+                    &context,
+                    taggedCommands: taggedCommands,
+                    tree: tree,
+                    pruneSeed: UInt64(absoluteIteration),
+                    discoveryIterations: context.coverageInvocations + samplingIteration,
+                    property: property,
+                    linearizableProbe: linearizableProbe
+                )
+                let discoveryMethod: ContractDiscoveryMethod = context.config.replayIteration != nil ? .replay : .randomSampling
+                return assembleReducedFailure(
+                    &context,
+                    reduction: reduction,
+                    discoveryMethod: discoveryMethod,
+                    seed: actualSeed,
+                    iteration: absoluteIteration,
+                    budget: context.samplingBudget,
+                    sequencesTested: context.coverageInvocations + samplingIteration,
+                    originalCount: taggedCommands.count,
+                    replaySeed: ReplaySeed.Resolved.sampling(seed: actualSeed, iteration: absoluteIteration).encoded,
+                    coverageInvocations: context.coverageInvocations,
+                    randomSamplingInvocations: samplingIteration
+                )
+            }
+        } catch {
+            context.deferredIssues.append("Generator failed during sampling: \(error)")
+        }
+        return nil
+    }
+}
+
+// MARK: - Helpers
+
+private extension __ExhaustRuntime {
+    /// Determines whether a failing outcome represents a confirmed linearizability violation. Returns `nil` when the execution passed or when linearizability holds despite the oracle flag.
+    static func classifyFailure<Backend: PreemptiveBackend>(
+        taggedCommands: [(ScheduleMarker, Backend.Spec.Command)],
+        outcome: Preemptive.Outcome<Backend.Spec>,
+        backend: Backend
+    ) -> FailureEvidence<Backend.Spec>? {
+        if outcome.passed {
+            return nil
+        }
+        guard let laneResponses = outcome.laneResponses,
+              let concurrentSpec = outcome.concurrentSpec
+        else {
+            return .init(outcome: outcome, witness: nil, failureDescription: nil)
+        }
+        guard case let .notLinearizable(witness, failure) = backend.checkLinearizability(
+            taggedCommands: taggedCommands,
+            laneResponses: laneResponses,
+            concurrentSpec: concurrentSpec
+        ) else {
+            return nil
+        }
+        return .init(outcome: outcome, witness: witness, failureDescription: failure)
+    }
+
+    /// Extracts per-lane response display values from an outcome for trace annotation.
+    static func laneResponseValues(
+        from outcome: Preemptive.Outcome<some ContractSpecBase>?
+    ) -> [UInt8: [String?]]? {
+        guard let outcome, let typedResponses = outcome.laneResponses else { return nil }
+        var values: [UInt8: [String?]] = [:]
+        for laneArray in typedResponses {
+            for response in laneArray {
+                values[response.lane, default: []].append(response.outcome.displayValue)
+            }
+        }
+        return values
+    }
+
+    /// Builds the oracle-based property closure, closing over the shared invocation counter and timeout flag.
+    static func makeProperty<Backend: PreemptiveBackend>(
+        _ context: inout PreemptivePipelineContext<Backend>
+    ) -> @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Bool {
+        let backend = context.backend
+        let invocationCounter = context.invocationCounter
+        let lastRunTimedOut = context.lastRunTimedOut
+        return { taggedCommands in
+            invocationCounter.value += 1
+            let outcome = backend.execute(taggedCommands)
+            lastRunTimedOut.value = outcome.timedOut
+            guard classifyFailure(
+                taggedCommands: taggedCommands,
+                outcome: outcome,
+                backend: backend
+            ) == nil else {
+                return false
+            }
+            return true
+        }
+    }
+
+    /// Builds the linearizability probe closure used during structural reduction.
+    static func makeLinearizableProbe<Backend: PreemptiveBackend>(
+        _ context: inout PreemptivePipelineContext<Backend>
+    ) -> @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?) {
+        let backend = context.backend
+        return { probeCommands, _ in
+            guard let failure = classifyFailure(
+                taggedCommands: probeCommands,
+                outcome: backend.execute(probeCommands),
+                backend: backend
+            ) else {
+                return (true, nil, nil, nil)
+            }
+            return (false, failure.witness, failure.failureDescription, failure)
+        }
+    }
+
+    /// Re-executes the reduced input to confirm the race is reproducible, since prior reduction probes may not have triggered it.
+    static func confirmRealFailure<Backend: PreemptiveBackend>(
+        _ context: borrowing PreemptivePipelineContext<Backend>,
+        input: [(ScheduleMarker, Backend.Spec.Command)],
+        discoveryIterations: Int
+    ) -> FailureEvidence<Backend.Spec>? {
+        for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
+            if let confirmed = classifyFailure(
+                taggedCommands: input,
+                outcome: context.backend.execute(input),
+                backend: context.backend
+            ) {
+                return confirmed
+            }
+        }
+        return nil
+    }
+
+    static func finalizeReport(
+        _ context: inout PreemptivePipelineContext<some PreemptiveBackend>
+    ) {
+        context.report.totalMilliseconds = context.runStopwatch.elapsedMilliseconds
+    }
+
+    static func renderFailureMessage(
         _ input: [(ScheduleMarker, some CustomStringConvertible)],
-        specName: String,
+        context: FailureContext
+    ) -> String {
+        let trace = buildPreemptiveTrace(
+            input,
+            laneResponseValues: context.laneResponseValues,
+            linearizabilityWitness: context.linearizabilityWitness
+        )
+        return renderFailure(input, trace: trace, context: context)
+    }
+
+    /// Reduces a confirmed failure in two passes: lane collapse (moving concurrent commands to the prefix) followed by deletion and value search on the tighter schedule. Falls back to ``confirmRealFailure(_:input:discoveryIterations:)`` when neither pass cached a failing outcome.
+    static func reduceConfirmedFailure<Backend: PreemptiveBackend>(
+        _ context: inout PreemptivePipelineContext<Backend>,
+        taggedCommands: [(ScheduleMarker, Backend.Spec.Command)],
+        tree: ChoiceTree,
+        pruneSeed: UInt64,
+        discoveryIterations: Int,
+        property: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Bool,
+        linearizableProbe: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?)
+    ) -> ReducedFailure<Backend.Spec> {
+        let repetitions = PreemptiveReduction.confirmationRepetitions(discoveryIterations: discoveryIterations)
+        let (prunedCommands, prunedTree) = pruneSkippedCommands(
+            value: taggedCommands,
+            tree: tree,
+            generator: context.sequenceGen,
+            seed: pruneSeed,
+            property: property,
+            identifySkips: context.identifySkips,
+            logEvent: "preemptive_skip_pruning"
+        )
+
+        // Pass 1: lane collapse. Moves concurrent commands into the sequential prefix, reducing the number of lanes and the interleaving space before the checker-heavy deletion pass.
+        let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
+        let collapseResult = PreemptiveReduction.reduceSinglePass(
+            generator: context.sequenceGen,
+            tree: prunedTree,
+            output: prunedCommands,
+            encoders: [.laneCollapse],
+            maxStalls: 2,
+            deadlineNanoseconds: 7_500_000_000,
+            rematerialize: true,
+            repetitions: repetitions,
+            tuning: noRelax,
+            execute: linearizableProbe
+        )
+
+        // Pass 2: deletion and value reduction on the collapsed schedule. The tighter interleaving space (fewer concurrent commands) makes each linearizability check cheaper.
+        let combinedResult = PreemptiveReduction.reduceSinglePass(
+            generator: context.sequenceGen,
+            tree: collapseResult.tree,
+            output: collapseResult.output,
+            encoders: [.deletion, .valueSearch, .floatSearch],
+            maxStalls: 2,
+            deadlineNanoseconds: 7_500_000_000,
+            rematerialize: true,
+            repetitions: repetitions,
+            tuning: noRelax,
+            execute: linearizableProbe
+        )
+        var stats = collapseResult.stats
+        stats.merge(combinedResult.stats)
+        context.report.applyReductionStats(stats)
+
+        let reduced = combinedResult.output.sorted { $0.0.isPrefix && $1.0.isPrefix == false }
+        let totalInvocations = combinedResult.propertyInvocations + collapseResult.propertyInvocations
+
+        // Evidence priority: (1) reduction cache from the deletion pass, (2) reduction cache from the lane collapse pass, (3) confirmRealFailure re-execution as last resort when no reduction probe reproduced the race.
+        let cached = combinedResult.failureOutcome ?? collapseResult.failureOutcome
+        if let cached {
+            return .init(
+                reduced: reduced,
+                reductionInvocations: totalInvocations,
+                witness: combinedResult.witness ?? collapseResult.witness,
+                reportedOutcome: cached.outcome,
+                failureDescription: combinedResult.failureDescription ?? collapseResult.failureDescription
+            )
+        }
+        let confirmed = confirmRealFailure(context, input: reduced, discoveryIterations: discoveryIterations)
+        return .init(
+            reduced: reduced,
+            reductionInvocations: totalInvocations,
+            witness: confirmed?.witness,
+            reportedOutcome: confirmed?.outcome,
+            failureDescription: confirmed?.failureDescription
+        )
+    }
+
+    /// Populates the failure context with reduction evidence and renders the failure message for deferred issue reporting.
+    static func assembleReducedFailure<Backend: PreemptiveBackend>(
+        _ context: inout PreemptivePipelineContext<Backend>,
+        reduction: ReducedFailure<Backend.Spec>,
         discoveryMethod: ContractDiscoveryMethod,
         seed: UInt64?,
         iteration: Int,
         budget: UInt64,
         sequencesTested: Int,
-        reductionInvocations: Int,
         originalCount: Int,
         replaySeed: String,
-        timedOut: Bool,
-        expectedDescription: String?,
-        actualDescription: String?,
-        laneResponseValues: [UInt8: [String?]]? = nil,
-        linearizabilityWitness: ResponseWitness? = nil
-    ) -> String {
-        var failureContext = FailureContext()
-        failureContext.isPreemptive = true
-        failureContext.specName = specName
-        failureContext.discoveryMethod = discoveryMethod
-        failureContext.seed = seed
-        failureContext.iteration = iteration
-        failureContext.budget = budget
-        failureContext.sequencesTested = sequencesTested
-        failureContext.reductionInvocations = reductionInvocations
-        failureContext.originalCount = originalCount
-        failureContext.replaySeed = replaySeed
-        failureContext.timedOut = timedOut
-        failureContext.oracleDescription = expectedDescription.map { "Expected state (from sequential replay):\n  \($0)" }
-        failureContext.failureDescription = actualDescription.map { "Actual state (from concurrent execution):\n  \($0)" }
-        failureContext.laneResponseValues = laneResponseValues
-        failureContext.linearizabilityWitness = linearizabilityWitness
-        let trace = __ExhaustRuntime.buildPreemptiveTrace(
-            input,
-            laneResponseValues: laneResponseValues,
-            linearizabilityWitness: linearizabilityWitness
+        coverageInvocations: Int,
+        randomSamplingInvocations: Int
+    ) -> PreemptivePipelineContext<Backend>.PipelineResult {
+        let (result, failureDescription) = context.backend.buildResult(
+            reduced: reduction.reduced,
+            seed: seed,
+            replaySeed: replaySeed,
+            discoveryMethod: discoveryMethod
         )
-        return renderFailure(input, trace: trace, context: failureContext)
+        context.report.setInvocations(
+            coverage: coverageInvocations,
+            randomSampling: randomSamplingInvocations,
+            reduction: reduction.reductionInvocations
+        )
+        if context.config.suppressIssueReporting == false {
+            context.failureContext.discoveryMethod = discoveryMethod
+            context.failureContext.seed = seed
+            context.failureContext.iteration = iteration
+            context.failureContext.budget = budget
+            context.failureContext.sequencesTested = sequencesTested
+            context.failureContext.reductionInvocations = reduction.reductionInvocations
+            context.failureContext.originalCount = originalCount
+            context.failureContext.replaySeed = replaySeed
+            context.failureContext.oracleDescription = failureDescription.map { "Expected state (from sequential replay):\n  \($0)" }
+            context.failureContext.failureDescription = (reduction.failureDescription ?? reduction.reportedOutcome?.concurrentSpec?.failureDescription()).map { "Actual state (from concurrent execution):\n  \($0)" }
+            context.failureContext.laneResponseValues = laneResponseValues(from: reduction.reportedOutcome)
+            context.failureContext.linearizabilityWitness = reduction.witness
+            context.deferredIssues.append(renderFailureMessage(reduction.reduced, context: context.failureContext))
+        }
+        finalizeReport(&context)
+        return (result, context.deferredIssues, context.report)
+    }
+}
+
+// MARK: - Supporting Types
+
+/// Accumulates configuration, report state, and deferred issues across the preemptive pipeline phases.
+///
+/// Phase functions on ``__ExhaustRuntime`` take this as `inout` and return an optional early-exit result; `nil` means "continue to the next phase."
+private struct PreemptivePipelineContext<Backend: PreemptiveBackend>: ~Copyable {
+    typealias Spec = Backend.Spec
+    typealias PipelineResult = (result: ContractResult<Spec>?, deferredIssues: [String], report: ExhaustReport)
+
+    let backend: Backend
+    let config: ResolvedConcurrentConfig
+    let regressionSeeds: [String]
+    let sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
+    let commandGen: Generator<Spec.Command>
+    let commandLimit: Int
+    let samplingBudget: UInt64
+    let coverageBudget: UInt64
+    let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>
+    let runStopwatch: Stopwatch
+    let invocationCounter: UnsafeSendableBox<Int>
+    let lastRunTimedOut: UnsafeSendableBox<Bool>
+
+    var report: ExhaustReport
+    var deferredIssues: [String]
+    var coverageInvocations: Int = 0
+    var failureContext: __ExhaustRuntime.FailureContext
+}
+
+extension __ExhaustRuntime {
+    /// Captures the outcome, response-level witness, and failure description from a single failing execution.
+    struct FailureEvidence<Spec: ContractSpecBase> {
+        let outcome: Preemptive.Outcome<Spec>
+        let witness: ResponseWitness?
+        let failureDescription: String?
+    }
+
+    /// Holds the reduced command sequence and associated evidence after reduction.
+    struct ReducedFailure<Spec: ContractSpecBase> {
+        let reduced: [(ScheduleMarker, Spec.Command)]
+        let reductionInvocations: Int
+        let witness: ResponseWitness?
+        let reportedOutcome: Preemptive.Outcome<Spec>?
+        let failureDescription: String?
     }
 }
