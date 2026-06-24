@@ -34,29 +34,38 @@ package enum PreemptiveReduction {
     package static let defaultCommandLimit = 20
 
     /// Result of a preemptive reduction pass.
-    package struct ReductionResult<Command> {
+    package struct ReductionResult<Command, FailureOutcome> {
         package let output: [(ScheduleMarker, Command)]
         package let tree: ChoiceTree
         package let propertyInvocations: Int
         package let stats: ReductionStats
+        package let witness: ResponseWitness?
+        package let failureDescription: String?
+        package let failureOutcome: FailureOutcome?
 
         package init(
             output: [(ScheduleMarker, Command)],
             tree: ChoiceTree,
             propertyInvocations: Int,
-            stats: ReductionStats
+            stats: ReductionStats,
+            witness: ResponseWitness?,
+            failureDescription: String?,
+            failureOutcome: FailureOutcome?
         ) {
             self.output = output
             self.tree = tree
             self.propertyInvocations = propertyInvocations
             self.stats = stats
+            self.witness = witness
+            self.failureDescription = failureDescription
+            self.failureOutcome = failureOutcome
         }
     }
 
     /// Runs a single reduction pass with the given encoder set and property function.
     ///
     /// The `execute` closure receives the materialized commands and the ChoiceTree from which they were produced, so the linearizability checker can derive per-command observation hashes from the reduced tree rather than the stale original.
-    package static func reduceSinglePass<Command>(
+    package static func reduceSinglePass<Command, FailureOutcome>(
         generator: Generator<[(ScheduleMarker, Command)]>,
         tree: ChoiceTree,
         output: [(ScheduleMarker, Command)],
@@ -66,14 +75,17 @@ package enum PreemptiveReduction {
         rematerialize: Bool,
         repetitions: Int,
         tuning: SchedulerTuning = .init(),
-        execute: @escaping ([(ScheduleMarker, Command)], ChoiceTree) -> Bool
-    ) -> ReductionResult<Command> {
+        execute: @escaping ([(ScheduleMarker, Command)], ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureOutcome?)
+    ) -> ReductionResult<Command, FailureOutcome> {
         var propertyInvocations = 0
+        var lastFailure: (ResponseWitness?, String?, FailureOutcome?)?
         let reductionProperty: ReductionProperty = .contract { output, probeTree in
             let taggedCommands = output as! [(ScheduleMarker, Command)] // swiftlint:disable:this force_cast
             for _ in 0 ..< repetitions {
                 propertyInvocations += 1
-                if execute(taggedCommands, probeTree) == false {
+                let (pass, witness, failureDescription, outcome) = execute(taggedCommands, probeTree)
+                if pass == false {
+                    lastFailure = (witness, failureDescription, outcome)
                     return false
                 }
             }
@@ -113,6 +125,14 @@ package enum PreemptiveReduction {
             }
         }
 
-        return ReductionResult(output: currentOutput, tree: currentTree, propertyInvocations: propertyInvocations, stats: stats)
+        return ReductionResult(
+            output: currentOutput,
+            tree: currentTree,
+            propertyInvocations: propertyInvocations,
+            stats: stats,
+            witness: lastFailure?.0,
+            failureDescription: lastFailure?.1,
+            failureOutcome: lastFailure?.2
+        )
     }
 }

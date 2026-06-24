@@ -22,17 +22,14 @@ protocol PreemptiveBackend<Spec>: Sendable {
     /// Called after lane-collapse reduction on oracle-flagged failures. If any valid interleaving produces matching responses and passes the oracle, the execution is linearizable and the failure was a false positive.
     ///
     /// - Parameters:
-    ///   - prefix: The sequential prefix commands.
+    ///   - taggedCommands: The full tagged command sequence (prefix + concurrent).
     ///   - laneResponses: The per-lane observed responses from `Outcome.laneResponses`.
     ///   - concurrentSpec: The concurrent spec instance after execution, kept alive for oracle calls.
     /// - Returns: The linearizability verdict with closest-ordering information on failure.
     func checkLinearizability(
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         laneResponses: [[ObservedResponse<Spec.Command>]],
-        concurrentSpec: Spec,
-        observationHashes: [[UInt64]]?,
-        prefixFingerprint: UInt64,
-        prefixCache: inout LinearizabilityPrefixCache?
+        concurrentSpec: Spec
     ) -> LinearizabilityResult
 
     /// Replays the reduced commands sequentially on a fresh spec to capture the expected (race-free) oracle state for a failure result.

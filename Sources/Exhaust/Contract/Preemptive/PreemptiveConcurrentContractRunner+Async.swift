@@ -278,14 +278,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
     func checkLinearizability(
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         laneResponses: [[ObservedResponse<Spec.Command>]],
-        concurrentSpec: Spec,
-        observationHashes: [[UInt64]]?,
-        prefixFingerprint: UInt64,
-        prefixCache: inout LinearizabilityPrefixCache?
+        concurrentSpec: Spec
     ) -> LinearizabilityResult {
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
         nonisolated(unsafe) let unsafeSpec = concurrentSpec
-        nonisolated(unsafe) var cacheBox = prefixCache
         let result: LinearizabilityChecker<Spec.Command>.Result = __ExhaustRuntime.blockingAwait {
             var replaySpec: Spec?
             return await checker.checkAsync(
@@ -324,12 +320,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                     guard let spec = replaySpec else { return false }
                     return await unsafeSpec.oracleCheck(spec.systemUnderTest)
                 },
-                observationHashes: observationHashes,
-                prefixFingerprint: prefixFingerprint,
-                prefixCache: &cacheBox
+                failureDescription: {
+                    unsafeSpec.failureDescription()
+                }
             )
         }
-        prefixCache = cacheBox
         return makeLinearizabilityResult(result, laneObservations: laneResponses)
     }
 
