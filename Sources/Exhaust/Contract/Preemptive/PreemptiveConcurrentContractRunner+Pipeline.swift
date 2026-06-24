@@ -18,29 +18,8 @@ extension __ExhaustRuntime {
         var report = ExhaustReport()
         report.seed = config.seed
         var deferredIssues: [String] = []
-        let linearizabilityCache = UnsafeSendableBox(Set<Int>())
-        let linearizabilityCacheHits = UnsafeSendableBox(0)
-        let linearizabilityChecks = UnsafeSendableBox(0)
-
         func finalizeReport() {
             report.totalMilliseconds = runStopwatch.elapsedMilliseconds
-            let hits = linearizabilityCacheHits.value
-            let checks = linearizabilityChecks.value
-            let total = hits + checks
-            if total > 0 {
-                let percentage = Int(Double(hits) / Double(total) * 100)
-                ExhaustLog.debug(
-                    category: .propertyTest,
-                    event: "linearizability_sequence_cache",
-                    metadata: [
-                        "checks": "\(checks)",
-                        "hits": "\(hits)",
-                        "total": "\(total)",
-                        "hit_rate": "\(percentage)%",
-                        "entries": "\(linearizabilityCache.value.count)",
-                    ]
-                )
-            }
         }
 
         let commandGen = Spec.commandGenerator.gen
@@ -65,7 +44,6 @@ extension __ExhaustRuntime {
 
         let identifySkips = backend.makeIdentifySkips()
         let lastFailingOutcome = UnsafeSendableBox<Preemptive.Outcome<Spec>?>(nil)
-        let currentTreeHash = UnsafeSendableBox<Int?>(nil)
         let classifyFailure: @Sendable ([(ScheduleMarker, Spec.Command)], Preemptive.Outcome<Spec>) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?, failureDescription: String?)? = { taggedCommands, outcome in
             if outcome.passed {
                 return nil
@@ -75,19 +53,11 @@ extension __ExhaustRuntime {
             else {
                 return (outcome, nil, nil)
             }
-            if let treeHash = currentTreeHash.value, linearizabilityCache.value.contains(treeHash) {
-                linearizabilityCacheHits.value += 1
-                return nil
-            }
-            linearizabilityChecks.value += 1
             guard case let .notLinearizable(witness, failure) = backend.checkLinearizability(
                 taggedCommands: taggedCommands,
                 laneResponses: laneResponses,
                 concurrentSpec: concurrentSpec
             ) else {
-                if let treeHash = currentTreeHash.value {
-                    linearizabilityCache.value.insert(treeHash)
-                }
                 return nil
             }
             return (outcome, witness, failure)
@@ -105,7 +75,6 @@ extension __ExhaustRuntime {
         }
 
         func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)], discoveryIterations: Int) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?, failureDescription: String?)? {
-            currentTreeHash.value = nil
             for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
                 if let confirmed = classifyFailure(input, backend.execute(input)) {
                     return confirmed
@@ -114,8 +83,7 @@ extension __ExhaustRuntime {
             return nil
         }
 
-        func linearizableProbe(_ probeCommands: [(ScheduleMarker, Spec.Command)], probeTree: ChoiceTree) -> (Bool, ResponseWitness?, String?, Preemptive.Outcome<Spec>?) {
-            currentTreeHash.value = probeTree.hashValue
+        func linearizableProbe(_ probeCommands: [(ScheduleMarker, Spec.Command)], probeTree _: ChoiceTree) -> (Bool, ResponseWitness?, String?, Preemptive.Outcome<Spec>?) {
             let failure = classifyFailure(probeCommands, backend.execute(probeCommands))
             if let failure {
                 return (false, failure.witness, failure.failureDescription, failure.outcome)
@@ -397,7 +365,6 @@ extension __ExhaustRuntime {
                 while let (taggedCommands, tree) = try interpreter.next() {
                     samplingIteration += 1
                     let absoluteIteration = Int(startIndex) + samplingIteration
-                    currentTreeHash.value = tree.hashValue
                     if property(taggedCommands) {
                         continue
                     }
