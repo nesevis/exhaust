@@ -560,12 +560,14 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> DeclSynt
             pattern = "case let .\(cmd.methodName)(\(bindings))"
         }
 
-        if cmd.returnType != nil {
+        if let returnType = cmd.returnType {
+            let isOptional = returnType.hasSuffix("?") || returnType.hasPrefix("Optional<")
+            let returnExpr = isOptional ? #"result ?? "nil" as Any"# : "result"
             cases.append(
                 """
                         \(pattern):
                             let result = \(call)
-                            return CommandResponse(commandDescription: command.description, returnValue: result)
+                            return CommandResponse(commandDescription: command.description, returnValue: \(returnExpr))
                 """
             )
         } else {

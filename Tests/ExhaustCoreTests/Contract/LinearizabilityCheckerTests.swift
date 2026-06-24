@@ -8,6 +8,45 @@ import Testing
 /// A stack makes a good model because its answers depend on order. A `pop` returns the value pushed last, or reports a skip when the stack is empty, so a wrong return value (a value that was never pushed) and a wrong final state are both easy to build. Each test supplies fixed observations and a fixed final state, so the verdict is deterministic. There are no real threads.
 @Suite("Linearizability checker")
 struct LinearizabilityCheckerTests {
+    // MARK: - Queue False Positive Reproduction
+
+    @Test("Dequeue-nil with concurrent enqueues is linearizable when a valid ordering exists")
+    func dequeueNilWithConcurrentEnqueuesIsLinearizable() {
+        // Reproduces the false positive from the Herlihy queue test:
+        // Lane A: dequeue → nil, enqueue(41)
+        // Lane B: enqueue(7), enqueue(78), enqueue(96)
+        // Queue starts empty (prefix was 4 dequeues on empty queue).
+        // Valid ordering: A1(dequeue→nil), A2(enqueue(41)), B1(enqueue(7)), B2(enqueue(78)), B3(enqueue(96))
+        //   → state [41, 7, 78, 96]
+        // The concurrent execution produced [41, 78, 96] (enqueue(7) lost),
+        // but for the false positive case, assume the concurrent state is [41, 78, 96]
+        // with only 3 items — that IS genuinely non-linearizable (lost item).
+        // The actual false positive had same-multiset: expected [78, 96, 41], actual [41, 78, 96].
+        // Test the same-multiset case: all 4 items present, just reordered.
+        let laneA: [QueueObservation] = [dequeueReturningNil(), enqueue(41)]
+        let laneB: [QueueObservation] = [enqueue(7), enqueue(78), enqueue(96)]
+        // State [41, 7, 78, 96] = ordering A1, A2, B1, B2, B3
+        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [41, 7, 78, 96]))
+        #expect(result.linearizable, "Ordering (dequeue→nil, enqueue(41), enqueue(7), enqueue(78), enqueue(96)) produces this state")
+    }
+
+    @Test("All reorderings of enqueue-only lanes are linearizable")
+    func allEnqueueReorderingsAreLinearizable() {
+        // Lane A: enqueue(1), enqueue(2)
+        // Lane B: enqueue(3)
+        // Every valid ordering produces 3 items; the item positions vary.
+        let laneA: [QueueObservation] = [enqueue(1), enqueue(2)]
+        let laneB: [QueueObservation] = [enqueue(3)]
+        // A1, A2, B1 → [1, 2, 3]
+        #expect(queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 2, 3])).linearizable)
+        // A1, B1, A2 → [1, 3, 2]
+        #expect(queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 3, 2])).linearizable)
+        // B1, A1, A2 → [3, 1, 2]
+        #expect(queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [3, 1, 2])).linearizable)
+    }
+
+    // MARK: - Stack Tests
+
     @Test("No commands is trivially linearizable")
     func emptyHistoryIsLinearizable() {
         #expect(verdict(check(lanes: [], finalState: [])).linearizable)
@@ -140,7 +179,8 @@ private func check(
         },
         checkOracle: {
             replayStack?.elements == finalState
-        }
+        },
+        failureDescription: { nil }
     )
 }
 
@@ -151,7 +191,7 @@ private func verdict(
     switch result {
         case .linearizable:
             return (true, nil)
-        case let .notLinearizable(witness):
+        case let .notLinearizable(witness, _):
             return (false, witness.map { ($0.laneIndex, $0.commandIndex) })
     }
 }
@@ -166,4 +206,101 @@ private func popReturning(_ value: Int) -> Observation {
 
 private func popSkipped() -> Observation {
     Observation(command: .pop, returnValue: nil, isSkipped: true)
+}
+
+private func popReturningNil() -> Observation {
+    Observation(command: .pop, returnValue: "nil", isSkipped: false)
+}
+
+// MARK: - Queue Model
+
+private enum QueueCommand: CustomStringConvertible {
+    case enqueue(Int)
+    case dequeue
+
+    var description: String {
+        switch self {
+            case let .enqueue(value): "enqueue(\(value))"
+            case .dequeue: "dequeue"
+        }
+    }
+}
+
+private final class Queue {
+    private(set) var elements: [Int] = []
+
+    func apply(_ command: QueueCommand) {
+        switch command {
+            case let .enqueue(value):
+                elements.append(value)
+            case .dequeue:
+                if elements.isEmpty == false {
+                    elements.removeFirst()
+                }
+        }
+    }
+
+    func replay(_ command: QueueCommand) -> LinearizabilityChecker<QueueCommand>.ReplayResponse {
+        switch command {
+            case let .enqueue(value):
+                elements.append(value)
+                return .init(returnValue: nil, isSkipped: false)
+            case .dequeue:
+                if elements.isEmpty {
+                    return .init(returnValue: "nil", isSkipped: false)
+                }
+                return .init(returnValue: elements.removeFirst(), isSkipped: false)
+        }
+    }
+}
+
+private typealias QueueObservation = LinearizabilityChecker<QueueCommand>.Observation
+
+private func checkQueue(
+    lanes: [[QueueObservation]],
+    prefix: [QueueCommand] = [],
+    finalState: [Int]
+) -> LinearizabilityChecker<QueueCommand>.Result {
+    let checker = LinearizabilityChecker(laneObservations: lanes)
+    var replayQueue: Queue?
+    return checker.check(
+        replayPrefix: {
+            let fresh = Queue()
+            for command in prefix {
+                fresh.apply(command)
+            }
+            replayQueue = fresh
+            return true
+        },
+        replayCommand: { command in
+            replayQueue?.replay(command)
+        },
+        checkOracle: {
+            replayQueue?.elements == finalState
+        },
+        failureDescription: { nil }
+    )
+}
+
+private func queueVerdict(
+    _ result: LinearizabilityChecker<QueueCommand>.Result
+) -> (linearizable: Bool, witness: (lane: Int, command: Int)?) {
+    switch result {
+        case .linearizable:
+            return (true, nil)
+        case let .notLinearizable(witness, _):
+            return (false, witness.map { ($0.laneIndex, $0.commandIndex) })
+    }
+}
+
+private func enqueue(_ value: Int) -> QueueObservation {
+    QueueObservation(command: .enqueue(value), returnValue: nil, isSkipped: false)
+}
+
+private func dequeueReturning(_ value: Int) -> QueueObservation {
+    QueueObservation(command: .dequeue, returnValue: value, isSkipped: false)
+}
+
+private func dequeueReturningNil() -> QueueObservation {
+    QueueObservation(command: .dequeue, returnValue: "nil", isSkipped: false)
 }

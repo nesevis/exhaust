@@ -45,7 +45,7 @@ package extension ObservedResponse.Outcome {
     var displayValue: String? {
         switch self {
             case let .returned(value):
-                return "\(value)"
+                return String(describing: value)
             case .skipped:
                 return "skipped"
             case .returnedVoid:
