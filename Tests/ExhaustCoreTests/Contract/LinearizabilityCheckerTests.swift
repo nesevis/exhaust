@@ -103,6 +103,77 @@ struct LinearizabilityCheckerTests {
         let lanes = [[popReturning(1)], [push(2)]]
         #expect(verdict(check(lanes: lanes, prefix: [.push(1)], finalState: [2])).linearizable)
     }
+
+    // MARK: - Prefix Cache Regression
+
+    @Test("Cache does not prune the valid ordering when void commands share the same cursor state")
+    func cachePrefixHashDistinguishesOrderingsAtSameCursorState() {
+        // Regression for the identical-observation-hash false negative.
+        //
+        // Lane A: enqueue(1), enqueue(2)     Lane B: enqueue(3)
+        // Final state: [3, 1, 2] = ordering B[0], A[0], A[1]
+        //
+        // The DFS tries lane 0 (A) first at each depth:
+        //   depth 0: A[0]
+        //     depth 1: A[1] → depth 2: B[0] → [1,2,3] ≠ [3,1,2] → oracle fails
+        //     depth 1: B[0] → cursor (A=1, B=1)
+        //       depth 2: A[1] → [1,3,2] ≠ [3,1,2] → oracle fails
+        //     subtree at cursor (A=1, B=1) exhausted → CACHED
+        //   depth 0: B[0]
+        //     depth 1: A[0] → cursor (A=1, B=1) — same cursor state
+        //     cache lookup: must MISS (different prefix ordering)
+        //       depth 2: A[1] → [3,1,2] = [3,1,2] → oracle PASSES
+        //
+        // The old cache keyed on observation hashes, which are identical for void
+        // enqueue commands after value minimization. That made the prefix hash
+        // order-invariant (XOR of identical per-depth contributions), so both
+        // paths to cursor (A=1, B=1) shared the same cache key. The first path's
+        // "no valid completion" entry pruned the second path, missing the valid
+        // ordering.
+        //
+        // The fix keys on command identity (laneIndex, commandIndex), which is
+        // unique per command regardless of observation hash. Two orderings of
+        // distinct commands produce different prefix hashes.
+        let laneA: [QueueObservation] = [enqueue(1), enqueue(2)]
+        let laneB: [QueueObservation] = [enqueue(3)]
+        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [3, 1, 2]))
+        #expect(result.linearizable)
+    }
+
+    @Test("Cache does not prune valid orderings with three lanes")
+    func cachePrefixHashWorksWithThreeLanes() {
+        // Three lanes of void enqueues. The DFS explores lane 0 first, then
+        // lane 1, then lane 2. Only the ordering C[0], A[0], B[0] produces
+        // final state [3, 1, 2]. The cache must not prune it after exhausting
+        // A-first and B-first subtrees that reach the same cursor state.
+        let laneA: [QueueObservation] = [enqueue(1)]
+        let laneB: [QueueObservation] = [enqueue(2)]
+        let laneC: [QueueObservation] = [enqueue(3)]
+        let result = queueVerdict(checkQueue(lanes: [laneA, laneB, laneC], finalState: [3, 1, 2]))
+        #expect(result.linearizable)
+    }
+
+    @Test("Genuinely non-linearizable lost enqueue is preserved with caching")
+    func genuinelyNonLinearizablePreservedWithCache() {
+        // Two enqueues, but the final state shows three items. No ordering of
+        // two enqueues can produce three items. The cache must not introduce
+        // a false positive (claiming linearizable when it is not).
+        let laneA: [QueueObservation] = [enqueue(1)]
+        let laneB: [QueueObservation] = [enqueue(2)]
+        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 2, 3]))
+        #expect(result.linearizable == false)
+    }
+
+    @Test("Cache preserves not-linearizable verdict for wrong queue ordering")
+    func cachePreservesWrongOrderingVerdict() {
+        // Lane A: enqueue(1), enqueue(2)   Lane B: enqueue(3)
+        // Final state: [2, 1, 3] — no valid ordering produces this because
+        // A[0] must precede A[1] (per-lane order), so 1 always appears before 2.
+        let laneA: [QueueObservation] = [enqueue(1), enqueue(2)]
+        let laneB: [QueueObservation] = [enqueue(3)]
+        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [2, 1, 3]))
+        #expect(result.linearizable == false)
+    }
 }
 
 // MARK: - Supporting Types
