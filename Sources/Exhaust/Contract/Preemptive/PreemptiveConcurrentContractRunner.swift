@@ -118,25 +118,35 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
-        for (marker, command) in taggedCommands where marker.isPrefix {
-            guard runCommandCatchingObjC(command, on: concurrentSpec) else {
-                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
-            }
-            guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
-            }
-        }
-
+        // Partition commands once: avoids repeated filtered scans over the full array.
+        var prefixCommands: [Spec.Command] = []
         var laneIDs: [UInt8] = []
-        for (marker, command) in taggedCommands where marker.isPrefix == false {
-            if laneIDs.contains(marker.rawValue) == false {
-                laneIDs.append(marker.rawValue)
-            }
-            guard runCommandCatchingObjC(command, on: sequentialSpec) else {
-                return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+        var laneBuckets: [UInt8: [Spec.Command]] = [:]
+        for (marker, command) in taggedCommands {
+            if marker.isPrefix {
+                prefixCommands.append(command)
+            } else {
+                if laneIDs.contains(marker.rawValue) == false {
+                    laneIDs.append(marker.rawValue)
+                }
+                laneBuckets[marker.rawValue, default: []].append(command)
             }
         }
         laneIDs.sort()
+
+        // Run prefix on both specs — one ObjC guard per spec instead of per command.
+        if runAllCommandsCatchingObjC(prefixCommands, on: concurrentSpec) == false {
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+        }
+        if runAllCommandsCatchingObjC(prefixCommands, on: sequentialSpec) == false {
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+        }
+
+        // Run all concurrent commands sequentially on the sequential spec — one ObjC guard.
+        let concurrentCommands = laneIDs.flatMap { laneBuckets[$0] ?? [] }
+        if runAllCommandsCatchingObjC(concurrentCommands, on: sequentialSpec) == false {
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+        }
 
         let perLaneResponses = laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
         let commandFailed = UnsafeSendableBox(false)
@@ -145,13 +155,14 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
         nonisolated(unsafe) let unsafeConcurrentSpec = concurrentSpec
         for (offset, laneID) in laneIDs.enumerated() {
+            let laneCommands = laneBuckets[laneID] ?? []
             let responseBox = perLaneResponses[offset]
             group.enter()
             DispatchQueue.global().async {
                 var localResponses: [ObservedResponse<Spec.Command>] = []
                 var exception: NSException?
                 let succeeded = exhaust_runCatchingObjCException({
-                    for (marker, command) in taggedCommands where marker.rawValue == laneID {
+                    for command in laneCommands {
                         if commandFailed.value { break }
                         do {
                             let response = try unsafeConcurrentSpec.run(command)
@@ -207,23 +218,22 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
     }
 
-    /// Runs a command on a spec with ObjC exception safety, treating ``ContractSkip`` as a pass.
-    private func runCommandCatchingObjC(_ command: Spec.Command, on spec: Spec) -> Bool {
-        var commandError: (any Error)?
+    /// Runs all commands on a spec under a single ObjC exception guard, treating ``ContractSkip`` as a pass.
+    private func runAllCommandsCatchingObjC(_ commands: [Spec.Command], on spec: Spec) -> Bool {
+        var commandFailed = false
         let objcSucceeded = runCatchingObjC {
-            do {
-                try spec.run(command)
-            } catch {
-                commandError = error
+            for command in commands {
+                do {
+                    try spec.run(command)
+                } catch is ContractSkip {
+                    continue
+                } catch {
+                    commandFailed = true
+                    return
+                }
             }
         }
-        guard objcSucceeded else {
-            return false
-        }
-        if let commandError, commandError is ContractSkip == false {
-            return false
-        }
-        return true
+        return objcSucceeded && commandFailed == false
     }
 
     func checkLinearizability(
@@ -243,12 +253,13 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
+        let prefixCommands = taggedCommands.lazy.filter(\.0.isPrefix).map(\.1)
         var replaySpec: Spec?
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
         let result = checker.check(
             replayPrefix: {
                 let fresh = Spec()
-                for (marker, command) in taggedCommands where marker.isPrefix {
+                for command in prefixCommands {
                     do {
                         try fresh.run(command)
                     } catch is ContractSkip {
@@ -336,10 +347,8 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         // Replay the sequence on a fresh reference and call the oracle once at the end, so a spec that is already broken under sequential execution fails here before any concurrent probing.
         // The reference is a distinct spec so the oracle's relational comparison is between two independent runs rather than the SUT against itself.
         let reference = Spec()
-        for command in commands {
-            guard runCommandCatchingObjC(command, on: reference) else {
-                return (trace, true, spec.systemUnderTest, spec.failureDescription())
-            }
+        guard runAllCommandsCatchingObjC(commands, on: reference) else {
+            return (trace, true, spec.systemUnderTest, spec.failureDescription())
         }
         if spec.oracleCheck(reference.systemUnderTest) == false {
             return (trace, true, spec.systemUnderTest, spec.failureDescription())

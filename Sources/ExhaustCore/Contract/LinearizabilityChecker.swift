@@ -8,23 +8,6 @@
 ///
 /// Both synchronous and asynchronous replay are supported. The interleaving search and response comparison are shared; only the replay-and-verify step differs.
 package struct LinearizabilityChecker<Command>: @unchecked Sendable {
-    /// One command's observed result during a concurrent execution, recorded per-lane.
-    package struct Observation: @unchecked Sendable {
-        package let command: Command
-        package let returnValue: Any?
-        package let isSkipped: Bool
-
-        package init(
-            command: Command,
-            returnValue: Any?,
-            isSkipped: Bool
-        ) {
-            self.command = command
-            self.returnValue = returnValue
-            self.isSkipped = isSkipped
-        }
-    }
-
     /// The response from replaying a single command on a fresh sequential instance.
     package struct ReplayResponse {
         package let returnValue: Any?
@@ -48,17 +31,16 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         case notLinearizable(witness: Witness?, failureDescription: String?)
     }
 
-    package let laneObservations: [[Observation]]
+    package let laneObservations: [[ObservedResponse<Command>]]
 
-    package init(laneObservations: [[Observation]]) {
+    package init(laneObservations: [[ObservedResponse<Command>]]) {
         self.laneObservations = laneObservations
     }
 
-    /// A command placed at a position in a candidate ordering, retaining its source coordinates so the witness can name it.
+    /// A command placed at a position in a candidate ordering, retaining its source coordinates so the witness can name it. Stored as an index pair rather than carrying a full ``Observation`` copy to keep the DFS working array (``SearchState/currentOrdering``) compact.
     private struct Placed {
         let laneIndex: Int
         let commandIndex: Int
-        let observation: Observation
     }
 
     // MARK: - Synchronous
@@ -94,7 +76,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
             checkOracle: checkOracle
         )
 
-        return makeResult(found: found, closestMatchDepth: state.closestMatchDepth, closestOrdering: state.closestOrdering, failureDescription: failureDescription)
+        return makeResult(found: found, closestMatchDepth: state.closestMatchDepth, closestPlaced: state.closestPlaced, failureDescription: failureDescription)
     }
 
     // MARK: - Search State
@@ -103,7 +85,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         var cursors: [Int]
         var currentOrdering: [Placed]
         var closestMatchDepth: Int = -1
-        var closestOrdering: [Placed] = []
+        var closestPlaced: Placed?
 
         init(laneCount: Int, totalCommands: Int) {
             cursors = Array(repeating: 0, count: laneCount)
@@ -122,7 +104,8 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     ) -> Bool {
         guard replayPrefix() else { return false }
         for index in 0 ..< depth {
-            guard replayCommand(currentOrdering[index].observation.command) != nil else { return false }
+            let placed = currentOrdering[index]
+            guard replayCommand(laneObservations[placed.laneIndex][placed.commandIndex].command) != nil else { return false }
         }
         return true
     }
@@ -142,7 +125,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
             }
             let oraclePassed = checkOracle()
             if oraclePassed == false {
-                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
+                updateClosest(depth: depth, placed: nil, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
             }
             return oraclePassed
         }
@@ -162,26 +145,20 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
             }
             childrenTried += 1
 
-            let placed = Placed(laneIndex: laneIndex, commandIndex: cursor, observation: observation)
+            let placed = Placed(laneIndex: laneIndex, commandIndex: cursor)
 
             guard let replay = replayCommand(observation.command) else {
-                state.currentOrdering.append(placed)
-                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
-                state.currentOrdering.removeLast()
+                updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
 
             if stepMismatches(observed: observation, replay: replay) {
-                state.currentOrdering.append(placed)
-                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
-                state.currentOrdering.removeLast()
+                updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
 
-            if observation.isSkipped == false, responsesMatch(observed: observation, replay: replay) == false {
-                state.currentOrdering.append(placed)
-                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
-                state.currentOrdering.removeLast()
+            if observation.outcome.isSkipped == false, responsesMatch(observed: observation, replay: replay) == false {
+                updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
 
@@ -232,7 +209,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
             checkOracle: checkOracle
         )
 
-        return makeResult(found: found, closestMatchDepth: state.closestMatchDepth, closestOrdering: state.closestOrdering, failureDescription: failureDescription)
+        return makeResult(found: found, closestMatchDepth: state.closestMatchDepth, closestPlaced: state.closestPlaced, failureDescription: failureDescription)
     }
 
     // MARK: - Async Incremental Search
@@ -245,7 +222,8 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     ) async -> Bool {
         guard await replayPrefix() else { return false }
         for index in 0 ..< depth {
-            guard await replayCommand(currentOrdering[index].observation.command) != nil else { return false }
+            let placed = currentOrdering[index]
+            guard await replayCommand(laneObservations[placed.laneIndex][placed.commandIndex].command) != nil else { return false }
         }
         return true
     }
@@ -265,7 +243,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
             }
             let oraclePassed = await checkOracle()
             if oraclePassed == false {
-                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
+                updateClosest(depth: depth, placed: nil, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
             }
             return oraclePassed
         }
@@ -285,26 +263,20 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
             }
             childrenTried += 1
 
-            let placed = Placed(laneIndex: laneIndex, commandIndex: cursor, observation: observation)
+            let placed = Placed(laneIndex: laneIndex, commandIndex: cursor)
 
             guard let replay = await replayCommand(observation.command) else {
-                state.currentOrdering.append(placed)
-                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
-                state.currentOrdering.removeLast()
+                updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
 
             if stepMismatches(observed: observation, replay: replay) {
-                state.currentOrdering.append(placed)
-                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
-                state.currentOrdering.removeLast()
+                updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
 
-            if observation.isSkipped == false, responsesMatch(observed: observation, replay: replay) == false {
-                state.currentOrdering.append(placed)
-                updateClosest(state.currentOrdering, matchDepth: depth, closestMatchDepth: &state.closestMatchDepth, closestOrdering: &state.closestOrdering)
-                state.currentOrdering.removeLast()
+            if observation.outcome.isSkipped == false, responsesMatch(observed: observation, replay: replay) == false {
+                updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
 
@@ -330,12 +302,12 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
     // MARK: - Shared Helpers
 
-    private func stepMismatches(observed: Observation, replay: ReplayResponse) -> Bool {
-        observed.isSkipped != replay.isSkipped
+    private func stepMismatches(observed: ObservedResponse<Command>, replay: ReplayResponse) -> Bool {
+        observed.outcome.isSkipped != replay.isSkipped
     }
 
-    private func responsesMatch(observed: Observation, replay: ReplayResponse) -> Bool {
-        switch (observed.returnValue, replay.returnValue) {
+    private func responsesMatch(observed: ObservedResponse<Command>, replay: ReplayResponse) -> Bool {
+        switch (observed.outcome.returnValue, replay.returnValue) {
             case (nil, nil):
                 return true
             case let (observedValue?, replayValue?):
@@ -345,27 +317,27 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         }
     }
 
+    /// Records the DFS node at the deepest divergence point. `placed` is `nil` when divergence is at the oracle (all commands matched but the final state differed), in which case there is no command-level witness.
     private func updateClosest(
-        _ ordering: [Placed],
-        matchDepth: Int,
+        depth: Int,
+        placed: Placed?,
         closestMatchDepth: inout Int,
-        closestOrdering: inout [Placed]
+        closestPlaced: inout Placed?
     ) {
-        if matchDepth > closestMatchDepth {
-            closestMatchDepth = matchDepth
-            closestOrdering = ordering
+        if depth > closestMatchDepth {
+            closestMatchDepth = depth
+            closestPlaced = placed
         }
     }
 
-    /// Builds the verdict. The witness is the command at the deepest divergence point reached across all orderings; when divergence is only at the oracle (`closestMatchDepth == totalCommands`, so the index is out of bounds) there is no command witness.
-    private func makeResult(found: Bool, closestMatchDepth: Int, closestOrdering: [Placed], failureDescription: () -> String?) -> Result {
+    /// Builds the verdict. When the closest divergence is at the oracle level (`closestPlaced` is `nil`), there is no command witness — the failure is visible only in the expected-versus-actual state diff.
+    private func makeResult(found: Bool, closestMatchDepth: Int, closestPlaced: Placed?, failureDescription: () -> String?) -> Result {
         guard found == false else {
             return .linearizable
         }
-        guard closestMatchDepth >= 0, closestMatchDepth < closestOrdering.count else {
+        guard closestMatchDepth >= 0, let placed = closestPlaced else {
             return .notLinearizable(witness: nil, failureDescription: failureDescription())
         }
-        let placed = closestOrdering[closestMatchDepth]
         return .notLinearizable(witness: Witness(laneIndex: placed.laneIndex, commandIndex: placed.commandIndex), failureDescription: failureDescription())
     }
 }

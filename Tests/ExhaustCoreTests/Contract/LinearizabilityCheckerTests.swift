@@ -226,7 +226,7 @@ private final class Stack {
 
 // MARK: - Helpers
 
-private typealias Observation = LinearizabilityChecker<StackCommand>.Observation
+private typealias Observation = ObservedResponse<StackCommand>
 
 /// Runs the checker over hand-built lane observations, replaying against a fresh stack and comparing the replayed final state to `finalState`.
 private func check(
@@ -268,19 +268,19 @@ private func verdict(
 }
 
 private func push(_ value: Int) -> Observation {
-    Observation(command: .push(value), returnValue: nil, isSkipped: false)
+    Observation(lane: 0, command: .push(value), outcome: .returnedVoid)
 }
 
 private func popReturning(_ value: Int) -> Observation {
-    Observation(command: .pop, returnValue: value, isSkipped: false)
+    Observation(lane: 0, command: .pop, outcome: .returned(value))
 }
 
 private func popSkipped() -> Observation {
-    Observation(command: .pop, returnValue: nil, isSkipped: true)
+    Observation(lane: 0, command: .pop, outcome: .skipped)
 }
 
 private func popReturningNil() -> Observation {
-    Observation(command: .pop, returnValue: "nil", isSkipped: false)
+    Observation(lane: 0, command: .pop, outcome: .returned("nil"))
 }
 
 // MARK: - Queue Model
@@ -325,7 +325,7 @@ private final class Queue {
     }
 }
 
-private typealias QueueObservation = LinearizabilityChecker<QueueCommand>.Observation
+private typealias QueueObservation = ObservedResponse<QueueCommand>
 
 private func checkQueue(
     lanes: [[QueueObservation]],
@@ -365,13 +365,13 @@ private func queueVerdict(
 }
 
 private func enqueue(_ value: Int) -> QueueObservation {
-    QueueObservation(command: .enqueue(value), returnValue: nil, isSkipped: false)
+    QueueObservation(lane: 0, command: .enqueue(value), outcome: .returnedVoid)
 }
 
 private func dequeueReturning(_ value: Int) -> QueueObservation {
-    QueueObservation(command: .dequeue, returnValue: value, isSkipped: false)
+    QueueObservation(lane: 0, command: .dequeue, outcome: .returned(value))
 }
 
 private func dequeueReturningNil() -> QueueObservation {
-    QueueObservation(command: .dequeue, returnValue: "nil", isSkipped: false)
+    QueueObservation(lane: 0, command: .dequeue, outcome: .returned("nil"))
 }

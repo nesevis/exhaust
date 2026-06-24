@@ -280,6 +280,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
+        let prefixCommands: [Spec.Command] = taggedCommands.filter(\.0.isPrefix).map(\.1)
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
         nonisolated(unsafe) let unsafeSpec = concurrentSpec
         let result: LinearizabilityChecker<Spec.Command>.Result = __ExhaustRuntime.blockingAwait {
@@ -287,7 +288,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
             return await checker.checkAsync(
                 replayPrefix: {
                     let fresh = Spec()
-                    for (marker, command) in taggedCommands where marker.isPrefix {
+                    for command in prefixCommands {
                         do {
                             try await fresh.run(command)
                         } catch is ContractSkip {
