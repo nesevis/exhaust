@@ -1,4 +1,4 @@
-/// Constants and reduction algorithm for preemptive concurrent contract testing.
+/// Provides the reduction algorithm and tuning constants for preemptive concurrent contract testing.
 ///
 /// The two preemptive backends (synchronous and async) differ only in how a single probe runs. The reduction algorithm and its result type are backend-independent and live here for whole-module optimization.
 package enum PreemptiveReduction {
@@ -25,7 +25,7 @@ package enum PreemptiveReduction {
 
     /// Computes the number of terminal confirmation repetitions, scaled by how quickly the failure was discovered.
     ///
-    /// The terminal confirmation runs once per reported failure (not per reduction probe), so it can afford more attempts than the per-probe count. Uses 3x the per-probe count, floored at 150 — easy races get up to 300 attempts to attach the actual-state evidence line, while hard races stay at 150 (where more attempts would be wasted anyway).
+    /// The terminal confirmation runs once per reported failure (not per reduction probe), so it can afford more attempts than the per-probe count. Uses three times the per-probe count, floored at 150 — easy races get up to 300 attempts to attach the actual-state evidence line, while hard races stay at 150 (where more attempts would be wasted anyway).
     package static func finalConfirmationRepetitions(discoveryIterations: Int) -> Int {
         max(150, confirmationRepetitions(discoveryIterations: discoveryIterations) * 3)
     }
@@ -33,14 +33,20 @@ package enum PreemptiveReduction {
     /// Default command limit for `.threads` contracts.
     package static let defaultCommandLimit = 20
 
-    /// Result of a preemptive reduction pass.
+    /// Captures the output, tree, invocation count, and failure evidence from a preemptive reduction pass.
     package struct ReductionResult<Command, FailureOutcome> {
         package let output: [(ScheduleMarker, Command)]
         package let tree: ChoiceTree
         package let propertyInvocations: Int
         package let stats: ReductionStats
+
+        /// The response-level linearizability witness from the last failing probe, if one was captured.
         package let witness: ResponseWitness?
+
+        /// Human-readable description of the expected state from the last failing probe's oracle comparison.
         package let failureDescription: String?
+
+        /// The backend-specific failure outcome from the last failing probe, carried through for evidence assembly.
         package let failureOutcome: FailureOutcome?
 
         package init(
@@ -78,6 +84,7 @@ package enum PreemptiveReduction {
         var propertyInvocations = 0
         var lastFailure: (ResponseWitness?, String?, FailureOutcome?)?
         let reductionProperty: ReductionProperty = .contract { output, probeTree in
+            // ReductionProperty.contract erases the output to [Any]; the pipeline guarantees the concrete type.
             let taggedCommands = output as! [(ScheduleMarker, Command)] // swiftlint:disable:this force_cast
             for _ in 0 ..< repetitions {
                 propertyInvocations += 1

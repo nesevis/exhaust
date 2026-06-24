@@ -58,7 +58,7 @@ public extension __ExhaustRuntime {
 
 // MARK: - Async Checker
 
-/// Async ``PreemptiveBackend``: bridges async command execution to GCD threads via Task+semaphore.
+/// Bridges async command execution to GCD threads via Task+semaphore.
 ///
 /// Each lane gets a real OS thread, and within that thread async commands are driven synchronously. The cooperative pool handles the Task's continuations while the GCD thread blocks on the semaphore. This provides real thread-level preemption for synchronous primitives (locks, dispatch queues) hidden behind async facades.
 private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBackend {
@@ -205,7 +205,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
     }
 
-    /// Outcome of a sequential command run.
+    /// Reports whether a sequential command run succeeded or timed out.
     ///
     /// `timedOut` distinguishes a drain-loop idle bailout from a command that threw or trapped, so a hang in the prefix or sequential reference replay propagates to ``Preemptive/Outcome/timedOut`` rather than masquerading as a deterministic failure.
     struct SequentialOutcome {
@@ -215,7 +215,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
     /// Runs commands sequentially on a spec, bridging async execution via ``__ExhaustRuntime/blockingAwait(_:)``. Wraps in ObjC exception handling so NSExceptions from underlying C/ObjC code are caught rather than crashing the process.
     ///
-    /// `succeeded` is `true` when all commands succeeded or were skipped, `false` when any command threw a non-skip error, an NSException was caught, or the drain loop idled out. `timedOut` is `true` only in that last case.
+    /// - Returns: A ``SequentialOutcome`` whose `succeeded` is `true` when all commands succeeded or were skipped, and whose `timedOut` is `true` only when the drain loop idled out (as opposed to a command throw or NSException).
     @discardableResult
     func runSequentially(_ commands: [Spec.Command], on spec: Spec) -> SequentialOutcome {
         var exception: NSException?

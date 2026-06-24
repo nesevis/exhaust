@@ -1,6 +1,6 @@
 import ExhaustCore
 
-/// The per-probe operations that differ between the synchronous and async preemptive runners.
+/// Defines the per-probe operations that differ between the synchronous and async preemptive runners.
 ///
 /// Everything else (phase ordering, smoke, SCA coverage, sampling, reduction, and failure assembly) is shared in ``__ExhaustRuntime/runPreemptivePipeline(backend:config:)``. The synchronous backend runs commands directly on GCD threads; the async backend bridges each probe through a drain loop.
 ///
