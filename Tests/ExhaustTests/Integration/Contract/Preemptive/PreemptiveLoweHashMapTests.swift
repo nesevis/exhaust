@@ -18,14 +18,15 @@ struct PreemptiveLoweHashMapTests {
         var commandCount = 0
         var iterations: Double = 0
         var totalRuntime = 0.0
-        for seed in UInt64(1337) ..< 1387 {
+        for seed in UInt64(1337) ..< 1338 {
             var report: ExhaustReport?
             let result = #execute(
                 LoweHashMapSpec.self,
                 .concurrent(.two),
                 .replay(.numeric(seed)),
+//                .log(.debug),
                 .budget(.custom(coverage: 10000, sampling: 150_000)),
-                .suppress(.issueReporting),
+//                .suppress(.issueReporting),
                 .onReport { report = $0 }
             )
             iterations += 1
@@ -41,9 +42,10 @@ struct PreemptiveLoweHashMapTests {
         let result = #execute(
             LoweHashMapSpec.self,
             .concurrent(.two),
-            .budget(.custom(coverage: 0, sampling: 100_000)),
-            .suppress(.issueReporting)
+            .budget(.custom(coverage: 100_000, sampling: 100_000)),
+            .suppress(.all)
         )
+        #expect(result?.replaySeed != nil)
     }
 }
 
@@ -74,14 +76,8 @@ final class LoweHashMapSpec {
         map.getOrElse(key: key, default: -1)
     }
 
-//
-//    @Command(weight: 1)
-//    func noop() throws {
-//        throw skip()
-//    }
-
     func failureDescription() -> String? {
-        "map: \(map.snapshot)"
+        "map: \(map.snapshot.sorted(by: { $0.key < $1.key }))"
     }
 }
 

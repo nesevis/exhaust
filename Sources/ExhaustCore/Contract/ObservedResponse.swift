@@ -45,7 +45,7 @@ package extension ObservedResponse.Outcome {
     var displayValue: String? {
         switch self {
             case let .returned(value):
-                return "\(value)"
+                return String(describing: value)
             case .skipped:
                 return "skipped"
             case .returnedVoid:
@@ -55,18 +55,8 @@ package extension ObservedResponse.Outcome {
 }
 
 package extension LinearizabilityChecker {
-    /// Builds a checker from the per-lane responses captured during a preemptive run, mapping each ``ObservedResponse`` to a checker observation. Shared by the synchronous and asynchronous preemptive backends.
-    ///
-    /// Command descriptions are computed lazily here rather than during probe execution, so the `String(describing:)` cost is paid only when building the checker for a confirmed failure — not on every reduction probe.
+    /// Builds a checker directly from the per-lane responses captured during a preemptive run. Shared by the synchronous and asynchronous preemptive backends.
     init(laneResponses: [[ObservedResponse<Command>]]) {
-        self.init(laneObservations: laneResponses.map { lane in
-            lane.map { response in
-                Observation(
-                    command: response.command,
-                    returnValue: response.outcome.returnValue,
-                    isSkipped: response.outcome.isSkipped
-                )
-            }
-        })
+        self.init(laneObservations: laneResponses)
     }
 }

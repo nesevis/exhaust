@@ -1,6 +1,6 @@
 import ExhaustCore
 
-/// The per-probe operations that differ between the synchronous and async preemptive runners.
+/// Defines the per-probe operations that differ between the synchronous and async preemptive runners.
 ///
 /// Everything else (phase ordering, smoke, SCA coverage, sampling, reduction, and failure assembly) is shared in ``__ExhaustRuntime/runPreemptivePipeline(backend:config:)``. The synchronous backend runs commands directly on GCD threads; the async backend bridges each probe through a drain loop.
 ///
@@ -22,17 +22,14 @@ protocol PreemptiveBackend<Spec>: Sendable {
     /// Called after lane-collapse reduction on oracle-flagged failures. If any valid interleaving produces matching responses and passes the oracle, the execution is linearizable and the failure was a false positive.
     ///
     /// - Parameters:
-    ///   - prefix: The sequential prefix commands.
+    ///   - taggedCommands: The full tagged command sequence (prefix + concurrent).
     ///   - laneResponses: The per-lane observed responses from `Outcome.laneResponses`.
     ///   - concurrentSpec: The concurrent spec instance after execution, kept alive for oracle calls.
     /// - Returns: The linearizability verdict with closest-ordering information on failure.
     func checkLinearizability(
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         laneResponses: [[ObservedResponse<Spec.Command>]],
-        concurrentSpec: Spec,
-        observationHashes: [[UInt64]]?,
-        prefixFingerprint: UInt64,
-        prefixCache: inout LinearizabilityPrefixCache?
+        concurrentSpec: Spec
     ) -> LinearizabilityResult
 
     /// Replays the reduced commands sequentially on a fresh spec to capture the expected (race-free) oracle state for a failure result.

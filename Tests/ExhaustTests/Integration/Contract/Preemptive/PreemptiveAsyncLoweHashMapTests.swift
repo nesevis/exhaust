@@ -13,7 +13,7 @@ struct PreemptiveAsyncLoweHashMapTests {
             .replay(.numeric(1337)),
             // Very high budget due to the non-deterministic interleaving.
             // Most failures are found after ~1100 iterations
-            .budget(.custom(coverage: 10000, sampling: 500_000)),
+            .budget(.custom(coverage: 10000, sampling: 5_000_000)),
             .suppress(.issueReporting)
         )
         #expect(result?.replaySeed != nil)

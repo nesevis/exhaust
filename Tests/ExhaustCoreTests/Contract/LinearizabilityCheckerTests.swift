@@ -8,6 +8,45 @@ import Testing
 /// A stack makes a good model because its answers depend on order. A `pop` returns the value pushed last, or reports a skip when the stack is empty, so a wrong return value (a value that was never pushed) and a wrong final state are both easy to build. Each test supplies fixed observations and a fixed final state, so the verdict is deterministic. There are no real threads.
 @Suite("Linearizability checker")
 struct LinearizabilityCheckerTests {
+    // MARK: - Queue False Positive Reproduction
+
+    @Test("Dequeue-nil with concurrent enqueues is linearizable when a valid ordering exists")
+    func dequeueNilWithConcurrentEnqueuesIsLinearizable() {
+        // Reproduces the false positive from the Herlihy queue test:
+        // Lane A: dequeue → nil, enqueue(41)
+        // Lane B: enqueue(7), enqueue(78), enqueue(96)
+        // Queue starts empty (prefix was 4 dequeues on empty queue).
+        // Valid ordering: A1(dequeue→nil), A2(enqueue(41)), B1(enqueue(7)), B2(enqueue(78)), B3(enqueue(96))
+        //   → state [41, 7, 78, 96]
+        // The concurrent execution produced [41, 78, 96] (enqueue(7) lost),
+        // but for the false positive case, assume the concurrent state is [41, 78, 96]
+        // with only 3 items — that IS genuinely non-linearizable (lost item).
+        // The actual false positive had same-multiset: expected [78, 96, 41], actual [41, 78, 96].
+        // Test the same-multiset case: all 4 items present, just reordered.
+        let laneA: [QueueObservation] = [dequeueReturningNil(), enqueue(41)]
+        let laneB: [QueueObservation] = [enqueue(7), enqueue(78), enqueue(96)]
+        // State [41, 7, 78, 96] = ordering A1, A2, B1, B2, B3
+        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [41, 7, 78, 96]))
+        #expect(result.linearizable, "Ordering (dequeue→nil, enqueue(41), enqueue(7), enqueue(78), enqueue(96)) produces this state")
+    }
+
+    @Test("All reorderings of enqueue-only lanes are linearizable")
+    func allEnqueueReorderingsAreLinearizable() {
+        // Lane A: enqueue(1), enqueue(2)
+        // Lane B: enqueue(3)
+        // Every valid ordering produces 3 items; the item positions vary.
+        let laneA: [QueueObservation] = [enqueue(1), enqueue(2)]
+        let laneB: [QueueObservation] = [enqueue(3)]
+        // A1, A2, B1 → [1, 2, 3]
+        #expect(queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 2, 3])).linearizable)
+        // A1, B1, A2 → [1, 3, 2]
+        #expect(queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 3, 2])).linearizable)
+        // B1, A1, A2 → [3, 1, 2]
+        #expect(queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [3, 1, 2])).linearizable)
+    }
+
+    // MARK: - Stack Tests
+
     @Test("No commands is trivially linearizable")
     func emptyHistoryIsLinearizable() {
         #expect(verdict(check(lanes: [], finalState: [])).linearizable)
@@ -64,6 +103,77 @@ struct LinearizabilityCheckerTests {
         let lanes = [[popReturning(1)], [push(2)]]
         #expect(verdict(check(lanes: lanes, prefix: [.push(1)], finalState: [2])).linearizable)
     }
+
+    // MARK: - Prefix Cache Regression
+
+    @Test("Cache does not prune the valid ordering when void commands share the same cursor state")
+    func cachePrefixHashDistinguishesOrderingsAtSameCursorState() {
+        // Regression for the identical-observation-hash false negative.
+        //
+        // Lane A: enqueue(1), enqueue(2)     Lane B: enqueue(3)
+        // Final state: [3, 1, 2] = ordering B[0], A[0], A[1]
+        //
+        // The DFS tries lane 0 (A) first at each depth:
+        //   depth 0: A[0]
+        //     depth 1: A[1] → depth 2: B[0] → [1,2,3] ≠ [3,1,2] → oracle fails
+        //     depth 1: B[0] → cursor (A=1, B=1)
+        //       depth 2: A[1] → [1,3,2] ≠ [3,1,2] → oracle fails
+        //     subtree at cursor (A=1, B=1) exhausted → CACHED
+        //   depth 0: B[0]
+        //     depth 1: A[0] → cursor (A=1, B=1) — same cursor state
+        //     cache lookup: must MISS (different prefix ordering)
+        //       depth 2: A[1] → [3,1,2] = [3,1,2] → oracle PASSES
+        //
+        // The old cache keyed on observation hashes, which are identical for void
+        // enqueue commands after value minimization. That made the prefix hash
+        // order-invariant (XOR of identical per-depth contributions), so both
+        // paths to cursor (A=1, B=1) shared the same cache key. The first path's
+        // "no valid completion" entry pruned the second path, missing the valid
+        // ordering.
+        //
+        // The fix keys on command identity (laneIndex, commandIndex), which is
+        // unique per command regardless of observation hash. Two orderings of
+        // distinct commands produce different prefix hashes.
+        let laneA: [QueueObservation] = [enqueue(1), enqueue(2)]
+        let laneB: [QueueObservation] = [enqueue(3)]
+        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [3, 1, 2]))
+        #expect(result.linearizable)
+    }
+
+    @Test("Cache does not prune valid orderings with three lanes")
+    func cachePrefixHashWorksWithThreeLanes() {
+        // Three lanes of void enqueues. The DFS explores lane 0 first, then
+        // lane 1, then lane 2. Only the ordering C[0], A[0], B[0] produces
+        // final state [3, 1, 2]. The cache must not prune it after exhausting
+        // A-first and B-first subtrees that reach the same cursor state.
+        let laneA: [QueueObservation] = [enqueue(1)]
+        let laneB: [QueueObservation] = [enqueue(2)]
+        let laneC: [QueueObservation] = [enqueue(3)]
+        let result = queueVerdict(checkQueue(lanes: [laneA, laneB, laneC], finalState: [3, 1, 2]))
+        #expect(result.linearizable)
+    }
+
+    @Test("Genuinely non-linearizable lost enqueue is preserved with caching")
+    func genuinelyNonLinearizablePreservedWithCache() {
+        // Two enqueues, but the final state shows three items. No ordering of
+        // two enqueues can produce three items. The cache must not introduce
+        // a false positive (claiming linearizable when it is not).
+        let laneA: [QueueObservation] = [enqueue(1)]
+        let laneB: [QueueObservation] = [enqueue(2)]
+        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 2, 3]))
+        #expect(result.linearizable == false)
+    }
+
+    @Test("Cache preserves not-linearizable verdict for wrong queue ordering")
+    func cachePreservesWrongOrderingVerdict() {
+        // Lane A: enqueue(1), enqueue(2)   Lane B: enqueue(3)
+        // Final state: [2, 1, 3] — no valid ordering produces this because
+        // A[0] must precede A[1] (per-lane order), so 1 always appears before 2.
+        let laneA: [QueueObservation] = [enqueue(1), enqueue(2)]
+        let laneB: [QueueObservation] = [enqueue(3)]
+        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [2, 1, 3]))
+        #expect(result.linearizable == false)
+    }
 }
 
 // MARK: - Supporting Types
@@ -116,7 +226,7 @@ private final class Stack {
 
 // MARK: - Helpers
 
-private typealias Observation = LinearizabilityChecker<StackCommand>.Observation
+private typealias Observation = ObservedResponse<StackCommand>
 
 /// Runs the checker over hand-built lane observations, replaying against a fresh stack and comparing the replayed final state to `finalState`.
 private func check(
@@ -140,7 +250,8 @@ private func check(
         },
         checkOracle: {
             replayStack?.elements == finalState
-        }
+        },
+        failureDescription: { nil }
     )
 }
 
@@ -151,19 +262,108 @@ private func verdict(
     switch result {
         case .linearizable:
             return (true, nil)
-        case let .notLinearizable(witness):
+        case let .notLinearizable(witness, _):
             return (false, witness.map { ($0.laneIndex, $0.commandIndex) })
     }
 }
 
 private func push(_ value: Int) -> Observation {
-    Observation(command: .push(value), returnValue: nil, isSkipped: false)
+    Observation(lane: 0, command: .push(value), outcome: .returnedVoid)
 }
 
 private func popReturning(_ value: Int) -> Observation {
-    Observation(command: .pop, returnValue: value, isSkipped: false)
+    Observation(lane: 0, command: .pop, outcome: .returned(value))
 }
 
 private func popSkipped() -> Observation {
-    Observation(command: .pop, returnValue: nil, isSkipped: true)
+    Observation(lane: 0, command: .pop, outcome: .skipped)
+}
+
+// MARK: - Queue Model
+
+private enum QueueCommand: CustomStringConvertible {
+    case enqueue(Int)
+    case dequeue
+
+    var description: String {
+        switch self {
+            case let .enqueue(value): "enqueue(\(value))"
+            case .dequeue: "dequeue"
+        }
+    }
+}
+
+private final class Queue {
+    private(set) var elements: [Int] = []
+
+    func apply(_ command: QueueCommand) {
+        switch command {
+            case let .enqueue(value):
+                elements.append(value)
+            case .dequeue:
+                if elements.isEmpty == false {
+                    elements.removeFirst()
+                }
+        }
+    }
+
+    func replay(_ command: QueueCommand) -> LinearizabilityChecker<QueueCommand>.ReplayResponse {
+        switch command {
+            case let .enqueue(value):
+                elements.append(value)
+                return .init(returnValue: nil, isSkipped: false)
+            case .dequeue:
+                if elements.isEmpty {
+                    return .init(returnValue: "nil", isSkipped: false)
+                }
+                return .init(returnValue: elements.removeFirst(), isSkipped: false)
+        }
+    }
+}
+
+private typealias QueueObservation = ObservedResponse<QueueCommand>
+
+private func checkQueue(
+    lanes: [[QueueObservation]],
+    prefix: [QueueCommand] = [],
+    finalState: [Int]
+) -> LinearizabilityChecker<QueueCommand>.Result {
+    let checker = LinearizabilityChecker(laneObservations: lanes)
+    var replayQueue: Queue?
+    return checker.check(
+        replayPrefix: {
+            let fresh = Queue()
+            for command in prefix {
+                fresh.apply(command)
+            }
+            replayQueue = fresh
+            return true
+        },
+        replayCommand: { command in
+            replayQueue?.replay(command)
+        },
+        checkOracle: {
+            replayQueue?.elements == finalState
+        },
+        failureDescription: { nil }
+    )
+}
+
+private func queueVerdict(
+    _ result: LinearizabilityChecker<QueueCommand>.Result
+) -> (linearizable: Bool, witness: (lane: Int, command: Int)?) {
+    switch result {
+        case .linearizable:
+            return (true, nil)
+        case let .notLinearizable(witness, _):
+            return (false, witness.map { ($0.laneIndex, $0.commandIndex) })
+    }
+}
+
+private func enqueue(_ value: Int) -> QueueObservation {
+    QueueObservation(lane: 0, command: .enqueue(value), outcome: .returnedVoid)
+}
+
+private func dequeueReturningNil() -> QueueObservation {
+    QueueObservation(lane: 0, command: .dequeue, outcome: .returned("nil"))
 }

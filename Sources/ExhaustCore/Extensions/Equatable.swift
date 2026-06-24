@@ -31,16 +31,24 @@ package extension Equatable {
     }
 }
 
+private protocol _OptionalProtocol {
+    var _unwrapped: Any? { get }
+}
+
+extension Optional: _OptionalProtocol {
+    var _unwrapped: Any? {
+        map { $0 as Any }
+    }
+}
+
 /// Unwraps an `Any` value that may contain a boxed `Optional`, returning the inner value or the original if it is not optional.
 private func unwrapOptional(_ value: Any) -> Any {
-    let mirror = Mirror(reflecting: value)
-    guard mirror.displayStyle == .optional else {
+    guard let optional = value as? _OptionalProtocol,
+          let inner = optional._unwrapped
+    else {
         return value
     }
-    guard let child = mirror.children.first else {
-        return value
-    }
-    return child.value
+    return inner
 }
 
 /// Recursive structural equality for values that may not conform to `Equatable` (for example, tuples). Uses `Equatable/isEqualToAny(_:)` at leaf nodes and `Mirror` to decompose compound values like tuples. Returns `true` when both values are structurally identical down to their `Equatable` leaves.
