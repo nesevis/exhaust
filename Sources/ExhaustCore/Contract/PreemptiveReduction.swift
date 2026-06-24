@@ -63,8 +63,6 @@ package enum PreemptiveReduction {
     }
 
     /// Runs a single reduction pass with the given encoder set and property function.
-    ///
-    /// The `execute` closure receives the materialized commands and the ChoiceTree from which they were produced, so the linearizability checker can derive per-command observation hashes from the reduced tree rather than the stale original.
     package static func reduceSinglePass<Command, FailureOutcome>(
         generator: Generator<[(ScheduleMarker, Command)]>,
         tree: ChoiceTree,

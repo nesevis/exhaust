@@ -8,6 +8,22 @@ extension __ExhaustRuntime {
     /// Sampling and lane-collapse use the oracle as their property function (fast, over-reports). Once a candidate survives lane-collapse, linearizability confirms it. Structural reduction uses linearizability as its property function, so commands whose return values carry response-level evidence are not stripped.
     ///
     /// Rendered failure messages are returned as deferred issues rather than reported inline, so each entry point can report them in a context where Swift Testing task-locals are available (the pipeline itself runs on a GCD thread). The fully-populated ``ExhaustReport`` is returned for the entry point to deliver to `onReport`.
+    /// Evidence from a single failing execution: the outcome, response-level witness, and human-readable description of the expected state.
+    private struct FailureEvidence<Spec: ContractSpecBase> {
+        let outcome: Preemptive.Outcome<Spec>
+        let witness: ResponseWitness?
+        let failureDescription: String?
+    }
+
+    /// Result of reducing a confirmed failure to its reported form.
+    private struct ReducedFailure<Spec: ContractSpecBase> {
+        let reduced: [(ScheduleMarker, Spec.Command)]
+        let reductionInvocations: Int
+        let witness: ResponseWitness?
+        let reportedOutcome: Preemptive.Outcome<Spec>?
+        let failureDescription: String?
+    }
+
     static func runPreemptivePipeline<Backend: PreemptiveBackend>(
         backend: Backend,
         config: ResolvedConcurrentConfig,
@@ -44,14 +60,14 @@ extension __ExhaustRuntime {
 
         let identifySkips = backend.makeIdentifySkips()
         let lastFailingOutcome = UnsafeSendableBox<Preemptive.Outcome<Spec>?>(nil)
-        let classifyFailure: @Sendable ([(ScheduleMarker, Spec.Command)], Preemptive.Outcome<Spec>) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?, failureDescription: String?)? = { taggedCommands, outcome in
+        let classifyFailure: @Sendable ([(ScheduleMarker, Spec.Command)], Preemptive.Outcome<Spec>) -> FailureEvidence<Spec>? = { taggedCommands, outcome in
             if outcome.passed {
                 return nil
             }
             guard let laneResponses = outcome.laneResponses,
                   let concurrentSpec = outcome.concurrentSpec
             else {
-                return (outcome, nil, nil)
+                return FailureEvidence(outcome: outcome, witness: nil, failureDescription: nil)
             }
             guard case let .notLinearizable(witness, failure) = backend.checkLinearizability(
                 taggedCommands: taggedCommands,
@@ -60,7 +76,7 @@ extension __ExhaustRuntime {
             ) else {
                 return nil
             }
-            return (outcome, witness, failure)
+            return FailureEvidence(outcome: outcome, witness: witness, failureDescription: failure)
         }
 
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
@@ -74,7 +90,7 @@ extension __ExhaustRuntime {
             return false
         }
 
-        func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)], discoveryIterations: Int) -> (outcome: Preemptive.Outcome<Spec>, witness: ResponseWitness?, failureDescription: String?)? {
+        func confirmRealFailure(_ input: [(ScheduleMarker, Spec.Command)], discoveryIterations: Int) -> FailureEvidence<Spec>? {
             for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
                 if let confirmed = classifyFailure(input, backend.execute(input)) {
                     return confirmed
@@ -83,12 +99,11 @@ extension __ExhaustRuntime {
             return nil
         }
 
-        func linearizableProbe(_ probeCommands: [(ScheduleMarker, Spec.Command)], probeTree _: ChoiceTree) -> (Bool, ResponseWitness?, String?, Preemptive.Outcome<Spec>?) {
-            let failure = classifyFailure(probeCommands, backend.execute(probeCommands))
-            if let failure {
-                return (false, failure.witness, failure.failureDescription, failure.outcome)
+        func linearizableProbe(_ probeCommands: [(ScheduleMarker, Spec.Command)], probeTree _: ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureEvidence<Spec>?) {
+            guard let failure = classifyFailure(probeCommands, backend.execute(probeCommands)) else {
+                return (true, nil, nil, nil)
             }
-            return (true, nil, nil, nil)
+            return (false, failure.witness, failure.failureDescription, failure)
         }
 
         /// Per-lane observed return values for failure annotation, keyed by ``ScheduleMarker/rawValue`` in per-lane execution order.
@@ -111,7 +126,7 @@ extension __ExhaustRuntime {
             tree: ChoiceTree,
             pruneSeed: UInt64,
             discoveryIterations: Int
-        ) -> (reduced: [(ScheduleMarker, Spec.Command)], reductionInvocations: Int, witness: ResponseWitness?, reportedOutcome: Preemptive.Outcome<Spec>?, failureDescription: String?) {
+        ) -> ReducedFailure<Spec> {
             let repetitions = PreemptiveReduction.confirmationRepetitions(discoveryIterations: discoveryIterations)
             // Prune commands whose preconditions were not met: a skipped command is a no-op, so removing it up front keeps reduction on the minimal command set and the reported counterexample carries no skipped commands. The prune is reverted if removing the skips dissolves the violation.
             let (prunedCommands, prunedTree) = pruneSkippedCommands(
@@ -139,7 +154,7 @@ extension __ExhaustRuntime {
                 execute: linearizableProbe
             )
 
-            // Pass 2: deletion and value reduction on the collapsed schedule. The tighter interleaving space (fewer concurrent commands) makes each linearizability check cheaper and the prefix cache more effective — fewer distinct observation sets, more cross-check hits.
+            // Pass 2: deletion and value reduction on the collapsed schedule. The tighter interleaving space (fewer concurrent commands) makes each linearizability check cheaper.
             let combinedResult = PreemptiveReduction.reduceSinglePass(
                 generator: sequenceGen,
                 tree: collapseResult.tree,
@@ -158,33 +173,32 @@ extension __ExhaustRuntime {
 
             // Present prefix-first. The runner runs all prefix commands sequentially before any lane (execute() partitions by marker, not array position), so reordering is execution-equivalent and makes the execution trace honest.
             let reduced = combinedResult.output.sorted { $0.0.isPrefix && $1.0.isPrefix == false }
+            let totalInvocations = combinedResult.propertyInvocations + collapseResult.propertyInvocations
 
             // Evidence priority: (1) reduction cache from the deletion pass, (2) reduction cache from the lane collapse pass, (3) confirmRealFailure re-execution as last resort when no reduction probe reproduced the race.
-            let cachedOutcome = combinedResult.failureOutcome ?? collapseResult.failureOutcome
-            let cachedWitness = combinedResult.witness ?? collapseResult.witness
-            let cachedDescription = combinedResult.failureDescription ?? collapseResult.failureDescription
-            if cachedOutcome != nil {
-                return (
-                    reduced,
-                    combinedResult.propertyInvocations + collapseResult.propertyInvocations,
-                    cachedWitness,
-                    cachedOutcome,
-                    cachedDescription
+            let cached = combinedResult.failureOutcome ?? collapseResult.failureOutcome
+            if let cached {
+                return ReducedFailure(
+                    reduced: reduced,
+                    reductionInvocations: totalInvocations,
+                    witness: combinedResult.witness ?? collapseResult.witness,
+                    reportedOutcome: cached.outcome,
+                    failureDescription: combinedResult.failureDescription ?? collapseResult.failureDescription
                 )
             }
             let confirmed = confirmRealFailure(reduced, discoveryIterations: discoveryIterations)
-            return (
-                reduced,
-                combinedResult.propertyInvocations + collapseResult.propertyInvocations,
-                confirmed?.witness,
-                confirmed?.outcome,
-                confirmed?.failureDescription
+            return ReducedFailure(
+                reduced: reduced,
+                reductionInvocations: totalInvocations,
+                witness: confirmed?.witness,
+                reportedOutcome: confirmed?.outcome,
+                failureDescription: confirmed?.failureDescription
             )
         }
 
         /// Builds the result, records invocation counts, renders the failure issue, and finalizes the report for a reduced failure. The coverage and sampling phases run this identical six-step sequence after ``reduceConfirmedFailure`` and differ only in discovery metadata, so it lives here rather than being spelled out at each phase.
         func assembleReducedFailure(
-            reduction: (reduced: [(ScheduleMarker, Spec.Command)], reductionInvocations: Int, witness: ResponseWitness?, reportedOutcome: Preemptive.Outcome<Spec>?, failureDescription: String?),
+            reduction: ReducedFailure<Spec>,
             discoveryMethod: ContractDiscoveryMethod,
             seed: UInt64?,
             iteration: Int,

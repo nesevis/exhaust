@@ -279,10 +279,6 @@ private func popSkipped() -> Observation {
     Observation(lane: 0, command: .pop, outcome: .skipped)
 }
 
-private func popReturningNil() -> Observation {
-    Observation(lane: 0, command: .pop, outcome: .returned("nil"))
-}
-
 // MARK: - Queue Model
 
 private enum QueueCommand: CustomStringConvertible {
@@ -366,10 +362,6 @@ private func queueVerdict(
 
 private func enqueue(_ value: Int) -> QueueObservation {
     QueueObservation(lane: 0, command: .enqueue(value), outcome: .returnedVoid)
-}
-
-private func dequeueReturning(_ value: Int) -> QueueObservation {
-    QueueObservation(lane: 0, command: .dequeue, outcome: .returned(value))
 }
 
 private func dequeueReturningNil() -> QueueObservation {

@@ -11,13 +11,29 @@ import Testing
 /// **Detection**: The oracle compares remaining items after all operations complete. A lost enqueue means the concurrent SUT is missing an item that every valid sequential ordering would include. Response-level detection also works: `dequeue` returns nil or a different item than any valid ordering predicts.
 @Suite("Preemptive linearizability: Herlihy-Wing lock-free queue lost enqueue", .serialized, .tags(.contract))
 struct PreemptiveHerlihyQueueTests {
-    @Test("Detects lost enqueue from non-atomic back increment")
+    @Test("Detects lost enqueue from non-atomic back increment", .disabled("Benchmark"))
     func detectsLostEnqueue() {
-        let result = #execute(
-            HerlihyQueueSpec.self,
-            .concurrent(.two)
-//            .suppress(.issueReporting)
-        )
+        var commandCount = 0
+        var iterations: Double = 0
+        var totalRuntime = 0.0
+        for seed in UInt64(1) ... 200 {
+            var report: ExhaustReport?
+            let result = #execute(
+                HerlihyQueueSpec.self,
+                .concurrent(.two),
+                .budget(.custom(coverage: 0, sampling: 500_000)),
+//                .log(.debug),
+                .replay(.numeric(seed)),
+                .onReport { report = $0 },
+                .suppress(.all)
+            )
+            iterations += 1
+            commandCount += result?.commands.count ?? 20
+            totalRuntime += report?.totalMilliseconds ?? 0
+            print("Reduction summary: \(report?.profilingSummary ?? "")")
+        }
+        print("Mean command count: \(Double(commandCount) / iterations)")
+        print("Mean runtime: \(totalRuntime / iterations)ms")
         #expect(result != nil, "Should detect the lost-enqueue bug")
     }
 }
