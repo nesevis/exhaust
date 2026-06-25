@@ -13,6 +13,7 @@ struct PreemptiveRacyAccountTests {
                 .concurrent(.two),
                 .budget(.custom(coverage: 20000, sampling: 20000)),
                 .suppress(.issueReporting),
+                .idleTimeoutMs(30000),
                 .onReport { report = $0 }
             )
         )
