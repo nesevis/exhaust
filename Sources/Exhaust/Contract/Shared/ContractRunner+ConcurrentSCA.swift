@@ -51,6 +51,7 @@ extension __ExhaustRuntime {
         coverageBudget: UInt64,
         concurrencyLevel: Int,
         skipToRow: Int? = nil,
+        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Command)]>)? = nil,
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
         identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
         lastRunTimedOut: UnsafeSendableBox<Bool>,
@@ -64,6 +65,7 @@ extension __ExhaustRuntime {
             skipToRow: skipToRow,
             logEventPrefix: "concurrent_sca_coverage",
             concurrencyLevel: concurrencyLevel,
+            sequenceGenForLength: sequenceGenForLength,
             property: property
         )
         switch result {
