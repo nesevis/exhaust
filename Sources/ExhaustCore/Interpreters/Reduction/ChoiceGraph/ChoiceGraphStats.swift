@@ -52,6 +52,21 @@ public struct ChoiceGraphStats: Sendable {
         fullGraphRebuilds = 0
     }
 
+    /// Merges another stats value by taking the latest structural snapshot and summing cumulative counters.
+    mutating func merge(_ other: ChoiceGraphStats) {
+        nodeCount = other.nodeCount
+        dependencyEdgeCount = other.dependencyEdgeCount
+        containmentEdgeCount = other.containmentEdgeCount
+        selfSimilarityEdgeCount = other.selfSimilarityEdgeCount
+        typeCompatibilityEdgeCount = other.typeCompatibilityEdgeCount
+        activeNodeCount = other.activeNodeCount
+        inactiveNodeCount = other.inactiveNodeCount
+        deletionAntichainSize = other.deletionAntichainSize
+        fullGraphRebuilds += other.fullGraphRebuilds
+        dynamicRegionRebuilds += other.dynamicRegionRebuilds
+        dynamicRegionNodesRebuilt += other.dynamicRegionNodesRebuilt
+    }
+
     /// Populates construction-time stats from a ``ChoiceGraph``.
     static func from(_ graph: ChoiceGraph) -> ChoiceGraphStats {
         var stats = ChoiceGraphStats()

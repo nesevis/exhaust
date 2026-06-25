@@ -67,7 +67,7 @@ public struct ReductionStats: Sendable {
         for (key, value) in other.filterObservations {
             filterObservations[key, default: FilterObservation()].merge(value)
         }
-        graphStats = other.graphStats
+        graphStats.merge(other.graphStats)
         stepTimings.merge(other.stepTimings)
     }
 }
