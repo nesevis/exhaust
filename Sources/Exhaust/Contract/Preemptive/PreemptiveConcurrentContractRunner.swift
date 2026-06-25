@@ -134,8 +134,8 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         }
 
         let perLaneResponses = partition.laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
-        let commandFailed = UnsafeSendableBox(false)
-        let caughtException = UnsafeSendableBox<NSException?>(nil)
+        let commandFailed = SendableBox(false)
+        let caughtException = SendableBox<NSException?>(nil)
         let group = DispatchGroup()
 
         nonisolated(unsafe) let unsafeConcurrentSpec = concurrentSpec
