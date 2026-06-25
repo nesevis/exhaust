@@ -234,7 +234,7 @@ private extension __ExhaustRuntime {
 
         var samplingIteration = 0
         do {
-            while let (taggedCommands, tree) = try interpreter.next() {
+            while let taggedCommands = try interpreter.nextValueOnly() {
                 samplingIteration += 1
                 let absoluteIteration = Int(startIndex) + samplingIteration
                 if property(taggedCommands) {
@@ -271,6 +271,7 @@ private extension __ExhaustRuntime {
                     return (result, context.deferredIssues, context.report)
                 }
 
+                let tree = try interpreter.reproduceFailureTree()
                 let reduction = reduceConfirmedFailure(
                     &context,
                     taggedCommands: taggedCommands,
@@ -312,7 +313,7 @@ private extension __ExhaustRuntime {
         outcome: Preemptive.Outcome<Backend.Spec>,
         backend: Backend
     ) -> FailureEvidence<Backend.Spec>? {
-        if outcome.passed {
+        if outcome.passed || outcome.timedOut {
             return nil
         }
         guard let laneResponses = outcome.laneResponses,
