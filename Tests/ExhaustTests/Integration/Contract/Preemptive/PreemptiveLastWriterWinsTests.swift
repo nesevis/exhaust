@@ -6,12 +6,18 @@ import Testing
 struct PreemptiveLastWriterWinsTests {
     @Test("Correctly synchronized last-writer-wins does not produce false positives")
     func correctlyImplementedLastWriterWinsPassesLinearizability() {
+        var report: ExhaustReport?
         let result = #execute(
             AtomicLastWriterWinsSpec.self,
             .concurrent(.two),
             .idleTimeoutMs(30000),
-            .suppress(.issueReporting)
+            .suppress(.issueReporting),
+            .onReport { report = $0 }
         )
+        print("\(#function): \(report?.totalMilliseconds ?? -1)ms total")
+        print("\(#function): \(result?.commands.count ?? -1) commands total")
+        print("\(#function): \(result?.trace) trace total")
+        print("\(#function): \(result?.originalCommands) trace total")
         #expect(result?.status != .fail, "A correctly synchronized SUT should not produce failures. The fixed-ordering oracle would false-positive here; linearizability should accept both orderings.")
     }
 }

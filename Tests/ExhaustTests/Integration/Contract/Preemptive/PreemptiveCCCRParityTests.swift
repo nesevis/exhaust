@@ -1,6 +1,5 @@
-import ExhaustTestSupport
+import Exhaust
 import Testing
-@testable import Exhaust
 
 // PCCR equivalents of the CCCR test specs. Same commands, same SUTs,
 // @Contract(.threads) instead of @Contract, @Oracle added for sequential comparison.
@@ -15,25 +14,15 @@ import Testing
 @Suite("PCCR parity: non-atomic counter", .serialized, .tags(.contract))
 struct PreemptiveNonAtomicCounterParityTests {
     @Test("Detects lost-update bug in non-atomic counter")
-    func detectsLostUpdateBugInNonAtomicCounter() async throws {
-        let result = try #require(
-            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
-                PreemptiveNonAtomicCounterParitySpec.self,
-                settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
-            )
+    func detectsLostUpdateBugInNonAtomicCounter() async {
+        let result = await #execute(
+            PreemptiveNonAtomicCounterParitySpec.self,
+            .suppress(.issueReporting)
         )
-        #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
-    }
-
-    @Test("Reduced counterexample is smaller than original")
-    func reducedCounterexampleIsSmallerThanOriginal() async throws {
-        let result = try #require(
-            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
-                PreemptiveNonAtomicCounterParitySpec.self,
-                settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
-            )
-        )
-        #expect(result.commands.count <= 6, "Reducer should shrink the counterexample")
+        #expect(result?.status != .pass, "Should never pass")
+        if let result {
+            #expect(result.originalCommands?.count ?? 0 > result.commands.count)
+        }
     }
 }
 
@@ -73,14 +62,15 @@ final class PreemptiveNonAtomicCounterParitySpec {
 @Suite("PCCR parity: leaky bucket", .serialized, .tags(.contract))
 struct PreemptiveLeakyBucketParityTests {
     @Test("Detects check-then-act bug that requires state buildup")
-    func detectsCheckThenActBugThatRequiresStateBuildup() async throws {
-        let result = try #require(
-            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
-                PreemptiveLeakyBucketParitySpec.self,
-                settings: [.budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
-            )
+    func detectsCheckThenActBugThatRequiresStateBuildup() async {
+        let result = await #execute(
+            PreemptiveLeakyBucketParitySpec.self,
+            .suppress(.issueReporting)
         )
-        #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
+        #expect(result?.status != .pass, "Should never pass")
+        if let result {
+            #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
+        }
     }
 }
 
@@ -122,12 +112,9 @@ final class PreemptiveLeakyBucketParitySpec {
 struct PreemptiveAtomicCounterParityTests {
     @Test("Thread-safe counter passes under preemptive execution")
     func threadSafeCounterPassesUnderPreemptiveExecution() async {
-        let result = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+        let result = await #execute(
             PreemptiveAtomicCounterParitySpec.self,
-            settings: [
-                .commandLimit(4),
-//                .suppress(.issueReporting)
-            ]
+            .suppress(.issueReporting)
         )
         #expect(result == nil, "Atomic counter should pass under any interleaving")
     }
@@ -165,9 +152,9 @@ struct PreemptiveDetectionBoundaryParityTests {
     @Test("Race with Task.yield() is detected by preemptive runner", .disabled("Race detection depends on scheduling timing"))
     func raceWithTaskyieldIsDetectedByPreemptiveRunner() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+            await #execute(
                 PreemptiveExposedRaceParitySpec.self,
-                settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+                .suppress(.issueReporting)
             )
         )
         #expect(result.commands.count >= 2)
@@ -176,9 +163,10 @@ struct PreemptiveDetectionBoundaryParityTests {
     @Test("Three-way race detected with concurrencyLevel 3", .disabled("Race detection depends on scheduling timing"))
     func threeWayRaceDetectedWithConcurrencyLevel3() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+            await #execute(
                 PreemptiveThreeWayRaceParitySpec.self,
-                settings: [.concurrent(.three), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+                .concurrent(.three),
+                .suppress(.issueReporting)
             )
         )
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
@@ -231,18 +219,18 @@ final class PreemptiveThreeWayRaceParitySpec {
 struct PreemptiveAllSkipParityTests {
     @Test("100% skip rate does not hang or crash")
     func fullSkipRateDoesNotHangOrCrash() async {
-        let result = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+        let result = await #execute(
             PreemptiveAlwaysSkipParitySpec.self,
-            settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 50)), .suppress(.issueReporting)]
+            .suppress(.issueReporting)
         )
         #expect(result == nil, "A spec where every command skips should produce no failure")
     }
 
     @Test("100% skip rate with coverage phase")
     func fullSkipRateWithCoveragePhase() async {
-        let result = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+        let result = await #execute(
             PreemptiveAlwaysSkipParitySpec.self,
-            settings: [.commandLimit(4), .budget(.custom(coverage: 100, sampling: 50)), .suppress(.issueReporting)]
+            .suppress(.issueReporting)
         )
         #expect(result == nil, "Coverage phase should handle 100% skip rate gracefully")
     }

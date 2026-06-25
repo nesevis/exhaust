@@ -1,7 +1,6 @@
-import ExhaustTestSupport
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 /// Exercises an `async` `@Oracle` under the preemptive concurrent runner (PCCR).
 ///
@@ -11,14 +10,10 @@ struct PreemptiveAsyncOracleTests {
     @Test("Async oracle detects a lost-update race")
     func asyncOracleDetectsLostUpdateRace() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+            await #execute(
                 AsyncOracleRacyCounterSpec.self,
-                settings: [
-                    .concurrent(.two),
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting),
-                ]
+                .concurrent(.two),
+                .suppress(.issueReporting)
             )
         )
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
@@ -26,14 +21,10 @@ struct PreemptiveAsyncOracleTests {
 
     @Test("Async oracle passes for a thread-safe SUT")
     func asyncOraclePassesForThreadSafeSUT() async {
-        let result = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+        let result = await #execute(
             AsyncOracleSafeCounterSpec.self,
-            settings: [
-                .concurrent(.two),
-                .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
-                .suppress(.issueReporting),
-            ]
+            .concurrent(.two),
+            .suppress(.issueReporting)
         )
         #expect(result == nil, "A serialized counter must never diverge from its sequential replay")
     }

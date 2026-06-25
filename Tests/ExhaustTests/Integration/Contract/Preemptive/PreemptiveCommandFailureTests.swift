@@ -1,42 +1,29 @@
-import ExhaustTestSupport
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Preemptive concurrent contract: command-level failures", .serialized, .tags(.contract))
 struct PreemptiveCommandFailureTests {
     @Test("Sync checker detects postcondition failure in prefix command")
-    func syncCheckerDetectsPostconditionFailureInPrefixCommand() async throws {
+    func syncCheckerDetectsPostconditionFailureInPrefixCommand() throws {
         let result = try #require(
-            await __ExhaustRuntime.dispatchToGCD {
-                __ExhaustRuntime.__runPreemptiveConcurrentContract(
-                    SyncPrefixFailingSpec.self,
-                    settings: [
-                        .concurrent(.two),
-                        .commandLimit(4),
-                        .budget(.custom(coverage: 0, sampling: 200)),
-                        .suppress(.all),
-                    ]
-                )
-            }
+            #execute(
+                SyncPrefixFailingSpec.self,
+                .concurrent(.two),
+                .suppress(.all)
+            )
         )
         #expect(result.commands.isEmpty == false)
     }
 
     @Test("Sync checker detects postcondition failure in concurrent lane")
-    func syncCheckerDetectsPostconditionFailureInConcurrentLane() async throws {
+    func syncCheckerDetectsPostconditionFailureInConcurrentLane() throws {
         let result = try #require(
-            await __ExhaustRuntime.dispatchToGCD {
-                __ExhaustRuntime.__runPreemptiveConcurrentContract(
-                    SyncLaneFailingSpec.self,
-                    settings: [
-                        .concurrent(.two),
-                        .commandLimit(6),
-                        .budget(.custom(coverage: 0, sampling: 200)),
-                        .suppress(.all),
-                    ]
-                )
-            }
+            #execute(
+                SyncLaneFailingSpec.self,
+                .concurrent(.two),
+                .suppress(.all)
+            )
         )
         #expect(result.commands.isEmpty == false)
     }
@@ -44,14 +31,10 @@ struct PreemptiveCommandFailureTests {
     @Test("Async checker detects postcondition failure in prefix command")
     func asyncCheckerDetectsPostconditionFailureInPrefixCommand() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+            await #execute(
                 AsyncPrefixFailingSpec.self,
-                settings: [
-                    .concurrent(.two),
-                    .commandLimit(4),
-                    .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.all),
-                ]
+                .concurrent(.two),
+                .suppress(.all)
             )
         )
         #expect(result.commands.isEmpty == false)
@@ -60,14 +43,10 @@ struct PreemptiveCommandFailureTests {
     @Test("Async checker detects postcondition failure in concurrent lane")
     func asyncCheckerDetectsPostconditionFailureInConcurrentLane() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+            await #execute(
                 AsyncLaneFailingSpec.self,
-                settings: [
-                    .concurrent(.two),
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.all),
-                ]
+                .concurrent(.two),
+                .suppress(.all)
             )
         )
         #expect(result.commands.isEmpty == false)
