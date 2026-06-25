@@ -19,6 +19,7 @@ struct PreemptiveRacyAccountTests {
         print(report?.profilingSummary)
         print(result.replaySeed)
         print(result.trace)
+        print(result.originalCommands)
         #expect(result.replaySeed != nil)
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
     }

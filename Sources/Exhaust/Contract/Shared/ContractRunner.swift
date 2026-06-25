@@ -344,6 +344,7 @@ private extension __ExhaustRuntime {
         let outcome = finalize(discovery.commands)
         let result = ContractResult<Spec>(
             commands: discovery.commands,
+            originalCommands: nil,
             trace: outcome.trace,
             systemUnderTest: outcome.systemUnderTest,
             seed: context.seed,

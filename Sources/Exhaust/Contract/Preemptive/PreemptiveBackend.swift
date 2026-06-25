@@ -35,6 +35,7 @@ protocol PreemptiveBackend<Spec>: Sendable {
     /// Replays the reduced commands sequentially on a fresh spec to capture the expected (race-free) oracle state for a failure result.
     func buildResult(
         reduced: [(ScheduleMarker, Spec.Command)],
+        originalCommands: [Spec.Command]?,
         seed: UInt64?,
         replaySeed: String?,
         discoveryMethod: ContractDiscoveryMethod

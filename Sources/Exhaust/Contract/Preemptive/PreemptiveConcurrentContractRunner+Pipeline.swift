@@ -36,6 +36,7 @@ extension __ExhaustRuntime {
             config: config,
             regressionSeeds: regressionSeeds,
             sequenceGen: Gen.arrayOf(taggedCommandGen, within: 1 ... UInt64(commandLimit), scaling: .constant),
+            taggedCommandGen: taggedCommandGen,
             commandGen: commandGen,
             commandLimit: commandLimit,
             samplingBudget: config.budget.samplingBudget,
@@ -133,6 +134,7 @@ private extension __ExhaustRuntime {
                 if smoke.failed {
                     let result = ContractResult<Spec>(
                         commands: commands,
+                        originalCommands: nil,
                         trace: smoke.trace,
                         systemUnderTest: smoke.systemUnderTest,
                         seed: nil,
@@ -168,6 +170,7 @@ private extension __ExhaustRuntime {
         } else {
             context.coverageBudget
         }
+        let taggedCommandGen = context.taggedCommandGen
         let scaRowResult = runSCACoverageRowLoop(
             sequenceGen: context.sequenceGen,
             commandGen: context.commandGen,
@@ -176,6 +179,9 @@ private extension __ExhaustRuntime {
             skipToRow: context.config.coverageReplayRow,
             logEventPrefix: "concurrent_sca_coverage",
             concurrencyLevel: context.config.concurrencyLevel,
+            sequenceGenForLength: { range in
+                Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
+            },
             property: property
         )
         guard case let .failure(taggedCommands, tree, coverageIterations) = scaRowResult else {
@@ -193,6 +199,7 @@ private extension __ExhaustRuntime {
         return assembleReducedFailure(
             &context,
             reduction: reduction,
+            originalCommands: taggedCommands.map(\.1),
             discoveryMethod: .coverage,
             seed: nil,
             iteration: coverageIterations,
@@ -242,6 +249,7 @@ private extension __ExhaustRuntime {
                     let reportedInput: [(ScheduleMarker, Backend.Spec.Command)] = taggedCommands.filter(\.0.isPrefix) + taggedCommands.filter { $0.0.isPrefix == false }
                     let (result, failureDescription) = context.backend.buildResult(
                         reduced: reportedInput,
+                        originalCommands: nil,
                         seed: actualSeed,
                         replaySeed: samplingReplaySeed,
                         discoveryMethod: discoveryMethod
@@ -276,6 +284,7 @@ private extension __ExhaustRuntime {
                 return assembleReducedFailure(
                     &context,
                     reduction: reduction,
+                    originalCommands: taggedCommands.map(\.1),
                     discoveryMethod: discoveryMethod,
                     seed: actualSeed,
                     iteration: absoluteIteration,
@@ -491,6 +500,7 @@ private extension __ExhaustRuntime {
     static func assembleReducedFailure<Backend: PreemptiveBackend>(
         _ context: inout PreemptivePipelineContext<Backend>,
         reduction: ReducedFailure<Backend.Spec>,
+        originalCommands: [Backend.Spec.Command],
         discoveryMethod: ContractDiscoveryMethod,
         seed: UInt64?,
         iteration: Int,
@@ -503,6 +513,7 @@ private extension __ExhaustRuntime {
     ) -> PreemptivePipelineContext<Backend>.PipelineResult {
         let (result, failureDescription) = context.backend.buildResult(
             reduced: reduction.reduced,
+            originalCommands: originalCommands,
             seed: seed,
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod
@@ -545,6 +556,7 @@ private struct PreemptivePipelineContext<Backend: PreemptiveBackend>: ~Copyable 
     let config: ResolvedConcurrentConfig
     let regressionSeeds: [String]
     let sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
+    let taggedCommandGen: Generator<(ScheduleMarker, Spec.Command)>
     let commandGen: Generator<Spec.Command>
     let commandLimit: Int
     let samplingBudget: UInt64

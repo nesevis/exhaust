@@ -7,6 +7,9 @@ public struct ContractResult<Spec: ContractSpecBase> {
     /// The reduced command sequence that triggered the failure.
     public let commands: [Spec.Command]
 
+    /// The original command sequence before reduction, or `nil` when no reduction was performed.
+    public let originalCommands: [Spec.Command]?
+
     /// Step-by-step execution trace of the failing sequence.
     public let trace: [TraceStep]
 

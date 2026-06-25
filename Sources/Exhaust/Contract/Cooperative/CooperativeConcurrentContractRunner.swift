@@ -513,6 +513,7 @@ private extension __ExhaustRuntime {
 
         let result = ContractResult<Spec>(
             commands: finalInput.map(\.1),
+            originalCommands: nil,
             trace: trace,
             systemUnderTest: oracle?.systemUnderTest,
             seed: seed,

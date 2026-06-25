@@ -30,6 +30,7 @@ extension __ExhaustRuntime {
         skipToRow: Int?,
         logEventPrefix: String,
         concurrencyLevel: Int? = nil,
+        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<Value>)? = nil,
         property: @escaping @Sendable (Value) -> Bool
     ) -> SCARowLoopResult<Value> {
         guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -56,7 +57,6 @@ extension __ExhaustRuntime {
         let tiers = buildCoverageTiers(commandLimit: commandLimit, totalBudget: coverageBudget)
 
         var totalIterations = 0
-        let lengthRange = UInt64(0) ... UInt64(commandLimit)
 
         for tier in tiers {
             let domain: SCADomain
@@ -87,9 +87,12 @@ extension __ExhaustRuntime {
             var tierAttempts: UInt64 = 0
             let maxAttempts = tier.budget * 10
 
+            let tierLengthRange = UInt64(tier.length) ... UInt64(tier.length)
+            let tierGen = sequenceGenForLength?(tierLengthRange) ?? sequenceGen
+
             while tierIterations < tier.budget, tierAttempts < maxAttempts, let row = generator.next() {
                 tierAttempts += 1
-                guard let tree = domain.buildTree(row: row, sequenceLengthRange: lengthRange) else {
+                guard let tree = domain.buildTree(row: row, sequenceLengthRange: tierLengthRange) else {
                     continue
                 }
 
@@ -98,7 +101,7 @@ extension __ExhaustRuntime {
                     fallbackTree: tree
                 )
                 guard case let .success(value, freshTree, _) = Materializer.materialize(
-                    sequenceGen, prefix: ChoiceSequence(), mode: mode
+                    tierGen, prefix: ChoiceSequence(), mode: mode
                 ) else {
                     continue
                 }
@@ -329,6 +332,9 @@ extension __ExhaustRuntime {
         ),
             property(rematerialized) == false
         {
+            if rematerialized.count == 1 {
+                print("[skip-prune] degenerate: \(value.count) → \(rematerialized.count), skipped \(skippedIndices.sorted()), rematerialized: \(rematerialized)")
+            }
             return (rematerialized, rematerializedTree)
         }
         return (value, tree)
