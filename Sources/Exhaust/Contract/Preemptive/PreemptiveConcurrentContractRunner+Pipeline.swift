@@ -133,6 +133,7 @@ private extension __ExhaustRuntime {
                 let smoke = context.backend.runSmoke(commands)
                 if smoke.failed {
                     let result = ContractResult<Spec>(
+                        status: .fail,
                         commands: commands,
                         originalCommands: nil,
                         trace: smoke.trace,
@@ -252,7 +253,8 @@ private extension __ExhaustRuntime {
                         originalCommands: nil,
                         seed: actualSeed,
                         replaySeed: samplingReplaySeed,
-                        discoveryMethod: discoveryMethod
+                        discoveryMethod: discoveryMethod,
+                        timedOut: true
                     )
                     context.report.setInvocations(coverage: context.coverageInvocations, randomSampling: samplingIteration, reduction: 0)
                     if context.config.suppressIssueReporting == false {
@@ -521,7 +523,8 @@ private extension __ExhaustRuntime {
             originalCommands: originalCommands,
             seed: seed,
             replaySeed: replaySeed,
-            discoveryMethod: discoveryMethod
+            discoveryMethod: discoveryMethod,
+            timedOut: false
         )
         context.report.setInvocations(
             coverage: coverageInvocations,

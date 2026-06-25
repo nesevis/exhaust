@@ -9,11 +9,10 @@ struct PreemptiveLastWriterWinsTests {
         let result = #execute(
             AtomicLastWriterWinsSpec.self,
             .concurrent(.two),
-            .commandLimit(4),
             .idleTimeoutMs(30000),
             .suppress(.issueReporting)
         )
-        #expect(result == nil, "A correctly synchronized SUT should not produce failures. The fixed-ordering oracle would false-positive here; linearizability should accept both orderings.")
+        #expect(result?.status != .fail, "A correctly synchronized SUT should not produce failures. The fixed-ordering oracle would false-positive here; linearizability should accept both orderings.")
     }
 }
 

@@ -402,11 +402,13 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         originalCommands: [Spec.Command]?,
         seed: UInt64?,
         replaySeed: String?,
-        discoveryMethod: ContractDiscoveryMethod
+        discoveryMethod: ContractDiscoveryMethod,
+        timedOut: Bool
     ) -> (result: ContractResult<Spec>, failureDescription: String?) {
         let oracleSpec = Spec()
         let replayOutcome = runSequentially(reduced.map(\.1), on: oracleSpec)
         let result = ContractResult<Spec>(
+            status: timedOut ? .timeout : .fail,
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
             trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),

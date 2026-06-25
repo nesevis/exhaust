@@ -570,6 +570,7 @@ private extension __ExhaustRuntime {
         }
 
         let result = ContractResult<Spec>(
+            status: timedOut ? .timeout : .fail,
             commands: finalInput.map(\.1),
             originalCommands: nil,
             trace: trace,

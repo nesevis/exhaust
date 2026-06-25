@@ -38,6 +38,7 @@ protocol PreemptiveBackend<Spec>: Sendable {
         originalCommands: [Spec.Command]?,
         seed: UInt64?,
         replaySeed: String?,
-        discoveryMethod: ContractDiscoveryMethod
+        discoveryMethod: ContractDiscoveryMethod,
+        timedOut: Bool
     ) -> (result: ContractResult<Spec>, failureDescription: String?)
 }

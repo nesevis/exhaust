@@ -348,7 +348,8 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         originalCommands: [Spec.Command]?,
         seed: UInt64?,
         replaySeed: String?,
-        discoveryMethod: ContractDiscoveryMethod
+        discoveryMethod: ContractDiscoveryMethod,
+        timedOut: Bool
     ) -> (result: ContractResult<Spec>, failureDescription: String?) {
         let oracleSpec = Spec()
         var replaySucceeded = true
@@ -369,6 +370,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             }
         }
         let result = ContractResult<Spec>(
+            status: timedOut ? .timeout : .fail,
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
             trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),

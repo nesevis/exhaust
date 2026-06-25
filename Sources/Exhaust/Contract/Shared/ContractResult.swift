@@ -4,6 +4,9 @@
 ///
 /// Contains the reduced command sequence, a step-by-step execution trace showing what happened at each step, and optionally the typed SUT state at the point of failure.
 public struct ContractResult<Spec: ContractSpecBase> {
+    /// Whether the contract run found a failure, timed out, or passed.
+    public let status: ContractStatus
+
     /// The reduced command sequence that triggered the failure.
     public let commands: [Spec.Command]
 
@@ -24,6 +27,16 @@ public struct ContractResult<Spec: ContractSpecBase> {
 
     /// How the failing example was discovered.
     public let discoveryMethod: ContractDiscoveryMethod
+}
+
+/// The outcome of a contract property test run.
+public enum ContractStatus: Sendable {
+    /// All probes passed within the budget.
+    case pass
+    /// A counterexample was found.
+    case fail
+    /// The concurrent execution stalled (no progress within the idle timeout). Typically caused by thread pool exhaustion under parallel test execution, not a bug in the SUT.
+    case timeout
 }
 
 /// Describes how a failing contract example was found.
