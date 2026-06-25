@@ -115,51 +115,32 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
     /// Idle bound for the concurrent lanes, or `nil` to wait indefinitely. Without a bound, a synchronous SUT deadlock (the exact bug class preemptive testing targets) would wedge a lane forever and hang the test process with no diagnostic.
     let idleTimeoutMilliseconds: Int?
 
-    /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
+    /// Executes a tagged command sequence with real GCD concurrency using a pre-computed lane partition.
     ///
     /// `passed` is `false` when a command throws, an invariant fails, or the oracle detects divergence from sequential behavior. `timedOut` is `true` when the concurrent lanes did not finish within ``idleTimeoutMilliseconds``, surfaced separately so the caller can skip reduction (every probe would wait out the bound) and report a hang rather than a deterministic failure.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome<Spec> {
+    func execute(_: [(ScheduleMarker, Spec.Command)], partition: LanePartition<Spec.Command>) -> Preemptive.Outcome<Spec> {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
-        // Partition commands once: avoids repeated filtered scans over the full array.
-        var prefixCommands: [Spec.Command] = []
-        var laneIDs: [UInt8] = []
-        var laneBuckets: [UInt8: [Spec.Command]] = [:]
-        for (marker, command) in taggedCommands {
-            if marker.isPrefix {
-                prefixCommands.append(command)
-            } else {
-                if laneIDs.contains(marker.rawValue) == false {
-                    laneIDs.append(marker.rawValue)
-                }
-                laneBuckets[marker.rawValue, default: []].append(command)
-            }
-        }
-        laneIDs.sort()
-
-        // Run prefix on both specs — one ObjC guard per spec instead of per command.
-        if runAllCommandsCatchingObjC(prefixCommands, on: concurrentSpec) == false {
+        if runAllCommandsCatchingObjC(partition.prefixCommands, on: concurrentSpec) == false {
             return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
-        if runAllCommandsCatchingObjC(prefixCommands, on: sequentialSpec) == false {
+        if runAllCommandsCatchingObjC(partition.prefixCommands, on: sequentialSpec) == false {
             return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
 
-        // Run all concurrent commands sequentially on the sequential spec — one ObjC guard.
-        let concurrentCommands = laneIDs.flatMap { laneBuckets[$0] ?? [] }
-        if runAllCommandsCatchingObjC(concurrentCommands, on: sequentialSpec) == false {
+        if runAllCommandsCatchingObjC(partition.concurrentCommands, on: sequentialSpec) == false {
             return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
 
-        let perLaneResponses = laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
-        let commandFailed = UnsafeSendableBox(false)
-        let caughtException = UnsafeSendableBox<NSException?>(nil)
+        let perLaneResponses = partition.laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
+        let commandFailed = SendableBox(false)
+        let caughtException = SendableBox<NSException?>(nil)
         let group = DispatchGroup()
 
         nonisolated(unsafe) let unsafeConcurrentSpec = concurrentSpec
-        for (offset, laneID) in laneIDs.enumerated() {
-            let laneCommands = laneBuckets[laneID] ?? []
+        for (offset, laneID) in partition.laneIDs.enumerated() {
+            let laneCommands = partition.laneBuckets[laneID] ?? []
             let responseBox = perLaneResponses[offset]
             group.enter()
             DispatchQueue.global().async {

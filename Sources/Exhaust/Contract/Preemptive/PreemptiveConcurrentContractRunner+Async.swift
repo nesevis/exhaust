@@ -84,7 +84,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// Prefix and sequential commands are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)]) -> Preemptive.Outcome<Spec> {
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], partition _: LanePartition<Spec.Command>) -> Preemptive.Outcome<Spec> {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
@@ -110,9 +110,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         laneIDs.sort()
 
         let perLaneResponses = laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
-        let commandFailed = UnsafeSendableBox(false)
-        let timedOut = UnsafeSendableBox(false)
-        let caughtException = UnsafeSendableBox<NSException?>(nil)
+        let commandFailed = SendableBox(false)
+        let timedOut = SendableBox(false)
+        let caughtException = SendableBox<NSException?>(nil)
         let group = DispatchGroup()
 
         for (offset, laneID) in laneIDs.enumerated() {
@@ -219,28 +219,30 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
     @discardableResult
     func runSequentially(_ commands: [Spec.Command], on spec: Spec) -> SequentialOutcome {
         var exception: NSException?
-        let failed = UnsafeSendableBox(false)
-        let timedOut = UnsafeSendableBox(false)
+        var failed = false
+        var timedOut = false
         nonisolated(unsafe) let spec = spec
         exhaust_runCatchingObjCException({
-            let completed: Void? = awaitOrTimeout("sequential") {
+            let succeeded: Bool? = awaitOrTimeout("sequential") {
                 for command in commands {
                     do {
                         try await spec.run(command)
                     } catch is ContractSkip {
                         continue
                     } catch {
-                        failed.value = true
-                        break
+                        return false
                     }
                 }
+                return true
             }
-            if completed == nil {
-                failed.value = true
-                timedOut.value = true
+            if let succeeded {
+                failed = succeeded == false
+            } else {
+                failed = true
+                timedOut = true
             }
         }, &exception)
-        return SequentialOutcome(succeeded: exception == nil && failed.value == false, timedOut: timedOut.value)
+        return SequentialOutcome(succeeded: exception == nil && failed == false, timedOut: timedOut)
     }
 
     /// Runs tagged commands sequentially on a spec, filtering by marker type to avoid intermediate array allocations.
@@ -251,28 +253,30 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         on spec: Spec
     ) -> SequentialOutcome {
         var exception: NSException?
-        let failed = UnsafeSendableBox(false)
-        let timedOut = UnsafeSendableBox(false)
+        var failed = false
+        var timedOut = false
         nonisolated(unsafe) let spec = spec
         exhaust_runCatchingObjCException({
-            let completed: Void? = awaitOrTimeout("sequential") {
+            let succeeded: Bool? = awaitOrTimeout("sequential") {
                 for (marker, command) in taggedCommands where marker.isPrefix == selectPrefix {
                     do {
                         try await spec.run(command)
                     } catch is ContractSkip {
                         continue
                     } catch {
-                        failed.value = true
-                        break
+                        return false
                     }
                 }
+                return true
             }
-            if completed == nil {
-                failed.value = true
-                timedOut.value = true
+            if let succeeded {
+                failed = succeeded == false
+            } else {
+                failed = true
+                timedOut = true
             }
         }, &exception)
-        return SequentialOutcome(succeeded: exception == nil && failed.value == false, timedOut: timedOut.value)
+        return SequentialOutcome(succeeded: exception == nil && failed == false, timedOut: timedOut)
     }
 
     func checkLinearizability(

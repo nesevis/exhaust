@@ -406,7 +406,7 @@ private extension __ExhaustRuntime {
         )
         var interpreter = ValueAndChoiceTreeInterpreter(
             sequenceGen,
-            materializePicks: true,
+            materializePicks: statsAccumulator != nil,
             seed: seed,
             maxRuns: maxRuns,
             initialRunIndex: startIndex
@@ -414,62 +414,118 @@ private extension __ExhaustRuntime {
         let actualSeed = interpreter.baseSeed
 
         var samplingIteration = 0
-        while let (input, tree) = try interpreter.next() {
-            samplingIteration += 1
-            let absoluteIteration = Int(startIndex) + samplingIteration
-            let passed = property(input)
-            statsAccumulator?.record(
-                representation: "\(input.map { "[\($0.0)] \($0.1)" })",
-                passed: passed,
-                tree: tree,
-                phase: .random
-            )
 
-            if passed == false {
-                ExhaustLog.notice(
-                    category: .propertyTest,
-                    event: "concurrent_failure_found",
-                    metadata: ["commands": "\(input.count)", "timedOut": "\(lastRunTimedOut.value)"]
-                )
-
-                let reductionStartInvocations = invocationCounter.value
-                let reductionStopwatch = Stopwatch()
-                let reductionProperty: @Sendable ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
-                    let passed = property(taggedCommands)
-                    return passed || lastRunTimedOut.value
-                }
-                let reduction = reduceConcurrentCounterexample(
-                    input: input,
+        if let statsAccumulator {
+            while let (input, tree) = try interpreter.next() {
+                samplingIteration += 1
+                let absoluteIteration = Int(startIndex) + samplingIteration
+                let passed = property(input)
+                statsAccumulator.record(
+                    representation: "\(input.map { "[\($0.0)] \($0.1)" })",
+                    passed: passed,
                     tree: tree,
-                    sequenceGen: sequenceGen,
-                    reductionConfig: reductionConfig,
-                    property: reductionProperty,
-                    identifySkips: identifySkips,
-                    seed: 0,
-                    skipPruningLogEvent: "concurrent_skip_pruning",
-                    timedOut: lastRunTimedOut.value
+                    phase: .random
                 )
-                let reductionMilliseconds = reductionStopwatch.elapsedMilliseconds
-                let reductionInvocations = invocationCounter.value - reductionStartInvocations
 
-                let discoveryMethod: ContractDiscoveryMethod = replayIteration != nil ? .replay : .randomSampling
-                return ConcurrentDiscovery(
-                    taggedCommands: reduction.finalInput,
-                    discoveryMethod: discoveryMethod,
-                    timedOut: reduction.timedOut,
-                    seed: actualSeed,
-                    originalCount: input.count,
-                    iteration: absoluteIteration,
-                    budget: samplingBudget,
-                    sequencesTested: invocationCounter.value,
-                    reductionStats: reduction.stats,
-                    reductionInvocations: reductionInvocations,
-                    reductionMilliseconds: reductionMilliseconds
-                )
+                if passed == false {
+                    return try buildSamplingDiscovery(
+                        input: input,
+                        tree: tree,
+                        absoluteIteration: absoluteIteration,
+                        actualSeed: actualSeed,
+                        sequenceGen: sequenceGen,
+                        reductionConfig: reductionConfig,
+                        property: property,
+                        identifySkips: identifySkips,
+                        lastRunTimedOut: lastRunTimedOut,
+                        invocationCounter: invocationCounter,
+                        replayIteration: replayIteration,
+                        samplingBudget: samplingBudget
+                    )
+                }
+            }
+        } else {
+            while let input = try interpreter.nextValueOnly() {
+                samplingIteration += 1
+                if property(input) == false {
+                    let tree = try interpreter.reproduceFailureTree()
+                    let absoluteIteration = Int(startIndex) + samplingIteration
+                    return try buildSamplingDiscovery(
+                        input: input,
+                        tree: tree,
+                        absoluteIteration: absoluteIteration,
+                        actualSeed: actualSeed,
+                        sequenceGen: sequenceGen,
+                        reductionConfig: reductionConfig,
+                        property: property,
+                        identifySkips: identifySkips,
+                        lastRunTimedOut: lastRunTimedOut,
+                        invocationCounter: invocationCounter,
+                        replayIteration: replayIteration,
+                        samplingBudget: samplingBudget
+                    )
+                }
             }
         }
 
         return nil
+    }
+
+    /// Builds a ``ConcurrentDiscovery`` from a failing command sequence by pruning skipped commands and reducing the counterexample.
+    static func buildSamplingDiscovery<Command: CustomStringConvertible>(
+        input: [(ScheduleMarker, Command)],
+        tree: ChoiceTree,
+        absoluteIteration: Int,
+        actualSeed: UInt64,
+        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
+        reductionConfig: Interpreters.ReducerConfiguration,
+        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
+        identifySkips: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Set<Int>,
+        lastRunTimedOut: UnsafeSendableBox<Bool>,
+        invocationCounter: UnsafeSendableBox<Int>,
+        replayIteration: Int?,
+        samplingBudget: UInt64
+    ) throws -> ConcurrentDiscovery<Command> {
+        ExhaustLog.notice(
+            category: .propertyTest,
+            event: "concurrent_failure_found",
+            metadata: ["commands": "\(input.count)", "timedOut": "\(lastRunTimedOut.value)"]
+        )
+
+        let reductionStartInvocations = invocationCounter.value
+        let reductionStopwatch = Stopwatch()
+        let reductionProperty: @Sendable ([(ScheduleMarker, Command)]) -> Bool = { taggedCommands in
+            let passed = property(taggedCommands)
+            return passed || lastRunTimedOut.value
+        }
+        let reduction = reduceConcurrentCounterexample(
+            input: input,
+            tree: tree,
+            sequenceGen: sequenceGen,
+            reductionConfig: reductionConfig,
+            property: reductionProperty,
+            identifySkips: identifySkips,
+            seed: 0,
+            skipPruningLogEvent: "concurrent_skip_pruning",
+            timedOut: lastRunTimedOut.value
+        )
+        let reductionMilliseconds = reductionStopwatch.elapsedMilliseconds
+        let reductionInvocations = invocationCounter.value - reductionStartInvocations
+
+        let discoveryMethod: ContractDiscoveryMethod = replayIteration != nil ? .replay : .randomSampling
+        return ConcurrentDiscovery(
+            taggedCommands: reduction.finalInput,
+            discoveryMethod: discoveryMethod,
+            timedOut: reduction.timedOut,
+            seed: actualSeed,
+            originalCount: input.count,
+            iteration: absoluteIteration,
+            budget: samplingBudget,
+            sequencesTested: invocationCounter.value,
+            reductionStats: reduction.stats,
+            reductionInvocations: reductionInvocations,
+            reductionMilliseconds: reductionMilliseconds
+        )
     }
 }
 

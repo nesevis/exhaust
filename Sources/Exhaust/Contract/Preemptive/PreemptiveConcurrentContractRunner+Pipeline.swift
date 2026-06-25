@@ -162,7 +162,7 @@ private extension __ExhaustRuntime {
     static func runCoveragePhase<Backend: PreemptiveBackend>(
         _ context: inout PreemptivePipelineContext<Backend>,
         property: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Bool,
-        linearizableProbe: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?)
+        linearizableProbe: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree, LanePartition<Backend.Spec.Command>) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?)
     ) -> PreemptivePipelineContext<Backend>.PipelineResult? {
         guard context.config.shouldRunCoverage else { return nil }
         let effectiveCoverageBudget: UInt64 = if let row = context.config.coverageReplayRow {
@@ -216,7 +216,7 @@ private extension __ExhaustRuntime {
     static func runSamplingPhase<Backend: PreemptiveBackend>(
         _ context: inout PreemptivePipelineContext<Backend>,
         property: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Bool,
-        linearizableProbe: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?)
+        linearizableProbe: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree, LanePartition<Backend.Spec.Command>) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?)
     ) -> PreemptivePipelineContext<Backend>.PipelineResult? {
         guard context.config.coverageReplayRow == nil else { return nil }
         let (startIndex, maxRuns) = samplingReplayWindow(
@@ -234,7 +234,7 @@ private extension __ExhaustRuntime {
 
         var samplingIteration = 0
         do {
-            while let (taggedCommands, tree) = try interpreter.next() {
+            while let taggedCommands = try interpreter.nextValueOnly() {
                 samplingIteration += 1
                 let absoluteIteration = Int(startIndex) + samplingIteration
                 if property(taggedCommands) {
@@ -271,6 +271,7 @@ private extension __ExhaustRuntime {
                     return (result, context.deferredIssues, context.report)
                 }
 
+                let tree = try interpreter.reproduceFailureTree()
                 let reduction = reduceConfirmedFailure(
                     &context,
                     taggedCommands: taggedCommands,
@@ -312,7 +313,7 @@ private extension __ExhaustRuntime {
         outcome: Preemptive.Outcome<Backend.Spec>,
         backend: Backend
     ) -> FailureEvidence<Backend.Spec>? {
-        if outcome.passed {
+        if outcome.passed || outcome.timedOut {
             return nil
         }
         guard let laneResponses = outcome.laneResponses,
@@ -353,7 +354,7 @@ private extension __ExhaustRuntime {
         let lastRunTimedOut = context.lastRunTimedOut
         return { taggedCommands in
             invocationCounter.value += 1
-            let outcome = backend.execute(taggedCommands)
+            let outcome = backend.execute(taggedCommands, partition: LanePartition(taggedCommands))
             lastRunTimedOut.value = outcome.timedOut
             guard classifyFailure(
                 taggedCommands: taggedCommands,
@@ -369,12 +370,12 @@ private extension __ExhaustRuntime {
     /// Builds the linearizability probe closure used during structural reduction.
     static func makeLinearizableProbe<Backend: PreemptiveBackend>(
         _ context: inout PreemptivePipelineContext<Backend>
-    ) -> @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?) {
+    ) -> @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree, LanePartition<Backend.Spec.Command>) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?) {
         let backend = context.backend
-        return { probeCommands, _ in
+        return { probeCommands, _, partition in
             guard let failure = classifyFailure(
                 taggedCommands: probeCommands,
-                outcome: backend.execute(probeCommands),
+                outcome: backend.execute(probeCommands, partition: partition),
                 backend: backend
             ) else {
                 return (true, nil, nil, nil)
@@ -389,10 +390,11 @@ private extension __ExhaustRuntime {
         input: [(ScheduleMarker, Backend.Spec.Command)],
         discoveryIterations: Int
     ) -> FailureEvidence<Backend.Spec>? {
+        let partition = LanePartition(input)
         for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
             if let confirmed = classifyFailure(
                 taggedCommands: input,
-                outcome: context.backend.execute(input),
+                outcome: context.backend.execute(input, partition: partition),
                 backend: context.backend
             ) {
                 return confirmed
@@ -427,7 +429,7 @@ private extension __ExhaustRuntime {
         pruneSeed: UInt64,
         discoveryIterations: Int,
         property: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Bool,
-        linearizableProbe: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?)
+        linearizableProbe: @escaping @Sendable ([(ScheduleMarker, Backend.Spec.Command)], ChoiceTree, LanePartition<Backend.Spec.Command>) -> (Bool, ResponseWitness?, String?, FailureEvidence<Backend.Spec>?)
     ) -> ReducedFailure<Backend.Spec> {
         let repetitions = PreemptiveReduction.confirmationRepetitions(discoveryIterations: discoveryIterations)
         let (prunedCommands, prunedTree) = pruneSkippedCommands(
@@ -472,7 +474,7 @@ private extension __ExhaustRuntime {
         stats.merge(combinedResult.stats)
         context.report.applyReductionStats(stats)
 
-        let reduced = combinedResult.output.sorted { $0.0.isPrefix && $1.0.isPrefix == false }
+        let reduced = combinedResult.output.filter(\.0.isPrefix) + combinedResult.output.filter { $0.0.isPrefix == false }
         let totalInvocations = combinedResult.propertyInvocations + collapseResult.propertyInvocations
 
         // Evidence priority: (1) reduction cache from the deletion pass, (2) reduction cache from the lane collapse pass, (3) confirmRealFailure re-execution as last resort when no reduction probe reproduced the race.

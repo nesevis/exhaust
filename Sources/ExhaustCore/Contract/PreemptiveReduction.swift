@@ -79,16 +79,17 @@ package enum PreemptiveReduction {
         rematerialize: Bool,
         repetitions: Int,
         tuning: SchedulerTuning = .init(),
-        execute: @escaping ([(ScheduleMarker, Command)], ChoiceTree) -> (Bool, ResponseWitness?, String?, FailureOutcome?)
+        execute: @escaping ([(ScheduleMarker, Command)], ChoiceTree, LanePartition<Command>) -> (Bool, ResponseWitness?, String?, FailureOutcome?)
     ) -> ReductionResult<Command, FailureOutcome> {
         var propertyInvocations = 0
         var lastFailure: (ResponseWitness?, String?, FailureOutcome?)?
         let reductionProperty: ReductionProperty = .contract { output, probeTree in
             // ReductionProperty.contract erases the output to [Any]; the pipeline guarantees the concrete type.
             let taggedCommands = output as! [(ScheduleMarker, Command)] // swiftlint:disable:this force_cast
+            let partition = LanePartition(taggedCommands)
             for _ in 0 ..< repetitions {
                 propertyInvocations += 1
-                let (pass, witness, failureDescription, outcome) = execute(taggedCommands, probeTree)
+                let (pass, witness, failureDescription, outcome) = execute(taggedCommands, probeTree, partition)
                 if pass == false {
                     lastFailure = (witness, failureDescription, outcome)
                     return false
