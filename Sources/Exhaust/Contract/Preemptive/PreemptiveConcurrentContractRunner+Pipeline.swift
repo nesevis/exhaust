@@ -313,8 +313,11 @@ private extension __ExhaustRuntime {
         outcome: Preemptive.Outcome<Backend.Spec>,
         backend: Backend
     ) -> FailureEvidence<Backend.Spec>? {
-        if outcome.passed || outcome.timedOut {
+        if outcome.passed {
             return nil
+        }
+        if outcome.timedOut {
+            return .init(outcome: outcome, witness: nil, failureDescription: nil)
         }
         guard let laneResponses = outcome.laneResponses,
               let concurrentSpec = outcome.concurrentSpec
