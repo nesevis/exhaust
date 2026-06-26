@@ -38,7 +38,7 @@ struct ExploreFailure<Output> {
         lines.append("")
         lines.append("Counterexample:")
         var counterexampleDump = ""
-        customDump(counterexample, to: &counterexampleDump)
+        customDump(counterexample, to: &counterexampleDump, maxDepth: 3)
         for line in counterexampleDump.split(separator: "\n", omittingEmptySubsequences: false) {
             lines.append("  \(line)")
         }

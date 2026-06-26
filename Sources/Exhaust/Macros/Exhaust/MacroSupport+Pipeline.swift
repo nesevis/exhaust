@@ -61,7 +61,7 @@ package extension __ExhaustRuntime {
             onExample: context.statsAccumulator.map { accumulator in
                 { value, tree, passed in
                     var representation = ""
-                    customDump(value, to: &representation)
+                    customDump(value, to: &representation, maxDepth: 3)
                     accumulator.record(representation: representation, passed: passed, tree: tree, phase: .coverage)
                 }
             }
@@ -241,7 +241,7 @@ package extension __ExhaustRuntime {
                     let generateSeconds = Double(generateEnd - generateStart) / 1_000_000_000
                     let testSeconds = Double(testEnd - testStart) / 1_000_000_000
                     var representation = ""
-                    customDump(next, to: &representation)
+                    customDump(next, to: &representation, maxDepth: 3)
                     if let rejections = filterRejections, rejections > 0 {
                         statsAccumulator.recordDiscards(count: rejections, phase: .random)
                     }
@@ -606,7 +606,7 @@ package extension __ExhaustRuntime {
                 )
                 if let statsAccumulator = context.statsAccumulator {
                     var representation = ""
-                    customDump(reducedValue, to: &representation)
+                    customDump(reducedValue, to: &representation, maxDepth: 3)
                     statsAccumulator.recordReduced(
                         representation: representation,
                         tree: .just,

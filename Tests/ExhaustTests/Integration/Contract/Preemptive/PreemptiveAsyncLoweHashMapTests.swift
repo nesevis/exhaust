@@ -11,6 +11,7 @@ struct PreemptiveAsyncLoweHashMapTests {
             AsyncLoweHashMapSpec.self,
             .concurrent(.two),
             .replay(.numeric(1337)),
+            .commandLimit(20),
             // Very high budget due to the non-deterministic interleaving.
             // Most failures are found after ~1100 iterations
             .budget(.custom(coverage: 10000, sampling: 5_000_000)),

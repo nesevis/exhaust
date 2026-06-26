@@ -67,7 +67,7 @@ struct PropertyTestFailure<Output> {
         lines.append("")
         lines.append("Counterexample:")
         var counterexampleDump = ""
-        customDump(counterexample, to: &counterexampleDump)
+        customDump(counterexample, to: &counterexampleDump, maxDepth: 3)
         for line in counterexampleDump.split(separator: "\n", omittingEmptySubsequences: false) {
             lines.append("  \(line)")
         }
@@ -121,12 +121,12 @@ struct PropertyTestFailure<Output> {
 
     private func renderJSONL() -> String {
         var counterexampleDump = ""
-        customDump(counterexample, to: &counterexampleDump)
+        customDump(counterexample, to: &counterexampleDump, maxDepth: 3)
 
         var originalDump: String?
         if transparent == false, let original {
             var dump = ""
-            customDump(original, to: &dump)
+            customDump(original, to: &dump, maxDepth: 3)
             originalDump = dump
         }
 

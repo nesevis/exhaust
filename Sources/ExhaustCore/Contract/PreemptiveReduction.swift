@@ -31,7 +31,7 @@ package enum PreemptiveReduction {
     }
 
     /// Default command limit for `.threads` contracts.
-    package static let defaultCommandLimit = 20
+    package static let defaultCommandLimit = 10
 
     /// Captures the output, tree, invocation count, and failure evidence from a preemptive reduction pass.
     package struct ReductionResult<Command, FailureOutcome> {
