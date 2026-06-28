@@ -15,3 +15,22 @@ enum Preemptive {
         let concurrentSpec: Spec?
     }
 }
+
+/// Whether a replayed command result matches an observed response, using the same rule as ``LinearizabilityChecker``: skip flags must agree, and non-skipped return values must be structurally equal. Shared by the synchronous and async preemptive witness checks so the cheap realized-order replay and the full interleaving search never disagree on what "the same response" means.
+func preemptiveResponseMatches(
+    observed: ObservedResponse<some Any>.Outcome,
+    replayValue: Any?,
+    replaySkipped: Bool
+) -> Bool {
+    if observed.isSkipped != replaySkipped {
+        return false
+    }
+    switch (observed.returnValue, replayValue) {
+        case (nil, nil):
+            return true
+        case let (observedValue?, replayedValue?):
+            return structurallyEqual(observedValue, replayedValue)
+        default:
+            return false
+    }
+}

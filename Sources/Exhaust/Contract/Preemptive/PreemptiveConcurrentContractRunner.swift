@@ -136,6 +136,8 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         let perLaneResponses = partition.laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
         let commandFailed = SendableBox(false)
         let caughtException = SendableBox<NSException?>(nil)
+        // `withValue`'s lock serializes appends into realized completion order.
+        let completionOrdered = SendableBox<[ObservedResponse<Spec.Command>]>([])
         let group = DispatchGroup()
 
         nonisolated(unsafe) let unsafeConcurrentSpec = concurrentSpec
@@ -152,17 +154,13 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                         do {
                             let response = try unsafeConcurrentSpec.run(command)
                             let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
-                            localResponses.append(ObservedResponse<Spec.Command>(
-                                lane: laneID,
-                                command: command,
-                                outcome: outcome
-                            ))
+                            let observed = ObservedResponse<Spec.Command>(lane: laneID, command: command, outcome: outcome)
+                            localResponses.append(observed)
+                            completionOrdered.withValue { $0.append(observed) }
                         } catch is ContractSkip {
-                            localResponses.append(ObservedResponse<Spec.Command>(
-                                lane: laneID,
-                                command: command,
-                                outcome: .skipped
-                            ))
+                            let observed = ObservedResponse<Spec.Command>(lane: laneID, command: command, outcome: .skipped)
+                            localResponses.append(observed)
+                            completionOrdered.withValue { $0.append(observed) }
                         } catch {
                             commandFailed.value = true
                             break
@@ -195,12 +193,62 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
 
-        let oraclePassed = concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest)
-        if oraclePassed {
+        let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
+        // Void-only, no-skip commands carry no response data, so linearizability reduces to final-state equivalence.
+        let hasResponseInfo = completionOrdered.value.contains { $0.outcome.returnValue != nil || $0.outcome.isSkipped }
+        if hasResponseInfo == false {
+            if concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest) {
+                return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            }
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
+        }
+        // Try the realized completion order as a single linearization witness before the full interleaving search.
+        if realizedOrderIsLinearizable(prefix: partition.prefixCommands, realizedOrder: completionOrdered.value, concurrentSpec: concurrentSpec) {
             return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
-        let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
         return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
+    }
+
+    /// Whether the realized completion order is a valid linearization: a sequential replay of the concurrent commands in the order the lanes finished, on a fresh spec, that reproduces every observed response and the oracle's final state.
+    ///
+    /// A match means the execution is linearizable (this order is a concrete witness), so the caller can pass without the full interleaving search.
+    /// Any divergence (a differing response, an oracle mismatch, a replay throw, or an ObjC exception) returns `false`, and the caller hands the per-lane responses to ``checkLinearizability(taggedCommands:laneResponses:concurrentSpec:)``.
+    /// The check is sound: it only reports a pass when an actual sequential order reproduces the observation.
+    private func realizedOrderIsLinearizable(
+        prefix: [Spec.Command],
+        realizedOrder: [ObservedResponse<Spec.Command>],
+        concurrentSpec: Spec
+    ) -> Bool {
+        let witnessSpec = Spec()
+        var matched = false
+        var exception: NSException?
+        let completed = exhaust_runCatchingObjCException({
+            for command in prefix {
+                do {
+                    try witnessSpec.run(command)
+                } catch is ContractSkip {
+                    continue
+                } catch {
+                    return
+                }
+            }
+            for observed in realizedOrder {
+                do {
+                    let response = try witnessSpec.run(observed.command)
+                    if preemptiveResponseMatches(observed: observed.outcome, replayValue: response.returnValue, replaySkipped: false) == false {
+                        return
+                    }
+                } catch is ContractSkip {
+                    if observed.outcome.isSkipped == false {
+                        return
+                    }
+                } catch {
+                    return
+                }
+            }
+            matched = concurrentSpec.oracleCheck(witnessSpec.systemUnderTest)
+        }, &exception)
+        return completed && exception == nil && matched
     }
 
     /// Runs all commands on a spec under a single ObjC exception guard, treating ``ContractSkip`` as a pass.

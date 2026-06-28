@@ -113,6 +113,8 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         let commandFailed = SendableBox(false)
         let timedOut = SendableBox(false)
         let caughtException = SendableBox<NSException?>(nil)
+        // `withValue`'s lock serializes appends into realized completion order.
+        let completionOrdered = SendableBox<[ObservedResponse<Spec.Command>]>([])
         let group = DispatchGroup()
 
         for (offset, laneID) in laneIDs.enumerated() {
@@ -129,17 +131,13 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                             do {
                                 let response = try await spec.run(command)
                                 let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
-                                results.append(ObservedResponse<Spec.Command>(
-                                    lane: laneID,
-                                    command: command,
-                                    outcome: outcome
-                                ))
+                                let observed = ObservedResponse<Spec.Command>(lane: laneID, command: command, outcome: outcome)
+                                results.append(observed)
+                                completionOrdered.withValue { $0.append(observed) }
                             } catch is ContractSkip {
-                                results.append(ObservedResponse<Spec.Command>(
-                                    lane: laneID,
-                                    command: command,
-                                    outcome: .skipped
-                                ))
+                                let observed = ObservedResponse<Spec.Command>(lane: laneID, command: command, outcome: .skipped)
+                                results.append(observed)
+                                completionOrdered.withValue { $0.append(observed) }
                             } catch {
                                 commandFailed.value = true
                                 break
@@ -190,19 +188,72 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
             return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
 
-        nonisolated(unsafe) let oracleSpec = concurrentSpec
-        nonisolated(unsafe) let sequentialResult = sequentialSpec.systemUnderTest
-        // Timeout → treat as failed (cannot confirm the oracle), and flag it so the failure is reported as a hang.
-        guard let oraclePassed = awaitOrTimeout("oracle", {
-            await oracleSpec.oracleCheck(sequentialResult)
-        }) else {
-            return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
+        let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
+        let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
+        // Void-only, no-skip commands carry no response data, so linearizability reduces to final-state equivalence.
+        let hasResponseInfo = completionOrdered.value.contains { $0.outcome.returnValue != nil || $0.outcome.isSkipped }
+        if hasResponseInfo == false {
+            nonisolated(unsafe) let oracleSpec = concurrentSpec
+            nonisolated(unsafe) let sequentialResult = sequentialSpec.systemUnderTest
+            switch awaitOrTimeout("oracle", { await oracleSpec.oracleCheck(sequentialResult) }) {
+                case .some(true):
+                    return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+                case .none:
+                    return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
+                case .some(false):
+                    return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
+            }
         }
-        if oraclePassed {
+        // Try the realized completion order as a single linearization witness before the full interleaving search.
+        if realizedOrderIsLinearizable(prefix: prefixCommands, realizedOrder: completionOrdered.value, concurrentSpec: concurrentSpec) {
             return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
         }
-        let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
         return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
+    }
+
+    /// Async counterpart of the synchronous witness check: replays the concurrent commands in realized completion order through the drain loop on a fresh spec.
+    ///
+    /// Returns `true` only when that single sequential order reproduces every observed response and the oracle's final state, which makes it a concrete linearization witness and lets the caller pass without the full interleaving search. A differing response, an oracle mismatch, a replay throw, an ObjC exception, or a drain timeout all return `false`, so the caller falls through to ``checkLinearizability(taggedCommands:laneResponses:concurrentSpec:)``.
+    private func realizedOrderIsLinearizable(
+        prefix: [Spec.Command],
+        realizedOrder: [ObservedResponse<Spec.Command>],
+        concurrentSpec: Spec
+    ) -> Bool {
+        let witnessSpec = Spec()
+        nonisolated(unsafe) let unsafeWitness = witnessSpec
+        nonisolated(unsafe) let unsafeConcurrent = concurrentSpec
+        var matched = false
+        var exception: NSException?
+        let completed = exhaust_runCatchingObjCException({
+            let result: Bool? = awaitOrTimeout("witness") {
+                for command in prefix {
+                    do {
+                        try await unsafeWitness.run(command)
+                    } catch is ContractSkip {
+                        continue
+                    } catch {
+                        return false
+                    }
+                }
+                for observed in realizedOrder {
+                    do {
+                        let response = try await unsafeWitness.run(observed.command)
+                        if preemptiveResponseMatches(observed: observed.outcome, replayValue: response.returnValue, replaySkipped: false) == false {
+                            return false
+                        }
+                    } catch is ContractSkip {
+                        if observed.outcome.isSkipped == false {
+                            return false
+                        }
+                    } catch {
+                        return false
+                    }
+                }
+                return await unsafeConcurrent.oracleCheck(unsafeWitness.systemUnderTest)
+            }
+            matched = result ?? false
+        }, &exception)
+        return completed && exception == nil && matched
     }
 
     /// Reports whether a sequential command run succeeded or timed out.
