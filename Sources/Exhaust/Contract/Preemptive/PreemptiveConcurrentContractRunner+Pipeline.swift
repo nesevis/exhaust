@@ -188,6 +188,35 @@ private extension __ExhaustRuntime {
         guard case let .failure(taggedCommands, tree, coverageIterations) = scaRowResult else {
             return nil
         }
+
+        let coverageReplaySeed = ReplaySeed.Resolved.encodeCoverageIteration(coverageIterations)
+
+        if context.lastRunTimedOut.value {
+            let reportedInput: [(ScheduleMarker, Backend.Spec.Command)] = taggedCommands.filter(\.0.isPrefix) + taggedCommands.filter { $0.0.isPrefix == false }
+            let (result, failureDescription) = context.backend.buildResult(
+                reduced: reportedInput,
+                originalCommands: nil,
+                seed: nil,
+                replaySeed: coverageReplaySeed,
+                discoveryMethod: .coverage,
+                timedOut: true
+            )
+            context.report.setInvocations(coverage: context.invocationCounter.value, randomSampling: 0, reduction: 0)
+            if context.config.suppressIssueReporting == false {
+                context.failureContext.discoveryMethod = .coverage
+                context.failureContext.iteration = coverageIterations
+                context.failureContext.budget = context.coverageBudget
+                context.failureContext.sequencesTested = context.invocationCounter.value
+                context.failureContext.originalCount = taggedCommands.count
+                context.failureContext.replaySeed = coverageReplaySeed
+                context.failureContext.timedOut = true
+                context.failureContext.oracleDescription = failureDescription.map { "Expected state (from sequential replay):\n  \($0)" }
+                context.deferredIssues.append(renderFailureMessage(reportedInput, context: context.failureContext))
+            }
+            finalizeReport(&context)
+            return (result, context.deferredIssues, context.report)
+        }
+
         let reduction = reduceConfirmedFailure(
             &context,
             taggedCommands: taggedCommands,
@@ -207,7 +236,7 @@ private extension __ExhaustRuntime {
             budget: context.coverageBudget,
             sequencesTested: context.invocationCounter.value,
             originalCount: taggedCommands.count,
-            replaySeed: ReplaySeed.Resolved.encodeCoverageIteration(coverageIterations),
+            replaySeed: coverageReplaySeed,
             coverageInvocations: context.invocationCounter.value,
             randomSamplingInvocations: 0
         )
