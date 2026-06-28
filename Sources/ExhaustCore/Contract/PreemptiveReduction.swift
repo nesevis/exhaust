@@ -33,6 +33,9 @@ package enum PreemptiveReduction {
     /// Default command limit for `.threads` contracts.
     package static let defaultCommandLimit = 10
 
+    /// Worst-case interleaving count above which the runner emits a warning before starting the pipeline. The DFS is exhaustive, so configurations that exceed this threshold can make each linearizability check very slow.
+    package static let interleavingWarningThreshold = 1_000_000_000
+
     /// Captures the output, tree, invocation count, and failure evidence from a preemptive reduction pass.
     package struct ReductionResult<Command, FailureOutcome> {
         package let output: [(ScheduleMarker, Command)]
