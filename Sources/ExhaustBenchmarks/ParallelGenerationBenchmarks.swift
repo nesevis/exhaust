@@ -4,7 +4,7 @@ import ExhaustCore
 import Foundation
 
 func registerParallelGenerationBenchmarks() {
-    let laneCounts: [ConcurrencyLevel] = [.one, .two, .three, .four, .five, .six, .seven, .eight]
+    let laneCounts = ConcurrencyLevel.allCases
 
     for lanes in laneCounts {
         let suffix = lanes == .one ? "sequential" : "parallel(\(lanes.rawValue))"
