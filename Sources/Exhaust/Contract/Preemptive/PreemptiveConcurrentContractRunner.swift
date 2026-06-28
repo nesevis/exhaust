@@ -41,6 +41,8 @@ public extension __ExhaustRuntime {
         #endif
 
         let backend = PreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
+        let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
+        warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
         let (result, deferredIssues, report): (ContractResult<Spec>?, [String], ExhaustReport) = DispatchQueue.global().sync {
             ExhaustLog.withConfiguration(config.logConfiguration) {

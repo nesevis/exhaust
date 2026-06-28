@@ -42,6 +42,8 @@ public extension __ExhaustRuntime {
         #endif
 
         let backend = AsyncPreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
+        let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
+        warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
         let (result, deferredIssues, report): (ContractResult<Spec>?, [String], ExhaustReport) = await __ExhaustRuntime.dispatchToGCD {
             ExhaustLog.withConfiguration(config.logConfiguration) {
@@ -66,11 +68,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
     let idleTimeoutMilliseconds: Int?
 
     /// Bridges async work to the calling thread, bailing with `nil` (and a log) if the drain loop idles past ``idleTimeoutMilliseconds``. Returns the work's result, or `nil` only on timeout.
-    private func awaitOrTimeout<Value>(_ label: String, _ work: @Sendable @escaping () async -> Value) -> Value? {
+    private func awaitOrTimeout<Value>(_ label: String, timeoutMultiplier: Int = 1, _ work: @Sendable @escaping () async -> Value) -> Value? {
         guard let idleTimeoutMilliseconds else {
             return __ExhaustRuntime.blockingAwait(work)
         }
-        let result = __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: idleTimeoutMilliseconds, work)
+        let result = __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: idleTimeoutMilliseconds * timeoutMultiplier, work)
         if result == nil {
             ExhaustLog.notice(
                 category: .propertyTest,
@@ -411,7 +413,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 checkInvariants: { try await unsafeSpec.checkInvariants() }
             )
         }
-        let (trace, failed) = __ExhaustRuntime.blockingAwait(work)
+        guard let (trace, failed) = awaitOrTimeout("smoke", timeoutMultiplier: 5, work) else {
+            return ([], true, spec.systemUnderTest, spec.failureDescription())
+        }
         if failed {
             return (trace, true, spec.systemUnderTest, spec.failureDescription())
         }
@@ -420,8 +424,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         // The reference is a distinct spec so the oracle's relational comparison is between two independent runs rather than the SUT against itself.
         let reference = Spec()
         nonisolated(unsafe) let unsafeReference = reference
-        let smokeTimeout = (idleTimeoutMilliseconds ?? ResolvedConcurrentConfig.defaultIdleTimeout) * 5
-        let referenceFailed: Bool? = __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: smokeTimeout) {
+        let referenceFailed: Bool? = awaitOrTimeout("smoke-reference", timeoutMultiplier: 5) {
             for command in commands {
                 do {
                     try await unsafeReference.run(command)
@@ -438,10 +441,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         }
         nonisolated(unsafe) let referenceResult = reference.systemUnderTest
         nonisolated(unsafe) let oracleSpec = spec
-        let oracleHeld = __ExhaustRuntime.blockingAwait {
+        let oracleHeld = awaitOrTimeout("smoke-oracle", timeoutMultiplier: 5) {
             await oracleSpec.oracleCheck(referenceResult)
         }
-        if oracleHeld == false {
+        if oracleHeld != true {
             return (trace, true, spec.systemUnderTest, spec.failureDescription())
         }
         return (trace, false, spec.systemUnderTest, nil)
