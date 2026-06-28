@@ -89,8 +89,6 @@ struct ResolvedConcurrentConfig {
                     config.idleTimeout = max(milliseconds, 1)
                 case let .log(level):
                     config.logLevel = level
-                case .includeDiff:
-                    break
             }
         }
 

@@ -7,7 +7,6 @@ struct ContractContext {
     var suppressIssueReporting: Bool = false
     var suppressLogs: Bool = false
     var collectOpenPBTStats: Bool = false
-    var includeDiff: Bool = false
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
     let fileID: StaticString
@@ -143,8 +142,6 @@ struct ContractContext {
                     }
                 case .collectOpenPBTStats:
                     collectOpenPBTStats = true
-                case .includeDiff:
-                    includeDiff = true
                 case let .onReport(closure):
                     let existing = onReportClosure
                     onReportClosure = { report in

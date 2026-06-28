@@ -358,8 +358,7 @@ private extension __ExhaustRuntime {
             : renderFailure(
                 result,
                 failureInfo: discovery.failureInfo,
-                failureDescription: outcome.failureDescription,
-                includeDiff: context.includeDiff
+                failureDescription: outcome.failureDescription
             )
         return (result, rendered)
     }

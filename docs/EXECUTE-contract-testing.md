@@ -391,7 +391,6 @@ All settings are passed as variadic arguments to `#execute`:
 | `.idleTimeoutMs(ms)` | 2000 | Milliseconds before a stalled run is reported without reduction: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. |
 | `.replay("seed")` | — | Deterministic replay from a failure report seed. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
-| `.includeDiff` | off | Includes a structural diff between the original and reduced command sequences. |
 | `.collectOpenPBTStats` | off | Records per-example stats in OpenPBTStats JSON Lines format. |
 | `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing, invocation counts, and reduction stats after the run. |
 | `.log(.debug)` | `.error` | Log verbosity. |

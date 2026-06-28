@@ -19,9 +19,6 @@ public enum ContractSettings {
     /// Use `.suppress(.issueReporting)` when the run is expected to find a failing command sequence and the test asserts on the returned value. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
     case suppress(SuppressOption)
 
-    /// Includes a structural diff between the original and reduced command sequences in the failure report.
-    case includeDiff
-
     /// Collects per-example statistics in the OpenPBTStats JSON Lines format and attaches the result to the test run.
     ///
     /// Each test example produces one JSON line with status, a `customDump` representation, and complexity features derived from the choice tree. Compatible with the [Tyche](https://github.com/tyche-pbt/tyche-extension) visualization tool.

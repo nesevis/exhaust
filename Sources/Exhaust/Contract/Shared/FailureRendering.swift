@@ -1,6 +1,6 @@
 // Formats failure reports for both the sequential and concurrent contract runners.
 //
-// The concurrent path (FailureContext, renderFailure(_:trace:context:), renderTimeout, renderCommandPartition) is populated incrementally by the runner and passed to renderFailure for final formatting. The sequential path (renderFailure(_:failureInfo:failureDescription:includeDiff:), ContractFailureInfo) renders a re-executed trace from a discovered command sequence.
+// The concurrent path (FailureContext, renderFailure(_:trace:context:), renderTimeout, renderCommandPartition) is populated incrementally by the runner and passed to renderFailure for final formatting. The sequential path (renderFailure(_:failureInfo:failureDescription:), ContractFailureInfo) renders a re-executed trace from a discovered command sequence.
 import CustomDump
 import ExhaustCore
 
@@ -169,14 +169,12 @@ extension __ExhaustRuntime {
     static func renderFailure<Spec: ContractSpecBase>(
         _ result: ContractResult<Spec>,
         failureInfo: ContractFailureInfo<Spec.Command>,
-        failureDescription: String?,
-        includeDiff: Bool = false
+        failureDescription: String?
     ) -> String {
         var lines: [String] = []
         lines.append("Contract failure (found via \(failureInfo.discoveryMethod))")
         lines.append("")
 
-        // Show sequence header with reduction info when available.
         if let original = failureInfo.originalCommands, original.count > result.commands.count {
             let header =
                 "Command sequence (\(result.commands.count) steps, reduced from \(original.count)):"
@@ -187,18 +185,6 @@ extension __ExhaustRuntime {
 
         for step in result.trace {
             lines.append("  \(step)")
-        }
-
-        if includeDiff, let original = failureInfo.originalCommands, original.count > result.commands.count {
-            let originalDescriptions = original.map { "\($0)" }
-            let reducedDescriptions = result.commands.map { "\($0)" }
-            if let reductionDiff = diff(originalDescriptions, reducedDescriptions) {
-                lines.append("")
-                lines.append("Reduction diff:")
-                for line in reductionDiff.split(separator: "\n", omittingEmptySubsequences: false) {
-                    lines.append("  \(line)")
-                }
-            }
         }
 
         if let failureDescription {
