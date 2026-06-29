@@ -139,7 +139,7 @@ public extension __ExhaustRuntime {
                 }
             )
 
-            let machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+            var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
             let result = machine.run()
 
             for issue in runContext.deferredIssues {
@@ -309,7 +309,7 @@ private extension __ExhaustRuntime {
             }
         )
 
-        let machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+        var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
         let result = machine.run()
 
         deferredIssues.append(contentsOf: runContext.deferredIssues)

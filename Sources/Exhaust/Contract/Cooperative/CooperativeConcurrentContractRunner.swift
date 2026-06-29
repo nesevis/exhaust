@@ -249,7 +249,7 @@ private extension __ExhaustRuntime {
                     property: property
                 )
 
-                let machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+                var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
                 if let result = machine.run() {
                     deferredIssues.append(contentsOf: runContext.deferredIssues)
                     return (result, deferredIssues)
@@ -306,7 +306,7 @@ private extension __ExhaustRuntime {
             smokeProperty: smokeProperty
         )
 
-        let machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+        var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
         let result = machine.run()
         deferredIssues.append(contentsOf: runContext.deferredIssues)
         return (result, deferredIssues)
