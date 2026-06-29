@@ -11,6 +11,7 @@ struct PreemptiveResponseOnlyGhostTests {
         let result = #execute(
             RacySetSpec.self,
             .concurrent(.two),
+            .idleTimeoutMs(5000),
             .suppress(.all)
         )
         #expect(result?.status == .fail)

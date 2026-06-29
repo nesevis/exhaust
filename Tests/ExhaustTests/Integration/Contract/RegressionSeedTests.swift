@@ -10,7 +10,7 @@ struct RegressionSeedTests {
 
     @Test(
         "Sequential regression seed reproduces a sampling failure through the trait",
-        .exhaust(.regressions("FZ9CGDYNJAFDV-2"))
+        .exhaust(.regressions("1X7BY02VY76FP-4"))
     )
     func sequentialRegressionSeedReproduces() {
         let result = #execute(

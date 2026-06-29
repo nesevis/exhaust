@@ -140,6 +140,7 @@ struct ConcurrentContractReplayTests {
                 settings: [
                     .commandLimit(6),
                     .budget(.custom(coverage: 0, sampling: 2000)),
+                    .idleTimeoutMs(5000),
                     .suppress(.all),
                 ]
             )
