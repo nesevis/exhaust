@@ -33,19 +33,19 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
     ) -> ContractReduction<Spec.Command> {
         nonisolated(unsafe) let unsafeSelf = self
         nonisolated(unsafe) let unsafeContext = context
-        let oracleProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { commands in
+        let oracleProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.ContractProbeVerdict<Void> = { commands in
             unsafeContext.invocationCounter.value += 1
-            return unsafeSelf.probe(commands, context: unsafeContext) == .pass
+            return unsafeSelf.probe(commands, context: unsafeContext) == .pass ? .pass : .fail(())
         }
 
-        let (reduced, _, stats) = __ExhaustRuntime.reduceConcurrentTwoPass(
+        let result = __ExhaustRuntime.reduceConcurrentTwoPass(
             generator: context.sequenceGen,
             tree: tree,
             output: taggedCommands,
             deadlineNanoseconds: context.reductionConfig.wallClockDeadlineNanoseconds,
             property: oracleProperty
         )
-        return ContractReduction(finalInput: reduced, stats: stats, timedOut: false)
+        return ContractReduction(finalInput: result.value, stats: result.stats, timedOut: false)
     }
 
     func buildResult(

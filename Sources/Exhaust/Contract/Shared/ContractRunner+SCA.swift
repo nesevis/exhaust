@@ -395,17 +395,30 @@ extension __ExhaustRuntime {
     /// Reduces a concurrent contract counterexample in two passes: structural (lane collapse + deletion) then value minimization.
     ///
     /// Lane collapse and deletion run together in pass 1 so the scheduler can interleave them — collapsing a lane then deleting the now-prefix command in the same cycle, rather than over-collapsing before deletion gets a chance. Pass 2 runs value and float search on the structurally reduced sequence. Each pass rematerializes on success to keep the output and tree consistent. Shared by the cooperative and preemptive backends so the reduction strategy cannot drift between them.
-    static func reduceConcurrentTwoPass<Command>(
+    ///
+    /// The property closure returns a ``ContractProbeVerdict`` so the preemptive backend can carry linearizability evidence (response witnesses, failure descriptions) through reduction without a separate side-channel. The cooperative backend returns `.fail(())`.
+    static func reduceConcurrentTwoPass<Command, Evidence>(
         generator: Generator<[(ScheduleMarker, Command)]>,
         tree: ChoiceTree,
         output: [(ScheduleMarker, Command)],
         deadlineNanoseconds: UInt64,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
-    ) -> (value: [(ScheduleMarker, Command)], tree: ChoiceTree, stats: ReductionStats) {
+        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> ContractProbeVerdict<Evidence>
+    ) -> ConcurrentTwoPassResult<Command, Evidence> {
         let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
         var currentOutput = output
         var currentTree = tree
         var mergedStats = ReductionStats()
+        nonisolated(unsafe) var lastEvidence: Evidence?
+
+        let boolProperty: @Sendable ([(ScheduleMarker, Command)]) -> Bool = { commands in
+            switch property(commands) {
+                case .pass:
+                    return true
+                case let .fail(evidence):
+                    lastEvidence = evidence
+                    return false
+            }
+        }
 
         // Pass 1: structural reduction (lane collapse + deletion).
         if let result = try? Interpreters.choiceGraphReduceCollectingStats(
@@ -418,7 +431,7 @@ extension __ExhaustRuntime {
                 enabledEncoders: [.laneCollapse, .deletion],
                 tuning: noRelax
             ),
-            property: property
+            property: boolProperty
         ) {
             mergedStats.merge(result.stats)
             if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
@@ -444,7 +457,7 @@ extension __ExhaustRuntime {
                 enabledEncoders: [.valueSearch, .floatSearch],
                 tuning: noRelax
             ),
-            property: property
+            property: boolProperty
         ) {
             mergedStats.merge(result.stats)
             if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
@@ -459,7 +472,28 @@ extension __ExhaustRuntime {
             }
         }
 
-        return (currentOutput, currentTree, mergedStats)
+        return ConcurrentTwoPassResult(
+            value: currentOutput,
+            tree: currentTree,
+            stats: mergedStats,
+            lastEvidence: lastEvidence
+        )
+    }
+}
+
+// MARK: - Two-Pass Reduction Types
+
+extension __ExhaustRuntime {
+    enum ContractProbeVerdict<Evidence> {
+        case pass
+        case fail(Evidence)
+    }
+
+    struct ConcurrentTwoPassResult<Command, Evidence> {
+        let value: [(ScheduleMarker, Command)]
+        let tree: ChoiceTree
+        let stats: ReductionStats
+        let lastEvidence: Evidence?
     }
 }
 
