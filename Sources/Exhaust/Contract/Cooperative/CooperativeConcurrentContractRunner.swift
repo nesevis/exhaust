@@ -123,11 +123,14 @@ public extension __ExhaustRuntime {
         // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop. This deadlocks under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD grows its thread pool dynamically, so concurrent drain loops cannot exhaust it.
         let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
             ExhaustLog.withConfiguration(config.logConfiguration) {
-                runConcurrentPipeline(
+                runCooperativeMachine(
                     Spec.self,
                     config: config,
                     regressionSeeds: regressionSeeds,
-                    fileID: fileID
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
                 )
             }
         }
@@ -138,7 +141,243 @@ public extension __ExhaustRuntime {
     }
 }
 
-// MARK: - Pipeline
+// MARK: - Machine Pipeline
+
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+private extension __ExhaustRuntime {
+    static func runCooperativeMachine<Spec: AsyncContractSpec>(
+        _: Spec.Type,
+        config: ResolvedConcurrentConfig,
+        regressionSeeds: [String],
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
+    ) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
+        var deferredIssues: [String] = []
+        var config = config
+
+        if config.concurrencyLevel > 1, Spec.self is any Actor.Type {
+            config.concurrencyLevel = 1
+        }
+
+        let commandGen = Spec.commandGenerator.gen
+        let coverageBudget = config.budget.coverageBudget
+        let resolvedCommandLimit = config.commandLimit
+            ?? min(estimateCommandLimit(commandGen: commandGen, coverageBudget: coverageBudget), 40)
+
+        guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
+            deferredIssues.append("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure.")
+            return (nil, deferredIssues)
+        }
+        let sequenceGen = Gen.arrayOf(
+            taggedCommandGen,
+            within: 1 ... UInt64(resolvedCommandLimit),
+            scaling: .constant
+        )
+
+        nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
+        let concurrencyLevel = config.concurrencyLevel
+        let idleTimeout = config.idleTimeout
+
+        let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit, idleTimeoutMilliseconds: idleTimeout)
+        let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
+            rawIdentifySkips(taggedCommands.map(\.1))
+        }
+
+        let backend = CooperativeContractBackend<Spec>(
+            specInit: specInit,
+            concurrencyLevel: concurrencyLevel,
+            idleTimeout: idleTimeout
+        )
+
+        let invocationCounter = UnsafeSendableBox(0)
+        let lastRunTimedOut = UnsafeSendableBox(false)
+        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+            invocationCounter.value += 1
+            let result = drainSchedule(
+                taggedCommands: taggedCommands,
+                specInit: specInit,
+                concurrencyLevel: concurrencyLevel,
+                recordTrace: false,
+                idleTimeoutMilliseconds: idleTimeout
+            )
+            if result.timedOut {
+                lastRunTimedOut.value = true
+            }
+            return result.passed
+        }
+
+        // Regression seeds
+        if config.coverageReplayRow == nil, config.seed == nil {
+            for encodedSeed in regressionSeeds {
+                guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
+                    deferredIssues.append("Invalid regression seed: \(encodedSeed)")
+                    continue
+                }
+
+                var replayConfig = config
+                switch decoded {
+                    case let .coverage(row):
+                        replayConfig.coverageReplayRow = row
+                    case let .sampling(seed, iteration):
+                        replayConfig.seed = seed
+                        replayConfig.replayIteration = iteration
+                }
+
+                let runContext = ContractRunContext<Spec>(
+                    config: replayConfig,
+                    sequenceGen: sequenceGen,
+                    commandGen: commandGen,
+                    commandLimit: resolvedCommandLimit,
+                    identifySkips: identifySkips,
+                    invocationCounter: invocationCounter,
+                    lastRunTimedOut: lastRunTimedOut,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+
+                let sources = buildConcurrentSources(
+                    config: replayConfig,
+                    sequenceGen: sequenceGen,
+                    commandGen: commandGen,
+                    commandLimit: resolvedCommandLimit,
+                    concurrencyLevel: concurrencyLevel,
+                    taggedCommandGen: taggedCommandGen,
+                    property: property
+                )
+
+                let machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+                if let result = machine.run() {
+                    deferredIssues.append(contentsOf: runContext.deferredIssues)
+                    return (result, deferredIssues)
+                } else if config.suppressIssueReporting == false {
+                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
+                }
+            }
+        }
+
+        let runContext = ContractRunContext<Spec>(
+            config: config,
+            sequenceGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: resolvedCommandLimit,
+            identifySkips: identifySkips,
+            invocationCounter: invocationCounter,
+            lastRunTimedOut: lastRunTimedOut,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+
+        nonisolated(unsafe) let unsafeSpecInit = specInit
+        var smokeProperty: (@Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool)?
+        if concurrencyLevel > 1 {
+            smokeProperty = { tagged in
+                let passed = __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+                    let spec = unsafeSpecInit()
+                    for (_, command) in tagged {
+                        do {
+                            try await spec.run(command)
+                            try await spec.checkInvariants()
+                        } catch is ContractSkip {
+                            continue
+                        } catch {
+                            return false
+                        }
+                    }
+                    return true
+                }
+                return passed ?? false
+            }
+        }
+
+        let sources = buildConcurrentSources(
+            config: config,
+            sequenceGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: resolvedCommandLimit,
+            concurrencyLevel: concurrencyLevel,
+            taggedCommandGen: taggedCommandGen,
+            property: property,
+            smokeProperty: smokeProperty
+        )
+
+        let machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+        let result = machine.run()
+        deferredIssues.append(contentsOf: runContext.deferredIssues)
+        return (result, deferredIssues)
+    }
+
+    static func buildConcurrentSources<Command: CustomStringConvertible>(
+        config: ResolvedConcurrentConfig,
+        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
+        commandGen: Generator<Command>,
+        commandLimit: Int,
+        concurrencyLevel: Int,
+        taggedCommandGen: Generator<(ScheduleMarker, Command)>,
+        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
+        smokeProperty: (@Sendable ([(ScheduleMarker, Command)]) -> Bool)? = nil
+    ) -> [AnyContractCandidateSource<Command>] {
+        var sources: [AnyContractCandidateSource<Command>] = []
+
+        if let row = config.coverageReplayRow {
+            sources.append(.coverageReplay(
+                row: row,
+                sequenceGen: sequenceGen,
+                commandGen: commandGen,
+                commandLimit: commandLimit,
+                coverageBudget: max(config.budget.coverageBudget, UInt64(row) + 1),
+                concurrencyLevel: concurrencyLevel,
+                property: property
+            ))
+        }
+
+        if let replayIteration = config.replayIteration, let seed = config.seed {
+            sources.append(.samplingReplay(
+                replaySeed: seed,
+                replayIteration: replayIteration,
+                sequenceGen: sequenceGen,
+                property: property
+            ))
+        }
+
+        if let smokeProperty {
+            sources.append(.smoke(sequenceGen: sequenceGen, property: smokeProperty))
+        }
+
+        if config.shouldRunCoverage {
+            sources.append(.coverage(
+                sequenceGen: sequenceGen,
+                commandGen: commandGen,
+                commandLimit: commandLimit,
+                coverageBudget: config.budget.coverageBudget,
+                concurrencyLevel: concurrencyLevel,
+                sequenceGenForLength: { range in
+                    Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
+                },
+                property: property
+            ))
+        }
+
+        if config.replayIteration == nil, config.coverageReplayRow == nil {
+            let seed = config.seed ?? Xoshiro256().seed
+            sources.append(.sampling(
+                sequenceGen: sequenceGen,
+                seed: seed,
+                samplingBudget: config.budget.samplingBudget,
+                property: property
+            ))
+        }
+
+        return sources
+    }
+}
+
+// MARK: - Legacy Pipeline (to be removed)
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 private extension __ExhaustRuntime {
@@ -210,7 +449,9 @@ private extension __ExhaustRuntime {
                 recordTrace: false,
                 idleTimeoutMilliseconds: idleTimeout
             )
-            lastRunTimedOut.value = result.timedOut
+            if result.timedOut {
+                lastRunTimedOut.value = true
+            }
             return result.passed
         }
 

@@ -364,6 +364,103 @@ extension __ExhaustRuntime {
         }
         return (value, result.stats, false)
     }
+
+    /// Variant of ``reduceContractCounterexample(value:tree:generator:config:property:)`` that also returns the post-reduction choice tree for use as input to a subsequent reduction pass.
+    static func reduceContractCounterexampleWithTree<Value>(
+        value: Value,
+        tree: ChoiceTree,
+        generator: Generator<Value>,
+        config: Interpreters.ReducerConfiguration,
+        property: @escaping @Sendable (Value) -> Bool
+    ) -> (value: Value, tree: ChoiceTree, stats: ReductionStats?, reduced: Bool) {
+        guard let result = try? Interpreters.choiceGraphReduceCollectingStats(
+            gen: generator,
+            tree: tree,
+            output: value,
+            config: config,
+            property: property
+        ) else {
+            return (value, tree, nil, false)
+        }
+        switch result.outcome {
+            case let .reduced(_, reducedTree, reduced):
+                return (reduced, reducedTree, result.stats, true)
+            case let .unreduced(_, unreducedTree, _):
+                return (value, unreducedTree, result.stats, false)
+            case .failure:
+                return (value, tree, result.stats, false)
+        }
+    }
+
+    /// Reduces a concurrent contract counterexample in two passes: structural (lane collapse + deletion) then value minimization.
+    ///
+    /// Lane collapse and deletion run together in pass 1 so the scheduler can interleave them — collapsing a lane then deleting the now-prefix command in the same cycle, rather than over-collapsing before deletion gets a chance. Pass 2 runs value and float search on the structurally reduced sequence. Each pass rematerializes on success to keep the output and tree consistent. Shared by the cooperative and preemptive backends so the reduction strategy cannot drift between them.
+    static func reduceConcurrentTwoPass<Command>(
+        generator: Generator<[(ScheduleMarker, Command)]>,
+        tree: ChoiceTree,
+        output: [(ScheduleMarker, Command)],
+        deadlineNanoseconds: UInt64,
+        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
+    ) -> (value: [(ScheduleMarker, Command)], tree: ChoiceTree, stats: ReductionStats) {
+        let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
+        var currentOutput = output
+        var currentTree = tree
+        var mergedStats = ReductionStats()
+
+        // Pass 1: structural reduction (lane collapse + deletion).
+        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
+            gen: generator,
+            tree: currentTree,
+            output: currentOutput,
+            config: .init(
+                maxStalls: 2,
+                wallClockDeadlineNanoseconds: deadlineNanoseconds,
+                enabledEncoders: [.laneCollapse, .deletion],
+                tuning: noRelax
+            ),
+            property: property
+        ) {
+            mergedStats.merge(result.stats)
+            if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
+                currentOutput = reduced
+                currentTree = reducedTree
+                if case let .success(value, tree, _) = Materializer.materialize(
+                    generator, prefix: sequence, mode: .exact
+                ) {
+                    currentOutput = value
+                    currentTree = tree
+                }
+            }
+        }
+
+        // Pass 2: value minimization on the structurally reduced sequence.
+        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
+            gen: generator,
+            tree: currentTree,
+            output: currentOutput,
+            config: .init(
+                maxStalls: 2,
+                wallClockDeadlineNanoseconds: deadlineNanoseconds,
+                enabledEncoders: [.valueSearch, .floatSearch],
+                tuning: noRelax
+            ),
+            property: property
+        ) {
+            mergedStats.merge(result.stats)
+            if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
+                currentOutput = reduced
+                currentTree = reducedTree
+                if case let .success(value, tree, _) = Materializer.materialize(
+                    generator, prefix: sequence, mode: .exact
+                ) {
+                    currentOutput = value
+                    currentTree = tree
+                }
+            }
+        }
+
+        return (currentOutput, currentTree, mergedStats)
+    }
 }
 
 extension __ExhaustRuntime {

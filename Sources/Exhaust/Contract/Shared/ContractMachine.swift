@@ -18,8 +18,12 @@ final class ContractRunContext<Spec: ContractSpecBase> {
     let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>
     let runStopwatch = Stopwatch()
 
-    var invocationCount: Int = 0
-    var lastRunTimedOut: Bool = false
+    let invocationCounter: UnsafeSendableBox<Int>
+    let lastRunTimedOutBox: UnsafeSendableBox<Bool>?
+    var lastRunTimedOut: Bool {
+        lastRunTimedOutBox?.value ?? false
+    }
+
     var report = ExhaustReport()
     var deferredIssues: [String] = []
     var failureContext = __ExhaustRuntime.FailureContext()
@@ -30,6 +34,8 @@ final class ContractRunContext<Spec: ContractSpecBase> {
         commandGen: Generator<Spec.Command>,
         commandLimit: Int,
         identifySkips: @escaping @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>,
+        invocationCounter: UnsafeSendableBox<Int> = UnsafeSendableBox(0),
+        lastRunTimedOut: UnsafeSendableBox<Bool>? = nil,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -40,6 +46,8 @@ final class ContractRunContext<Spec: ContractSpecBase> {
         self.commandGen = commandGen
         self.commandLimit = commandLimit
         self.identifySkips = identifySkips
+        self.invocationCounter = invocationCounter
+        lastRunTimedOutBox = lastRunTimedOut
         self.fileID = fileID
         self.filePath = filePath
         self.line = line
@@ -49,6 +57,7 @@ final class ContractRunContext<Spec: ContractSpecBase> {
     var reductionConfig: Interpreters.ReducerConfiguration {
         Interpreters.ReducerConfiguration(
             maxStalls: 2,
+            wallClockDeadlineNanoseconds: config.budget.samplingBudget * 5 * 1_000_000,
             tuning: SchedulerTuning(relaxMaterializationBudget: 0)
         )
     }
@@ -62,7 +71,13 @@ struct ContractMachine<Backend: ContractBackend> {
 
     /// Returns the first failing ``ContractResult``, or `nil` when all sources exhaust without finding a failure.
     func run() -> ContractResult<Backend.Spec>? {
+        let coverageStopwatch = Stopwatch()
+        var coverageTimingRecorded = false
+
         defer {
+            if coverageTimingRecorded == false {
+                context.report.coverageMilliseconds = coverageStopwatch.elapsedMilliseconds
+            }
             if let onReport = context.config.onReportClosure {
                 context.report.seed = context.config.seed
                 context.report.totalMilliseconds = context.runStopwatch.elapsedMilliseconds
@@ -71,17 +86,56 @@ struct ContractMachine<Backend: ContractBackend> {
         }
 
         for sourceIndex in sources.indices {
-            guard let candidate = sources[sourceIndex].next() else { continue }
+            let candidate: ContractCandidate<Backend.Spec.Command>
+            do {
+                guard let found = try sources[sourceIndex].next() else {
+                    continue
+                }
+                candidate = found
+            } catch {
+                if let resolved = sources[sourceIndex].resolvedReplaySeed {
+                    context.deferredIssues.append("Generator failed during regression replay (seed \(resolved.encoded)): \(error)")
+                } else {
+                    context.deferredIssues.append("Generator failed: \(error)")
+                }
+                continue
+            }
 
             switch candidate.discoveryMethod {
                 case .coverage, .replay:
                     context.report.coverageInvocations += candidate.sourceInvocations
                 case .randomSampling:
+                    if coverageTimingRecorded == false {
+                        context.report.coverageMilliseconds = coverageStopwatch.elapsedMilliseconds
+                        coverageTimingRecorded = true
+                    }
                     context.report.randomSamplingInvocations += candidate.sourceInvocations
                 case .smokeTest:
                     context.report.coverageInvocations += candidate.sourceInvocations
             }
             context.report.propertyInvocations += candidate.sourceInvocations
+
+            context.failureContext.timedOut = context.lastRunTimedOut
+            context.failureContext.seed = candidate.discoveryMethod == .coverage ? nil : candidate.seed
+            context.failureContext.originalCount = candidate.taggedCommands.count
+            context.failureContext.iteration = candidate.iteration
+            context.failureContext.budget = context.config.budget.samplingBudget
+            context.failureContext.sequencesTested = candidate.sourceInvocations
+
+            guard context.lastRunTimedOut == false else {
+                let (result, issueMessage) = backend.buildResult(
+                    reduced: candidate.taggedCommands,
+                    originalCommands: nil,
+                    seed: candidate.seed,
+                    iteration: candidate.iteration,
+                    discoveryMethod: candidate.discoveryMethod,
+                    context: context
+                )
+                if issueMessage.isEmpty == false {
+                    context.deferredIssues.append(issueMessage)
+                }
+                return result
+            }
 
             nonisolated(unsafe) let unsafeBackend = backend
             nonisolated(unsafe) let unsafeContext = context
@@ -97,13 +151,18 @@ struct ContractMachine<Backend: ContractBackend> {
                 logEvent: "contract_skip_pruning"
             )
 
+            let preReductionInvocations = context.invocationCounter.value
             let reductionStopwatch = Stopwatch()
             let reduction = backend.reduce(
                 taggedCommands: pruned.value,
                 tree: pruned.tree,
                 context: context
             )
+            let reductionInvocations = context.invocationCounter.value - preReductionInvocations
             context.report.reductionMilliseconds = reductionStopwatch.elapsedMilliseconds
+            context.report.reductionInvocations = reductionInvocations
+            context.report.propertyInvocations += reductionInvocations
+            context.failureContext.reductionInvocations = reductionInvocations
             if let stats = reduction.stats {
                 context.report.applyReductionStats(stats)
             }

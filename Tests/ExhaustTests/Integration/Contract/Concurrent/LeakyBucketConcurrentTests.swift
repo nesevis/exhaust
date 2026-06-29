@@ -33,14 +33,14 @@ struct LeakyBucketConcurrentTests {
             settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 500)), .replay(.numeric(42)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
         )
         let report = try #require(deliveredReport)
-        #expect(report.propertyInvocations == 19)
-        #expect(report.reductionInvocations == 17)
-        #expect(report.totalMaterializations == 23)
-        #expect(report.cycles == 3)
-        #expect(report.encoderProbes[.laneCollapse] == 9)
+        #expect(report.propertyInvocations == 11)
+        #expect(report.reductionInvocations == 9)
+        #expect(report.totalMaterializations == 9)
+        #expect(report.cycles == 5)
+        #expect(report.encoderProbes[.laneCollapse] == 7)
         #expect(report.encoderProbesAccepted[.laneCollapse] == 1)
-        #expect(report.encoderProbes[.deletion] == 12)
-        #expect(report.encoderProbes[.substitution] == 6)
+        #expect(report.encoderProbes[.deletion] == 10)
+        #expect(report.encoderProbesAccepted[.deletion] == 1)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

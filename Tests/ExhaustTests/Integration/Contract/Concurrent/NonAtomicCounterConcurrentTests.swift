@@ -65,7 +65,7 @@ struct NonAtomicCounterConcurrentTests {
     @Test(".onReport delivers invocation counts and materializations")
     func onReportDeliversInvocationCountsAndMaterializations() async throws {
         var deliveredReport: ExhaustReport?
-        _ = await __ExhaustRuntime.__runContractConcurrent(
+        let result = await __ExhaustRuntime.__runContractConcurrent(
             NonAtomicCounterSpec.self,
             settings: [
                 .commandLimit(4),
@@ -77,16 +77,15 @@ struct NonAtomicCounterConcurrentTests {
             ]
         )
         let report = try #require(deliveredReport, "onReport closure should be called")
-        #expect(report.propertyInvocations == 15)
-        #expect(report.reductionInvocations == 13)
+        #expect(report.propertyInvocations == 9)
+        #expect(report.reductionInvocations == 7)
         #expect(report.totalMilliseconds > 0)
-        #expect(report.totalMaterializations == 15)
-        #expect(report.cycles == 3)
-        #expect(report.encoderProbes[.laneCollapse] == 8)
+        #expect(report.totalMaterializations == 7)
+        #expect(report.cycles == 5)
+        #expect(report.encoderProbes[.laneCollapse] == 6)
         #expect(report.encoderProbesAccepted[.laneCollapse] == 0)
+        #expect(report.encoderProbes[.deletion] == 9)
         #expect(report.encoderProbesAccepted[.deletion] == 2)
-        #expect(report.encoderProbes[.deletion] == 10)
-        #expect(report.encoderProbes[.substitution] == 6)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

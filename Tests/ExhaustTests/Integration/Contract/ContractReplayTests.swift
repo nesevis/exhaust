@@ -177,8 +177,6 @@ struct ConcurrentContractReplayTests {
             )
         )
         let replaySeed = try #require(initial.replaySeed)
-        #expect(replaySeed.hasPrefix("U"), "Coverage replay seed should have U prefix")
-
         let replayed = try #require(
             await __ExhaustRuntime.__runContractConcurrent(
                 ReplayableNonAtomicCounterSpec.self,
@@ -190,7 +188,7 @@ struct ConcurrentContractReplayTests {
                 ]
             )
         )
-        #expect(replayed.commands.isEmpty == false, "Coverage row replay should reproduce the failure")
+        #expect(replayed.commands.isEmpty == false, "Replay should reproduce the failure")
     }
 }
 

@@ -10,7 +10,7 @@ struct RegressionSeedTests {
 
     @Test(
         "Sequential regression seed reproduces a sampling failure through the trait",
-        .exhaust(.regressions("1X7BY02VY76FP-4"))
+        .exhaust(.regressions("FZ9CGDYNJAFDV-2"))
     )
     func sequentialRegressionSeedReproduces() {
         let result = #execute(
@@ -83,7 +83,7 @@ struct RegressionSeedTests {
                 RegressionAsyncSequentialContract.self,
                 settings: [
                     .commandLimit(8),
-                    .budget(.custom(coverage: 0, sampling: 0)),
+                    .budget(.custom(coverage: 0, sampling: 1)),
                     .suppress(.all),
                 ]
             )

@@ -12,14 +12,19 @@ struct ContractCandidate<Command> {
 
 /// Type-erased source that produces failing candidate command sequences for the ``ContractMachine``. Each source owns its iteration state internally.
 struct AnyContractCandidateSource<Command> {
-    private let produceNext: () -> ContractCandidate<Command>?
+    let resolvedReplaySeed: ReplaySeed.Resolved?
+    private let produceNext: () throws -> ContractCandidate<Command>?
 
-    init(_ produceNext: @escaping () -> ContractCandidate<Command>?) {
+    init(
+        resolvedReplaySeed: ReplaySeed.Resolved? = nil,
+        _ produceNext: @escaping () throws -> ContractCandidate<Command>?
+    ) {
+        self.resolvedReplaySeed = resolvedReplaySeed
         self.produceNext = produceNext
     }
 
-    func next() -> ContractCandidate<Command>? {
-        produceNext()
+    func next() throws -> ContractCandidate<Command>? {
+        try produceNext()
     }
 }
 
@@ -37,8 +42,10 @@ extension AnyContractCandidateSource {
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
     ) -> AnyContractCandidateSource {
         var exhausted = false
-        return AnyContractCandidateSource {
-            guard exhausted == false else { return nil }
+        return AnyContractCandidateSource(resolvedReplaySeed: .coverage(row: row)) {
+            guard exhausted == false else {
+                return nil
+            }
             exhausted = true
 
             let result = __ExhaustRuntime.runSCACoverageRowLoop(
@@ -68,7 +75,7 @@ extension AnyContractCandidateSource {
         }
     }
 
-    /// Replays a single sampling seed.
+    /// Replays a single sampling seed by jumping directly to the target PRNG state via `initialRunIndex`.
     static func samplingReplay(
         replaySeed: UInt64,
         replayIteration: Int?,
@@ -76,30 +83,31 @@ extension AnyContractCandidateSource {
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
     ) -> AnyContractCandidateSource {
         var exhausted = false
-        return AnyContractCandidateSource {
-            guard exhausted == false else { return nil }
+        return AnyContractCandidateSource(resolvedReplaySeed: .sampling(seed: replaySeed, iteration: replayIteration)) {
+            guard exhausted == false else {
+                return nil
+            }
             exhausted = true
 
+            let startIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
             var interpreter = ValueAndChoiceTreeInterpreter(
                 sequenceGen,
                 seed: replaySeed,
-                maxRuns: UInt64((replayIteration ?? 0) + 1)
+                maxRuns: startIndex + 1,
+                initialRunIndex: startIndex
             )
-            var currentIteration = 0
-            while let (value, tree) = try? interpreter.next() {
-                defer { currentIteration += 1 }
-                if currentIteration == (replayIteration ?? 0) {
-                    if property(value) == false {
-                        return ContractCandidate(
-                            taggedCommands: value,
-                            tree: tree,
-                            seed: replaySeed,
-                            iteration: currentIteration,
-                            discoveryMethod: .replay,
-                            sourceInvocations: currentIteration + 1
-                        )
-                    }
-                }
+            guard let (value, tree) = try interpreter.next() else {
+                return nil
+            }
+            if property(value) == false {
+                return ContractCandidate(
+                    taggedCommands: value,
+                    tree: tree,
+                    seed: replaySeed,
+                    iteration: Int(startIndex) + 1,
+                    discoveryMethod: .replay,
+                    sourceInvocations: 1
+                )
             }
             return nil
         }
@@ -112,11 +120,15 @@ extension AnyContractCandidateSource {
     ) -> AnyContractCandidateSource {
         var exhausted = false
         return AnyContractCandidateSource {
-            guard exhausted == false else { return nil }
+            guard exhausted == false else {
+                return nil
+            }
             exhausted = true
 
             var interpreter = ValueAndChoiceTreeInterpreter(sequenceGen, seed: 0, maxRuns: 1)
-            guard let (value, tree) = try? interpreter.next() else { return nil }
+            guard let (value, tree) = try interpreter.next() else {
+                return nil
+            }
             if property(value) == false {
                 return ContractCandidate(
                     taggedCommands: value,
@@ -143,7 +155,9 @@ extension AnyContractCandidateSource {
     ) -> AnyContractCandidateSource {
         var exhausted = false
         return AnyContractCandidateSource {
-            guard exhausted == false else { return nil }
+            guard exhausted == false else {
+                return nil
+            }
             exhausted = true
 
             let result = __ExhaustRuntime.runSCACoverageRowLoop(
@@ -188,15 +202,15 @@ extension AnyContractCandidateSource {
         )
         var iteration = 0
         return AnyContractCandidateSource {
-            while let (value, tree) = try? interpreter.next() {
-                let currentIteration = iteration
+            while let value = try interpreter.nextValueOnly() {
                 iteration += 1
                 if property(value) == false {
+                    let tree = try interpreter.reproduceFailureTree()
                     return ContractCandidate(
                         taggedCommands: value,
                         tree: tree,
                         seed: seed,
-                        iteration: currentIteration,
+                        iteration: iteration,
                         discoveryMethod: .randomSampling,
                         sourceInvocations: iteration
                     )
