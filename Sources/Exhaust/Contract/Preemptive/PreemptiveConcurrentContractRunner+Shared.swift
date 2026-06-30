@@ -5,8 +5,6 @@ import IssueReporting
 /// Groups shared types for the synchronous and async preemptive contract runners.
 enum Preemptive {
     /// Captures the result of one preemptive concurrent execution probe.
-    ///
-    /// Four outcomes are possible: the execution matched some valid sequential ordering (``passed``), a lane or drain loop hung (``timedOut``), a command threw or an invariant broke before response comparison (``failed``), or the oracle flagged a state divergence and per-lane responses are available for linearizability analysis (``oracleMismatch``).
     enum Outcome<Spec: ContractSpecBase> {
         /// The execution is consistent with some valid sequential ordering.
         case passed

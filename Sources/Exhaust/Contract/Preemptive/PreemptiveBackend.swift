@@ -2,9 +2,7 @@ import ExhaustCore
 
 /// Defines the per-probe operations that differ between the synchronous and async preemptive runners.
 ///
-/// Everything else (phase ordering, smoke, SCA coverage, sampling, reduction, and failure assembly) is shared in ``__ExhaustRuntime/runPreemptivePipeline(backend:config:)``. The synchronous backend runs commands directly on GCD threads; the async backend bridges each probe through a drain loop.
-///
-/// Conformers are captured into the `@Sendable` property closure handed to the SCA coverage and reduction passes, so they must be `Sendable`. Both checkers store only an `Int?` timeout, so this is unconditional.
+/// Conformers are captured into the `@Sendable` property closure handed to the SCA coverage and reduction passes, so they must be `Sendable`. Both current conformers store only an `Int?` timeout, so the requirement is trivially satisfied.
 protocol PreemptiveBackend<Spec>: Sendable {
     associatedtype Spec: ContractSpecBase
 

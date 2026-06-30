@@ -224,7 +224,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
     /// Executes a tagged command sequence with real GCD concurrency using a pre-computed lane partition.
     ///
-    /// Returns ``Preemptive/Outcome/failed(concurrentSpec:)`` when a command throws, an invariant fails, or an ObjC exception is caught. Returns ``Preemptive/Outcome/timedOut(concurrentSpec:)`` when the concurrent lanes do not finish within ``idleTimeoutMilliseconds``, so the caller can skip reduction and report a hang rather than a deterministic failure.
+    /// Returns ``Preemptive/Outcome/failed(concurrentSpec:)`` when a command throws, an invariant fails, or an ObjC exception is caught. Returns ``Preemptive/Outcome/timedOut(concurrentSpec:)`` when the concurrent lanes do not finish within ``idleTimeoutMilliseconds``, so the ``ContractMachine`` can skip reduction and report a hang rather than a deterministic failure.
     func execute(_: [(ScheduleMarker, Spec.Command)], partition: LanePartition<Spec.Command>) -> Preemptive.Outcome<Spec> {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
@@ -320,8 +320,8 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
     /// Whether the realized completion order is a valid linearization: a sequential replay of the concurrent commands in the order the lanes finished, on a fresh spec, that reproduces every observed response and the oracle's final state.
     ///
-    /// A match means the execution is linearizable (this order is a concrete witness), so the caller can pass without the full interleaving search.
-    /// Any divergence (a differing response, an oracle mismatch, a replay throw, or an ObjC exception) returns `false`, and the caller hands the per-lane responses to ``checkLinearizability(taggedCommands:laneResponses:concurrentSpec:)``.
+    /// A match means the execution is linearizable (this order is a concrete witness), so the ``ContractMachine`` can pass without the full interleaving search.
+    /// Any divergence (a differing response, an oracle mismatch, a replay throw, or an ObjC exception) returns `false`, and the ``ContractMachine`` hands the per-lane responses to ``checkLinearizability(taggedCommands:laneResponses:concurrentSpec:)``.
     /// The check is sound: it only reports a pass when an actual sequential order reproduces the observation.
     private func realizedOrderIsLinearizable(
         prefix: [Spec.Command],

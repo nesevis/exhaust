@@ -19,7 +19,7 @@ extension __ExhaustRuntime {
 
     /// Core SCA coverage row loop shared by the sequential and concurrent contract runners.
     ///
-    /// Builds covering arrays at multiple sequence lengths to cover both short and long command sequences. Budget is split across length tiers: 50% at `min + 4`, 25% at `max / 2`, 25% at `max`, with duplicate lengths collapsed and their budgets merged. Tiers run shortest-first so minimal counterexamples are found early.
+    /// Builds covering arrays at multiple sequence lengths to cover both short and long command sequences. Budget is split across length tiers: 50% at `min(5, commandLimit)`, 25% at `max(5, commandLimit / 2)`, 25% at `commandLimit`, with duplicate lengths collapsed and their budgets merged. Tiers run shortest-first so minimal counterexamples are found early.
     ///
     /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:coverageInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"sca_coverage"` for sequential, `"concurrent_sca_coverage"` for concurrent.
     static func runSCACoverageRowLoop<Value>(
@@ -139,7 +139,7 @@ extension __ExhaustRuntime {
 
     /// Computes coverage tiers with deduplicated lengths and proportional budget allocation.
     ///
-    /// Raw tiers: 50% at `min(min + 4, max)`, 25% at `max(min + 4, max / 2)`, 25% at `max`. Tiers with duplicate lengths are collapsed and their budgets merged. The minimum sequence length for any tier is 2 (pairwise coverage requires at least 2 parameters).
+    /// Raw tiers: 50% at `min(5, commandLimit)`, 25% at `max(5, commandLimit / 2)`, 25% at `commandLimit`. Tiers with duplicate lengths are collapsed and their budgets merged. The minimum sequence length for any tier is 2 (pairwise coverage requires at least 2 parameters).
     private static func buildCoverageTiers(
         commandLimit: Int,
         totalBudget: UInt64

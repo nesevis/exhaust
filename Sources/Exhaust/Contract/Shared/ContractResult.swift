@@ -16,7 +16,7 @@ public struct ContractResult<Spec: ContractSpecBase> {
     /// Step-by-step execution trace of the failing sequence.
     public let trace: [TraceStep]
 
-    /// The system under test's state after executing the failing sequence. For concurrent contracts, this is the state from a sequential replay, the expected outcome without the race. Nil when the sequential replay also failed or the test timed out.
+    /// The system under test's state after executing the failing sequence. For concurrent contracts, this is the state from a sequential replay, the expected outcome without the race. `nil` when the sequential replay also failed or the test timed out.
     public let systemUnderTest: Spec.SystemUnderTest?
 
     /// The seed for deterministic replay, if available.
@@ -61,7 +61,7 @@ public enum ContractDiscoveryMethod: Equatable, Sendable, CustomStringConvertibl
 
     /// Encodes a replay seed string for reproducing a failure found by this discovery method.
     ///
-    /// Coverage results use the `U-N` wire format. Smoke tests encode a fixed seed. Random sampling and replay produce the standard seed-iteration format, returning `nil` when no seed is available.
+    /// Coverage results encode the row number as `U-{row}` (for example, `U-3` replays the third coverage row). Smoke tests encode a fixed seed. Random sampling and replay produce the standard seed-iteration format, returning `nil` when no seed is available.
     func encodeReplaySeed(seed: UInt64?, iteration: Int) -> String? {
         switch self {
             case .coverage:

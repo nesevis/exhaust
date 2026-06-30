@@ -1,6 +1,6 @@
 import ExhaustCore
 
-/// Routes a single probe outcome from the backend to the ``ContractMachine``'s scheduler.
+/// Outcome of a single backend probe, consumed by the ``ContractMachine`` to decide the next phase.
 enum ProbeOutcome {
     case pass
     case fail

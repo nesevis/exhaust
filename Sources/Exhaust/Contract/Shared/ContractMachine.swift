@@ -54,6 +54,7 @@ struct ContractMachine<Backend: ContractBackend> {
 
     // MARK: - Pull Source
 
+    /// Advances to the next source, returning `.candidateFound` on the first failure or `.sourceExhausted` when all sources pass or error.
     private mutating func stepPullSource() -> Transition {
         guard sourceIndex < sources.count else {
             phase = .finalize
@@ -121,6 +122,7 @@ struct ContractMachine<Backend: ContractBackend> {
 
     // MARK: - Prune
 
+    /// Removes skipped commands from the candidate before reduction. Short-circuits to `.timedOut` when the probe timed out, building the result directly and skipping reduction entirely.
     private mutating func stepPrune() -> Transition {
         guard let candidate else {
             phase = .pullSource

@@ -2,7 +2,7 @@ import ExhaustCore
 
 /// Runs contract probes sequentially where all markers are `.prefix`.
 ///
-/// Sync versus async spec bridging is handled by the entry point, which injects the appropriate execution closure at construction time.
+/// Used when the contract's execution model is sequential (no concurrency mode selected). The entry point injects a sync or async execution closure at construction time.
 struct SequentialContractBackend<Spec: ContractSpecBase>: ContractBackend {
     let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool
     let finalize: ([(ScheduleMarker, Spec.Command)]) -> (trace: [TraceStep], systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)

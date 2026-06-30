@@ -1,8 +1,8 @@
 import ExhaustCore
 
-/// Accumulates mutable state for a single contract test run.
+/// Mutable per-run state that stays on a single GCD thread while concurrent backends probe in parallel.
 ///
-/// Non-`Sendable` — the machine and context live on a single GCD thread. Concurrent backends internally parallelize during ``ContractBackend/probe(_:context:)`` but return synchronously before the context is mutated.
+/// Non-`Sendable` — concurrent backends internally parallelize during ``ContractBackend/probe(_:context:)`` but return synchronously before the context is mutated.
 final class ContractRunContext<Spec: ContractSpecBase> {
     let config: ResolvedConcurrentConfig
     let fileID: StaticString
@@ -10,7 +10,7 @@ final class ContractRunContext<Spec: ContractSpecBase> {
     let line: UInt
     let column: UInt
 
-    /// The generator used to prune and reduce the discovered candidate. Built from the multi-lane command generator, but retargeted by the machine to the candidate's own generator (for example, a concurrency-1 generator for smoke failures) so reduction stays consistent with the candidate's tree.
+    /// The generator used to prune and reduce the discovered candidate. The machine replaces this with the candidate's own generator before reduction so the choice sequence stays consistent with the candidate's tree.
     var sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
     let commandGen: Generator<Spec.Command>
     let commandLimit: Int

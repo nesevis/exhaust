@@ -222,7 +222,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
     /// Async counterpart of the synchronous witness check: replays the concurrent commands in realized completion order through the drain loop on a fresh spec.
     ///
-    /// Returns `true` only when that single sequential order reproduces every observed response and the oracle's final state, which makes it a concrete linearization witness and lets the caller pass without the full interleaving search. A differing response, an oracle mismatch, a replay throw, an ObjC exception, or a drain timeout all return `false`, so the caller falls through to ``checkLinearizability(taggedCommands:laneResponses:concurrentSpec:)``.
+    /// Returns `true` only when that single sequential order reproduces every observed response and the oracle's final state, which makes it a concrete linearization witness and lets the ``ContractMachine`` pass without the full interleaving search. A differing response, an oracle mismatch, a replay throw, an ObjC exception, or a drain timeout all return `false`, so the ``ContractMachine`` falls through to ``checkLinearizability(taggedCommands:laneResponses:concurrentSpec:)``.
     private func realizedOrderIsLinearizable(
         prefix: [Spec.Command],
         realizedOrder: [ObservedResponse<Spec.Command>],
@@ -447,6 +447,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
             }
             return false
         }
+        // nil = timed out waiting for reference replay
         if referenceFailed == nil {
             return (trace, true, true, spec.systemUnderTest, spec.failureDescription())
         }
@@ -458,6 +459,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         let oracleHeld = awaitOrTimeout("smoke-oracle", timeoutMultiplier: 5) {
             await oracleSpec.oracleCheck(referenceResult)
         }
+        // nil = timed out waiting for oracle check
         if oracleHeld == nil {
             return (trace, true, true, spec.systemUnderTest, spec.failureDescription())
         }
