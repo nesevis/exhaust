@@ -13,7 +13,6 @@ struct ResolvedConcurrentConfig {
     var idleTimeoutMilliseconds: Int = defaultIdleTimeout
     var suppressIssueReporting: Bool = false
     var suppressLogs: Bool = false
-    var collectOpenPBTStats: Bool = false
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
 
@@ -82,8 +81,6 @@ struct ResolvedConcurrentConfig {
                     }
                 case let .suppress(option):
                     config.applySuppress(option)
-                case .collectOpenPBTStats:
-                    config.collectOpenPBTStats = true
                 case let .onReport(closure):
                     config.onReportClosure = config.onReportClosure.map { chained in
                         { report in

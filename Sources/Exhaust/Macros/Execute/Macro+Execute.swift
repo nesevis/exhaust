@@ -24,7 +24,6 @@ import ExhaustCore
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
 /// - `.log(_)`: controls log verbosity. Defaults to `.error`.
-/// - `.collectOpenPBTStats`: collects per-example statistics in the OpenPBTStats JSON Lines format.
 ///
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
@@ -55,7 +54,6 @@ public macro execute<Spec: ContractSpec>(
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
 /// - `.log(_)`: controls log verbosity. Defaults to `.error`.
-/// - `.collectOpenPBTStats`: collects per-example statistics in the OpenPBTStats JSON Lines format.
 ///
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
