@@ -21,7 +21,8 @@ struct SequentialContractBackend<Spec: ContractSpecBase>: ContractBackend {
     ) -> ContractReduction<Spec.Command> {
         let config = Interpreters.ReducerConfiguration(
             maxStalls: 2,
-            enabledEncoders: [.deletion, .valueSearch, .floatSearch],
+            wallClockDeadlineNanoseconds: context.reductionDeadlineNanoseconds,
+            enabledEncoders: [.laneCollapse, .deletion, .valueSearch, .floatSearch],
             tuning: SchedulerTuning(relaxMaterializationBudget: 0)
         )
         let (reduced, stats, _) = __ExhaustRuntime.reduceContractCounterexample(

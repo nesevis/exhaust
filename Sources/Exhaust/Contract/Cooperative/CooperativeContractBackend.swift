@@ -46,7 +46,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             generator: context.sequenceGen,
             tree: tree,
             output: taggedCommands,
-            deadlineNanoseconds: context.reductionConfig.wallClockDeadlineNanoseconds,
+            deadlineNanoseconds: context.reductionDeadlineNanoseconds,
             property: oracleProperty
         )
         return ContractReduction(finalInput: result.value, stats: result.stats, timedOut: false)
