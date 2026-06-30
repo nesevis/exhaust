@@ -42,7 +42,9 @@ extension __ExhaustRuntime {
         }
 
         var lines: [String] = []
-        if let replaySeed = context.replaySeed {
+        if context.discoveryMethod == .smokeTest {
+            lines.append("\(context.specName) failure (found through sequential smoke test)")
+        } else if let replaySeed = context.replaySeed {
             lines.append("\(context.specName) failure (iteration \(context.iteration)/\(context.budget), found via \(context.discoveryMethod), seed \(replaySeed))")
         } else {
             lines.append("\(context.specName) failure (iteration \(context.iteration)/\(context.budget), found via \(context.discoveryMethod))")
