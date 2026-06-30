@@ -43,7 +43,7 @@ struct ContractMachineTests {
         } else {
             Issue.record("Expected .sourceError, got \(String(describing: transition))")
         }
-        #expect(context.deferredIssues.count == 1)
+        #expect(context.state.deferredIssues.count == 1)
     }
 
     @Test("Candidate found transitions through full pipeline to assembled")
@@ -94,7 +94,7 @@ struct ContractMachineTests {
 
         while machine.next() != nil {}
 
-        #expect(context.report.propertyInvocations > 0)
+        #expect(context.state.report.propertyInvocations > 0)
     }
 
     @Test("Each source's invocations are attributed to its bucket, including a passing source")
@@ -113,10 +113,10 @@ struct ContractMachineTests {
         while machine.next() != nil {}
 
         // The coverage source passed but its 5 probes are still counted; sampling's 3 land in their own bucket; reduction adds the StubBackend's 2.
-        #expect(context.report.coverageInvocations == 5)
-        #expect(context.report.randomSamplingInvocations == 3)
-        #expect(context.report.reductionInvocations == 2)
-        #expect(context.report.propertyInvocations == 10)
+        #expect(context.state.report.coverageInvocations == 5)
+        #expect(context.state.report.randomSamplingInvocations == 3)
+        #expect(context.state.report.reductionInvocations == 2)
+        #expect(context.state.report.propertyInvocations == 10)
     }
 
     @Test("A sampling-only run attributes no wall time to the coverage phase")
@@ -129,7 +129,7 @@ struct ContractMachineTests {
 
         while machine.next() != nil {}
 
-        #expect(context.report.coverageMilliseconds == 0)
+        #expect(context.state.report.coverageMilliseconds == 0)
     }
 
     @Test("Report seed comes from the sampling source even when the run passes")

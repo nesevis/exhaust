@@ -83,7 +83,7 @@ struct ContractMachine<Backend: ContractBackend> {
             let message = source.resolvedReplaySeed.map {
                 "Generator failed during regression replay (seed \($0.encoded)): \(error)"
             } ?? "Generator failed: \(error)"
-            context.deferredIssues.append(message)
+            context.state.deferredIssues.append(message)
             sourceIndex += 1
             return .sourceError(message)
         }
@@ -97,12 +97,12 @@ struct ContractMachine<Backend: ContractBackend> {
     ) {
         switch source.discoveryMethod {
             case .coverage:
-                context.report.coverageInvocations += invocations
-                context.report.coverageMilliseconds += elapsed
+                context.state.report.coverageInvocations += invocations
+                context.state.report.coverageMilliseconds += elapsed
             case .randomSampling, .smokeTest, .replay:
-                context.report.randomSamplingInvocations += invocations
+                context.state.report.randomSamplingInvocations += invocations
         }
-        context.report.propertyInvocations += invocations
+        context.state.report.propertyInvocations += invocations
         discoveryInvocations += invocations
         if let seed = source.reportedSeed {
             reportedSeed = seed
@@ -110,14 +110,14 @@ struct ContractMachine<Backend: ContractBackend> {
     }
 
     private mutating func accountCandidate(_ candidate: ContractCandidate<Backend.Spec.Command>) {
-        context.failureContext.timedOut = context.lastRunTimedOut
-        context.failureContext.seed = candidate.discoveryMethod == .coverage ? nil : candidate.seed
-        context.failureContext.originalCount = candidate.taggedCommands.count
-        context.failureContext.iteration = candidate.iteration
-        context.failureContext.budget = candidate.discoveryMethod == .coverage
+        context.state.failureContext.timedOut = context.lastRunTimedOut
+        context.state.failureContext.seed = candidate.discoveryMethod == .coverage ? nil : candidate.seed
+        context.state.failureContext.originalCount = candidate.taggedCommands.count
+        context.state.failureContext.iteration = candidate.iteration
+        context.state.failureContext.budget = candidate.discoveryMethod == .coverage
             ? context.config.budget.coverageBudget
             : context.config.budget.samplingBudget
-        context.failureContext.sequencesTested = discoveryInvocations
+        context.state.failureContext.sequencesTested = discoveryInvocations
     }
 
     // MARK: - Prune
@@ -139,7 +139,7 @@ struct ContractMachine<Backend: ContractBackend> {
                 context: context
             )
             if issueMessage.isEmpty == false {
-                context.deferredIssues.append(issueMessage)
+                context.state.deferredIssues.append(issueMessage)
             }
             result = built
             phase = .finalize
@@ -147,19 +147,19 @@ struct ContractMachine<Backend: ContractBackend> {
         }
 
         // Prune and reduce against the generator that produced this candidate so the choice sequence matches its tree. Smoke supplies a concurrency-1 generator, so smoke failures reduce sequentially regardless of the run's lane count.
-        context.sequenceGen = candidate.sequenceGen
+        context.state.sequenceGen = candidate.sequenceGen
         preReductionInvocations = context.invocationCounter.value
         reductionStopwatch = Stopwatch()
 
         nonisolated(unsafe) let unsafeBackend = backend
-        nonisolated(unsafe) let unsafeContext = context
+        nonisolated(unsafe) let capturedContext = context
         let pruneResult = __ExhaustRuntime.pruneSkippedCommands(
             value: candidate.taggedCommands,
             tree: candidate.tree,
-            generator: context.sequenceGen,
+            generator: context.state.sequenceGen,
             seed: candidate.seed,
             property: { commands in
-                unsafeBackend.probe(commands, context: unsafeContext) == .pass
+                unsafeBackend.probe(commands, context: capturedContext) == .pass
             },
             identifySkips: context.identifySkips,
             logEvent: "contract_skip_pruning"
@@ -192,12 +192,12 @@ struct ContractMachine<Backend: ContractBackend> {
 
     private mutating func stepRecordStats() -> Transition {
         let reductionInvocations = context.invocationCounter.value - preReductionInvocations
-        context.report.reductionMilliseconds = reductionStopwatch?.elapsedMilliseconds ?? 0
-        context.report.reductionInvocations = reductionInvocations
-        context.report.propertyInvocations += reductionInvocations
-        context.failureContext.reductionInvocations = reductionInvocations
+        context.state.report.reductionMilliseconds = reductionStopwatch?.elapsedMilliseconds ?? 0
+        context.state.report.reductionInvocations = reductionInvocations
+        context.state.report.propertyInvocations += reductionInvocations
+        context.state.failureContext.reductionInvocations = reductionInvocations
         if let stats = reduction?.stats {
-            context.report.applyReductionStats(stats)
+            context.state.report.applyReductionStats(stats)
         }
 
         phase = .assemble
@@ -223,7 +223,7 @@ struct ContractMachine<Backend: ContractBackend> {
         )
 
         if issueMessage.isEmpty == false {
-            context.deferredIssues.append(issueMessage)
+            context.state.deferredIssues.append(issueMessage)
         }
 
         result = built
@@ -236,9 +236,9 @@ struct ContractMachine<Backend: ContractBackend> {
     @discardableResult
     private mutating func stepFinalize() -> Transition? {
         if let onReport = context.config.onReportClosure {
-            context.report.seed = reportedSeed
-            context.report.totalMilliseconds = context.runStopwatch.elapsedMilliseconds
-            onReport(context.report)
+            context.state.report.seed = reportedSeed
+            context.state.report.totalMilliseconds = context.state.runStopwatch.elapsedMilliseconds
+            onReport(context.state.report)
         }
         phase = .done
         return nil
@@ -339,7 +339,7 @@ struct ContractPipeline<Backend: ContractBackend> {
                     break
             }
         }
-        return (machine.result, runContext.deferredIssues)
+        return (machine.result, runContext.state.deferredIssues)
     }
 
     func runWithRegressions(

@@ -32,15 +32,15 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
         context: ContractRunContext<Spec>
     ) -> ContractReduction<Spec.Command> {
         nonisolated(unsafe) let unsafeSelf = self
-        nonisolated(unsafe) let unsafeContext = context
+        nonisolated(unsafe) let capturedContext = context
         // A probe that times out during reduction is not a counterexample. Abort further reduction and keep the original failure as-is rather than reducing toward a hang or flipping the reported status to `.timeout`.
         nonisolated(unsafe) var reductionTimedOut = false
         let oracleProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.ContractProbeVerdict<Void> = { commands in
             guard reductionTimedOut == false else {
                 return .pass
             }
-            unsafeContext.invocationCounter.value += 1
-            let result = unsafeSelf.probe(commands, context: unsafeContext)
+            capturedContext.invocationCounter.value += 1
+            let result = unsafeSelf.probe(commands, context: capturedContext)
             switch result {
                 case .pass:
                     return .pass
@@ -54,7 +54,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
         }
 
         let result = __ExhaustRuntime.reduceConcurrentTwoPass(
-            generator: context.sequenceGen,
+            generator: context.state.sequenceGen,
             tree: tree,
             output: taggedCommands,
             deadlineNanoseconds: context.reductionDeadlineNanoseconds,
@@ -99,25 +99,25 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             discoveryMethod: discoveryMethod
         )
 
-        context.failureContext.specName = "\(Spec.self)"
-        context.failureContext.discoveryMethod = discoveryMethod
-        context.failureContext.replaySeed = replaySeed
-        context.failureContext.timedOut = timedOut
-        context.failureContext.oracleDescription = oracle.flatMap { oracle in
+        context.state.failureContext.specName = "\(Spec.self)"
+        context.state.failureContext.discoveryMethod = discoveryMethod
+        context.state.failureContext.replaySeed = replaySeed
+        context.state.failureContext.timedOut = timedOut
+        context.state.failureContext.oracleDescription = oracle.flatMap { oracle in
             guard let description = oracle.failureDescription else {
                 return nil
             }
             let indented = description.replacingOccurrences(of: "\n", with: "\n  ")
             return "Expected result (from sequential replay):\n  \(indented)"
         }
-        context.failureContext.failureDescription = oracle?.failureDescription
+        context.state.failureContext.failureDescription = oracle?.failureDescription
 
         let issueMessage: String = context.config.suppressIssueReporting
             ? ""
             : __ExhaustRuntime.renderFailure(
                 reduced,
                 trace: traceResult.trace,
-                context: context.failureContext
+                context: context.state.failureContext
             )
 
         return (result, issueMessage)

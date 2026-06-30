@@ -1,32 +1,29 @@
 import ExhaustCore
 
-/// Mutable per-run state that stays on a single GCD thread while concurrent backends probe in parallel.
+/// Bundles the immutable configuration and mutable per-run state for a single contract machine run.
 ///
-/// Non-`Sendable` — concurrent backends internally parallelize during ``ContractBackend/probe(_:context:)`` but return synchronously before the context is mutated.
-final class ContractRunContext<Spec: ContractSpecBase> {
+/// The struct itself is immutable — all mutation flows through the ``state`` reference. Concurrent backends internally parallelize during ``ContractBackend/probe(_:context:)`` but return synchronously before ``state`` is mutated.
+struct ContractRunContext<Spec: ContractSpecBase> {
     let config: ResolvedConcurrentConfig
+    let commandGen: Generator<Spec.Command>
+    let commandLimit: Int
+    let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>
+    let invocationCounter: UnsafeSendableBox<Int>
+    let lastRunTimedOutBox: UnsafeSendableBox<Bool>?
     let fileID: StaticString
     let filePath: StaticString
     let line: UInt
     let column: UInt
 
-    /// The generator used to prune and reduce the discovered candidate. The machine replaces this with the candidate's own generator before reduction so the choice sequence stays consistent with the candidate's tree.
-    var sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
-    let commandGen: Generator<Spec.Command>
-    let commandLimit: Int
-    let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>
-    let runStopwatch = Stopwatch()
+    let state: ContractRunState<Spec>
 
-    let invocationCounter: UnsafeSendableBox<Int>
-    let lastRunTimedOutBox: UnsafeSendableBox<Bool>?
     var lastRunTimedOut: Bool {
         lastRunTimedOutBox?.value ?? false
     }
 
-    var report = ExhaustReport()
-    var deferredIssues: [String] = []
-    var failureContext = __ExhaustRuntime.FailureContext()
-    var probeEvidence: __ExhaustRuntime.FailureEvidence<Spec>?
+    var reductionDeadlineNanoseconds: UInt64 {
+        config.budget.samplingBudget * 5 * 1_000_000
+    }
 
     init(
         config: ResolvedConcurrentConfig,
@@ -42,7 +39,6 @@ final class ContractRunContext<Spec: ContractSpecBase> {
         column: UInt
     ) {
         self.config = config
-        self.sequenceGen = sequenceGen
         self.commandGen = commandGen
         self.commandLimit = commandLimit
         self.identifySkips = identifySkips
@@ -52,9 +48,23 @@ final class ContractRunContext<Spec: ContractSpecBase> {
         self.filePath = filePath
         self.line = line
         self.column = column
+        state = ContractRunState(sequenceGen: sequenceGen)
     }
+}
 
-    var reductionDeadlineNanoseconds: UInt64 {
-        config.budget.samplingBudget * 5 * 1_000_000
+/// Mutable per-run accumulators for a contract machine run.
+///
+/// Reference type so backends can populate diagnostic state (``failureContext``, ``probeEvidence``) through a shared reference without `inout` threading.
+final class ContractRunState<Spec: ContractSpecBase> {
+    /// The generator used to prune and reduce the discovered candidate. The machine replaces this with the candidate's own generator before reduction so the choice sequence stays consistent with the candidate's tree.
+    var sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
+    let runStopwatch = Stopwatch()
+    var report = ExhaustReport()
+    var deferredIssues: [String] = []
+    var failureContext = __ExhaustRuntime.FailureContext()
+    var probeEvidence: __ExhaustRuntime.FailureEvidence<Spec>?
+
+    init(sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>) {
+        self.sequenceGen = sequenceGen
     }
 }

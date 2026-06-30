@@ -39,9 +39,9 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         let discoveryInvocations = context.invocationCounter.value
         let repetitions = PreemptiveReduction.confirmationRepetitions(discoveryIterations: discoveryInvocations)
 
-        nonisolated(unsafe) let unsafeContext = context
+        nonisolated(unsafe) let capturedContext = context
         let linearizableProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.ContractProbeVerdict<__ExhaustRuntime.FailureEvidence<Spec>> = { commands in
-            unsafeContext.invocationCounter.value += 1
+            capturedContext.invocationCounter.value += 1
             let partition = LanePartition(commands)
             for _ in 0 ..< repetitions {
                 if let evidence = __ExhaustRuntime.classifyFailure(
@@ -56,7 +56,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         }
 
         let twoPassResult = __ExhaustRuntime.reduceConcurrentTwoPass(
-            generator: context.sequenceGen,
+            generator: context.state.sequenceGen,
             tree: tree,
             output: taggedCommands,
             deadlineNanoseconds: context.reductionDeadlineNanoseconds,
@@ -66,7 +66,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         let reduced = twoPassResult.value.filter(\.0.isPrefix) + twoPassResult.value.filter { $0.0.isPrefix == false }
 
         if let cached = twoPassResult.lastEvidence {
-            context.probeEvidence = cached
+            context.state.probeEvidence = cached
             return ContractReduction(finalInput: reduced, stats: twoPassResult.stats, timedOut: false)
         }
 
@@ -76,7 +76,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
             discoveryIterations: discoveryInvocations
         )
         if let confirmed {
-            context.probeEvidence = confirmed
+            context.state.probeEvidence = confirmed
         }
         return ContractReduction(finalInput: reduced, stats: twoPassResult.stats, timedOut: false)
     }
@@ -105,7 +105,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         )
 
         // The system under test reported to the user is always the concurrent spec that exhibited the failure, never the sequential confirmation replay.
-        let systemUnderTest = context.probeEvidence?.outcome.concurrentSpec?.systemUnderTest
+        let systemUnderTest = context.state.probeEvidence?.outcome.concurrentSpec?.systemUnderTest
         let result = ContractResult<Spec>(
             status: replayResult.status,
             commands: replayResult.commands,
@@ -117,22 +117,22 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
             discoveryMethod: replayResult.discoveryMethod
         )
 
-        context.failureContext.specName = "\(Spec.self)"
-        context.failureContext.isPreemptive = true
-        context.failureContext.discoveryMethod = discoveryMethod
-        context.failureContext.replaySeed = replaySeed
-        context.failureContext.timedOut = context.lastRunTimedOut
-        context.failureContext.oracleDescription = failureDescription.map { "Expected state (from sequential replay):\n  \($0)" }
+        context.state.failureContext.specName = "\(Spec.self)"
+        context.state.failureContext.isPreemptive = true
+        context.state.failureContext.discoveryMethod = discoveryMethod
+        context.state.failureContext.replaySeed = replaySeed
+        context.state.failureContext.timedOut = context.lastRunTimedOut
+        context.state.failureContext.oracleDescription = failureDescription.map { "Expected state (from sequential replay):\n  \($0)" }
 
-        if let evidence = context.probeEvidence {
-            context.failureContext.failureDescription = (evidence.failureDescription ?? evidence.outcome.concurrentSpec?.failureDescription()).map { "Actual state (from concurrent execution):\n  \($0)" }
-            context.failureContext.laneResponseValues = __ExhaustRuntime.laneResponseValues(from: evidence.outcome)
-            context.failureContext.linearizabilityWitness = evidence.witness
+        if let evidence = context.state.probeEvidence {
+            context.state.failureContext.failureDescription = (evidence.failureDescription ?? evidence.outcome.concurrentSpec?.failureDescription()).map { "Actual state (from concurrent execution):\n  \($0)" }
+            context.state.failureContext.laneResponseValues = __ExhaustRuntime.laneResponseValues(from: evidence.outcome)
+            context.state.failureContext.linearizabilityWitness = evidence.witness
         }
 
         let issueMessage: String = context.config.suppressIssueReporting
             ? ""
-            : __ExhaustRuntime.renderPreemptiveFailure(reduced, context: context.failureContext)
+            : __ExhaustRuntime.renderPreemptiveFailure(reduced, context: context.state.failureContext)
 
         return (result, issueMessage)
     }

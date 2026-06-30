@@ -30,7 +30,7 @@ protocol ContractBackend<Spec> {
 
     /// Assembles a ``ContractResult`` from the reduced counterexample.
     ///
-    /// Populates `context.failureContext` with backend-specific diagnostic data (response witnesses for preemptive, oracle descriptions for cooperative).
+    /// Populates `context.state.failureContext` with backend-specific diagnostic data (response witnesses for preemptive, oracle descriptions for cooperative).
     func buildResult(
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,

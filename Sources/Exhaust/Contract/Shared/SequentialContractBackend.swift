@@ -28,7 +28,7 @@ struct SequentialContractBackend<Spec: ContractSpecBase>: ContractBackend {
         let (reduced, stats, _) = __ExhaustRuntime.reduceContractCounterexample(
             value: taggedCommands,
             tree: tree,
-            generator: context.sequenceGen,
+            generator: context.state.sequenceGen,
             config: config,
             property: property
         )
