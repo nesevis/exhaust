@@ -44,13 +44,7 @@ struct SequentialContractBackend<Spec: ContractSpecBase>: ContractBackend {
     ) -> (result: ContractResult<Spec>, issueMessage: String) {
         let outcome = finalize(reduced)
         let commands = reduced.map(\.1)
-
-        let replaySeed: String? = switch discoveryMethod {
-            case .coverage:
-                ReplaySeed.Resolved.encodeCoverageIteration(iteration)
-            default:
-                seed.map { ReplaySeed.Resolved.sampling(seed: $0, iteration: iteration).encoded }
-        }
+        let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
 
         let result = ContractResult<Spec>(
             status: .fail,
@@ -58,7 +52,7 @@ struct SequentialContractBackend<Spec: ContractSpecBase>: ContractBackend {
             originalCommands: originalCommands,
             trace: outcome.trace,
             systemUnderTest: outcome.systemUnderTest,
-            seed: seed,
+            seed: discoveryMethod.resultSeed(seed),
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod
         )

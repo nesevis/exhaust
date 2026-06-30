@@ -94,14 +94,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         discoveryMethod: ContractDiscoveryMethod,
         context: ContractRunContext<Spec>
     ) -> (result: ContractResult<Spec>, issueMessage: String) {
-        let replaySeed: String? = switch discoveryMethod {
-            case .coverage:
-                ReplaySeed.Resolved.encodeCoverageIteration(iteration)
-            case .smokeTest:
-                ReplaySeed.Resolved.sampling(seed: 0, iteration: 1).encoded
-            default:
-                seed.map { ReplaySeed.Resolved.sampling(seed: $0, iteration: iteration).encoded }
-        }
+        let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
 
         let (replayResult, failureDescription) = inner.buildResult(
             reduced: reduced,

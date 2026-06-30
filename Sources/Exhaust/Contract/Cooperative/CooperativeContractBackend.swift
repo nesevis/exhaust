@@ -75,19 +75,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             idleTimeoutMilliseconds: idleTimeout
         )
 
-        let replaySeed: String? = switch discoveryMethod {
-            case .coverage:
-                ReplaySeed.Resolved.encodeCoverageIteration(iteration)
-            case .smokeTest:
-                ReplaySeed.Resolved.sampling(seed: 0, iteration: 1).encoded
-            default:
-                seed.map { ReplaySeed.Resolved.sampling(seed: $0, iteration: iteration).encoded }
-        }
-
-        let resultSeed: UInt64? = switch discoveryMethod {
-            case .coverage, .smokeTest: nil
-            default: seed
-        }
+        let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
 
         let result = ContractResult<Spec>(
             status: timedOut ? .timeout : .fail,
@@ -95,7 +83,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             originalCommands: originalCommands,
             trace: traceResult.trace,
             systemUnderTest: oracle?.systemUnderTest,
-            seed: resultSeed,
+            seed: discoveryMethod.resultSeed(seed),
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod
         )
