@@ -13,22 +13,20 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
 
     func probe(
         _ candidate: [(ScheduleMarker, Spec.Command)],
-        context: ContractRunContext<Spec>
+        context _: ContractRunContext<Spec>
     ) -> ProbeOutcome {
         let partition = LanePartition(candidate)
         let outcome = inner.execute(candidate, partition: partition)
         if case .timedOut = outcome {
             return .timeout
         }
-        if let evidence = __ExhaustRuntime.classifyFailure(
+        // Evidence is established only by reduction and final confirmation, which run against the reduced sequence. Pruning probes run against pre-reduction sequences, so they must not leak their evidence into the final report.
+        let isFailure = __ExhaustRuntime.classifyFailure(
             taggedCommands: candidate,
             outcome: outcome,
             backend: inner
-        ) {
-            context.probeEvidence = evidence
-            return .fail
-        }
-        return .pass
+        ) != nil
+        return isFailure ? .fail : .pass
     }
 
     // MARK: - Reduce
@@ -93,6 +91,8 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         discoveryMethod: ContractDiscoveryMethod,
         context: ContractRunContext<Spec>
     ) -> (result: ContractResult<Spec>, issueMessage: String) {
+        // Report commands prefix-first. Reduction already orders its output this way; the timeout path skips reduction, so normalize here to keep the report consistent. The partition is idempotent, so the reduced path is unaffected.
+        let reduced = reduced.filter(\.0.isPrefix) + reduced.filter { $0.0.isPrefix == false }
         let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
 
         let (replayResult, failureDescription) = inner.buildResult(
@@ -104,7 +104,8 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
             timedOut: context.lastRunTimedOut
         )
 
-        let systemUnderTest = context.probeEvidence?.outcome.concurrentSpec?.systemUnderTest ?? replayResult.systemUnderTest
+        // The system under test reported to the user is always the concurrent spec that exhibited the failure, never the sequential confirmation replay.
+        let systemUnderTest = context.probeEvidence?.outcome.concurrentSpec?.systemUnderTest
         let result = ContractResult<Spec>(
             status: replayResult.status,
             commands: replayResult.commands,

@@ -169,6 +169,41 @@ struct ContractMachineTests {
     }
 }
 
+// MARK: - Coverage Source Selection
+
+@Suite("Contract coverage source selection", .tags(.contract))
+struct ContractCoverageSourceSelectionTests {
+    /// Whenever coverage runs, no replay target may be set. A replay (sampling seed, coverage row, or iteration) must reproduce its targeted failure, not launch a fresh full coverage sweep that could surface an unrelated failure and mask a stale regression seed.
+    @Test("A replay never also triggers a full coverage sweep")
+    func replayNeverTriggersCoverageSweep() {
+        let configGen = #gen(
+            .int(in: 0 ... 1_000_000).optional(),
+            .int(in: 0 ... 100).optional(),
+            .int(in: 1 ... 100).optional(),
+            .int(in: 0 ... 400)
+        ) { seedSource, coverageReplayRow, replayIteration, coverageBudget in
+            var config = ResolvedConcurrentConfig()
+            config.seed = seedSource.map { UInt64($0) }
+            config.coverageReplayRow = coverageReplayRow
+            config.replayIteration = replayIteration
+            config.budget = .custom(coverage: UInt64(coverageBudget), sampling: 200)
+            return config
+        }
+        #exhaust(configGen) { config in
+            config.shouldRunCoverage == false
+                || (config.seed == nil && config.coverageReplayRow == nil && config.replayIteration == nil)
+        }
+    }
+
+    /// Pins the other direction so the invariant above is not vacuously satisfied by an implementation that never runs coverage.
+    @Test("A fresh run with budget enables the coverage sweep")
+    func freshRunEnablesCoverage() {
+        var config = ResolvedConcurrentConfig()
+        config.budget = .custom(coverage: 200, sampling: 200)
+        #expect(config.shouldRunCoverage)
+    }
+}
+
 // MARK: - Stub Types
 
 private enum StubCommand: CustomStringConvertible {

@@ -18,7 +18,8 @@ struct ResolvedConcurrentConfig {
 
     var shouldRunCoverage: Bool {
         replayIteration == nil
-            && (seed == nil || coverageReplayRow != nil)
+            && seed == nil
+            && coverageReplayRow == nil
             && budget.coverageBudget > 0
     }
 

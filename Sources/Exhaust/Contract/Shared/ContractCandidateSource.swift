@@ -74,12 +74,13 @@ extension AnyContractCandidateSource {
 
             switch result {
                 case let .failure(value, tree, coverageInvocations):
+                    // Match the shape of a fresh coverage candidate so the replayed failure round-trips to the same `U-N` seed and nils its synthetic seed.
                     return ContractCandidate(
                         taggedCommands: value,
                         tree: tree,
-                        seed: UInt64(row),
-                        iteration: row,
-                        discoveryMethod: .replay,
+                        seed: UInt64(coverageInvocations),
+                        iteration: coverageInvocations,
+                        discoveryMethod: .coverage,
                         sourceInvocations: coverageInvocations
                     )
                 case .completed, .skipped:

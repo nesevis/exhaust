@@ -55,6 +55,9 @@ struct ContractReplayTests {
             )
         )
         #expect(replayed.commands.isEmpty == false, "Coverage row replay should reproduce the failure")
+        // A replayed coverage failure must stay a coverage result and round-trip to the same `U-N` seed, rather than degrading into a sampling-format seed that no longer targets the row.
+        #expect(replayed.discoveryMethod == .coverage)
+        #expect(replayed.replaySeed == replaySeed)
     }
 
     @Test("Seed-only replay (no iteration) still finds failure within budget")
@@ -172,6 +175,10 @@ struct ConcurrentContractReplayTests {
             )
         )
         #expect(replayed.commands.isEmpty == false, "Replay should reproduce the failure")
+        if initial.discoveryMethod == .coverage {
+            #expect(replayed.discoveryMethod == .coverage)
+            #expect(replayed.replaySeed == replaySeed)
+        }
     }
 }
 
