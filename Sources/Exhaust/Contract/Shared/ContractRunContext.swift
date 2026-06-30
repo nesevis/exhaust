@@ -1,10 +1,8 @@
 import ExhaustCore
 
-/// Mutable state for a single contract test run.
+/// Accumulates mutable state for a single contract test run.
 ///
-/// Non-`Sendable` — the machine and context live on a single GCD thread. Concurrent backends
-/// internally parallelize during ``ContractBackend/probe(_:context:)`` but return synchronously
-/// before the context is mutated.
+/// Non-`Sendable` — the machine and context live on a single GCD thread. Concurrent backends internally parallelize during ``ContractBackend/probe(_:context:)`` but return synchronously before the context is mutated.
 final class ContractRunContext<Spec: ContractSpecBase> {
     let config: ResolvedConcurrentConfig
     let fileID: StaticString
@@ -27,6 +25,7 @@ final class ContractRunContext<Spec: ContractSpecBase> {
     var report = ExhaustReport()
     var deferredIssues: [String] = []
     var failureContext = __ExhaustRuntime.FailureContext()
+    var probeEvidence: __ExhaustRuntime.FailureEvidence<Spec>?
 
     init(
         config: ResolvedConcurrentConfig,

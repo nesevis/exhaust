@@ -5,9 +5,9 @@ import Foundation
 // MARK: - Shared SCA Row Loop
 
 extension __ExhaustRuntime {
-    /// Raw outcome of the SCA row loop before caller-specific failure handling.
+    /// Reports the raw outcome of the SCA row loop before caller-specific failure handling.
     ///
-    /// Each caller (sequential, concurrent) handles the ``failure`` case differently. The sequential path prunes skipped commands and reduces directly, while the concurrent path delegates to ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``.
+    /// Each caller handles the ``failure`` case differently. The sequential path prunes skipped commands and reduces directly, while the concurrent source wraps the value in a ``ContractCandidate`` for the machine to reduce.
     enum SCARowLoopResult<Value> {
         /// A counterexample was found at the given coverage iteration.
         case failure(value: Value, tree: ChoiceTree, coverageInvocations: Int)
@@ -179,74 +179,6 @@ extension __ExhaustRuntime {
     }
 }
 
-// MARK: - Sequential SCA Coverage
-
-extension __ExhaustRuntime {
-    /// Runs SCA coverage for sequential contract command sequences.
-    ///
-    /// Delegates to the shared ``runSCACoverageRowLoop(sequenceGen:commandGen:commandLimit:coverageBudget:skipToRow:logEventPrefix:property:)`` for the covering array iteration, then prunes skipped commands and reduces any counterexample found.
-    ///
-    /// Returns ``SCAOutcome/skipped`` when domain construction fails or the domain is too small for pairwise coverage, so the caller can fall through to generic coverage and random sampling.
-    static func runSCACoverage<Command>(
-        sequenceGen: Generator<[Command]>,
-        commandGen: Generator<Command>,
-        commandLimit: Int,
-        coverageBudget: UInt64,
-        skipToRow: Int? = nil,
-        property: @escaping @Sendable ([Command]) -> Bool,
-        identifySkips: @escaping @Sendable ([Command]) -> Set<Int>
-    ) -> SCAOutcome<Command> {
-        let result = runSCACoverageRowLoop(
-            sequenceGen: sequenceGen,
-            commandGen: commandGen,
-            commandLimit: commandLimit,
-            coverageBudget: coverageBudget,
-            skipToRow: skipToRow,
-            logEventPrefix: "sca_coverage",
-            property: property
-        )
-        switch result {
-            case let .failure(value, tree, coverageInvocations):
-                // Single-threaded: the reducer calls the property sequentially on the pipeline thread.
-                let reductionPropertyInvocations = UnsafeSendableBox(0)
-                let countingProperty: @Sendable ([Command]) -> Bool = { input in
-                    reductionPropertyInvocations.value += 1
-                    return property(input)
-                }
-                let reductionStopwatch = Stopwatch()
-                let (reduceValue, reduceTree) = pruneSkippedCommands(
-                    value: value,
-                    tree: tree,
-                    generator: sequenceGen,
-                    seed: UInt64(coverageInvocations),
-                    property: countingProperty,
-                    identifySkips: identifySkips,
-                    logEvent: "contract_skip_pruning"
-                )
-                let (reduced, stats, _) = reduceContractCounterexample(
-                    value: reduceValue,
-                    tree: reduceTree,
-                    generator: sequenceGen,
-                    config: .init(maxStalls: 2),
-                    property: countingProperty
-                )
-                let reductionMilliseconds = reductionStopwatch.elapsedMilliseconds
-                return .failure(
-                    commands: reduced,
-                    original: value,
-                    coverageInvocations: coverageInvocations,
-                    reductionStats: stats,
-                    reductionInvocations: reductionPropertyInvocations.value,
-                    reductionMilliseconds: reductionMilliseconds
-                )
-            case let .completed(coverageInvocations):
-                return .completed(coverageInvocations: coverageInvocations)
-            case .skipped:
-                return .skipped
-        }
-    }
-}
-
 // MARK: - Skip-Aware Pruning
 
 extension __ExhaustRuntime {
@@ -332,9 +264,6 @@ extension __ExhaustRuntime {
         ),
             property(rematerialized) == false
         {
-            if rematerialized.count == 1 {
-                print("[skip-prune] degenerate: \(value.count) → \(rematerialized.count), skipped \(skippedIndices.sorted()), rematerialized: \(rematerialized)")
-            }
             return (rematerialized, rematerializedTree)
         }
         return (value, tree)
@@ -363,33 +292,6 @@ extension __ExhaustRuntime {
             return (reduced, result.stats, true)
         }
         return (value, result.stats, false)
-    }
-
-    /// Variant of ``reduceContractCounterexample(value:tree:generator:config:property:)`` that also returns the post-reduction choice tree for use as input to a subsequent reduction pass.
-    static func reduceContractCounterexampleWithTree<Value>(
-        value: Value,
-        tree: ChoiceTree,
-        generator: Generator<Value>,
-        config: Interpreters.ReducerConfiguration,
-        property: @escaping @Sendable (Value) -> Bool
-    ) -> (value: Value, tree: ChoiceTree, stats: ReductionStats?, reduced: Bool) {
-        guard let result = try? Interpreters.choiceGraphReduceCollectingStats(
-            gen: generator,
-            tree: tree,
-            output: value,
-            config: config,
-            property: property
-        ) else {
-            return (value, tree, nil, false)
-        }
-        switch result.outcome {
-            case let .reduced(_, reducedTree, reduced):
-                return (reduced, reducedTree, result.stats, true)
-            case let .unreduced(_, unreducedTree, _):
-                return (value, unreducedTree, result.stats, false)
-            case .failure:
-                return (value, tree, result.stats, false)
-        }
     }
 
     /// Reduces a concurrent contract counterexample in two passes: structural (lane collapse + deletion) then value minimization.
@@ -478,6 +380,54 @@ extension __ExhaustRuntime {
             stats: mergedStats,
             lastEvidence: lastEvidence
         )
+    }
+}
+
+// MARK: - Sequential Smoke Property
+
+extension __ExhaustRuntime {
+    /// Builds a sequential property for the smoke source: runs commands in order, checks invariants after each step.
+    ///
+    /// Shared by all contract backends. The sync variant handles `ContractSpec`; the async variant bridges through `_blockingAwaitSemaphore`. Both are used as the smoke source's property closure and as the sequential backend's probe property.
+    static func syncSequentialProperty<Spec: ContractSpec>(_: Spec.Type) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
+        { tagged in
+            let spec = Spec()
+            for (_, command) in tagged {
+                do {
+                    try spec.run(command)
+                    try spec.checkInvariants()
+                } catch is ContractSkip {
+                    continue
+                } catch {
+                    return false
+                }
+            }
+            return true
+        }
+    }
+
+    /// Async variant of the sequential smoke property, bridging through `_blockingAwaitSemaphore`.
+    static func asyncSequentialProperty<Spec: AsyncContractSpec>(
+        specInit: @escaping () -> Spec
+    ) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
+        nonisolated(unsafe) let specInit = specInit
+        return { tagged in
+            let passed = _blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+                let spec = specInit()
+                for (_, command) in tagged {
+                    do {
+                        try await spec.run(command)
+                        try await spec.checkInvariants()
+                    } catch is ContractSkip {
+                        continue
+                    } catch {
+                        return false
+                    }
+                }
+                return true
+            }
+            return passed ?? false
+        }
     }
 }
 
@@ -574,27 +524,5 @@ extension __ExhaustRuntime {
         )
 
         return limit
-    }
-}
-
-// MARK: - SCA Outcome
-
-extension __ExhaustRuntime {
-    /// Outcome of an SCA coverage run.
-    enum SCAOutcome<Command> {
-        /// SCA found a counterexample.
-        case failure(commands: [Command], original: [Command], coverageInvocations: Int, reductionStats: ReductionStats?, reductionInvocations: Int, reductionMilliseconds: Double)
-        /// SCA ran its covering array to completion without finding a failure.
-        case completed(coverageInvocations: Int)
-        /// SCA was not applicable or was skipped before covering anything.
-        case skipped
-
-        /// Whether SCA ran to completion, covering command orderings.
-        var isCompleted: Bool {
-            switch self {
-                case .completed: true
-                case .failure, .skipped: false
-            }
-        }
     }
 }

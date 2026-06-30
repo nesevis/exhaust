@@ -90,20 +90,7 @@ public extension __ExhaustRuntime {
                 commands.map { (ScheduleMarker.prefix, $0) }
             }
 
-            let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
-                let spec = Spec()
-                for (_, command) in tagged {
-                    do {
-                        try spec.run(command)
-                        try spec.checkInvariants()
-                    } catch is ContractSkip {
-                        continue
-                    } catch {
-                        return false
-                    }
-                }
-                return true
-            }
+            let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = syncSequentialProperty(Spec.self)
 
             let syncSkipIdentifier = Spec.skipIdentifier
             let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { tagged in
@@ -249,22 +236,7 @@ private extension __ExhaustRuntime {
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
-        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
-            __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
-                let spec = specInit()
-                for (_, command) in tagged {
-                    do {
-                        try await spec.run(command)
-                        try await spec.checkInvariants()
-                    } catch is ContractSkip {
-                        continue
-                    } catch {
-                        return false
-                    }
-                }
-                return true
-            }!
-        }
+        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = asyncSequentialProperty(specInit: specInit)
 
         let asyncSkipIdentifier = Spec.skipIdentifier(specInit: specInit)
         let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { tagged in

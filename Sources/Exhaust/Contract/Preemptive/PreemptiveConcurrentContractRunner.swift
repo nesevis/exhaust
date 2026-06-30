@@ -40,20 +40,240 @@ public extension __ExhaustRuntime {
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
-        let backend = PreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
+        let innerBackend = PreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
         let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
-        let (result, deferredIssues, report): (ContractResult<Spec>?, [String], ExhaustReport) = DispatchQueue.global().sync {
+        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = DispatchQueue.global().sync {
             ExhaustLog.withConfiguration(config.logConfiguration) {
-                runPreemptivePipeline(backend: backend, config: config, regressionSeeds: regressionSeeds)
+                runPreemptiveMachine(
+                    innerBackend: innerBackend,
+                    config: config,
+                    regressionSeeds: regressionSeeds,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
             }
         }
-        config.onReportClosure?(report)
         for issue in deferredIssues {
             reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }
         return result
+    }
+}
+
+// MARK: - Machine Pipeline
+
+extension __ExhaustRuntime {
+    static func runPreemptiveMachine<Inner: PreemptiveBackend>(
+        innerBackend: Inner,
+        config: ResolvedConcurrentConfig,
+        regressionSeeds: [String],
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
+    ) -> (result: ContractResult<Inner.Spec>?, deferredIssues: [String]) {
+        typealias Spec = Inner.Spec
+        var deferredIssues: [String] = []
+
+        let commandGen = Spec.commandGenerator.gen
+        let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
+
+        guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
+            deferredIssues.append("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure.")
+            return (nil, deferredIssues)
+        }
+        let sequenceGen = Gen.arrayOf(
+            taggedCommandGen,
+            within: 1 ... UInt64(commandLimit),
+            scaling: .constant
+        )
+
+        let identifySkips = innerBackend.makeIdentifySkips()
+
+        let backend = PreemptiveContractBackend(
+            inner: innerBackend,
+            concurrencyLevel: config.concurrencyLevel
+        )
+
+        let invocationCounter = UnsafeSendableBox(0)
+        let lastRunTimedOut = UnsafeSendableBox(false)
+        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+            invocationCounter.value += 1
+            let partition = LanePartition(taggedCommands)
+            let outcome = innerBackend.execute(taggedCommands, partition: partition)
+            if outcome.timedOut {
+                lastRunTimedOut.value = true
+            }
+            return classifyFailure(
+                taggedCommands: taggedCommands,
+                outcome: outcome,
+                backend: innerBackend
+            ) == nil
+        }
+
+        // Regression seeds
+        if config.coverageReplayRow == nil, config.seed == nil {
+            for encodedSeed in regressionSeeds {
+                guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
+                    deferredIssues.append("Invalid regression seed: \(encodedSeed)")
+                    continue
+                }
+
+                var replayConfig = config
+                switch decoded {
+                    case let .coverage(row):
+                        replayConfig.coverageReplayRow = row
+                        let needed = UInt64(row) + 1
+                        if replayConfig.budget.coverageBudget < needed {
+                            replayConfig.budget = .custom(
+                                coverage: needed,
+                                sampling: replayConfig.budget.samplingBudget
+                            )
+                        }
+                    case let .sampling(seed, iteration):
+                        replayConfig.seed = seed
+                        replayConfig.replayIteration = iteration
+                }
+
+                let runContext = ContractRunContext<Spec>(
+                    config: replayConfig,
+                    sequenceGen: sequenceGen,
+                    commandGen: commandGen,
+                    commandLimit: commandLimit,
+                    identifySkips: identifySkips,
+                    invocationCounter: invocationCounter,
+                    lastRunTimedOut: lastRunTimedOut,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+
+                let sources = buildPreemptiveSources(
+                    config: replayConfig,
+                    sequenceGen: sequenceGen,
+                    commandGen: commandGen,
+                    commandLimit: commandLimit,
+                    concurrencyLevel: config.concurrencyLevel,
+                    taggedCommandGen: taggedCommandGen,
+                    innerBackend: innerBackend,
+                    property: property,
+                    lastRunTimedOut: lastRunTimedOut
+                )
+
+                var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+                if let result = machine.run() {
+                    deferredIssues.append(contentsOf: runContext.deferredIssues)
+                    return (result, deferredIssues)
+                } else if config.suppressIssueReporting == false {
+                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
+                }
+            }
+        }
+
+        let runContext = ContractRunContext<Spec>(
+            config: config,
+            sequenceGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            identifySkips: identifySkips,
+            invocationCounter: invocationCounter,
+            lastRunTimedOut: lastRunTimedOut,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+
+        let sources = buildPreemptiveSources(
+            config: config,
+            sequenceGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            concurrencyLevel: config.concurrencyLevel,
+            taggedCommandGen: taggedCommandGen,
+            innerBackend: innerBackend,
+            property: property,
+            lastRunTimedOut: lastRunTimedOut
+        )
+
+        var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+        let result = machine.run()
+        deferredIssues.append(contentsOf: runContext.deferredIssues)
+        return (result, deferredIssues)
+    }
+
+    static func buildPreemptiveSources<Inner: PreemptiveBackend>(
+        config: ResolvedConcurrentConfig,
+        sequenceGen: Generator<[(ScheduleMarker, Inner.Spec.Command)]>,
+        commandGen: Generator<Inner.Spec.Command>,
+        commandLimit: Int,
+        concurrencyLevel: Int,
+        taggedCommandGen: Generator<(ScheduleMarker, Inner.Spec.Command)>,
+        innerBackend: Inner,
+        property: @escaping @Sendable ([(ScheduleMarker, Inner.Spec.Command)]) -> Bool,
+        lastRunTimedOut _: UnsafeSendableBox<Bool>
+    ) -> [AnyContractCandidateSource<Inner.Spec.Command>] {
+        var sources: [AnyContractCandidateSource<Inner.Spec.Command>] = []
+
+        if let row = config.coverageReplayRow {
+            sources.append(.coverageReplay(
+                row: row,
+                sequenceGen: sequenceGen,
+                commandGen: commandGen,
+                commandLimit: commandLimit,
+                coverageBudget: max(config.budget.coverageBudget, UInt64(row) + 1),
+                concurrencyLevel: concurrencyLevel,
+                property: property
+            ))
+        }
+
+        if let replayIteration = config.replayIteration, let seed = config.seed {
+            sources.append(.samplingReplay(
+                replaySeed: seed,
+                replayIteration: replayIteration,
+                sequenceGen: sequenceGen,
+                property: property
+            ))
+        }
+
+        if let smokeTaggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: 1) {
+            let smokeGen = Gen.arrayOf(smokeTaggedCommandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
+            let smokeProperty: @Sendable ([(ScheduleMarker, Inner.Spec.Command)]) -> Bool = { tagged in
+                innerBackend.runSmoke(tagged.map(\.1)).failed == false
+            }
+            sources.append(.smoke(sequenceGen: smokeGen, property: smokeProperty))
+        }
+
+        if config.shouldRunCoverage {
+            sources.append(.coverage(
+                sequenceGen: sequenceGen,
+                commandGen: commandGen,
+                commandLimit: commandLimit,
+                coverageBudget: config.budget.coverageBudget,
+                concurrencyLevel: concurrencyLevel,
+                sequenceGenForLength: { range in
+                    Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
+                },
+                property: property
+            ))
+        }
+
+        if config.replayIteration == nil, config.coverageReplayRow == nil {
+            let seed = config.seed ?? Xoshiro256().seed
+            sources.append(.sampling(
+                sequenceGen: sequenceGen,
+                seed: seed,
+                samplingBudget: config.budget.samplingBudget,
+                property: property
+            ))
+        }
+
+        return sources
     }
 }
 
@@ -125,14 +345,14 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         let sequentialSpec = Spec()
 
         if runAllCommandsCatchingObjC(partition.prefixCommands, on: concurrentSpec) == false {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: concurrentSpec)
         }
         if runAllCommandsCatchingObjC(partition.prefixCommands, on: sequentialSpec) == false {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: concurrentSpec)
         }
 
         if runAllCommandsCatchingObjC(partition.concurrentCommands, on: sequentialSpec) == false {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: concurrentSpec)
         }
 
         let perLaneResponses = partition.laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
@@ -179,20 +399,20 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
-                return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
+                return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: concurrentSpec)
             }
         } else {
             group.wait()
         }
 
         if caughtException.value != nil || commandFailed.value {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: concurrentSpec)
         }
 
         do {
             try concurrentSpec.checkInvariants()
         } catch {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: concurrentSpec)
         }
 
         let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)

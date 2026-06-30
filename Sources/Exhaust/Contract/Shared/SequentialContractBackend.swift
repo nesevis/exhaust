@@ -1,9 +1,8 @@
 import ExhaustCore
 
-/// Contract backend for sequential execution where all markers are `.prefix`.
+/// Runs contract probes sequentially where all markers are `.prefix`.
 ///
-/// Sync versus async spec bridging is handled by the entry point, which injects the appropriate
-/// execution closure at construction time.
+/// Sync versus async spec bridging is handled by the entry point, which injects the appropriate execution closure at construction time.
 struct SequentialContractBackend<Spec: ContractSpecBase>: ContractBackend {
     let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool
     let finalize: ([(ScheduleMarker, Spec.Command)]) -> (trace: [TraceStep], systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)

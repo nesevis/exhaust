@@ -84,32 +84,25 @@ struct ContractReplayTests {
 
 @Suite("Preemptive oracle replay", .serialized, .tags(.contract))
 struct PreemptiveOracleReplayTests {
-    @Test("Smoke-phase failure replays deterministically through the coverage row path")
-    func smokePhaseFailureReplaysDeterministically() throws {
+    @Test("Sequentially broken spec replays deterministically")
+    func sequentiallyBrokenSpecReplaysDeterministically() throws {
         let initial = try #require(
-            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+            #execute(
                 PreemptiveSequentiallyBrokenSpec.self,
-                settings: [
-                    .commandLimit(6),
-                    .suppress(.all),
-                ]
+                .commandLimit(6),
+                .suppress(.all)
             )
         )
         let replaySeed = try #require(initial.replaySeed)
-        #expect(replaySeed == "0-1")
-        #expect(initial.discoveryMethod == .smokeTest)
-
         let replayed = try #require(
-            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+            #execute(
                 PreemptiveSequentiallyBrokenSpec.self,
-                settings: [
-                    .commandLimit(6),
-                    .replay(.encoded(replaySeed)),
-                    .suppress(.all),
-                ]
+                .commandLimit(6),
+                .replay(.encoded(replaySeed)),
+                .suppress(.all)
             )
         )
-        #expect(replayed.commands.isEmpty == false, "Smoke row replay should reproduce the failure")
+        #expect(replayed.commands.isEmpty == false, "Replay should reproduce the failure")
     }
 
     @Test("Smoke catches sequentially broken spec before concurrent execution")

@@ -273,26 +273,9 @@ private extension __ExhaustRuntime {
             column: column
         )
 
-        nonisolated(unsafe) let unsafeSpecInit = specInit
         var smokeProperty: (@Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool)?
         if concurrencyLevel > 1 {
-            smokeProperty = { tagged in
-                let passed = __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
-                    let spec = unsafeSpecInit()
-                    for (_, command) in tagged {
-                        do {
-                            try await spec.run(command)
-                            try await spec.checkInvariants()
-                        } catch is ContractSkip {
-                            continue
-                        } catch {
-                            return false
-                        }
-                    }
-                    return true
-                }
-                return passed ?? false
-            }
+            smokeProperty = asyncSequentialProperty(specInit: specInit)
         }
 
         let sources = buildConcurrentSources(

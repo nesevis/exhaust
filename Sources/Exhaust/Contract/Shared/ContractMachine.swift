@@ -5,7 +5,6 @@ import ExhaustCore
 /// Pulls candidates from prioritized sources, dispatches to a ``ContractBackend`` for probing, and reduces the first failure found.
 ///
 /// Modeled after ``ReductionMachine``'s stepped architecture. Each call to ``next()`` advances one phase and returns a ``Transition`` describing what happened. The caller iterates until `nil`:
-///
 /// ```swift
 /// var machine = ContractMachine(...)
 /// while let transition = machine.next() {
@@ -84,12 +83,9 @@ struct ContractMachine<Backend: ContractBackend> {
                 commandCount: found.taggedCommands.count
             )
         } catch {
-            let message: String
-            if let resolved = sources[sourceIndex].resolvedReplaySeed {
-                message = "Generator failed during regression replay (seed \(resolved.encoded)): \(error)"
-            } else {
-                message = "Generator failed: \(error)"
-            }
+            let message = sources[sourceIndex].resolvedReplaySeed.map {
+                "Generator failed during regression replay (seed \($0.encoded)): \(error)"
+            } ?? "Generator failed: \(error)"
             context.deferredIssues.append(message)
             sourceIndex += 1
             return .sourceError(message)
@@ -114,7 +110,7 @@ struct ContractMachine<Backend: ContractBackend> {
                 }
                 context.report.randomSamplingInvocations += candidate.sourceInvocations
             case .smokeTest:
-                context.report.coverageInvocations += candidate.sourceInvocations
+                context.report.randomSamplingInvocations += candidate.sourceInvocations
         }
         context.report.propertyInvocations += candidate.sourceInvocations
 
@@ -158,7 +154,7 @@ struct ContractMachine<Backend: ContractBackend> {
         }
 
         phase = .prune
-        return .timedOut
+        return .pruned
     }
 
     // MARK: - Prune
@@ -270,6 +266,7 @@ struct ContractMachine<Backend: ContractBackend> {
 // MARK: - Phase
 
 extension ContractMachine {
+    /// Tracks which pipeline step the machine will execute on the next call to ``next()``.
     enum Phase {
         case pullSource
         case accountCandidate
@@ -286,6 +283,7 @@ extension ContractMachine {
 // MARK: - Transition
 
 extension ContractMachine {
+    /// Describes what happened during a single ``next()`` step, returned to the caller for logging or diagnostics.
     enum Transition {
         case sourceExhausted
         case sourceError(String)

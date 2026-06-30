@@ -41,16 +41,23 @@ public extension __ExhaustRuntime {
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
-        let backend = AsyncPreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
+        let innerBackend = AsyncPreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
         let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
-        let (result, deferredIssues, report): (ContractResult<Spec>?, [String], ExhaustReport) = await __ExhaustRuntime.dispatchToGCD {
+        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
             ExhaustLog.withConfiguration(config.logConfiguration) {
-                runPreemptivePipeline(backend: backend, config: config, regressionSeeds: regressionSeeds)
+                runPreemptiveMachine(
+                    innerBackend: innerBackend,
+                    config: config,
+                    regressionSeeds: regressionSeeds,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
             }
         }
-        config.onReportClosure?(report)
         for issue in deferredIssues {
             reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }

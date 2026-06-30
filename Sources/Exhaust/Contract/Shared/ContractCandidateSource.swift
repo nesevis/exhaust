@@ -10,7 +10,7 @@ struct ContractCandidate<Command> {
     let sourceInvocations: Int
 }
 
-/// Type-erased source that produces failing candidate command sequences for the ``ContractMachine``. Each source owns its iteration state internally.
+/// Produces failing candidate command sequences for the ``ContractMachine``, owning its iteration state internally.
 struct AnyContractCandidateSource<Command> {
     let resolvedReplaySeed: ReplaySeed.Resolved?
     private let produceNext: () throws -> ContractCandidate<Command>?

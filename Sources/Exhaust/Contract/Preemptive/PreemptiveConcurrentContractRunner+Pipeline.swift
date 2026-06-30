@@ -335,9 +335,9 @@ private extension __ExhaustRuntime {
     }
 }
 
-// MARK: - Helpers
+// MARK: - Shared Helpers
 
-private extension __ExhaustRuntime {
+extension __ExhaustRuntime {
     /// Determines whether a failing outcome represents a confirmed linearizability violation. Returns `nil` when the execution passed or when linearizability holds despite the oracle flag.
     static func classifyFailure<Backend: PreemptiveBackend>(
         taggedCommands: [(ScheduleMarker, Backend.Spec.Command)],
@@ -379,6 +379,42 @@ private extension __ExhaustRuntime {
         return values
     }
 
+    /// Re-executes the reduced input to confirm the race is reproducible when no reduction probe cached evidence.
+    static func confirmRealFailure<Backend: PreemptiveBackend>(
+        backend: Backend,
+        input: [(ScheduleMarker, Backend.Spec.Command)],
+        discoveryIterations: Int
+    ) -> FailureEvidence<Backend.Spec>? {
+        let partition = LanePartition(input)
+        for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
+            if let confirmed = classifyFailure(
+                taggedCommands: input,
+                outcome: backend.execute(input, partition: partition),
+                backend: backend
+            ) {
+                return confirmed
+            }
+        }
+        return nil
+    }
+
+    /// Renders a preemptive failure message with the preemptive trace format.
+    static func renderPreemptiveFailure(
+        _ input: [(ScheduleMarker, some CustomStringConvertible)],
+        context: FailureContext
+    ) -> String {
+        let trace = buildPreemptiveTrace(
+            input,
+            laneResponseValues: context.laneResponseValues,
+            linearizabilityWitness: context.linearizabilityWitness
+        )
+        return renderFailure(input, trace: trace, context: context)
+    }
+}
+
+// MARK: - Pipeline-Specific Helpers
+
+private extension __ExhaustRuntime {
     /// Builds the oracle-based property closure, closing over the shared invocation counter and timeout flag.
     static func makeProperty<Backend: PreemptiveBackend>(
         _ context: inout PreemptivePipelineContext<Backend>
@@ -418,23 +454,12 @@ private extension __ExhaustRuntime {
         }
     }
 
-    /// Re-executes the reduced input to confirm the race is reproducible, since prior reduction probes may not have triggered it.
     static func confirmRealFailure<Backend: PreemptiveBackend>(
         _ context: borrowing PreemptivePipelineContext<Backend>,
         input: [(ScheduleMarker, Backend.Spec.Command)],
         discoveryIterations: Int
     ) -> FailureEvidence<Backend.Spec>? {
-        let partition = LanePartition(input)
-        for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
-            if let confirmed = classifyFailure(
-                taggedCommands: input,
-                outcome: context.backend.execute(input, partition: partition),
-                backend: context.backend
-            ) {
-                return confirmed
-            }
-        }
-        return nil
+        confirmRealFailure(backend: context.backend, input: input, discoveryIterations: discoveryIterations)
     }
 
     static func finalizeReport(

@@ -6,21 +6,19 @@ import Testing
 @Suite("Preemptive concurrent contract: smoke test", .serialized, .tags(.contract))
 struct PreemptiveSmokeTestTests {
     @Test("Smoke test catches sequential bug before concurrent phase")
-    func smokeTestCatchesSequentialBugBeforeConcurrentPhase() async throws {
-        let result = try #require(
-            await __ExhaustRuntime.dispatchToGCD {
-                __ExhaustRuntime.__runPreemptiveConcurrentContract(
-                    SequentiallyBrokenSpec.self,
-                    settings: [
-                        .concurrent(.two),
-                        .commandLimit(10),
-                        .budget(.custom(coverage: 0, sampling: 0)),
-                        .suppress(.issueReporting),
-                    ]
-                )
-            }
-        )
-        #expect(result.commands.isEmpty == false)
+    func smokeTestCatchesSequentialBugBeforeConcurrentPhase() async {
+        let result = await __ExhaustRuntime.dispatchToGCD {
+            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                SequentiallyBrokenSpec.self,
+                settings: [
+                    .concurrent(.two),
+                    .commandLimit(10),
+                    .budget(.custom(coverage: 0, sampling: 0)),
+                    .suppress(.issueReporting),
+                ]
+            )
+        }
+        #expect(result?.commands.isEmpty == false)
     }
 
     @Test("Smoke test failure carries specific replay seed")
@@ -75,7 +73,7 @@ final class SequentiallyBrokenSpec {
 
 // MARK: - SUT
 
-/// Broken even under sequential access — decrement is a no-op.
+/// Broken even under sequential access — increment adds 2 instead of 1.
 /// Marked `@unchecked Sendable` to satisfy `ContractSpec`; intentionally not thread-safe.
 final class BrokenCounter: @unchecked Sendable, CustomDebugStringConvertible {
     private var _value: Int = 0
@@ -89,10 +87,10 @@ final class BrokenCounter: @unchecked Sendable, CustomDebugStringConvertible {
     }
 
     func increment() {
-        _value += 1
+        _value += 2
     }
 
     func decrement() {
-        // Bug: does nothing
+        _value -= 1
     }
 }

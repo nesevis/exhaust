@@ -1,6 +1,6 @@
 import ExhaustCore
 
-/// Contract backend for cooperative concurrent execution via ``drainSchedule(taggedCommands:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``.
+/// Runs contract probes via cooperative concurrent execution through ``drainSchedule(taggedCommands:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``.
 ///
 /// Async-only because `.tasks` requires ``AsyncContractSpec``. The drain loop is synchronous on the calling GCD thread, so ``probe(_:context:)`` returns without async bridging.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
