@@ -114,10 +114,22 @@ extension __ExhaustRuntime {
         }
 
         let smokeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
-            innerBackend.runSmoke(tagged.map(\.1)).failed == false
+            invocationCounter.value += 1
+            let smoke = innerBackend.runSmoke(tagged.map(\.1))
+            if smoke.timedOut {
+                lastRunTimedOut.value = true
+            }
+            return smoke.failed == false
+        }
+        // Smoke runs commands sequentially, so generate concurrency-1 (all-prefix) sequences. The candidate then carries this generator and reduces sequentially even when the run uses multiple lanes.
+        let smokeSequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
+        if let sequentialCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: 1) {
+            smokeSequenceGen = Gen.arrayOf(sequentialCommandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
+        } else {
+            smokeSequenceGen = sequenceGen
         }
         let smokeSource: AnyContractCandidateSource<Spec.Command>? = .smoke(
-            sequenceGen: sequenceGen,
+            sequenceGen: smokeSequenceGen,
             property: smokeProperty
         )
 
@@ -453,7 +465,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         }
     }
 
-    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
+    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, timedOut: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
         let spec = Spec()
         let (trace, failed) = __ExhaustRuntime.buildSequentialTrace(
             commands,
@@ -476,19 +488,19 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             checkInvariants: { try spec.checkInvariants() }
         )
         if failed {
-            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+            return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
         // A .threads spec expresses its self-consistency check through the @Oracle, because the macro rejects @Invariant under .threads, and smoke never runs the concurrent phase.
         // Replay the sequence on a fresh reference and call the oracle once at the end, so a spec that is already broken under sequential execution fails here before any concurrent probing.
         // The reference is a distinct spec so the oracle's relational comparison is between two independent runs rather than the SUT against itself.
         let reference = Spec()
         guard runAllCommandsCatchingObjC(commands, on: reference) else {
-            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+            return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
         if spec.oracleCheck(reference.systemUnderTest) == false {
-            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+            return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
-        return (trace, false, spec.systemUnderTest, nil)
+        return (trace, false, false, spec.systemUnderTest, nil)
     }
 
     /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails, because the partial state would mislead debugging.

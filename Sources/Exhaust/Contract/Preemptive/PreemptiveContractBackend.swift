@@ -112,7 +112,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
             originalCommands: replayResult.originalCommands,
             trace: replayResult.trace,
             systemUnderTest: systemUnderTest,
-            seed: replayResult.seed,
+            seed: discoveryMethod.resultSeed(seed),
             replaySeed: replayResult.replaySeed,
             discoveryMethod: replayResult.discoveryMethod
         )

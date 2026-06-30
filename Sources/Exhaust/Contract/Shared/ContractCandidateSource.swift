@@ -4,21 +4,30 @@ import ExhaustCore
 struct ContractCandidate<Command> {
     let taggedCommands: [(ScheduleMarker, Command)]
     let tree: ChoiceTree
+    /// The generator that produced this candidate. Pruning and reduction must use it so the choice sequence stays consistent with `tree`. Smoke supplies a concurrency-1 generator, so a smoke-discovered failure reduces sequentially regardless of the run's lane count.
+    let sequenceGen: Generator<[(ScheduleMarker, Command)]>
     let seed: UInt64
     let iteration: Int
     let discoveryMethod: ContractDiscoveryMethod
-    let sourceInvocations: Int
 }
 
 /// Produces failing candidate command sequences for the ``ContractMachine``, owning its iteration state internally.
 struct AnyContractCandidateSource<Command> {
+    /// Which discovery phase this source represents. The machine attributes the source's invocations and wall time to the matching report bucket whether or not the source yields a candidate, so a phase that runs and passes is still counted.
+    let discoveryMethod: ContractDiscoveryMethod
+    /// The PRNG seed to surface in ``ExhaustReport/seed``, or `nil` for phases with no replayable seed (coverage, smoke).
+    let reportedSeed: UInt64?
     let resolvedReplaySeed: ReplaySeed.Resolved?
     private let produceNext: () throws -> ContractCandidate<Command>?
 
     init(
+        discoveryMethod: ContractDiscoveryMethod = .randomSampling,
+        reportedSeed: UInt64? = nil,
         resolvedReplaySeed: ReplaySeed.Resolved? = nil,
         _ produceNext: @escaping () throws -> ContractCandidate<Command>?
     ) {
+        self.discoveryMethod = discoveryMethod
+        self.reportedSeed = reportedSeed
         self.resolvedReplaySeed = resolvedReplaySeed
         self.produceNext = produceNext
     }
@@ -33,11 +42,17 @@ struct AnyContractCandidateSource<Command> {
 extension AnyContractCandidateSource {
     /// A source that evaluates its computation at most once, then returns nil forever.
     private static func once(
+        discoveryMethod: ContractDiscoveryMethod,
+        reportedSeed: UInt64? = nil,
         resolvedReplaySeed: ReplaySeed.Resolved? = nil,
         _ computation: @escaping () throws -> ContractCandidate<Command>?
     ) -> AnyContractCandidateSource {
         var exhausted = false
-        return AnyContractCandidateSource(resolvedReplaySeed: resolvedReplaySeed) {
+        return AnyContractCandidateSource(
+            discoveryMethod: discoveryMethod,
+            reportedSeed: reportedSeed,
+            resolvedReplaySeed: resolvedReplaySeed
+        ) {
             guard exhausted == false else {
                 return nil
             }
@@ -60,7 +75,7 @@ extension AnyContractCandidateSource {
         concurrencyLevel: Int,
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
     ) -> AnyContractCandidateSource {
-        .once(resolvedReplaySeed: .coverage(row: row)) {
+        .once(discoveryMethod: .coverage, resolvedReplaySeed: .coverage(row: row)) {
             let result = __ExhaustRuntime.runSCACoverageRowLoop(
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
@@ -78,10 +93,10 @@ extension AnyContractCandidateSource {
                     return ContractCandidate(
                         taggedCommands: value,
                         tree: tree,
+                        sequenceGen: sequenceGen,
                         seed: UInt64(coverageInvocations),
                         iteration: coverageInvocations,
-                        discoveryMethod: .coverage,
-                        sourceInvocations: coverageInvocations
+                        discoveryMethod: .coverage
                     )
                 case .completed, .skipped:
                     return nil
@@ -96,7 +111,11 @@ extension AnyContractCandidateSource {
         sequenceGen: Generator<[(ScheduleMarker, Command)]>,
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
     ) -> AnyContractCandidateSource {
-        .once(resolvedReplaySeed: .sampling(seed: replaySeed, iteration: replayIteration)) {
+        .once(
+            discoveryMethod: .replay,
+            reportedSeed: replaySeed,
+            resolvedReplaySeed: .sampling(seed: replaySeed, iteration: replayIteration)
+        ) {
             let startIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
             var interpreter = ValueAndChoiceTreeInterpreter(
                 sequenceGen,
@@ -113,10 +132,10 @@ extension AnyContractCandidateSource {
             return ContractCandidate(
                 taggedCommands: value,
                 tree: tree,
+                sequenceGen: sequenceGen,
                 seed: replaySeed,
                 iteration: Int(startIndex) + 1,
-                discoveryMethod: .replay,
-                sourceInvocations: 1
+                discoveryMethod: .replay
             )
         }
     }
@@ -126,7 +145,7 @@ extension AnyContractCandidateSource {
         sequenceGen: Generator<[(ScheduleMarker, Command)]>,
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
     ) -> AnyContractCandidateSource {
-        .once {
+        .once(discoveryMethod: .smokeTest) {
             var interpreter = ValueAndChoiceTreeInterpreter(sequenceGen, seed: 0, maxRuns: 1)
             guard let (value, tree) = try interpreter.next() else {
                 return nil
@@ -137,10 +156,10 @@ extension AnyContractCandidateSource {
             return ContractCandidate(
                 taggedCommands: value,
                 tree: tree,
+                sequenceGen: sequenceGen,
                 seed: 0,
                 iteration: 0,
-                discoveryMethod: .smokeTest,
-                sourceInvocations: 1
+                discoveryMethod: .smokeTest
             )
         }
     }
@@ -155,7 +174,7 @@ extension AnyContractCandidateSource {
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Command)]>)? = nil,
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
     ) -> AnyContractCandidateSource {
-        .once {
+        .once(discoveryMethod: .coverage) {
             let result = __ExhaustRuntime.runSCACoverageRowLoop(
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
@@ -173,10 +192,10 @@ extension AnyContractCandidateSource {
                     return ContractCandidate(
                         taggedCommands: value,
                         tree: tree,
+                        sequenceGen: sequenceGen,
                         seed: UInt64(coverageInvocations),
                         iteration: coverageInvocations,
-                        discoveryMethod: .coverage,
-                        sourceInvocations: coverageInvocations
+                        discoveryMethod: .coverage
                     )
                 case .completed, .skipped:
                     return nil
@@ -197,7 +216,7 @@ extension AnyContractCandidateSource {
             maxRuns: samplingBudget
         )
         var iteration = 0
-        return AnyContractCandidateSource {
+        return AnyContractCandidateSource(discoveryMethod: .randomSampling, reportedSeed: seed) {
             while let value = try interpreter.nextValueOnly() {
                 iteration += 1
                 if property(value) == false {
@@ -205,10 +224,10 @@ extension AnyContractCandidateSource {
                     return ContractCandidate(
                         taggedCommands: value,
                         tree: tree,
+                        sequenceGen: sequenceGen,
                         seed: seed,
                         iteration: iteration,
-                        discoveryMethod: .randomSampling,
-                        sourceInvocations: iteration
+                        discoveryMethod: .randomSampling
                     )
                 }
             }

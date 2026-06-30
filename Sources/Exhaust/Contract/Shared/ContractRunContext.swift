@@ -10,7 +10,8 @@ final class ContractRunContext<Spec: ContractSpecBase> {
     let line: UInt
     let column: UInt
 
-    let sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
+    /// The generator used to prune and reduce the discovered candidate. Built from the multi-lane command generator, but retargeted by the machine to the candidate's own generator (for example, a concurrency-1 generator for smoke failures) so reduction stays consistent with the candidate's tree.
+    var sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
     let commandGen: Generator<Spec.Command>
     let commandLimit: Int
     let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>

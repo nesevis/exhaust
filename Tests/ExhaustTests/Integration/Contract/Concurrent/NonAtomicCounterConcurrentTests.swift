@@ -77,7 +77,7 @@ struct NonAtomicCounterConcurrentTests {
     @Test(".onReport delivers invocation counts and materializations")
     func onReportDeliversInvocationCountsAndMaterializations() async throws {
         var deliveredReport: ExhaustReport?
-        let result = await #execute(
+        _ = await #execute(
             NonAtomicCounterSpec.self,
             .commandLimit(4),
             .budget(.custom(coverage: 0, sampling: 50)),
@@ -86,7 +86,7 @@ struct NonAtomicCounterConcurrentTests {
             .onReport { deliveredReport = $0 }
         )
         let report = try #require(deliveredReport, "onReport closure should be called")
-        #expect(report.propertyInvocations == 9)
+        #expect(report.propertyInvocations == 10)
         #expect(report.reductionInvocations == 7)
         #expect(report.totalMilliseconds > 0)
         #expect(report.totalMaterializations == 7)

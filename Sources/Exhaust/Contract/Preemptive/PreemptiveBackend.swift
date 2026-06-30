@@ -14,8 +14,10 @@ protocol PreemptiveBackend<Spec>: Sendable {
     /// Runs one tagged command sequence concurrently using a pre-computed lane partition.
     func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], partition: LanePartition<Spec.Command>) -> Preemptive.Outcome<Spec>
 
-    /// Runs a command sequence sequentially on a fresh spec for the smoke phase, capturing the trace, whether it failed, and the resulting oracle state for the report.
-    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)
+    /// Runs a command sequence sequentially on a fresh spec for the smoke phase, capturing the trace, whether it failed, whether it timed out, and the resulting oracle state for the report.
+    ///
+    /// `timedOut` distinguishes a stalling command (which must route to the timeout path and skip reduction) from a genuine smoke failure. The synchronous backend runs unbounded and never times out.
+    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, timedOut: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)
 
     /// Checks whether a concurrent execution's observed responses are consistent with some valid sequential ordering.
     ///

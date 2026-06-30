@@ -20,8 +20,8 @@ struct ContractMachine<Backend: ContractBackend> {
 
     var phase: Phase = .pullSource
     var sourceIndex: Int = 0
-    let coverageStopwatch = Stopwatch()
-    var coverageTimingRecorded = false
+    var discoveryInvocations: Int = 0
+    var reportedSeed: UInt64?
 
     var candidate: ContractCandidate<Backend.Spec.Command>?
     var pruned: (value: [(ScheduleMarker, Backend.Spec.Command)], tree: ChoiceTree)?
@@ -60,8 +60,13 @@ struct ContractMachine<Backend: ContractBackend> {
             return stepFinalize() ?? .sourceExhausted
         }
 
+        let source = sources[sourceIndex]
+        let invocationsBefore = context.invocationCounter.value
+        let stopwatch = Stopwatch()
         do {
-            guard let found = try sources[sourceIndex].next() else {
+            let found = try source.next()
+            accountSource(source, invocations: context.invocationCounter.value - invocationsBefore, elapsed: stopwatch.elapsedMilliseconds)
+            guard let found else {
                 sourceIndex += 1
                 return .sourceExhausted
             }
@@ -73,7 +78,8 @@ struct ContractMachine<Backend: ContractBackend> {
                 commandCount: found.taggedCommands.count
             )
         } catch {
-            let message = sources[sourceIndex].resolvedReplaySeed.map {
+            accountSource(source, invocations: context.invocationCounter.value - invocationsBefore, elapsed: stopwatch.elapsedMilliseconds)
+            let message = source.resolvedReplaySeed.map {
                 "Generator failed during regression replay (seed \($0.encoded)): \(error)"
             } ?? "Generator failed: \(error)"
             context.deferredIssues.append(message)
@@ -82,27 +88,35 @@ struct ContractMachine<Backend: ContractBackend> {
         }
     }
 
-    private mutating func accountCandidate(_ candidate: ContractCandidate<Backend.Spec.Command>) {
-        switch candidate.discoveryMethod {
-            case .coverage, .replay:
-                context.report.coverageInvocations += candidate.sourceInvocations
-            case .randomSampling:
-                if coverageTimingRecorded == false {
-                    context.report.coverageMilliseconds = coverageStopwatch.elapsedMilliseconds
-                    coverageTimingRecorded = true
-                }
-                context.report.randomSamplingInvocations += candidate.sourceInvocations
-            case .smokeTest:
-                context.report.randomSamplingInvocations += candidate.sourceInvocations
+    /// Attributes a source's discovery invocations and wall time to the matching report bucket. Runs for every source the machine advances through, so a phase that passes is still counted — not only the one that produces the failing candidate.
+    private mutating func accountSource(
+        _ source: AnyContractCandidateSource<Backend.Spec.Command>,
+        invocations: Int,
+        elapsed: Double
+    ) {
+        switch source.discoveryMethod {
+            case .coverage:
+                context.report.coverageInvocations += invocations
+                context.report.coverageMilliseconds += elapsed
+            case .randomSampling, .smokeTest, .replay:
+                context.report.randomSamplingInvocations += invocations
         }
-        context.report.propertyInvocations += candidate.sourceInvocations
+        context.report.propertyInvocations += invocations
+        discoveryInvocations += invocations
+        if let seed = source.reportedSeed {
+            reportedSeed = seed
+        }
+    }
 
+    private mutating func accountCandidate(_ candidate: ContractCandidate<Backend.Spec.Command>) {
         context.failureContext.timedOut = context.lastRunTimedOut
         context.failureContext.seed = candidate.discoveryMethod == .coverage ? nil : candidate.seed
         context.failureContext.originalCount = candidate.taggedCommands.count
         context.failureContext.iteration = candidate.iteration
-        context.failureContext.budget = context.config.budget.samplingBudget
-        context.failureContext.sequencesTested = candidate.sourceInvocations
+        context.failureContext.budget = candidate.discoveryMethod == .coverage
+            ? context.config.budget.coverageBudget
+            : context.config.budget.samplingBudget
+        context.failureContext.sequencesTested = discoveryInvocations
     }
 
     // MARK: - Prune
@@ -129,6 +143,11 @@ struct ContractMachine<Backend: ContractBackend> {
             phase = .finalize
             return .timedOut
         }
+
+        // Prune and reduce against the generator that produced this candidate so the choice sequence matches its tree. Smoke supplies a concurrency-1 generator, so smoke failures reduce sequentially regardless of the run's lane count.
+        context.sequenceGen = candidate.sequenceGen
+        preReductionInvocations = context.invocationCounter.value
+        reductionStopwatch = Stopwatch()
 
         nonisolated(unsafe) let unsafeBackend = backend
         nonisolated(unsafe) let unsafeContext = context
@@ -157,8 +176,6 @@ struct ContractMachine<Backend: ContractBackend> {
             return .sourceExhausted
         }
 
-        preReductionInvocations = context.invocationCounter.value
-        reductionStopwatch = Stopwatch()
         reduction = backend.reduce(
             taggedCommands: pruned.value,
             tree: pruned.tree,
@@ -216,11 +233,8 @@ struct ContractMachine<Backend: ContractBackend> {
 
     @discardableResult
     private mutating func stepFinalize() -> Transition? {
-        if coverageTimingRecorded == false {
-            context.report.coverageMilliseconds = coverageStopwatch.elapsedMilliseconds
-        }
         if let onReport = context.config.onReportClosure {
-            context.report.seed = context.config.seed
+            context.report.seed = reportedSeed
             context.report.totalMilliseconds = context.runStopwatch.elapsedMilliseconds
             onReport(context.report)
         }

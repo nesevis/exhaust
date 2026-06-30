@@ -37,7 +37,7 @@ struct LeakyBucketConcurrentTests {
             .onReport { deliveredReport = $0 }
         )
         let report = try #require(deliveredReport)
-        #expect(report.propertyInvocations == 11)
+        #expect(report.propertyInvocations == 12)
         #expect(report.reductionInvocations == 9)
         #expect(report.totalMaterializations == 9)
         #expect(report.cycles == 5)

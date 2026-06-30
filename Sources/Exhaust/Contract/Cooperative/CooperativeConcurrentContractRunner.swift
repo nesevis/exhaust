@@ -210,8 +210,19 @@ private extension __ExhaustRuntime {
 
         var smokeSource: AnyContractCandidateSource<Spec.Command>?
         if concurrencyLevel > 1 {
-            let smokeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = asyncSequentialProperty(specInit: specInit)
-            smokeSource = .smoke(sequenceGen: sequenceGen, property: smokeProperty)
+            let rawSmokeProperty = asyncSequentialProperty(specInit: specInit)
+            let smokeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
+                invocationCounter.value += 1
+                return rawSmokeProperty(tagged)
+            }
+            // Smoke runs commands sequentially, so generate concurrency-1 (all-prefix) sequences. The candidate carries this generator and reduces sequentially even at higher lane counts.
+            let smokeSequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
+            if let sequentialCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: 1) {
+                smokeSequenceGen = Gen.arrayOf(sequentialCommandGen, within: 1 ... UInt64(resolvedCommandLimit), scaling: .constant)
+            } else {
+                smokeSequenceGen = sequenceGen
+            }
+            smokeSource = .smoke(sequenceGen: smokeSequenceGen, property: smokeProperty)
         }
 
         let pipeline = ContractPipeline(

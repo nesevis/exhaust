@@ -97,23 +97,53 @@ struct ContractMachineTests {
         #expect(context.report.propertyInvocations > 0)
     }
 
-    @Test("Coverage timing is recorded on first non-coverage candidate")
-    func coverageTimingIsRecordedOnFirstNonCoverageCandidate() {
-        let candidate = ContractCandidate<StubCommand>(
-            taggedCommands: [(.prefix, .increment)],
-            tree: .just,
-            seed: 42,
-            iteration: 1,
-            discoveryMethod: .randomSampling,
-            sourceInvocations: 1
-        )
-        let source = AnyContractCandidateSource<StubCommand>.once { candidate }
+    @Test("Each source's invocations are attributed to its bucket, including a passing source")
+    func sourceInvocationsAttributedPerBucket() {
         let context = makeContext()
-        var machine = makeMachine(context: context, sources: [source])
+        let coverageSource = AnyContractCandidateSource<StubCommand>(discoveryMethod: .coverage) {
+            context.invocationCounter.value += 5
+            return nil
+        }
+        let samplingSource = AnyContractCandidateSource<StubCommand>(discoveryMethod: .randomSampling) {
+            context.invocationCounter.value += 3
+            return makeCandidate(commands: [(.prefix, .increment)], discoveryMethod: .randomSampling)
+        }
+        var machine = makeMachine(context: context, sources: [coverageSource, samplingSource])
 
         while machine.next() != nil {}
 
-        #expect(context.report.coverageMilliseconds >= 0)
+        // The coverage source passed but its 5 probes are still counted; sampling's 3 land in their own bucket; reduction adds the StubBackend's 2.
+        #expect(context.report.coverageInvocations == 5)
+        #expect(context.report.randomSamplingInvocations == 3)
+        #expect(context.report.reductionInvocations == 2)
+        #expect(context.report.propertyInvocations == 10)
+    }
+
+    @Test("A sampling-only run attributes no wall time to the coverage phase")
+    func samplingOnlyRunHasNoCoverageTime() {
+        let context = makeContext()
+        let samplingSource = AnyContractCandidateSource<StubCommand>(discoveryMethod: .randomSampling) {
+            makeCandidate(commands: [(.prefix, .increment)], discoveryMethod: .randomSampling)
+        }
+        var machine = makeMachine(context: context, sources: [samplingSource])
+
+        while machine.next() != nil {}
+
+        #expect(context.report.coverageMilliseconds == 0)
+    }
+
+    @Test("Report seed comes from the sampling source even when the run passes")
+    func reportSeedComesFromSamplingSource() {
+        var deliveredReport: ExhaustReport?
+        let context = makeContext(config: makeConfig(onReport: { deliveredReport = $0 }))
+        let samplingSource = AnyContractCandidateSource<StubCommand>(discoveryMethod: .randomSampling, reportedSeed: 99) {
+            nil
+        }
+        var machine = makeMachine(context: context, sources: [samplingSource])
+
+        while machine.next() != nil {}
+
+        #expect(deliveredReport?.seed == 99)
     }
 
     @Test("Finalize delivers report to onReport closure")
@@ -260,9 +290,11 @@ private struct StubBackend: ContractBackend {
     func reduce(
         taggedCommands: [(ScheduleMarker, StubCommand)],
         tree _: ChoiceTree,
-        context _: ContractRunContext<StubSpec>
+        context: ContractRunContext<StubSpec>
     ) -> ContractReduction<StubCommand> {
-        ContractReduction(finalInput: taggedCommands, stats: nil, timedOut: false)
+        // Simulate two reduction probes so the machine's reduction-invocation delta is observable.
+        context.invocationCounter.value += 2
+        return ContractReduction(finalInput: taggedCommands, stats: nil, timedOut: false)
     }
 
     func buildResult(
@@ -289,6 +321,12 @@ private struct StubBackend: ContractBackend {
 
 // MARK: - Helpers
 
+private func stubSequenceGen() -> Generator<[(ScheduleMarker, StubCommand)]> {
+    StubSpec.commandGenerator.array(length: 0 ... 5, scaling: .constant).gen.map { commands in
+        commands.map { (ScheduleMarker.prefix, $0) }
+    }
+}
+
 private func makeCandidate(
     commands: [(ScheduleMarker, StubCommand)],
     discoveryMethod: ContractDiscoveryMethod = .coverage,
@@ -297,10 +335,10 @@ private func makeCandidate(
     ContractCandidate(
         taggedCommands: commands,
         tree: .just,
+        sequenceGen: stubSequenceGen(),
         seed: seed,
         iteration: 1,
-        discoveryMethod: discoveryMethod,
-        sourceInvocations: 1
+        discoveryMethod: discoveryMethod
     )
 }
 
@@ -318,14 +356,10 @@ private func makeContext(
     config: ResolvedConcurrentConfig? = nil
 ) -> ContractRunContext<StubSpec> {
     let resolved = config ?? makeConfig()
-    let commandGen = StubSpec.commandGenerator
-    let seqGen = commandGen.array(length: 0 ... 5, scaling: .constant).gen.map { commands in
-        commands.map { (ScheduleMarker.prefix, $0) }
-    }
     return ContractRunContext<StubSpec>(
         config: resolved,
-        sequenceGen: seqGen,
-        commandGen: commandGen.gen,
+        sequenceGen: stubSequenceGen(),
+        commandGen: StubSpec.commandGenerator.gen,
         commandLimit: 5,
         identifySkips: { _ in [] },
         fileID: #fileID,
@@ -348,14 +382,10 @@ private func makeMachine(
     } else {
         var resolved = config ?? makeConfig()
         resolved.suppressIssueReporting = true
-        let commandGen = StubSpec.commandGenerator
-        let seqGen = commandGen.array(length: 0 ... 5, scaling: .constant).gen.map { commands in
-            commands.map { (ScheduleMarker.prefix, $0) }
-        }
         resolvedContext = ContractRunContext<StubSpec>(
             config: resolved,
-            sequenceGen: seqGen,
-            commandGen: commandGen.gen,
+            sequenceGen: stubSequenceGen(),
+            commandGen: StubSpec.commandGenerator.gen,
             commandLimit: 5,
             identifySkips: { _ in [] },
             lastRunTimedOut: lastRunTimedOut,
@@ -371,14 +401,10 @@ private func makeMachine(
 private func makePipeline(
     propertyPasses: Bool
 ) -> ContractPipeline<StubBackend> {
-    let commandGen = StubSpec.commandGenerator
-    let seqGen = commandGen.array(length: 0 ... 5, scaling: .constant).gen.map { commands in
-        commands.map { (ScheduleMarker.prefix, $0) }
-    }
-    return ContractPipeline(
+    ContractPipeline(
         backend: StubBackend(),
-        sequenceGen: seqGen,
-        commandGen: commandGen.gen,
+        sequenceGen: stubSequenceGen(),
+        commandGen: StubSpec.commandGenerator.gen,
         commandLimit: 5,
         concurrencyLevel: 1,
         identifySkips: { _ in [] },
