@@ -159,7 +159,7 @@ public extension __ExhaustRuntime {
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
-        let logConfiguration = ContractContext.logConfiguration(from: settings)
+        let logConfiguration = ResolvedConcurrentConfig.logConfiguration(from: settings)
 
         let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
             ExhaustLog.withConfiguration(logConfiguration) {
