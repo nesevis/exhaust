@@ -457,6 +457,77 @@ extension __ExhaustRuntime {
     }
 }
 
+// MARK: - Source Construction
+
+extension __ExhaustRuntime {
+    /// Builds the prioritized source array for a contract machine run.
+    ///
+    /// Source order matches the design document: coverage replay, sampling replay, smoke, coverage, sampling. Each source is independently gated by the config. The smoke source is entry-point-specific (sequential has none, cooperative and preemptive construct different property closures), so it is passed in pre-built.
+    static func buildContractSources<Command>(
+        config: ResolvedConcurrentConfig,
+        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
+        commandGen: Generator<Command>,
+        commandLimit: Int,
+        concurrencyLevel: Int,
+        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
+        smokeSource: AnyContractCandidateSource<Command>? = nil,
+        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Command)]>)? = nil
+    ) -> [AnyContractCandidateSource<Command>] {
+        var sources: [AnyContractCandidateSource<Command>] = []
+
+        if let row = config.coverageReplayRow {
+            sources.append(.coverageReplay(
+                row: row,
+                sequenceGen: sequenceGen,
+                commandGen: commandGen,
+                commandLimit: commandLimit,
+                coverageBudget: max(config.budget.coverageBudget, UInt64(row) + 1),
+                concurrencyLevel: concurrencyLevel,
+                property: property
+            ))
+        }
+
+        if let replayIteration = config.replayIteration, let seed = config.seed {
+            sources.append(.samplingReplay(
+                replaySeed: seed,
+                replayIteration: replayIteration,
+                sequenceGen: sequenceGen,
+                property: property
+            ))
+        }
+
+        if let smokeSource {
+            sources.append(smokeSource)
+        }
+
+        if config.shouldRunCoverage {
+            sources.append(.coverage(
+                sequenceGen: sequenceGen,
+                commandGen: commandGen,
+                commandLimit: commandLimit,
+                coverageBudget: config.budget.coverageBudget,
+                concurrencyLevel: concurrencyLevel,
+                sequenceGenForLength: sequenceGenForLength,
+                property: property
+            ))
+        }
+
+        if config.replayIteration == nil, config.coverageReplayRow == nil {
+            let seed = config.seed ?? Xoshiro256().seed
+            sources.append(.sampling(
+                sequenceGen: sequenceGen,
+                seed: seed,
+                samplingBudget: config.budget.samplingBudget,
+                property: property
+            ))
+        }
+
+        return sources
+    }
+}
+
+// MARK: - Pick Analysis
+
 extension __ExhaustRuntime {
     /// Extracts pick choices from a command generator when the generator is a top-level ``Gen.pick``.
     static func extractPickChoices(

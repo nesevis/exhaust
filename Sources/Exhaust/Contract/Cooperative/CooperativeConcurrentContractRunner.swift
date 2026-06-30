@@ -226,15 +226,20 @@ private extension __ExhaustRuntime {
                 column: column
             )
 
-            let sources = buildConcurrentSources(
+            let smoke: AnyContractCandidateSource<Spec.Command>? = smokeProperty.map {
+                .smoke(sequenceGen: sequenceGen, property: $0)
+            }
+            let sources = buildContractSources(
                 config: machineConfig,
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: resolvedCommandLimit,
                 concurrencyLevel: concurrencyLevel,
-                taggedCommandGen: taggedCommandGen,
                 property: property,
-                smokeProperty: smokeProperty
+                smokeSource: smoke,
+                sequenceGenForLength: { range in
+                    Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
+                }
             )
 
             var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
@@ -242,38 +247,14 @@ private extension __ExhaustRuntime {
             return (result, runContext.deferredIssues)
         }
 
-        // Regression seeds
-        if config.coverageReplayRow == nil, config.seed == nil {
-            for encodedSeed in regressionSeeds {
-                guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
-                    deferredIssues.append("Invalid regression seed: \(encodedSeed)")
-                    continue
-                }
-
-                var replayConfig = config
-                switch decoded {
-                    case let .coverage(row):
-                        replayConfig.coverageReplayRow = row
-                        let needed = UInt64(row) + 1
-                        if replayConfig.budget.coverageBudget < needed {
-                            replayConfig.budget = .custom(
-                                coverage: needed,
-                                sampling: replayConfig.budget.samplingBudget
-                            )
-                        }
-                    case let .sampling(seed, iteration):
-                        replayConfig.seed = seed
-                        replayConfig.replayIteration = iteration
-                }
-
-                let (result, issues) = runMachine(config: replayConfig)
-                deferredIssues.append(contentsOf: issues)
-                if let result {
-                    return (result, deferredIssues)
-                } else if config.suppressIssueReporting == false {
-                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
-                }
-            }
+        let (regressionResult, regressionIssues) = replayRegressionSeeds(
+            config: config,
+            regressionSeeds: regressionSeeds,
+            runMachine: { runMachine(config: $0) }
+        )
+        deferredIssues.append(contentsOf: regressionIssues)
+        if let regressionResult {
+            return (regressionResult, deferredIssues)
         }
 
         var smokeProperty: (@Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool)?
@@ -284,69 +265,5 @@ private extension __ExhaustRuntime {
         let (result, issues) = runMachine(config: config, smokeProperty: smokeProperty)
         deferredIssues.append(contentsOf: issues)
         return (result, deferredIssues)
-    }
-
-    static func buildConcurrentSources<Command: CustomStringConvertible>(
-        config: ResolvedConcurrentConfig,
-        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
-        commandGen: Generator<Command>,
-        commandLimit: Int,
-        concurrencyLevel: Int,
-        taggedCommandGen: Generator<(ScheduleMarker, Command)>,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
-        smokeProperty: (@Sendable ([(ScheduleMarker, Command)]) -> Bool)? = nil
-    ) -> [AnyContractCandidateSource<Command>] {
-        var sources: [AnyContractCandidateSource<Command>] = []
-
-        if let row = config.coverageReplayRow {
-            sources.append(.coverageReplay(
-                row: row,
-                sequenceGen: sequenceGen,
-                commandGen: commandGen,
-                commandLimit: commandLimit,
-                coverageBudget: max(config.budget.coverageBudget, UInt64(row) + 1),
-                concurrencyLevel: concurrencyLevel,
-                property: property
-            ))
-        }
-
-        if let replayIteration = config.replayIteration, let seed = config.seed {
-            sources.append(.samplingReplay(
-                replaySeed: seed,
-                replayIteration: replayIteration,
-                sequenceGen: sequenceGen,
-                property: property
-            ))
-        }
-
-        if let smokeProperty {
-            sources.append(.smoke(sequenceGen: sequenceGen, property: smokeProperty))
-        }
-
-        if config.shouldRunCoverage {
-            sources.append(.coverage(
-                sequenceGen: sequenceGen,
-                commandGen: commandGen,
-                commandLimit: commandLimit,
-                coverageBudget: config.budget.coverageBudget,
-                concurrencyLevel: concurrencyLevel,
-                sequenceGenForLength: { range in
-                    Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
-                },
-                property: property
-            ))
-        }
-
-        if config.replayIteration == nil, config.coverageReplayRow == nil {
-            let seed = config.seed ?? Xoshiro256().seed
-            sources.append(.sampling(
-                sequenceGen: sequenceGen,
-                seed: seed,
-                samplingBudget: config.budget.samplingBudget,
-                property: property
-            ))
-        }
-
-        return sources
     }
 }

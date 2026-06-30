@@ -117,11 +117,12 @@ public extension __ExhaustRuntime {
                 column: column
             )
 
-            let sources = buildSequentialSources(
+            let sources = buildContractSources(
                 config: config,
-                taggedSeqGen: taggedSeqGen,
+                sequenceGen: taggedSeqGen,
                 commandGen: commandGen.gen,
                 commandLimit: commandLimit,
+                concurrencyLevel: 1,
                 property: property
             )
 
@@ -271,11 +272,12 @@ private extension __ExhaustRuntime {
             column: column
         )
 
-        let sources = buildSequentialSources(
+        let sources = buildContractSources(
             config: config,
-            taggedSeqGen: taggedSeqGen,
+            sequenceGen: taggedSeqGen,
             commandGen: commandGen.gen,
             commandLimit: commandLimit,
+            concurrencyLevel: 1,
             property: property
         )
 
@@ -361,6 +363,58 @@ private extension __ExhaustRuntime {
     }
 }
 
+// MARK: - Regression Seed Replay
+
+extension __ExhaustRuntime {
+    /// Replays each regression seed through a caller-supplied machine runner, returning the first failure.
+    ///
+    /// Shared by the cooperative and preemptive entry points. Decodes each seed, builds a modified config (expanding the coverage budget for `.coverage(row)` seeds), and delegates to `runMachine`. Returns `nil` result when all seeds pass.
+    static func replayRegressionSeeds<Spec: ContractSpecBase>(
+        config: ResolvedConcurrentConfig,
+        regressionSeeds: [String],
+        runMachine: (ResolvedConcurrentConfig) -> (result: ContractResult<Spec>?, issues: [String])
+    ) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
+        var deferredIssues: [String] = []
+
+        guard config.coverageReplayRow == nil, config.seed == nil else {
+            return (nil, deferredIssues)
+        }
+
+        for encodedSeed in regressionSeeds {
+            guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
+                deferredIssues.append("Invalid regression seed: \(encodedSeed)")
+                continue
+            }
+
+            var replayConfig = config
+            switch decoded {
+                case let .coverage(row):
+                    replayConfig.coverageReplayRow = row
+                    let needed = UInt64(row) + 1
+                    if replayConfig.budget.coverageBudget < needed {
+                        replayConfig.budget = .custom(
+                            coverage: needed,
+                            sampling: replayConfig.budget.samplingBudget
+                        )
+                    }
+                case let .sampling(seed, iteration):
+                    replayConfig.seed = seed
+                    replayConfig.replayIteration = iteration
+            }
+
+            let (result, issues) = runMachine(replayConfig)
+            deferredIssues.append(contentsOf: issues)
+            if let result {
+                return (result, deferredIssues)
+            } else if config.suppressIssueReporting == false {
+                deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
+            }
+        }
+
+        return (nil, deferredIssues)
+    }
+}
+
 // MARK: - Trace Building
 
 private extension __ExhaustRuntime {
@@ -375,69 +429,5 @@ private extension __ExhaustRuntime {
             checkInvariants: { try spec.checkInvariants() }
         )
         return (trace, spec)
-    }
-}
-
-// MARK: - Source Construction
-
-private extension __ExhaustRuntime {
-    static func buildSequentialSources<Command>(
-        config: ResolvedConcurrentConfig,
-        taggedSeqGen: Generator<[(ScheduleMarker, Command)]>,
-        commandGen: Generator<Command>,
-        commandLimit: Int,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
-    ) -> [AnyContractCandidateSource<Command>] {
-        var sources: [AnyContractCandidateSource<Command>] = []
-
-        if let row = config.coverageReplayRow {
-            sources.append(.coverageReplay(
-                row: row,
-                sequenceGen: taggedSeqGen,
-                commandGen: commandGen,
-                commandLimit: commandLimit,
-                coverageBudget: config.budget.coverageBudget,
-                concurrencyLevel: 1,
-                property: property
-            ))
-            return sources
-        }
-
-        if config.shouldRunCoverage {
-            sources.append(.coverage(
-                sequenceGen: taggedSeqGen,
-                commandGen: commandGen,
-                commandLimit: commandLimit,
-                coverageBudget: config.budget.coverageBudget,
-                concurrencyLevel: 1,
-                property: property
-            ))
-        }
-
-        if let replayIteration = config.replayIteration, let seed = config.seed {
-            sources.append(.samplingReplay(
-                replaySeed: seed,
-                replayIteration: replayIteration,
-                sequenceGen: taggedSeqGen,
-                property: property
-            ))
-        } else if let seed = config.seed {
-            sources.append(.sampling(
-                sequenceGen: taggedSeqGen,
-                seed: seed,
-                samplingBudget: config.budget.samplingBudget,
-                property: property
-            ))
-        } else {
-            let seed = Xoshiro256().seed
-            sources.append(.sampling(
-                sequenceGen: taggedSeqGen,
-                seed: seed,
-                samplingBudget: config.budget.samplingBudget,
-                property: property
-            ))
-        }
-
-        return sources
     }
 }

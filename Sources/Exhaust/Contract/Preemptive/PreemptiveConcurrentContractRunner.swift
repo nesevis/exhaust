@@ -113,6 +113,17 @@ extension __ExhaustRuntime {
             ) == nil
         }
 
+        let smokeSource: AnyContractCandidateSource<Spec.Command>? = {
+            guard let smokeTaggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: 1) else {
+                return nil
+            }
+            let smokeGen = Gen.arrayOf(smokeTaggedCommandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
+            let smokeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
+                innerBackend.runSmoke(tagged.map(\.1)).failed == false
+            }
+            return .smoke(sequenceGen: smokeGen, property: smokeProperty)
+        }()
+
         func runMachine(
             config machineConfig: ResolvedConcurrentConfig
         ) -> (result: ContractResult<Spec>?, issues: [String]) {
@@ -130,15 +141,17 @@ extension __ExhaustRuntime {
                 column: column
             )
 
-            let sources = buildPreemptiveSources(
+            let sources = buildContractSources(
                 config: machineConfig,
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 concurrencyLevel: config.concurrencyLevel,
-                taggedCommandGen: taggedCommandGen,
-                innerBackend: innerBackend,
-                property: property
+                property: property,
+                smokeSource: smokeSource,
+                sequenceGenForLength: { range in
+                    Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
+                }
             )
 
             var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
@@ -146,111 +159,19 @@ extension __ExhaustRuntime {
             return (result, runContext.deferredIssues)
         }
 
-        // Regression seeds
-        if config.coverageReplayRow == nil, config.seed == nil {
-            for encodedSeed in regressionSeeds {
-                guard let decoded = ReplaySeed.Resolved.decode(encodedSeed) else {
-                    deferredIssues.append("Invalid regression seed: \(encodedSeed)")
-                    continue
-                }
-
-                var replayConfig = config
-                switch decoded {
-                    case let .coverage(row):
-                        replayConfig.coverageReplayRow = row
-                        let needed = UInt64(row) + 1
-                        if replayConfig.budget.coverageBudget < needed {
-                            replayConfig.budget = .custom(
-                                coverage: needed,
-                                sampling: replayConfig.budget.samplingBudget
-                            )
-                        }
-                    case let .sampling(seed, iteration):
-                        replayConfig.seed = seed
-                        replayConfig.replayIteration = iteration
-                }
-
-                let (result, issues) = runMachine(config: replayConfig)
-                deferredIssues.append(contentsOf: issues)
-                if let result {
-                    return (result, deferredIssues)
-                } else if config.suppressIssueReporting == false {
-                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
-                }
-            }
+        let (regressionResult, regressionIssues) = replayRegressionSeeds(
+            config: config,
+            regressionSeeds: regressionSeeds,
+            runMachine: { runMachine(config: $0) }
+        )
+        deferredIssues.append(contentsOf: regressionIssues)
+        if let regressionResult {
+            return (regressionResult, deferredIssues)
         }
 
         let (result, issues) = runMachine(config: config)
         deferredIssues.append(contentsOf: issues)
         return (result, deferredIssues)
-    }
-
-    static func buildPreemptiveSources<Inner: PreemptiveBackend>(
-        config: ResolvedConcurrentConfig,
-        sequenceGen: Generator<[(ScheduleMarker, Inner.Spec.Command)]>,
-        commandGen: Generator<Inner.Spec.Command>,
-        commandLimit: Int,
-        concurrencyLevel: Int,
-        taggedCommandGen: Generator<(ScheduleMarker, Inner.Spec.Command)>,
-        innerBackend: Inner,
-        property: @escaping @Sendable ([(ScheduleMarker, Inner.Spec.Command)]) -> Bool
-    ) -> [AnyContractCandidateSource<Inner.Spec.Command>] {
-        var sources: [AnyContractCandidateSource<Inner.Spec.Command>] = []
-
-        if let row = config.coverageReplayRow {
-            sources.append(.coverageReplay(
-                row: row,
-                sequenceGen: sequenceGen,
-                commandGen: commandGen,
-                commandLimit: commandLimit,
-                coverageBudget: max(config.budget.coverageBudget, UInt64(row) + 1),
-                concurrencyLevel: concurrencyLevel,
-                property: property
-            ))
-        }
-
-        if let replayIteration = config.replayIteration, let seed = config.seed {
-            sources.append(.samplingReplay(
-                replaySeed: seed,
-                replayIteration: replayIteration,
-                sequenceGen: sequenceGen,
-                property: property
-            ))
-        }
-
-        if let smokeTaggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: 1) {
-            let smokeGen = Gen.arrayOf(smokeTaggedCommandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
-            let smokeProperty: @Sendable ([(ScheduleMarker, Inner.Spec.Command)]) -> Bool = { tagged in
-                innerBackend.runSmoke(tagged.map(\.1)).failed == false
-            }
-            sources.append(.smoke(sequenceGen: smokeGen, property: smokeProperty))
-        }
-
-        if config.shouldRunCoverage {
-            sources.append(.coverage(
-                sequenceGen: sequenceGen,
-                commandGen: commandGen,
-                commandLimit: commandLimit,
-                coverageBudget: config.budget.coverageBudget,
-                concurrencyLevel: concurrencyLevel,
-                sequenceGenForLength: { range in
-                    Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
-                },
-                property: property
-            ))
-        }
-
-        if config.replayIteration == nil, config.coverageReplayRow == nil {
-            let seed = config.seed ?? Xoshiro256().seed
-            sources.append(.sampling(
-                sequenceGen: sequenceGen,
-                seed: seed,
-                samplingBudget: config.budget.samplingBudget,
-                property: property
-            ))
-        }
-
-        return sources
     }
 }
 
