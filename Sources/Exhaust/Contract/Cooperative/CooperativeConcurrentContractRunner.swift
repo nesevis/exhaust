@@ -178,9 +178,9 @@ private extension __ExhaustRuntime {
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
         let concurrencyLevel = config.concurrencyLevel
-        let idleTimeout = config.idleTimeout
+        let idleTimeoutMilliseconds = config.idleTimeoutMilliseconds
 
-        let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit, idleTimeoutMilliseconds: idleTimeout)
+        let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit, idleTimeoutMilliseconds: idleTimeoutMilliseconds)
         let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
             rawIdentifySkips(taggedCommands.map(\.1))
         }
@@ -188,7 +188,7 @@ private extension __ExhaustRuntime {
         let backend = CooperativeContractBackend<Spec>(
             specInit: specInit,
             concurrencyLevel: concurrencyLevel,
-            idleTimeout: idleTimeout
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds
         )
 
         let invocationCounter = UnsafeSendableBox(0)
@@ -200,7 +200,7 @@ private extension __ExhaustRuntime {
                 specInit: specInit,
                 concurrencyLevel: concurrencyLevel,
                 recordTrace: false,
-                idleTimeoutMilliseconds: idleTimeout
+                idleTimeoutMilliseconds: idleTimeoutMilliseconds
             )
             if result.timedOut {
                 lastRunTimedOut.value = true

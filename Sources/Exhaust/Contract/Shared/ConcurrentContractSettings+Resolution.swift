@@ -10,7 +10,7 @@ struct ResolvedConcurrentConfig {
     var replayIteration: Int?
     var coverageReplayRow: Int?
     static let defaultIdleTimeout = 2000
-    var idleTimeout: Int = defaultIdleTimeout
+    var idleTimeoutMilliseconds: Int = defaultIdleTimeout
     var suppressIssueReporting: Bool = false
     var suppressLogs: Bool = false
     var collectOpenPBTStats: Bool = false
@@ -25,7 +25,7 @@ struct ResolvedConcurrentConfig {
 
     /// Normalized idle timeout: `nil` when the configured value is non-positive or sentinel-large (``Int/max``), meaning "wait unbounded". Used by the preemptive checkers to distinguish a real timeout from an intentionally disabled one.
     var resolvedIdleTimeoutMilliseconds: Int? {
-        (idleTimeout > 0 && idleTimeout < Int.max) ? idleTimeout : nil
+        (idleTimeoutMilliseconds > 0 && idleTimeoutMilliseconds < Int.max) ? idleTimeoutMilliseconds : nil
     }
 
     /// Log configuration derived from the resolved settings, shared by all concurrent entry points.
@@ -92,7 +92,7 @@ struct ResolvedConcurrentConfig {
                         }
                     } ?? closure
                 case let .idleTimeoutMs(milliseconds):
-                    config.idleTimeout = max(milliseconds, 1)
+                    config.idleTimeoutMilliseconds = max(milliseconds, 1)
                 case let .log(level):
                     config.logLevel = level
             }

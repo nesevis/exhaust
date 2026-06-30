@@ -24,7 +24,7 @@ struct ContractMachine<Backend: ContractBackend> {
     var coverageTimingRecorded = false
 
     var candidate: ContractCandidate<Backend.Spec.Command>?
-    var pruned: PrunedCommands<Backend.Spec.Command>?
+    var pruned: (value: [(ScheduleMarker, Backend.Spec.Command)], tree: ChoiceTree)?
     var reduction: ContractReduction<Backend.Spec.Command>?
     var preReductionInvocations: Int = 0
     var reductionStopwatch: Stopwatch?
@@ -164,7 +164,7 @@ struct ContractMachine<Backend: ContractBackend> {
             identifySkips: context.identifySkips,
             logEvent: "contract_skip_pruning"
         )
-        pruned = PrunedCommands(value: result.value, tree: result.tree)
+        pruned = (value: result.value, tree: result.tree)
 
         phase = .reduce
         return .pruned
@@ -280,12 +280,4 @@ extension ContractMachine {
         case statsRecorded
         case assembled(ContractResult<Backend.Spec>)
     }
-}
-
-// MARK: - Pruned Commands
-
-/// Command sequence after skip-pruning, paired with the choice tree that produced it.
-struct PrunedCommands<Command> {
-    let value: [(ScheduleMarker, Command)]
-    let tree: ChoiceTree
 }

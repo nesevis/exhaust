@@ -7,7 +7,7 @@ import ExhaustCore
 struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
     let specInit: () -> Spec
     let concurrencyLevel: Int
-    let idleTimeout: Int
+    let idleTimeoutMilliseconds: Int
 
     func probe(
         _ candidate: [(ScheduleMarker, Spec.Command)],
@@ -18,7 +18,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             specInit: specInit,
             concurrencyLevel: concurrencyLevel,
             recordTrace: false,
-            idleTimeoutMilliseconds: idleTimeout
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds
         )
         if result.timedOut {
             return .timeout
@@ -65,14 +65,14 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             specInit: specInit,
             concurrencyLevel: concurrencyLevel,
             recordTrace: true,
-            idleTimeoutMilliseconds: idleTimeout
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds
         )
 
         let timedOut = context.lastRunTimedOut
         let oracle = timedOut ? nil : __ExhaustRuntime.sequentialOracle(
             commands: reduced.map(\.1),
             specInit: specInit,
-            idleTimeoutMilliseconds: idleTimeout
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds
         )
 
         let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
