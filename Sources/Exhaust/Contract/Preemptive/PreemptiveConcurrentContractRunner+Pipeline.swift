@@ -9,39 +9,30 @@ extension __ExhaustRuntime {
         outcome: Preemptive.Outcome<Backend.Spec>,
         backend: Backend
     ) -> FailureEvidence<Backend.Spec>? {
-        if outcome.passed {
-            return nil
+        switch outcome {
+            case .passed:
+                return nil
+            case .timedOut, .failed:
+                return .init(outcome: outcome, witness: nil, failureDescription: nil)
+            case let .oracleMismatch(laneResponses, concurrentSpec):
+                guard case let .notLinearizable(witness, failure) = backend.checkLinearizability(
+                    taggedCommands: taggedCommands,
+                    laneResponses: laneResponses,
+                    concurrentSpec: concurrentSpec
+                ) else {
+                    return nil
+                }
+                return .init(outcome: outcome, witness: witness, failureDescription: failure)
         }
-        if outcome.timedOut {
-            return .init(outcome: outcome, witness: nil, failureDescription: nil)
-        }
-        guard let laneResponses = outcome.laneResponses,
-              let concurrentSpec = outcome.concurrentSpec
-        else {
-            return .init(outcome: outcome, witness: nil, failureDescription: nil)
-        }
-        guard case let .notLinearizable(witness, failure) = backend.checkLinearizability(
-            taggedCommands: taggedCommands,
-            laneResponses: laneResponses,
-            concurrentSpec: concurrentSpec
-        ) else {
-            return nil
-        }
-        return .init(outcome: outcome, witness: witness, failureDescription: failure)
     }
 
     /// Extracts per-lane response display values from an outcome for trace annotation.
     static func laneResponseValues(
         from outcome: Preemptive.Outcome<some ContractSpecBase>?
     ) -> [UInt8: [String?]]? {
-        guard let outcome, let typedResponses = outcome.laneResponses else { return nil }
-        var values: [UInt8: [String?]] = [:]
-        for laneArray in typedResponses {
-            for response in laneArray {
-                values[response.lane, default: []].append(response.outcome.displayValue)
-            }
-        }
-        return values
+        guard let outcome, let responses = outcome.laneResponses else { return nil }
+        return Dictionary(grouping: responses.joined(), by: \.lane)
+            .mapValues { $0.map(\.outcome.displayValue) }
     }
 
     /// Re-executes the reduced input to confirm the race is reproducible when no reduction probe cached evidence.

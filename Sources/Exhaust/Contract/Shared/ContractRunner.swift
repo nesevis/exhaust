@@ -61,10 +61,12 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column
     ) -> ContractResult<Spec>? {
-        guard case var .success(config) = ResolvedConcurrentConfig.parse(settings) else {
+        let parsed = ResolvedConcurrentConfig.parse(settings)
+        guard parsed.invalidReplaySeed == nil else {
             reportIssue("Invalid replay seed", fileID: fileID, filePath: filePath, line: line, column: column)
             return nil
         }
+        var config = parsed.config
         config.concurrencyLevel = 1
 
         return ExhaustLog.withConfiguration(config.logConfiguration) {
@@ -193,10 +195,12 @@ private extension __ExhaustRuntime {
     ) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
 
-        guard case var .success(config) = ResolvedConcurrentConfig.parse(settings) else {
+        let parsed = ResolvedConcurrentConfig.parse(settings)
+        guard parsed.invalidReplaySeed == nil else {
             deferredIssues.append("Invalid replay seed")
             return (nil, deferredIssues)
         }
+        var config = parsed.config
         config.concurrencyLevel = 1
 
         if config.seed == nil, config.coverageReplayRow == nil, config.replayIteration == nil {

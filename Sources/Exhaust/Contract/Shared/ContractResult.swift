@@ -58,6 +58,30 @@ public enum ContractDiscoveryMethod: Equatable, Sendable, CustomStringConvertibl
             case .replay: "replay"
         }
     }
+
+    /// Encodes a replay seed string for reproducing a failure found by this discovery method.
+    ///
+    /// Coverage results use the `U-N` wire format. Smoke tests encode a fixed seed. Random sampling and replay produce the standard seed-iteration format, returning `nil` when no seed is available.
+    func encodeReplaySeed(seed: UInt64?, iteration: Int) -> String? {
+        switch self {
+            case .coverage:
+                ReplaySeed.Resolved.encodeCoverageIteration(iteration)
+            case .smokeTest:
+                ReplaySeed.Resolved.sampling(seed: 0, iteration: 1).encoded
+            case .randomSampling, .replay:
+                seed.map { ReplaySeed.Resolved.sampling(seed: $0, iteration: iteration).encoded }
+        }
+    }
+
+    /// Filters synthetic seeds to `nil`, passing through only seeds that enable deterministic replay.
+    ///
+    /// Coverage and smoke-test candidates carry synthetic seeds (row numbers or hardcoded zero) that have no PRNG replay value.
+    func resultSeed(_ rawSeed: UInt64?) -> UInt64? {
+        switch self {
+            case .coverage, .smokeTest: nil
+            case .randomSampling, .replay: rawSeed
+        }
+    }
 }
 
 /// A single step in a contract execution trace.

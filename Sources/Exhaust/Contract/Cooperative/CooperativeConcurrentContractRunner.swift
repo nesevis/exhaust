@@ -99,20 +99,18 @@ public extension __ExhaustRuntime {
             }
         }
 
-        let config: ResolvedConcurrentConfig
-        switch ResolvedConcurrentConfig.parse(settings) {
-            case let .success(resolved):
-                config = resolved
-            case let .invalidReplaySeed(seed):
-                reportIssue(
-                    "Invalid replay seed: \(seed)",
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-                return nil
+        let parsed = ResolvedConcurrentConfig.parse(settings)
+        if let invalidSeed = parsed.invalidReplaySeed {
+            reportIssue(
+                "Invalid replay seed: \(invalidSeed)",
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+            return nil
         }
+        let config = parsed.config
 
         // The trait-budget fallback is applied in `ResolvedConcurrentConfig.parse`, so `config.budget` already reflects a suite-level `.budget` trait here.
         var regressionSeeds: [String] = []
@@ -208,6 +206,40 @@ private extension __ExhaustRuntime {
             return result.passed
         }
 
+        func runMachine(
+            config machineConfig: ResolvedConcurrentConfig,
+            smokeProperty: (@Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool)? = nil
+        ) -> (result: ContractResult<Spec>?, issues: [String]) {
+            let runContext = ContractRunContext<Spec>(
+                config: machineConfig,
+                sequenceGen: sequenceGen,
+                commandGen: commandGen,
+                commandLimit: resolvedCommandLimit,
+                identifySkips: identifySkips,
+                invocationCounter: invocationCounter,
+                lastRunTimedOut: lastRunTimedOut,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+
+            let sources = buildConcurrentSources(
+                config: machineConfig,
+                sequenceGen: sequenceGen,
+                commandGen: commandGen,
+                commandLimit: resolvedCommandLimit,
+                concurrencyLevel: concurrencyLevel,
+                taggedCommandGen: taggedCommandGen,
+                property: property,
+                smokeProperty: smokeProperty
+            )
+
+            var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+            let result = machine.run()
+            return (result, runContext.deferredIssues)
+        }
+
         // Regression seeds
         if config.coverageReplayRow == nil, config.seed == nil {
             for encodedSeed in regressionSeeds {
@@ -220,38 +252,21 @@ private extension __ExhaustRuntime {
                 switch decoded {
                     case let .coverage(row):
                         replayConfig.coverageReplayRow = row
+                        let needed = UInt64(row) + 1
+                        if replayConfig.budget.coverageBudget < needed {
+                            replayConfig.budget = .custom(
+                                coverage: needed,
+                                sampling: replayConfig.budget.samplingBudget
+                            )
+                        }
                     case let .sampling(seed, iteration):
                         replayConfig.seed = seed
                         replayConfig.replayIteration = iteration
                 }
 
-                let runContext = ContractRunContext<Spec>(
-                    config: replayConfig,
-                    sequenceGen: sequenceGen,
-                    commandGen: commandGen,
-                    commandLimit: resolvedCommandLimit,
-                    identifySkips: identifySkips,
-                    invocationCounter: invocationCounter,
-                    lastRunTimedOut: lastRunTimedOut,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-
-                let sources = buildConcurrentSources(
-                    config: replayConfig,
-                    sequenceGen: sequenceGen,
-                    commandGen: commandGen,
-                    commandLimit: resolvedCommandLimit,
-                    concurrencyLevel: concurrencyLevel,
-                    taggedCommandGen: taggedCommandGen,
-                    property: property
-                )
-
-                var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
-                if let result = machine.run() {
-                    deferredIssues.append(contentsOf: runContext.deferredIssues)
+                let (result, issues) = runMachine(config: replayConfig)
+                deferredIssues.append(contentsOf: issues)
+                if let result {
                     return (result, deferredIssues)
                 } else if config.suppressIssueReporting == false {
                     deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
@@ -259,39 +274,13 @@ private extension __ExhaustRuntime {
             }
         }
 
-        let runContext = ContractRunContext<Spec>(
-            config: config,
-            sequenceGen: sequenceGen,
-            commandGen: commandGen,
-            commandLimit: resolvedCommandLimit,
-            identifySkips: identifySkips,
-            invocationCounter: invocationCounter,
-            lastRunTimedOut: lastRunTimedOut,
-            fileID: fileID,
-            filePath: filePath,
-            line: line,
-            column: column
-        )
-
         var smokeProperty: (@Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool)?
         if concurrencyLevel > 1 {
             smokeProperty = asyncSequentialProperty(specInit: specInit)
         }
 
-        let sources = buildConcurrentSources(
-            config: config,
-            sequenceGen: sequenceGen,
-            commandGen: commandGen,
-            commandLimit: resolvedCommandLimit,
-            concurrencyLevel: concurrencyLevel,
-            taggedCommandGen: taggedCommandGen,
-            property: property,
-            smokeProperty: smokeProperty
-        )
-
-        var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
-        let result = machine.run()
-        deferredIssues.append(contentsOf: runContext.deferredIssues)
+        let (result, issues) = runMachine(config: config, smokeProperty: smokeProperty)
+        deferredIssues.append(contentsOf: issues)
         return (result, deferredIssues)
     }
 

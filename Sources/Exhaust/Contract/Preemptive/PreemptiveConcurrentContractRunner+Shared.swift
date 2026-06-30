@@ -4,16 +4,34 @@ import IssueReporting
 
 /// Groups shared types for the synchronous and async preemptive contract runners.
 enum Preemptive {
-    /// Reports whether one preemptive concurrent execution passed, failed, or timed out.
+    /// Captures the result of one preemptive concurrent execution probe.
     ///
-    /// `timedOut` distinguishes a hang (a wedged lane or a drain-loop idle bailout) from a genuine pass or property failure, so the runner reports the hang as a timeout rather than dressing it up as a confirmed race. A timed-out run always has `passed == false`.
-    ///
-    /// On failure, `laneResponses` carries the per-lane observed responses for linearizability confirmation. On pass or timeout, `laneResponses` is `nil` because responses are only worth preserving when the oracle flags a potential violation.
-    struct Outcome<Spec: ContractSpecBase> {
-        let passed: Bool
-        let timedOut: Bool
-        let laneResponses: [[ObservedResponse<Spec.Command>]]?
-        let concurrentSpec: Spec?
+    /// Four outcomes are possible: the execution matched some valid sequential ordering (``passed``), a lane or drain loop hung (``timedOut``), a command threw or an invariant broke before response comparison (``failed``), or the oracle flagged a state divergence and per-lane responses are available for linearizability analysis (``oracleMismatch``).
+    enum Outcome<Spec: ContractSpecBase> {
+        /// The execution is consistent with some valid sequential ordering.
+        case passed
+        /// A lane or the drain loop did not finish within the idle timeout.
+        case timedOut(concurrentSpec: Spec?)
+        /// A command threw, an invariant failed, or an ObjC exception was caught before response comparison.
+        case failed(concurrentSpec: Spec?)
+        /// The oracle detected a state divergence from the sequential reference. Per-lane observed responses are available for linearizability analysis.
+        case oracleMismatch(laneResponses: [[ObservedResponse<Spec.Command>]], concurrentSpec: Spec)
+
+        var concurrentSpec: Spec? {
+            switch self {
+                case .passed: nil
+                case let .timedOut(concurrentSpec): concurrentSpec
+                case let .failed(concurrentSpec): concurrentSpec
+                case let .oracleMismatch(_, concurrentSpec): concurrentSpec
+            }
+        }
+
+        var laneResponses: [[ObservedResponse<Spec.Command>]]? {
+            switch self {
+                case let .oracleMismatch(laneResponses, _): laneResponses
+                default: nil
+            }
+        }
     }
 }
 

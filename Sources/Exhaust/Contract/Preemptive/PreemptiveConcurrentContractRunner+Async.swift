@@ -24,17 +24,15 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column
     ) async -> ContractResult<Spec>? {
-        let config: ResolvedConcurrentConfig
-        switch ResolvedConcurrentConfig.parse(settings) {
-            case let .success(resolved):
-                config = resolved
-            case let .invalidReplaySeed(seed):
-                reportIssue(
-                    "Invalid replay seed: \(seed)",
-                    fileID: fileID, filePath: filePath, line: line, column: column
-                )
-                return nil
+        let parsed = ResolvedConcurrentConfig.parse(settings)
+        if let invalidSeed = parsed.invalidReplaySeed {
+            reportIssue(
+                "Invalid replay seed: \(invalidSeed)",
+                fileID: fileID, filePath: filePath, line: line, column: column
+            )
+            return nil
         }
+        let config = parsed.config
 
         var regressionSeeds: [String] = []
         #if canImport(Testing)
@@ -99,15 +97,15 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
         let prefixOnConcurrent = runSequentially(taggedCommands, selectPrefix: true, on: concurrentSpec)
         if prefixOnConcurrent.succeeded == false {
-            return Preemptive.Outcome(passed: false, timedOut: prefixOnConcurrent.timedOut, laneResponses: nil, concurrentSpec: nil)
+            return prefixOnConcurrent.timedOut ? .timedOut(concurrentSpec: nil) : .failed(concurrentSpec: nil)
         }
         let prefixOnSequential = runSequentially(taggedCommands, selectPrefix: true, on: sequentialSpec)
         if prefixOnSequential.succeeded == false {
-            return Preemptive.Outcome(passed: false, timedOut: prefixOnSequential.timedOut, laneResponses: nil, concurrentSpec: nil)
+            return prefixOnSequential.timedOut ? .timedOut(concurrentSpec: nil) : .failed(concurrentSpec: nil)
         }
         let concurrentOnSequential = runSequentially(taggedCommands, selectPrefix: false, on: sequentialSpec)
         if concurrentOnSequential.succeeded == false {
-            return Preemptive.Outcome(passed: false, timedOut: concurrentOnSequential.timedOut, laneResponses: nil, concurrentSpec: nil)
+            return concurrentOnSequential.timedOut ? .timedOut(concurrentSpec: nil) : .failed(concurrentSpec: nil)
         }
 
         var laneIDs: [UInt8] = []
@@ -170,14 +168,14 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
-                return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
+                return .timedOut(concurrentSpec: nil)
             }
         } else {
             group.wait()
         }
 
         if caughtException.value != nil || commandFailed.value {
-            return Preemptive.Outcome(passed: false, timedOut: timedOut.value, laneResponses: nil, concurrentSpec: nil)
+            return timedOut.value ? .timedOut(concurrentSpec: nil) : .failed(concurrentSpec: nil)
         }
 
         nonisolated(unsafe) let invariantSpec = concurrentSpec
@@ -190,11 +188,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 return false
             }
         }) else {
-            return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
+            return .timedOut(concurrentSpec: nil)
         }
 
         if invariantsPassed == false {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return .failed(concurrentSpec: nil)
         }
 
         let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
@@ -206,18 +204,18 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
             nonisolated(unsafe) let sequentialResult = sequentialSpec.systemUnderTest
             switch awaitOrTimeout("oracle", { await oracleSpec.oracleCheck(sequentialResult) }) {
                 case .some(true):
-                    return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+                    return .passed
                 case .none:
-                    return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
+                    return .timedOut(concurrentSpec: nil)
                 case .some(false):
-                    return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
+                    return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
             }
         }
         // Try the realized completion order as a single linearization witness before the full interleaving search.
         if realizedOrderIsLinearizable(prefix: prefixCommands, realizedOrder: completionOrdered.value, concurrentSpec: concurrentSpec) {
-            return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return .passed
         }
-        return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
+        return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
     }
 
     /// Async counterpart of the synchronous witness check: replays the concurrent commands in realized completion order through the drain loop on a fresh spec.

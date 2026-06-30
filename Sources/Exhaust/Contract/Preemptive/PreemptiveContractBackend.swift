@@ -17,7 +17,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
     ) -> ProbeOutcome {
         let partition = LanePartition(candidate)
         let outcome = inner.execute(candidate, partition: partition)
-        if outcome.timedOut {
+        if case .timedOut = outcome {
             return .timeout
         }
         if let evidence = __ExhaustRuntime.classifyFailure(
