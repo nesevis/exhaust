@@ -113,16 +113,13 @@ extension __ExhaustRuntime {
             ) == nil
         }
 
-        let smokeSource: AnyContractCandidateSource<Spec.Command>? = {
-            guard let smokeTaggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: 1) else {
-                return nil
-            }
-            let smokeGen = Gen.arrayOf(smokeTaggedCommandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
-            let smokeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
-                innerBackend.runSmoke(tagged.map(\.1)).failed == false
-            }
-            return .smoke(sequenceGen: smokeGen, property: smokeProperty)
-        }()
+        let smokeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
+            innerBackend.runSmoke(tagged.map(\.1)).failed == false
+        }
+        let smokeSource: AnyContractCandidateSource<Spec.Command>? = .smoke(
+            sequenceGen: sequenceGen,
+            property: smokeProperty
+        )
 
         let pipeline = ContractPipeline(
             backend: backend,

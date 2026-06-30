@@ -36,8 +36,6 @@ struct ContractMachine<Backend: ContractBackend> {
         switch phase {
             case .pullSource:
                 return stepPullSource()
-            case .checkTimeout:
-                return stepCheckTimeout()
             case .prune:
                 return stepPrune()
             case .reduce:
@@ -69,7 +67,7 @@ struct ContractMachine<Backend: ContractBackend> {
             }
             candidate = found
             accountCandidate(found)
-            phase = .checkTimeout
+            phase = .prune
             return .candidateFound(
                 discoveryMethod: found.discoveryMethod,
                 commandCount: found.taggedCommands.count
@@ -107,9 +105,9 @@ struct ContractMachine<Backend: ContractBackend> {
         context.failureContext.sequencesTested = candidate.sourceInvocations
     }
 
-    // MARK: - Check Timeout
+    // MARK: - Prune
 
-    private mutating func stepCheckTimeout() -> Transition {
+    private mutating func stepPrune() -> Transition {
         guard let candidate else {
             phase = .pullSource
             return .sourceExhausted
@@ -132,21 +130,9 @@ struct ContractMachine<Backend: ContractBackend> {
             return .timedOut
         }
 
-        phase = .prune
-        return .pruned
-    }
-
-    // MARK: - Prune
-
-    private mutating func stepPrune() -> Transition {
-        guard let candidate else {
-            phase = .pullSource
-            return .sourceExhausted
-        }
-
         nonisolated(unsafe) let unsafeBackend = backend
         nonisolated(unsafe) let unsafeContext = context
-        let result = __ExhaustRuntime.pruneSkippedCommands(
+        let pruneResult = __ExhaustRuntime.pruneSkippedCommands(
             value: candidate.taggedCommands,
             tree: candidate.tree,
             generator: context.sequenceGen,
@@ -157,7 +143,7 @@ struct ContractMachine<Backend: ContractBackend> {
             identifySkips: context.identifySkips,
             logEvent: "contract_skip_pruning"
         )
-        pruned = (value: result.value, tree: result.tree)
+        pruned = (value: pruneResult.value, tree: pruneResult.tree)
 
         phase = .reduce
         return .pruned
@@ -249,7 +235,6 @@ extension ContractMachine {
     /// Tracks which pipeline step the machine will execute on the next call to ``next()``.
     enum Phase {
         case pullSource
-        case checkTimeout
         case prune
         case reduce
         case recordStats
