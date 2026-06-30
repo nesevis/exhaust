@@ -53,11 +53,9 @@ final class ContractRunContext<Spec: ContractSpecBase> {
         self.column = column
     }
 
-    var reductionConfig: Interpreters.ReducerConfiguration {
-        Interpreters.ReducerConfiguration(
-            maxStalls: 2,
-            wallClockDeadlineNanoseconds: config.budget.samplingBudget * 5 * 1_000_000,
-            tuning: SchedulerTuning(relaxMaterializationBudget: 0)
-        )
-    }
+    lazy var reductionConfig = Interpreters.ReducerConfiguration(
+        maxStalls: 2,
+        wallClockDeadlineNanoseconds: config.budget.samplingBudget * 5 * 1_000_000,
+        tuning: SchedulerTuning(relaxMaterializationBudget: 0)
+    )
 }

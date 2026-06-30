@@ -230,7 +230,7 @@ struct ContractMachine<Backend: ContractBackend> {
 
         result = built
         phase = .finalize
-        return .assembled(built)
+        return .assembled
     }
 
     // MARK: - Finalize
@@ -278,6 +278,6 @@ extension ContractMachine {
         case pruned
         case reduced
         case statsRecorded
-        case assembled(ContractResult<Backend.Spec>)
+        case assembled
     }
 }
