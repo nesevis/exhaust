@@ -9,9 +9,11 @@ struct DetectionBoundaryTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Race without suspension point is NOT detected (demonstrates tool limitation)")
     func raceWithoutSuspensionPointIsNOTDetectedDemonstratesToolLimitation() async {
-        let result = await __ExhaustRuntime.__runContractConcurrent(
+        let result = await #execute(
             SilentRaceSpec.self,
-            settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+            .commandLimit(6),
+            .budget(.custom(coverage: 0, sampling: 500)),
+            .suppress(.issueReporting)
         )
         #expect(result == nil, "Race without await/yield between read and write is invisible to cooperative scheduling")
     }
@@ -20,9 +22,11 @@ struct DetectionBoundaryTests {
     @Test("Same race WITH suspension point IS detected")
     func sameRaceWITHSuspensionPointISDetected() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runContractConcurrent(
+            await #execute(
                 ExposedRaceSpec.self,
-                settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+                .commandLimit(4),
+                .budget(.custom(coverage: 0, sampling: 200)),
+                .suppress(.issueReporting)
             )
         )
         let hasFailure = result.trace.contains { step in
@@ -36,9 +40,12 @@ struct DetectionBoundaryTests {
     @Test("Three-way race detected with concurrencyLevel 3")
     func threeWayRaceDetectedWithConcurrencyLevel3() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runContractConcurrent(
+            await #execute(
                 ThreeWayRaceSpec.self,
-                settings: [.concurrent(.three), .commandLimit(6), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+                .concurrent(.three),
+                .commandLimit(6),
+                .budget(.custom(coverage: 0, sampling: 500)),
+                .suppress(.issueReporting)
             )
         )
         let hasFailure = result.trace.contains { step in
@@ -52,9 +59,12 @@ struct DetectionBoundaryTests {
     @Test("Four-way race detected with concurrencyLevel 4 (exercises chooseLaneControl)")
     func fourWayRaceDetectedWithConcurrencyLevel4ExercisesChooseLaneControl() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runContractConcurrent(
+            await #execute(
                 ThreeWayRaceSpec.self,
-                settings: [.concurrent(.four), .commandLimit(8), .budget(.custom(coverage: 0, sampling: 500)), .suppress(.issueReporting)]
+                .concurrent(.four),
+                .commandLimit(8),
+                .budget(.custom(coverage: 0, sampling: 500)),
+                .suppress(.issueReporting)
             )
         )
         let hasFailure = result.trace.contains { step in

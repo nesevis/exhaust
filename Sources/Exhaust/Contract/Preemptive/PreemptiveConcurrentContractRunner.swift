@@ -23,35 +23,142 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column
     ) -> ContractResult<Spec>? {
-        let config: ResolvedConcurrentConfig
-        switch ResolvedConcurrentConfig.parse(settings) {
-            case let .success(resolved):
-                config = resolved
-            case let .invalidReplaySeed(seed):
-                reportIssue(
-                    "Invalid replay seed: \(seed)",
-                    fileID: fileID, filePath: filePath, line: line, column: column
-                )
-                return nil
+        let parsed = ResolvedConcurrentConfig.parse(settings)
+        if let invalidSeed = parsed.invalidReplaySeed {
+            reportIssue(
+                "Invalid replay seed: \(invalidSeed)",
+                fileID: fileID, filePath: filePath, line: line, column: column
+            )
+            return nil
         }
+        let config = parsed.config
 
         var regressionSeeds: [String] = []
         #if canImport(Testing)
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
-        let backend = PreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
+        let innerBackend = PreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
+        let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
+        warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
-        let (result, deferredIssues, report): (ContractResult<Spec>?, [String], ExhaustReport) = DispatchQueue.global().sync {
+        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = DispatchQueue.global().sync {
             ExhaustLog.withConfiguration(config.logConfiguration) {
-                runPreemptivePipeline(backend: backend, config: config, regressionSeeds: regressionSeeds)
+                runPreemptiveMachine(
+                    innerBackend: innerBackend,
+                    config: config,
+                    regressionSeeds: regressionSeeds,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
             }
         }
-        config.onReportClosure?(report)
         for issue in deferredIssues {
             reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }
         return result
+    }
+}
+
+// MARK: - Machine Pipeline
+
+extension __ExhaustRuntime {
+    static func runPreemptiveMachine<Inner: PreemptiveBackend>(
+        innerBackend: Inner,
+        config: ResolvedConcurrentConfig,
+        regressionSeeds: [String],
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
+    ) -> (result: ContractResult<Inner.Spec>?, deferredIssues: [String]) {
+        typealias Spec = Inner.Spec
+        var deferredIssues: [String] = []
+
+        let commandGen = Spec.commandGenerator.gen
+        let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
+
+        guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
+            deferredIssues.append("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure.")
+            return (nil, deferredIssues)
+        }
+        let sequenceGen = Gen.arrayOf(
+            taggedCommandGen,
+            within: 1 ... UInt64(commandLimit),
+            scaling: .constant
+        )
+
+        let identifySkips = innerBackend.makeIdentifySkips()
+
+        let backend = PreemptiveContractBackend(
+            inner: innerBackend,
+            concurrencyLevel: config.concurrencyLevel
+        )
+
+        let invocationCounter = UnsafeSendableBox(0)
+        let lastRunTimedOut = UnsafeSendableBox(false)
+        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+            invocationCounter.value += 1
+            let partition = LanePartition(taggedCommands)
+            let outcome = innerBackend.execute(taggedCommands, partition: partition)
+            if case .timedOut = outcome {
+                lastRunTimedOut.value = true
+            }
+            return classifyFailure(
+                taggedCommands: taggedCommands,
+                outcome: outcome,
+                backend: innerBackend
+            ) == nil
+        }
+
+        let smokeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
+            invocationCounter.value += 1
+            let smoke = innerBackend.runSmoke(tagged.map(\.1))
+            if smoke.timedOut {
+                lastRunTimedOut.value = true
+            }
+            return smoke.failed == false
+        }
+        // Smoke runs commands sequentially, so generate concurrency-1 (all-prefix) sequences. The candidate then carries this generator and reduces sequentially even when the run uses multiple lanes.
+        let smokeSequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
+        if let sequentialCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: 1) {
+            smokeSequenceGen = Gen.arrayOf(sequentialCommandGen, within: 1 ... UInt64(commandLimit), scaling: .constant)
+        } else {
+            smokeSequenceGen = sequenceGen
+        }
+        let smokeSource: AnyContractCandidateSource<Spec.Command>? = .smoke(
+            sequenceGen: smokeSequenceGen,
+            property: smokeProperty
+        )
+
+        let pipeline = ContractPipeline(
+            backend: backend,
+            sequenceGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            concurrencyLevel: config.concurrencyLevel,
+            identifySkips: identifySkips,
+            property: property,
+            invocationCounter: invocationCounter,
+            lastRunTimedOut: lastRunTimedOut,
+            sequenceGenForLength: { range in
+                Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
+            },
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+
+        let (result, issues) = pipeline.runWithRegressions(
+            config: config,
+            regressionSeeds: regressionSeeds,
+            mainRunSmokeSource: smokeSource
+        )
+        deferredIssues.append(contentsOf: issues)
+        return (result, deferredIssues)
     }
 }
 
@@ -117,25 +224,27 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
     /// Executes a tagged command sequence with real GCD concurrency using a pre-computed lane partition.
     ///
-    /// `passed` is `false` when a command throws, an invariant fails, or the oracle detects divergence from sequential behavior. `timedOut` is `true` when the concurrent lanes did not finish within ``idleTimeoutMilliseconds``, surfaced separately so the caller can skip reduction (every probe would wait out the bound) and report a hang rather than a deterministic failure.
+    /// Returns ``Preemptive/Outcome/failed(concurrentSpec:)`` when a command throws, an invariant fails, or an ObjC exception is caught. Returns ``Preemptive/Outcome/timedOut(concurrentSpec:)`` when the concurrent lanes do not finish within ``idleTimeoutMilliseconds``, so the ``ContractMachine`` can skip reduction and report a hang rather than a deterministic failure.
     func execute(_: [(ScheduleMarker, Spec.Command)], partition: LanePartition<Spec.Command>) -> Preemptive.Outcome<Spec> {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
         if runAllCommandsCatchingObjC(partition.prefixCommands, on: concurrentSpec) == false {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return .failed(concurrentSpec: concurrentSpec)
         }
         if runAllCommandsCatchingObjC(partition.prefixCommands, on: sequentialSpec) == false {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return .failed(concurrentSpec: concurrentSpec)
         }
 
         if runAllCommandsCatchingObjC(partition.concurrentCommands, on: sequentialSpec) == false {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return .failed(concurrentSpec: concurrentSpec)
         }
 
         let perLaneResponses = partition.laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
         let commandFailed = SendableBox(false)
         let caughtException = SendableBox<NSException?>(nil)
+        // `withValue`'s lock serializes appends into realized completion order.
+        let completionOrdered = SendableBox<[ObservedResponse<Spec.Command>]>([])
         let group = DispatchGroup()
 
         nonisolated(unsafe) let unsafeConcurrentSpec = concurrentSpec
@@ -148,21 +257,19 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                 var exception: NSException?
                 let succeeded = exhaust_runCatchingObjCException({
                     for command in laneCommands {
-                        if commandFailed.value { break }
+                        if commandFailed.value {
+                            break
+                        }
                         do {
                             let response = try unsafeConcurrentSpec.run(command)
                             let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
-                            localResponses.append(ObservedResponse<Spec.Command>(
-                                lane: laneID,
-                                command: command,
-                                outcome: outcome
-                            ))
+                            let observed = ObservedResponse<Spec.Command>(lane: laneID, command: command, outcome: outcome)
+                            localResponses.append(observed)
+                            completionOrdered.withValue { $0.append(observed) }
                         } catch is ContractSkip {
-                            localResponses.append(ObservedResponse<Spec.Command>(
-                                lane: laneID,
-                                command: command,
-                                outcome: .skipped
-                            ))
+                            let observed = ObservedResponse<Spec.Command>(lane: laneID, command: command, outcome: .skipped)
+                            localResponses.append(observed)
+                            completionOrdered.withValue { $0.append(observed) }
                         } catch {
                             commandFailed.value = true
                             break
@@ -179,28 +286,78 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
-                return Preemptive.Outcome(passed: false, timedOut: true, laneResponses: nil, concurrentSpec: nil)
+                return .timedOut(concurrentSpec: concurrentSpec)
             }
         } else {
             group.wait()
         }
 
         if caughtException.value != nil || commandFailed.value {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return .failed(concurrentSpec: concurrentSpec)
         }
 
         do {
             try concurrentSpec.checkInvariants()
         } catch {
-            return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: nil, concurrentSpec: nil)
+            return .failed(concurrentSpec: concurrentSpec)
         }
 
-        let oraclePassed = concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest)
-        if oraclePassed {
-            return Preemptive.Outcome(passed: true, timedOut: false, laneResponses: nil, concurrentSpec: nil)
-        }
         let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
-        return Preemptive.Outcome(passed: false, timedOut: false, laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
+        // Void-only, no-skip commands carry no response data, so linearizability reduces to final-state equivalence.
+        let hasResponseInfo = completionOrdered.value.contains { $0.outcome.returnValue != nil || $0.outcome.isSkipped }
+        if hasResponseInfo == false {
+            if concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest) {
+                return .passed
+            }
+            return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
+        }
+        // Try the realized completion order as a single linearization witness before the full interleaving search.
+        if realizedOrderIsLinearizable(prefix: partition.prefixCommands, realizedOrder: completionOrdered.value, concurrentSpec: concurrentSpec) {
+            return .passed
+        }
+        return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
+    }
+
+    /// Whether the realized completion order is a valid linearization: a sequential replay of the concurrent commands in the order the lanes finished, on a fresh spec, that reproduces every observed response and the oracle's final state.
+    ///
+    /// A match means the execution is linearizable (this order is a concrete witness), so the ``ContractMachine`` can pass without the full interleaving search.
+    /// Any divergence (a differing response, an oracle mismatch, a replay throw, or an ObjC exception) returns `false`, and the ``ContractMachine`` hands the per-lane responses to ``checkLinearizability(taggedCommands:laneResponses:concurrentSpec:)``.
+    /// The check is sound: it only reports a pass when an actual sequential order reproduces the observation.
+    private func realizedOrderIsLinearizable(
+        prefix: [Spec.Command],
+        realizedOrder: [ObservedResponse<Spec.Command>],
+        concurrentSpec: Spec
+    ) -> Bool {
+        let witnessSpec = Spec()
+        var matched = false
+        var exception: NSException?
+        let completed = exhaust_runCatchingObjCException({
+            for command in prefix {
+                do {
+                    try witnessSpec.run(command)
+                } catch is ContractSkip {
+                    continue
+                } catch {
+                    return
+                }
+            }
+            for observed in realizedOrder {
+                do {
+                    let response = try witnessSpec.run(observed.command)
+                    if preemptiveResponseMatches(observed: observed.outcome, replayValue: response.returnValue, replaySkipped: false) == false {
+                        return
+                    }
+                } catch is ContractSkip {
+                    if observed.outcome.isSkipped == false {
+                        return
+                    }
+                } catch {
+                    return
+                }
+            }
+            matched = concurrentSpec.oracleCheck(witnessSpec.systemUnderTest)
+        }, &exception)
+        return completed && exception == nil && matched
     }
 
     /// Runs all commands on a spec under a single ObjC exception guard, treating ``ContractSkip`` as a pass.
@@ -258,11 +415,15 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                 return true
             },
             replayCommand: { command in
-                guard let spec = replaySpec else { return nil }
+                guard let spec = replaySpec else {
+                    return nil
+                }
                 return Self.replaySync(command, on: spec)
             },
             checkOracle: {
-                guard let spec = replaySpec else { return false }
+                guard let spec = replaySpec else {
+                    return false
+                }
                 return concurrentSpec.oracleCheck(spec.systemUnderTest)
             },
             failureDescription: {
@@ -304,7 +465,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         }
     }
 
-    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
+    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, timedOut: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
         let spec = Spec()
         let (trace, failed) = __ExhaustRuntime.buildSequentialTrace(
             commands,
@@ -327,19 +488,19 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             checkInvariants: { try spec.checkInvariants() }
         )
         if failed {
-            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+            return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
         // A .threads spec expresses its self-consistency check through the @Oracle, because the macro rejects @Invariant under .threads, and smoke never runs the concurrent phase.
         // Replay the sequence on a fresh reference and call the oracle once at the end, so a spec that is already broken under sequential execution fails here before any concurrent probing.
         // The reference is a distinct spec so the oracle's relational comparison is between two independent runs rather than the SUT against itself.
         let reference = Spec()
         guard runAllCommandsCatchingObjC(commands, on: reference) else {
-            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+            return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
         if spec.oracleCheck(reference.systemUnderTest) == false {
-            return (trace, true, spec.systemUnderTest, spec.failureDescription())
+            return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
-        return (trace, false, spec.systemUnderTest, nil)
+        return (trace, false, false, spec.systemUnderTest, nil)
     }
 
     /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails, because the partial state would mislead debugging.
@@ -352,26 +513,11 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         timedOut: Bool
     ) -> (result: ContractResult<Spec>, failureDescription: String?) {
         let oracleSpec = Spec()
-        var replaySucceeded = true
-        for (_, command) in reduced {
-            var exception: NSException?
-            let succeeded = exhaust_runCatchingObjCException({
-                do {
-                    try oracleSpec.run(command)
-                } catch is ContractSkip {
-                    // Skip is expected, continue.
-                } catch {
-                    replaySucceeded = false
-                }
-            }, &exception)
-            if succeeded == false || replaySucceeded == false {
-                replaySucceeded = false
-                break
-            }
-        }
+        let commands = reduced.map(\.1)
+        let replaySucceeded = runAllCommandsCatchingObjC(commands, on: oracleSpec)
         let result = ContractResult<Spec>(
             status: timedOut ? .timeout : .fail,
-            commands: reduced.map(\.1),
+            commands: commands,
             originalCommands: originalCommands,
             trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),
             systemUnderTest: replaySucceeded ? oracleSpec.systemUnderTest : nil,

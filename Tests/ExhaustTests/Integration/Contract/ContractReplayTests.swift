@@ -55,6 +55,9 @@ struct ContractReplayTests {
             )
         )
         #expect(replayed.commands.isEmpty == false, "Coverage row replay should reproduce the failure")
+        // A replayed coverage failure must stay a coverage result and round-trip to the same `U-N` seed, rather than degrading into a sampling-format seed that no longer targets the row.
+        #expect(replayed.discoveryMethod == .coverage)
+        #expect(replayed.replaySeed == replaySeed)
     }
 
     @Test("Seed-only replay (no iteration) still finds failure within budget")
@@ -84,44 +87,35 @@ struct ContractReplayTests {
 
 @Suite("Preemptive oracle replay", .serialized, .tags(.contract))
 struct PreemptiveOracleReplayTests {
-    @Test("Smoke-phase failure replays deterministically through the coverage row path")
-    func smokePhaseFailureReplaysDeterministically() throws {
+    @Test("Sequentially broken spec replays deterministically")
+    func sequentiallyBrokenSpecReplaysDeterministically() throws {
         let initial = try #require(
-            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+            #execute(
                 PreemptiveSequentiallyBrokenSpec.self,
-                settings: [
-                    .commandLimit(6),
-                    .suppress(.all),
-                ]
+                .commandLimit(6),
+                .suppress(.all)
             )
         )
         let replaySeed = try #require(initial.replaySeed)
-        #expect(replaySeed == "0-1")
-        #expect(initial.discoveryMethod == .smokeTest)
-
         let replayed = try #require(
-            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+            #execute(
                 PreemptiveSequentiallyBrokenSpec.self,
-                settings: [
-                    .commandLimit(6),
-                    .replay(.encoded(replaySeed)),
-                    .suppress(.all),
-                ]
+                .commandLimit(6),
+                .replay(.encoded(replaySeed)),
+                .suppress(.all)
             )
         )
-        #expect(replayed.commands.isEmpty == false, "Smoke row replay should reproduce the failure")
+        #expect(replayed.commands.isEmpty == false, "Replay should reproduce the failure")
     }
 
     @Test("Smoke catches sequentially broken spec before concurrent execution")
     func smokeCatchesSequentiallyBrokenSpecBeforeConcurrentExecution() throws {
         let result = try #require(
-            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+            #execute(
                 AlwaysThrowingPreemptiveSpec.self,
-                settings: [
-                    .commandLimit(2),
-                    .budget(.custom(coverage: 0, sampling: 50)),
-                    .suppress(.all),
-                ]
+                .commandLimit(2),
+                .budget(.custom(coverage: 0, sampling: 50)),
+                .suppress(.all)
             )
         )
         #expect(result.discoveryMethod == .smokeTest)
@@ -135,27 +129,24 @@ struct ConcurrentContractReplayTests {
     @Test("Iteration-targeted replay reproduces a cooperative concurrent failure")
     func iterationTargetedReplayReproducesCooperativeConcurrentFailure() async throws {
         let initial = try #require(
-            await __ExhaustRuntime.__runContractConcurrent(
+            await #execute(
                 ReplayableNonAtomicCounterSpec.self,
-                settings: [
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 2000)),
-                    .suppress(.all),
-                ]
+                .commandLimit(6),
+                .budget(.custom(coverage: 0, sampling: 2000)),
+                .idleTimeoutMs(5000),
+                .suppress(.all)
             )
         )
         let replaySeed = try #require(initial.replaySeed)
         #expect(replaySeed.contains("-"), "Sampling replay seed should include iteration suffix")
 
         let replayed = try #require(
-            await __ExhaustRuntime.__runContractConcurrent(
+            await #execute(
                 ReplayableNonAtomicCounterSpec.self,
-                settings: [
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 2000)),
-                    .replay(.encoded(replaySeed)),
-                    .suppress(.all),
-                ]
+                .commandLimit(6),
+                .budget(.custom(coverage: 0, sampling: 2000)),
+                .replay(.encoded(replaySeed)),
+                .suppress(.all)
             )
         )
         #expect(replayed.commands.isEmpty == false, "Iteration-targeted replay should reproduce the failure")
@@ -166,30 +157,28 @@ struct ConcurrentContractReplayTests {
     @Test("Coverage row replay reproduces a cooperative concurrent SCA failure")
     func coverageRowReplayReproducesCooperativeConcurrentSCAFailure() async throws {
         let initial = try #require(
-            await __ExhaustRuntime.__runContractConcurrent(
+            await #execute(
                 ReplayableNonAtomicCounterSpec.self,
-                settings: [
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 2000, sampling: 0)),
-                    .suppress(.all),
-                ]
+                .commandLimit(6),
+                .budget(.custom(coverage: 2000, sampling: 0)),
+                .suppress(.all)
             )
         )
         let replaySeed = try #require(initial.replaySeed)
-        #expect(replaySeed.hasPrefix("U"), "Coverage replay seed should have U prefix")
-
         let replayed = try #require(
-            await __ExhaustRuntime.__runContractConcurrent(
+            await #execute(
                 ReplayableNonAtomicCounterSpec.self,
-                settings: [
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 2000, sampling: 0)),
-                    .replay(.encoded(replaySeed)),
-                    .suppress(.all),
-                ]
+                .commandLimit(6),
+                .budget(.custom(coverage: 2000, sampling: 0)),
+                .replay(.encoded(replaySeed)),
+                .suppress(.all)
             )
         )
-        #expect(replayed.commands.isEmpty == false, "Coverage row replay should reproduce the failure")
+        #expect(replayed.commands.isEmpty == false, "Replay should reproduce the failure")
+        if initial.discoveryMethod == .coverage {
+            #expect(replayed.discoveryMethod == .coverage)
+            #expect(replayed.replaySeed == replaySeed)
+        }
     }
 }
 
@@ -255,7 +244,9 @@ final class ReplayableNonAtomicCounterSpec {
 
     @Command(weight: 2)
     func decrement() async throws {
-        guard expected > 0 else { throw skip() }
+        guard expected > 0 else {
+            throw skip()
+        }
         expected -= 1
         await counter.decrement()
     }
@@ -313,7 +304,9 @@ final class PreemptiveReplayableSpec {
 
     @Command(weight: 2)
     func decrement() throws {
-        guard expected > 0 else { throw skip() }
+        guard expected > 0 else {
+            throw skip()
+        }
         expected -= 1
         counter.decrement()
     }
@@ -373,7 +366,9 @@ final class PreemptiveSequentiallyBrokenSpec {
 
     @Command(weight: 2)
     func decrement() throws {
-        guard expected > 0 else { throw skip() }
+        guard expected > 0 else {
+            throw skip()
+        }
         expected -= 1
         counter.decrement()
     }

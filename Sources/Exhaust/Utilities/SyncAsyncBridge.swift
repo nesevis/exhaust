@@ -29,7 +29,7 @@ extension __ExhaustRuntime {
 
     /// Like ``blockingAwait(_:)`` but bails with `nil` if the work makes no progress within `idleTimeoutMilliseconds`.
     ///
-    /// Use when the awaited work may suspend onto a foreign executor (the main actor, a custom-executor actor, the global pool, `Task.sleep`, or I/O bridged through a continuation that resumes elsewhere). Such a continuation never returns to this single drain lane, so the unbounded ``blockingAwait(_:)`` would spin a CPU core forever. The bound mirrors the cooperative scheduler's idle timeout: the drain-loop path measures time since the last drained job (so legitimately long-but-active work does not trip it); the semaphore fallback measures total wall-clock.
+    /// Use when the awaited work may suspend onto a foreign executor (the main actor, a custom-executor actor, the global pool, `Task.sleep`, or I/O bridged through a continuation that resumes elsewhere). Such a continuation never returns to this single drain lane, so the unbounded ``blockingAwait(_:)`` would park the calling thread indefinitely. The bound mirrors the cooperative scheduler's idle timeout: the drain-loop path measures time since the last drained job (so legitimately long-but-active work does not trip it); the semaphore fallback measures total wall-clock.
     static func blockingAwait<Result>(
         idleTimeoutMilliseconds: Int,
         _ work: @Sendable @escaping () async -> Result

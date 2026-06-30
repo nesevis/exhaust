@@ -238,13 +238,11 @@ struct ConcurrentContractDrainLoopTests {
     @Test("Concurrent contract with Task.yield suspension points")
     func concurrentContractWithTaskyieldSuspensionPoints() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runContractConcurrent(
+            await #execute(
                 YieldingCounterSpec.self,
-                settings: [
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 100)),
-                    .suppress(.issueReporting),
-                ]
+                .commandLimit(6),
+                .budget(.custom(coverage: 0, sampling: 100)),
+                .suppress(.issueReporting)
             )
         )
         #expect(result.commands.count >= 2)
@@ -256,13 +254,11 @@ struct ConcurrentContractDrainLoopTests {
         await withTaskGroup(of: Void.self) { group in
             for _ in 0 ..< 5 {
                 group.addTask {
-                    _ = await __ExhaustRuntime.__runContractConcurrent(
+                    _ = await #execute(
                         YieldingCounterSpec.self,
-                        settings: [
-                            .commandLimit(4),
-                            .budget(.custom(coverage: 0, sampling: 50)),
-                            .suppress(.all),
-                        ]
+                        .commandLimit(4),
+                        .budget(.custom(coverage: 0, sampling: 50)),
+                        .suppress(.all)
                     )
                 }
             }
@@ -273,7 +269,7 @@ struct ConcurrentContractDrainLoopTests {
 // MARK: - Specs
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-@Contract(.sequential)
+@Contract(.tasks)
 final class YieldingCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: YieldingCounter = .init()

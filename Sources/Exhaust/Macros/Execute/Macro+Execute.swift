@@ -23,9 +23,7 @@ import ExhaustCore
 /// - `.onReport(_)`: registers a closure that receives an ``ExhaustReport`` after the test completes.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
-/// - `.includeDiff`: includes a structural diff between the original and reduced command sequences in the failure report.
 /// - `.log(_)`: controls log verbosity. Defaults to `.error`.
-/// - `.collectOpenPBTStats`: collects per-example statistics in the OpenPBTStats JSON Lines format.
 ///
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
@@ -55,9 +53,7 @@ public macro execute<Spec: ContractSpec>(
 /// - `.onReport(_)`: registers a closure that receives an ``ExhaustReport`` after the test completes.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
-/// - `.includeDiff`: includes a structural diff between the original and reduced command sequences in the failure report.
 /// - `.log(_)`: controls log verbosity. Defaults to `.error`.
-/// - `.collectOpenPBTStats`: collects per-example statistics in the OpenPBTStats JSON Lines format.
 ///
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)

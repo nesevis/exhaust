@@ -16,7 +16,7 @@ public struct ContractResult<Spec: ContractSpecBase> {
     /// Step-by-step execution trace of the failing sequence.
     public let trace: [TraceStep]
 
-    /// The system under test's state after executing the failing sequence. For concurrent contracts, this is the state from a sequential replay, the expected outcome without the race. Nil when the sequential replay also failed or the test timed out.
+    /// The system under test's state after executing the failing sequence. For concurrent contracts, this is the state from a sequential replay, the expected outcome without the race. `nil` when the sequential replay also failed or the test timed out.
     public let systemUnderTest: Spec.SystemUnderTest?
 
     /// The seed for deterministic replay, if available.
@@ -56,6 +56,30 @@ public enum ContractDiscoveryMethod: Equatable, Sendable, CustomStringConvertibl
             case .coverage: "coverage"
             case .randomSampling: "random sampling"
             case .replay: "replay"
+        }
+    }
+
+    /// Encodes a replay seed string for reproducing a failure found by this discovery method.
+    ///
+    /// Coverage results encode the row number as `U-{row}` (for example, `U-3` replays the third coverage row). Smoke tests encode a fixed seed. Random sampling and replay produce the standard seed-iteration format, returning `nil` when no seed is available.
+    func encodeReplaySeed(seed: UInt64?, iteration: Int) -> String? {
+        switch self {
+            case .coverage:
+                ReplaySeed.Resolved.encodeCoverageIteration(iteration)
+            case .smokeTest:
+                ReplaySeed.Resolved.sampling(seed: 0, iteration: 1).encoded
+            case .randomSampling, .replay:
+                seed.map { ReplaySeed.Resolved.sampling(seed: $0, iteration: iteration).encoded }
+        }
+    }
+
+    /// Filters synthetic seeds to `nil`, passing through only seeds that enable deterministic replay.
+    ///
+    /// Coverage and smoke-test candidates carry synthetic seeds (row numbers or hardcoded zero) that have no PRNG replay value.
+    func resultSeed(_ rawSeed: UInt64?) -> UInt64? {
+        switch self {
+            case .coverage, .smokeTest: nil
+            case .randomSampling, .replay: rawSeed
         }
     }
 }

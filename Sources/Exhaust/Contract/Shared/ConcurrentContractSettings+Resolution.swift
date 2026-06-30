@@ -10,22 +10,22 @@ struct ResolvedConcurrentConfig {
     var replayIteration: Int?
     var coverageReplayRow: Int?
     static let defaultIdleTimeout = 2000
-    var idleTimeout: Int = defaultIdleTimeout
+    var idleTimeoutMilliseconds: Int = defaultIdleTimeout
     var suppressIssueReporting: Bool = false
     var suppressLogs: Bool = false
-    var collectOpenPBTStats: Bool = false
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
 
     var shouldRunCoverage: Bool {
         replayIteration == nil
-            && (seed == nil || coverageReplayRow != nil)
+            && seed == nil
+            && coverageReplayRow == nil
             && budget.coverageBudget > 0
     }
 
     /// Normalized idle timeout: `nil` when the configured value is non-positive or sentinel-large (``Int/max``), meaning "wait unbounded". Used by the preemptive checkers to distinguish a real timeout from an intentionally disabled one.
     var resolvedIdleTimeoutMilliseconds: Int? {
-        (idleTimeout > 0 && idleTimeout < Int.max) ? idleTimeout : nil
+        (idleTimeoutMilliseconds > 0 && idleTimeoutMilliseconds < Int.max) ? idleTimeoutMilliseconds : nil
     }
 
     /// Log configuration derived from the resolved settings, shared by all concurrent entry points.
@@ -37,13 +37,29 @@ struct ResolvedConcurrentConfig {
         )
     }
 
-    enum ParseResult {
-        case success(ResolvedConcurrentConfig)
-        case invalidReplaySeed(ReplaySeed)
+    /// Extracts log configuration from raw settings.
+    static func logConfiguration(from settings: [ContractSettings]) -> ExhaustLog.Configuration {
+        parse(settings).config.logConfiguration
+    }
+
+    mutating func applySuppress(_ option: SuppressOption) {
+        switch option {
+            case .issueReporting: suppressIssueReporting = true
+            case .logs: suppressLogs = true
+            case .all:
+                applySuppress(.issueReporting)
+                applySuppress(.logs)
+        }
+    }
+
+    struct ParseResult {
+        var config: ResolvedConcurrentConfig
+        var invalidReplaySeed: ReplaySeed?
     }
 
     static func parse(_ settings: [ContractSettings]) -> ParseResult {
         var config = ResolvedConcurrentConfig()
+        var invalidSeed: ReplaySeed?
         for setting in settings {
             switch setting {
                 case let .concurrent(level):
@@ -53,44 +69,30 @@ struct ResolvedConcurrentConfig {
                 case let .commandLimit(limit):
                     config.commandLimit = max(Int(limit), 1)
                 case let .replay(replaySeed):
-                    guard let resolved = replaySeed.resolve() else {
-                        return .invalidReplaySeed(replaySeed)
-                    }
-                    switch resolved {
-                        case let .sampling(resolvedSeed, iteration):
-                            config.seed = resolvedSeed
-                            config.replayIteration = iteration
-                        case let .coverage(row):
-                            config.coverageReplayRow = row
+                    if let resolved = replaySeed.resolve() {
+                        switch resolved {
+                            case let .sampling(resolvedSeed, iteration):
+                                config.seed = resolvedSeed
+                                config.replayIteration = iteration
+                            case let .coverage(row):
+                                config.coverageReplayRow = row
+                        }
+                    } else {
+                        invalidSeed = replaySeed
                     }
                 case let .suppress(option):
-                    switch option {
-                        case .issueReporting:
-                            config.suppressIssueReporting = true
-                        case .logs:
-                            config.suppressLogs = true
-                        case .all:
-                            config.suppressIssueReporting = true
-                            config.suppressLogs = true
-                    }
-                case .collectOpenPBTStats:
-                    config.collectOpenPBTStats = true
+                    config.applySuppress(option)
                 case let .onReport(closure):
-                    if let existing = config.onReportClosure {
-                        let chained = existing
-                        config.onReportClosure = { report in
+                    config.onReportClosure = config.onReportClosure.map { chained in
+                        { report in
                             chained(report)
                             closure(report)
                         }
-                    } else {
-                        config.onReportClosure = closure
-                    }
+                    } ?? closure
                 case let .idleTimeoutMs(milliseconds):
-                    config.idleTimeout = max(milliseconds, 1)
+                    config.idleTimeoutMilliseconds = max(milliseconds, 1)
                 case let .log(level):
                     config.logLevel = level
-                case .includeDiff:
-                    break
             }
         }
 
@@ -104,6 +106,6 @@ struct ResolvedConcurrentConfig {
             }
         #endif
 
-        return .success(config)
+        return ParseResult(config: config, invalidReplaySeed: invalidSeed)
     }
 }

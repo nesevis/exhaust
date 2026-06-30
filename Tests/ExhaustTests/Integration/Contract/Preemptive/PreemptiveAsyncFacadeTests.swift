@@ -8,14 +8,12 @@ struct PreemptiveAsyncFacadeTests {
     @Test("Detects lost-update bug behind async facade")
     func detectsLostUpdateBugBehindAsyncFacade() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+            await #execute(
                 AsyncRacyCounterSpec.self,
-                settings: [
-                    .concurrent(.two),
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting),
-                ]
+                .concurrent(.two),
+                .commandLimit(6),
+                .budget(.custom(coverage: 0, sampling: 200)),
+                .suppress(.issueReporting)
             )
         )
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
@@ -24,15 +22,13 @@ struct PreemptiveAsyncFacadeTests {
     @Test("onReport delivers profiling summary")
     func onReportDeliversProfilingSummary() async throws {
         var capturedReport: ExhaustReport?
-        _ = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+        _ = await #execute(
             AsyncRacyCounterSpec.self,
-            settings: [
-                .concurrent(.two),
-                .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
-                .suppress(.issueReporting),
-                .onReport { capturedReport = $0 },
-            ]
+            .concurrent(.two),
+            .commandLimit(6),
+            .budget(.custom(coverage: 0, sampling: 200)),
+            .suppress(.issueReporting),
+            .onReport { capturedReport = $0 }
         )
         let report = try #require(capturedReport)
         #expect(report.totalMilliseconds > 0)
@@ -44,13 +40,11 @@ struct PreemptiveAsyncFacadeTests {
     func reportsIssueThroughSwiftTestingWhenSuppressionIsOff() async {
         await withKnownIssue {
             _ = try #require(
-                await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+                await #execute(
                     AsyncRacyCounterSpec.self,
-                    settings: [
-                        .concurrent(.two),
-                        .commandLimit(6),
-                        .budget(.custom(coverage: 0, sampling: 200)),
-                    ]
+                    .concurrent(.two),
+                    .commandLimit(6),
+                    .budget(.custom(coverage: 0, sampling: 200))
                 )
             )
         }

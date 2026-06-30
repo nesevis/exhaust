@@ -5,9 +5,9 @@ import Foundation
 // MARK: - Shared SCA Row Loop
 
 extension __ExhaustRuntime {
-    /// Raw outcome of the SCA row loop before caller-specific failure handling.
+    /// Reports the raw outcome of the SCA row loop before caller-specific failure handling.
     ///
-    /// Each caller (sequential, concurrent) handles the ``failure`` case differently. The sequential path prunes skipped commands and reduces directly, while the concurrent path delegates to ``reduceConcurrentCounterexample(input:tree:sequenceGen:reductionConfig:property:identifySkips:seed:skipPruningLogEvent:timedOut:)``.
+    /// Each caller handles the ``failure`` case differently. The sequential path prunes skipped commands and reduces directly, while the concurrent source wraps the value in a ``ContractCandidate`` for the machine to reduce.
     enum SCARowLoopResult<Value> {
         /// A counterexample was found at the given coverage iteration.
         case failure(value: Value, tree: ChoiceTree, coverageInvocations: Int)
@@ -19,7 +19,7 @@ extension __ExhaustRuntime {
 
     /// Core SCA coverage row loop shared by the sequential and concurrent contract runners.
     ///
-    /// Builds covering arrays at multiple sequence lengths to cover both short and long command sequences. Budget is split across length tiers: 50% at `min + 4`, 25% at `max / 2`, 25% at `max`, with duplicate lengths collapsed and their budgets merged. Tiers run shortest-first so minimal counterexamples are found early.
+    /// Builds covering arrays at multiple sequence lengths to cover both short and long command sequences. Budget is split across length tiers: 50% at `min(5, commandLimit)`, 25% at `max(5, commandLimit / 2)`, 25% at `commandLimit`, with duplicate lengths collapsed and their budgets merged. Tiers run shortest-first so minimal counterexamples are found early.
     ///
     /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:coverageInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"sca_coverage"` for sequential, `"concurrent_sca_coverage"` for concurrent.
     static func runSCACoverageRowLoop<Value>(
@@ -80,7 +80,9 @@ extension __ExhaustRuntime {
             }
 
             let domainSizes = domain.profile.domainSizes
-            guard domainSizes.count >= 2 else { continue }
+            guard domainSizes.count >= 2 else {
+                continue
+            }
 
             let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
             var tierIterations: UInt64 = 0
@@ -108,11 +110,15 @@ extension __ExhaustRuntime {
 
                 tierIterations += 1
                 totalIterations += 1
-                if let skipToRow, totalIterations - 1 < skipToRow { continue }
+                if let skipToRow, totalIterations - 1 < skipToRow {
+                    continue
+                }
                 if property(value) == false {
                     return .failure(value: value, tree: freshTree, coverageInvocations: totalIterations)
                 }
-                if skipToRow != nil { return .completed(coverageInvocations: totalIterations) }
+                if skipToRow != nil {
+                    return .completed(coverageInvocations: totalIterations)
+                }
             }
         }
 
@@ -133,7 +139,7 @@ extension __ExhaustRuntime {
 
     /// Computes coverage tiers with deduplicated lengths and proportional budget allocation.
     ///
-    /// Raw tiers: 50% at `min(min + 4, max)`, 25% at `max(min + 4, max / 2)`, 25% at `max`. Tiers with duplicate lengths are collapsed and their budgets merged. The minimum sequence length for any tier is 2 (pairwise coverage requires at least 2 parameters).
+    /// Raw tiers: 50% at `min(5, commandLimit)`, 25% at `max(5, commandLimit / 2)`, 25% at `commandLimit`. Tiers with duplicate lengths are collapsed and their budgets merged. The minimum sequence length for any tier is 2 (pairwise coverage requires at least 2 parameters).
     private static func buildCoverageTiers(
         commandLimit: Int,
         totalBudget: UInt64
@@ -148,7 +154,9 @@ extension __ExhaustRuntime {
 
         var merged: [(length: Int, fraction: UInt64, denominator: UInt64)] = []
         for raw in rawTiers {
-            guard raw.length >= minLength else { continue }
+            guard raw.length >= minLength else {
+                continue
+            }
             if let existingIndex = merged.firstIndex(where: { $0.length == raw.length }) {
                 let existing = merged[existingIndex]
                 let combinedNumerator = existing.fraction * raw.denominator + raw.fraction * existing.denominator
@@ -170,80 +178,14 @@ extension __ExhaustRuntime {
             } else {
                 budget = totalBudget * tier.fraction / tier.denominator
             }
-            guard budget > 0 else { continue }
+            guard budget > 0 else {
+                continue
+            }
             result.append((length: tier.length, budget: budget))
             allocated += budget
         }
 
         return result
-    }
-}
-
-// MARK: - Sequential SCA Coverage
-
-extension __ExhaustRuntime {
-    /// Runs SCA coverage for sequential contract command sequences.
-    ///
-    /// Delegates to the shared ``runSCACoverageRowLoop(sequenceGen:commandGen:commandLimit:coverageBudget:skipToRow:logEventPrefix:property:)`` for the covering array iteration, then prunes skipped commands and reduces any counterexample found.
-    ///
-    /// Returns ``SCAOutcome/skipped`` when domain construction fails or the domain is too small for pairwise coverage, so the caller can fall through to generic coverage and random sampling.
-    static func runSCACoverage<Command>(
-        sequenceGen: Generator<[Command]>,
-        commandGen: Generator<Command>,
-        commandLimit: Int,
-        coverageBudget: UInt64,
-        skipToRow: Int? = nil,
-        property: @escaping @Sendable ([Command]) -> Bool,
-        identifySkips: @escaping @Sendable ([Command]) -> Set<Int>
-    ) -> SCAOutcome<Command> {
-        let result = runSCACoverageRowLoop(
-            sequenceGen: sequenceGen,
-            commandGen: commandGen,
-            commandLimit: commandLimit,
-            coverageBudget: coverageBudget,
-            skipToRow: skipToRow,
-            logEventPrefix: "sca_coverage",
-            property: property
-        )
-        switch result {
-            case let .failure(value, tree, coverageInvocations):
-                // Single-threaded: the reducer calls the property sequentially on the pipeline thread.
-                let reductionPropertyInvocations = UnsafeSendableBox(0)
-                let countingProperty: @Sendable ([Command]) -> Bool = { input in
-                    reductionPropertyInvocations.value += 1
-                    return property(input)
-                }
-                let reductionStopwatch = Stopwatch()
-                let (reduceValue, reduceTree) = pruneSkippedCommands(
-                    value: value,
-                    tree: tree,
-                    generator: sequenceGen,
-                    seed: UInt64(coverageInvocations),
-                    property: countingProperty,
-                    identifySkips: identifySkips,
-                    logEvent: "contract_skip_pruning"
-                )
-                let (reduced, stats, _) = reduceContractCounterexample(
-                    value: reduceValue,
-                    tree: reduceTree,
-                    generator: sequenceGen,
-                    config: .init(maxStalls: 2),
-                    property: countingProperty
-                )
-                let reductionMilliseconds = reductionStopwatch.elapsedMilliseconds
-                return .failure(
-                    commands: reduced,
-                    original: value,
-                    coverageInvocations: coverageInvocations,
-                    reductionStats: stats,
-                    reductionInvocations: reductionPropertyInvocations.value,
-                    reductionMilliseconds: reductionMilliseconds
-                )
-            case let .completed(coverageInvocations):
-                return .completed(coverageInvocations: coverageInvocations)
-            case .skipped:
-                return .skipped
-        }
     }
 }
 
@@ -332,9 +274,6 @@ extension __ExhaustRuntime {
         ),
             property(rematerialized) == false
         {
-            if rematerialized.count == 1 {
-                print("[skip-prune] degenerate: \(value.count) → \(rematerialized.count), skipped \(skippedIndices.sorted()), rematerialized: \(rematerialized)")
-            }
             return (rematerialized, rematerializedTree)
         }
         return (value, tree)
@@ -364,7 +303,230 @@ extension __ExhaustRuntime {
         }
         return (value, result.stats, false)
     }
+
+    /// Reduces a concurrent contract counterexample in two passes: structural (lane collapse + deletion) then value minimization.
+    ///
+    /// Lane collapse and deletion run together in pass 1 so the scheduler can interleave them — collapsing a lane then deleting the now-prefix command in the same cycle, rather than over-collapsing before deletion gets a chance. Pass 2 runs value and float search on the structurally reduced sequence. Each pass rematerializes on success to keep the output and tree consistent. Shared by the cooperative and preemptive backends so the reduction strategy cannot drift between them.
+    ///
+    /// The property closure returns a ``ContractProbeVerdict`` so the preemptive backend can carry linearizability evidence (response witnesses, failure descriptions) through reduction without a separate side-channel. The cooperative backend returns `.fail(())`.
+    static func reduceConcurrentTwoPass<Command, Evidence>(
+        generator: Generator<[(ScheduleMarker, Command)]>,
+        tree: ChoiceTree,
+        output: [(ScheduleMarker, Command)],
+        deadlineNanoseconds: UInt64,
+        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> ContractProbeVerdict<Evidence>
+    ) -> ConcurrentTwoPassResult<Command, Evidence> {
+        let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
+        var currentOutput = output
+        var currentTree = tree
+        var mergedStats = ReductionStats()
+        nonisolated(unsafe) var lastEvidence: Evidence?
+
+        let boolProperty: @Sendable ([(ScheduleMarker, Command)]) -> Bool = { commands in
+            switch property(commands) {
+                case .pass:
+                    return true
+                case let .fail(evidence):
+                    lastEvidence = evidence
+                    return false
+            }
+        }
+
+        // Pass 1: structural reduction (lane collapse + deletion).
+        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
+            gen: generator,
+            tree: currentTree,
+            output: currentOutput,
+            config: .init(
+                maxStalls: 2,
+                wallClockDeadlineNanoseconds: deadlineNanoseconds,
+                enabledEncoders: [.laneCollapse, .deletion],
+                tuning: noRelax
+            ),
+            property: boolProperty
+        ) {
+            mergedStats.merge(result.stats)
+            if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
+                currentOutput = reduced
+                currentTree = reducedTree
+                if case let .success(value, tree, _) = Materializer.materialize(
+                    generator, prefix: sequence, mode: .exact
+                ) {
+                    currentOutput = value
+                    currentTree = tree
+                }
+            }
+        }
+
+        // Pass 2: value minimization on the structurally reduced sequence.
+        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
+            gen: generator,
+            tree: currentTree,
+            output: currentOutput,
+            config: .init(
+                maxStalls: 2,
+                wallClockDeadlineNanoseconds: deadlineNanoseconds,
+                enabledEncoders: [.valueSearch, .floatSearch],
+                tuning: noRelax
+            ),
+            property: boolProperty
+        ) {
+            mergedStats.merge(result.stats)
+            if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
+                currentOutput = reduced
+                currentTree = reducedTree
+                if case let .success(value, tree, _) = Materializer.materialize(
+                    generator, prefix: sequence, mode: .exact
+                ) {
+                    currentOutput = value
+                    currentTree = tree
+                }
+            }
+        }
+
+        return ConcurrentTwoPassResult(
+            value: currentOutput,
+            tree: currentTree,
+            stats: mergedStats,
+            lastEvidence: lastEvidence
+        )
+    }
 }
+
+// MARK: - Sequential Smoke Property
+
+extension __ExhaustRuntime {
+    /// Builds a sequential property for the smoke source: runs commands in order, checks invariants after each step.
+    ///
+    /// Shared by all contract backends. The sync variant handles `ContractSpec`; the async variant bridges through `_blockingAwaitSemaphore`. Both are used as the smoke source's property closure and as the sequential backend's probe property.
+    static func syncSequentialProperty<Spec: ContractSpec>(_: Spec.Type) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
+        { tagged in
+            let spec = Spec()
+            for (_, command) in tagged {
+                do {
+                    try spec.run(command)
+                    try spec.checkInvariants()
+                } catch is ContractSkip {
+                    continue
+                } catch {
+                    return false
+                }
+            }
+            return true
+        }
+    }
+
+    /// Async variant of the sequential smoke property, bridging through `_blockingAwaitSemaphore`.
+    static func asyncSequentialProperty<Spec: AsyncContractSpec>(
+        specInit: @escaping () -> Spec
+    ) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
+        nonisolated(unsafe) let specInit = specInit
+        return { tagged in
+            let passed = _blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+                let spec = specInit()
+                for (_, command) in tagged {
+                    do {
+                        try await spec.run(command)
+                        try await spec.checkInvariants()
+                    } catch is ContractSkip {
+                        continue
+                    } catch {
+                        return false
+                    }
+                }
+                return true
+            }
+            return passed ?? false
+        }
+    }
+}
+
+// MARK: - Two-Pass Reduction Types
+
+extension __ExhaustRuntime {
+    enum ContractProbeVerdict<Evidence> {
+        case pass
+        case fail(Evidence)
+    }
+
+    struct ConcurrentTwoPassResult<Command, Evidence> {
+        let value: [(ScheduleMarker, Command)]
+        let tree: ChoiceTree
+        let stats: ReductionStats
+        let lastEvidence: Evidence?
+    }
+}
+
+// MARK: - Source Construction
+
+extension __ExhaustRuntime {
+    /// Builds the prioritized source array for a contract machine run.
+    ///
+    /// Source order matches the design document: coverage replay, sampling replay, smoke, coverage, sampling. Each source is independently gated by the config. The smoke source is entry-point-specific (sequential has none, cooperative and preemptive construct different property closures), so it is passed in pre-built.
+    static func buildContractSources<Command>(
+        config: ResolvedConcurrentConfig,
+        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
+        commandGen: Generator<Command>,
+        commandLimit: Int,
+        concurrencyLevel: Int,
+        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
+        smokeSource: AnyContractCandidateSource<Command>? = nil,
+        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Command)]>)? = nil
+    ) -> [AnyContractCandidateSource<Command>] {
+        var sources: [AnyContractCandidateSource<Command>] = []
+
+        if let row = config.coverageReplayRow {
+            sources.append(.coverageReplay(
+                row: row,
+                sequenceGen: sequenceGen,
+                commandGen: commandGen,
+                commandLimit: commandLimit,
+                coverageBudget: max(config.budget.coverageBudget, UInt64(row) + 1),
+                concurrencyLevel: concurrencyLevel,
+                property: property
+            ))
+        }
+
+        if let replayIteration = config.replayIteration, let seed = config.seed {
+            sources.append(.samplingReplay(
+                replaySeed: seed,
+                replayIteration: replayIteration,
+                sequenceGen: sequenceGen,
+                property: property
+            ))
+        }
+
+        if let smokeSource {
+            sources.append(smokeSource)
+        }
+
+        if config.shouldRunCoverage {
+            sources.append(.coverage(
+                sequenceGen: sequenceGen,
+                commandGen: commandGen,
+                commandLimit: commandLimit,
+                coverageBudget: config.budget.coverageBudget,
+                concurrencyLevel: concurrencyLevel,
+                sequenceGenForLength: sequenceGenForLength,
+                property: property
+            ))
+        }
+
+        if config.replayIteration == nil, config.coverageReplayRow == nil {
+            let seed = config.seed ?? Xoshiro256().seed
+            sources.append(.sampling(
+                sequenceGen: sequenceGen,
+                seed: seed,
+                samplingBudget: config.budget.samplingBudget,
+                property: property
+            ))
+        }
+
+        return sources
+    }
+}
+
+// MARK: - Pick Analysis
 
 extension __ExhaustRuntime {
     /// Extracts pick choices from a command generator when the generator is a top-level ``Gen.pick``.
@@ -373,7 +535,9 @@ extension __ExhaustRuntime {
     ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
         guard case let .impure(operation, _) = gen,
               case let .pick(choices, _) = operation
-        else { return nil }
+        else {
+            return nil
+        }
         return choices
     }
 
@@ -443,27 +607,5 @@ extension __ExhaustRuntime {
         )
 
         return limit
-    }
-}
-
-// MARK: - SCA Outcome
-
-extension __ExhaustRuntime {
-    /// Outcome of an SCA coverage run.
-    enum SCAOutcome<Command> {
-        /// SCA found a counterexample.
-        case failure(commands: [Command], original: [Command], coverageInvocations: Int, reductionStats: ReductionStats?, reductionInvocations: Int, reductionMilliseconds: Double)
-        /// SCA ran its covering array to completion without finding a failure.
-        case completed(coverageInvocations: Int)
-        /// SCA was not applicable or was skipped before covering anything.
-        case skipped
-
-        /// Whether SCA ran to completion, covering command orderings.
-        var isCompleted: Bool {
-            switch self {
-                case .completed: true
-                case .failure, .skipped: false
-            }
-        }
     }
 }

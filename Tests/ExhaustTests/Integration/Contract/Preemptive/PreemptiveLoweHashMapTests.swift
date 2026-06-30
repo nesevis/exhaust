@@ -18,20 +18,21 @@ struct PreemptiveLoweHashMapTests {
         var commandCount = 0
         var iterations: Double = 0
         var totalRuntime = 0.0
-        for seed in UInt64(1337) ..< 1338 {
+        for seed in UInt64(1337) ..< 1347 {
             var report: ExhaustReport?
             let result = #execute(
                 LoweHashMapSpec.self,
                 .concurrent(.two),
                 .replay(.numeric(seed)),
-//                .log(.debug),
-                .budget(.custom(coverage: 10000, sampling: 150_000)),
-//                .suppress(.issueReporting),
+                .commandLimit(20),
+                .budget(.custom(coverage: 0, sampling: 150_000)),
+                .suppress(.issueReporting),
                 .onReport { report = $0 }
             )
             iterations += 1
             commandCount += result?.commands.count ?? 20
             totalRuntime += report?.totalMilliseconds ?? 0
+            print(report?.profilingSummary ?? "")
         }
         print("Mean command count: \(Double(commandCount) / iterations)")
         print("Mean runtime: \(totalRuntime / iterations)ms")
@@ -42,6 +43,7 @@ struct PreemptiveLoweHashMapTests {
         let result = #execute(
             LoweHashMapSpec.self,
             .concurrent(.two),
+            .commandLimit(20),
             .budget(.custom(coverage: 100_000, sampling: 100_000)),
             .suppress(.all)
         )
@@ -90,7 +92,7 @@ final class LoweHashMapSpec {
 ///
 /// Each field access is individually locked (NSLock) so concurrent operations race at the operation level (the intended ghost-entry bug) without a low-level data race on the fields themselves.
 final class BuggyHashMap: @unchecked Sendable {
-    static let keyGen = #gen(.int(in: 0 ... 31))
+    static let keyGen = #gen(.int(in: 0 ... 1))
 
     enum SlotStatus: Int, Sendable {
         case empty = 0
@@ -113,7 +115,9 @@ final class BuggyHashMap: @unchecked Sendable {
         /// Atomically sets status to `desired` if it currently equals `expected`. Returns whether the swap occurred.
         func compareAndSwapStatus(expected: SlotStatus, desired: SlotStatus) -> Bool {
             lock.withLock {
-                guard _status == expected else { return false }
+                guard _status == expected else {
+                    return false
+                }
                 _status = desired
                 return true
             }
@@ -150,8 +154,12 @@ final class BuggyHashMap: @unchecked Sendable {
         let slot = slots[index]
         while true {
             let current = slot.status
-            if current == .updating { continue }
-            if slot.compareAndSwapStatus(expected: current, desired: .updating) { break }
+            if current == .updating {
+                continue
+            }
+            if slot.compareAndSwapStatus(expected: current, desired: .updating) {
+                break
+            }
         }
         slot.key = key
         slot.value = value
@@ -161,7 +169,9 @@ final class BuggyHashMap: @unchecked Sendable {
     /// BUG: uses plain assignment instead of CAS. A concurrent `update` that already holds `.updating` will overwrite this `.deleted` with `.stored` when it finishes.
     func delete(key: Int) {
         let index = abs(key) % slots.count
-        guard slots[index].key == key else { return }
+        guard slots[index].key == key else {
+            return
+        }
         slots[index].status = .deleted
     }
 

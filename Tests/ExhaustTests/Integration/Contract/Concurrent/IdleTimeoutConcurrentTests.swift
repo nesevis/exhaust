@@ -1,3 +1,4 @@
+import ExhaustCore
 import ExhaustTestSupport
 import Foundation
 import Testing
@@ -11,12 +12,16 @@ struct IdleTimeoutConcurrentTests {
     @Test("Idle timeout fires for SUT that escapes the cooperative executor")
     func idleTimeoutFiresForSUTThatEscapesTheCooperativeExecutor() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runContractConcurrent(
+            await #execute(
                 SleepingSpec.self,
-                settings: [.commandLimit(2), .idleTimeoutMs(10), .budget(.custom(coverage: 0, sampling: 10)), .suppress(.issueReporting)]
+                .commandLimit(2),
+                .idleTimeoutMs(10),
+                .budget(.custom(coverage: 0, sampling: 10)),
+                .suppress(.issueReporting)
             )
         )
         #expect(result.discoveryMethod == .randomSampling)
+        #expect(result.status == .timeout)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -37,16 +42,14 @@ struct IdleTimeoutConcurrentTests {
     func asyncPreemptiveIdleTimeoutSurfacesStallingCommand() async throws {
         var deliveredReport: ExhaustReport?
         let result = try #require(
-            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+            await #execute(
                 StallingAsyncSpec.self,
-                settings: [
-                    .concurrent(.two),
-                    .commandLimit(2),
-                    .idleTimeoutMs(20),
-                    .budget(.custom(coverage: 0, sampling: 10)),
-                    .suppress(.issueReporting),
-                    .onReport { deliveredReport = $0 },
-                ]
+                .concurrent(.two),
+                .commandLimit(2),
+                .idleTimeoutMs(20),
+                .budget(.custom(coverage: 0, sampling: 10)),
+                .suppress(.issueReporting),
+                .onReport { deliveredReport = $0 }
             )
         )
         #expect(result.commands.isEmpty == false)
@@ -61,16 +64,54 @@ struct IdleTimeoutConcurrentTests {
 
     @Test("Async preemptive group.wait bound prevents hang on synchronous SUT deadlock")
     func asyncPreemptiveGroupWaitBoundPreventsHangOnSynchronousSUTDeadlock() async {
-        _ = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+        _ = await #execute(
             DeadlockingAsyncSpec.self,
-            settings: [
-                .concurrent(.two),
-                .commandLimit(2),
-                .idleTimeoutMs(50),
-                .budget(.custom(coverage: 0, sampling: 50)),
-                .suppress(.all),
-            ]
+            .concurrent(.two),
+            .commandLimit(2),
+            .idleTimeoutMs(50),
+            .budget(.custom(coverage: 0, sampling: 50)),
+            .suppress(.all)
         )
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Cooperative reduction timeout aborts reduction without flipping the failure to a timeout")
+    func cooperativeReductionTimeoutKeepsFailure() throws {
+        // Every probe of SleepingSpec stalls past the idle bound, so reduction times out on its first probe.
+        let commandGen = SleepingSpec.commandGenerator.gen
+        let taggedGen = try #require(__ExhaustRuntime.zipScheduleMarker(onto: commandGen, concurrencyLevel: 2))
+        let sequenceGen = Gen.arrayOf(taggedGen, within: 2 ... 2, scaling: .constant)
+        var interpreter = ValueAndChoiceTreeInterpreter(sequenceGen, seed: 0, maxRuns: 1)
+        let (commands, tree) = try #require(try interpreter.next())
+
+        var config = ResolvedConcurrentConfig()
+        config.budget = .custom(coverage: 0, sampling: 10)
+        config.suppressIssueReporting = true
+
+        let lastRunTimedOut = UnsafeSendableBox(false)
+        let context = ContractRunContext<SleepingSpec>(
+            config: config,
+            sequenceGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: 2,
+            identifySkips: { _ in [] },
+            lastRunTimedOut: lastRunTimedOut,
+            fileID: #fileID,
+            filePath: #filePath,
+            line: #line,
+            column: #column
+        )
+        let backend = CooperativeContractBackend<SleepingSpec>(
+            specInit: { SleepingSpec() },
+            concurrencyLevel: 2,
+            idleTimeoutMilliseconds: 10
+        )
+
+        let reduction = backend.reduce(taggedCommands: commands, tree: tree, context: context)
+
+        // The probe timed out during reduction (so the scenario is exercised), but that must not latch the shared timeout flag that `buildResult` reads to set the status — a genuine failure stays `.fail`, not `.timeout`.
+        #expect(reduction.timedOut)
+        #expect(context.lastRunTimedOut == false)
     }
 }
 

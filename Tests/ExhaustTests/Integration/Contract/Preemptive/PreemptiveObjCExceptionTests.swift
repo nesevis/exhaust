@@ -9,14 +9,12 @@ struct PreemptiveObjCExceptionTests {
     func catchesNSExceptionFromConcurrentCommandWithoutCrashing() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                #execute(
                     ThrowingObjCSpec.self,
-                    settings: [
-                        .concurrent(.two),
-                        .commandLimit(4),
-                        .budget(.custom(coverage: 0, sampling: 50)),
-                        .suppress(.issueReporting),
-                    ]
+                    .concurrent(.two),
+                    .commandLimit(4),
+                    .budget(.custom(coverage: 0, sampling: 50)),
+                    .suppress(.issueReporting)
                 )
             }
         )

@@ -1207,4 +1207,133 @@
         }
     }
 
+    // MARK: - Marker Macro Attachment Validation
+
+    @Suite("Marker macro attachment validation", .macros(testMacros, record: .failed))
+    struct MarkerMacroAttachmentTests {
+        @Test("@SystemUnderTest on a method produces diagnostic")
+        func sutOnMethod() {
+            assertMacro {
+                """
+                @SystemUnderTest
+                func notAProperty() {}
+                """
+            } diagnostics: {
+                """
+                @SystemUnderTest
+                ┬───────────────
+                ╰─ 🛑 @SystemUnderTest must be applied to a stored property
+                func notAProperty() {}
+                """
+            }
+        }
+
+        @Test("@Command on a property produces diagnostic")
+        func commandOnProperty() {
+            assertMacro {
+                """
+                @Command(weight: 1)
+                var notAMethod: Int = 0
+                """
+            } diagnostics: {
+                """
+                @Command(weight: 1)
+                ┬──────────────────
+                ╰─ 🛑 @Command must be applied to a method
+                var notAMethod: Int = 0
+                """
+            }
+        }
+
+        @Test("@Invariant on a property produces diagnostic")
+        func invariantOnProperty() {
+            assertMacro {
+                """
+                @Invariant
+                var notAMethod: Bool = true
+                """
+            } diagnostics: {
+                """
+                @Invariant
+                ┬─────────
+                ╰─ 🛑 @Invariant must be applied to a method
+                var notAMethod: Bool = true
+                """
+            }
+        }
+
+        @Test("@Oracle on a property produces diagnostic")
+        func oracleOnProperty() {
+            assertMacro {
+                """
+                @Oracle
+                var notAMethod: Bool = true
+                """
+            } diagnostics: {
+                """
+                @Oracle
+                ┬──────
+                ╰─ 🛑 @Oracle must be applied to a method
+                var notAMethod: Bool = true
+                """
+            }
+        }
+
+        @Test("@SystemUnderTest on a property produces no diagnostic")
+        func sutOnProperty() {
+            assertMacro {
+                """
+                @SystemUnderTest
+                var sut: MyType = .init()
+                """
+            } expansion: {
+                """
+                var sut: MyType = .init()
+                """
+            }
+        }
+
+        @Test("@Command on a method produces no diagnostic")
+        func commandOnMethod() {
+            assertMacro {
+                """
+                @Command(weight: 1)
+                func doSomething() {}
+                """
+            } expansion: {
+                """
+                func doSomething() {}
+                """
+            }
+        }
+
+        @Test("@Invariant on a method produces no diagnostic")
+        func invariantOnMethod() {
+            assertMacro {
+                """
+                @Invariant
+                func isValid() -> Bool { true }
+                """
+            } expansion: {
+                """
+                func isValid() -> Bool { true }
+                """
+            }
+        }
+
+        @Test("@Oracle on a method produces no diagnostic")
+        func oracleOnMethod() {
+            assertMacro {
+                """
+                @Oracle
+                func matches(other: MyType) -> Bool { true }
+                """
+            } expansion: {
+                """
+                func matches(other: MyType) -> Bool { true }
+                """
+            }
+        }
+    }
+
 #endif

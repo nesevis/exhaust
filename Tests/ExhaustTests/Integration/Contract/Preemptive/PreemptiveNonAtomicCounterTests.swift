@@ -10,14 +10,12 @@ struct PreemptiveNonAtomicCounterTests {
     func detectsLostUpdateBugViaOracleComparison() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                #execute(
                     PreemptiveCounterSpec.self,
-                    settings: [
-                        .concurrent(.two),
-                        .commandLimit(6),
-                        .budget(.custom(coverage: 0, sampling: 200)),
-                        .suppress(.issueReporting),
-                    ]
+                    .concurrent(.two),
+                    .commandLimit(6),
+                    .budget(.custom(coverage: 0, sampling: 200)),
+                    .suppress(.issueReporting)
                 )
             }
         )
@@ -29,14 +27,12 @@ struct PreemptiveNonAtomicCounterTests {
     func failureReportRendersCorrectly() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                #execute(
                     PreemptiveCounterSpec.self,
-                    settings: [
-                        .concurrent(.two),
-                        .commandLimit(6),
-                        .budget(.custom(coverage: 0, sampling: 200)),
-                        .suppress(.issueReporting),
-                    ]
+                    .concurrent(.two),
+                    .commandLimit(6),
+                    .budget(.custom(coverage: 0, sampling: 200)),
+                    .suppress(.issueReporting)
                 )
             }
         )
@@ -50,15 +46,13 @@ struct PreemptiveNonAtomicCounterTests {
     func onReportDeliversProfilingSummary() async throws {
         var capturedReport: ExhaustReport?
         _ = await __ExhaustRuntime.dispatchToGCD {
-            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+            #execute(
                 PreemptiveCounterSpec.self,
-                settings: [
-                    .concurrent(.two),
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting),
-                    .onReport { capturedReport = $0 },
-                ]
+                .concurrent(.two),
+                .commandLimit(6),
+                .budget(.custom(coverage: 0, sampling: 200)),
+                .suppress(.issueReporting),
+                .onReport { capturedReport = $0 }
             )
         }
         let report = try #require(capturedReport)
@@ -72,14 +66,12 @@ struct PreemptiveNonAtomicCounterTests {
     func reductionShrinksTheCounterexample() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                #execute(
                     PreemptiveCounterSpec.self,
-                    settings: [
-                        .concurrent(.two),
-                        .commandLimit(8),
-                        .budget(.custom(coverage: 0, sampling: 200)),
-                        .suppress(.issueReporting),
-                    ]
+                    .concurrent(.two),
+                    .commandLimit(8),
+                    .budget(.custom(coverage: 0, sampling: 200)),
+                    .suppress(.issueReporting)
                 )
             }
         )

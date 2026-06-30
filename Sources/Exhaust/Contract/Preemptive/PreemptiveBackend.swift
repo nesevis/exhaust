@@ -2,9 +2,7 @@ import ExhaustCore
 
 /// Defines the per-probe operations that differ between the synchronous and async preemptive runners.
 ///
-/// Everything else (phase ordering, smoke, SCA coverage, sampling, reduction, and failure assembly) is shared in ``__ExhaustRuntime/runPreemptivePipeline(backend:config:)``. The synchronous backend runs commands directly on GCD threads; the async backend bridges each probe through a drain loop.
-///
-/// Conformers are captured into the `@Sendable` property closure handed to the SCA coverage and reduction passes, so they must be `Sendable`. Both checkers store only an `Int?` timeout, so this is unconditional.
+/// Conformers are captured into the `@Sendable` property closure handed to the SCA coverage and reduction passes, so they must be `Sendable`. Both current conformers store only an `Int?` timeout, so the requirement is trivially satisfied.
 protocol PreemptiveBackend<Spec>: Sendable {
     associatedtype Spec: ContractSpecBase
 
@@ -14,8 +12,10 @@ protocol PreemptiveBackend<Spec>: Sendable {
     /// Runs one tagged command sequence concurrently using a pre-computed lane partition.
     func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], partition: LanePartition<Spec.Command>) -> Preemptive.Outcome<Spec>
 
-    /// Runs a command sequence sequentially on a fresh spec for the smoke phase, capturing the trace, whether it failed, and the resulting oracle state for the report.
-    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)
+    /// Runs a command sequence sequentially on a fresh spec for the smoke phase, capturing the trace, whether it failed, whether it timed out, and the resulting oracle state for the report.
+    ///
+    /// `timedOut` distinguishes a stalling command (which must route to the timeout path and skip reduction) from a genuine smoke failure. The synchronous backend runs unbounded and never times out.
+    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, timedOut: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?)
 
     /// Checks whether a concurrent execution's observed responses are consistent with some valid sequential ordering.
     ///

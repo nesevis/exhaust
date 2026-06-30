@@ -10,15 +10,15 @@ struct LeakyBucketConcurrentTests {
     @Test("Detects check-then-act bug that requires state buildup")
     func detectsCheckThenActBugThatRequiresStateBuildup() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runContractConcurrent(
+            await #execute(
                 LeakyBucketSpec.self,
-                settings: [
-                    .suppress(.issueReporting),
-                ]
+                .suppress(.issueReporting)
             )
         )
         let hasFailure = result.trace.contains { step in
-            if case .invariantFailed = step.outcome { return true }
+            if case .invariantFailed = step.outcome {
+                return true
+            }
             return false
         }
         #expect(hasFailure, "Should detect token over-drain from interleaved tryConsume")
@@ -28,19 +28,23 @@ struct LeakyBucketConcurrentTests {
     @Test("Lane collapse encoder accepts probes when prefix is required")
     func laneCollapseEncoderAcceptsProbesWhenPrefixIsRequired() async throws {
         var deliveredReport: ExhaustReport?
-        _ = await __ExhaustRuntime.__runContractConcurrent(
+        _ = await #execute(
             LeakyBucketSpec.self,
-            settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 500)), .replay(.numeric(42)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
+            .commandLimit(8),
+            .budget(.custom(coverage: 0, sampling: 500)),
+            .replay(.numeric(42)),
+            .suppress(.issueReporting),
+            .onReport { deliveredReport = $0 }
         )
         let report = try #require(deliveredReport)
-        #expect(report.propertyInvocations == 19)
-        #expect(report.reductionInvocations == 17)
-        #expect(report.totalMaterializations == 23)
-        #expect(report.cycles == 3)
-        #expect(report.encoderProbes[.laneCollapse] == 9)
+        #expect(report.propertyInvocations == 12)
+        #expect(report.reductionInvocations == 9)
+        #expect(report.totalMaterializations == 9)
+        #expect(report.cycles == 5)
+        #expect(report.encoderProbes[.laneCollapse] == 7)
         #expect(report.encoderProbesAccepted[.laneCollapse] == 1)
-        #expect(report.encoderProbes[.deletion] == 12)
-        #expect(report.encoderProbes[.substitution] == 6)
+        #expect(report.encoderProbes[.deletion] == 10)
+        #expect(report.encoderProbesAccepted[.deletion] == 1)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -48,13 +52,14 @@ struct LeakyBucketConcurrentTests {
     func reportsIssueThroughSwiftTestingWhenSuppressionIsOff() async {
         await withKnownIssue {
             let result = try #require(
-                await __ExhaustRuntime.__runContractConcurrent(
-                    LeakyBucketSpec.self,
-                    settings: []
+                await #execute(
+                    LeakyBucketSpec.self
                 )
             )
             let hasFailure = result.trace.contains { step in
-                if case .invariantFailed = step.outcome { return true }
+                if case .invariantFailed = step.outcome {
+                    return true
+                }
                 return false
             }
             #expect(hasFailure)
@@ -82,14 +87,18 @@ final class LeakyBucketSpec {
 
     @Command(weight: 4)
     func refill() async throws {
-        guard expectedTokens < 5 else { throw skip() }
+        guard expectedTokens < 5 else {
+            throw skip()
+        }
         expectedTokens += 1
         await bucket.refill()
     }
 
     @Command(weight: 3)
     func tryConsume() async throws {
-        guard expectedTokens > 0 else { throw skip() }
+        guard expectedTokens > 0 else {
+            throw skip()
+        }
         expectedTokens -= 1
         await bucket.tryConsume()
     }

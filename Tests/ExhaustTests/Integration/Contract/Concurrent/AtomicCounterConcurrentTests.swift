@@ -9,9 +9,11 @@ struct AtomicCounterConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Thread-safe counter passes under all interleavings")
     func threadSafeCounterPassesUnderAllInterleavings() async {
-        let result = await __ExhaustRuntime.__runContractConcurrent(
+        let result = await #execute(
             AtomicCounterSpec.self,
-            settings: [.commandLimit(4), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+            .commandLimit(4),
+            .budget(.custom(coverage: 0, sampling: 200)),
+            .suppress(.issueReporting)
         )
         #expect(result == nil, "Atomic counter should pass under any interleaving")
     }
@@ -19,9 +21,11 @@ struct AtomicCounterConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Narrow race in non-suspending counter is invisible to cooperative scheduler")
     func narrowRaceInNonSuspendingCounterIsInvisibleToCooperativeScheduler() async {
-        let result = await __ExhaustRuntime.__runContractConcurrent(
+        let result = await #execute(
             NarrowRaceCounterSpec.self,
-            settings: [.commandLimit(6), .budget(.custom(coverage: 0, sampling: 200)), .suppress(.issueReporting)]
+            .commandLimit(6),
+            .budget(.custom(coverage: 0, sampling: 200)),
+            .suppress(.issueReporting)
         )
         #expect(result == nil, "NarrowRaceCounter has a real data race, but CCCR cannot interleave non-suspending methods")
     }
