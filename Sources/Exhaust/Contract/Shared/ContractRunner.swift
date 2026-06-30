@@ -69,19 +69,12 @@ public extension __ExhaustRuntime {
         var config = parsed.config
         config.concurrencyLevel = 1
 
-        return ExhaustLog.withConfiguration(config.logConfiguration) {
-            if let result = runRegressionSeeds(
-                specType: specType,
-                settings: settings,
-                config: config,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            ) {
-                return result
-            }
+        var regressionSeeds: [String] = []
+        #if canImport(Testing)
+            regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
+        #endif
 
+        return ExhaustLog.withConfiguration(config.logConfiguration) {
             let commandGen = Spec.commandGenerator
             let commandLimit = config.commandLimit ?? estimateCommandLimit(
                 commandGen: commandGen.gen,
@@ -104,28 +97,6 @@ public extension __ExhaustRuntime {
                 syncSkipIdentifier(tagged.map(\.1))
             }
 
-            let runContext = ContractRunContext<Spec>(
-                config: config,
-                sequenceGen: taggedSeqGen,
-                commandGen: commandGen.gen,
-                commandLimit: commandLimit,
-                identifySkips: identifySkips,
-                invocationCounter: invocationCounter,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
-
-            let sources = buildContractSources(
-                config: config,
-                sequenceGen: taggedSeqGen,
-                commandGen: commandGen.gen,
-                commandLimit: commandLimit,
-                concurrencyLevel: 1,
-                property: property
-            )
-
             let backend = SequentialContractBackend<Spec>(
                 property: property,
                 finalize: { tagged in
@@ -135,10 +106,51 @@ public extension __ExhaustRuntime {
                 }
             )
 
-            var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
-            let result = machine.run()
+            func runMachine(
+                config machineConfig: ResolvedConcurrentConfig
+            ) -> (result: ContractResult<Spec>?, issues: [String]) {
+                let runContext = ContractRunContext<Spec>(
+                    config: machineConfig,
+                    sequenceGen: taggedSeqGen,
+                    commandGen: commandGen.gen,
+                    commandLimit: commandLimit,
+                    identifySkips: identifySkips,
+                    invocationCounter: invocationCounter,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
 
-            for issue in runContext.deferredIssues {
+                let sources = buildContractSources(
+                    config: machineConfig,
+                    sequenceGen: taggedSeqGen,
+                    commandGen: commandGen.gen,
+                    commandLimit: commandLimit,
+                    concurrencyLevel: 1,
+                    property: property
+                )
+
+                var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+                let result = machine.run()
+                return (result, runContext.deferredIssues)
+            }
+
+            let (regressionResult, regressionIssues) = replayRegressionSeeds(
+                config: config,
+                regressionSeeds: regressionSeeds,
+                runMachine: { runMachine(config: $0) }
+            )
+            for issue in regressionIssues {
+                ExhaustLog.error(category: .propertyTest, event: "contract_failed", issue)
+                reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
+            }
+            if let regressionResult {
+                return regressionResult
+            }
+
+            let (result, issues) = runMachine(config: config)
+            for issue in issues {
                 ExhaustLog.error(category: .propertyTest, event: "contract_failed", issue)
                 reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
             }
@@ -192,7 +204,7 @@ public extension __ExhaustRuntime {
 
 private extension __ExhaustRuntime {
     static func runAsyncSequentialPipeline<Spec: AsyncContractSpec>(
-        _ specType: Spec.Type,
+        _: Spec.Type,
         settings: [ContractSettings],
         regressionSeeds: [String] = [],
         fileID: StaticString,
@@ -209,31 +221,6 @@ private extension __ExhaustRuntime {
         }
         var config = parsed.config
         config.concurrencyLevel = 1
-
-        if config.seed == nil, config.coverageReplayRow == nil, config.replayIteration == nil {
-            for encodedSeed in regressionSeeds {
-                guard ReplaySeed.Resolved.decode(encodedSeed) != nil else {
-                    deferredIssues.append("Invalid regression seed: \(encodedSeed)")
-                    continue
-                }
-
-                let (replayResult, replayIssues) = runAsyncSequentialPipeline(
-                    specType,
-                    settings: [.replay(.encoded(encodedSeed))] + settings,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-                deferredIssues.append(contentsOf: replayIssues)
-
-                if let replayResult {
-                    return (replayResult, deferredIssues)
-                } else if config.suppressIssueReporting == false {
-                    deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
-                }
-            }
-        }
 
         let commandGen = Spec.commandGenerator
         let commandLimit = config.commandLimit ?? estimateCommandLimit(
@@ -259,28 +246,6 @@ private extension __ExhaustRuntime {
             asyncSkipIdentifier(tagged.map(\.1))
         }
 
-        let runContext = ContractRunContext<Spec>(
-            config: config,
-            sequenceGen: taggedSeqGen,
-            commandGen: commandGen.gen,
-            commandLimit: commandLimit,
-            identifySkips: identifySkips,
-            invocationCounter: invocationCounter,
-            fileID: fileID,
-            filePath: filePath,
-            line: line,
-            column: column
-        )
-
-        let sources = buildContractSources(
-            config: config,
-            sequenceGen: taggedSeqGen,
-            commandGen: commandGen.gen,
-            commandLimit: commandLimit,
-            concurrencyLevel: 1,
-            property: property
-        )
-
         let backend = SequentialContractBackend<Spec>(
             property: property,
             finalize: { tagged in
@@ -299,67 +264,49 @@ private extension __ExhaustRuntime {
             }
         )
 
-        var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
-        let result = machine.run()
+        func runMachine(
+            config machineConfig: ResolvedConcurrentConfig
+        ) -> (result: ContractResult<Spec>?, issues: [String]) {
+            let runContext = ContractRunContext<Spec>(
+                config: machineConfig,
+                sequenceGen: taggedSeqGen,
+                commandGen: commandGen.gen,
+                commandLimit: commandLimit,
+                identifySkips: identifySkips,
+                invocationCounter: invocationCounter,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
 
-        deferredIssues.append(contentsOf: runContext.deferredIssues)
+            let sources = buildContractSources(
+                config: machineConfig,
+                sequenceGen: taggedSeqGen,
+                commandGen: commandGen.gen,
+                commandLimit: commandLimit,
+                concurrencyLevel: 1,
+                property: property
+            )
+
+            var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+            let result = machine.run()
+            return (result, runContext.deferredIssues)
+        }
+
+        let (regressionResult, regressionIssues) = replayRegressionSeeds(
+            config: config,
+            regressionSeeds: regressionSeeds,
+            runMachine: { runMachine(config: $0) }
+        )
+        deferredIssues.append(contentsOf: regressionIssues)
+        if let regressionResult {
+            return (regressionResult, deferredIssues)
+        }
+
+        let (result, issues) = runMachine(config: config)
+        deferredIssues.append(contentsOf: issues)
         return (result, deferredIssues)
-    }
-}
-
-// MARK: - Regression Seeds
-
-private extension __ExhaustRuntime {
-    /// Replays each regression seed from the Swift Testing trait configuration, returning the first failure as a ``ContractResult``. Returns nil when all seeds pass, none are configured, or Swift Testing is unavailable.
-    ///
-    /// Each seed is replayed through the same path as an inline `.replay(...)`, so coverage-row (`U…`) and iteration-suffixed (`…-N`) seeds (the exact strings the runner prints) round-trip and the failing run is re-materialised at its true position rather than only the first value.
-    static func runRegressionSeeds<Spec: ContractSpec>(
-        specType: Spec.Type,
-        settings: [ContractSettings],
-        config: ResolvedConcurrentConfig,
-        fileID: StaticString,
-        filePath: StaticString,
-        line: UInt,
-        column: UInt
-    ) -> ContractResult<Spec>? {
-        #if canImport(Testing)
-            guard config.seed == nil, config.coverageReplayRow == nil, config.replayIteration == nil else {
-                return nil
-            }
-            guard let traitConfig = ExhaustTraitConfiguration.current,
-                  traitConfig.regressions.isEmpty == false
-            else {
-                return nil
-            }
-
-            for encodedSeed in traitConfig.regressions {
-                guard ReplaySeed.Resolved.decode(encodedSeed) != nil else {
-                    reportIssue("Invalid regression seed: \(encodedSeed)", fileID: fileID, filePath: filePath, line: line, column: column)
-                    continue
-                }
-                if let result = __runContract(
-                    specType,
-                    settings: [.replay(.encoded(encodedSeed))] + settings,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                ) {
-                    return result
-                } else if config.suppressIssueReporting == false {
-                    reportIssue(
-                        "Regression seed \"\(encodedSeed)\" now passes. Consider removing it.",
-                        fileID: fileID,
-                        filePath: filePath,
-                        line: line,
-                        column: column
-                    )
-                }
-            }
-            return nil
-        #else
-            return nil
-        #endif
     }
 }
 
