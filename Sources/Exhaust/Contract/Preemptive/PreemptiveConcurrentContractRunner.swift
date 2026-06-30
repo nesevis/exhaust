@@ -124,52 +124,30 @@ extension __ExhaustRuntime {
             return .smoke(sequenceGen: smokeGen, property: smokeProperty)
         }()
 
-        func runMachine(
-            config machineConfig: ResolvedConcurrentConfig
-        ) -> (result: ContractResult<Spec>?, issues: [String]) {
-            let runContext = ContractRunContext<Spec>(
-                config: machineConfig,
-                sequenceGen: sequenceGen,
-                commandGen: commandGen,
-                commandLimit: commandLimit,
-                identifySkips: identifySkips,
-                invocationCounter: invocationCounter,
-                lastRunTimedOut: lastRunTimedOut,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
+        let pipeline = ContractPipeline(
+            backend: backend,
+            sequenceGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            concurrencyLevel: config.concurrencyLevel,
+            identifySkips: identifySkips,
+            property: property,
+            invocationCounter: invocationCounter,
+            lastRunTimedOut: lastRunTimedOut,
+            sequenceGenForLength: { range in
+                Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
+            },
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
 
-            let sources = buildContractSources(
-                config: machineConfig,
-                sequenceGen: sequenceGen,
-                commandGen: commandGen,
-                commandLimit: commandLimit,
-                concurrencyLevel: config.concurrencyLevel,
-                property: property,
-                smokeSource: smokeSource,
-                sequenceGenForLength: { range in
-                    Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
-                }
-            )
-
-            var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
-            let result = machine.run()
-            return (result, runContext.deferredIssues)
-        }
-
-        let (regressionResult, regressionIssues) = replayRegressionSeeds(
+        let (result, issues) = pipeline.runWithRegressions(
             config: config,
             regressionSeeds: regressionSeeds,
-            runMachine: { runMachine(config: $0) }
+            mainRunSmokeSource: smokeSource
         )
-        deferredIssues.append(contentsOf: regressionIssues)
-        if let regressionResult {
-            return (regressionResult, deferredIssues)
-        }
-
-        let (result, issues) = runMachine(config: config)
         deferredIssues.append(contentsOf: issues)
         return (result, deferredIssues)
     }

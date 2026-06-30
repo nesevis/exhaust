@@ -208,61 +208,36 @@ private extension __ExhaustRuntime {
             return result.passed
         }
 
-        func runMachine(
-            config machineConfig: ResolvedConcurrentConfig,
-            smokeProperty: (@Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool)? = nil
-        ) -> (result: ContractResult<Spec>?, issues: [String]) {
-            let runContext = ContractRunContext<Spec>(
-                config: machineConfig,
-                sequenceGen: sequenceGen,
-                commandGen: commandGen,
-                commandLimit: resolvedCommandLimit,
-                identifySkips: identifySkips,
-                invocationCounter: invocationCounter,
-                lastRunTimedOut: lastRunTimedOut,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
-
-            let smoke: AnyContractCandidateSource<Spec.Command>? = smokeProperty.map {
-                .smoke(sequenceGen: sequenceGen, property: $0)
-            }
-            let sources = buildContractSources(
-                config: machineConfig,
-                sequenceGen: sequenceGen,
-                commandGen: commandGen,
-                commandLimit: resolvedCommandLimit,
-                concurrencyLevel: concurrencyLevel,
-                property: property,
-                smokeSource: smoke,
-                sequenceGenForLength: { range in
-                    Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
-                }
-            )
-
-            var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
-            let result = machine.run()
-            return (result, runContext.deferredIssues)
+        var smokeSource: AnyContractCandidateSource<Spec.Command>?
+        if concurrencyLevel > 1 {
+            let smokeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = asyncSequentialProperty(specInit: specInit)
+            smokeSource = .smoke(sequenceGen: sequenceGen, property: smokeProperty)
         }
 
-        let (regressionResult, regressionIssues) = replayRegressionSeeds(
+        let pipeline = ContractPipeline(
+            backend: backend,
+            sequenceGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: resolvedCommandLimit,
+            concurrencyLevel: concurrencyLevel,
+            identifySkips: identifySkips,
+            property: property,
+            invocationCounter: invocationCounter,
+            lastRunTimedOut: lastRunTimedOut,
+            sequenceGenForLength: { range in
+                Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
+            },
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+
+        let (result, issues) = pipeline.runWithRegressions(
             config: config,
             regressionSeeds: regressionSeeds,
-            runMachine: { runMachine(config: $0) }
+            mainRunSmokeSource: smokeSource
         )
-        deferredIssues.append(contentsOf: regressionIssues)
-        if let regressionResult {
-            return (regressionResult, deferredIssues)
-        }
-
-        var smokeProperty: (@Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool)?
-        if concurrencyLevel > 1 {
-            smokeProperty = asyncSequentialProperty(specInit: specInit)
-        }
-
-        let (result, issues) = runMachine(config: config, smokeProperty: smokeProperty)
         deferredIssues.append(contentsOf: issues)
         return (result, deferredIssues)
     }

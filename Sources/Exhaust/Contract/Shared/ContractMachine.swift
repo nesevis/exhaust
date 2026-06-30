@@ -54,13 +54,6 @@ struct ContractMachine<Backend: ContractBackend> {
         }
     }
 
-    // MARK: - Convenience
-
-    mutating func run() -> ContractResult<Backend.Spec>? {
-        while next() != nil {}
-        return result
-    }
-
     // MARK: - Pull Source
 
     private mutating func stepPullSource() -> Transition {
@@ -270,7 +263,7 @@ extension ContractMachine {
 
 extension ContractMachine {
     /// Describes what happened during a single ``next()`` step, returned to the caller for logging or diagnostics.
-    enum Transition {
+    enum Transition: Equatable {
         case sourceExhausted
         case sourceError(String)
         case candidateFound(discoveryMethod: ContractDiscoveryMethod, commandCount: Int)
@@ -279,5 +272,94 @@ extension ContractMachine {
         case reduced
         case statsRecorded
         case assembled
+    }
+}
+
+// MARK: - Pipeline
+
+/// Drives a ``ContractMachine`` through its phases, handling regression replay and the main run.
+///
+/// Each entry point (sequential, cooperative, preemptive) constructs a pipeline once and calls ``runWithRegressions(config:regressionSeeds:mainRunSmokeSource:)`` to run the full pipeline. The pipeline drives ``ContractMachine/next()`` directly rather than using a blind loop, so each transition is available for logging and diagnostics.
+struct ContractPipeline<Backend: ContractBackend> {
+    let backend: Backend
+    let sequenceGen: Generator<[(ScheduleMarker, Backend.Spec.Command)]>
+    let commandGen: Generator<Backend.Spec.Command>
+    let commandLimit: Int
+    let concurrencyLevel: Int
+    let identifySkips: @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Set<Int>
+    let property: @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Bool
+    let invocationCounter: UnsafeSendableBox<Int>
+    let lastRunTimedOut: UnsafeSendableBox<Bool>?
+    let sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Backend.Spec.Command)]>)?
+    let fileID: StaticString
+    let filePath: StaticString
+    let line: UInt
+    let column: UInt
+
+    func run(
+        config: ResolvedConcurrentConfig,
+        smokeSource: AnyContractCandidateSource<Backend.Spec.Command>? = nil
+    ) -> (result: ContractResult<Backend.Spec>?, issues: [String]) {
+        let runContext = ContractRunContext<Backend.Spec>(
+            config: config,
+            sequenceGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            identifySkips: identifySkips,
+            invocationCounter: invocationCounter,
+            lastRunTimedOut: lastRunTimedOut,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+        let sources = __ExhaustRuntime.buildContractSources(
+            config: config,
+            sequenceGen: sequenceGen,
+            commandGen: commandGen,
+            commandLimit: commandLimit,
+            concurrencyLevel: concurrencyLevel,
+            property: property,
+            smokeSource: smokeSource,
+            sequenceGenForLength: sequenceGenForLength
+        )
+        var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
+        while let transition = machine.next() {
+            switch transition {
+                case let .candidateFound(discoveryMethod, commandCount):
+                    ExhaustLog.notice(
+                        category: .propertyTest,
+                        event: "contract_candidate_found",
+                        metadata: ["method": "\(discoveryMethod)", "commands": "\(commandCount)"]
+                    )
+                case .timedOut:
+                    ExhaustLog.notice(category: .propertyTest, event: "contract_timeout")
+                case .sourceExhausted, .sourceError, .pruned, .reduced, .statsRecorded, .assembled:
+                    break
+            }
+        }
+        return (machine.result, runContext.deferredIssues)
+    }
+
+    func runWithRegressions(
+        config: ResolvedConcurrentConfig,
+        regressionSeeds: [String],
+        mainRunSmokeSource: AnyContractCandidateSource<Backend.Spec.Command>? = nil
+    ) -> (result: ContractResult<Backend.Spec>?, deferredIssues: [String]) {
+        var deferredIssues: [String] = []
+
+        let (regressionResult, regressionIssues) = __ExhaustRuntime.replayRegressionSeeds(
+            config: config,
+            regressionSeeds: regressionSeeds,
+            runMachine: { run(config: $0) }
+        )
+        deferredIssues.append(contentsOf: regressionIssues)
+        if let regressionResult {
+            return (regressionResult, deferredIssues)
+        }
+
+        let (result, issues) = run(config: config, smokeSource: mainRunSmokeSource)
+        deferredIssues.append(contentsOf: issues)
+        return (result, deferredIssues)
     }
 }

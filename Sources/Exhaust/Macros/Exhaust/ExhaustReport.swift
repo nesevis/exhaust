@@ -4,7 +4,7 @@ import ExhaustCore
 ///
 /// Delivered via the ``PropertySettings/onReport(_:)`` setting. Contains phase timing, invocation counts, per-encoder probe breakdown, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree.
 public struct ExhaustReport: Sendable {
-    /// The PRNG seed used for random sampling, if any.
+    /// The PRNG seed for this run, when one was supplied by the caller via `.replay` or resolved from a regression trait. `nil` for non-replay runs and for coverage-only results.
     public var seed: UInt64?
 
     /// The encoded replay string for reproducing this failure (for example, `"1A-7"` or `"U3"`), or `nil` if the test passed.

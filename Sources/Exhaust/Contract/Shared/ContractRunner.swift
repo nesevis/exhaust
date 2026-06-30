@@ -106,51 +106,28 @@ public extension __ExhaustRuntime {
                 }
             )
 
-            func runMachine(
-                config machineConfig: ResolvedConcurrentConfig
-            ) -> (result: ContractResult<Spec>?, issues: [String]) {
-                let runContext = ContractRunContext<Spec>(
-                    config: machineConfig,
-                    sequenceGen: taggedSeqGen,
-                    commandGen: commandGen.gen,
-                    commandLimit: commandLimit,
-                    identifySkips: identifySkips,
-                    invocationCounter: invocationCounter,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-
-                let sources = buildContractSources(
-                    config: machineConfig,
-                    sequenceGen: taggedSeqGen,
-                    commandGen: commandGen.gen,
-                    commandLimit: commandLimit,
-                    concurrencyLevel: 1,
-                    property: property
-                )
-
-                var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
-                let result = machine.run()
-                return (result, runContext.deferredIssues)
-            }
-
-            let (regressionResult, regressionIssues) = replayRegressionSeeds(
-                config: config,
-                regressionSeeds: regressionSeeds,
-                runMachine: { runMachine(config: $0) }
+            let pipeline = ContractPipeline(
+                backend: backend,
+                sequenceGen: taggedSeqGen,
+                commandGen: commandGen.gen,
+                commandLimit: commandLimit,
+                concurrencyLevel: 1,
+                identifySkips: identifySkips,
+                property: property,
+                invocationCounter: invocationCounter,
+                lastRunTimedOut: nil,
+                sequenceGenForLength: nil,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
             )
-            for issue in regressionIssues {
-                ExhaustLog.error(category: .propertyTest, event: "contract_failed", issue)
-                reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
-            }
-            if let regressionResult {
-                return regressionResult
-            }
 
-            let (result, issues) = runMachine(config: config)
-            for issue in issues {
+            let (result, deferredIssues) = pipeline.runWithRegressions(
+                config: config,
+                regressionSeeds: regressionSeeds
+            )
+            for issue in deferredIssues {
                 ExhaustLog.error(category: .propertyTest, event: "contract_failed", issue)
                 reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
             }
@@ -264,47 +241,27 @@ private extension __ExhaustRuntime {
             }
         )
 
-        func runMachine(
-            config machineConfig: ResolvedConcurrentConfig
-        ) -> (result: ContractResult<Spec>?, issues: [String]) {
-            let runContext = ContractRunContext<Spec>(
-                config: machineConfig,
-                sequenceGen: taggedSeqGen,
-                commandGen: commandGen.gen,
-                commandLimit: commandLimit,
-                identifySkips: identifySkips,
-                invocationCounter: invocationCounter,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
-
-            let sources = buildContractSources(
-                config: machineConfig,
-                sequenceGen: taggedSeqGen,
-                commandGen: commandGen.gen,
-                commandLimit: commandLimit,
-                concurrencyLevel: 1,
-                property: property
-            )
-
-            var machine = ContractMachine(backend: backend, context: runContext, sources: sources)
-            let result = machine.run()
-            return (result, runContext.deferredIssues)
-        }
-
-        let (regressionResult, regressionIssues) = replayRegressionSeeds(
-            config: config,
-            regressionSeeds: regressionSeeds,
-            runMachine: { runMachine(config: $0) }
+        let pipeline = ContractPipeline(
+            backend: backend,
+            sequenceGen: taggedSeqGen,
+            commandGen: commandGen.gen,
+            commandLimit: commandLimit,
+            concurrencyLevel: 1,
+            identifySkips: identifySkips,
+            property: property,
+            invocationCounter: invocationCounter,
+            lastRunTimedOut: nil,
+            sequenceGenForLength: nil,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
         )
-        deferredIssues.append(contentsOf: regressionIssues)
-        if let regressionResult {
-            return (regressionResult, deferredIssues)
-        }
 
-        let (result, issues) = runMachine(config: config)
+        let (result, issues) = pipeline.runWithRegressions(
+            config: config,
+            regressionSeeds: regressionSeeds
+        )
         deferredIssues.append(contentsOf: issues)
         return (result, deferredIssues)
     }

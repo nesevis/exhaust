@@ -37,7 +37,7 @@ enum Preemptive {
 
 // MARK: - Interleaving Space Warning
 
-/// Emits a runtime warning when the worst-case linearizability search space exceeds 500,000 interleavings.
+/// Emits a runtime warning when the worst-case linearizability search space exceeds 1 billion interleavings.
 ///
 /// The worst case distributes `commandLimit` commands as evenly as possible across `laneCount` lanes, giving multinomial(commandLimit; sizes) interleavings. The DFS is exhaustive, so a large search space means each linearizability check can be slow.
 func warnIfInterleavingSpaceIsLarge(
@@ -56,9 +56,8 @@ func warnIfInterleavingSpaceIsLarge(
         return
     }
     let millions = interleavings / 1_000_000
-    let description = millions >= 1 ? "~\(millions)M" : ">500K"
     reportIssue(
-        "Worst-case linearizability search space is \(description) interleavings (commandLimit=\(commandLimit), lanes=\(laneCount)). Each oracle-flagged probe runs an exhaustive DFS over this space. Reduce .commandLimit or .concurrent level to improve performance.",
+        "Worst-case linearizability search space is ~\(millions)M interleavings (commandLimit=\(commandLimit), lanes=\(laneCount)). Each oracle-flagged probe runs an exhaustive DFS over this space. Reduce .commandLimit or .concurrent level to improve performance.",
         severity: .warning,
         fileID: fileID,
         filePath: filePath,

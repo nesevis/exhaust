@@ -41,7 +41,6 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         let discoveryInvocations = context.invocationCounter.value
         let repetitions = PreemptiveReduction.confirmationRepetitions(discoveryIterations: discoveryInvocations)
 
-        nonisolated(unsafe) let unsafeInner = inner
         nonisolated(unsafe) let unsafeContext = context
         let linearizableProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.ContractProbeVerdict<__ExhaustRuntime.FailureEvidence<Spec>> = { commands in
             unsafeContext.invocationCounter.value += 1
@@ -49,8 +48,8 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
             for _ in 0 ..< repetitions {
                 if let evidence = __ExhaustRuntime.classifyFailure(
                     taggedCommands: commands,
-                    outcome: unsafeInner.execute(commands, partition: partition),
-                    backend: unsafeInner
+                    outcome: inner.execute(commands, partition: partition),
+                    backend: inner
                 ) {
                     return .fail(evidence)
                 }
@@ -62,7 +61,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
             generator: context.sequenceGen,
             tree: tree,
             output: taggedCommands,
-            deadlineNanoseconds: 7_500_000_000,
+            deadlineNanoseconds: context.reductionDeadlineNanoseconds,
             property: linearizableProperty
         )
 
