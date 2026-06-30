@@ -36,8 +36,6 @@ struct ContractMachine<Backend: ContractBackend> {
         switch phase {
             case .pullSource:
                 return stepPullSource()
-            case .accountCandidate:
-                return stepAccountCandidate()
             case .checkTimeout:
                 return stepCheckTimeout()
             case .prune:
@@ -77,7 +75,8 @@ struct ContractMachine<Backend: ContractBackend> {
                 return .sourceExhausted
             }
             candidate = found
-            phase = .accountCandidate
+            accountCandidate(found)
+            phase = .checkTimeout
             return .candidateFound(
                 discoveryMethod: found.discoveryMethod,
                 commandCount: found.taggedCommands.count
@@ -92,14 +91,7 @@ struct ContractMachine<Backend: ContractBackend> {
         }
     }
 
-    // MARK: - Account Candidate
-
-    private mutating func stepAccountCandidate() -> Transition {
-        guard let candidate else {
-            phase = .pullSource
-            return .sourceExhausted
-        }
-
+    private mutating func accountCandidate(_ candidate: ContractCandidate<Backend.Spec.Command>) {
         switch candidate.discoveryMethod {
             case .coverage, .replay:
                 context.report.coverageInvocations += candidate.sourceInvocations
@@ -120,12 +112,6 @@ struct ContractMachine<Backend: ContractBackend> {
         context.failureContext.iteration = candidate.iteration
         context.failureContext.budget = context.config.budget.samplingBudget
         context.failureContext.sequencesTested = candidate.sourceInvocations
-
-        phase = .checkTimeout
-        return .candidateFound(
-            discoveryMethod: candidate.discoveryMethod,
-            commandCount: candidate.taggedCommands.count
-        )
     }
 
     // MARK: - Check Timeout
@@ -269,7 +255,6 @@ extension ContractMachine {
     /// Tracks which pipeline step the machine will execute on the next call to ``next()``.
     enum Phase {
         case pullSource
-        case accountCandidate
         case checkTimeout
         case prune
         case reduce
