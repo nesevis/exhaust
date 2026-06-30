@@ -115,7 +115,9 @@ final class BuggyHashMap: @unchecked Sendable {
         /// Atomically sets status to `desired` if it currently equals `expected`. Returns whether the swap occurred.
         func compareAndSwapStatus(expected: SlotStatus, desired: SlotStatus) -> Bool {
             lock.withLock {
-                guard _status == expected else { return false }
+                guard _status == expected else {
+                    return false
+                }
                 _status = desired
                 return true
             }
@@ -152,8 +154,12 @@ final class BuggyHashMap: @unchecked Sendable {
         let slot = slots[index]
         while true {
             let current = slot.status
-            if current == .updating { continue }
-            if slot.compareAndSwapStatus(expected: current, desired: .updating) { break }
+            if current == .updating {
+                continue
+            }
+            if slot.compareAndSwapStatus(expected: current, desired: .updating) {
+                break
+            }
         }
         slot.key = key
         slot.value = value
@@ -163,7 +169,9 @@ final class BuggyHashMap: @unchecked Sendable {
     /// BUG: uses plain assignment instead of CAS. A concurrent `update` that already holds `.updating` will overwrite this `.deleted` with `.stored` when it finishes.
     func delete(key: Int) {
         let index = abs(key) % slots.count
-        guard slots[index].key == key else { return }
+        guard slots[index].key == key else {
+            return
+        }
         slots[index].status = .deleted
     }
 

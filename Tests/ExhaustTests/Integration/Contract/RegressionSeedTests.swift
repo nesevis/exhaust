@@ -112,7 +112,9 @@ private final class RegressionCounterContract {
 
     @Command(weight: 2)
     func decrement() throws {
-        guard expected > 0 else { throw skip() }
+        guard expected > 0 else {
+            throw skip()
+        }
         expected -= 1
         counter.decrement()
     }
@@ -200,7 +202,9 @@ private final class RegressionPreemptiveContract {
 
     @Command(weight: 2)
     func decrement() throws {
-        guard expected > 0 else { throw skip() }
+        guard expected > 0 else {
+            throw skip()
+        }
         expected -= 1
         counter.decrement()
     }
@@ -226,7 +230,9 @@ private final class RegressionBrokenDecrement: @unchecked Sendable, CustomDebugS
 
     func decrement() {
         // Bug: no-op when value is 1.
-        if storedValue != 1 { storedValue -= 1 }
+        if storedValue != 1 {
+            storedValue -= 1
+        }
     }
 }
 
@@ -248,7 +254,9 @@ private final class RegressionAsyncSequentialContract {
 
     @Command(weight: 2)
     func decrement() async throws {
-        guard expected > 0 else { throw skip() }
+        guard expected > 0 else {
+            throw skip()
+        }
         expected -= 1
         counter.decrement()
     }
@@ -267,6 +275,8 @@ private final class RegressionAsyncCounter {
 
     func decrement() {
         // Bug: no-op when value is 3.
-        if value != 3 { value -= 1 }
+        if value != 3 {
+            value -= 1
+        }
     }
 }

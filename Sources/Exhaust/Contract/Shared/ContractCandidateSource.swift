@@ -38,7 +38,9 @@ extension AnyContractCandidateSource {
     ) -> AnyContractCandidateSource {
         var exhausted = false
         return AnyContractCandidateSource(resolvedReplaySeed: resolvedReplaySeed) {
-            guard exhausted == false else { return nil }
+            guard exhausted == false else {
+                return nil
+            }
             exhausted = true
             return try computation()
         }
@@ -104,7 +106,9 @@ extension AnyContractCandidateSource {
             guard let (value, tree) = try interpreter.next() else {
                 return nil
             }
-            guard property(value) == false else { return nil }
+            guard property(value) == false else {
+                return nil
+            }
             return ContractCandidate(
                 taggedCommands: value,
                 tree: tree,
@@ -126,7 +130,9 @@ extension AnyContractCandidateSource {
             guard let (value, tree) = try interpreter.next() else {
                 return nil
             }
-            guard property(value) == false else { return nil }
+            guard property(value) == false else {
+                return nil
+            }
             return ContractCandidate(
                 taggedCommands: value,
                 tree: tree,

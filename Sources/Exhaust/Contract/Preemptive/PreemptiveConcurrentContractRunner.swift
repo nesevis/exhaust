@@ -349,7 +349,9 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                 var exception: NSException?
                 let succeeded = exhaust_runCatchingObjCException({
                     for command in laneCommands {
-                        if commandFailed.value { break }
+                        if commandFailed.value {
+                            break
+                        }
                         do {
                             let response = try unsafeConcurrentSpec.run(command)
                             let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
@@ -505,11 +507,15 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                 return true
             },
             replayCommand: { command in
-                guard let spec = replaySpec else { return nil }
+                guard let spec = replaySpec else {
+                    return nil
+                }
                 return Self.replaySync(command, on: spec)
             },
             checkOracle: {
-                guard let spec = replaySpec else { return false }
+                guard let spec = replaySpec else {
+                    return false
+                }
                 return concurrentSpec.oracleCheck(spec.systemUnderTest)
             },
             failureDescription: {

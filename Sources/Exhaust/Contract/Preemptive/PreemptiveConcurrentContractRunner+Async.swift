@@ -134,7 +134,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                     let responses: [ObservedResponse<Spec.Command>]? = awaitOrTimeout("lane") {
                         var results: [ObservedResponse<Spec.Command>] = []
                         for (marker, command) in taggedCommands where marker.rawValue == laneID {
-                            if commandFailed.value { break }
+                            if commandFailed.value {
+                                break
+                            }
                             do {
                                 let response = try await spec.run(command)
                                 let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
@@ -363,7 +365,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                     return true
                 },
                 replayCommand: { command in
-                    guard let spec = replaySpec else { return nil }
+                    guard let spec = replaySpec else {
+                        return nil
+                    }
                     do {
                         let response = try await spec.run(command)
                         return .init(
@@ -380,7 +384,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                     }
                 },
                 checkOracle: {
-                    guard let spec = replaySpec else { return false }
+                    guard let spec = replaySpec else {
+                        return false
+                    }
                     return await unsafeSpec.oracleCheck(spec.systemUnderTest)
                 },
                 failureDescription: {

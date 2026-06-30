@@ -48,9 +48,13 @@ func warnIfInterleavingSpaceIsLarge(
     line: UInt,
     column: UInt
 ) {
-    guard laneCount >= 2 else { return }
+    guard laneCount >= 2 else {
+        return
+    }
     let interleavings = worstCaseInterleavings(totalCommands: commandLimit, lanes: laneCount)
-    guard interleavings > PreemptiveReduction.interleavingWarningThreshold else { return }
+    guard interleavings > PreemptiveReduction.interleavingWarningThreshold else {
+        return
+    }
     let millions = interleavings / 1_000_000
     let description = millions >= 1 ? "~\(millions)M" : ">500K"
     reportIssue(
@@ -76,7 +80,9 @@ private func worstCaseInterleavings(totalCommands: Int, lanes: Int) -> Int {
     for size in sizes where size > 1 {
         for pick in 1 ... size {
             let (product, overflow) = result.multipliedReportingOverflow(by: remaining)
-            if overflow { return Int.max }
+            if overflow {
+                return Int.max
+            }
             result = product / pick
             remaining -= 1
         }

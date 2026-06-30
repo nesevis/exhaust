@@ -36,7 +36,9 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
         let oracleProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.ContractProbeVerdict<Void> = { commands in
             unsafeContext.invocationCounter.value += 1
             let result = unsafeSelf.probe(commands, context: unsafeContext)
-            if unsafeContext.lastRunTimedOut { return .pass }
+            if unsafeContext.lastRunTimedOut {
+                return .pass
+            }
             return result == .pass ? .pass : .fail(())
         }
 

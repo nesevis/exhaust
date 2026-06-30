@@ -84,7 +84,9 @@ public extension __ExhaustRuntime {
     ) async -> ContractResult<Spec>? {
         if Spec.self is any Actor.Type {
             let requestedLevel = settings.compactMap { setting -> Int? in
-                if case let .concurrent(level) = setting { return level.rawValue }
+                if case let .concurrent(level) = setting {
+                    return level.rawValue
+                }
                 return nil
             }.last
             if let requestedLevel, requestedLevel > 1 {

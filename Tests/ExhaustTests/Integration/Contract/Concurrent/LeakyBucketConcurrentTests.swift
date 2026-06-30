@@ -18,7 +18,9 @@ struct LeakyBucketConcurrentTests {
             )
         )
         let hasFailure = result.trace.contains { step in
-            if case .invariantFailed = step.outcome { return true }
+            if case .invariantFailed = step.outcome {
+                return true
+            }
             return false
         }
         #expect(hasFailure, "Should detect token over-drain from interleaved tryConsume")
@@ -54,7 +56,9 @@ struct LeakyBucketConcurrentTests {
                 )
             )
             let hasFailure = result.trace.contains { step in
-                if case .invariantFailed = step.outcome { return true }
+                if case .invariantFailed = step.outcome {
+                    return true
+                }
                 return false
             }
             #expect(hasFailure)
@@ -82,14 +86,18 @@ final class LeakyBucketSpec {
 
     @Command(weight: 4)
     func refill() async throws {
-        guard expectedTokens < 5 else { throw skip() }
+        guard expectedTokens < 5 else {
+            throw skip()
+        }
         expectedTokens += 1
         await bucket.refill()
     }
 
     @Command(weight: 3)
     func tryConsume() async throws {
-        guard expectedTokens > 0 else { throw skip() }
+        guard expectedTokens > 0 else {
+            throw skip()
+        }
         expectedTokens -= 1
         await bucket.tryConsume()
     }

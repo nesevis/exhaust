@@ -61,7 +61,9 @@ final class SequentiallyBrokenSpec {
 
     @Command(weight: 2)
     func decrement() throws {
-        guard expected > 0 else { throw skip() }
+        guard expected > 0 else {
+            throw skip()
+        }
         expected -= 1
         counter.decrement()
     }

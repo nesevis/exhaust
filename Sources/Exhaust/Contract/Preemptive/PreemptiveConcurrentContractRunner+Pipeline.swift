@@ -30,7 +30,9 @@ extension __ExhaustRuntime {
     static func laneResponseValues(
         from outcome: Preemptive.Outcome<some ContractSpecBase>?
     ) -> [UInt8: [String?]]? {
-        guard let outcome, let responses = outcome.laneResponses else { return nil }
+        guard let outcome, let responses = outcome.laneResponses else {
+            return nil
+        }
         return Dictionary(grouping: responses.joined(), by: \.lane)
             .mapValues { $0.map(\.outcome.displayValue) }
     }

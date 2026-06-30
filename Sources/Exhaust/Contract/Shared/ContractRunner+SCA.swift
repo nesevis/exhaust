@@ -80,7 +80,9 @@ extension __ExhaustRuntime {
             }
 
             let domainSizes = domain.profile.domainSizes
-            guard domainSizes.count >= 2 else { continue }
+            guard domainSizes.count >= 2 else {
+                continue
+            }
 
             let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
             var tierIterations: UInt64 = 0
@@ -108,11 +110,15 @@ extension __ExhaustRuntime {
 
                 tierIterations += 1
                 totalIterations += 1
-                if let skipToRow, totalIterations - 1 < skipToRow { continue }
+                if let skipToRow, totalIterations - 1 < skipToRow {
+                    continue
+                }
                 if property(value) == false {
                     return .failure(value: value, tree: freshTree, coverageInvocations: totalIterations)
                 }
-                if skipToRow != nil { return .completed(coverageInvocations: totalIterations) }
+                if skipToRow != nil {
+                    return .completed(coverageInvocations: totalIterations)
+                }
             }
         }
 
@@ -148,7 +154,9 @@ extension __ExhaustRuntime {
 
         var merged: [(length: Int, fraction: UInt64, denominator: UInt64)] = []
         for raw in rawTiers {
-            guard raw.length >= minLength else { continue }
+            guard raw.length >= minLength else {
+                continue
+            }
             if let existingIndex = merged.firstIndex(where: { $0.length == raw.length }) {
                 let existing = merged[existingIndex]
                 let combinedNumerator = existing.fraction * raw.denominator + raw.fraction * existing.denominator
@@ -170,7 +178,9 @@ extension __ExhaustRuntime {
             } else {
                 budget = totalBudget * tier.fraction / tier.denominator
             }
-            guard budget > 0 else { continue }
+            guard budget > 0 else {
+                continue
+            }
             result.append((length: tier.length, budget: budget))
             allocated += budget
         }
@@ -454,7 +464,9 @@ extension __ExhaustRuntime {
     ) -> ContiguousArray<ReflectiveOperation.PickTuple>? {
         guard case let .impure(operation, _) = gen,
               case let .pick(choices, _) = operation
-        else { return nil }
+        else {
+            return nil
+        }
         return choices
     }
 

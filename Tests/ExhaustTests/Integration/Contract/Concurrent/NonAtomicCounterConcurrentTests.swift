@@ -16,8 +16,12 @@ struct NonAtomicCounterConcurrentTests {
             )
         )
         let hasFailure = result.trace.contains { step in
-            if case .invariantFailed = step.outcome { return true }
-            if case .checkFailed = step.outcome { return true }
+            if case .invariantFailed = step.outcome {
+                return true
+            }
+            if case .checkFailed = step.outcome {
+                return true
+            }
             return false
         }
         #expect(hasFailure, "Should detect invariant failure from interleaved read-modify-write")
@@ -167,7 +171,9 @@ final class NonAtomicCounterSpec {
 
     @Command(weight: 2)
     func decrement() async throws {
-        guard expected > 0 else { throw skip() }
+        guard expected > 0 else {
+            throw skip()
+        }
         expected -= 1
         await counter.decrement()
     }
