@@ -41,16 +41,14 @@ struct IdleTimeoutConcurrentTests {
     func asyncPreemptiveIdleTimeoutSurfacesStallingCommand() async throws {
         var deliveredReport: ExhaustReport?
         let result = try #require(
-            await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+            await #execute(
                 StallingAsyncSpec.self,
-                settings: [
-                    .concurrent(.two),
-                    .commandLimit(2),
-                    .idleTimeoutMs(20),
-                    .budget(.custom(coverage: 0, sampling: 10)),
-                    .suppress(.issueReporting),
-                    .onReport { deliveredReport = $0 },
-                ]
+                .concurrent(.two),
+                .commandLimit(2),
+                .idleTimeoutMs(20),
+                .budget(.custom(coverage: 0, sampling: 10)),
+                .suppress(.issueReporting),
+                .onReport { deliveredReport = $0 }
             )
         )
         #expect(result.commands.isEmpty == false)
@@ -65,15 +63,13 @@ struct IdleTimeoutConcurrentTests {
 
     @Test("Async preemptive group.wait bound prevents hang on synchronous SUT deadlock")
     func asyncPreemptiveGroupWaitBoundPreventsHangOnSynchronousSUTDeadlock() async {
-        _ = await __ExhaustRuntime.__runPreemptiveConcurrentContractAsync(
+        _ = await #execute(
             DeadlockingAsyncSpec.self,
-            settings: [
-                .concurrent(.two),
-                .commandLimit(2),
-                .idleTimeoutMs(50),
-                .budget(.custom(coverage: 0, sampling: 50)),
-                .suppress(.all),
-            ]
+            .concurrent(.two),
+            .commandLimit(2),
+            .idleTimeoutMs(50),
+            .budget(.custom(coverage: 0, sampling: 50)),
+            .suppress(.all)
         )
     }
 }

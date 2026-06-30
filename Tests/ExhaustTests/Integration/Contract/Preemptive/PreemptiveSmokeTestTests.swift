@@ -8,14 +8,12 @@ struct PreemptiveSmokeTestTests {
     @Test("Smoke test catches sequential bug before concurrent phase")
     func smokeTestCatchesSequentialBugBeforeConcurrentPhase() async {
         let result = await __ExhaustRuntime.dispatchToGCD {
-            __ExhaustRuntime.__runPreemptiveConcurrentContract(
+            #execute(
                 SequentiallyBrokenSpec.self,
-                settings: [
-                    .concurrent(.two),
-                    .commandLimit(10),
-                    .budget(.custom(coverage: 0, sampling: 0)),
-                    .suppress(.issueReporting),
-                ]
+                .concurrent(.two),
+                .commandLimit(10),
+                .budget(.custom(coverage: 0, sampling: 0)),
+                .suppress(.issueReporting)
             )
         }
         #expect(result?.commands.isEmpty == false)
@@ -25,14 +23,12 @@ struct PreemptiveSmokeTestTests {
     func smokeTestFailureCarriesSpecificReplaySeed() async throws {
         let result = try #require(
             await __ExhaustRuntime.dispatchToGCD {
-                __ExhaustRuntime.__runPreemptiveConcurrentContract(
+                #execute(
                     SequentiallyBrokenSpec.self,
-                    settings: [
-                        .concurrent(.two),
-                        .commandLimit(10),
-                        .budget(.custom(coverage: 0, sampling: 0)),
-                        .suppress(.issueReporting),
-                    ]
+                    .concurrent(.two),
+                    .commandLimit(10),
+                    .budget(.custom(coverage: 0, sampling: 0)),
+                    .suppress(.issueReporting)
                 )
             }
         )

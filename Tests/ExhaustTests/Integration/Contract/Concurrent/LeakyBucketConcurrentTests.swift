@@ -10,11 +10,9 @@ struct LeakyBucketConcurrentTests {
     @Test("Detects check-then-act bug that requires state buildup")
     func detectsCheckThenActBugThatRequiresStateBuildup() async throws {
         let result = try #require(
-            await __ExhaustRuntime.__runContractConcurrent(
+            await #execute(
                 LeakyBucketSpec.self,
-                settings: [
-                    .suppress(.issueReporting),
-                ]
+                .suppress(.issueReporting)
             )
         )
         let hasFailure = result.trace.contains { step in
@@ -30,9 +28,13 @@ struct LeakyBucketConcurrentTests {
     @Test("Lane collapse encoder accepts probes when prefix is required")
     func laneCollapseEncoderAcceptsProbesWhenPrefixIsRequired() async throws {
         var deliveredReport: ExhaustReport?
-        _ = await __ExhaustRuntime.__runContractConcurrent(
+        _ = await #execute(
             LeakyBucketSpec.self,
-            settings: [.commandLimit(8), .budget(.custom(coverage: 0, sampling: 500)), .replay(.numeric(42)), .suppress(.issueReporting), .onReport { deliveredReport = $0 }]
+            .commandLimit(8),
+            .budget(.custom(coverage: 0, sampling: 500)),
+            .replay(.numeric(42)),
+            .suppress(.issueReporting),
+            .onReport { deliveredReport = $0 }
         )
         let report = try #require(deliveredReport)
         #expect(report.propertyInvocations == 11)
@@ -50,9 +52,8 @@ struct LeakyBucketConcurrentTests {
     func reportsIssueThroughSwiftTestingWhenSuppressionIsOff() async {
         await withKnownIssue {
             let result = try #require(
-                await __ExhaustRuntime.__runContractConcurrent(
-                    LeakyBucketSpec.self,
-                    settings: []
+                await #execute(
+                    LeakyBucketSpec.self
                 )
             )
             let hasFailure = result.trace.contains { step in
