@@ -92,7 +92,12 @@ public extension __ExhaustRuntime {
                 commands.map { (ScheduleMarker.prefix, $0) }
             }
 
-            let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = syncSequentialProperty(Spec.self)
+            let invocationCounter = UnsafeSendableBox(0)
+            let rawProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = syncSequentialProperty(Spec.self)
+            let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+                invocationCounter.value += 1
+                return rawProperty(taggedCommands)
+            }
 
             let syncSkipIdentifier = Spec.skipIdentifier
             let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { tagged in
@@ -105,6 +110,7 @@ public extension __ExhaustRuntime {
                 commandGen: commandGen.gen,
                 commandLimit: commandLimit,
                 identifySkips: identifySkips,
+                invocationCounter: invocationCounter,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -240,7 +246,12 @@ private extension __ExhaustRuntime {
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
-        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = asyncSequentialProperty(specInit: specInit)
+        let invocationCounter = UnsafeSendableBox(0)
+        let rawProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = asyncSequentialProperty(specInit: specInit)
+        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+            invocationCounter.value += 1
+            return rawProperty(taggedCommands)
+        }
 
         let asyncSkipIdentifier = Spec.skipIdentifier(specInit: specInit)
         let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { tagged in
@@ -253,6 +264,7 @@ private extension __ExhaustRuntime {
             commandGen: commandGen.gen,
             commandLimit: commandLimit,
             identifySkips: identifySkips,
+            invocationCounter: invocationCounter,
             fileID: fileID,
             filePath: filePath,
             line: line,
