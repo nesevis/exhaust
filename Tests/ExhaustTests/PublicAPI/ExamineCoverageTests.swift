@@ -124,7 +124,7 @@ struct ExamineCoverageTests {
             Person(firstName: $0, lastName: $1, age: $2)
         }.filter { $0.age >= 18 }
         let report = #examine(gen, .suppress(.issueReporting))
-        print()
+        #expect(report.filterObservations.isEmpty == false)
     }
 
     @Test("Complex generator with bind report")

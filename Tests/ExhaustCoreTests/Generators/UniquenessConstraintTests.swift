@@ -212,7 +212,7 @@ struct UniquenessConstraintTests {
         let gen = uniqueGen(Gen.choose(from: [true, false]))
 
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 100)
-        while let value = try iterator.next() {
+        while try iterator.next() != nil {
             #expect(true)
         }
     }

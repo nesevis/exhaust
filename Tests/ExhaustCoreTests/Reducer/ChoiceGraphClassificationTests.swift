@@ -132,7 +132,6 @@ struct ChoiceGraphClassificationTests {
         let gen = makeCouplingLikeGen()
         let tree = try generateTree(from: gen, seed: 12)
         var graph = ChoiceGraph.build(from: tree)
-        let sequence = ChoiceSequence(tree)
         let bindNodeID = try #require(firstActiveBindNodeID(in: graph))
         let upstreamLeafNodeID = try #require(innerLeafNodeID(ofBind: bindNodeID, in: graph))
 

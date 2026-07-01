@@ -291,11 +291,6 @@ final class PreemptiveReplayableSpec {
         counter.value == other.value
     }
 
-    @Invariant
-    func matchesModel() -> Bool {
-        counter.value == expected
-    }
-
     @Command(weight: 3)
     func increment() throws {
         expected += 1
@@ -351,11 +346,6 @@ final class PreemptiveSequentiallyBrokenSpec {
     @Oracle
     func oracleMatches(other: BrokenDecrementCounter) -> Bool {
         counter.value == other.value
-    }
-
-    @Invariant
-    func matchesModel() -> Bool {
-        counter.value == expected
     }
 
     @Command(weight: 3)

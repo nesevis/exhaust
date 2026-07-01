@@ -292,14 +292,14 @@ struct ChoiceTreeTests {
 
 // MARK: - Shared fixtures
 
-private nonisolated(unsafe) let choiceNode = ChoiceTree.choice(
+private let choiceNode = ChoiceTree.choice(
     ChoiceValue(UInt64(5), tag: .uint64),
     ChoiceMetadata(validRange: 0 ... 10)
 )
-private nonisolated(unsafe) let branchNode = ChoiceTree.branch(
+private let branchNode = ChoiceTree.branch(
     fingerprint: 0, weight: 1, id: 1, branchCount: 2,
     choice: .just
 )
-private nonisolated(unsafe) let justNode = ChoiceTree.just
-private nonisolated(unsafe) let groupNode = ChoiceTree.group([justNode])
-private nonisolated(unsafe) let getSizeNode = ChoiceTree.getSize(50)
+private let justNode = ChoiceTree.just
+private let groupNode = ChoiceTree.group([justNode])
+private let getSizeNode = ChoiceTree.getSize(50)

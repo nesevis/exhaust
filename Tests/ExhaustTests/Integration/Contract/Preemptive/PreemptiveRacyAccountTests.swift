@@ -17,10 +17,10 @@ struct PreemptiveRacyAccountTests {
                 .onReport { report = $0 }
             )
         )
-        print(report?.profilingSummary)
-        print(result.replaySeed)
+        print(String(describing: report?.profilingSummary))
+        print(String(describing: result.replaySeed))
         print(result.trace)
-        print(result.originalCommands)
+        print(String(describing: result.originalCommands))
         #expect(result.replaySeed != nil)
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
     }

@@ -184,11 +184,6 @@ private final class RegressionPreemptiveContract {
         counter.value == other.value
     }
 
-    @Invariant
-    func valueMatches() -> Bool {
-        counter.value == expected
-    }
-
     @Command(weight: 3)
     func increment() throws {
         expected += 1

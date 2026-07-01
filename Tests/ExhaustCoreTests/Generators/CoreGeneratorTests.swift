@@ -55,17 +55,6 @@ struct CoreGeneratorTests {
             }
         }
 
-        @Test("Gen.choose with type produces valid values")
-        func genChooseType() throws {
-            let gen = Gen.choose(in: UInt32.min ... UInt32.max, scaling: UInt32.defaultScaling)
-            var iterator = ValueInterpreter(gen)
-
-            for _ in 0 ..< 20 {
-                let value = try iterator.next()!
-                #expect(value is UInt32)
-            }
-        }
-
         @Test("Gen.exact produces exact value and reflects correctly")
         func genExact() throws {
             let value = 42

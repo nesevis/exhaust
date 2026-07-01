@@ -362,17 +362,6 @@ struct GraphColoringChallenge {
         // Sanity-check the result is a counterexample.
         #expect(Self.property(value) == false)
 
-        // Categorise the result by topology.
-        let n = value.distinctVertices.count
-        let e = value.edges.count
-        let category = switch (n, e) {
-            case (3, 3): "K_3 (triangle)"
-            case (5, 5): "C_5 (5-cycle)"
-            case (4, 6): "K_4"
-            default: "non-canonical (n=\(n), e=\(e))"
-        }
-//        print("[CE class] \(category)")
-
         #expect(value.distinctVertices == [0, 1, 2])
     }
 }
