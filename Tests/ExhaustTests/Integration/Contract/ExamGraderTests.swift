@@ -29,10 +29,10 @@ import Testing
 struct ExamGraderTests {
     /// Runs the contract and verifies that Exhaust detects at least one of the two embedded bugs. With sequence lengths of 3 to 8 commands, the contract reliably triggers either the invariant failure (mismatched answer length) or the postcondition failure (grading penalizes blanks). The test passes when the trace contains a failure — meaning the contract successfully caught the bug.
     @Test("Detects answer length mismatch or grading bug")
-    func detectsAnswerLengthMismatchOrGradingBug() throws {
+    func detectsAnswerLengthMismatchOrGradingBug() async throws {
         // Note: Bonsai doesn't produce as minimal a counterexample
         let result = try #require(
-            #execute(
+            await #execute(
                 ExamGraderContract.self,
                 .commandLimit(8),
                 .suppress(.issueReporting)

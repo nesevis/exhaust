@@ -5,8 +5,8 @@ import Testing
 @Suite("Multiple @Invariant methods", .serialized, .tags(.contract))
 struct MultiInvariantTests {
     @Test("First failing invariant is reported in trace")
-    func firstFailingInvariantIsReportedInTrace() {
-        let result = #execute(
+    func firstFailingInvariantIsReportedInTrace() async {
+        let result = await #execute(
             FiveInvariantSpec.self,
             .commandLimit(4),
             .suppress(.issueReporting)
@@ -23,8 +23,8 @@ struct MultiInvariantTests {
     }
 
     @Test("Passing spec with five invariants produces no counterexample")
-    func passingSpecWithFiveInvariantsProducesNoCounterexample() {
-        let result = #execute(
+    func passingSpecWithFiveInvariantsProducesNoCounterexample() async {
+        let result = await #execute(
             PassingFiveInvariantSpec.self,
             .commandLimit(6),
             .budget(.custom(coverage: 100, sampling: 50)),

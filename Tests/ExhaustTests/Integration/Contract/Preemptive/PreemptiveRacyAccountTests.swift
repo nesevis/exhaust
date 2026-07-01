@@ -5,10 +5,10 @@ import Testing
 @Suite("Preemptive linearizability: real race detection", .serialized, .tags(.contract))
 struct PreemptiveRacyAccountTests {
     @Test("Detects lost update in unsynchronized counter")
-    func detectsLostUpdateInUnsynchronizedCounter() throws {
+    func detectsLostUpdateInUnsynchronizedCounter() async throws {
         var report: ExhaustReport?
         let result = try #require(
-            #execute(
+            await #execute(
                 RacyAccountSpec.self,
                 .concurrent(.two),
                 .budget(.custom(coverage: 20000, sampling: 20000)),

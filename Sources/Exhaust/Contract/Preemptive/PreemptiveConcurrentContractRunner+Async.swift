@@ -44,7 +44,7 @@ public extension __ExhaustRuntime {
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
         let timedOutProbeCount = UnsafeSendableBox(0)
-        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.asyncThreads(config.concurrencyLevel)) {
+        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.threads(config.concurrencyLevel)) {
             ExhaustLog.withConfiguration(config.logConfiguration) {
                 runPreemptiveMachine(
                     innerBackend: innerBackend,

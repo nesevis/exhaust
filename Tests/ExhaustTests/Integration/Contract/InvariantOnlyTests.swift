@@ -7,9 +7,9 @@ import Testing
 @Suite("Invariant-only contract tests", .serialized, .tags(.contract))
 struct InvariantOnlyTests {
     @Test("Circular buffer capacity invariant detects overflow")
-    func circularBufferCapacityInvariantDetectsOverflow() throws {
+    func circularBufferCapacityInvariantDetectsOverflow() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 CircularBufferContract.self,
                 .commandLimit(6),
                 .suppress(.issueReporting)
@@ -23,9 +23,9 @@ struct InvariantOnlyTests {
     }
 
     @Test("Sorted backing invariant detects unsorted insert")
-    func sortedBackingInvariantDetectsUnsortedInsert() throws {
+    func sortedBackingInvariantDetectsUnsortedInsert() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 SortedBackingContract.self,
                 .commandLimit(5),
                 .suppress(.issueReporting)

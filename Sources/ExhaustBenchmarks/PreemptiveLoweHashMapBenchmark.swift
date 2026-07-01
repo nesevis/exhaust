@@ -13,15 +13,18 @@ func registerPreemptiveLoweHashMapBenchmarks() {
 
         for index in 0 ..< seedCount {
             let seed = baseSeed &+ UInt64(index)
-            var report: ExhaustReport?
-            let result = #execute(
-                LoweHashMapBenchSpec.self,
-                .concurrent(.two),
-                .replay(.numeric(seed)),
-                .budget(.custom(coverage: 10000, sampling: 150_000)),
-                .suppress(.issueReporting),
-                .onReport { report = $0 }
-            )
+            nonisolated(unsafe) var report: ExhaustReport?
+            // `#execute` is async now; bridge it to this synchronous benchmark closure.
+            let result = __ExhaustRuntime.blockingAwait {
+                await #execute(
+                    LoweHashMapBenchSpec.self,
+                    .concurrent(.two),
+                    .replay(.numeric(seed)),
+                    .budget(.custom(coverage: 10000, sampling: 150_000)),
+                    .suppress(.issueReporting),
+                    .onReport { report = $0 }
+                )
+            }
             if let result {
                 failureCount += 1
                 commandCount += result.commands.count

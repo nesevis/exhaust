@@ -16,7 +16,7 @@ extension __ExhaustRuntime {
     ///     return spec.value
     /// }
     /// ```
-    static func blockingAwait<Result>(
+    package static func blockingAwait<Result>(
         _ work: @Sendable @escaping () async -> Result
     ) -> Result {
         if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {

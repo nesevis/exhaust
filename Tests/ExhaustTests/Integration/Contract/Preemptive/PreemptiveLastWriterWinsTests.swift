@@ -5,9 +5,9 @@ import Testing
 @Suite("Preemptive linearizability: false positive elimination", .serialized, .tags(.contract))
 struct PreemptiveLastWriterWinsTests {
     @Test("Correctly synchronized last-writer-wins does not produce false positives")
-    func correctlyImplementedLastWriterWinsPassesLinearizability() {
+    func correctlyImplementedLastWriterWinsPassesLinearizability() async {
         var report: ExhaustReport?
-        let result = #execute(
+        let result = await #execute(
             AtomicLastWriterWinsSpec.self,
             .concurrent(.two),
             .idleTimeoutMs(30000),

@@ -7,8 +7,8 @@ struct PreemptiveResponseOnlyGhostTests {
     /// `RacySet.add(x)` carries a response-only race: two concurrent `add(x)` can both return `true`, which no sequential ordering permits, while the final state is the same single element under every interleaving.
     /// A final-state oracle cannot witness the violation, so detection has to come from comparing the per-command responses against a sequential replay.
     @Test("Response-only violation is detected by the realized-order witness (C1 regression)")
-    func responseOnlyViolationShouldBeDetected() {
-        let result = #execute(
+    func responseOnlyViolationShouldBeDetected() async {
+        let result = await #execute(
             RacySetSpec.self,
             .concurrent(.two),
             .idleTimeoutMs(5000),

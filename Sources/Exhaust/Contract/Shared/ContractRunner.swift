@@ -18,9 +18,10 @@ public extension __ExhaustRuntime {
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ContractResult<Spec>? {
+    ) async -> ContractResult<Spec>? {
         switch Spec.executionModel {
             case .sequential, .tasks:
+                // Sequential contracts run inline and spawn no GCD lanes, so no gate hop is needed.
                 return __runContract(
                     specType,
                     settings: settings,
@@ -30,7 +31,7 @@ public extension __ExhaustRuntime {
                     column: column
                 )
             case .threads:
-                return __runPreemptiveConcurrentContract(
+                return await __runPreemptiveConcurrentContract(
                     specType,
                     settings: settings,
                     fileID: fileID,

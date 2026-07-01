@@ -5,8 +5,8 @@ import Testing
 @Suite("Multiple properties", .serialized, .tags(.contract))
 struct MultiModelTests {
     @Test("Spec with three properties detects divergence")
-    func specWithThreeModelPropertiesDetectsDivergence() {
-        let result = #execute(
+    func specWithThreeModelPropertiesDetectsDivergence() async {
+        let result = await #execute(
             MultiModelSpec.self,
             .commandLimit(8),
             .suppress(.issueReporting)

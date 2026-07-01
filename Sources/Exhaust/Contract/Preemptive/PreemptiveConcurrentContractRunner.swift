@@ -22,7 +22,7 @@ public extension __ExhaustRuntime {
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ContractResult<Spec>? {
+    ) async -> ContractResult<Spec>? {
         let parsed = ResolvedConcurrentConfig.parse(settings)
         if let invalidSeed = parsed.invalidReplaySeed {
             reportIssue(
@@ -43,18 +43,20 @@ public extension __ExhaustRuntime {
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
         let timedOutProbeCount = UnsafeSendableBox(0)
-        // Run the machine directly on the calling thread. Callers reach this through `await dispatchToGCD { #execute(...) }`, so it already runs on a GCD worker with the cooperative thread freed. A nested `DispatchQueue.global().sync` here would be a `global().sync` submitted from within a GCD worker, which self-deadlocks once the global pool saturates (the worker blocks waiting for a pool thread that never comes, with no idle timeout to break it).
-        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = ExhaustLog.withConfiguration(config.logConfiguration) {
-            runPreemptiveMachine(
-                innerBackend: innerBackend,
-                config: config,
-                regressionSeeds: regressionSeeds,
-                timedOutProbeCount: timedOutProbeCount,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
+        // Gate + offload: acquire a lane reservation, then run the (synchronous) machine on a GCD worker. The gate bounds how many preemptive runs execute at once so their lanes are not starved of threads under `--parallel`; the GCD hop frees the cooperative thread. Reporting is deferred to the async return context where Swift Testing's task-locals are available.
+        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await dispatchToGCD(reserving: LaneReservation.threads(config.concurrencyLevel)) {
+            ExhaustLog.withConfiguration(config.logConfiguration) {
+                runPreemptiveMachine(
+                    innerBackend: innerBackend,
+                    config: config,
+                    regressionSeeds: regressionSeeds,
+                    timedOutProbeCount: timedOutProbeCount,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+            }
         }
         for issue in deferredIssues {
             reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)

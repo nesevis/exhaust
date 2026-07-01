@@ -12,13 +12,13 @@ import Testing
 @Suite("Preemptive linearizability: Herlihy-Wing lock-free queue lost enqueue", .serialized, .tags(.contract))
 struct PreemptiveHerlihyQueueTests {
     @Test("Detects lost enqueue from non-atomic back increment", .disabled("Benchmark"))
-    func detectsLostEnqueue() {
+    func detectsLostEnqueue() async {
         var commandCount = 0
         var iterations: Double = 0
         var totalRuntime = 0.0
         for seed in UInt64(1) ... 200 {
             var report: ExhaustReport?
-            let result = #execute(
+            let result = await #execute(
                 HerlihyQueueSpec.self,
                 .concurrent(.two),
                 .budget(.custom(coverage: 0, sampling: 500_000)),

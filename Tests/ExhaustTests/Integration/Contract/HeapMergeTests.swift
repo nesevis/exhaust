@@ -24,12 +24,12 @@ import Testing
 @Suite("Heap merge contract tests (Bundle)", .serialized, .tags(.contract))
 struct HeapMergeTests {
     @Test("Detects dropped element during merge via invariant or postcondition")
-    func detectsDroppedElementDuringMergeViaInvariantOrPostcondition() throws {
+    func detectsDroppedElementDuringMergeViaInvariantOrPostcondition() async throws {
         // Bonsai uses 464 invocations in 71ms
         // Legacy uses 256 in 23ms
         // Bonsai does not reduce as well (6 vs 5)
         let result = try #require(
-            #execute(
+            await #execute(
                 HeapMergeContract.self,
                 .commandLimit(12),
                 .budget(.extensive),
@@ -50,11 +50,11 @@ struct HeapMergeTests {
 @Suite("Heap aliasing contract tests (self-merge)", .serialized, .tags(.contract))
 struct HeapAliasingTests {
     @Test("Sorted-splice merge violates heap property after repeated self-merges")
-    func sortedSpliceMergeViolatesHeapPropertyAfterRepeatedSelfMerges() throws {
+    func sortedSpliceMergeViolatesHeapPropertyAfterRepeatedSelfMerges() async throws {
         // Legacy: 90 invocations, 31ms, CE 5 steps
         // Bonsai: 151 invocations, 26ms, CE 5 steps
         let result = try #require(
-            #execute(
+            await #execute(
                 HeapAliasingContract.self,
                 .commandLimit(20),
                 .suppress(.issueReporting),

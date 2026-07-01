@@ -12,8 +12,8 @@ struct RegressionSeedTests {
         "Sequential regression seed reproduces a sampling failure through the trait",
         .exhaust(.regressions("FZ9CGDYNJAFDV-2"))
     )
-    func sequentialRegressionSeedReproduces() {
-        let result = #execute(
+    func sequentialRegressionSeedReproduces() async {
+        let result = await #execute(
             RegressionCounterContract.self,
             .commandLimit(8),
             .budget(.custom(coverage: 0, sampling: 0)),
@@ -38,9 +38,9 @@ struct RegressionSeedTests {
     }
 
     @Test("Preemptive regression seed reproduces a failure through the trait")
-    func preemptiveRegressionSeedReproduces() throws {
+    func preemptiveRegressionSeedReproduces() async throws {
         let initial = try #require(
-            #execute(
+            await #execute(
                 RegressionPreemptiveContract.self,
                 .commandLimit(6),
                 .suppress(.all)
@@ -48,10 +48,10 @@ struct RegressionSeedTests {
         )
         let replaySeed = try #require(initial.replaySeed)
 
-        let result = ExhaustTraitConfiguration.$current.withValue(
+        let result = await ExhaustTraitConfiguration.$current.withValue(
             ExhaustTraitConfiguration(budget: nil, regressions: [replaySeed])
         ) {
-            #execute(
+            await #execute(
                 RegressionPreemptiveContract.self,
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 0)),

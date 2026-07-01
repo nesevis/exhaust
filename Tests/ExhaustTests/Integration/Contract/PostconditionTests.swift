@@ -7,9 +7,9 @@ import Testing
 @Suite("Postcondition-only contract tests", .serialized, .tags(.contract))
 struct PostconditionTests {
     @Test("Set uniqueness postcondition detects duplicate add")
-    func setUniquenessPostconditionDetectsDuplicateAdd() throws {
+    func setUniquenessPostconditionDetectsDuplicateAdd() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 SetUniquenessContract.self,
                 .commandLimit(5),
                 .suppress(.issueReporting)
@@ -23,9 +23,9 @@ struct PostconditionTests {
     }
 
     @Test("Stack LIFO postcondition detects wrong peek")
-    func stackLIFOPostconditionDetectsWrongPeek() throws {
+    func stackLIFOPostconditionDetectsWrongPeek() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 StackLIFOContract.self,
                 .commandLimit(4),
                 .suppress(.issueReporting)
@@ -39,9 +39,9 @@ struct PostconditionTests {
     }
 
     @Test("Dictionary consistency detects count drift")
-    func dictionaryConsistencyDetectsCountDrift() throws {
+    func dictionaryConsistencyDetectsCountDrift() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 DictionaryConsistencyContract.self,
                 .commandLimit(6),
                 .suppress(.issueReporting)

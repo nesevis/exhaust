@@ -6,7 +6,7 @@ import Testing
 @Suite("SCA sequence length benchmark", .serialized, .tags(.contract))
 struct SCABenchmark {
     @Test("Sequence length timing", arguments: [5, 8, 10, 15, 20, 25, 30])
-    func sequenceLengthTiming(length: Int) {
+    func sequenceLengthTiming(length: Int) async {
         let cap = switch length {
             case ...6: 6
             case ...8: 5
@@ -17,7 +17,7 @@ struct SCABenchmark {
         var times: [Duration] = []
         for _ in 0 ..< 5 {
             let start = ContinuousClock.now
-            _ = #execute(
+            _ = await #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(UInt(length)),
                 .suppress(.issueReporting)

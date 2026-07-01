@@ -103,8 +103,8 @@ extension LaneGate {
 ///
 /// Centralized so the `+1` on the async `.threads` path lives in one commented place rather than as a magic number at each dispatch site. The sync `.threads` entry is not listed: it is ungated (see ``LaneGate``).
 enum LaneReservation {
-    /// The async `.threads` reservation: one lane per concurrency level, plus one for the coordinator GCD worker parked on `group.wait` while the level lanes run.
-    static func asyncThreads(_ level: Int) -> Int {
+    /// The `.threads` reservation (sync and async): one lane per concurrency level, plus one for the coordinator GCD worker parked on `group.wait` while the level lanes run.
+    static func threads(_ level: Int) -> Int {
         level + 1
     }
 

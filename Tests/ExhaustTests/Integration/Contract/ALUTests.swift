@@ -7,12 +7,12 @@ import Testing
 @Suite("ALU state machine tests", .serialized, .tags(.contract))
 struct ALUTests {
     @Test("SCA argument coverage finds narrow ALU multiply bug")
-    func sCAArgumentCoverageFindsNarrowALUMultiplyBug() throws {
+    func sCAArgumentCoverageFindsNarrowALUMultiplyBug() async throws {
         // The multiply bug only fires when value × factor ≥ 13.
         // Triggering paths (shortest): store(4) + add(3) + multiply(2) → 14, store(3) + add(2) + multiply(3) → 15, store(1) + subtract(3) + multiply(2) → 28 (via 0xF wrap to 14).
         // Random at 100 iterations hits one of these ~20% of the time. SCA with 16 domain values at t=2 produces ~256+ rows covering all pairwise (command+arg) interactions, reliably surfacing the failure.
         let result = try #require(
-            #execute(
+            await #execute(
                 ALUSpec.self,
                 .commandLimit(8),
                 .suppress(.issueReporting)

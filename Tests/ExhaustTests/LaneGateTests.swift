@@ -74,7 +74,7 @@ struct LaneGateTests {
 
     @Test("Reservation sizes: async threads adds the coordinator lane")
     func reservationSizes() {
-        #expect(LaneReservation.asyncThreads(4) == 5)
+        #expect(LaneReservation.threads(4) == 5)
         #expect(LaneReservation.single == 1)
     }
 }
