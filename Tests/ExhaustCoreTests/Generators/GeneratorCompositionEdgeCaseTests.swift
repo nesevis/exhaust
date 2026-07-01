@@ -22,7 +22,7 @@ struct GeneratorCompositionEdgeCaseTests {
         // Generate multiple values
         for _ in 0 ..< 10 {
             var iterator = ValueInterpreter(composed)
-            let (constant, string) = try iterator.next()!
+            let (constant, _) = try iterator.next()!
             #expect(constant == 42) // Constant should always be the same
             // String can be anything
         }
@@ -41,7 +41,7 @@ struct GeneratorCompositionEdgeCaseTests {
         // Verify all components are generated correctly
         for _ in 0 ..< 20 {
             var iterator = ValueInterpreter(gen)
-            let (int, string, uint, double, ranged) = try iterator.next()!
+            let (_, _, _, _, ranged) = try iterator.next()!
 
             // Type checking ensures correctness, but verify range constraint
             #expect(ranged >= 1)
@@ -125,7 +125,7 @@ struct GeneratorCompositionEdgeCaseTests {
 
         for _ in 0 ..< 20 {
             var iterator = ValueInterpreter(composed)
-            let (array, string) = try iterator.next()!
+            let (array, _) = try iterator.next()!
             #expect(array.count >= 0) // swiftlint:disable:this empty_count
             #expect(array.count <= 5)
         }
@@ -148,7 +148,7 @@ struct GeneratorCompositionEdgeCaseTests {
 
         for _ in 0 ..< 10 {
             var iterator = ValueInterpreter(composed)
-            let (nested, string) = try iterator.next()!
+            let (nested, _) = try iterator.next()!
 
             // Verify structure depth
             #expect(nested.count >= 1)
