@@ -36,6 +36,9 @@ package enum PreemptiveReduction {
     /// Worst-case interleaving count above which the runner emits a warning before starting the pipeline. The DFS is exhaustive, so configurations that exceed this threshold can make each linearizability check very slow.
     package static let interleavingWarningThreshold = 1_000_000_000
 
+    /// Fraction of the configured budget that, once reached as timed-out probes, triggers a runtime warning. A probe that times out counts as a pass so discovery stays resilient under host contention, but a high timeout rate means most of the budget produced no useful signal — a saturated machine or a genuinely hanging system — so the runner surfaces it rather than passing silently.
+    package static let timeoutWarningFraction = 0.25
+
     /// Captures the output, tree, invocation count, and failure evidence from a preemptive reduction pass.
     package struct ReductionResult<Command, FailureOutcome> {
         package let output: [(ScheduleMarker, Command)]

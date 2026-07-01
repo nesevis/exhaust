@@ -43,12 +43,14 @@ public extension __ExhaustRuntime {
         let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
+        let timedOutProbeCount = UnsafeSendableBox(0)
         let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
             ExhaustLog.withConfiguration(config.logConfiguration) {
                 runPreemptiveMachine(
                     innerBackend: innerBackend,
                     config: config,
                     regressionSeeds: regressionSeeds,
+                    timedOutProbeCount: timedOutProbeCount,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -59,6 +61,14 @@ public extension __ExhaustRuntime {
         for issue in deferredIssues {
             reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }
+        warnIfTimeoutFractionHigh(
+            timedOutProbes: timedOutProbeCount.value,
+            totalBudget: config.budget.coverageBudget + config.budget.samplingBudget,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
         return result
     }
 }

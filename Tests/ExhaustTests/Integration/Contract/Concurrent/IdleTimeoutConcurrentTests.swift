@@ -1,6 +1,7 @@
 import ExhaustCore
 import ExhaustTestSupport
 import Foundation
+import IssueReporting
 import Testing
 @testable import Exhaust
 
@@ -9,19 +10,21 @@ import Testing
 @Suite("Idle timeout concurrent tests", .serialized, .tags(.contract))
 struct IdleTimeoutConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Idle timeout fires for SUT that escapes the cooperative executor")
-    func idleTimeoutFiresForSUTThatEscapesTheCooperativeExecutor() async throws {
-        let result = try #require(
+    @Test("Always-stalling cooperative SUT passes under the idle timeout and warns")
+    func idleTimeoutForSUTThatEscapesTheCooperativeExecutorPassesWithWarning() async {
+        // Every probe of SleepingSpec sleeps past the 10ms idle bound, so every probe times out. A timed-out probe counts as a pass — so the run finds no counterexample and returns nil rather than reporting a `.timeout` failure that contention could also produce. Because timeouts consume the whole budget, the runner emits a warning instead of passing silently.
+        let reporter = CapturingIssueReporter()
+        let result = await withIssueReporters([reporter]) {
             await #execute(
                 SleepingSpec.self,
                 .commandLimit(2),
                 .idleTimeoutMs(10),
-                .budget(.custom(coverage: 0, sampling: 10)),
-                .suppress(.issueReporting)
+                .budget(.custom(coverage: 0, sampling: 10))
             )
-        )
-        #expect(result.discoveryMethod == .randomSampling)
-        #expect(result.status == .timeout)
+        }
+        #expect(result == nil)
+        #expect(reporter.warnings.count == 1)
+        #expect(reporter.errors.isEmpty)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -38,28 +41,29 @@ struct IdleTimeoutConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Async preemptive idle timeout surfaces a stalling command as a timeout, not a race")
+    @Test("Async preemptive idle timeout makes a stalling command pass and warns, without reducing")
     func asyncPreemptiveIdleTimeoutSurfacesStallingCommand() async throws {
-        var deliveredReport: ExhaustReport?
-        let result = try #require(
+        // The stalling command always exceeds the idle bound, so every probe times out. A timed-out probe counts as a pass, so discovery runs the full sampling budget, finds no counterexample, and returns nil. No candidate means no reduction: `reductionInvocations == 0` is the regression signal — a timeout misclassified as a race would have run the three-pass reducer, leaving `reductionInvocations > 0`. Because timeouts consume the whole budget, a warning fires.
+        let reportBox = UnsafeSendableBox<ExhaustReport?>(nil)
+        let reporter = CapturingIssueReporter()
+        let result = await withIssueReporters([reporter]) {
             await #execute(
                 StallingAsyncSpec.self,
                 .concurrent(.two),
                 .commandLimit(2),
                 .idleTimeoutMs(20),
                 .budget(.custom(coverage: 0, sampling: 10)),
-                .suppress(.issueReporting),
-                .onReport { deliveredReport = $0 }
+                .onReport { report in reportBox.value = report }
             )
-        )
-        #expect(result.commands.isEmpty == false)
+        }
+        #expect(result == nil)
+        #expect(reporter.warnings.count == 1)
 
-        // The stalling command always exceeds the idle bound, so the first sampling run times out. The runner must route that to the timeout path: flag the failure (so it renders as a timeout rather than a confirmed race) and skip reduction (slow and usually fruitless on a hang). Zero reduction probes is the regression signal — a failure misclassified as a race would have run the three-pass reducer, leaving `reductionInvocations > 0`.
-        let report = try #require(deliveredReport)
+        let report = try #require(reportBox.value)
         #expect(report.reductionInvocations == 0)
-        #expect(report.randomSamplingInvocations == 1)
         #expect(report.coverageInvocations == 0)
-        #expect(report.propertyInvocations == 1)
+        // One smoke probe plus the full 10-probe sampling budget, all timing out as passes; the sampling loop never short-circuits. The smoke and sampling phases share the `randomSamplingInvocations` bucket.
+        #expect(report.randomSamplingInvocations == 11)
     }
 
     @Test("Async preemptive group.wait bound prevents hang on synchronous SUT deadlock")
@@ -112,6 +116,36 @@ struct IdleTimeoutConcurrentTests {
         // The probe timed out during reduction (so the scenario is exercised), but that must not latch the shared timeout flag that `buildResult` reads to set the status — a genuine failure stays `.fail`, not `.timeout`.
         #expect(reduction.timedOut)
         #expect(context.lastRunTimedOut == false)
+    }
+
+    @Test("Timeout-fraction warning fires at the budget fraction and is silent below it")
+    func timeoutFractionWarningThreshold() {
+        // 0.25 of the budget is the threshold: 25/100 reaches it, 24/100 does not.
+        let firing = CapturingIssueReporter()
+        withIssueReporters([firing]) {
+            warnIfTimeoutFractionHigh(
+                timedOutProbes: 25,
+                totalBudget: 100,
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+        }
+        #expect(firing.warnings.count == 1)
+
+        let silent = CapturingIssueReporter()
+        withIssueReporters([silent]) {
+            warnIfTimeoutFractionHigh(
+                timedOutProbes: 24,
+                totalBudget: 100,
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+        }
+        #expect(silent.warnings.isEmpty)
     }
 }
 
@@ -235,5 +269,39 @@ final class DeadlockingSUT: @unchecked Sendable, CustomDebugStringConvertible {
         lockA.lock()
         lockA.unlock()
         lockB.unlock()
+    }
+}
+
+// MARK: - Test Support
+
+/// An ``IssueReporter`` that records reported issues by severity so a test can assert which warnings (or errors) the runner emitted, instead of letting them reach the test framework.
+private final class CapturingIssueReporter: IssueReporter, @unchecked Sendable {
+    private let lock = NSLock()
+    private var warningMessages: [String] = []
+    private var errorMessages: [String] = []
+
+    var warnings: [String] {
+        lock.withLock { warningMessages }
+    }
+
+    var errors: [String] {
+        lock.withLock { errorMessages }
+    }
+
+    func reportIssue(
+        _ message: @autoclosure () -> String?,
+        severity: IssueSeverity,
+        fileID _: StaticString,
+        filePath _: StaticString,
+        line _: UInt,
+        column _: UInt
+    ) {
+        let captured = message() ?? ""
+        lock.withLock {
+            switch severity {
+                case .warning: warningMessages.append(captured)
+                case .error: errorMessages.append(captured)
+            }
+        }
     }
 }

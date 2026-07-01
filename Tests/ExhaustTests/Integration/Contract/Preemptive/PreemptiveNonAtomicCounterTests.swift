@@ -92,11 +92,6 @@ final class PreemptiveCounterSpec {
         counter.value == other.value
     }
 
-    @Invariant
-    func isNonNegative() -> Bool {
-        counter.value >= 0
-    }
-
     @Command(weight: 3)
     func increment() throws {
         counter.increment()

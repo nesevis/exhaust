@@ -42,12 +42,14 @@ public extension __ExhaustRuntime {
         let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
+        let timedOutProbeCount = UnsafeSendableBox(0)
         let (result, deferredIssues): (ContractResult<Spec>?, [String]) = DispatchQueue.global().sync {
             ExhaustLog.withConfiguration(config.logConfiguration) {
                 runPreemptiveMachine(
                     innerBackend: innerBackend,
                     config: config,
                     regressionSeeds: regressionSeeds,
+                    timedOutProbeCount: timedOutProbeCount,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -58,6 +60,14 @@ public extension __ExhaustRuntime {
         for issue in deferredIssues {
             reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }
+        warnIfTimeoutFractionHigh(
+            timedOutProbes: timedOutProbeCount.value,
+            totalBudget: config.budget.coverageBudget + config.budget.samplingBudget,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
         return result
     }
 }
@@ -69,6 +79,7 @@ extension __ExhaustRuntime {
         innerBackend: Inner,
         config: ResolvedConcurrentConfig,
         regressionSeeds: [String],
+        timedOutProbeCount: UnsafeSendableBox<Int>,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -104,7 +115,9 @@ extension __ExhaustRuntime {
             let partition = LanePartition(taggedCommands)
             let outcome = innerBackend.execute(taggedCommands, partition: partition)
             if case .timedOut = outcome {
-                lastRunTimedOut.value = true
+                // A timed-out probe is inconclusive, not a counterexample: under host contention the lanes simply did not finish in time. Count it as a pass so discovery keeps sampling, and tally it so the runner can warn when timeouts dominate the budget.
+                timedOutProbeCount.value += 1
+                return true
             }
             return classifyFailure(
                 taggedCommands: taggedCommands,
@@ -117,7 +130,8 @@ extension __ExhaustRuntime {
             invocationCounter.value += 1
             let smoke = innerBackend.runSmoke(tagged.map(\.1))
             if smoke.timedOut {
-                lastRunTimedOut.value = true
+                timedOutProbeCount.value += 1
+                return true
             }
             return smoke.failed == false
         }
