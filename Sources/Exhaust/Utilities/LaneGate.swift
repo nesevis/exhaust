@@ -2,16 +2,16 @@ import Foundation
 
 /// A process-global budget over the GCD lanes Exhaust's concurrent runners occupy at once.
 ///
-/// Under `swift test --parallel` the async concurrent runs — async `.threads`/`.tasks` contracts and async property/explore runs — park hundreds of pending Tasks that each dispatch work onto GCD's global queue. Their aggregate lane demand exceeds what a constrained CI VM can schedule, and lanes that never get a thread trip the runner's idle timeout. The gate bounds the sum of in-flight lane reservations to ``limit`` regardless of how many test functions run at once: a run acquires its lanes, holds them for its whole duration, and releases on the way out. Excess runs suspend at the gate as parked continuations holding no thread, rather than piling onto GCD.
+/// Under `swift test --parallel`, Exhaust's concurrent runs — preemptive `.threads` contracts (each fanning commands across N GCD lanes), cooperative `.tasks` contracts, and async property/explore runs — can all be in flight at once. On a constrained (single-core) CI runner, dozens of concurrent preemptive runs mean their lanes contend for the CPU and never start within the runner's idle window, so every probe times out and the suite crawls. The gate bounds the sum of in-flight lane reservations to ``limit``: a run acquires its lanes, holds them for its whole duration, and releases on the way out, so at most ~``limit``/(N+1) preemptive runs execute at once and their lanes are not starved. Excess runs suspend at the gate as parked continuations holding no thread, rather than piling onto GCD.
 ///
-/// It is a budget, not a provider: GCD still hands out the actual threads. Admission is the whole effect. See `gcd-lane-admission-design.md` for the reservation accounting (async `.threads` reserves `N+1`, see ``LaneReservation``) and the call-site trace.
+/// It is a budget, not a provider: GCD still hands out the actual threads. Admission is the whole effect. See `gcd-lane-admission-design.md` for the reservation accounting (`.threads` reserves `N+1`, see ``LaneReservation``) and the call-site trace.
 ///
-/// - Important: The gate is **async-only** and must never block a caller's thread. A blocking acquire was tried and removed: a synchronous `@Test` runs on the cooperative pool, so a blocking acquire parked cooperative-pool threads, which starved the pool that admitted runs need to service their `blockingAwait` continuations — deadlocking the whole suite. The sync `.threads` entry is therefore left ungated; it is self-limiting, since it blocks its own cooperative thread while running, so Swift Testing cannot start more than pool-width of them at once.
+/// - Important: The gate is **async-only**: it exposes a suspending ``acquire(_:)`` and never blocks a caller's thread. A blocking acquire was tried and removed — a synchronous `@Test` runs on the cooperative pool, so blocking it starved the pool that admitted runs need to service their `blockingAwait` continuations, deadlocking the suite. Sync `.threads` contracts reach the gate through the same non-blocking `acquire`: their `#execute` dispatch is `async` (``__runContractDispatch`` is `async`), so the synchronous machine runs on a GCD worker via `dispatchToGCD` and acquires without ever blocking a cooperative thread.
 ///
 /// - Note: This is a `final class` guarded by an `NSLock` rather than an `actor` because ``release(_:)`` is called from synchronous contexts (inside the `dispatchToGCD` GCD closure, a `() -> Result`), which an actor's async-only surface cannot serve.
 final class LaneGate: @unchecked Sendable {
-    /// The default lane budget. Kept well under the 64-thread per-queue GCD wall, with headroom for the ungated sync `.threads` lanes and any uncounted usage.
-    static let defaultLimit = 8
+    /// The default lane budget. Bounds concurrent preemptive runs to ~`limit`/(N+1) so their lanes are not starved on a constrained runner, while staying under the 64-thread per-queue GCD wall. Overridable via ``environmentOverrideKey``.
+    static let defaultLimit = 16
 
     /// The smallest budget that can satisfy every reservation: the largest single request is async `.threads` at `ConcurrencyLevel.max (4) + 1`.
     static let reservationFloor = 5
@@ -101,7 +101,7 @@ extension LaneGate {
 
 /// The lane count each gated concurrent entry reserves from the ``LaneGate``.
 ///
-/// Centralized so the `+1` on the async `.threads` path lives in one commented place rather than as a magic number at each dispatch site. The sync `.threads` entry is not listed: it is ungated (see ``LaneGate``).
+/// Centralized so the `+1` on the `.threads` path lives in one commented place rather than as a magic number at each dispatch site.
 enum LaneReservation {
     /// The `.threads` reservation (sync and async): one lane per concurrency level, plus one for the coordinator GCD worker parked on `group.wait` while the level lanes run.
     static func threads(_ level: Int) -> Int {

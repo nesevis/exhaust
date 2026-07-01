@@ -8,8 +8,8 @@ import ExhaustCore
 /// `.sequential` and `.tasks` contracts run commands one at a time and check `@Invariant` after each step. A synchronous `.tasks` contract has no suspension points to interleave at, so it executes sequentially — use ``AsyncContractSpec`` (async commands) for cooperative interleaving. `.threads` dispatches commands across real GCD threads and checks the `@Oracle` against a sequential replay. On failure, the sequence is reduced to a minimal counterexample.
 ///
 /// ```swift
-/// @Test func boundedQueueBehavior() {
-///     #execute(BoundedQueueContract.self, .commandLimit(20))
+/// @Test func boundedQueueBehavior() async {
+///     await #execute(BoundedQueueContract.self, .commandLimit(20))
 /// }
 /// ```
 ///

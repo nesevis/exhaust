@@ -74,7 +74,7 @@ When `.collectOpenPBTStats` is enabled, Exhaust records the data as an `XCTAttac
 
 ### Contract tests
 
-`#execute(Spec.self)` works under XCTest with the same command generation, invariant checking, and reduction pipeline. Failures are reported via `XCTFail`.
+`await #execute(Spec.self)` works under XCTest (in an `async` test method) with the same command generation, invariant checking, and reduction pipeline. Failures are reported via `XCTFail`.
 
 ## What doesn't work
 
