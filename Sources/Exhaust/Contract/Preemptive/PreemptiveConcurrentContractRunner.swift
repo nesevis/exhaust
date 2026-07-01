@@ -259,12 +259,18 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         let completionOrdered = SendableBox<[ObservedResponse<Spec.Command>]>([])
         let group = DispatchGroup()
 
+        // MEASUREMENT SCAFFOLDING — REMOVE BEFORE MERGE. Per-lane scheduling latency to classify timeouts.
+        let submittedAt = DispatchTime.now().uptimeNanoseconds
+        let laneStartedAt = partition.laneIDs.map { _ in UnsafeSendableBox<UInt64?>(nil) }
+        PreemptiveTimeoutStats.shared.recordProbe()
+
         nonisolated(unsafe) let unsafeConcurrentSpec = concurrentSpec
         for (offset, laneID) in partition.laneIDs.enumerated() {
             let laneCommands = partition.laneBuckets[laneID] ?? []
             let responseBox = perLaneResponses[offset]
             group.enter()
             DispatchQueue.global().async {
+                laneStartedAt[offset].value = DispatchTime.now().uptimeNanoseconds
                 var localResponses: [ObservedResponse<Spec.Command>] = []
                 var exception: NSException?
                 let succeeded = exhaust_runCatchingObjCException({
@@ -298,6 +304,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
+                recordPreemptiveTimeout(laneStartedAt: laneStartedAt, submittedAt: submittedAt, idleTimeoutMs: idleTimeoutMilliseconds)
                 return .timedOut(concurrentSpec: concurrentSpec)
             }
         } else {

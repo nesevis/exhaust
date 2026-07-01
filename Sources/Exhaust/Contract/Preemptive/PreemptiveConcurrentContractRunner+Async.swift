@@ -134,10 +134,16 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         let completionOrdered = SendableBox<[ObservedResponse<Spec.Command>]>([])
         let group = DispatchGroup()
 
+        // MEASUREMENT SCAFFOLDING — REMOVE BEFORE MERGE. Per-lane scheduling latency to classify timeouts.
+        let submittedAt = DispatchTime.now().uptimeNanoseconds
+        let laneStartedAt = laneIDs.map { _ in UnsafeSendableBox<UInt64?>(nil) }
+        PreemptiveTimeoutStats.shared.recordProbe()
+
         for (offset, laneID) in laneIDs.enumerated() {
             let responseBox = perLaneResponses[offset]
             group.enter()
             DispatchQueue.global().async {
+                laneStartedAt[offset].value = DispatchTime.now().uptimeNanoseconds
                 var exception: NSException?
                 nonisolated(unsafe) let spec = concurrentSpec
                 let succeeded = exhaust_runCatchingObjCException({
@@ -180,6 +186,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
+                recordPreemptiveTimeout(laneStartedAt: laneStartedAt, submittedAt: submittedAt, idleTimeoutMs: idleTimeoutMilliseconds)
                 return .timedOut(concurrentSpec: nil)
             }
         } else {
@@ -187,7 +194,13 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         }
 
         if caughtException.value != nil || commandFailed.value {
-            return timedOut.value ? .timedOut(concurrentSpec: nil) : .failed(concurrentSpec: nil)
+            if timedOut.value {
+                if let idleTimeoutMilliseconds {
+                    recordPreemptiveTimeout(laneStartedAt: laneStartedAt, submittedAt: submittedAt, idleTimeoutMs: idleTimeoutMilliseconds)
+                }
+                return .timedOut(concurrentSpec: nil)
+            }
+            return .failed(concurrentSpec: nil)
         }
 
         nonisolated(unsafe) let invariantSpec = concurrentSpec
