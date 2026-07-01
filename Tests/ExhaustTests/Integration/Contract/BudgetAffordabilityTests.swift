@@ -35,7 +35,8 @@ struct BudgetAffordabilityTests {
             #execute(
                 BuggyBudgetAffordabilitySpec.self,
                 .commandLimit(8),
-                .suppress(.issueReporting)
+                .suppress(.issueReporting),
+                .budget(.extensive)
             )
         )
         #expect(result.trace.contains { step in

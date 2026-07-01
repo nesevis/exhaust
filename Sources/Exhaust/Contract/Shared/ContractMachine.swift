@@ -110,7 +110,6 @@ struct ContractMachine<Backend: ContractBackend> {
     }
 
     private mutating func accountCandidate(_ candidate: ContractCandidate<Backend.Spec.Command>) {
-        context.state.failureContext.timedOut = context.lastRunTimedOut
         context.state.failureContext.seed = candidate.discoveryMethod == .coverage ? nil : candidate.seed
         context.state.failureContext.originalCount = candidate.taggedCommands.count
         context.state.failureContext.iteration = candidate.iteration
@@ -122,28 +121,11 @@ struct ContractMachine<Backend: ContractBackend> {
 
     // MARK: - Prune
 
-    /// Removes skipped commands from the candidate before reduction. Short-circuits to `.timedOut` when the probe timed out, building the result directly and skipping reduction entirely.
+    /// Removes skipped commands from the candidate before reduction.
     private mutating func stepPrune() -> Transition {
         guard let candidate else {
             phase = .pullSource
             return .sourceExhausted
-        }
-
-        guard context.lastRunTimedOut == false else {
-            let (built, issueMessage) = backend.buildResult(
-                reduced: candidate.taggedCommands,
-                originalCommands: nil,
-                seed: candidate.seed,
-                iteration: candidate.iteration,
-                discoveryMethod: candidate.discoveryMethod,
-                context: context
-            )
-            if issueMessage.isEmpty == false {
-                context.state.deferredIssues.append(issueMessage)
-            }
-            result = built
-            phase = .finalize
-            return .timedOut
         }
 
         // Prune and reduce against the generator that produced this candidate so the choice sequence matches its tree. Smoke supplies a concurrency-1 generator, so smoke failures reduce sequentially regardless of the run's lane count.
@@ -268,7 +250,6 @@ extension ContractMachine {
         case sourceExhausted
         case sourceError(String)
         case candidateFound(discoveryMethod: ContractDiscoveryMethod, commandCount: Int)
-        case timedOut
         case pruned
         case reduced
         case statsRecorded
@@ -290,7 +271,6 @@ struct ContractPipeline<Backend: ContractBackend> {
     let identifySkips: @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Set<Int>
     let property: @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Bool
     let invocationCounter: UnsafeSendableBox<Int>
-    let lastRunTimedOut: UnsafeSendableBox<Bool>?
     let sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Backend.Spec.Command)]>)?
     let fileID: StaticString
     let filePath: StaticString
@@ -308,7 +288,6 @@ struct ContractPipeline<Backend: ContractBackend> {
             commandLimit: commandLimit,
             identifySkips: identifySkips,
             invocationCounter: invocationCounter,
-            lastRunTimedOut: lastRunTimedOut,
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -333,8 +312,6 @@ struct ContractPipeline<Backend: ContractBackend> {
                         event: "contract_candidate_found",
                         metadata: ["method": "\(discoveryMethod)", "commands": "\(commandCount)"]
                     )
-                case .timedOut:
-                    ExhaustLog.notice(category: .propertyTest, event: "contract_timeout")
                 case .sourceExhausted, .sourceError, .pruned, .reduced, .statsRecorded, .assembled:
                     break
             }

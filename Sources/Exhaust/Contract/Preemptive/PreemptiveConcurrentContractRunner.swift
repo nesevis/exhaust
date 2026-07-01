@@ -109,7 +109,6 @@ extension __ExhaustRuntime {
         )
 
         let invocationCounter = UnsafeSendableBox(0)
-        let lastRunTimedOut = UnsafeSendableBox(false)
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             invocationCounter.value += 1
             let partition = LanePartition(taggedCommands)
@@ -156,7 +155,6 @@ extension __ExhaustRuntime {
             identifySkips: identifySkips,
             property: property,
             invocationCounter: invocationCounter,
-            lastRunTimedOut: lastRunTimedOut,
             sequenceGenForLength: { range in
                 Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
             },
@@ -523,14 +521,13 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         originalCommands: [Spec.Command]?,
         seed: UInt64?,
         replaySeed: String?,
-        discoveryMethod: ContractDiscoveryMethod,
-        timedOut: Bool
+        discoveryMethod: ContractDiscoveryMethod
     ) -> (result: ContractResult<Spec>, failureDescription: String?) {
         let oracleSpec = Spec()
         let commands = reduced.map(\.1)
         let replaySucceeded = runAllCommandsCatchingObjC(commands, on: oracleSpec)
         let result = ContractResult<Spec>(
-            status: timedOut ? .timeout : .fail,
+            status: .fail,
             commands: commands,
             originalCommands: originalCommands,
             trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),

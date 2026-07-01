@@ -30,13 +30,13 @@ public struct ContractResult<Spec: ContractSpecBase> {
 }
 
 /// The outcome of a contract property test run.
+///
+/// A concurrent probe that stalls past the idle timeout does not produce a status of its own: it counts as a pass so contention cannot manufacture a failure, and the runner emits a runtime warning when timed-out probes dominate the budget.
 public enum ContractStatus: Sendable {
     /// All probes passed within the budget.
     case pass
     /// A counterexample was found.
     case fail
-    /// The concurrent execution stalled (no progress within the idle timeout). Typically caused by thread pool exhaustion under parallel test execution, not a bug in the SUT.
-    case timeout
 }
 
 /// Describes how a failing contract example was found.

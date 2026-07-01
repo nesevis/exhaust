@@ -1,6 +1,6 @@
 // Formats failure reports for both the sequential and concurrent contract runners.
 //
-// The concurrent path (FailureContext, renderFailure(_:trace:context:), renderTimeout, renderCommandPartition) is populated incrementally by the runner and passed to renderFailure for final formatting. The sequential path (renderFailure(_:failureInfo:failureDescription:), ContractFailureInfo) renders a re-executed trace from a discovered command sequence.
+// The concurrent path (FailureContext, renderFailure(_:trace:context:), renderCommandPartition) is populated incrementally by the runner and passed to renderFailure for final formatting. The sequential path (renderFailure(_:failureInfo:failureDescription:), ContractFailureInfo) renders a re-executed trace from a discovered command sequence.
 import CustomDump
 import ExhaustCore
 
@@ -18,7 +18,6 @@ extension __ExhaustRuntime {
         var originalCount: Int = 0
         var sequencesTested: Int = 0
         var reductionInvocations: Int = 0
-        var timedOut: Bool = false
         var isPreemptive: Bool = false
         var replaySeed: String?
         var oracleDescription: String?
@@ -31,16 +30,12 @@ extension __ExhaustRuntime {
 
     /// Formats a concurrent contract failure for reporting.
     ///
-    /// Delegates to ``renderTimeout(_:trace:)`` when `context.timedOut` is true. Otherwise renders the full failure report with command partition, execution trace, and replay seed.
+    /// Renders the full failure report with command partition, execution trace, and replay seed.
     static func renderFailure(
         _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
         trace: [TraceStep],
         context: FailureContext
     ) -> String {
-        if context.timedOut {
-            return renderTimeout(tagged, trace: trace)
-        }
-
         var lines: [String] = []
         if context.discoveryMethod == .smokeTest {
             lines.append("\(context.specName) failure (found through sequential smoke test)")
@@ -94,29 +89,6 @@ extension __ExhaustRuntime {
         if context.isPreemptive {
             lines.append("")
             lines.append("* Preemptive scheduling depends on OS thread timing and may not reproduce on every run. Run the test repeatedly to reproduce.")
-        }
-
-        return lines.joined(separator: "\n")
-    }
-
-    /// Formats a timeout diagnostic when the drain loop stalls with no pending continuations.
-    static func renderTimeout(
-        _ tagged: [(ScheduleMarker, some CustomStringConvertible)],
-        trace: [TraceStep]
-    ) -> String {
-        var lines: [String] = []
-        lines.append("Concurrent contract timed out: the drain loop stalled with no pending continuations.")
-        lines.append("This typically means a command body suspended to a foreign executor (custom-executor actor, Task.sleep, or blocking I/O) that does not flow through the cooperative scheduler.")
-        lines.append("If the timeout is caused by thread contention from parallel tests, increase the budget with .idleTimeoutMs(_:).")
-        lines.append("")
-
-        renderCommandPartition(tagged, into: &lines)
-
-        if trace.isEmpty == false {
-            lines.append("Partial execution trace (up to stall point):")
-            for step in trace {
-                lines.append("  \(step)")
-            }
         }
 
         return lines.joined(separator: "\n")

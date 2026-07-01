@@ -203,7 +203,6 @@ private extension __ExhaustRuntime {
         )
 
         let invocationCounter = UnsafeSendableBox(0)
-        let lastRunTimedOut = UnsafeSendableBox(false)
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             invocationCounter.value += 1
             let result = drainSchedule(
@@ -247,7 +246,6 @@ private extension __ExhaustRuntime {
             identifySkips: identifySkips,
             property: property,
             invocationCounter: invocationCounter,
-            lastRunTimedOut: lastRunTimedOut,
             sequenceGenForLength: { range in
                 Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
             },

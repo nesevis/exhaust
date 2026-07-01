@@ -66,25 +66,6 @@ struct ContractMachineTests {
         #expect(machine.result?.status == .fail)
     }
 
-    @Test("Timeout skips prune and reduce phases")
-    func timeoutSkipsPruneAndReducePhases() {
-        let timedOutBox = UnsafeSendableBox(true)
-        let candidate = makeCandidate(commands: [(.prefix, .increment)])
-        let source = AnyContractCandidateSource<StubCommand>.once { candidate }
-        var machine = makeMachine(lastRunTimedOut: timedOutBox, sources: [source])
-
-        var transitions: [String] = []
-        while let transition = machine.next() {
-            transitions.append(label(transition))
-        }
-
-        #expect(transitions.contains("candidateFound"))
-        #expect(transitions.contains("timedOut"))
-        #expect(transitions.contains("pruned") == false)
-        #expect(transitions.contains("reduced") == false)
-        #expect(machine.result != nil)
-    }
-
     @Test("Reduction invocations are tracked in report")
     func reductionInvocationsAreTrackedInReport() {
         let candidate = makeCandidate(commands: [(.prefix, .increment), (.prefix, .increment)])
@@ -373,7 +354,6 @@ private func makeMachine(
     config: ResolvedConcurrentConfig? = nil,
     context: ContractRunContext<StubSpec>? = nil,
     backend: StubBackend = StubBackend(),
-    lastRunTimedOut: UnsafeSendableBox<Bool>? = nil,
     sources: [AnyContractCandidateSource<StubCommand>]
 ) -> ContractMachine<StubBackend> {
     let resolvedContext: ContractRunContext<StubSpec>
@@ -388,7 +368,6 @@ private func makeMachine(
             commandGen: StubSpec.commandGenerator.gen,
             commandLimit: 5,
             identifySkips: { _ in [] },
-            lastRunTimedOut: lastRunTimedOut,
             fileID: #fileID,
             filePath: #filePath,
             line: #line,
@@ -410,7 +389,6 @@ private func makePipeline(
         identifySkips: { _ in [] },
         property: { _ in propertyPasses },
         invocationCounter: UnsafeSendableBox(0),
-        lastRunTimedOut: nil,
         sequenceGenForLength: nil,
         fileID: #fileID,
         filePath: #filePath,
@@ -424,7 +402,6 @@ private func label(_ transition: ContractMachine<StubBackend>.Transition) -> Str
         case .sourceExhausted: "sourceExhausted"
         case .sourceError: "sourceError"
         case .candidateFound: "candidateFound"
-        case .timedOut: "timedOut"
         case .pruned: "pruned"
         case .reduced: "reduced"
         case .statsRecorded: "statsRecorded"

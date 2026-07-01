@@ -9,17 +9,12 @@ struct ContractRunContext<Spec: ContractSpecBase> {
     let commandLimit: Int
     let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>
     let invocationCounter: UnsafeSendableBox<Int>
-    let lastRunTimedOutBox: UnsafeSendableBox<Bool>?
     let fileID: StaticString
     let filePath: StaticString
     let line: UInt
     let column: UInt
 
     let state: ContractRunState<Spec>
-
-    var lastRunTimedOut: Bool {
-        lastRunTimedOutBox?.value ?? false
-    }
 
     var reductionDeadlineNanoseconds: UInt64 {
         config.budget.samplingBudget * 5 * 1_000_000
@@ -32,7 +27,6 @@ struct ContractRunContext<Spec: ContractSpecBase> {
         commandLimit: Int,
         identifySkips: @escaping @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>,
         invocationCounter: UnsafeSendableBox<Int> = UnsafeSendableBox(0),
-        lastRunTimedOut: UnsafeSendableBox<Bool>? = nil,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -43,7 +37,6 @@ struct ContractRunContext<Spec: ContractSpecBase> {
         self.commandLimit = commandLimit
         self.identifySkips = identifySkips
         self.invocationCounter = invocationCounter
-        lastRunTimedOutBox = lastRunTimedOut
         self.fileID = fileID
         self.filePath = filePath
         self.line = line

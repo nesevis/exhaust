@@ -92,14 +92,12 @@ struct IdleTimeoutConcurrentTests {
         config.budget = .custom(coverage: 0, sampling: 10)
         config.suppressIssueReporting = true
 
-        let lastRunTimedOut = UnsafeSendableBox(false)
         let context = ContractRunContext<SleepingSpec>(
             config: config,
             sequenceGen: sequenceGen,
             commandGen: commandGen,
             commandLimit: 2,
             identifySkips: { _ in [] },
-            lastRunTimedOut: lastRunTimedOut,
             fileID: #fileID,
             filePath: #filePath,
             line: #line,
@@ -113,9 +111,8 @@ struct IdleTimeoutConcurrentTests {
 
         let reduction = backend.reduce(taggedCommands: commands, tree: tree, context: context)
 
-        // The probe timed out during reduction (so the scenario is exercised), but that must not latch the shared timeout flag that `buildResult` reads to set the status — a genuine failure stays `.fail`, not `.timeout`.
+        // A probe that times out during reduction aborts further reduction and keeps the original failure, rather than reducing toward a hang. `reduction.timedOut` records that the abort fired.
         #expect(reduction.timedOut)
-        #expect(context.lastRunTimedOut == false)
     }
 
     @Test("Timeout-fraction warning fires at the budget fraction and is silent below it")

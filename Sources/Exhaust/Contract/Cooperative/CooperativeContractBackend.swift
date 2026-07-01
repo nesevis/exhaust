@@ -33,7 +33,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
     ) -> ContractReduction<Spec.Command> {
         nonisolated(unsafe) let unsafeSelf = self
         nonisolated(unsafe) let capturedContext = context
-        // A probe that times out during reduction is not a counterexample. Abort further reduction and keep the original failure as-is rather than reducing toward a hang or flipping the reported status to `.timeout`.
+        // A probe that times out during reduction is not a counterexample. Abort further reduction and keep the original failure as-is rather than reducing toward a hang.
         nonisolated(unsafe) var reductionTimedOut = false
         let oracleProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.ContractProbeVerdict<Void> = { commands in
             guard reductionTimedOut == false else {
@@ -79,8 +79,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             idleTimeoutMilliseconds: idleTimeoutMilliseconds
         )
 
-        let timedOut = context.lastRunTimedOut
-        let oracle = timedOut ? nil : __ExhaustRuntime.sequentialOracle(
+        let oracle = __ExhaustRuntime.sequentialOracle(
             commands: reduced.map(\.1),
             specInit: specInit,
             idleTimeoutMilliseconds: idleTimeoutMilliseconds
@@ -89,7 +88,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
         let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
 
         let result = ContractResult<Spec>(
-            status: timedOut ? .timeout : .fail,
+            status: .fail,
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
             trace: traceResult.trace,
@@ -102,7 +101,6 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
         context.state.failureContext.specName = "\(Spec.self)"
         context.state.failureContext.discoveryMethod = discoveryMethod
         context.state.failureContext.replaySeed = replaySeed
-        context.state.failureContext.timedOut = timedOut
         context.state.failureContext.oracleDescription = oracle.flatMap { oracle in
             guard let description = oracle.failureDescription else {
                 return nil

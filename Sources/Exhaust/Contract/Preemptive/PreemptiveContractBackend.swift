@@ -100,8 +100,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
             originalCommands: originalCommands,
             seed: seed,
             replaySeed: replaySeed,
-            discoveryMethod: discoveryMethod,
-            timedOut: context.lastRunTimedOut
+            discoveryMethod: discoveryMethod
         )
 
         // The system under test reported to the user is always the concurrent spec that exhibited the failure, never the sequential confirmation replay.
@@ -121,7 +120,6 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         context.state.failureContext.isPreemptive = true
         context.state.failureContext.discoveryMethod = discoveryMethod
         context.state.failureContext.replaySeed = replaySeed
-        context.state.failureContext.timedOut = context.lastRunTimedOut
         context.state.failureContext.oracleDescription = failureDescription.map { "Expected state (from sequential replay):\n  \($0)" }
 
         if let evidence = context.state.probeEvidence {
