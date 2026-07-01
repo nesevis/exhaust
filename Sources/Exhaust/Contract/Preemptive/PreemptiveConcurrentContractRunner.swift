@@ -43,20 +43,18 @@ public extension __ExhaustRuntime {
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
         let timedOutProbeCount = UnsafeSendableBox(0)
-        // Ungated: the sync `.threads` entry is synchronous and cannot await the suspending gate, and a blocking acquire here would park a cooperative-pool thread and deadlock the suite (see LaneGate). It is self-limiting instead — `global().sync` blocks this cooperative thread for the whole run, so Swift Testing cannot start more than pool-width of these at once.
-        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = DispatchQueue.global().sync {
-            ExhaustLog.withConfiguration(config.logConfiguration) {
-                runPreemptiveMachine(
-                    innerBackend: innerBackend,
-                    config: config,
-                    regressionSeeds: regressionSeeds,
-                    timedOutProbeCount: timedOutProbeCount,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-            }
+        // Run the machine directly on the calling thread. Callers reach this through `await dispatchToGCD { #execute(...) }`, so it already runs on a GCD worker with the cooperative thread freed. A nested `DispatchQueue.global().sync` here would be a `global().sync` submitted from within a GCD worker, which self-deadlocks once the global pool saturates (the worker blocks waiting for a pool thread that never comes, with no idle timeout to break it).
+        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = ExhaustLog.withConfiguration(config.logConfiguration) {
+            runPreemptiveMachine(
+                innerBackend: innerBackend,
+                config: config,
+                regressionSeeds: regressionSeeds,
+                timedOutProbeCount: timedOutProbeCount,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
         }
         for issue in deferredIssues {
             reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
