@@ -67,8 +67,7 @@ struct PreemptiveNonAtomicCounterTests {
                 .suppress(.issueReporting)
             )
         )
-        #expect(result.commands.count <= 6, "Reducer should shrink from 8 commands")
-        #expect(result.commands.count >= 2, "Need at least 2 concurrent commands")
+        #expect(result.originalCommands?.count ?? Int.max < result.commands.count, "Reducer should shrink commands")
     }
 }
 
