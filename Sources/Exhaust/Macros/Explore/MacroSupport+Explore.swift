@@ -312,7 +312,7 @@ public extension __ExhaustRuntime {
         #if canImport(Testing)
             let traitConfig = ExhaustTraitConfiguration.current
         #endif
-        return await dispatchToGCD {
+        return await dispatchToGCD(reserving: LaneReservation.single) {
             let run = {
                 __explore(
                     refGen,
@@ -354,76 +354,72 @@ public extension __ExhaustRuntime {
             let traitConfig = ExhaustTraitConfiguration.current
         #endif
 
-        return await withCheckedContinuation { continuation in
-            DispatchQueue.global().async {
-                nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
-                // withExpectedIssue cannot be used on a GCD thread because Test.current is nil, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
-                #if canImport(Testing)
-                    ExhaustTraitConfiguration.$current.withValue(traitConfig) {
-                        withKnownIssue(isIntermittent: true) {
-                            pipelineResult = __explore(
-                                refGen,
-                                settings: settings + [.suppress(.issueReporting)],
-                                directions: directions,
+        return await dispatchToGCD(reserving: LaneReservation.single) {
+            nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
+            // withExpectedIssue cannot be used on a GCD thread because Test.current is nil, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
+            #if canImport(Testing)
+                ExhaustTraitConfiguration.$current.withValue(traitConfig) {
+                    withKnownIssue(isIntermittent: true) {
+                        pipelineResult = __explore(
+                            refGen,
+                            settings: settings + [.suppress(.issueReporting)],
+                            directions: directions,
 
-                                fileID: fileID,
-                                filePath: filePath,
-                                line: line,
-                                column: column,
-                                property: boolProperty
-                            )
-                        }
-                    }
-                #else
-                    pipelineResult = __explore(
-                        refGen,
-                        settings: settings + [.suppress(.issueReporting)],
-                        directions: directions,
-
-                        fileID: fileID,
-                        filePath: filePath,
-                        line: line,
-                        column: column,
-                        property: boolProperty
-                    )
-                #endif
-
-                guard let report = pipelineResult else {
-                    let emptyReport = __explore(
-                        refGen,
-                        settings: settings,
-                        directions: directions,
-
-                        property: { _ in true }
-                    )
-                    continuation.resume(returning: emptyReport)
-                    return
-                }
-
-                if let counterexample = report.result {
-                    let suppressIssueReporting = settings.contains { setting in
-                        if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
-                        return false
-                    }
-                    if suppressIssueReporting == false {
-                        let valueBox = UnsafeSendableBox(counterexample)
-                        __ExhaustRuntime.blockingAwait {
-                            try? await property(valueBox.value)
-                        }
-
-                        let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: report.propertyInvocations).encoded
-                        reportIssue(
-                            "Reproduce: .replay(\"\(encoded)\")",
                             fileID: fileID,
                             filePath: filePath,
                             line: line,
-                            column: column
+                            column: column,
+                            property: boolProperty
                         )
                     }
                 }
+            #else
+                pipelineResult = __explore(
+                    refGen,
+                    settings: settings + [.suppress(.issueReporting)],
+                    directions: directions,
 
-                continuation.resume(returning: report)
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column,
+                    property: boolProperty
+                )
+            #endif
+
+            guard let report = pipelineResult else {
+                return __explore(
+                    refGen,
+                    settings: settings,
+                    directions: directions,
+
+                    property: { _ in true }
+                )
             }
+
+            if let counterexample = report.result {
+                let suppressIssueReporting = settings.contains { setting in
+                    if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
+                    return false
+                }
+                if suppressIssueReporting == false {
+                    let valueBox = UnsafeSendableBox(counterexample)
+                    __ExhaustRuntime.blockingAwait {
+                        try? await property(valueBox.value)
+                    }
+
+                    let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: report.propertyInvocations).encoded
+                    reportIssue(
+                        "Reproduce: .replay(\"\(encoded)\")",
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                }
+            }
+
+            return report
         }
     }
 }

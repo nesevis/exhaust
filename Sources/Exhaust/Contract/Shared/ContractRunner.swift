@@ -158,7 +158,7 @@ public extension __ExhaustRuntime {
 
         let logConfiguration = ResolvedConcurrentConfig.logConfiguration(from: settings)
 
-        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD {
+        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.single) {
             ExhaustLog.withConfiguration(logConfiguration) {
                 runAsyncSequentialPipeline(
                     specType,

@@ -43,18 +43,21 @@ public extension __ExhaustRuntime {
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
         let timedOutProbeCount = UnsafeSendableBox(0)
-        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = DispatchQueue.global().sync {
-            ExhaustLog.withConfiguration(config.logConfiguration) {
-                runPreemptiveMachine(
-                    innerBackend: innerBackend,
-                    config: config,
-                    regressionSeeds: regressionSeeds,
-                    timedOutProbeCount: timedOutProbeCount,
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
+        // The gate is acquired by hand here (not through dispatchToGCD) because this entry is synchronous and cannot await the suspending acquire. The blocking acquire is consistent with the path: `global().sync` runs the coordinator inline on this thread, which is already occupied for the whole run.
+        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = LaneGate.shared.withLanesBlocking(LaneReservation.syncThreads(config.concurrencyLevel)) {
+            DispatchQueue.global().sync {
+                ExhaustLog.withConfiguration(config.logConfiguration) {
+                    runPreemptiveMachine(
+                        innerBackend: innerBackend,
+                        config: config,
+                        regressionSeeds: regressionSeeds,
+                        timedOutProbeCount: timedOutProbeCount,
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                }
             }
         }
         for issue in deferredIssues {

@@ -117,4 +117,19 @@ extension __ExhaustRuntime {
             }
         }
     }
+
+    /// Acquires `lanes` from the process-global ``LaneGate``, performs the GCD hop, and releases on the way out.
+    ///
+    /// The reservation is held for the whole run: the entire discovery pipeline (regression replay, coverage, sampling, reduction) runs synchronously inside `work`, so it never re-enters the gate. Excess runs suspend at the gate as parked continuations holding no thread, bounding aggregate GCD lane demand to ``LaneGate/limit`` regardless of how many test functions Swift Testing runs at once. Use ``LaneReservation`` for the lane count.
+    static func dispatchToGCD<Result>(
+        reserving lanes: Int,
+        _ work: @escaping () -> Result
+    ) async -> Result {
+        await LaneGate.shared.acquire(lanes)
+        // Release inside the GCD closure, on the GCD thread — not in a `defer` after the `await`, which would resume on the cooperative pool. If release ran on the cooperative pool it could deadlock: the sync `.threads` `acquireBlocking` can occupy every cooperative thread, leaving none to run the release that would admit those very waiters.
+        return await dispatchToGCD {
+            defer { LaneGate.shared.release(lanes) }
+            return work()
+        }
+    }
 }
