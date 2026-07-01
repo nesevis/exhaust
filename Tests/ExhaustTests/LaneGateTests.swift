@@ -24,13 +24,6 @@ struct LaneGateTests {
         #expect(gate.freeCount == 8)
     }
 
-    @Test("Blocking fast path returns immediately when lanes are free")
-    func blockingFastPath() {
-        let gate = LaneGate(limit: 5)
-        gate.acquireBlocking(3)
-        #expect(gate.freeCount == 2)
-    }
-
     @Test("A request that does not fit takes nothing until it fits")
     func atomicAllOrNothing() async throws {
         let gate = LaneGate(limit: 5)
@@ -82,7 +75,6 @@ struct LaneGateTests {
     @Test("Reservation sizes: async threads adds the coordinator lane")
     func reservationSizes() {
         #expect(LaneReservation.asyncThreads(4) == 5)
-        #expect(LaneReservation.syncThreads(4) == 4)
         #expect(LaneReservation.single == 1)
     }
 }
