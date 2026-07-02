@@ -66,7 +66,8 @@ struct PreemptiveNonAtomicCounterTests {
                 .suppress(.issueReporting)
             )
         )
-        #expect(result.originalCommands?.count ?? Int.max > result.commands.count, "Reducer should shrink commands")
+        // Coalescing to 0 makes a missing originalCommands fail: reduction that recorded nothing did not shrink anything.
+        #expect((result.originalCommands?.count ?? 0) > result.commands.count, "Reducer should shrink commands")
     }
 }
 

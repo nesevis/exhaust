@@ -32,12 +32,6 @@ protocol PreemptiveBackend<Spec>: Sendable {
         concurrentSpec: Spec
     ) -> LinearizabilityResult
 
-    /// Replays the reduced commands sequentially on a fresh spec to capture the expected (race-free) oracle state for a failure result.
-    func buildResult(
-        reduced: [(ScheduleMarker, Spec.Command)],
-        originalCommands: [Spec.Command]?,
-        seed: UInt64?,
-        replaySeed: String?,
-        discoveryMethod: ContractDiscoveryMethod
-    ) -> (result: ContractResult<Spec>, failureDescription: String?)
+    /// Replays the reduced commands sequentially on a fresh spec and returns its failure description, the expected race-free state for the report. Returns nil when the replay itself fails, because the partial state would mislead debugging.
+    func sequentialReplayDescription(of reduced: [(ScheduleMarker, Spec.Command)]) -> String?
 }

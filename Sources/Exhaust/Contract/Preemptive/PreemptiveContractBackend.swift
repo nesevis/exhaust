@@ -40,19 +40,16 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         let repetitions = PreemptiveReduction.confirmationRepetitions(discoveryIterations: discoveryInvocations)
 
         nonisolated(unsafe) let capturedContext = context
-        nonisolated(unsafe) var reductionTimedOut = false
         let linearizableProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.ContractProbeVerdict<__ExhaustRuntime.FailureEvidence<Spec>> = { commands in
-            guard reductionTimedOut == false else {
-                return .pass
-            }
+            // One increment per candidate, covering all confirmation repetitions. This site cannot go through countedProbe because it calls inner.execute directly to carry evidence and repetitions.
             capturedContext.invocationCounter.value += 1
             let partition = LanePartition(commands)
             for _ in 0 ..< repetitions {
                 let outcome = inner.execute(commands, partition: partition)
                 if case .timedOut = outcome {
+                    // A probe that times out during reduction is not a counterexample. Abort further reduction and keep the failure as-is rather than reducing toward a hang.
                     ExhaustLog.notice(category: .reducer, event: "preemptive_reduction_timeout")
-                    reductionTimedOut = true
-                    return .pass
+                    return .abort
                 }
                 if let evidence = __ExhaustRuntime.classifyFailure(
                     taggedCommands: commands,
@@ -85,7 +82,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         } else if let cached = twoPassResult.lastEvidence {
             context.state.probeEvidence = cached
         }
-        return ContractReduction(finalInput: reduced, stats: twoPassResult.stats, timedOut: reductionTimedOut)
+        return ContractReduction(finalInput: reduced, stats: twoPassResult.stats, timedOut: twoPassResult.aborted)
     }
 
     // MARK: - Build Result
@@ -98,28 +95,22 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         discoveryMethod: ContractDiscoveryMethod,
         context: ContractRunContext<Spec>
     ) -> (result: ContractResult<Spec>, issueMessage: String) {
+        // Reduction already orders its output prefix-first, but the timeout path skips reduction entirely, so normalize here as well. The partition is idempotent, so the reduced path is unaffected.
         let reduced = reduced.prefixFirstOrder()
         let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
 
-        let (replayResult, failureDescription) = inner.buildResult(
-            reduced: reduced,
-            originalCommands: originalCommands,
-            seed: seed,
-            replaySeed: replaySeed,
-            discoveryMethod: discoveryMethod
-        )
+        let failureDescription = inner.sequentialReplayDescription(of: reduced)
 
         // The system under test reported to the user is always the concurrent spec that exhibited the failure, never the sequential confirmation replay.
-        let systemUnderTest = context.state.probeEvidence?.outcome.concurrentSpec?.systemUnderTest
         let result = ContractResult<Spec>(
-            status: replayResult.status,
-            commands: replayResult.commands,
-            originalCommands: replayResult.originalCommands,
-            trace: replayResult.trace,
-            systemUnderTest: systemUnderTest,
+            status: .fail,
+            commands: reduced.map(\.1),
+            originalCommands: originalCommands,
+            trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),
+            systemUnderTest: context.state.probeEvidence?.outcome.concurrentSpec?.systemUnderTest,
             seed: discoveryMethod.resultSeed(seed),
-            replaySeed: replayResult.replaySeed,
-            discoveryMethod: replayResult.discoveryMethod
+            replaySeed: replaySeed,
+            discoveryMethod: discoveryMethod
         )
 
         context.state.failureContext.specName = "\(Spec.self)"

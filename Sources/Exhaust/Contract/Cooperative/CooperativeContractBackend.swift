@@ -33,21 +33,14 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
     ) -> ContractReduction<Spec.Command> {
         nonisolated(unsafe) let unsafeSelf = self
         nonisolated(unsafe) let capturedContext = context
-        // A probe that times out during reduction is not a counterexample. Abort further reduction and keep the original failure as-is rather than reducing toward a hang.
-        nonisolated(unsafe) var reductionTimedOut = false
         let oracleProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.ContractProbeVerdict<Void> = { commands in
-            guard reductionTimedOut == false else {
-                return .pass
-            }
-            capturedContext.invocationCounter.value += 1
-            let result = unsafeSelf.probe(commands, context: capturedContext)
-            switch result {
+            switch unsafeSelf.countedProbe(commands, context: capturedContext) {
                 case .pass:
                     return .pass
                 case .timeout:
+                    // A probe that times out during reduction is not a counterexample. Abort further reduction and keep the failure as-is rather than reducing toward a hang.
                     ExhaustLog.notice(category: .reducer, event: "cooperative_reduction_timeout")
-                    reductionTimedOut = true
-                    return .pass
+                    return .abort
                 case .fail:
                     return .fail(())
             }
@@ -60,7 +53,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             deadlineNanoseconds: context.reductionDeadlineNanoseconds,
             property: oracleProperty
         )
-        return ContractReduction(finalInput: result.value, stats: result.stats, timedOut: reductionTimedOut)
+        return ContractReduction(finalInput: result.value, stats: result.stats, timedOut: result.aborted)
     }
 
     func buildResult(

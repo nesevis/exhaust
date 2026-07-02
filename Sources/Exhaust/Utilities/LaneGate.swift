@@ -13,8 +13,8 @@ final class LaneGate: @unchecked Sendable {
     /// The default lane budget. Bounds concurrent preemptive runs to ~`limit`/(N+1) so their lanes are not starved on a constrained runner, while staying under the 64-thread per-queue GCD wall. Overridable via ``environmentOverrideKey``.
     static let defaultLimit = 32
 
-    /// The smallest budget that can satisfy every reservation: the largest single request is async `.threads` at `ConcurrencyLevel.max (4) + 1`.
-    static let reservationFloor = 5
+    /// The smallest budget that can satisfy every reservation: the largest single request is a `.threads` run at the highest ``ConcurrencyLevel`` plus its coordinator lane. Derived rather than hardcoded so a new `ConcurrencyLevel` case raises the floor automatically.
+    static let reservationFloor = LaneReservation.threads(ConcurrencyLevel.allCases.map(\.rawValue).max() ?? 1)
 
     /// Environment override for ``limit``, read once at init. Mirrors NIO's `NIO_SINGLETON_BLOCKING_POOL_THREAD_COUNT` convention.
     static let environmentOverrideKey = "EXHAUST_LANE_LIMIT"

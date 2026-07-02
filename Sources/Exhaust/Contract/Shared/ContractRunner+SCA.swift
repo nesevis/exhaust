@@ -310,7 +310,7 @@ extension __ExhaustRuntime {
     ///
     /// Lane collapse and deletion run together in pass 1 so the scheduler can interleave them — collapsing a lane then deleting the now-prefix command in the same cycle, rather than over-collapsing before deletion gets a chance. Pass 2 runs value and float search on the structurally reduced sequence. Each pass rematerializes on success to keep the output and tree consistent. Shared by the cooperative and preemptive backends so the reduction strategy cannot drift between them.
     ///
-    /// The property closure returns a ``ContractProbeVerdict`` so the preemptive backend can carry linearizability evidence (response witnesses, failure descriptions) through reduction without a separate side-channel. The cooperative backend returns `.fail(())`.
+    /// The property closure returns a ``ContractProbeVerdict`` so the preemptive backend can carry linearizability evidence (response witnesses, failure descriptions) through reduction without a separate side-channel. The cooperative backend returns `.fail(())`. A `.abort` verdict (a probe timed out, so further probing would reduce toward a hang) stops reduction: remaining probes in the current pass are treated as passing and the second pass is skipped, leaving the counterexample as-is.
     static func reduceConcurrentTwoPass<Command, Evidence>(
         generator: Generator<[(ScheduleMarker, Command)]>,
         tree: ChoiceTree,
@@ -323,10 +323,18 @@ extension __ExhaustRuntime {
         var currentTree = tree
         var mergedStats = ReductionStats()
         nonisolated(unsafe) var lastEvidence: Evidence?
+        nonisolated(unsafe) var aborted = false
 
+        // The underlying graph reducer has no abort channel, so an abort is latched here: remaining probes in the in-flight pass report passing (rejecting every candidate) without reaching the backend's property, and the next pass is skipped.
         let boolProperty: @Sendable ([(ScheduleMarker, Command)]) -> Bool = { commands in
+            guard aborted == false else {
+                return true
+            }
             switch property(commands) {
                 case .pass:
+                    return true
+                case .abort:
+                    aborted = true
                     return true
                 case let .fail(evidence):
                     lastEvidence = evidence
@@ -361,7 +369,7 @@ extension __ExhaustRuntime {
         }
 
         // Pass 2: value minimization on the structurally reduced sequence.
-        if let result = try? Interpreters.choiceGraphReduceCollectingStats(
+        if aborted == false, let result = try? Interpreters.choiceGraphReduceCollectingStats(
             gen: generator,
             tree: currentTree,
             output: currentOutput,
@@ -390,7 +398,8 @@ extension __ExhaustRuntime {
             value: currentOutput,
             tree: currentTree,
             stats: mergedStats,
-            lastEvidence: lastEvidence
+            lastEvidence: lastEvidence,
+            aborted: aborted
         )
     }
 }
@@ -449,6 +458,8 @@ extension __ExhaustRuntime {
     enum ContractProbeVerdict<Evidence> {
         case pass
         case fail(Evidence)
+        /// The probe could not produce a verdict (it timed out) and further probing would reduce toward a hang. ``reduceConcurrentTwoPass(generator:tree:output:deadlineNanoseconds:property:)`` stops reduction and keeps the counterexample as-is.
+        case abort
     }
 
     struct ConcurrentTwoPassResult<Command, Evidence> {
@@ -456,6 +467,8 @@ extension __ExhaustRuntime {
         let tree: ChoiceTree
         let stats: ReductionStats
         let lastEvidence: Evidence?
+        /// Whether the property aborted reduction. Backends surface this as ``ContractReduction/timedOut``.
+        let aborted: Bool
     }
 }
 

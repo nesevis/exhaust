@@ -31,7 +31,7 @@ struct CoreGeneratorTests {
             let tree = try #require(try Interpreters.reflect(gen, with: UInt64(15)))
 
             guard case let .choice(_, metadata) = tree else {
-                #expect(Bool(false), "Expected reflected tree to be a single choice")
+                Issue.record("Expected reflected tree to be a single choice")
                 return
             }
 
@@ -44,14 +44,14 @@ struct CoreGeneratorTests {
 
             do {
                 _ = try Interpreters.reflect(gen, with: UInt64(25))
-                #expect(Bool(false), "Expected reflection to fail for out-of-range value")
+                Issue.record("Expected reflection to fail for out-of-range value")
             } catch let error as ReflectionError {
                 guard case .inputWasOutOfGeneratorRange = error else {
-                    #expect(Bool(false), "Expected inputWasOutOfGeneratorRange, got \(error)")
+                    Issue.record("Expected inputWasOutOfGeneratorRange, got \(error)")
                     return
                 }
             } catch {
-                #expect(Bool(false), "Expected ReflectionError, got \(error)")
+                Issue.record("Expected ReflectionError, got \(error)")
             }
         }
 
@@ -72,11 +72,11 @@ struct CoreGeneratorTests {
 
             // Test replay
             guard let recipe else {
-                #expect(Bool(false), "Reflection failed for Gen.exact test")
+                Issue.record("Reflection failed for Gen.exact test")
                 return
             }
             guard let replayed = try Interpreters.replay(gen, using: recipe) else {
-                #expect(Bool(false), "Replay failed for Gen.exact test")
+                Issue.record("Replay failed for Gen.exact test")
                 return
             }
             #expect(replayed == value)
@@ -121,10 +121,10 @@ struct CoreGeneratorTests {
                         if let replayed = try Interpreters.replay(gen, using: recipe) {
                             #expect(generated == replayed)
                         } else {
-                            #expect(Bool(false), "Replay failed for generator \(index), iteration \(iteration)")
+                            Issue.record("Replay failed for generator \(index), iteration \(iteration)")
                         }
                     } else {
-                        #expect(Bool(false), "Reflection failed for generator \(index), iteration \(iteration)")
+                        Issue.record("Reflection failed for generator \(index), iteration \(iteration)")
                     }
                 }
             }
@@ -134,7 +134,7 @@ struct CoreGeneratorTests {
         func multipleGenerationConsistency() throws {
             let gen = Gen.choose(in: 1 ... 100) as Generator<Int>
             guard let recipe = try Interpreters.reflect(gen, with: 42) else {
-                #expect(Bool(false), "Reflection failed for value 42")
+                Issue.record("Reflection failed for value 42")
                 return
             }
 
@@ -143,7 +143,7 @@ struct CoreGeneratorTests {
                 if let replayed = try Interpreters.replay(gen, using: recipe) {
                     #expect(replayed == 42)
                 } else {
-                    #expect(Bool(false), "Replay failed for value 42")
+                    Issue.record("Replay failed for value 42")
                 }
             }
         }

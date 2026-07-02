@@ -14,7 +14,7 @@ public extension __ExhaustRuntime {
     ///
     /// Dispatches commands across real GCD threads and bridges async command execution via Task+semaphore. This catches races in synchronous primitives (locks, dispatch queues, atomics) hidden behind async facades. The cooperative runner's deterministic interleaving only reaches `await` suspension points.
     ///
-    /// The outer loop runs on a GCD thread (via ``__ExhaustRuntime/dispatchToGCD(_:)``) to avoid starving the cooperative pool during parallel test runs. Issue reporting is deferred to the async return context where Swift Testing's task-locals are available.
+    /// The outer loop runs on a GCD thread (via ``__ExhaustRuntime/dispatchToGCD(reserving:_:)``) to avoid starving the cooperative pool during parallel test runs. Issue reporting is deferred to the async return context where Swift Testing's task-locals are available.
     @discardableResult
     static func __runPreemptiveConcurrentContractAsync<Spec: AsyncContractSpec>(
         _: Spec.Type,
@@ -423,9 +423,14 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         }
     }
 
-    /// No ObjC exception guard (`exhaust_runCatchingObjCException`) here, unlike the synchronous ``PreemptiveChecker/runSmoke(_:)``. The sync checker wraps each `spec.run(command)` in an ObjC `@try/@catch` because there are no Tasks involved, everything is plain function frames. In the async path, each command runs inside a Task drained by `blockingAwait`.
-    /// An NSException that unwinds through a Task continuation bypasses the Swift runtime's task-local allocation cleanup (`swift_task_dealloc_specific`). The ObjC `@try/@catch` catches the exception, but the Task's internal state is already corrupted, and the runtime aborts on the next task-local operation.
-    /// This is a Swift runtime limitation: NSExceptions and Task-local storage are fundamentally incompatible. An async spec whose command deterministically raises an NSException will abort the test process.
+    // MARK: - Async Smoke and NSExceptions
+
+    //
+    // No ObjC exception guard (`exhaust_runCatchingObjCException`) here, unlike the synchronous `PreemptiveChecker.runSmoke(_:)`. The sync checker wraps each `spec.run(command)` in an ObjC `@try/@catch` because there are no Tasks involved, everything is plain function frames. In the async path, each command runs inside a Task drained by `blockingAwait`. An NSException that unwinds through a Task continuation bypasses the Swift runtime's task-local allocation cleanup (`swift_task_dealloc_specific`): the ObjC `@try/@catch` catches the exception, but the Task's internal state is already corrupted, and the runtime aborts on the next task-local operation. This is a Swift runtime limitation. NSExceptions and Task-local storage are fundamentally incompatible.
+
+    /// Runs the smoke commands sequentially on a fresh spec, without the sync checker's ObjC exception guard.
+    ///
+    /// - Important: An async spec whose command deterministically raises an NSException will abort the test process. See the implementation note above.
     func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, timedOut: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
         let spec = Spec()
         nonisolated(unsafe) let unsafeSpec = spec
@@ -480,26 +485,12 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         return (trace, false, false, spec.systemUnderTest, nil)
     }
 
-    /// Replays the reduced commands sequentially on a fresh spec via ``runSequentially(_:on:)`` to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails or times out, because the partial state would mislead debugging.
-    func buildResult(
-        reduced: [(ScheduleMarker, Spec.Command)],
-        originalCommands: [Spec.Command]?,
-        seed: UInt64?,
-        replaySeed: String?,
-        discoveryMethod: ContractDiscoveryMethod
-    ) -> (result: ContractResult<Spec>, failureDescription: String?) {
+    /// Replays the reduced commands sequentially on a fresh spec via ``runSequentially(_:on:)`` and returns its failure description, the expected race-free state for the report. Returns nil when the replay itself fails or times out, because the partial state would mislead debugging.
+    func sequentialReplayDescription(of reduced: [(ScheduleMarker, Spec.Command)]) -> String? {
         let oracleSpec = Spec()
-        let replayOutcome = runSequentially(reduced.map(\.1), on: oracleSpec)
-        let result = ContractResult<Spec>(
-            status: .fail,
-            commands: reduced.map(\.1),
-            originalCommands: originalCommands,
-            trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),
-            systemUnderTest: replayOutcome.succeeded ? oracleSpec.systemUnderTest : nil,
-            seed: seed,
-            replaySeed: replaySeed,
-            discoveryMethod: discoveryMethod
-        )
-        return (result, replayOutcome.succeeded ? oracleSpec.failureDescription() : nil)
+        guard runSequentially(reduced.map(\.1), on: oracleSpec).succeeded else {
+            return nil
+        }
+        return oracleSpec.failureDescription()
     }
 }

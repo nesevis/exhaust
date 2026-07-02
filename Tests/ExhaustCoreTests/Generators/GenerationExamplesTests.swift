@@ -100,10 +100,10 @@ struct GenerationExamplesTests {
                     if try Interpreters.replay(singleStringGen, using: recipe) != nil {
                         // Round-trip successful
                     } else {
-                        #expect(Bool(false), "Replay failed")
+                        Issue.record("Replay failed")
                     }
                 } else {
-                    #expect(Bool(false), "Reflection failed")
+                    Issue.record("Reflection failed")
                 }
             }
 
@@ -116,10 +116,10 @@ struct GenerationExamplesTests {
                     if try Interpreters.replay(arrayGen, using: recipe) != nil {
                         // Round-trip successful
                     } else {
-                        #expect(Bool(false), "Replay failed")
+                        Issue.record("Replay failed")
                     }
                 } else {
-                    #expect(Bool(false), "Reflection failed")
+                    Issue.record("Reflection failed")
                 }
             }
         }

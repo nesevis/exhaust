@@ -141,8 +141,7 @@ struct ContractMachine<Backend: ContractBackend> {
             generator: context.state.sequenceGen,
             seed: candidate.seed,
             property: { commands in
-                capturedContext.invocationCounter.value += 1
-                return unsafeBackend.probe(commands, context: capturedContext) != .fail
+                unsafeBackend.countedProbe(commands, context: capturedContext) != .fail
             },
             identifySkips: context.identifySkips,
             logEvent: "contract_skip_pruning"
