@@ -348,10 +348,12 @@ final class PreemptiveSequentiallyBrokenSpec {
         counter.value == other.value
     }
 
+    /// The bug is deterministic, so it survives on both sides of the oracle's concurrent-vs-sequential comparison and cannot be caught there. The `check` postcondition throws on divergence, which the sequential smoke phase catches before the concurrent phase runs.
     @Command(weight: 3)
     func increment() throws {
         expected += 1
         counter.increment()
+        try check(counter.value == expected, "counter must match the model")
     }
 
     @Command(weight: 2)
@@ -361,6 +363,7 @@ final class PreemptiveSequentiallyBrokenSpec {
         }
         expected -= 1
         counter.decrement()
+        try check(counter.value == expected, "counter must match the model")
     }
 
     func failureDescription() -> String? {
@@ -368,6 +371,7 @@ final class PreemptiveSequentiallyBrokenSpec {
     }
 }
 
+/// Deterministically broken: `decrement` is a no-op, so any decrement leaves the counter out of step with the model.
 final class BrokenDecrementCounter: @unchecked Sendable, CustomDebugStringConvertible {
     private var _value: Int = 0
 

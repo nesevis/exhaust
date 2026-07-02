@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import Exhaust
 
@@ -43,6 +44,7 @@ struct RegressionSeedTests {
             await #execute(
                 RegressionPreemptiveContract.self,
                 .commandLimit(6),
+                .budget(.extensive),
                 .suppress(.all)
             )
         )
@@ -176,26 +178,23 @@ private final class RegressionRacyCounter: @unchecked Sendable, CustomDebugStrin
 
 @Contract(.threads)
 private final class RegressionPreemptiveContract {
-    var expected: Int = 0
-    @SystemUnderTest var counter = RegressionBrokenDecrement()
+    @SystemUnderTest var counter = RegressionRacyPreemptiveCounter()
 
     @Oracle
-    func oracleMatches(other: RegressionBrokenDecrement) -> Bool {
+    func oracleMatches(other: RegressionRacyPreemptiveCounter) -> Bool {
         counter.value == other.value
     }
 
     @Command(weight: 3)
     func increment() throws {
-        expected += 1
         counter.increment()
     }
 
     @Command(weight: 2)
     func decrement() throws {
-        guard expected > 0 else {
+        guard counter.value > 0 else {
             throw skip()
         }
-        expected -= 1
         counter.decrement()
     }
 
@@ -204,25 +203,28 @@ private final class RegressionPreemptiveContract {
     }
 }
 
-private final class RegressionBrokenDecrement: @unchecked Sendable, CustomDebugStringConvertible {
+/// Deliberately unsynchronized: concurrent read-modify-write loses updates, so the concurrent run diverges from the sequential replay and the `@Oracle` catches it. A deterministic bug would be invisible to the oracle, which compares two runs of the same spec.
+private final class RegressionRacyPreemptiveCounter: @unchecked Sendable, CustomDebugStringConvertible {
     private var storedValue: Int = 0
+
     var value: Int {
         storedValue
     }
 
     var debugDescription: String {
-        "RegressionBrokenDecrement(\(storedValue))"
+        "RegressionRacyPreemptiveCounter(value: \(storedValue))"
     }
 
     func increment() {
-        storedValue += 1
+        let current = storedValue
+        Thread.sleep(forTimeInterval: 0.0001)
+        storedValue = current + 1
     }
 
     func decrement() {
-        // Bug: no-op when value is 1.
-        if storedValue != 1 {
-            storedValue -= 1
-        }
+        let current = storedValue
+        Thread.sleep(forTimeInterval: 0.0001)
+        storedValue = current - 1
     }
 }
 
