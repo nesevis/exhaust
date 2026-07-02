@@ -215,6 +215,39 @@ struct ContractCoverageSourceSelectionTests {
     }
 }
 
+// MARK: - Prefix-First Ordering
+
+@Suite("prefixFirstOrder", .tags(.contract))
+struct PrefixFirstOrderTests {
+    private static let taggedCommandGen = #gen(
+        .int(in: 0 ... 3),
+        .element(from: [StubCommand.increment, .decrement])
+    ) { marker, command in
+        (ScheduleMarker(rawValue: UInt8(marker)), command)
+    }
+
+    @Test("Stable partition: prefixes first, both subsequences preserve input order")
+    func stablePartition() {
+        #exhaust(Self.taggedCommandGen.array(length: 0 ... 8)) { input in
+            let result = input.prefixFirstOrder()
+            let prefixCount = input.count(where: { $0.0.isPrefix })
+
+            let allPrefixesFirst = result.prefix(prefixCount).allSatisfy(\.0.isPrefix)
+            let allLanesAfter = result.dropFirst(prefixCount).allSatisfy { $0.0.isPrefix == false }
+            #expect(allPrefixesFirst)
+            #expect(allLanesAfter)
+
+            let resultPrefixCommands = result.prefix(prefixCount).map(\.1)
+            let inputPrefixCommands = input.filter(\.0.isPrefix).map(\.1)
+            #expect(resultPrefixCommands == inputPrefixCommands)
+
+            let resultLaneDescriptions = result.dropFirst(prefixCount).map { "\($0.0)\($0.1)" }
+            let inputLaneDescriptions = input.filter { $0.0.isPrefix == false }.map { "\($0.0)\($0.1)" }
+            #expect(resultLaneDescriptions == inputLaneDescriptions)
+        }
+    }
+}
+
 // MARK: - Stub Types
 
 private enum StubCommand: CustomStringConvertible {

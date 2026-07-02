@@ -73,7 +73,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
             property: linearizableProperty
         )
 
-        let reduced = twoPassResult.value.filter(\.0.isPrefix) + twoPassResult.value.filter { $0.0.isPrefix == false }
+        let reduced = twoPassResult.value.prefixFirstOrder()
 
         let confirmed = __ExhaustRuntime.confirmRealFailure(
             backend: inner,
@@ -98,8 +98,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         discoveryMethod: ContractDiscoveryMethod,
         context: ContractRunContext<Spec>
     ) -> (result: ContractResult<Spec>, issueMessage: String) {
-        // Report commands prefix-first. Reduction already orders its output this way; the timeout path skips reduction, so normalize here to keep the report consistent. The partition is idempotent, so the reduced path is unaffected.
-        let reduced = reduced.filter(\.0.isPrefix) + reduced.filter { $0.0.isPrefix == false }
+        let reduced = reduced.prefixFirstOrder()
         let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
 
         let (replayResult, failureDescription) = inner.buildResult(

@@ -71,6 +71,8 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
         discoveryMethod: ContractDiscoveryMethod,
         context: ContractRunContext<Spec>
     ) -> (result: ContractResult<Spec>, issueMessage: String) {
+        let reduced = reduced.prefixFirstOrder()
+
         let traceResult = drainSchedule(
             taggedCommands: reduced,
             specInit: specInit,
