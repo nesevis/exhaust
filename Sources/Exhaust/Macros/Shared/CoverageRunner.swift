@@ -72,6 +72,11 @@ package enum CoverageRunner {
 
         guard paramCount >= 1 else { return .notApplicable }
 
+        // Erase once for the whole coverage loop; testRow calls materializeAny directly to avoid per-row erasure.
+        let erasedGen = gen.erase()
+        // A passing row's tree is only read by the onExample stats callback; without one, testRow skips tree construction.
+        let needsTree = onExample != nil
+
         // Pull-based pairwise coverage for 2+ parameters.
         if paramCount >= 2 {
             let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
@@ -83,8 +88,8 @@ package enum CoverageRunner {
                     continue
                 }
                 let rowResult = testRow(
-                    gen, row: row, rowIndex: rowIndex,
-                    profile: profile, property: property
+                    erasedGen, row: row, rowIndex: rowIndex,
+                    profile: profile, needsTree: needsTree, property: property
                 )
                 if let rowResult {
                     onExample?(rowResult.value, rowResult.tree, rowResult.passed)
@@ -118,8 +123,8 @@ package enum CoverageRunner {
         while rowIndex < budget, UInt64(rowIndex) < domainSizes[0] {
             let row = CoveringArrayRow(values: [UInt64(rowIndex)])
             let rowResult = testRow(
-                gen, row: row, rowIndex: rowIndex,
-                profile: profile, property: property
+                erasedGen, row: row, rowIndex: rowIndex,
+                profile: profile, needsTree: needsTree, property: property
             )
             if let rowResult {
                 onExample?(rowResult.value, rowResult.tree, rowResult.passed)
@@ -156,12 +161,15 @@ package enum CoverageRunner {
 
     /// Builds a tree from a covering array row, materializes it, and tests the property.
     ///
+    /// Materializes in two phases when `needsTree` is `false`: phase 1 skips ``ChoiceTree`` construction because a passing row's tree is never read, and a failing row triggers a second materialization that builds the real tree for the failure report. Guided materialization is deterministic for a fixed seed and fallback tree, so both phases produce the same value (the same pattern ``SequenceDecoder`` uses).
+    ///
     /// Returns `nil` when materialization fails (row is skipped). Otherwise returns the value, its choice tree, and whether the property passed.
     private static func testRow<Output>(
-        _ gen: Generator<Output>,
+        _ erasedGen: AnyGenerator,
         row: CoveringArrayRow,
         rowIndex: Int,
         profile: any CoverageProfile,
+        needsTree: Bool,
         property: (Output) -> Bool
     ) -> RowResult<Output>? {
         guard let tree = profile.buildTree(from: row) else { return nil }
@@ -170,12 +178,28 @@ package enum CoverageRunner {
             seed: UInt64(rowIndex),
             fallbackTree: nil
         )
-        switch Materializer.materialize(
-            gen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree
+        switch Materializer.materializeAny(
+            erasedGen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree,
+            skipTree: needsTree == false,
+            collectDecodingReport: false
         ) {
-            case let .success(value, freshTree, _):
+            case let .success(anyValue, freshTree, _):
+                // swiftlint:disable:next force_cast
+                let value = anyValue as! Output
                 let passed = property(value)
-                return RowResult(value: value, tree: freshTree, passed: passed)
+                guard needsTree == false, passed == false else {
+                    return RowResult(value: value, tree: freshTree, passed: passed)
+                }
+                // Phase 2: the failure path reads the tree, so rebuild it. Same seed and fallback reproduce phase 1 deterministically; a divergence here cannot happen, and skipping the row is the safe response if it somehow does.
+                switch Materializer.materializeAny(
+                    erasedGen, prefix: ChoiceSequence(), mode: mode, fallbackTree: tree,
+                    collectDecodingReport: false
+                ) {
+                    case let .success(_, realTree, _):
+                        return RowResult(value: value, tree: realTree, passed: passed)
+                    case .rejected, .failed:
+                        return nil
+                }
             case .rejected, .failed:
                 return nil
         }
