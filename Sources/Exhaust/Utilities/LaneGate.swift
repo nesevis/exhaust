@@ -11,7 +11,7 @@ import Foundation
 /// - Note: This is a `final class` guarded by an `NSLock` rather than an `actor` because ``release(_:)`` is called from synchronous contexts (inside the `dispatchToGCD` GCD closure, a `() -> Result`), which an actor's async-only surface cannot serve. Marked `@unchecked Sendable` because the mutable state, `free` and `waiters`, is read and written from many threads (async acquirers, and releasers on GCD workers); every access is serialized under `lock`, so the state is never touched concurrently.
 final class LaneGate: @unchecked Sendable {
     /// The default lane budget. Bounds concurrent preemptive runs to ~`limit`/(N+1) so their lanes are not starved on a constrained runner, while staying under the 64-thread per-queue GCD wall. Overridable via ``environmentOverrideKey``.
-    static let defaultLimit = 16
+    static let defaultLimit = 32
 
     /// The smallest budget that can satisfy every reservation: the largest single request is async `.threads` at `ConcurrencyLevel.max (4) + 1`.
     static let reservationFloor = 5
