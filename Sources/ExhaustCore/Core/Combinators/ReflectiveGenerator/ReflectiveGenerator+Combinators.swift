@@ -26,7 +26,21 @@ public extension ReflectiveGenerator {
         forward: @Sendable @escaping (Output) throws -> NewOutput,
         backward: @Sendable @escaping (NewOutput) throws -> Output
     ) rethrows -> ReflectiveGenerator<NewOutput> {
-        try Gen.contramap(backward, gen.map(forward)).wrapped
+        Gen.liftF(.transform(
+            kind: .map(
+                forward: { try forward($0 as! Output) },
+                backward: {
+                    // Reflection probes pick branches against a shared final output, so a mismatched value is a normal rejection, not a programmer error — throw (as the previous contramap-based construction did) instead of trapping.
+                    guard let output = $0 as? NewOutput else {
+                        throw ReflectionError.contramapWasWrongType
+                    }
+                    return try backward(output)
+                },
+                inputType: Output.self,
+                outputType: NewOutput.self
+            ),
+            inner: gen.erase()
+        )).wrapped
     }
 
     /// Adapts a generator to a new output type, using a key path as the inverse for reflection.
