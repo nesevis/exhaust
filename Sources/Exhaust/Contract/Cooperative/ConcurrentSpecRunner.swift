@@ -50,6 +50,7 @@ private func runCommandRecordingTrace<Spec: AsyncContractSpec>(
     trace: UnsafeSendableBox<[TraceEvent]>,
     recordTrace: Bool
 ) async -> CommandOutcome {
+    // `label` is empty on the non-trace path; callers only build the (reflection-priced) command description when recordTrace is true.
     if recordTrace { trace.value.append(TraceEvent(kind: .started, lane: lane, label: label)) }
     do {
         try await spec.value.run(command)
@@ -105,15 +106,23 @@ func drainSchedule<Spec: AsyncContractSpec>(
     recordTrace: Bool,
     idleTimeoutMilliseconds: Int = 1000
 ) -> ConcurrentExecutionResult<Spec.SystemUnderTest> {
-    let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
-    let laneCommands: [[Spec.Command]] = (0 ..< concurrencyLevel).map { laneIndex in
-        let marker = ScheduleMarker(rawValue: UInt8(laneIndex + 1))
-        return taggedCommands.filter { $0.0 == marker }.map(\.1)
+    // One pass replaces the per-lane filter passes: prefix commands, per-lane buckets, and the schedule all fall out of a single scan. The lane-bounds guard mirrors the old per-lane filter — markers above the concurrency level contribute a schedule entry but no lane command, exactly as before. The results are rebound as lets so the `@Sendable` lane tasks can capture them.
+    var prefixBuffer: [Spec.Command] = []
+    var laneBuffer: [[Spec.Command]] = Array(repeating: [], count: concurrencyLevel)
+    var scheduleBuffer: [LaneID] = []
+    for (marker, command) in taggedCommands {
+        guard let laneIndex = marker.laneIndex else {
+            prefixBuffer.append(command)
+            continue
+        }
+        scheduleBuffer.append(LaneID(index: laneIndex))
+        if Int(laneIndex) < concurrencyLevel {
+            laneBuffer[Int(laneIndex)].append(command)
+        }
     }
-    let schedule: [LaneID] = taggedCommands.compactMap { marker, _ in
-        guard let laneIndex = marker.laneIndex else { return nil }
-        return LaneID(index: laneIndex)
-    }
+    let prefixCommands = prefixBuffer
+    let laneCommands = laneBuffer
+    let schedule = scheduleBuffer
 
     let runQueue = RunQueue(laneCount: concurrencyLevel)
     let executors: [LaneExecutor] = (0 ..< concurrencyLevel).map { index in
@@ -130,7 +139,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
         Task(executorPreference: executors[0]) { @Sendable [spec, failed, prefixDone, trace] in
             for command in prefixCommands {
                 guard failed.value == nil else { break }
-                let label = "\(command)"
+                let label = recordTrace ? "\(command)" : ""
                 let outcome = await runCommandRecordingTrace(
                     command, on: spec, lane: .prefix, label: label,
                     trace: trace, recordTrace: recordTrace
@@ -143,25 +152,19 @@ func drainSchedule<Spec: AsyncContractSpec>(
             prefixDone.value = true
         }
 
-        var idleStopwatch = Stopwatch()
-        while prefixDone.value == false {
-            guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
-                if runQueue.waitForJob(
-                    idleTimeoutMilliseconds: idleTimeoutMilliseconds,
-                    elapsedMilliseconds: idleStopwatch.elapsedMilliseconds
-                ) == false {
-                    return ConcurrentExecutionResult(
-                        passed: false,
-                        trace: recordTrace
-                            ? __ExhaustRuntime.buildTrace(trace.value)
-                            : [],
-                        timedOut: true
-                    )
-                }
-                continue
-            }
-            job.runSynchronously(on: executors[0].asUnownedTaskExecutor())
-            idleStopwatch = Stopwatch()
+        if ScheduleDrain.drainUntilDone(
+            prefixDone,
+            runQueue: runQueue,
+            executor: executors[0],
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds
+        ) == .timedOut {
+            return ConcurrentExecutionResult(
+                passed: false,
+                trace: recordTrace
+                    ? __ExhaustRuntime.buildTrace(trace.value)
+                    : [],
+                timedOut: true
+            )
         }
         if failed.value != nil {
             return ConcurrentExecutionResult(
@@ -200,8 +203,13 @@ func drainSchedule<Spec: AsyncContractSpec>(
             for command in commands {
                 guard failed.value == nil else { return }
                 commandIndex.value += 1
-                let name = "\(command)".split(separator: "(").first.map(String.init) ?? "\(command)"
-                let label = "\(commandIndex.value)\(traceLane) \(name)"
+                let label: String
+                if recordTrace {
+                    let name = "\(command)".split(separator: "(").first.map(String.init) ?? "\(command)"
+                    label = "\(commandIndex.value)\(traceLane) \(name)"
+                } else {
+                    label = ""
+                }
                 let outcome = await runCommandRecordingTrace(
                     command, on: spec, lane: traceLane, label: label,
                     trace: trace, recordTrace: recordTrace
@@ -214,56 +222,31 @@ func drainSchedule<Spec: AsyncContractSpec>(
         }
     }
 
-    // Drain concurrent section with lane-switch tracking for suspended/resumed markers.
-    var lastDrainedLane: LaneID?
-    var laneHasOpenCommand: [LaneID: Bool] = Dictionary(
-        uniqueKeysWithValues: (0 ..< concurrencyLevel).map { (LaneID(index: UInt8($0)), false) }
-    )
-    var scheduleIndex = 0
-
-    var idleStopwatch = Stopwatch()
-
-    while runQueue.isFinished == false {
-        if runQueue.hasPendingJobs == false {
-            if runQueue.waitForJob(
-                idleTimeoutMilliseconds: idleTimeoutMilliseconds,
-                elapsedMilliseconds: idleStopwatch.elapsedMilliseconds
-            ) == false {
-                let finalTrace: [TraceStep] = recordTrace
-                    ? __ExhaustRuntime.buildTrace(trace.value)
-                    : []
-                return ConcurrentExecutionResult(passed: false, trace: finalTrace, timedOut: true)
-            }
-            continue
-        }
-        let preferred = scheduleIndex < schedule.count
-            ? schedule[scheduleIndex]
-            : LaneID(index: UInt8(scheduleIndex % concurrencyLevel))
-        scheduleIndex += 1
-        guard let (lane, job) = runQueue.dequeue(preferring: preferred) else {
-            assertionFailure("dequeue returned nil despite hasPendingJobs being true")
-            break
-        }
-        let executor = executors[Int(lane.index)]
-
-        if recordTrace {
-            let switchedLanes = lastDrainedLane != nil && lastDrainedLane != lane
-            if switchedLanes, let prev = lastDrainedLane, laneHasOpenCommand[prev] == true {
-                trace.value.append(TraceEvent(kind: .suspended, lane: .lane(prev), label: ""))
-            }
-            if switchedLanes, laneHasOpenCommand[lane] == true {
-                trace.value.append(TraceEvent(kind: .resumed, lane: .lane(lane), label: ""))
+    // Drain the concurrent section via the core engine. Lane-switch tracking for suspended/resumed markers only exists when a trace is recorded; the nil handler on the probe path also skips the engine's per-continuation open-command bookkeeping.
+    let onTraceSignal: ((ScheduleDrain.TraceSignal) -> Void)? = recordTrace
+        ? { signal in
+            switch signal {
+                case let .suspended(lane):
+                    trace.value.append(TraceEvent(kind: .suspended, lane: .lane(lane), label: ""))
+                case let .resumed(lane):
+                    trace.value.append(TraceEvent(kind: .resumed, lane: .lane(lane), label: ""))
             }
         }
+        : nil
 
-        job.runSynchronously(on: executor.asUnownedTaskExecutor())
-        laneHasOpenCommand[lane] = runQueue.hasPendingJob(for: lane)
-        lastDrainedLane = lane
-        idleStopwatch = Stopwatch()
-
-        if failed.value != nil {
-            break
-        }
+    if ScheduleDrain.drainConcurrentSection(
+        runQueue: runQueue,
+        executors: executors,
+        schedule: schedule,
+        concurrencyLevel: concurrencyLevel,
+        idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+        failureFlag: failed,
+        onTraceSignal: onTraceSignal
+    ) == .timedOut {
+        let finalTrace: [TraceStep] = recordTrace
+            ? __ExhaustRuntime.buildTrace(trace.value)
+            : []
+        return ConcurrentExecutionResult(passed: false, trace: finalTrace, timedOut: true)
     }
 
     let finalTrace: [TraceStep] = recordTrace

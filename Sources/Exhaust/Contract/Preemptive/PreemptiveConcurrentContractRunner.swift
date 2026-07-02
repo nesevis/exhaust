@@ -112,7 +112,7 @@ extension __ExhaustRuntime {
         let invocationCounter = UnsafeSendableBox(0)
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             invocationCounter.value += 1
-            let partition = LanePartition(taggedCommands)
+            let partition = LanePartition(markers: taggedCommands.map(\.0))
             let outcome = innerBackend.execute(taggedCommands, partition: partition)
             if case .timedOut = outcome {
                 // A timed-out probe is inconclusive, not a counterexample: under host contention the lanes simply did not finish in time. Count it as a pass so discovery keeps sampling, and tally it so the runner can warn when timeouts dominate the budget.
@@ -238,18 +238,18 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
     /// Executes a tagged command sequence with real GCD concurrency using a pre-computed lane partition.
     ///
     /// Returns ``Preemptive/Outcome/failed(concurrentSpec:)`` when a command throws, an invariant fails, or an ObjC exception is caught. Returns ``Preemptive/Outcome/timedOut(concurrentSpec:)`` when the concurrent lanes do not finish within ``idleTimeoutMilliseconds``, so the ``ContractMachine`` can skip reduction and report a hang rather than a deterministic failure.
-    func execute(_: [(ScheduleMarker, Spec.Command)], partition: LanePartition<Spec.Command>) -> Preemptive.Outcome<Spec> {
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], partition: LanePartition) -> Preemptive.Outcome<Spec> {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
-        if runAllCommandsCatchingObjC(partition.prefixCommands, on: concurrentSpec) == false {
+        if runCommandsCatchingObjC(at: partition.prefixIndices, in: taggedCommands, on: concurrentSpec) == false {
             return .failed(concurrentSpec: concurrentSpec)
         }
-        if runAllCommandsCatchingObjC(partition.prefixCommands, on: sequentialSpec) == false {
+        if runCommandsCatchingObjC(at: partition.prefixIndices, in: taggedCommands, on: sequentialSpec) == false {
             return .failed(concurrentSpec: concurrentSpec)
         }
 
-        if runAllCommandsCatchingObjC(partition.concurrentCommands, on: sequentialSpec) == false {
+        if runCommandsCatchingObjC(at: partition.concurrentIndices, in: taggedCommands, on: sequentialSpec) == false {
             return .failed(concurrentSpec: concurrentSpec)
         }
 
@@ -262,17 +262,18 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
         nonisolated(unsafe) let unsafeConcurrentSpec = concurrentSpec
         for (offset, laneID) in partition.laneIDs.enumerated() {
-            let laneCommands = partition.laneBuckets[laneID] ?? []
+            let laneIndices = partition.laneBuckets[laneID] ?? []
             let responseBox = perLaneResponses[offset]
             group.enter()
             DispatchQueue.global().async {
                 var localResponses: [ObservedResponse<Spec.Command>] = []
                 var exception: NSException?
                 let succeeded = exhaust_runCatchingObjCException({
-                    for command in laneCommands {
+                    for laneIndex in laneIndices {
                         if commandFailed.value {
                             break
                         }
+                        let command = taggedCommands[laneIndex].1
                         do {
                             let response = try unsafeConcurrentSpec.run(command)
                             let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
@@ -324,8 +325,9 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
             }
             return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
         }
-        // Try the realized completion order as a single linearization witness before the full interleaving search.
-        if realizedOrderIsLinearizable(prefix: partition.prefixCommands, realizedOrder: completionOrdered.value, concurrentSpec: concurrentSpec) {
+        // Try the realized completion order as a single linearization witness before the full interleaving search. The prefix array is materialized only here — the passed and no-response-info paths never need it.
+        let prefixCommands = partition.prefixIndices.map { taggedCommands[$0].1 }
+        if realizedOrderIsLinearizable(prefix: prefixCommands, realizedOrder: completionOrdered.value, concurrentSpec: concurrentSpec) {
             return .passed
         }
         return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
@@ -391,6 +393,28 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         return objcSucceeded && commandFailed == false
     }
 
+    /// Index-bucket twin of ``runAllCommandsCatchingObjC(_:on:)``: runs the commands at the partition-supplied positions without materializing a command array.
+    private func runCommandsCatchingObjC(
+        at indices: [Int],
+        in taggedCommands: [(ScheduleMarker, Spec.Command)],
+        on spec: Spec
+    ) -> Bool {
+        var commandFailed = false
+        let objcSucceeded = runCatchingObjC {
+            for index in indices {
+                do {
+                    try spec.run(taggedCommands[index].1)
+                } catch is ContractSkip {
+                    continue
+                } catch {
+                    commandFailed = true
+                    return
+                }
+            }
+        }
+        return objcSucceeded && commandFailed == false
+    }
+
     func checkLinearizability(
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         laneResponses: [[ObservedResponse<Spec.Command>]],
@@ -409,7 +433,8 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
-        let prefixCommands = taggedCommands.lazy.filter(\.0.isPrefix).map(\.1)
+        // Materialized, not lazy: `replayPrefix` runs once per sibling retry in the DFS, and a lazy view would re-filter the full tagged array on every call.
+        let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
         var replaySpec: Spec?
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
         let result = checker.check(
@@ -427,11 +452,11 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
                 replaySpec = fresh
                 return true
             },
-            replayCommand: { command in
+            replayCommand: { laneIndex, commandIndex in
                 guard let spec = replaySpec else {
                     return nil
                 }
-                return Self.replaySync(command, on: spec)
+                return Self.replaySync(laneResponses[laneIndex][commandIndex].command, on: spec)
             },
             checkOracle: {
                 guard let spec = replaySpec else {
@@ -449,7 +474,7 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
     private static func replaySync(
         _ command: Spec.Command,
         on spec: Spec
-    ) -> LinearizabilityChecker<Spec.Command>.ReplayResponse? {
+    ) -> LinearizabilityChecker.ReplayResponse? {
         do {
             let response = try spec.run(command)
             return .init(

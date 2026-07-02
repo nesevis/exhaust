@@ -1,3 +1,4 @@
+import ExhaustCore
 import Foundation
 
 extension __ExhaustRuntime {
