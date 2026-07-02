@@ -183,7 +183,7 @@ package enum CGSDerivativeInterpreter {
                     case let .transform(kind, inner):
                         let result: Any
                         switch kind {
-                            case let .map(forward, _, _):
+                            case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
                                 guard let innerValue = try generateRecursive(
                                     inner, with: inputValue, rng: &rng, size: size
                                 ) else {

@@ -600,7 +600,7 @@ extension Materializer {
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
         switch kind {
-            case let .map(forward, _, _):
+            case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
                 guard let (innerValue, innerTree) = try generateRecursive(
                     inner, with: inputValue, context: &context, fallbackTree: calleeFallback
                 ) else { return nil }

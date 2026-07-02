@@ -31,9 +31,14 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         /// Creates an empty derivative context with no frames.
         public init() {}
 
-        /// The number of frames in this context.
+        /// The structural descent depth: the number of frames excluding `.transform` adapters.
+        ///
+        /// Depth gates subdivision, halves the derivative sample count per level, and offsets fitness-record fingerprints — all of which measure how deep the target site sits inside binds, zips, and sequences. A `.transform` frame is a value adapter at the same structural level, so counting it would shift those semantics for every `mapped` or zip layer in the generator.
         public var depth: Int {
-            frames.count
+            frames.reduce(0) { count, frame in
+                if case .transform = frame { return count }
+                return count + 1
+            }
         }
 
         /// Pushes a derivative frame onto the context stack for deferred CGS weight updates.
@@ -54,7 +59,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             var current = gen
             for frame in frames.reversed() {
                 switch frame {
-                    case let .bind(continuation):
+                    case let .bind(continuation), let .transform(continuation):
                         current = try current.bind { try continuation($0) }
 
                     case let .zipComponent(index, completed, allGenerators, continuation):
@@ -117,6 +122,9 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public enum DerivativeFrame {
         /// A bind continuation encountered on the path to the target choice site.
         case bind(continuation: (Any) throws -> AnyGenerator)
+
+        /// A reified value transform (`.transform(.map)` or `.transform(.isomorph)`) encountered on the path to the target choice site. Interpreted identically to `.bind`, but excluded from ``DerivativeContext/depth`` because it adapts the value at the same structural level rather than descending a level.
+        case transform(continuation: (Any) throws -> AnyGenerator)
 
         /// A zip component: the target site is inside the `index`-th child of a zip. `completed` holds already-generated values for earlier children, `allGenerators` holds all children's generators, and `continuation` is the downstream bind.
         case zipComponent(
@@ -562,7 +570,12 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     case let .transform(kind, inner):
                         let result: Any
                         switch kind {
-                            case let .map(forward, _, _):
+                            case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
+                                // Push the forward transform as a frame so derivative rollouts inside `inner` apply it. Without this, a rollout crossing the transform boundary hands the untransformed inner value (for example `[Character]` instead of `String`) to outer frames, which trap on their continuation casts.
+                                var innerContext = derivativeContext
+                                innerContext.push(.transform(continuation: { innerValue in
+                                    try continuation(forward(innerValue)).erase()
+                                }))
                                 guard let innerValue = try generateRecursive(
                                     inner,
                                     with: inputValue,
@@ -570,7 +583,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                                     predicate: predicate,
                                     sampleCount: sampleCount,
                                     cgsState: &cgsState,
-                                    derivativeContext: derivativeContext
+                                    derivativeContext: innerContext
                                 ) else { return nil }
                                 result = try forward(innerValue)
                             case let .bind(_, forward, _, _, _):
@@ -960,7 +973,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         // Newest frame first, matching the nesting order `apply` produces: the innermost bind runs immediately after the branch, the oldest frame runs last.
         for frame in frames.reversed() {
             switch frame {
-                case let .bind(continuation):
+                case let .bind(continuation), let .transform(continuation):
                     guard let next = try CGSDerivativeInterpreter.sample(continuation(current), using: &rng, size: size) else {
                         return nil
                     }

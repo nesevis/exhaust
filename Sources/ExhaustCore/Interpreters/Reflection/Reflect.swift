@@ -159,7 +159,15 @@ extension Interpreters {
 
             case let .transform(kind, inner):
                 switch kind {
-                    case let .map(forward, inputType, outputType):
+                    case let .map(forward, backward, inputType, outputType):
+                        if let backward {
+                            // Bidirectional map (`mapped(forward:backward:)`): apply the user-contract inverse and reflect the inner generator against the recovered input. Forward is applied per candidate — inner reflection can return several candidates (pick branches probed against a shared target), and upstream disambiguation compares each candidate's value to the final output, so collapsing them to one shared value would make every branch look like a match.
+                            let innerValue = try backward(finalOutput)
+                            let reflected = try reflectRecursive(inner, onFinalOutput: innerValue)
+                            return try reflected.map { result in
+                                try (value: forward(result.value), path: result.path)
+                            }
+                        }
                         if let inputBPC = inputType as? any BitPatternConvertible.Type,
                            let outputValue = finalOutput as? any BitPatternConvertible
                         {
@@ -182,6 +190,13 @@ extension Interpreters {
                             inputType: "\(inputType)",
                             outputType: "\(outputType)"
                         )
+                    case let .isomorph(forward, backward, _, _):
+                        // Guaranteed invertible by construction (framework-authored pairs only), so no forward-only error path exists here. Forward is applied per candidate for the same reason as the bidirectional `.map` case above.
+                        let innerValue = try backward(finalOutput)
+                        let reflected = try reflectRecursive(inner, onFinalOutput: innerValue)
+                        return try reflected.map { result in
+                            try (value: forward(result.value), path: result.path)
+                        }
                     case let .bind(fingerprint, forward, backward, inputType, outputType):
                         guard let backward else {
                             throw ReflectionError.forwardOnlyBind(

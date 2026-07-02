@@ -129,7 +129,7 @@ extension Interpreters {
             case let .transform(kind, inner):
                 let result: Any
                 switch kind {
-                    case let .map(forward, _, _):
+                    case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
                         guard let innerValue = try replayWithChoicesHelper(
                             inner,
                             choices: &choices
@@ -487,7 +487,7 @@ extension Interpreters {
             case let .transform(kind, inner):
                 let result: Any
                 switch kind {
-                    case let .map(forward, _, _):
+                    case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
                         guard let innerValue = try replayRecursive(
                             inner,
                             with: script

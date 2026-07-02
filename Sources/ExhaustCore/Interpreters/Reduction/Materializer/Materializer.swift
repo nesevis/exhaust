@@ -326,10 +326,20 @@ extension Materializer {
                     context: &context, continuationFallback: continuationFallback
                 )
 
-            case let .impure(.transform(.map(forward, inputType, outputType), inner), continuation):
+            case let .impure(.transform(.map(forward, backward, inputType, outputType), inner), continuation):
                 // Transparent: no callee tree node — fallback passes through.
                 return try handleTransform(
-                    kind: .map(forward: forward, inputType: inputType, outputType: outputType),
+                    kind: .map(forward: forward, backward: backward, inputType: inputType, outputType: outputType),
+                    inner: inner,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: fallbackTree,
+                    continuationFallback: nil
+                )
+
+            case let .impure(.transform(.isomorph(forward, backward, inputType, outputType), inner), continuation):
+                // Transparent: no callee tree node — fallback passes through (same as .map).
+                return try handleTransform(
+                    kind: .isomorph(forward: forward, backward: backward, inputType: inputType, outputType: outputType),
                     inner: inner,
                     continuation: continuation, inputValue: inputValue,
                     context: &context, calleeFallback: fallbackTree,

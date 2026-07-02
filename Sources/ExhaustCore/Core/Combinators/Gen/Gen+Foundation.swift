@@ -106,6 +106,7 @@ package extension Gen {
                     let (scheme, host, path, query) = tuple as! (String, String, String, String)
                     return URL(string: "\(scheme)://\(host)\(path)\(query)")!
                 },
+                backward: nil,
                 inputType: (String, String, String, String).self,
                 outputType: URL.self
             ),
