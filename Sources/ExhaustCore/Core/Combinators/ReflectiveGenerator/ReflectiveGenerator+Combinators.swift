@@ -30,7 +30,7 @@ public extension ReflectiveGenerator {
             kind: .map(
                 forward: { try forward($0 as! Output) },
                 backward: {
-                    // Reflection probes pick branches against a shared final output, so a mismatched value is a normal rejection, not a programmer error — throw (as the previous contramap-based construction did) instead of trapping.
+                    // Reflection probes pick branches against a shared final output, so a mismatched value is a normal rejection rather than a programmer error. Throw, as the previous contramap-based construction did, instead of trapping.
                     guard let output = $0 as? NewOutput else {
                         throw ReflectionError.contramapWasWrongType
                     }

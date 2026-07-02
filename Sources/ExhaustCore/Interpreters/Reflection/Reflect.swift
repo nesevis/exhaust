@@ -161,7 +161,7 @@ extension Interpreters {
                 switch kind {
                     case let .map(forward, backward, inputType, outputType):
                         if let backward {
-                            // Bidirectional map (`mapped(forward:backward:)`): apply the user-contract inverse and reflect the inner generator against the recovered input. Forward is applied per candidate — inner reflection can return several candidates (pick branches probed against a shared target), and upstream disambiguation compares each candidate's value to the final output, so collapsing them to one shared value would make every branch look like a match.
+                            // Bidirectional map (`mapped(forward:backward:)`): apply the user-contract inverse and reflect the inner generator against the recovered input. Forward is applied per candidate because inner reflection can return several candidates (pick branches probed against a shared target), and upstream disambiguation compares each candidate's value to the final output. Collapsing them to one shared value would make every branch look like a match.
                             let innerValue = try backward(finalOutput)
                             let reflected = try reflectRecursive(inner, onFinalOutput: innerValue)
                             return try reflected.map { result in

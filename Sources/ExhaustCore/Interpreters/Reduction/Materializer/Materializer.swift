@@ -337,7 +337,7 @@ extension Materializer {
                 )
 
             case let .impure(.transform(.isomorph(forward, backward, inputType, outputType), inner), continuation):
-                // Transparent: no callee tree node — fallback passes through (same as .map).
+                // Transparent: no callee tree node, so the fallback passes through (same as .map).
                 return try handleTransform(
                     kind: .isomorph(forward: forward, backward: backward, inputType: inputType, outputType: outputType),
                     inner: inner,

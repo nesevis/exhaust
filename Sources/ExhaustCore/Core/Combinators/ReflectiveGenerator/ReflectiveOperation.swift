@@ -253,7 +253,7 @@ package enum ReflectiveOperation {
 
 /// Describes the kind of transformation applied by a `.transform` operation.
 ///
-/// The three value-transform kinds form a guarantee hierarchy: `.map` with `backward: nil` is forward-only, `.map` with a backward is bidirectional by user contract (the framework cannot verify the pair inverts), and `.isomorph` is bidirectional by construction — only framework-authored pairs may use it.
+/// The three value-transform kinds form a guarantee hierarchy: `.map` with `backward: nil` is forward-only, `.map` with a backward is bidirectional by user contract (the framework cannot verify the pair inverts), and `.isomorph` is bidirectional by construction, restricted to framework-authored pairs.
 @usableFromInline
 package enum TransformKind {
     /// A pure function applied to the inner generator's output, with an optional user-supplied inverse.
@@ -272,7 +272,7 @@ package enum TransformKind {
 
     /// A guaranteed invertible mapping between the inner generator's output and the final value.
     ///
-    /// Both directions are required and the pair must genuinely invert: `backward(forward(x)) == x`. Because the framework cannot verify invertibility, this case is never constructed from user-supplied closures — only framework-authored pairs qualify (for example ``Gen/zip(_:isOpaque:)``'s `[Any]` ↔ tuple packaging). Interpreters may rely on the guarantee: reflection through `.isomorph` cannot fail for want of a backward direction.
+    /// Both directions are required and the pair must genuinely invert: `backward(forward(x)) == x`. Because the framework cannot verify invertibility, this case is never constructed from user-supplied closures. Only framework-authored pairs qualify (for example ``Gen/zip(_:isOpaque:)``'s `[Any]` ↔ tuple packaging). Interpreters may rely on the guarantee: reflection through `.isomorph` cannot fail for want of a backward direction.
     ///
     /// - Parameters:
     ///   - forward: The forward transform `(Input) -> Output`.

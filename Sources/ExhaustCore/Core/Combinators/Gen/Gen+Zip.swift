@@ -34,7 +34,7 @@ package extension Gen {
             continuation: { .pure($0) }
         )
 
-        // The `[Any]` ↔ tuple packaging is a framework-authored exact inverse pair, so it qualifies for `.isomorph` — one transform node instead of the contramap + map sandwich this method emitted previously.
+        // The `[Any]` ↔ tuple packaging is a framework-authored exact inverse pair, so it qualifies for `.isomorph`: one transform node replaces the contramap + map sandwich this method emitted previously.
         return Gen.liftF(.transform(
             kind: .isomorph(
                 forward: { anyValues in
@@ -47,7 +47,7 @@ package extension Gen {
                     return (repeat next((each T).self))
                 },
                 backward: { anyTuple in
-                    // Reflection probes pick branches against a shared final output, so a mismatched value is a normal rejection, not a programmer error — throw (as the previous contramap-based construction did) instead of trapping.
+                    // Reflection probes pick branches against a shared final output, so a mismatched value is a normal rejection rather than a programmer error. Throw, as the previous contramap-based construction did, instead of trapping.
                     guard let tuple = anyTuple as? (repeat each T) else {
                         throw ReflectionError.contramapWasWrongType
                     }

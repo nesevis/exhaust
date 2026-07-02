@@ -33,7 +33,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
 
         /// The structural descent depth: the number of frames excluding `.transform` adapters.
         ///
-        /// Depth gates subdivision, halves the derivative sample count per level, and offsets fitness-record fingerprints — all of which measure how deep the target site sits inside binds, zips, and sequences. A `.transform` frame is a value adapter at the same structural level, so counting it would shift those semantics for every `mapped` or zip layer in the generator.
+        /// Depth gates subdivision, halves the derivative sample count per level, and offsets fitness-record fingerprints, all of which measure how deep the target site sits inside binds, zips, and sequences. A `.transform` frame is a value adapter at the same structural level, so counting it would shift those semantics for every `mapped` or zip layer in the generator.
         public var depth: Int {
             frames.reduce(0) { count, frame in
                 if case .transform = frame { return count }
