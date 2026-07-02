@@ -3,16 +3,16 @@ import ExhaustCore
 // MARK: - Shared Helpers
 
 extension __ExhaustRuntime {
-    /// Determines whether a failing outcome represents a confirmed linearizability violation. Returns `nil` when the execution passed or when linearizability holds despite the oracle flag.
+    /// Determines whether a failing outcome represents a confirmed linearizability violation. Returns `nil` when the execution passed, timed out, or when linearizability holds despite the oracle flag.
     static func classifyFailure<Backend: PreemptiveBackend>(
         taggedCommands: [(ScheduleMarker, Backend.Spec.Command)],
         outcome: Preemptive.Outcome<Backend.Spec>,
         backend: Backend
     ) -> FailureEvidence<Backend.Spec>? {
         switch outcome {
-            case .passed:
+            case .passed, .timedOut:
                 return nil
-            case .timedOut, .failed:
+            case .failed:
                 return .init(outcome: outcome, witness: nil, failureDescription: nil)
             case let .oracleMismatch(laneResponses, concurrentSpec):
                 guard case let .notLinearizable(witness, failure) = backend.checkLinearizability(

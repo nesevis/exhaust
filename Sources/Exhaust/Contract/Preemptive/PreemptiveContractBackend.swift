@@ -40,13 +40,23 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         let repetitions = PreemptiveReduction.confirmationRepetitions(discoveryIterations: discoveryInvocations)
 
         nonisolated(unsafe) let capturedContext = context
+        nonisolated(unsafe) var reductionTimedOut = false
         let linearizableProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.ContractProbeVerdict<__ExhaustRuntime.FailureEvidence<Spec>> = { commands in
+            guard reductionTimedOut == false else {
+                return .pass
+            }
             capturedContext.invocationCounter.value += 1
             let partition = LanePartition(commands)
             for _ in 0 ..< repetitions {
+                let outcome = inner.execute(commands, partition: partition)
+                if case .timedOut = outcome {
+                    ExhaustLog.notice(category: .reducer, event: "preemptive_reduction_timeout")
+                    reductionTimedOut = true
+                    return .pass
+                }
                 if let evidence = __ExhaustRuntime.classifyFailure(
                     taggedCommands: commands,
-                    outcome: inner.execute(commands, partition: partition),
+                    outcome: outcome,
                     backend: inner
                 ) {
                     return .fail(evidence)
@@ -65,11 +75,6 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
 
         let reduced = twoPassResult.value.filter(\.0.isPrefix) + twoPassResult.value.filter { $0.0.isPrefix == false }
 
-        if let cached = twoPassResult.lastEvidence {
-            context.state.probeEvidence = cached
-            return ContractReduction(finalInput: reduced, stats: twoPassResult.stats, timedOut: false)
-        }
-
         let confirmed = __ExhaustRuntime.confirmRealFailure(
             backend: inner,
             input: reduced,
@@ -77,8 +82,10 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         )
         if let confirmed {
             context.state.probeEvidence = confirmed
+        } else if let cached = twoPassResult.lastEvidence {
+            context.state.probeEvidence = cached
         }
-        return ContractReduction(finalInput: reduced, stats: twoPassResult.stats, timedOut: false)
+        return ContractReduction(finalInput: reduced, stats: twoPassResult.stats, timedOut: reductionTimedOut)
     }
 
     // MARK: - Build Result
