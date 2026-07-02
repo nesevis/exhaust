@@ -107,15 +107,15 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
         let prefixOnConcurrent = runSequentially(taggedCommands, selectPrefix: true, on: concurrentSpec)
         if prefixOnConcurrent.succeeded == false {
-            return prefixOnConcurrent.timedOut ? .timedOut(concurrentSpec: nil) : .failed(concurrentSpec: nil)
+            return prefixOnConcurrent.timedOut ? .timedOut(concurrentSpec: concurrentSpec) : .failed(concurrentSpec: concurrentSpec)
         }
         let prefixOnSequential = runSequentially(taggedCommands, selectPrefix: true, on: sequentialSpec)
         if prefixOnSequential.succeeded == false {
-            return prefixOnSequential.timedOut ? .timedOut(concurrentSpec: nil) : .failed(concurrentSpec: nil)
+            return prefixOnSequential.timedOut ? .timedOut(concurrentSpec: concurrentSpec) : .failed(concurrentSpec: concurrentSpec)
         }
         let concurrentOnSequential = runSequentially(taggedCommands, selectPrefix: false, on: sequentialSpec)
         if concurrentOnSequential.succeeded == false {
-            return concurrentOnSequential.timedOut ? .timedOut(concurrentSpec: nil) : .failed(concurrentSpec: nil)
+            return concurrentOnSequential.timedOut ? .timedOut(concurrentSpec: concurrentSpec) : .failed(concurrentSpec: concurrentSpec)
         }
 
         var laneIDs: [UInt8] = []
@@ -187,7 +187,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         if let idleTimeoutMilliseconds {
             if group.wait(timeout: .now() + .milliseconds(idleTimeoutMilliseconds)) == .timedOut {
                 recordPreemptiveTimeout(laneStartedAt: laneStartedAt, submittedAt: submittedAt, idleTimeoutMs: idleTimeoutMilliseconds)
-                return .timedOut(concurrentSpec: nil)
+                return .timedOut(concurrentSpec: concurrentSpec)
             }
         } else {
             group.wait()
@@ -198,13 +198,12 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 if let idleTimeoutMilliseconds {
                     recordPreemptiveTimeout(laneStartedAt: laneStartedAt, submittedAt: submittedAt, idleTimeoutMs: idleTimeoutMilliseconds)
                 }
-                return .timedOut(concurrentSpec: nil)
+                return .timedOut(concurrentSpec: concurrentSpec)
             }
-            return .failed(concurrentSpec: nil)
+            return .failed(concurrentSpec: concurrentSpec)
         }
 
         nonisolated(unsafe) let invariantSpec = concurrentSpec
-        // Timeout → treat as failed (cannot confirm invariants held), and flag it so the failure is reported as a hang.
         guard let invariantsPassed = awaitOrTimeout("invariants", {
             do {
                 try await invariantSpec.checkInvariants()
@@ -213,11 +212,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 return false
             }
         }) else {
-            return .timedOut(concurrentSpec: nil)
+            return .timedOut(concurrentSpec: concurrentSpec)
         }
 
         if invariantsPassed == false {
-            return .failed(concurrentSpec: nil)
+            return .failed(concurrentSpec: concurrentSpec)
         }
 
         let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
@@ -231,7 +230,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 case .some(true):
                     return .passed
                 case .none:
-                    return .timedOut(concurrentSpec: nil)
+                    return .timedOut(concurrentSpec: concurrentSpec)
                 case .some(false):
                     return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
             }
