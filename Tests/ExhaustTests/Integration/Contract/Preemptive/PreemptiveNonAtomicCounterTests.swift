@@ -67,7 +67,7 @@ struct PreemptiveNonAtomicCounterTests {
                 .suppress(.issueReporting)
             )
         )
-        #expect(result.originalCommands?.count ?? Int.max < result.commands.count, "Reducer should shrink commands")
+        #expect(result.originalCommands?.count ?? Int.max > result.commands.count, "Reducer should shrink commands")
     }
 }
 
