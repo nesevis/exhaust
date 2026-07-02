@@ -87,12 +87,14 @@ extension __ExhaustRuntime {
             let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
             var tierIterations: UInt64 = 0
             var tierAttempts: UInt64 = 0
-            let maxAttempts = tier.budget * 10
+            // A replay must land on the exact row discovery found. The global row index depends on how many rows each tier contributes, and the fractional `tier.budget` split makes that budget-dependent — so a replay under a smaller budget would cut a tier short and shift the target row into a different combination. A replay only needs to *reach* `skipToRow` (earlier rows are skipped without running the property), so cap each tier at `skipToRow + 1` instead: every tier then runs to its covering-array completion up to the target, matching the discovery run's row numbering regardless of the replay budget.
+            let tierRowCap = skipToRow.map { UInt64($0) + 1 } ?? tier.budget
+            let maxAttempts = tierRowCap * 10
 
             let tierLengthRange = UInt64(tier.length) ... UInt64(tier.length)
             let tierGen = sequenceGenForLength?(tierLengthRange) ?? sequenceGen
 
-            while tierIterations < tier.budget, tierAttempts < maxAttempts, let row = generator.next() {
+            while tierIterations < tierRowCap, tierAttempts < maxAttempts, let row = generator.next() {
                 tierAttempts += 1
                 guard let tree = domain.buildTree(row: row, sequenceLengthRange: tierLengthRange) else {
                     continue

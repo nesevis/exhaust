@@ -300,9 +300,17 @@ extension __ExhaustRuntime {
                             sampling: replayConfig.budget.samplingBudget
                         )
                     }
-                case let .sampling(seed, iteration):
+                case let .sampling(seed, iteration?):
                     replayConfig.seed = seed
                     replayConfig.replayIteration = iteration
+                    if replayConfig.budget.samplingBudget < iteration + 1 {
+                        replayConfig.budget = .custom(
+                            coverage: UInt64(iteration + 1),
+                            sampling: replayConfig.budget.samplingBudget
+                        )
+                    }
+                case let .sampling(seed, nil):
+                    replayConfig.seed = seed
             }
 
             let (result, issues) = runMachine(replayConfig)
