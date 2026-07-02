@@ -10,7 +10,9 @@ protocol PreemptiveBackend<Spec>: Sendable {
     func makeIdentifySkips() -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>
 
     /// Runs one tagged command sequence concurrently using a pre-computed lane partition.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], partition: LanePartition<Spec.Command>) -> Preemptive.Outcome<Spec>
+    ///
+    /// The partition holds index buckets into `taggedCommands`; both must describe the same sequence.
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], partition: LanePartition) -> Preemptive.Outcome<Spec>
 
     /// Runs a command sequence sequentially on a fresh spec for the smoke phase, capturing the trace, whether it failed, whether it timed out, and the resulting oracle state for the report.
     ///

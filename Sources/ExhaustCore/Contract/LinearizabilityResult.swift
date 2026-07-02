@@ -1,6 +1,6 @@
 /// Linearizability verdict used by the preemptive pipeline and backend protocol.
 ///
-/// Mirrors ``LinearizabilityChecker/Result`` from the generic checker so the pipeline does not depend on the checker's type parameter, and resolves the checker's positional witness into a renderable ``ResponseWitness``.
+/// Mirrors ``LinearizabilityChecker/Result``, resolving the checker's positional witness into a renderable ``ResponseWitness`` addressed by marker value rather than lane array position.
 package enum LinearizabilityResult {
     case linearizable
     case notLinearizable(witness: ResponseWitness?, failureDescription: String?)
@@ -18,9 +18,9 @@ package struct ResponseWitness {
 }
 
 /// Resolves a core checker result into a ``LinearizabilityResult``, mapping the checker's positional witness back to the originating lane's ``ScheduleMarker/rawValue``.
-package func makeLinearizabilityResult<Command>(
-    _ coreResult: LinearizabilityChecker<Command>.Result,
-    laneObservations: [[ObservedResponse<Command>]]
+package func makeLinearizabilityResult(
+    _ coreResult: LinearizabilityChecker.Result,
+    laneObservations: [[ObservedResponse<some Any>]]
 ) -> LinearizabilityResult {
     switch coreResult {
         case .linearizable:

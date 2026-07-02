@@ -46,19 +46,13 @@ extension __ExhaustRuntime {
             done.value = true
         }
 
-        var idleStopwatch = Stopwatch()
-        while done.value == false {
-            guard let (_, job) = runQueue.dequeue(preferring: LaneID(index: 0)) else {
-                if runQueue.waitForJob(
-                    idleTimeoutMilliseconds: idleTimeoutMilliseconds,
-                    elapsedMilliseconds: idleStopwatch.elapsedMilliseconds
-                ) == false {
-                    return nil
-                }
-                continue
-            }
-            job.runSynchronously(on: executor.asUnownedTaskExecutor())
-            idleStopwatch = Stopwatch()
+        guard ScheduleDrain.drainUntilDone(
+            done,
+            runQueue: runQueue,
+            executor: executor,
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds
+        ) == .completed else {
+            return nil
         }
 
         return oracleResult.value

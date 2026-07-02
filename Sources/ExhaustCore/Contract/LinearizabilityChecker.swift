@@ -7,7 +7,9 @@
 /// On failure, the checker reports the ``Witness``: the concurrent command whose observed response no ordering reproduces. This pins a response-level violation to a single command, the case the final-state diff cannot show, because the end state may coincidentally match a valid ordering even though no ordering yields the observed return value. When divergence is only in the final state (the oracle), there is no command witness and ``Witness`` is `nil`; that case is already visible in the expected-versus-actual state diff.
 ///
 /// Both synchronous and asynchronous replay are supported. The interleaving search and response comparison are shared; only the replay-and-verify step differs.
-package struct LinearizabilityChecker<Command>: @unchecked Sendable {
+///
+/// The checker is deliberately non-generic: it stores per-lane ``ObservedOutcome`` arrays and addresses commands by `(laneIndex, commandIndex)` coordinates through the replay closure, so the exponential search compiles as concrete code under this module's whole-module optimization instead of an unspecialized generic. The commands themselves stay with the caller.
+package struct LinearizabilityChecker: @unchecked Sendable {
     /// The response from replaying a single command on a fresh sequential instance.
     package struct ReplayResponse {
         package let returnValue: Any?
@@ -19,7 +21,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         }
     }
 
-    /// The concurrent command whose observed response no valid ordering reproduces, addressed by its position in ``laneObservations`` (`laneIndex` is the outer index, `commandIndex` the per-lane offset). The caller maps these coordinates back to a renderable command.
+    /// The concurrent command whose observed response no valid ordering reproduces, addressed by its position in ``laneOutcomes`` (`laneIndex` is the outer index, `commandIndex` the per-lane offset). The caller maps these coordinates back to a renderable command.
     package struct Witness: Sendable {
         package let laneIndex: Int
         package let commandIndex: Int
@@ -31,13 +33,13 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         case notLinearizable(witness: Witness?, failureDescription: String?)
     }
 
-    package let laneObservations: [[ObservedResponse<Command>]]
+    package let laneOutcomes: [[ObservedOutcome]]
 
-    package init(laneObservations: [[ObservedResponse<Command>]]) {
-        self.laneObservations = laneObservations
+    package init(laneOutcomes: [[ObservedOutcome]]) {
+        self.laneOutcomes = laneOutcomes
     }
 
-    /// A command placed at a position in a candidate ordering, retaining its source coordinates so the witness can name it. Stored as an index pair rather than carrying a full ``Observation`` copy to keep the DFS working array (``SearchState/currentOrdering``) compact.
+    /// A command placed at a position in a candidate ordering, retaining its source coordinates so the witness can name it and the replay closure can locate the command. Stored as an index pair to keep the DFS working array (``SearchState/currentOrdering``) compact.
     private struct Placed {
         let laneIndex: Int
         let commandIndex: Int
@@ -51,21 +53,21 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     ///
     /// - Parameters:
     ///   - replayPrefix: Replays all prefix commands on a fresh sequential instance. Returns `false` if any prefix command fails. The closure captures its own prefix data.
-    ///   - replayCommand: Replays a single concurrent command on the sequential instance. Returns `nil` if the command threw a non-skip error.
+    ///   - replayCommand: Replays the concurrent command at the given `(laneIndex, commandIndex)` coordinates on the sequential instance. Returns `nil` if the command threw a non-skip error.
     ///   - checkOracle: Checks whether the sequential instance's final state matches the concurrent execution's final state.
     ///   - failureDescription: Produces a human-readable description of the expected state on failure.
     package func check(
         replayPrefix: () -> Bool,
-        replayCommand: (Command) -> ReplayResponse?,
+        replayCommand: (_ laneIndex: Int, _ commandIndex: Int) -> ReplayResponse?,
         checkOracle: () -> Bool,
         failureDescription: () -> String?
     ) -> Result {
-        let laneCount = laneObservations.count
+        let laneCount = laneOutcomes.count
         guard laneCount > 0 else {
             return .linearizable
         }
 
-        let totalCommands = laneObservations.reduce(0) { $0 + $1.count }
+        let totalCommands = laneOutcomes.reduce(0) { $0 + $1.count }
         var state = SearchState(laneCount: laneCount, totalCommands: totalCommands)
 
         let found = searchIncrementally(
@@ -100,12 +102,12 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         _ depth: Int,
         currentOrdering: [Placed],
         replayPrefix: () -> Bool,
-        replayCommand: (Command) -> ReplayResponse?
+        replayCommand: (Int, Int) -> ReplayResponse?
     ) -> Bool {
         guard replayPrefix() else { return false }
         for index in 0 ..< depth {
             let placed = currentOrdering[index]
-            guard replayCommand(laneObservations[placed.laneIndex][placed.commandIndex].command) != nil else { return false }
+            guard replayCommand(placed.laneIndex, placed.commandIndex) != nil else { return false }
         }
         return true
     }
@@ -114,7 +116,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         totalCommands: Int,
         state: inout SearchState,
         replayPrefix: () -> Bool,
-        replayCommand: (Command) -> ReplayResponse?,
+        replayCommand: (Int, Int) -> ReplayResponse?,
         checkOracle: () -> Bool
     ) -> Bool {
         let depth = state.currentOrdering.count
@@ -132,11 +134,11 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
         var childrenTried = 0
 
-        for laneIndex in 0 ..< laneObservations.count {
+        for laneIndex in 0 ..< laneOutcomes.count {
             let cursor = state.cursors[laneIndex]
-            guard cursor < laneObservations[laneIndex].count else { continue }
+            guard cursor < laneOutcomes[laneIndex].count else { continue }
 
-            let observation = laneObservations[laneIndex][cursor]
+            let observed = laneOutcomes[laneIndex][cursor]
 
             if childrenTried > 0 || depth == 0 {
                 guard replayToDepth(depth, currentOrdering: state.currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
@@ -147,17 +149,17 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
             let placed = Placed(laneIndex: laneIndex, commandIndex: cursor)
 
-            guard let replay = replayCommand(observation.command) else {
+            guard let replay = replayCommand(laneIndex, cursor) else {
                 updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
 
-            if stepMismatches(observed: observation, replay: replay) {
+            if stepMismatches(observed: observed, replay: replay) {
                 updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
 
-            if observation.outcome.isSkipped == false, responsesMatch(observed: observation, replay: replay) == false {
+            if observed.isSkipped == false, responsesMatch(observed: observed, replay: replay) == false {
                 updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
@@ -189,16 +191,16 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
     /// Async equivalent of ``check(replayPrefix:replayCommand:checkOracle:failureDescription:)``. Folds verification into the DFS with pruning on response mismatch.
     package func checkAsync(
         replayPrefix: () async -> Bool,
-        replayCommand: (Command) async -> ReplayResponse?,
+        replayCommand: (_ laneIndex: Int, _ commandIndex: Int) async -> ReplayResponse?,
         checkOracle: () async -> Bool,
         failureDescription: () -> String?
     ) async -> Result {
-        let laneCount = laneObservations.count
+        let laneCount = laneOutcomes.count
         guard laneCount > 0 else {
             return .linearizable
         }
 
-        let totalCommands = laneObservations.reduce(0) { $0 + $1.count }
+        let totalCommands = laneOutcomes.reduce(0) { $0 + $1.count }
         var state = SearchState(laneCount: laneCount, totalCommands: totalCommands)
 
         let found = await searchIncrementallyAsync(
@@ -218,12 +220,12 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         _ depth: Int,
         currentOrdering: [Placed],
         replayPrefix: () async -> Bool,
-        replayCommand: (Command) async -> ReplayResponse?
+        replayCommand: (Int, Int) async -> ReplayResponse?
     ) async -> Bool {
         guard await replayPrefix() else { return false }
         for index in 0 ..< depth {
             let placed = currentOrdering[index]
-            guard await replayCommand(laneObservations[placed.laneIndex][placed.commandIndex].command) != nil else { return false }
+            guard await replayCommand(placed.laneIndex, placed.commandIndex) != nil else { return false }
         }
         return true
     }
@@ -232,7 +234,7 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
         totalCommands: Int,
         state: inout SearchState,
         replayPrefix: () async -> Bool,
-        replayCommand: (Command) async -> ReplayResponse?,
+        replayCommand: (Int, Int) async -> ReplayResponse?,
         checkOracle: () async -> Bool
     ) async -> Bool {
         let depth = state.currentOrdering.count
@@ -250,11 +252,11 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
         var childrenTried = 0
 
-        for laneIndex in 0 ..< laneObservations.count {
+        for laneIndex in 0 ..< laneOutcomes.count {
             let cursor = state.cursors[laneIndex]
-            guard cursor < laneObservations[laneIndex].count else { continue }
+            guard cursor < laneOutcomes[laneIndex].count else { continue }
 
-            let observation = laneObservations[laneIndex][cursor]
+            let observed = laneOutcomes[laneIndex][cursor]
 
             if childrenTried > 0 || depth == 0 {
                 guard await replayToDepthAsync(depth, currentOrdering: state.currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
@@ -265,17 +267,17 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
             let placed = Placed(laneIndex: laneIndex, commandIndex: cursor)
 
-            guard let replay = await replayCommand(observation.command) else {
+            guard let replay = await replayCommand(laneIndex, cursor) else {
                 updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
 
-            if stepMismatches(observed: observation, replay: replay) {
+            if stepMismatches(observed: observed, replay: replay) {
                 updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
 
-            if observation.outcome.isSkipped == false, responsesMatch(observed: observation, replay: replay) == false {
+            if observed.isSkipped == false, responsesMatch(observed: observed, replay: replay) == false {
                 updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
             }
@@ -302,12 +304,12 @@ package struct LinearizabilityChecker<Command>: @unchecked Sendable {
 
     // MARK: - Shared Helpers
 
-    private func stepMismatches(observed: ObservedResponse<Command>, replay: ReplayResponse) -> Bool {
-        observed.outcome.isSkipped != replay.isSkipped
+    private func stepMismatches(observed: ObservedOutcome, replay: ReplayResponse) -> Bool {
+        observed.isSkipped != replay.isSkipped
     }
 
-    private func responsesMatch(observed: ObservedResponse<Command>, replay: ReplayResponse) -> Bool {
-        switch (observed.outcome.returnValue, replay.returnValue) {
+    private func responsesMatch(observed: ObservedOutcome, replay: ReplayResponse) -> Bool {
+        switch (observed.returnValue, replay.returnValue) {
             case (nil, nil):
                 return true
             case let (observedValue?, replayValue?):

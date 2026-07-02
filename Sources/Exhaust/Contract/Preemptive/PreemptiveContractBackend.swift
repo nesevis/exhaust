@@ -15,7 +15,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         _ candidate: [(ScheduleMarker, Spec.Command)],
         context _: ContractRunContext<Spec>
     ) -> ProbeOutcome {
-        let partition = LanePartition(candidate)
+        let partition = LanePartition(markers: candidate.map(\.0))
         let outcome = inner.execute(candidate, partition: partition)
         if case .timedOut = outcome {
             return .timeout
@@ -43,7 +43,7 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
         let linearizableProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.ContractProbeVerdict<__ExhaustRuntime.FailureEvidence<Spec>> = { commands in
             // One increment per candidate, covering all confirmation repetitions. This site cannot go through countedProbe because it calls inner.execute directly to carry evidence and repetitions.
             capturedContext.invocationCounter.value += 1
-            let partition = LanePartition(commands)
+            let partition = LanePartition(markers: commands.map(\.0))
             for _ in 0 ..< repetitions {
                 let outcome = inner.execute(commands, partition: partition)
                 if case .timedOut = outcome {

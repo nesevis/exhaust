@@ -100,33 +100,22 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
-    /// Prefix and sequential commands are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], partition _: LanePartition<Spec.Command>) -> Preemptive.Outcome<Spec> {
+    /// The three sequential phases (prefix on the concurrent spec, prefix and concurrent commands on the sequential reference) are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], partition: LanePartition) -> Preemptive.Outcome<Spec> {
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
-        let prefixOnConcurrent = runSequentially(taggedCommands, selectPrefix: true, on: concurrentSpec)
-        if prefixOnConcurrent.succeeded == false {
-            return prefixOnConcurrent.timedOut ? .timedOut(concurrentSpec: concurrentSpec) : .failed(concurrentSpec: concurrentSpec)
-        }
-        let prefixOnSequential = runSequentially(taggedCommands, selectPrefix: true, on: sequentialSpec)
-        if prefixOnSequential.succeeded == false {
-            return prefixOnSequential.timedOut ? .timedOut(concurrentSpec: concurrentSpec) : .failed(concurrentSpec: concurrentSpec)
-        }
-        let concurrentOnSequential = runSequentially(taggedCommands, selectPrefix: false, on: sequentialSpec)
-        if concurrentOnSequential.succeeded == false {
-            return concurrentOnSequential.timedOut ? .timedOut(concurrentSpec: concurrentSpec) : .failed(concurrentSpec: concurrentSpec)
+        let sequentialPhases = runSequentialPhases(
+            taggedCommands,
+            partition: partition,
+            concurrentSpec: concurrentSpec,
+            sequentialSpec: sequentialSpec
+        )
+        if sequentialPhases.succeeded == false {
+            return sequentialPhases.timedOut ? .timedOut(concurrentSpec: concurrentSpec) : .failed(concurrentSpec: concurrentSpec)
         }
 
-        var laneIDs: [UInt8] = []
-        for (marker, _) in taggedCommands where marker.isPrefix == false {
-            if laneIDs.contains(marker.rawValue) == false {
-                laneIDs.append(marker.rawValue)
-            }
-        }
-        laneIDs.sort()
-
-        let perLaneResponses = laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
+        let perLaneResponses = partition.laneIDs.map { _ in UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([]) }
         let commandFailed = SendableBox(false)
         let timedOut = SendableBox(false)
         let caughtException = SendableBox<NSException?>(nil)
@@ -134,7 +123,8 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         let completionOrdered = SendableBox<[ObservedResponse<Spec.Command>]>([])
         let group = DispatchGroup()
 
-        for (offset, laneID) in laneIDs.enumerated() {
+        for (offset, laneID) in partition.laneIDs.enumerated() {
+            let laneIndices = partition.laneBuckets[laneID] ?? []
             let responseBox = perLaneResponses[offset]
             group.enter()
             DispatchQueue.global().async {
@@ -143,10 +133,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                 let succeeded = exhaust_runCatchingObjCException({
                     let responses: [ObservedResponse<Spec.Command>]? = awaitOrTimeout("lane") {
                         var results: [ObservedResponse<Spec.Command>] = []
-                        for (marker, command) in taggedCommands where marker.rawValue == laneID {
+                        for laneIndex in laneIndices {
                             if commandFailed.value {
                                 break
                             }
+                            let command = taggedCommands[laneIndex].1
                             do {
                                 let response = try await spec.run(command)
                                 let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
@@ -207,7 +198,6 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         }
 
         let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
-        let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
         // Void-only, no-skip commands carry no response data, so linearizability reduces to final-state equivalence.
         let hasResponseInfo = completionOrdered.value.contains { $0.outcome.returnValue != nil || $0.outcome.isSkipped }
         if hasResponseInfo == false {
@@ -222,7 +212,8 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                     return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
             }
         }
-        // Try the realized completion order as a single linearization witness before the full interleaving search.
+        // Try the realized completion order as a single linearization witness before the full interleaving search. The prefix array is materialized only here — the passed and no-response-info paths never need it.
+        let prefixCommands = partition.prefixIndices.map { taggedCommands[$0].1 }
         if realizedOrderIsLinearizable(prefix: prefixCommands, realizedOrder: completionOrdered.value, concurrentSpec: concurrentSpec) {
             return .passed
         }
@@ -314,29 +305,41 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         return SequentialOutcome(succeeded: exception == nil && failed == false, timedOut: timedOut)
     }
 
-    /// Runs tagged commands sequentially on a spec, filtering by marker type to avoid intermediate array allocations.
-    @discardableResult
-    func runSequentially(
+    /// Runs the three sequential phases of a probe — the prefix on the concurrent spec, then the prefix and the concurrent commands on the sequential reference — under a single Task+semaphore bridge.
+    ///
+    /// One bridge replaces the three separate `blockingAwait` round-trips these phases used to pay per probe. On the drain-loop path (macOS 15 and later) the timeout semantics are unchanged, because the bound measures idle time since the last drained job and resets across phases. On the semaphore fallback, the bound is total wall-clock, so the three phases now share one window instead of getting one each; a slow-but-genuine sequential replay on an older platform trips the timeout (and counts as a pass) sooner than before.
+    private func runSequentialPhases(
         _ taggedCommands: [(ScheduleMarker, Spec.Command)],
-        selectPrefix: Bool,
-        on spec: Spec
+        partition: LanePartition,
+        concurrentSpec: Spec,
+        sequentialSpec: Spec
     ) -> SequentialOutcome {
         var exception: NSException?
         var failed = false
         var timedOut = false
-        nonisolated(unsafe) let spec = spec
+        nonisolated(unsafe) let concurrentSpec = concurrentSpec
+        nonisolated(unsafe) let sequentialSpec = sequentialSpec
         exhaust_runCatchingObjCException({
             let succeeded: Bool? = awaitOrTimeout("sequential") {
-                for (marker, command) in taggedCommands where marker.isPrefix == selectPrefix {
-                    do {
-                        try await spec.run(command)
-                    } catch is ContractSkip {
-                        continue
-                    } catch {
-                        return false
+                func run(_ indices: [Int], on spec: Spec) async -> Bool {
+                    for index in indices {
+                        do {
+                            try await spec.run(taggedCommands[index].1)
+                        } catch is ContractSkip {
+                            continue
+                        } catch {
+                            return false
+                        }
                     }
+                    return true
                 }
-                return true
+                guard await run(partition.prefixIndices, on: concurrentSpec) else {
+                    return false
+                }
+                guard await run(partition.prefixIndices, on: sequentialSpec) else {
+                    return false
+                }
+                return await run(partition.concurrentIndices, on: sequentialSpec)
             }
             if let succeeded {
                 failed = succeeded == false
@@ -356,7 +359,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         let prefixCommands: [Spec.Command] = taggedCommands.filter(\.0.isPrefix).map(\.1)
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
         nonisolated(unsafe) let unsafeSpec = concurrentSpec
-        let result: LinearizabilityChecker<Spec.Command>.Result = __ExhaustRuntime.blockingAwait {
+        let result: LinearizabilityChecker.Result = __ExhaustRuntime.blockingAwait {
             var replaySpec: Spec?
             return await checker.checkAsync(
                 replayPrefix: {
@@ -373,12 +376,12 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                     replaySpec = fresh
                     return true
                 },
-                replayCommand: { command in
+                replayCommand: { laneIndex, commandIndex in
                     guard let spec = replaySpec else {
                         return nil
                     }
                     do {
-                        let response = try await spec.run(command)
+                        let response = try await spec.run(laneResponses[laneIndex][commandIndex].command)
                         return .init(
                             returnValue: response.returnValue,
                             isSkipped: false

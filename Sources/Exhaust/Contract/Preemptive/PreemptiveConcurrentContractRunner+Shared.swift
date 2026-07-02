@@ -122,7 +122,7 @@ private func worstCaseInterleavings(totalCommands: Int, lanes: Int) -> Int {
 
 /// Whether a replayed command result matches an observed response, using the same rule as ``LinearizabilityChecker``: skip flags must agree, and non-skipped return values must be structurally equal. Shared by the synchronous and async preemptive witness checks so the cheap realized-order replay and the full interleaving search never disagree on what "the same response" means.
 func preemptiveResponseMatches(
-    observed: ObservedResponse<some Any>.Outcome,
+    observed: ObservedOutcome,
     replayValue: Any?,
     replaySkipped: Bool
 ) -> Bool {

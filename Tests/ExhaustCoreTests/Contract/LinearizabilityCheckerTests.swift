@@ -210,7 +210,7 @@ private final class Stack {
     }
 
     /// Runs a command and reports what it returned, so the checker can compare it against the observed value.
-    func replay(_ command: StackCommand) -> LinearizabilityChecker<StackCommand>.ReplayResponse {
+    func replay(_ command: StackCommand) -> LinearizabilityChecker.ReplayResponse {
         switch command {
             case let .push(value):
                 elements.append(value)
@@ -228,13 +228,13 @@ private final class Stack {
 
 private typealias Observation = ObservedResponse<StackCommand>
 
-/// Runs the checker over hand-built lane observations, replaying against a fresh stack and comparing the replayed final state to `finalState`.
+/// Runs the checker over hand-built lane observations, replaying against a fresh stack and comparing the replayed final state to `finalState`. The checker stores outcomes only, so the replay closure maps `(laneIndex, commandIndex)` back to the observed command.
 private func check(
     lanes: [[Observation]],
     prefix: [StackCommand] = [],
     finalState: [Int]
-) -> LinearizabilityChecker<StackCommand>.Result {
-    let checker = LinearizabilityChecker(laneObservations: lanes)
+) -> LinearizabilityChecker.Result {
+    let checker = LinearizabilityChecker(laneResponses: lanes)
     var replayStack: Stack?
     return checker.check(
         replayPrefix: {
@@ -245,8 +245,8 @@ private func check(
             replayStack = fresh
             return true
         },
-        replayCommand: { command in
-            replayStack?.replay(command)
+        replayCommand: { laneIndex, commandIndex in
+            replayStack?.replay(lanes[laneIndex][commandIndex].command)
         },
         checkOracle: {
             replayStack?.elements == finalState
@@ -257,7 +257,7 @@ private func check(
 
 /// Flattens a checker result into a plain pair for assertions: whether the run was linearizable, and the witness coordinates when it was not.
 private func verdict(
-    _ result: LinearizabilityChecker<StackCommand>.Result
+    _ result: LinearizabilityChecker.Result
 ) -> (linearizable: Bool, witness: (lane: Int, command: Int)?) {
     switch result {
         case .linearizable:
@@ -307,7 +307,7 @@ private final class Queue {
         }
     }
 
-    func replay(_ command: QueueCommand) -> LinearizabilityChecker<QueueCommand>.ReplayResponse {
+    func replay(_ command: QueueCommand) -> LinearizabilityChecker.ReplayResponse {
         switch command {
             case let .enqueue(value):
                 elements.append(value)
@@ -327,8 +327,8 @@ private func checkQueue(
     lanes: [[QueueObservation]],
     prefix: [QueueCommand] = [],
     finalState: [Int]
-) -> LinearizabilityChecker<QueueCommand>.Result {
-    let checker = LinearizabilityChecker(laneObservations: lanes)
+) -> LinearizabilityChecker.Result {
+    let checker = LinearizabilityChecker(laneResponses: lanes)
     var replayQueue: Queue?
     return checker.check(
         replayPrefix: {
@@ -339,8 +339,8 @@ private func checkQueue(
             replayQueue = fresh
             return true
         },
-        replayCommand: { command in
-            replayQueue?.replay(command)
+        replayCommand: { laneIndex, commandIndex in
+            replayQueue?.replay(lanes[laneIndex][commandIndex].command)
         },
         checkOracle: {
             replayQueue?.elements == finalState
@@ -350,7 +350,7 @@ private func checkQueue(
 }
 
 private func queueVerdict(
-    _ result: LinearizabilityChecker<QueueCommand>.Result
+    _ result: LinearizabilityChecker.Result
 ) -> (linearizable: Bool, witness: (lane: Int, command: Int)?) {
     switch result {
         case .linearizable:

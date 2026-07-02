@@ -1,3 +1,4 @@
+import ExhaustCore
 import Foundation
 
 extension __ExhaustRuntime {
@@ -58,23 +59,14 @@ extension __ExhaustRuntime {
             done.value = true
         }
 
-        // Reset the idle timer whenever a job is drained, so only a genuine stall — the work suspended onto another executor — trips the bound.
-        var idleStopwatch = Stopwatch()
-        while done.value == false {
-            if let (_, job) = runQueue.dequeue(preferring: lane) {
-                job.runSynchronously(on: executor.asUnownedTaskExecutor())
-                idleStopwatch = Stopwatch()
-            } else if let idleTimeoutMilliseconds {
-                // No job to run and the work has not completed — the continuation has suspended onto another executor and will not return to this lane. Bail rather than spin forever. The orphaned Task retains `box`/`done`, so its later resumption only writes to boxes we no longer read.
-                if runQueue.waitForJob(
-                    idleTimeoutMilliseconds: idleTimeoutMilliseconds,
-                    elapsedMilliseconds: idleStopwatch.elapsedMilliseconds
-                ) == false {
-                    return nil
-                }
-            } else {
-                runQueue.waitForJob()
-            }
+        // On timeout, the continuation has suspended onto another executor and will not return to this lane; bail rather than spin forever. The orphaned Task retains `box`/`done`, so its later resumption only writes to boxes we no longer read.
+        guard ScheduleDrain.drainUntilDone(
+            done,
+            runQueue: runQueue,
+            executor: executor,
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds
+        ) == .completed else {
+            return nil
         }
         return box.value
     }
