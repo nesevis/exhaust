@@ -14,7 +14,7 @@ protocol ProbeSessionState {
     var output: Any { get set }
     var graph: ChoiceGraph { get set }
     var gen: AnyGenerator { get }
-    var property: ReductionProperty { get }
+    var property: (Any) -> Bool { get }
     var rejectCache: Set<UInt64> { get set }
     var collectStats: Bool { get }
     var isInstrumented: Bool { get }

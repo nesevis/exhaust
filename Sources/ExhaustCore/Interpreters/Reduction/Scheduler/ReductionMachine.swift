@@ -96,7 +96,7 @@ package struct ReductionMachine: ProbeSessionState {
     var stats: ReductionStats = .init()
     var rejectCache: Set<UInt64> = []
     let gen: AnyGenerator
-    let property: ReductionProperty
+    let property: (Any) -> Bool
     let tuning: SchedulerTuning
     let enabledEncoders: Set<EncoderName>?
     let collectStats: Bool
@@ -169,9 +169,10 @@ package struct ReductionMachine: ProbeSessionState {
         initialOutput: Output,
         config: Interpreters.ReducerConfiguration,
         collectStats: Bool,
-        property: ReductionProperty
+        property: @escaping (Output) -> Bool
     ) {
         let erasedGen = gen.erase()
+        let wrappedProperty: (Any) -> Bool = { property($0 as! Output) } // swiftlint:disable:this force_cast
 
         var sequence = ChoiceSequence.flatten(initialTree)
         var tree = initialTree
@@ -195,7 +196,7 @@ package struct ReductionMachine: ProbeSessionState {
         output = initialOutput
         self.graph = graph
         self.gen = erasedGen
-        self.property = property
+        self.property = wrappedProperty
         tuning = config.tuning
         enabledEncoders = config.enabledEncoders
         self.collectStats = collectStats
