@@ -94,7 +94,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
             trace: traceResult.trace,
-            systemUnderTest: oracle?.systemUnderTest,
+            systemUnderTest: traceResult.systemUnderTest,
             seed: discoveryMethod.resultSeed(seed),
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod

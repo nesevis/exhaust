@@ -19,13 +19,15 @@ import ExhaustCore
 
 /// Outcome of draining a single tagged command sequence through the cooperative scheduler.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-struct ConcurrentExecutionResult {
+struct ConcurrentExecutionResult<SystemUnderTest> {
     /// Whether all invariants held throughout the interleaved execution.
     var passed: Bool
     /// The execution trace, populated only when `recordTrace` is true.
     var trace: [TraceStep]
     /// Whether execution stalled because no continuations arrived within the idle timeout.
     var timedOut: Bool = false
+    /// The SUT state after the concurrent execution, populated only when `recordTrace` is true.
+    var systemUnderTest: SystemUnderTest?
     /// The spec's failure description after the concurrent execution, populated only when `recordTrace` is true and the execution failed.
     var failureDescription: String?
 }
@@ -102,7 +104,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
     concurrencyLevel: Int,
     recordTrace: Bool,
     idleTimeoutMilliseconds: Int = 1000
-) -> ConcurrentExecutionResult {
+) -> ConcurrentExecutionResult<Spec.SystemUnderTest> {
     let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
     let laneCommands: [[Spec.Command]] = (0 ..< concurrencyLevel).map { laneIndex in
         let marker = ScheduleMarker(rawValue: UInt8(laneIndex + 1))
@@ -271,6 +273,7 @@ func drainSchedule<Spec: AsyncContractSpec>(
     return ConcurrentExecutionResult(
         passed: concurrentFailed == false,
         trace: finalTrace,
+        systemUnderTest: recordTrace ? spec.value.systemUnderTest : nil,
         failureDescription: concurrentFailed && recordTrace ? spec.value.failureDescription() : nil
     )
 }
