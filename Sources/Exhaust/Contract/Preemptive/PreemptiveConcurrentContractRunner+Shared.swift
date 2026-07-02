@@ -105,7 +105,7 @@ private func worstCaseInterleavings(totalCommands: Int, lanes: Int) -> Int {
     }
     var result = 1
     var remaining = totalCommands
-    for size in sizes where size > 1 {
+    for size in sizes {
         for pick in 1 ... size {
             let (product, overflow) = result.multipliedReportingOverflow(by: remaining)
             if overflow {

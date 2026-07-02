@@ -36,14 +36,12 @@ struct DateLargeDomainCoverageAnalysis {
         BudgetTier(name: "extensive (2000)", budget: 2000),
     ]
 
-    @Test("5 params: per-parameter coverage at each budget tier", arguments: tiers)
-    func fiveParamCoverage(tier: BudgetTier) throws {
+    @Test("3 params: per-parameter coverage at each budget tier", arguments: tiers)
+    func threeParamCoverage(tier: BudgetTier) throws {
         let dateGen = #gen(.date(
             between: Self.year2024, interval: .hours(1), timeZone: Self.usEastern
         ))
         let stringGen = #gen(.string(length: 1 ... 20))
-        let asciiGen = #gen(.asciiString(length: 1 ... 20))
-        let intGen = #gen(.int(in: 0 ... 10000))
         let gen = #gen(dateGen, dateGen, stringGen)
 
         let profile = try #require(analyzeLargeDomain(gen.gen, expand: false))
@@ -122,14 +120,12 @@ struct DateLargeDomainCoverageAnalysis {
         print()
     }
 
-    @Test("5 params: per-parameter coverage at each budget tier (rotated)", arguments: tiers)
-    func fiveParamCoverageRotated(tier: BudgetTier) throws {
+    @Test("3 params: per-parameter coverage at each budget tier (rotated)", arguments: tiers)
+    func threeParamCoverageRotated(tier: BudgetTier) throws {
         let dateGen = #gen(.date(
             between: Self.year2024, interval: .hours(1), timeZone: Self.usEastern
         ))
         let stringGen = #gen(.string(length: 1 ... 20))
-        let asciiGen = #gen(.asciiString(length: 1 ... 20))
-        let intGen = #gen(.int(in: 0 ... 10000))
         let gen = #gen(dateGen, dateGen, stringGen)
 
         let profile = try #require(analyzeLargeDomain(gen.gen, expand: false))
@@ -231,14 +227,12 @@ struct DateLargeDomainCoverageAnalysis {
         print()
     }
 
-    @Test("5 params: BCAG per-parameter coverage at each budget tier", arguments: tiers)
-    func fiveParamCoverageBCAG(tier: BudgetTier) throws {
+    @Test("3 params: BCAG per-parameter coverage at each budget tier", arguments: tiers)
+    func threeParamCoverageBCAG(tier: BudgetTier) throws {
         let dateGen = #gen(.date(
             between: Self.year2024, interval: .hours(1), timeZone: Self.usEastern
         ))
         let stringGen = #gen(.string(length: 1 ... 20))
-        let asciiGen = #gen(.asciiString(length: 1 ... 20))
-        let intGen = #gen(.int(in: 0 ... 10000))
         let gen = #gen(dateGen, dateGen, stringGen)
 
         let profile = try #require(analyzeLargeDomain(gen.gen, expand: false))

@@ -6,9 +6,9 @@ import Testing
 @Suite("Contract replay seed resolution", .serialized, .tags(.contract))
 struct ContractReplayTests {
     @Test("Iteration-targeted replay reproduces a sampling failure")
-    func iterationTargetedReplayReproducesSamplingFailure() throws {
+    func iterationTargetedReplayReproducesSamplingFailure() async throws {
         let initial = try #require(
-            #execute(
+            await #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
@@ -19,7 +19,7 @@ struct ContractReplayTests {
         #expect(replaySeed.contains("-"), "Sampling replay seed should include iteration suffix")
 
         let replayed = try #require(
-            #execute(
+            await #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
@@ -31,9 +31,9 @@ struct ContractReplayTests {
     }
 
     @Test("Coverage row replay reproduces an SCA coverage failure")
-    func coverageRowReplayReproducesSCACoverageFailure() throws {
+    func coverageRowReplayReproducesSCACoverageFailure() async throws {
         let initial = try #require(
-            #execute(
+            await #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(4),
                 .suppress(.all)
@@ -47,7 +47,7 @@ struct ContractReplayTests {
         #expect(replaySeed.hasPrefix("U"), "SCA replay seed should have U prefix")
 
         let replayed = try #require(
-            #execute(
+            await #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(4),
                 .replay(.encoded(replaySeed)),
@@ -61,9 +61,9 @@ struct ContractReplayTests {
     }
 
     @Test("Seed-only replay (no iteration) still finds failure within budget")
-    func seedOnlyReplayFindsFailureWithinBudget() throws {
+    func seedOnlyReplayFindsFailureWithinBudget() async throws {
         let initial = try #require(
-            #execute(
+            await #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
@@ -73,7 +73,7 @@ struct ContractReplayTests {
         let seed = try #require(initial.seed)
 
         let replayed = try #require(
-            #execute(
+            await #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
@@ -88,9 +88,9 @@ struct ContractReplayTests {
 @Suite("Preemptive oracle replay", .serialized, .tags(.contract))
 struct PreemptiveOracleReplayTests {
     @Test("Sequentially broken spec replays deterministically")
-    func sequentiallyBrokenSpecReplaysDeterministically() throws {
+    func sequentiallyBrokenSpecReplaysDeterministically() async throws {
         let initial = try #require(
-            #execute(
+            await #execute(
                 PreemptiveSequentiallyBrokenSpec.self,
                 .commandLimit(6),
                 .suppress(.all)
@@ -98,7 +98,7 @@ struct PreemptiveOracleReplayTests {
         )
         let replaySeed = try #require(initial.replaySeed)
         let replayed = try #require(
-            #execute(
+            await #execute(
                 PreemptiveSequentiallyBrokenSpec.self,
                 .commandLimit(6),
                 .replay(.encoded(replaySeed)),
@@ -109,9 +109,9 @@ struct PreemptiveOracleReplayTests {
     }
 
     @Test("Smoke catches sequentially broken spec before concurrent execution")
-    func smokeCatchesSequentiallyBrokenSpecBeforeConcurrentExecution() throws {
+    func smokeCatchesSequentiallyBrokenSpecBeforeConcurrentExecution() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 AlwaysThrowingPreemptiveSpec.self,
                 .commandLimit(2),
                 .budget(.custom(coverage: 0, sampling: 50)),
@@ -291,11 +291,6 @@ final class PreemptiveReplayableSpec {
         counter.value == other.value
     }
 
-    @Invariant
-    func matchesModel() -> Bool {
-        counter.value == expected
-    }
-
     @Command(weight: 3)
     func increment() throws {
         expected += 1
@@ -353,15 +348,12 @@ final class PreemptiveSequentiallyBrokenSpec {
         counter.value == other.value
     }
 
-    @Invariant
-    func matchesModel() -> Bool {
-        counter.value == expected
-    }
-
+    /// The bug is deterministic, so it survives on both sides of the oracle's concurrent-vs-sequential comparison and cannot be caught there. The `check` postcondition throws on divergence, which the sequential smoke phase catches before the concurrent phase runs.
     @Command(weight: 3)
     func increment() throws {
         expected += 1
         counter.increment()
+        try check(counter.value == expected, "counter must match the model")
     }
 
     @Command(weight: 2)
@@ -371,6 +363,7 @@ final class PreemptiveSequentiallyBrokenSpec {
         }
         expected -= 1
         counter.decrement()
+        try check(counter.value == expected, "counter must match the model")
     }
 
     func failureDescription() -> String? {
@@ -378,6 +371,7 @@ final class PreemptiveSequentiallyBrokenSpec {
     }
 }
 
+/// Deterministically broken: `decrement` is a no-op, so any decrement leaves the counter out of step with the model.
 final class BrokenDecrementCounter: @unchecked Sendable, CustomDebugStringConvertible {
     private var _value: Int = 0
 

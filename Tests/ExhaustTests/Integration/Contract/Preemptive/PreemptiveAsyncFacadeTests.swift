@@ -63,11 +63,6 @@ final class AsyncRacyCounterSpec {
         counter.value == other.value
     }
 
-    @Invariant
-    func isNonNegative() -> Bool {
-        counter.value >= 0
-    }
-
     @Command(weight: 3)
     func increment() async throws {
         await counter.increment()

@@ -7,9 +7,9 @@ import Testing
 @Suite("Buggy counter state machine tests", .serialized, .tags(.contract))
 struct BuggyCounterTests {
     @Test("Detects model/SUT divergence in buggy counter")
-    func detectsModelSUTDivergenceInBuggyCounter() throws {
+    func detectsModelSUTDivergenceInBuggyCounter() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(10),
                 .suppress(.issueReporting)
@@ -26,9 +26,9 @@ struct BuggyCounterTests {
     }
 
     @Test("Trace steps have correct structure")
-    func traceStepsHaveCorrectStructure() throws {
+    func traceStepsHaveCorrectStructure() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(10),
                 .suppress(.issueReporting)
@@ -54,9 +54,9 @@ struct BuggyCounterTests {
     }
 
     @Test("Sequential contract failure carries replay seed")
-    func sequentialContractFailureCarriesReplaySeed() throws {
+    func sequentialContractFailureCarriesReplaySeed() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(10),
                 .budget(.custom(coverage: 0, sampling: 200)),
@@ -68,9 +68,9 @@ struct BuggyCounterTests {
     }
 
     @Test("Sequential contract SCA coverage failure carries U-prefixed replay seed")
-    func sequentialContractSCACoverageFailureCarriesUPrefixedReplaySeed() throws {
+    func sequentialContractSCACoverageFailureCarriesUPrefixedReplaySeed() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(4),
                 .suppress(.issueReporting)
@@ -86,9 +86,9 @@ struct BuggyCounterTests {
 @Suite("SCA reduction coverage", .serialized, .tags(.contract))
 struct SCAReductionCoverageTests {
     @Test("SCA coverage exercises the reduction path")
-    func scaCoverageExercisesReductionPath() throws {
+    func scaCoverageExercisesReductionPath() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 PairwiseBugSpec.self,
                 .commandLimit(3),
                 .budget(.custom(coverage: 200, sampling: 0)),
@@ -101,10 +101,10 @@ struct SCAReductionCoverageTests {
     }
 
     @Test("SCA coverage report counts reduction property invocations, not materializations")
-    func scaCoverageReportCountsReductionPropertyInvocations() throws {
+    func scaCoverageReportCountsReductionPropertyInvocations() async throws {
         var capturedReport: ExhaustReport?
         let result = try #require(
-            #execute(
+            await #execute(
                 PairwiseBugSpec.self,
                 .commandLimit(3),
                 .budget(.custom(coverage: 200, sampling: 0)),
@@ -121,10 +121,10 @@ struct SCAReductionCoverageTests {
     }
 
     @Test("SCA coverage report includes non-zero reduction timing")
-    func scaCoverageReportIncludesReductionTiming() throws {
+    func scaCoverageReportIncludesReductionTiming() async throws {
         var capturedReport: ExhaustReport?
         let result = try #require(
-            #execute(
+            await #execute(
                 PairwiseBugSpec.self,
                 .commandLimit(3),
                 .budget(.custom(coverage: 200, sampling: 0)),

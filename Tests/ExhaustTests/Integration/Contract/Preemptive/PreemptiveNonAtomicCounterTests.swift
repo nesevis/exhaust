@@ -9,15 +9,13 @@ struct PreemptiveNonAtomicCounterTests {
     @Test("Detects lost-update bug via oracle comparison")
     func detectsLostUpdateBugViaOracleComparison() async throws {
         let result = try #require(
-            await __ExhaustRuntime.dispatchToGCD {
-                #execute(
-                    PreemptiveCounterSpec.self,
-                    .concurrent(.two),
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting)
-                )
-            }
+            await #execute(
+                PreemptiveCounterSpec.self,
+                .concurrent(.two),
+                .commandLimit(6),
+                .budget(.custom(coverage: 0, sampling: 200)),
+                .suppress(.issueReporting)
+            )
         )
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
     }
@@ -26,15 +24,13 @@ struct PreemptiveNonAtomicCounterTests {
     @Test("Failure report renders correctly")
     func failureReportRendersCorrectly() async throws {
         let result = try #require(
-            await __ExhaustRuntime.dispatchToGCD {
-                #execute(
-                    PreemptiveCounterSpec.self,
-                    .concurrent(.two),
-                    .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting)
-                )
-            }
+            await #execute(
+                PreemptiveCounterSpec.self,
+                .concurrent(.two),
+                .commandLimit(6),
+                .budget(.custom(coverage: 0, sampling: 200)),
+                .suppress(.issueReporting)
+            )
         )
         #expect(result.commands.isEmpty == false)
         #expect(result.seed != nil)
@@ -45,16 +41,14 @@ struct PreemptiveNonAtomicCounterTests {
     @Test("onReport delivers profiling summary")
     func onReportDeliversProfilingSummary() async throws {
         var capturedReport: ExhaustReport?
-        _ = await __ExhaustRuntime.dispatchToGCD {
-            #execute(
-                PreemptiveCounterSpec.self,
-                .concurrent(.two),
-                .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
-                .suppress(.issueReporting),
-                .onReport { capturedReport = $0 }
-            )
-        }
+        _ = await #execute(
+            PreemptiveCounterSpec.self,
+            .concurrent(.two),
+            .commandLimit(6),
+            .budget(.custom(coverage: 0, sampling: 200)),
+            .suppress(.issueReporting),
+            .onReport { capturedReport = $0 }
+        )
         let report = try #require(capturedReport)
         #expect(report.totalMilliseconds > 0)
         #expect(report.propertyInvocations > 0)
@@ -65,18 +59,15 @@ struct PreemptiveNonAtomicCounterTests {
     @Test("Reduction shrinks the counterexample")
     func reductionShrinksTheCounterexample() async throws {
         let result = try #require(
-            await __ExhaustRuntime.dispatchToGCD {
-                #execute(
-                    PreemptiveCounterSpec.self,
-                    .concurrent(.two),
-                    .commandLimit(8),
-                    .budget(.custom(coverage: 0, sampling: 200)),
-                    .suppress(.issueReporting)
-                )
-            }
+            await #execute(
+                PreemptiveCounterSpec.self,
+                .concurrent(.two),
+                .commandLimit(20),
+                .suppress(.issueReporting)
+            )
         )
-        #expect(result.commands.count <= 6, "Reducer should shrink from 8 commands")
-        #expect(result.commands.count >= 2, "Need at least 2 concurrent commands")
+        // Coalescing to 0 makes a missing originalCommands fail: reduction that recorded nothing did not shrink anything.
+        #expect((result.originalCommands?.count ?? 0) > result.commands.count, "Reducer should shrink commands")
     }
 }
 

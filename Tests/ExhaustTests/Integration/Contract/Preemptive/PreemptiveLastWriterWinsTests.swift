@@ -5,9 +5,9 @@ import Testing
 @Suite("Preemptive linearizability: false positive elimination", .serialized, .tags(.contract))
 struct PreemptiveLastWriterWinsTests {
     @Test("Correctly synchronized last-writer-wins does not produce false positives")
-    func correctlyImplementedLastWriterWinsPassesLinearizability() {
+    func correctlyImplementedLastWriterWinsPassesLinearizability() async {
         var report: ExhaustReport?
-        let result = #execute(
+        let result = await #execute(
             AtomicLastWriterWinsSpec.self,
             .concurrent(.two),
             .idleTimeoutMs(30000),
@@ -16,8 +16,8 @@ struct PreemptiveLastWriterWinsTests {
         )
         print("\(#function): \(report?.totalMilliseconds ?? -1)ms total")
         print("\(#function): \(result?.commands.count ?? -1) commands total")
-        print("\(#function): \(result?.trace) trace total")
-        print("\(#function): \(result?.originalCommands) trace total")
+        print("\(#function): \(String(describing: result?.trace)) trace total")
+        print("\(#function): \(String(describing: result?.originalCommands)) trace total")
         #expect(result?.status != .fail, "A correctly synchronized SUT should not produce failures. The fixed-ordering oracle would false-positive here; linearizability should accept both orderings.")
     }
 }

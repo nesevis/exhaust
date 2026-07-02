@@ -97,13 +97,13 @@ struct GenerationExamplesTests {
                 var iterator = ValueInterpreter(singleStringGen)
                 let generated = try iterator.next()!
                 if let recipe = try Interpreters.reflect(singleStringGen, with: generated) {
-                    if let replayed = try Interpreters.replay(singleStringGen, using: recipe) {
+                    if try Interpreters.replay(singleStringGen, using: recipe) != nil {
                         // Round-trip successful
                     } else {
-                        #expect(false, "Replay failed")
+                        Issue.record("Replay failed")
                     }
                 } else {
-                    #expect(false, "Reflection failed")
+                    Issue.record("Reflection failed")
                 }
             }
 
@@ -113,13 +113,13 @@ struct GenerationExamplesTests {
                 var iterator = ValueInterpreter(arrayGen)
                 let generated = try iterator.next()!
                 if let recipe = try Interpreters.reflect(arrayGen, with: generated) {
-                    if let replayed = try Interpreters.replay(arrayGen, using: recipe) {
+                    if try Interpreters.replay(arrayGen, using: recipe) != nil {
                         // Round-trip successful
                     } else {
-                        #expect(false, "Replay failed")
+                        Issue.record("Replay failed")
                     }
                 } else {
-                    #expect(false, "Reflection failed")
+                    Issue.record("Reflection failed")
                 }
             }
         }

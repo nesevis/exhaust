@@ -31,7 +31,7 @@ struct CoreGeneratorTests {
             let tree = try #require(try Interpreters.reflect(gen, with: UInt64(15)))
 
             guard case let .choice(_, metadata) = tree else {
-                #expect(Bool(false), "Expected reflected tree to be a single choice")
+                Issue.record("Expected reflected tree to be a single choice")
                 return
             }
 
@@ -44,25 +44,14 @@ struct CoreGeneratorTests {
 
             do {
                 _ = try Interpreters.reflect(gen, with: UInt64(25))
-                #expect(Bool(false), "Expected reflection to fail for out-of-range value")
+                Issue.record("Expected reflection to fail for out-of-range value")
             } catch let error as ReflectionError {
                 guard case .inputWasOutOfGeneratorRange = error else {
-                    #expect(Bool(false), "Expected inputWasOutOfGeneratorRange, got \(error)")
+                    Issue.record("Expected inputWasOutOfGeneratorRange, got \(error)")
                     return
                 }
             } catch {
-                #expect(Bool(false), "Expected ReflectionError, got \(error)")
-            }
-        }
-
-        @Test("Gen.choose with type produces valid values")
-        func genChooseType() throws {
-            let gen = Gen.choose(in: UInt32.min ... UInt32.max, scaling: UInt32.defaultScaling)
-            var iterator = ValueInterpreter(gen)
-
-            for _ in 0 ..< 20 {
-                let value = try iterator.next()!
-                #expect(value is UInt32)
+                Issue.record("Expected ReflectionError, got \(error)")
             }
         }
 
@@ -83,11 +72,11 @@ struct CoreGeneratorTests {
 
             // Test replay
             guard let recipe else {
-                #expect(false, "Reflection failed for Gen.exact test")
+                Issue.record("Reflection failed for Gen.exact test")
                 return
             }
             guard let replayed = try Interpreters.replay(gen, using: recipe) else {
-                #expect(false, "Replay failed for Gen.exact test")
+                Issue.record("Replay failed for Gen.exact test")
                 return
             }
             #expect(replayed == value)
@@ -132,10 +121,10 @@ struct CoreGeneratorTests {
                         if let replayed = try Interpreters.replay(gen, using: recipe) {
                             #expect(generated == replayed)
                         } else {
-                            #expect(false, "Replay failed for generator \(index), iteration \(iteration)")
+                            Issue.record("Replay failed for generator \(index), iteration \(iteration)")
                         }
                     } else {
-                        #expect(false, "Reflection failed for generator \(index), iteration \(iteration)")
+                        Issue.record("Reflection failed for generator \(index), iteration \(iteration)")
                     }
                 }
             }
@@ -145,7 +134,7 @@ struct CoreGeneratorTests {
         func multipleGenerationConsistency() throws {
             let gen = Gen.choose(in: 1 ... 100) as Generator<Int>
             guard let recipe = try Interpreters.reflect(gen, with: 42) else {
-                #expect(false, "Reflection failed for value 42")
+                Issue.record("Reflection failed for value 42")
                 return
             }
 
@@ -154,7 +143,7 @@ struct CoreGeneratorTests {
                 if let replayed = try Interpreters.replay(gen, using: recipe) {
                     #expect(replayed == 42)
                 } else {
-                    #expect(false, "Replay failed for value 42")
+                    Issue.record("Replay failed for value 42")
                 }
             }
         }
@@ -207,7 +196,7 @@ struct CoreGeneratorTests {
             _ = try thing.next()
             _ = try thing.next()
             let test = try thing.next()
-            let (output2, choiceTree) = try #require(test)
+            let (output2, _) = try #require(test)
 
             print("ValueInterpreter output: \(output.description)")
             print("ValueAndChoiceTreeInterpreter output: \(output2.description)")

@@ -5,9 +5,9 @@ import Testing
 @Suite("Preemptive concurrent contract: command-level failures", .serialized, .tags(.contract))
 struct PreemptiveCommandFailureTests {
     @Test("Sync checker detects postcondition failure in prefix command")
-    func syncCheckerDetectsPostconditionFailureInPrefixCommand() throws {
+    func syncCheckerDetectsPostconditionFailureInPrefixCommand() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 SyncPrefixFailingSpec.self,
                 .concurrent(.two),
                 .suppress(.all)
@@ -17,9 +17,9 @@ struct PreemptiveCommandFailureTests {
     }
 
     @Test("Sync checker detects postcondition failure in concurrent lane")
-    func syncCheckerDetectsPostconditionFailureInConcurrentLane() throws {
+    func syncCheckerDetectsPostconditionFailureInConcurrentLane() async throws {
         let result = try #require(
-            #execute(
+            await #execute(
                 SyncLaneFailingSpec.self,
                 .concurrent(.two),
                 .suppress(.all)

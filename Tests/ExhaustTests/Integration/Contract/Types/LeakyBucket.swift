@@ -1,5 +1,5 @@
 /// Deliberately unsynchronized — @unchecked Sendable is required because the cooperative scheduler accesses the instance from multiple Tasks via SendableBox.
-final class LeakyBucket: @unchecked Sendable {
+final class LeakyBucket: @unchecked Sendable, CustomStringConvertible {
     private var _tokens: Int = 0
     private let _capacity: Int
 
@@ -21,5 +21,9 @@ final class LeakyBucket: @unchecked Sendable {
         guard current > 0 else { return }
         await Task.yield()
         _tokens = current - 1
+    }
+
+    var description: String {
+        "tokens: \(_tokens)\ncapacity: \(_capacity)"
     }
 }

@@ -13,11 +13,11 @@
         func executeContractWithCommandLimit() {
             assertMacro {
                 """
-                #execute(BoundedQueueContract.self, .commandLimit(20))
+                await #execute(BoundedQueueContract.self, .commandLimit(20))
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__runContractDispatch(
+                await __ExhaustRuntime.__runContractDispatch(
                     BoundedQueueContract.self,
                     settings: [.commandLimit(20)],
                     fileID: #fileID,
@@ -33,11 +33,11 @@
         func executeContractWithSettings() {
             assertMacro {
                 """
-                #execute(Spec.self, .commandLimit(20), .budget(.thorough))
+                await #execute(Spec.self, .commandLimit(20), .budget(.thorough))
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__runContractDispatch(
+                await __ExhaustRuntime.__runContractDispatch(
                     Spec.self,
                     settings: [.commandLimit(20), .budget(.thorough)],
                     fileID: #fileID,
@@ -53,11 +53,11 @@
         func executeContractWithNoSettings() {
             assertMacro {
                 """
-                #execute(Spec.self)
+                await #execute(Spec.self)
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__runContractDispatch(
+                await __ExhaustRuntime.__runContractDispatch(
                     Spec.self,
                     settings: [],
                     fileID: #fileID,
@@ -73,13 +73,13 @@
         func missingSpec() {
             assertMacro {
                 """
-                #execute()
+                await #execute()
                 """
             } diagnostics: {
                 """
-                #execute()
-                ┬─────────
-                ╰─ 🛑 #execute requires a spec type argument
+                await #execute()
+                      ┬─────────
+                      ╰─ 🛑 #execute requires a spec type argument
                 """
             }
         }
@@ -94,11 +94,11 @@
         func executeAsyncContractWithNoSettings() {
             assertMacro {
                 """
-                #execute(AsyncSpec.self)
+                await #execute(AsyncSpec.self)
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__runContractDispatchAsync(
+                await __ExhaustRuntime.__runContractDispatchAsync(
                     AsyncSpec.self,
                     settings: [],
                     fileID: #fileID,
@@ -114,11 +114,11 @@
         func executeAsyncContractWithSettings() {
             assertMacro {
                 """
-                #execute(AsyncSpec.self, .commandLimit(10), .concurrent(.three))
+                await #execute(AsyncSpec.self, .commandLimit(10), .concurrent(.three))
                 """
             } expansion: {
                 """
-                __ExhaustRuntime.__runContractDispatchAsync(
+                await __ExhaustRuntime.__runContractDispatchAsync(
                     AsyncSpec.self,
                     settings: [.commandLimit(10), .concurrent(.three)],
                     fileID: #fileID,

@@ -458,8 +458,8 @@ Everything above this point has been about pure functions — feed in an input, 
 Exhaust has a separate facility for this kind of testing, built around a `@Contract` macro. You declare a `final class` (or an `actor`) that describes the system under test (`@SystemUnderTest`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two. Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks. The shape looks like this:
 
 ```swift
-@Test func contractHolds() {
-    #execute(MyContract.self)
+@Test func contractHolds() async {
+    await #execute(MyContract.self)
 }
 
 @Contract(.sequential)

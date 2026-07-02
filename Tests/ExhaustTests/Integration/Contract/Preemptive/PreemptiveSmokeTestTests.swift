@@ -7,30 +7,26 @@ import Testing
 struct PreemptiveSmokeTestTests {
     @Test("Smoke test catches sequential bug before concurrent phase")
     func smokeTestCatchesSequentialBugBeforeConcurrentPhase() async {
-        let result = await __ExhaustRuntime.dispatchToGCD {
-            #execute(
-                SequentiallyBrokenSpec.self,
-                .concurrent(.two),
-                .commandLimit(10),
-                .budget(.custom(coverage: 0, sampling: 0)),
-                .suppress(.issueReporting)
-            )
-        }
+        let result = await #execute(
+            SequentiallyBrokenSpec.self,
+            .concurrent(.two),
+            .commandLimit(10),
+            .budget(.custom(coverage: 0, sampling: 0)),
+            .suppress(.issueReporting)
+        )
         #expect(result?.commands.isEmpty == false)
     }
 
     @Test("Smoke test failure carries specific replay seed")
     func smokeTestFailureCarriesSpecificReplaySeed() async throws {
         let result = try #require(
-            await __ExhaustRuntime.dispatchToGCD {
-                #execute(
-                    SequentiallyBrokenSpec.self,
-                    .concurrent(.two),
-                    .commandLimit(10),
-                    .budget(.custom(coverage: 0, sampling: 0)),
-                    .suppress(.issueReporting)
-                )
-            }
+            await #execute(
+                SequentiallyBrokenSpec.self,
+                .concurrent(.two),
+                .commandLimit(10),
+                .budget(.custom(coverage: 0, sampling: 0)),
+                .suppress(.issueReporting)
+            )
         )
         let replaySeed = try #require(result.replaySeed)
         #expect(replaySeed == "0-1")

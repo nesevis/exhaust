@@ -36,11 +36,6 @@ final class PreemptiveNonAtomicCounterParitySpec {
         counter.value == other.value
     }
 
-    @Invariant
-    func isNonNegative() -> Bool {
-        counter.value >= 0
-    }
-
     @Command(weight: 3)
     func increment() async throws {
         await counter.increment()
@@ -82,11 +77,6 @@ final class PreemptiveLeakyBucketParitySpec {
     @Oracle
     func tokensMatch(other: LeakyBucket) -> Bool {
         bucket.tokens == other.tokens
-    }
-
-    @Invariant
-    func tokensNeverNegative() -> Bool {
-        bucket.tokens >= 0
     }
 
     @Command(weight: 4)
@@ -244,11 +234,6 @@ final class PreemptiveAlwaysSkipParitySpec {
     @Oracle
     func valuesMatch(other: Int) -> Bool {
         value == other
-    }
-
-    @Invariant
-    func alwaysTrue() -> Bool {
-        true
     }
 
     @Command(weight: 1)

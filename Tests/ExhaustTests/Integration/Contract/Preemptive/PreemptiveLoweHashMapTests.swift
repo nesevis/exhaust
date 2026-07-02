@@ -14,13 +14,13 @@ import Testing
 @Suite("Preemptive linearizability: Lowe hash map five-operation race", .serialized, .tags(.contract))
 struct PreemptiveLoweHashMapTests {
     @Test("Detects ghost entry from assignment-instead-of-CAS delete (benchmark)", .disabled("Benchmark"))
-    func detectsGhostEntryFromBuggyDelete() {
+    func detectsGhostEntryFromBuggyDelete() async {
         var commandCount = 0
         var iterations: Double = 0
         var totalRuntime = 0.0
         for seed in UInt64(1337) ..< 1347 {
             var report: ExhaustReport?
-            let result = #execute(
+            let result = await #execute(
                 LoweHashMapSpec.self,
                 .concurrent(.two),
                 .replay(.numeric(seed)),
@@ -39,8 +39,8 @@ struct PreemptiveLoweHashMapTests {
     }
 
     @Test("Detects ghost entry from assignment-instead-of-CAS delete")
-    func detectsGhostEntryFromBuggyDeleteWithSeed() {
-        let result = #execute(
+    func detectsGhostEntryFromBuggyDeleteWithSeed() async {
+        let result = await #execute(
             LoweHashMapSpec.self,
             .concurrent(.two),
             .commandLimit(20),

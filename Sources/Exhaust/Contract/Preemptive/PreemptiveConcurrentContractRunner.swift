@@ -22,7 +22,7 @@ public extension __ExhaustRuntime {
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
-    ) -> ContractResult<Spec>? {
+    ) async -> ContractResult<Spec>? {
         let parsed = ResolvedConcurrentConfig.parse(settings)
         if let invalidSeed = parsed.invalidReplaySeed {
             reportIssue(
@@ -43,7 +43,8 @@ public extension __ExhaustRuntime {
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
         let timedOutProbeCount = UnsafeSendableBox(0)
-        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = DispatchQueue.global().sync {
+        // Gate + offload: acquire a lane reservation, then run the (synchronous) machine on a GCD worker. The gate bounds how many preemptive runs execute at once so their lanes are not starved of threads under `--parallel`; the GCD hop frees the cooperative thread. Reporting is deferred to the async return context where Swift Testing's task-locals are available.
+        let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await dispatchToGCD(reserving: LaneReservation.threads(config.concurrencyLevel)) {
             ExhaustLog.withConfiguration(config.logConfiguration) {
                 runPreemptiveMachine(
                     innerBackend: innerBackend,
@@ -515,27 +516,12 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
         return (trace, false, false, spec.systemUnderTest, nil)
     }
 
-    /// Replays the reduced commands sequentially on a fresh spec to capture the oracle SUT state. Returns nil ``ContractResult/systemUnderTest`` when the sequential replay itself fails, because the partial state would mislead debugging.
-    func buildResult(
-        reduced: [(ScheduleMarker, Spec.Command)],
-        originalCommands: [Spec.Command]?,
-        seed: UInt64?,
-        replaySeed: String?,
-        discoveryMethod: ContractDiscoveryMethod
-    ) -> (result: ContractResult<Spec>, failureDescription: String?) {
+    /// Replays the reduced commands sequentially on a fresh spec and returns its failure description, the expected race-free state for the report. Returns nil when the replay itself fails, because the partial state would mislead debugging.
+    func sequentialReplayDescription(of reduced: [(ScheduleMarker, Spec.Command)]) -> String? {
         let oracleSpec = Spec()
-        let commands = reduced.map(\.1)
-        let replaySucceeded = runAllCommandsCatchingObjC(commands, on: oracleSpec)
-        let result = ContractResult<Spec>(
-            status: .fail,
-            commands: commands,
-            originalCommands: originalCommands,
-            trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),
-            systemUnderTest: replaySucceeded ? oracleSpec.systemUnderTest : nil,
-            seed: seed,
-            replaySeed: replaySeed,
-            discoveryMethod: discoveryMethod
-        )
-        return (result, replaySucceeded ? oracleSpec.failureDescription() : nil)
+        guard runAllCommandsCatchingObjC(reduced.map(\.1), on: oracleSpec) else {
+            return nil
+        }
+        return oracleSpec.failureDescription()
     }
 }

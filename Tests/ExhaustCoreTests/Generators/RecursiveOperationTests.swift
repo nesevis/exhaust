@@ -65,7 +65,7 @@ struct RecursiveOperationTests {
         let gen = BST.arbitraryRecursive()
         var iterator = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42, maxRuns: 10)
 
-        while let (value, tree) = try iterator.next() {
+        while let (value, _) = try iterator.next() {
             // Reflect the generated value back
             let reflectedTree = try Interpreters.reflect(gen, with: value)
             #expect(reflectedTree != nil, "Reflection should succeed for generated value: \(value)")

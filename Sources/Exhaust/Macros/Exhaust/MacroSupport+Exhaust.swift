@@ -599,7 +599,7 @@ public extension __ExhaustRuntime {
         #if canImport(Testing)
             let traitConfig = ExhaustTraitConfiguration.current
         #endif
-        return await dispatchToGCD {
+        return await dispatchToGCD(reserving: LaneReservation.single) {
             let run = {
                 __exhaust(
                     refGen,
@@ -656,7 +656,7 @@ public extension __ExhaustRuntime {
             nonisolated(unsafe) var capturedReplaySeed: String?
             nonisolated(unsafe) var capturedRenderedFailure: String?
 
-            await dispatchToGCD {
+            await dispatchToGCD(reserving: LaneReservation.single) {
                 // withExpectedIssue cannot be used inside dispatchToGCD because Test.current is nil on the GCD thread, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
                 #if canImport(Testing)
                     ExhaustTraitConfiguration.$current.withValue(traitConfig) {

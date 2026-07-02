@@ -212,8 +212,10 @@ struct UniquenessConstraintTests {
         let gen = uniqueGen(Gen.choose(from: [true, false]))
 
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 100)
+        var seen = Set<Bool>()
         while let value = try iterator.next() {
-            #expect(true)
+            let (inserted, _) = seen.insert(value)
+            #expect(inserted, "Every yielded value should be unique")
         }
     }
 }

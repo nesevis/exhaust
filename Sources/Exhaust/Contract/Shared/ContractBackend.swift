@@ -41,9 +41,31 @@ protocol ContractBackend<Spec> {
     ) -> (result: ContractResult<Spec>, issueMessage: String)
 }
 
+extension ContractBackend {
+    /// Probes a candidate after charging one property invocation to the run's counter.
+    ///
+    /// Every probe must be counted exactly once. Attribution to the coverage and sampling report buckets happens by diffing the counter around each phase, so no per-invocation marking is needed. Funnel probe calls through here rather than incrementing at the call site, so the accounting invariant lives in one place.
+    func countedProbe(
+        _ candidate: [(ScheduleMarker, Spec.Command)],
+        context: ContractRunContext<Spec>
+    ) -> ProbeOutcome {
+        context.invocationCounter.value += 1
+        return probe(candidate, context: context)
+    }
+}
+
 /// Carries the reduced command sequence and reduction statistics from a backend's ``ContractBackend/reduce(taggedCommands:tree:context:)`` call.
 struct ContractReduction<Command> {
     let finalInput: [(ScheduleMarker, Command)]
     let stats: ReductionStats?
     let timedOut: Bool
+}
+
+extension Array {
+    /// Returns a copy with all prefix-marked commands before lane commands, preserving the relative order within each group.
+    ///
+    /// Reduction can place prefix markers after lane markers in the array. Without normalization, the oracle replays commands in an order the concurrent execution never used, and the reported command list disagrees with the trace.
+    func prefixFirstOrder<Command>() -> Self where Element == (ScheduleMarker, Command) {
+        filter(\.0.isPrefix) + filter { $0.0.isPrefix == false }
+    }
 }

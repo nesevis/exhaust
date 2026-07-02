@@ -33,21 +33,14 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
     ) -> ContractReduction<Spec.Command> {
         nonisolated(unsafe) let unsafeSelf = self
         nonisolated(unsafe) let capturedContext = context
-        // A probe that times out during reduction is not a counterexample. Abort further reduction and keep the original failure as-is rather than reducing toward a hang.
-        nonisolated(unsafe) var reductionTimedOut = false
         let oracleProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.ContractProbeVerdict<Void> = { commands in
-            guard reductionTimedOut == false else {
-                return .pass
-            }
-            capturedContext.invocationCounter.value += 1
-            let result = unsafeSelf.probe(commands, context: capturedContext)
-            switch result {
+            switch unsafeSelf.countedProbe(commands, context: capturedContext) {
                 case .pass:
                     return .pass
                 case .timeout:
+                    // A probe that times out during reduction is not a counterexample. Abort further reduction and keep the failure as-is rather than reducing toward a hang.
                     ExhaustLog.notice(category: .reducer, event: "cooperative_reduction_timeout")
-                    reductionTimedOut = true
-                    return .pass
+                    return .abort
                 case .fail:
                     return .fail(())
             }
@@ -60,7 +53,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             deadlineNanoseconds: context.reductionDeadlineNanoseconds,
             property: oracleProperty
         )
-        return ContractReduction(finalInput: result.value, stats: result.stats, timedOut: reductionTimedOut)
+        return ContractReduction(finalInput: result.value, stats: result.stats, timedOut: result.aborted)
     }
 
     func buildResult(
@@ -71,6 +64,8 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
         discoveryMethod: ContractDiscoveryMethod,
         context: ContractRunContext<Spec>
     ) -> (result: ContractResult<Spec>, issueMessage: String) {
+        let reduced = reduced.prefixFirstOrder()
+
         let traceResult = drainSchedule(
             taggedCommands: reduced,
             specInit: specInit,
@@ -92,7 +87,7 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
             trace: traceResult.trace,
-            systemUnderTest: oracle?.systemUnderTest,
+            systemUnderTest: traceResult.systemUnderTest,
             seed: discoveryMethod.resultSeed(seed),
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod
@@ -108,7 +103,10 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             let indented = description.replacingOccurrences(of: "\n", with: "\n  ")
             return "Expected result (from sequential replay):\n  \(indented)"
         }
-        context.state.failureContext.failureDescription = oracle?.failureDescription
+        context.state.failureContext.failureDescription = traceResult.failureDescription.map {
+            let indented = $0.replacingOccurrences(of: "\n", with: "\n  ")
+            return "Actual state (from concurrent execution):\n  \(indented)"
+        }
 
         let issueMessage: String = context.config.suppressIssueReporting
             ? ""

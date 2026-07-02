@@ -25,8 +25,8 @@ The rest of this guide walks through each case.
 A contract has three required parts: a system under test, commands that operate on it, and invariants that must always hold. Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two.
 
 ```swift
-@Test func stackBehavesCorrectly() {
-    #execute(StackContract.self, .commandLimit(15))
+@Test func stackBehavesCorrectly() async {
+    await #execute(StackContract.self, .commandLimit(15))
 }
 
 @Contract(.sequential)
@@ -116,8 +116,8 @@ The distinction between `@Invariant` and `check`: invariants run after every com
 ## Running the test
 
 ```swift
-@Test func queueMaintainsFIFOOrder() {
-    #execute(CircularQueueContract.self, .commandLimit(10), .budget(.thorough))
+@Test func queueMaintainsFIFOOrder() async {
+    await #execute(CircularQueueContract.self, .commandLimit(10), .budget(.thorough))
 }
 ```
 
@@ -343,8 +343,8 @@ The oracle is always required for `.threads` contracts and always written by han
 Running the test:
 
 ```swift
-@Test func counterIsThreadSafe() {
-    #execute(
+@Test func counterIsThreadSafe() async {
+    await #execute(
         RacyCounterContract.self,
         .concurrent(.two),
         .commandLimit(6),

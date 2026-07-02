@@ -106,9 +106,9 @@ struct AsyncContractTests {
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("sync contract replay reproduces failure deterministically")
-    func syncContractReplayReproducesFailureDeterministically() {
+    func syncContractReplayReproducesFailureDeterministically() async {
         // Use a fixed seed that produces a failure
-        let result1 = #execute(
+        let result1 = await #execute(
             BuggyCounterSpec.self,
             .commandLimit(20),
             .replay(42),
