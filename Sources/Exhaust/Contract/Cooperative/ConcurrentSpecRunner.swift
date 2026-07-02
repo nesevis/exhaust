@@ -26,6 +26,8 @@ struct ConcurrentExecutionResult {
     var trace: [TraceStep]
     /// Whether execution stalled because no continuations arrived within the idle timeout.
     var timedOut: Bool = false
+    /// The spec's failure description after the concurrent execution, populated only when `recordTrace` is true and the execution failed.
+    var failureDescription: String?
 }
 
 /// Outcome of running a single command and checking its invariants inside the drain loop.
@@ -265,5 +267,10 @@ func drainSchedule<Spec: AsyncContractSpec>(
     let finalTrace: [TraceStep] = recordTrace
         ? __ExhaustRuntime.buildTrace(trace.value)
         : []
-    return ConcurrentExecutionResult(passed: failed.value == nil, trace: finalTrace)
+    let concurrentFailed = failed.value != nil
+    return ConcurrentExecutionResult(
+        passed: concurrentFailed == false,
+        trace: finalTrace,
+        failureDescription: concurrentFailed && recordTrace ? spec.value.failureDescription() : nil
+    )
 }

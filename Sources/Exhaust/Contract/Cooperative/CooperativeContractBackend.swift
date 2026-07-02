@@ -110,7 +110,10 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
             let indented = description.replacingOccurrences(of: "\n", with: "\n  ")
             return "Expected result (from sequential replay):\n  \(indented)"
         }
-        context.state.failureContext.failureDescription = oracle?.failureDescription
+        context.state.failureContext.failureDescription = traceResult.failureDescription.map {
+            let indented = $0.replacingOccurrences(of: "\n", with: "\n  ")
+            return "Actual state (from concurrent execution):\n  \(indented)"
+        }
 
         let issueMessage: String = context.config.suppressIssueReporting
             ? ""
