@@ -152,18 +152,26 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column
     ) async -> ContractResult<Spec>? {
+        let parsed = ResolvedConcurrentConfig.parse(settings)
+        guard parsed.invalidReplaySeed == nil else {
+            reportIssue("Invalid replay seed", fileID: fileID, filePath: filePath, line: line, column: column)
+            return nil
+        }
+        var config = parsed.config
+        config.concurrencyLevel = 1
+
         var regressionSeeds: [String] = []
         #if canImport(Testing)
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
-        let logConfiguration = ResolvedConcurrentConfig.logConfiguration(from: settings)
+        let logConfiguration = config.logConfiguration
 
         let (result, deferredIssues): (ContractResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.single) {
             ExhaustLog.withConfiguration(logConfiguration) {
                 runAsyncSequentialPipeline(
                     specType,
-                    settings: settings,
+                    config: config,
                     regressionSeeds: regressionSeeds,
                     fileID: fileID,
                     filePath: filePath,
@@ -182,7 +190,7 @@ public extension __ExhaustRuntime {
 private extension __ExhaustRuntime {
     static func runAsyncSequentialPipeline<Spec: AsyncContractSpec>(
         _: Spec.Type,
-        settings: [ContractSettings],
+        config: ResolvedConcurrentConfig,
         regressionSeeds: [String] = [],
         fileID: StaticString,
         filePath: StaticString,
@@ -190,14 +198,6 @@ private extension __ExhaustRuntime {
         column: UInt
     ) -> (result: ContractResult<Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
-
-        let parsed = ResolvedConcurrentConfig.parse(settings)
-        guard parsed.invalidReplaySeed == nil else {
-            deferredIssues.append("Invalid replay seed")
-            return (nil, deferredIssues)
-        }
-        var config = parsed.config
-        config.concurrencyLevel = 1
 
         let commandGen = Spec.commandGenerator
         let commandLimit = config.commandLimit ?? estimateCommandLimit(
