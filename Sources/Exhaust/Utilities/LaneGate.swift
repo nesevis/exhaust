@@ -6,9 +6,9 @@ import Foundation
 ///
 /// It is a budget, not a provider: GCD still hands out the actual threads. Admission is the whole effect. See `gcd-lane-admission-design.md` for the reservation accounting (`.threads` reserves `N+1`, see ``LaneReservation``) and the call-site trace.
 ///
-/// - Important: The gate is **async-only**: it exposes a suspending ``acquire(_:)`` and never blocks a caller's thread. A blocking acquire was tried and removed — a synchronous `@Test` runs on the cooperative pool, so blocking it starved the pool that admitted runs need to service their `blockingAwait` continuations, deadlocking the suite. Sync `.threads` contracts reach the gate through the same non-blocking `acquire`: their `#execute` dispatch is `async` (``__runContractDispatch`` is `async`), so the synchronous machine runs on a GCD worker via `dispatchToGCD` and acquires without ever blocking a cooperative thread.
+/// - Important: The gate is **async-only**: it exposes a suspending ``acquire(_:)`` and never blocks a caller's thread. A blocking acquire was tried and removed — a synchronous `@Test` runs on the cooperative pool, so blocking it starved the pool that admitted runs need to service their `blockingAwait` continuations, deadlocking the suite. Sync `.threads` contracts reach the gate through the same non-blocking `acquire`: their `#execute` dispatch is `async` (`__runContractDispatch` is `async`), so the synchronous machine runs on a GCD worker via `dispatchToGCD` and acquires without ever blocking a cooperative thread.
 ///
-/// - Note: This is a `final class` guarded by an `NSLock` rather than an `actor` because ``release(_:)`` is called from synchronous contexts (inside the `dispatchToGCD` GCD closure, a `() -> Result`), which an actor's async-only surface cannot serve.
+/// - Note: This is a `final class` guarded by an `NSLock` rather than an `actor` because ``release(_:)`` is called from synchronous contexts (inside the `dispatchToGCD` GCD closure, a `() -> Result`), which an actor's async-only surface cannot serve. Marked `@unchecked Sendable` because the mutable state, `free` and `waiters`, is read and written from many threads (async acquirers, and releasers on GCD workers); every access is serialized under `lock`, so the state is never touched concurrently.
 final class LaneGate: @unchecked Sendable {
     /// The default lane budget. Bounds concurrent preemptive runs to ~`limit`/(N+1) so their lanes are not starved on a constrained runner, while staying under the 64-thread per-queue GCD wall. Overridable via ``environmentOverrideKey``.
     static let defaultLimit = 16
@@ -48,7 +48,7 @@ final class LaneGate: @unchecked Sendable {
 
     /// Suspends until `count` lanes are available, then reserves them. The run parks as a continuation holding no thread rather than blocking a GCD worker.
     ///
-    /// Cancellation is not handled: a unit test is never cancelled, and the async entries reach the gate through a non-cancellable `dispatchToGCD` hop, so a parked continuation is always eventually resumed on admission.
+    /// Cancellation is not handled: a unit test is never canceled, and the async entries reach the gate through a non-cancelable `dispatchToGCD` hop, so a parked continuation is always eventually resumed on admission.
     func acquire(_ count: Int) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             lock.lock()

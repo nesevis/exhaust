@@ -102,7 +102,7 @@ extension __ExhaustRuntime {
 
     /// Dispatches a synchronous closure onto a GCD thread and returns the result asynchronously.
     ///
-    /// Moves work off the cooperative thread pool so that synchronous blocking (drain loops, semaphore waits) inside `work` cannot starve the pool. GCD grows its thread pool dynamically, so concurrent callers cannot exhaust it the way they can exhaust cooperative threads.
+    /// Moves work off the cooperative thread pool so that synchronous blocking (drain loops, semaphore waits) inside `work` cannot starve the pool. GCD's global queue is far larger than the fixed cooperative pool, so it does not starve the way the cooperative pool does — but it is not unbounded (a top-level concurrent queue caps at 64 threads), so callers that fan out lanes reserve through ``LaneGate`` via `dispatchToGCD(reserving:)` to keep aggregate demand under that wall.
     ///
     /// The `nonisolated(unsafe)` annotations bridge non-Sendable generic values across the GCD boundary. Safety relies on the closure and its result being created and consumed by the same logical unit of work — no concurrent access is possible because the continuation resumes only after `work` returns.
     static func dispatchToGCD<Result>(
@@ -126,7 +126,7 @@ extension __ExhaustRuntime {
         _ work: @escaping () -> Result
     ) async -> Result {
         await LaneGate.shared.acquire(lanes)
-        // Release inside the GCD closure, on the GCD thread — not in a `defer` after the `await`, which would resume on the cooperative pool. If release ran on the cooperative pool it could deadlock: the sync `.threads` `acquireBlocking` can occupy every cooperative thread, leaving none to run the release that would admit those very waiters.
+        // Release inside the GCD closure, on the GCD thread, rather than in a `defer` after the `await` (which resumes on the cooperative pool). Keeping release off the cooperative pool means it never has to wait on a cooperative thread that admitted runs may be occupying through their `blockingAwait` continuations.
         return await dispatchToGCD {
             defer { LaneGate.shared.release(lanes) }
             return work()
