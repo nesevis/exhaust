@@ -437,6 +437,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         }
     }
 
+    /// No ObjC exception guard (`exhaust_runCatchingObjCException`) here, unlike the synchronous ``PreemptiveChecker/runSmoke(_:)``. The sync checker wraps each `spec.run(command)` in an ObjC `@try/@catch` because there are no Tasks involved, everything is plain function frames. In the async path, each command runs inside a Task drained by `blockingAwait`.
+    /// An NSException that unwinds through a Task continuation bypasses the Swift runtime's task-local allocation cleanup (`swift_task_dealloc_specific`). The ObjC `@try/@catch` catches the exception, but the Task's internal state is already corrupted, and the runtime aborts on the next task-local operation.
+    /// This is a Swift runtime limitation: NSExceptions and Task-local storage are fundamentally incompatible. An async spec whose command deterministically raises an NSException will abort the test process.
     func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, timedOut: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
         let spec = Spec()
         nonisolated(unsafe) let unsafeSpec = spec
@@ -470,7 +473,6 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
             }
             return false
         }
-        // nil = timed out waiting for reference replay
         if referenceFailed == nil {
             return (trace, true, true, spec.systemUnderTest, spec.failureDescription())
         }
