@@ -43,8 +43,7 @@ struct RegressionSeedTests {
         let initial = try #require(
             await #execute(
                 RegressionPreemptiveContract.self,
-                .commandLimit(6),
-                .budget(.extensive),
+                .commandLimit(20),
                 .suppress(.all)
             )
         )
@@ -55,8 +54,7 @@ struct RegressionSeedTests {
         ) {
             await #execute(
                 RegressionPreemptiveContract.self,
-                .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 0)),
+                .commandLimit(20),
                 .suppress(.all)
             )
         }

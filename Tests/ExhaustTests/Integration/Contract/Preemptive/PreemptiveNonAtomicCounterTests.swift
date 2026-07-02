@@ -62,8 +62,7 @@ struct PreemptiveNonAtomicCounterTests {
             await #execute(
                 PreemptiveCounterSpec.self,
                 .concurrent(.two),
-                .commandLimit(8),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .commandLimit(20),
                 .suppress(.issueReporting)
             )
         )
