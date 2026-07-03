@@ -73,7 +73,7 @@ struct ExploreTransactionTests {
     }
 
     @Test("CGS steers into 'dips and recovers' despite low natural prevalence")
-    func dipDirectionGetsSteeredCoverage() {
+    func dipDirectionGetsSteeredCoverage() throws {
         let gen = #gen(
             .int(in: -100 ... 100), .int(in: -100 ... 100),
             .int(in: -100 ... 100), .int(in: -100 ... 100),
@@ -94,7 +94,9 @@ struct ExploreTransactionTests {
             .first { $0.name == "dips and recovers" }!
         #expect(dipEntry.isCovered, "CGS should steer enough samples into the dip-and-recover region")
 
-        let warmupHitRate = Double(dipEntry.warmupHits) / Double(report.warmupSamples)
+        let warmup = try #require(report.warmup)
+        let dipWarmup = try #require(dipEntry.warmup)
+        let warmupHitRate = Double(dipWarmup.hits) / Double(warmup.samples)
         #expect(warmupHitRate < 0.5, "Dip-and-recover should be uncommon in untuned sampling (got \(warmupHitRate))")
     }
 

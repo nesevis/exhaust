@@ -52,7 +52,7 @@ public extension __ExhaustRuntime {
                             coOccurrence: CoOccurrenceMatrix(directionCount: 0),
                             counterexampleDirections: [],
                             propertyInvocations: 0,
-                            warmupSamples: 0,
+                            warmup: nil,
                             totalMilliseconds: 0,
                             termination: .budgetExhausted
                         )
@@ -142,23 +142,29 @@ public extension __ExhaustRuntime {
                     coOccurrence: CoOccurrenceMatrix(directionCount: 0),
                     counterexampleDirections: [],
                     propertyInvocations: 0,
-                    warmupSamples: 0,
+                    warmup: nil,
                     totalMilliseconds: 0,
                     termination: .budgetExhausted
                 )
             }
 
+            let warmupRan = result.warmupSamples != nil
             let directionCoverage = result.directionCoverage.map { entry in
-                DirectionCoverage(
+                let outcome: DirectionOutcome = if entry.isCovered {
+                    .covered
+                } else if let tuningError = entry.tuningError {
+                    .tuningFailed(tuningError)
+                } else {
+                    .uncovered
+                }
+                return DirectionCoverage(
                     name: entry.name,
                     hits: entry.hits,
                     tuningPassSamples: entry.tuningPassSamples,
                     tuningPassPasses: entry.tuningPassPasses,
                     tuningPassFailures: entry.tuningPassFailures,
-                    warmupHits: entry.warmupHits,
-                    isCovered: entry.isCovered,
-                    warmupRuleOfThreeBound: entry.warmupRuleOfThreeBound,
-                    tuningPassRuleOfThreeBound: entry.tuningPassRuleOfThreeBound
+                    outcome: outcome,
+                    warmup: warmupRan ? DirectionWarmup(hits: entry.warmupHits) : nil
                 )
             }
 
@@ -195,7 +201,7 @@ public extension __ExhaustRuntime {
             } else {
                 var passMetadata = [
                     "invocations": "\(result.propertyInvocations)",
-                    "warmup_samples": "\(result.warmupSamples)",
+                    "warmup_samples": result.warmupSamples.map { "\($0)" } ?? "none",
                     "seed": "\(result.seed)",
                 ]
                 let coveredCount = directionCoverage.filter(\.isCovered).count
@@ -214,7 +220,7 @@ public extension __ExhaustRuntime {
                 coOccurrence: result.coOccurrence,
                 counterexampleDirections: result.counterexampleDirections,
                 propertyInvocations: result.propertyInvocations,
-                warmupSamples: result.warmupSamples,
+                warmup: result.warmupSamples.map { WarmupStats(samples: $0) },
                 totalMilliseconds: result.totalMilliseconds,
                 termination: termination
             )

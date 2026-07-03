@@ -87,8 +87,7 @@ struct ParallelExploreTests {
         for coverage in report.directionCoverage {
             #expect(coverage.hits >= Self.budget.hitsPerDirection)
             #expect(coverage.tuningPassSamples > 0)
-            #expect(coverage.warmupHits == 0)
-            #expect(coverage.warmupRuleOfThreeBound == nil)
+            #expect(coverage.warmup == nil)
         }
     }
 
@@ -126,7 +125,8 @@ struct ParallelExploreTests {
         }
         #expect(report.result == nil)
         #expect(report.termination == .coverageAchieved)
-        #expect(report.warmupSamples > 0, "Sequential path runs warm-up")
+        #expect(report.warmup != nil, "Sequential path runs warm-up")
+        #expect((report.warmup?.samples ?? 0) > 0)
     }
 
     @Test("Property invocations do not exceed the total budget")
