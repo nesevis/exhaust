@@ -70,6 +70,7 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
         Gen.liftF(.transform(
             kind: .map(
                 forward: { try transform($0 as! Output) },
+                backward: nil,
                 inputType: Output.self,
                 outputType: NewOutput.self
             ),

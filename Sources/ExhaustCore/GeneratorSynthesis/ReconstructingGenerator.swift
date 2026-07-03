@@ -17,6 +17,7 @@ private func zipMap(
     return Gen.liftF(.transform(
         kind: .map(
             forward: { try transform($0 as! [Any]) },
+            backward: nil,
             inputType: [Any].self,
             outputType: Any.self
         ),

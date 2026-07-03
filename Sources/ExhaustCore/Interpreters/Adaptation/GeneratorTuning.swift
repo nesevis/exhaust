@@ -275,16 +275,42 @@ package enum GeneratorTuning {
                         )
 
                     case let .transform(kind, inner):
-                        let tunedInner = try measureAndTune(
-                            inner,
-                            context: context,
-                            insideSubdividedChooseBits: insideSubdividedChooseBits,
-                            predicate: { _ in true }
-                        )
-                        return .impure(
-                            operation: .transform(kind: kind, inner: tunedInner),
-                            continuation: continuation
-                        )
+                        switch kind {
+                            case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
+                                // The forward function is known, so the outer predicate composes through it the same way the contramap handler composes through the continuation: transform the inner value, then evaluate downstream. A forward that throws marks the inner value invalid.
+                                let composed = SharedInterpreterHelpers.composedPredicate(
+                                    continuation: continuation,
+                                    context: context,
+                                    predicate: predicate
+                                )
+                                let innerPredicate: (Any) -> Bool = { innerValue in
+                                    guard let transformed = try? forward(innerValue) else { return false }
+                                    return composed(transformed)
+                                }
+                                let tunedInner = try measureAndTune(
+                                    inner,
+                                    context: context,
+                                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                                    predicate: innerPredicate
+                                )
+                                return .impure(
+                                    operation: .transform(kind: kind, inner: tunedInner),
+                                    continuation: continuation
+                                )
+
+                            case .bind, .metamorphic:
+                                // The inner value determines a second generator (bind) or is copied through independent re-generation (metamorphic), so the outer predicate cannot be evaluated from the inner value alone. Recurse with a trivial predicate.
+                                let tunedInner = try measureAndTune(
+                                    inner,
+                                    context: context,
+                                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                                    predicate: { _ in true }
+                                )
+                                return .impure(
+                                    operation: .transform(kind: kind, inner: tunedInner),
+                                    continuation: continuation
+                                )
+                        }
 
                     // Leaf: no sub-generators to recurse into.
                     case .just:

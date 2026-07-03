@@ -673,7 +673,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         let result: Any
         let resultTree: ChoiceTree
         switch kind {
-            case let .map(forward, _, _):
+            case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
                 guard let (innerValue, innerTree) = try generateRecursiveAny(
                     inner, context: &context
                 ) else {

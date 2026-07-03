@@ -82,6 +82,8 @@ package enum Materializer {
     /// Materializes a value from an already-erased generator and a choice-sequence prefix.
     ///
     /// Accepts ``AnyGenerator`` to avoid the per-`Output`-type metadata cache lookups that a generic `<Output>` parameter would impose inside ``generateRecursive``. Callers that hold a typed ``Generator`` should use the generic ``materialize(_:prefix:mode:fallbackTree:materializePicks:precomputedSeed:)`` overload, which erases at the boundary and forwards here.
+    ///
+    /// - Parameter collectDecodingReport: When `false`, the result carries a `nil` ``DecodingReport`` and per-coordinate tier recording is skipped. Callers that never read the report (coverage rows) opt out to avoid the per-coordinate bookkeeping.
     public static func materializeAny(
         _ gen: AnyGenerator,
         prefix: consuming ChoiceSequence,
@@ -89,7 +91,8 @@ package enum Materializer {
         fallbackTree: ChoiceTree? = nil,
         materializePicks: Bool = false,
         precomputedSeed: UInt64? = nil,
-        skipTree: Bool = false
+        skipTree: Bool = false,
+        collectDecodingReport: Bool = true
     ) -> Result<Any> {
         let seed: UInt64
         let resolvedFallbackTree: ChoiceTree?
@@ -117,7 +120,7 @@ package enum Materializer {
             maximizeBoundRegionIndices: maximizeBoundRegionIndices,
             materializePicks: materializePicks,
             skipTree: skipTree,
-            decodingReport: DecodingReport()
+            decodingReport: collectDecodingReport ? DecodingReport() : nil
         )
 
         do {
@@ -326,10 +329,20 @@ extension Materializer {
                     context: &context, continuationFallback: continuationFallback
                 )
 
-            case let .impure(.transform(.map(forward, inputType, outputType), inner), continuation):
+            case let .impure(.transform(.map(forward, backward, inputType, outputType), inner), continuation):
                 // Transparent: no callee tree node — fallback passes through.
                 return try handleTransform(
-                    kind: .map(forward: forward, inputType: inputType, outputType: outputType),
+                    kind: .map(forward: forward, backward: backward, inputType: inputType, outputType: outputType),
+                    inner: inner,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: fallbackTree,
+                    continuationFallback: nil
+                )
+
+            case let .impure(.transform(.isomorph(forward, backward, inputType, outputType), inner), continuation):
+                // Transparent: no callee tree node, so the fallback passes through (same as .map).
+                return try handleTransform(
+                    kind: .isomorph(forward: forward, backward: backward, inputType: inputType, outputType: outputType),
                     inner: inner,
                     continuation: continuation, inputValue: inputValue,
                     context: &context, calleeFallback: fallbackTree,

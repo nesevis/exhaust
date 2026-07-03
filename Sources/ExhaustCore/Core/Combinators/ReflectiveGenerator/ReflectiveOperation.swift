@@ -239,28 +239,52 @@ package enum ReflectiveOperation {
         keyExtractor: ((Any) -> AnyHashable)?
     )
 
-    /// Reifies a forward-only `map` or `bind` as inspectable data visible to interpreters and analysis passes.
+    /// Reifies a `map`, `bind`, `isomorph`, or `metamorphic` transformation as inspectable data visible to interpreters and analysis passes.
     ///
-    /// Structural dual of ``contramap``: contramap transforms the backward (input) side; transform transforms the forward (output) side. Because the transform function is not invertible, reflection through a `.transform` fails with a diagnostic error. For bidirectional transforms, use `mapped(forward:backward:)`, which pairs a contramap with an invisible `map` — no `.transform` operation is created.
+    /// Structural dual of ``contramap``: contramap transforms the backward (input) side; transform transforms the forward (output) side. Whether reflection can pass through depends on the kind: `.map` and `.bind` reflect only when their optional `backward` is present, `.isomorph` always reflects, and `.metamorphic` reflects on the untransformed original.
     ///
     /// Forward-only transforms do not degrade reduction. The reducer operates on choice sequences, not on reflected values, so a non-invertible output transform has no effect on reduction quality.
     ///
     /// - Parameters:
-    ///   - kind: Whether this is a `map` (pure function) or `bind` (dependent generator).
+    ///   - kind: The transformation applied to the inner generator's output.
     ///   - inner: The generator whose output is being transformed.
     case transform(kind: TransformKind, inner: AnyGenerator)
 }
 
-/// Describes the kind of forward-only transformation applied by a `.transform` operation.
+/// Describes the kind of transformation applied by a `.transform` operation.
+///
+/// The three value-transform kinds form a guarantee hierarchy: `.map` with `backward: nil` is forward-only, `.map` with a backward is bidirectional by user contract (the framework cannot verify the pair inverts), and `.isomorph` is bidirectional by construction, restricted to framework-authored pairs.
 @usableFromInline
 package enum TransformKind {
-    /// A pure function applied to the inner generator's output.
+    /// A pure function applied to the inner generator's output, with an optional user-supplied inverse.
     ///
     /// - Parameters:
     ///   - forward: The transform function (type-erased). Throws if the transformation fails.
+    ///   - backward: Optional inverse `(Output) -> Input` for reflection, supplied by `mapped(forward:backward:)`. The pair inverting is a user contract the framework cannot verify. `nil` = forward-only.
     ///   - inputType: The metatype of the input, captured at the call site.
     ///   - outputType: The metatype of the output, captured at the call site.
-    case map(forward: (Any) throws -> Any, inputType: Any.Type, outputType: Any.Type)
+    case map(
+        forward: (Any) throws -> Any,
+        backward: ((Any) throws -> Any)?,
+        inputType: Any.Type,
+        outputType: Any.Type
+    )
+
+    /// A guaranteed invertible mapping between the inner generator's output and the final value.
+    ///
+    /// Both directions are required and the pair must genuinely invert: `backward(forward(x)) == x`. Because the framework cannot verify invertibility, this case is never constructed from user-supplied closures. Only framework-authored pairs qualify (for example ``Gen/zip(_:isOpaque:)``'s `[Any]` ↔ tuple packaging). Interpreters may rely on the guarantee: reflection through `.isomorph` cannot fail for want of a backward direction.
+    ///
+    /// - Parameters:
+    ///   - forward: The forward transform `(Input) -> Output`.
+    ///   - backward: The exact inverse `(Output) -> Input`.
+    ///   - inputType: The metatype of the input, captured at the call site.
+    ///   - outputType: The metatype of the output, captured at the call site.
+    case isomorph(
+        forward: (Any) throws -> Any,
+        backward: (Any) throws -> Any,
+        inputType: Any.Type,
+        outputType: Any.Type
+    )
 
     /// A dependent generator derived from the inner generator's output.
     ///

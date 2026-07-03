@@ -161,8 +161,11 @@ extension Generator where Operation == ReflectiveOperation {
             case let .transform(kind, inner):
                 let kindDesc: String
                 switch kind {
-                    case let .map(_, inputType, outputType):
-                        kindDesc = "map: \(inputType) → \(outputType)"
+                    case let .map(_, backward, inputType, outputType):
+                        let direction = backward != nil ? "map↔" : "map"
+                        kindDesc = "\(direction): \(inputType) → \(outputType)"
+                    case let .isomorph(_, _, inputType, outputType):
+                        kindDesc = "isomorph: \(inputType) ↔ \(outputType)"
                     case let .bind(_, _, backward, inputType, outputType):
                         let direction = backward != nil ? "bind↔" : "bind→"
                         kindDesc = "\(direction): \(inputType) → \(outputType)"

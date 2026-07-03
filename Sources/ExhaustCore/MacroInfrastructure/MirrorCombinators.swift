@@ -51,28 +51,37 @@ public extension __ExhaustRuntime {
             erased.append(generator.gen.erase())
         }
 
-        let impure: Generator<[Any]> = .impure(
+        let zipNode: AnyGenerator = .impure(
             operation: .zip(erased),
-            continuation: { .pure($0 as! [Any]) }
+            continuation: { .pure($0) }
         )
 
-        let forwardFromArray: ([Any]) -> NewOutput = { values in
-            var index = 0
-            func next<U>(_: U.Type) -> U {
-                defer { index += 1 }
-                return values[index] as! U
-            }
-            return forward((repeat next((each T).self)))
-        }
-
-        let backwardToArray: (NewOutput) throws -> [Any] = { output in
-            guard let values = Self._mirrorExtractAll(output, labels: labels) else {
-                throw ReflectionError.contramapWasWrongType
-            }
-            return values
-        }
-
-        return Gen.contramap(backwardToArray, impure.map(forwardFromArray)).wrapped
+        // The macro expands an initializer call to the forward closure and derives the backward from the same member labels, so the pair inverts by construction of the expansion and the `.isomorph` guarantee holds without user involvement.
+        return Gen.liftF(.transform(
+            kind: .isomorph(
+                forward: { anyValues in
+                    let values = anyValues as! [Any]
+                    var index = 0
+                    func next<Element>(_: Element.Type) -> Element {
+                        defer { index += 1 }
+                        return values[index] as! Element
+                    }
+                    return forward((repeat next((each T).self)))
+                },
+                backward: { output in
+                    // Reflection probes pick branches against a shared final output, so a mismatched value is a normal rejection. Throw instead of trapping.
+                    guard let typed = output as? NewOutput,
+                          let values = Self._mirrorExtractAll(typed, labels: labels)
+                    else {
+                        throw ReflectionError.contramapWasWrongType
+                    }
+                    return values
+                },
+                inputType: [Any].self,
+                outputType: NewOutput.self
+            ),
+            inner: zipNode
+        )).wrapped
     }
 
     /// Zips multiple generators with a failable backward closure for extraction.
@@ -89,34 +98,44 @@ public extension __ExhaustRuntime {
             erased.append(generator.gen.erase())
         }
 
-        let impure: Generator<[Any]> = .impure(
+        let zipNode: AnyGenerator = .impure(
             operation: .zip(erased),
-            continuation: { .pure($0 as! [Any]) }
+            continuation: { .pure($0) }
         )
 
-        let forwardFromArray: ([Any]) -> NewOutput = { values in
-            var index = 0
-            func next<U>(_: U.Type) -> U {
-                defer { index += 1 }
-                return values[index] as! U
-            }
-            return forward((repeat next((each T).self)))
-        }
-
-        let backwardToArray: (NewOutput) throws -> [Any] = { output in
-            guard let values = backward(output) else {
-                throw ReflectionError.contramapWasWrongType
-            }
-            return values
-        }
-
-        return Gen.contramap(backwardToArray, impure.map(forwardFromArray)).wrapped
+        // The macro expands an enum case constructor to the forward closure and a pattern match over the same case to the backward, so the pair inverts by construction of the expansion. A `nil` from the pattern match means the value is a different case: a normal rejection during pick-branch probing, surfaced as a throw.
+        return Gen.liftF(.transform(
+            kind: .isomorph(
+                forward: { anyValues in
+                    let values = anyValues as! [Any]
+                    var index = 0
+                    func next<Element>(_: Element.Type) -> Element {
+                        defer { index += 1 }
+                        return values[index] as! Element
+                    }
+                    return forward((repeat next((each T).self)))
+                },
+                backward: { output in
+                    guard let typed = output as? NewOutput,
+                          let values = backward(typed)
+                    else {
+                        throw ReflectionError.contramapWasWrongType
+                    }
+                    return values
+                },
+                inputType: [Any].self,
+                outputType: NewOutput.self
+            ),
+            inner: zipNode
+        )).wrapped
     }
 
     // MARK: - Scalar conversion overloads
 
     /// Scalar conversion for `BinaryInteger` → `BinaryInteger` (for example `UInt64` → `Int`).
-    static func _macroMapScalar<Input: BinaryInteger, Output: BinaryInteger>(
+    ///
+    /// The `SendableMetatype` constraints let the reified `mapped(forward:backward:)` capture the generic metatypes in its `@Sendable` transform closures without a strict-concurrency diagnostic. Every standard numeric type satisfies them.
+    static func _macroMapScalar<Input: BinaryInteger & SendableMetatype, Output: BinaryInteger & SendableMetatype>(
         _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {
@@ -124,7 +143,9 @@ public extension __ExhaustRuntime {
     }
 
     /// Scalar conversion for `BinaryFloatingPoint` → `BinaryFloatingPoint` (for example `Double` → `Float`).
-    static func _macroMapScalar<Input: BinaryFloatingPoint, Output: BinaryFloatingPoint>(
+    ///
+    /// See the `BinaryInteger` overload for why the `SendableMetatype` constraints are present.
+    static func _macroMapScalar<Input: BinaryFloatingPoint & SendableMetatype, Output: BinaryFloatingPoint & SendableMetatype>(
         _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {

@@ -106,15 +106,18 @@ package enum AdaptiveSmoothing {
 
                 return .pick(choices: smoothed, totalWeight: smoothed.reduce(0) { $0 &+ $1.weight })
 
-            case let .zip(generators, _):
-                return .zip(ContiguousArray(generators.map {
-                    smoothGenerator(
-                        $0,
-                        epsilon: epsilon,
-                        baseTemperature: baseTemperature,
-                        maxTemperature: maxTemperature
-                    )
-                }))
+            case let .zip(generators, isOpaque):
+                return .zip(
+                    ContiguousArray(generators.map {
+                        smoothGenerator(
+                            $0,
+                            epsilon: epsilon,
+                            baseTemperature: baseTemperature,
+                            maxTemperature: maxTemperature
+                        )
+                    }),
+                    isOpaque: isOpaque
+                )
 
             case let .sequence(length, gen):
                 let smoothedLength = smoothGenerator(

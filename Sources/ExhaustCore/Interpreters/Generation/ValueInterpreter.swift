@@ -298,7 +298,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             case let .impure(operation: .transform(kind, inner), continuation):
                 let transformedValue: Any
                 switch kind {
-                    case let .map(forward, _, _):
+                    case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
                         guard let innerValue = try generateRecursiveAny(
                             inner, context: &context
                         ) else {
