@@ -17,9 +17,9 @@ import ExhaustCore
 ///
 /// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
 /// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
-/// - `.concurrent(_)`: number of concurrent execution lanes (1 through 8, default 2). Only meaningful for `.threads` contracts.
+/// - `.concurrent(_)`: number of concurrent execution lanes (one through four, default two). Only meaningful for `.threads` contracts.
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
-/// - `.idleTimeoutMs(_)`: maximum milliseconds the drain loop waits before declaring a timeout (default 1000). Only meaningful for concurrent contracts.
+/// - `.idleTimeoutMs(_)`: maximum milliseconds the drain loop waits before declaring a timeout (default 2000). Only meaningful for concurrent contracts.
 /// - `.onReport(_)`: registers a closure that receives an ``ExhaustReport`` after the test completes.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.
@@ -45,11 +45,11 @@ public macro execute<Spec: ContractSpec>(
 ///
 /// ## Settings
 ///
-/// - `.concurrent(_)`: number of concurrent execution lanes (1 through 8, default 2).
+/// - `.concurrent(_)`: number of concurrent execution lanes (one through four, default two).
 /// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
 /// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
-/// - `.idleTimeoutMs(_)`: maximum milliseconds the drain loop waits before declaring a timeout (default 1000).
+/// - `.idleTimeoutMs(_)`: maximum milliseconds the drain loop waits before declaring a timeout (default 2000).
 /// - `.onReport(_)`: registers a closure that receives an ``ExhaustReport`` after the test completes.
 /// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
 /// - `.suppress(.logs)`: silences all console output.

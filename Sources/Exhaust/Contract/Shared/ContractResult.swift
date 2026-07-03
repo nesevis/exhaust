@@ -4,7 +4,7 @@
 ///
 /// Contains the reduced command sequence, a step-by-step execution trace showing what happened at each step, and optionally the typed SUT state at the point of failure.
 public struct ContractResult<Spec: ContractSpecBase> {
-    /// Whether the contract run found a failure, timed out, or passed.
+    /// Whether the contract run found a failure or passed.
     public let status: ContractStatus
 
     /// The reduced command sequence that triggered the failure.

@@ -8,7 +8,7 @@
 extension ChoiceGraphScheduler {
     /// Builds a ``GraphComposedEncoder`` for a bound value scope.
     ///
-    /// The upstream encoder is a ``GraphBinarySearchEncoder`` operating on a synthesised one-leaf integer scope targeting the bind's ``BoundValueScope/upstreamLeafNodeID``.
+    /// The upstream encoder is a ``GraphBinarySearchEncoder`` operating on a synthesized one-leaf integer scope targeting the bind's ``BoundValueScope/upstreamLeafNodeID``.
     ///
     /// The downstream encoder depends on the bound subtree's leaf count: a ``GraphBinarySearchEncoder`` for single-leaf subtrees, or a ``GraphBoundValueCoveringEncoder`` for multi-leaf subtrees. The downstream is started by the lift closure on the lifted graph's bound-subtree leaves.
     ///

@@ -1,7 +1,7 @@
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-/// Expands `#gen(T.self, from: data)` into a ``__ExhaustRuntime/_macroGenDecodable(_:from:)`` call that synthesises a generator from a `Decodable` type and example JSON.
+/// Expands `#gen(T.self, from: data)` into a ``__ExhaustRuntime/_macroGenDecodable(_:from:)`` call that synthesizes a generator from a `Decodable` type and example JSON.
 public struct GenerateFromDecodableMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,

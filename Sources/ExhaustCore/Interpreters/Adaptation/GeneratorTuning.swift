@@ -7,13 +7,13 @@
 
 /// Offline, one-shot tuning that transforms a generator's pick structure using fitness-weighted sampling inspired by Choice Gradient Sampling (CGS).
 ///
-/// Tuning is performed once at creation time via a single top-down recursive pass. The result is a normal ``Generator`` with synthesised pick structure whose weights reflect predicate satisfaction rates. Reduction is unaffected because the reducer operates on ``ChoiceTree``/``ChoiceSequence`` and is weight-agnostic.
+/// Tuning is performed once at creation time via a single top-down recursive pass. The result is a normal ``Generator`` with synthesized pick structure whose weights reflect predicate satisfaction rates. Reduction is unaffected because the reducer operates on ``ChoiceTree``/``ChoiceSequence`` and is weight-agnostic.
 ///
 /// ## Algorithm
 ///
 /// At every `pick`, each choice is sampled through the continuation pipeline to measure how often the final output satisfies the predicate. The measured success count becomes the choice's weight. Inner generators are recursively tuned using *composed predicates* — the current continuation is folded into the predicate so that inner operations always evaluate against the final output.
 ///
-/// `chooseBits` and `getSize` operations are subdivided into synthesised picks of subranges, then tuned through the pick path.
+/// `chooseBits` and `getSize` operations are subdivided into synthesized picks of subranges, then tuned through the pick path.
 ///
 /// The specification-entropy objective is inspired by Tjoa et al., "Tuning Random Generators for Property-Based Testing" (OOPSLA2, 2025). Exhaust diverges from the paper's BDD-compiled symbolic approach by using empirical fitness-based weight estimation with convergence-gated batched sampling.
 package enum GeneratorTuning {

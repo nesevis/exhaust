@@ -8,7 +8,7 @@
 public extension ReflectiveGenerator {
     /// Creates a recursive generator with a constant base case value.
     ///
-    /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
+    /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from the drawn depth (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
     ///
     /// ```swift
     /// let treeGen: ReflectiveGenerator<Tree> = #gen(.recursive(
@@ -42,7 +42,7 @@ public extension ReflectiveGenerator {
 
     /// Creates a recursive generator with a constant base case value.
     ///
-    /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from `maxDepth` (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
+    /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from the drawn depth (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
     ///
     /// ```swift
     /// let treeGen: ReflectiveGenerator<Tree> = #gen(.recursive(
