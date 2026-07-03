@@ -1,8 +1,10 @@
 /// Tests whether a concurrent execution's observed responses are consistent with some valid sequential ordering.
 ///
-/// The checker enumerates valid interleavings that preserve per-lane command order. For each ordering, it replays the commands via the caller's closures, compares per-step responses via ``structurallyEqual(_:_:)``, and checks the oracle against the concurrent execution's final state. If any ordering produces matching responses and passes the oracle, the execution is linearizable.
+/// The checker enumerates valid interleavings that preserve per-lane command order and measured real-time precedence. For each ordering, it replays the commands via the caller's closures, compares per-step responses via ``structurallyEqual(_:_:)``, and checks the oracle against the concurrent execution's final state. If any ordering produces matching responses and passes the oracle, the execution is linearizable.
 ///
-/// The preemptive runner produces a fully overlapping history: every concurrent command overlaps every command on another lane, so the only ordering constraint is each lane's own command order. Enumerating the interleavings that preserve per-lane order therefore covers exactly the candidate orderings, which is why no cross-lane timestamps are recorded.
+/// Two ordering constraints bound the search. Each lane's own command order is always preserved. When ``ObservedInterval`` timestamps are available, cross-lane returns-before edges are enforced as well: a command whose measured return precedes another command's measured call must be ordered first (Herlihy and Wing's real-time condition). Without the second constraint the checker would accept histories where a lane observes state that a completed command on another lane had already overwritten: a stale read explained away by reordering non-overlapping commands. The intervals also prune the search: every enforced edge removes candidate interleavings from the DFS.
+///
+/// Enforcement checks only lane heads: within a lane, commands run sequentially, so per-lane return times are non-decreasing and the head holds the lane's earliest unplaced return. If any unplaced command's return precedes a candidate's call, that lane's head's return does too, so the head guard rejects every real-time violation (see ``candidateRespectsRealTime(laneIndex:cursor:cursors:)``).
 ///
 /// On failure, the checker reports the ``Witness``: the concurrent command whose observed response no ordering reproduces. This pins a response-level violation to a single command, the case the final-state diff cannot show, because the end state may coincidentally match a valid ordering even though no ordering yields the observed return value. When divergence is only in the final state (the oracle), there is no command witness and ``Witness`` is `nil`; that case is already visible in the expected-versus-actual state diff.
 ///
@@ -35,8 +37,12 @@ package struct LinearizabilityChecker: @unchecked Sendable {
 
     package let laneOutcomes: [[ObservedOutcome]]
 
-    package init(laneOutcomes: [[ObservedOutcome]]) {
+    /// Per-lane measured execution spans, aligned index-for-index with ``laneOutcomes``. A nil entry means the caller had no timing data for that command; such commands are treated as overlapping everything, so missing data weakens the real-time constraint but never rejects a valid ordering.
+    package let laneIntervals: [[ObservedInterval?]]
+
+    package init(laneOutcomes: [[ObservedOutcome]], laneIntervals: [[ObservedInterval?]]? = nil) {
         self.laneOutcomes = laneOutcomes
+        self.laneIntervals = laneIntervals ?? laneOutcomes.map { lane in Array(repeating: nil, count: lane.count) }
     }
 
     /// A command placed at a position in a candidate ordering, retaining its source coordinates so the witness can name it and the replay closure can locate the command. Stored as an index pair to keep the DFS working array (``SearchState/currentOrdering``) compact.
@@ -137,6 +143,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         for laneIndex in 0 ..< laneOutcomes.count {
             let cursor = state.cursors[laneIndex]
             guard cursor < laneOutcomes[laneIndex].count else { continue }
+            guard candidateRespectsRealTime(laneIndex: laneIndex, cursor: cursor, cursors: state.cursors) else { continue }
 
             let observed = laneOutcomes[laneIndex][cursor]
 
@@ -255,6 +262,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         for laneIndex in 0 ..< laneOutcomes.count {
             let cursor = state.cursors[laneIndex]
             guard cursor < laneOutcomes[laneIndex].count else { continue }
+            guard candidateRespectsRealTime(laneIndex: laneIndex, cursor: cursor, cursors: state.cursors) else { continue }
 
             let observed = laneOutcomes[laneIndex][cursor]
 
@@ -303,6 +311,25 @@ package struct LinearizabilityChecker: @unchecked Sendable {
     }
 
     // MARK: - Shared Helpers
+
+    /// Whether placing the candidate command next would respect measured real-time precedence: no unplaced command's return may precede the candidate's call (an operation can be linearized next only if it is minimal in the returns-before order, per Wing and Gong).
+    ///
+    /// Checking each lane's head is sufficient: per-lane return times are non-decreasing, so if any unplaced command in a lane returned before the candidate's call, that lane's head did too. Commands without an interval impose and receive no constraint.
+    ///
+    /// Rejections here need no `closestPlaced` bookkeeping: the candidate is not a response mismatch, it is simply not permitted at this position, and it remains reachable through orderings that place the earlier-returning command first.
+    private func candidateRespectsRealTime(laneIndex: Int, cursor: Int, cursors: [Int]) -> Bool {
+        guard let candidateCall = laneIntervals[laneIndex][cursor]?.callTime else {
+            return true
+        }
+        for otherLane in 0 ..< laneIntervals.count where otherLane != laneIndex {
+            let otherCursor = cursors[otherLane]
+            guard otherCursor < laneIntervals[otherLane].count else { continue }
+            if let otherReturn = laneIntervals[otherLane][otherCursor]?.returnTime, otherReturn < candidateCall {
+                return false
+            }
+        }
+        return true
+    }
 
     private func stepMismatches(observed: ObservedOutcome, replay: ReplayResponse) -> Bool {
         observed.isSkipped != replay.isSkipped

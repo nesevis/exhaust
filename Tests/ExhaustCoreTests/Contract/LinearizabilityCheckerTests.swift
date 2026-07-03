@@ -104,6 +104,62 @@ struct LinearizabilityCheckerTests {
         #expect(verdict(check(lanes: lanes, prefix: [.push(1)], finalState: [2])).linearizable)
     }
 
+    // MARK: - Real-Time Order
+
+    @Test("A stale observation after a completed command is rejected when timestamps prove the order")
+    func staleObservationIsRejectedWithTimestamps() {
+        // Lane A's push returned (at 10) before lane B's pop was even called (at 20), so real time forces push before pop, and the pop must see the pushed value. The observed skip (empty stack) is only explainable by running the pop first, which the timestamps forbid. This is the stale-read signature: without intervals the checker accepts it (see the companion test below).
+        let lanes = [
+            [push(1, from: 0, to: 10)],
+            [popSkipped(from: 20, to: 30)],
+        ]
+        let (linearizable, witness) = verdict(check(lanes: lanes, finalState: [1]))
+        #expect(linearizable == false)
+        #expect(witness?.lane == 1)
+        #expect(witness?.command == 0)
+    }
+
+    @Test("The same stale observation is accepted without timestamps")
+    func staleObservationIsAcceptedWithoutTimestamps() {
+        // Identical history to the test above, minus the intervals. With no timing data every command is treated as overlapping everything, so the ordering (pop on empty, then push) is a valid witness. This documents the fallback behavior for interval-free histories, and why the runners always record intervals.
+        let lanes = [[push(1)], [popSkipped()]]
+        #expect(verdict(check(lanes: lanes, finalState: [1])).linearizable)
+    }
+
+    @Test("Overlapping intervals leave both orders available")
+    func overlappingIntervalsAcceptBothOrders() {
+        // The two pushes overlap in real time (neither returned before the other was called), so both orders remain valid witnesses, exactly as in the interval-free case.
+        let lanes = [
+            [push(1, from: 0, to: 20)],
+            [push(2, from: 10, to: 30)],
+        ]
+        #expect(verdict(check(lanes: lanes, finalState: [1, 2])).linearizable)
+        #expect(verdict(check(lanes: lanes, finalState: [2, 1])).linearizable)
+    }
+
+    @Test("Non-overlapping intervals force the real-time order")
+    func nonOverlappingIntervalsForceOrder() {
+        // Lane A's push returned before lane B's push was called, so only the order (1, 2) is a candidate. The final state [2, 1] would require inverting real-time precedence and must be rejected even though it is a valid interleaving of the lane orders.
+        let lanes = [
+            [push(1, from: 0, to: 10)],
+            [push(2, from: 20, to: 30)],
+        ]
+        #expect(verdict(check(lanes: lanes, finalState: [1, 2])).linearizable)
+        #expect(verdict(check(lanes: lanes, finalState: [2, 1])).linearizable == false)
+    }
+
+    @Test("Real-time edges constrain commands beyond lane heads")
+    func realTimeEdgesConstrainLaterLaneCommands() {
+        // Lane A: push(1) then push(2), with a gap during which lane B's push(3) ran to completion. Real time pins the order to 1, 3, 2: push(3) returned before push(2) was called, and push(1) returned before push(3) was called. The other interleavings of the lane orders ([1, 2, 3] and [3, 1, 2]) invert a proven edge and must be rejected.
+        let lanes = [
+            [push(1, from: 0, to: 10), push(2, from: 40, to: 50)],
+            [push(3, from: 20, to: 30)],
+        ]
+        #expect(verdict(check(lanes: lanes, finalState: [1, 3, 2])).linearizable)
+        #expect(verdict(check(lanes: lanes, finalState: [1, 2, 3])).linearizable == false)
+        #expect(verdict(check(lanes: lanes, finalState: [3, 1, 2])).linearizable == false)
+    }
+
     // MARK: - Prefix Cache Regression
 
     @Test("Cache does not prune the valid ordering when void commands share the same cursor state")
@@ -271,12 +327,20 @@ private func push(_ value: Int) -> Observation {
     Observation(lane: 0, command: .push(value), outcome: .returnedVoid)
 }
 
+private func push(_ value: Int, from callTime: UInt64, to returnTime: UInt64) -> Observation {
+    Observation(lane: 0, command: .push(value), outcome: .returnedVoid, interval: ObservedInterval(callTime: callTime, returnTime: returnTime))
+}
+
 private func popReturning(_ value: Int) -> Observation {
     Observation(lane: 0, command: .pop, outcome: .returned(value))
 }
 
 private func popSkipped() -> Observation {
     Observation(lane: 0, command: .pop, outcome: .skipped)
+}
+
+private func popSkipped(from callTime: UInt64, to returnTime: UInt64) -> Observation {
+    Observation(lane: 0, command: .pop, outcome: .skipped, interval: ObservedInterval(callTime: callTime, returnTime: returnTime))
 }
 
 // MARK: - Queue Model

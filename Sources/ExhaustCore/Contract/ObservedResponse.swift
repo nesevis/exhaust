@@ -42,9 +42,22 @@ package extension ObservedOutcome {
     }
 }
 
+/// The measured wall-clock span of a single command execution, in nanoseconds from a shared monotonic clock.
+///
+/// Timestamps are taken immediately before invoking the command and immediately after it returns, so the measured span contains the true span. The containment makes cross-lane precedence inference conservative: `returnTime < other.callTime` on measured values proves the true return preceded the true call, so every inferred returns-before edge is real, while some true edges may go undetected. The linearizability checker uses these edges to reject orderings that invert real-time precedence.
+package struct ObservedInterval: Sendable {
+    package let callTime: UInt64
+    package let returnTime: UInt64
+
+    package init(callTime: UInt64, returnTime: UInt64) {
+        self.callTime = callTime
+        self.returnTime = returnTime
+    }
+}
+
 /// A single command's observed result during a preemptive concurrent execution, recorded per-lane.
 ///
-/// Per-lane arrays of these (one array per lane, in per-lane execution order) feed the linearizability checker, which enumerates the order-preserving interleavings of the lanes. The per-lane order is the only ordering constraint the checker needs, so no cross-lane timestamp is recorded.
+/// Per-lane arrays of these (one array per lane, in per-lane execution order) feed the linearizability checker, which enumerates the order-preserving interleavings of the lanes. Each lane's internal order is one ordering constraint; the ``interval`` timestamps supply the cross-lane returns-before constraints, so commands that provably did not overlap are never reordered by the checker.
 ///
 /// Marked `@unchecked Sendable` because ``Outcome`` carries `Any`; see ``ObservedOutcome``.
 package struct ObservedResponse<Command>: @unchecked Sendable {
@@ -54,17 +67,23 @@ package struct ObservedResponse<Command>: @unchecked Sendable {
     package let lane: UInt8
     package let command: Command
     package let outcome: Outcome
+    /// The command's measured execution span, or nil when the caller has no timing data (hand-built histories in tests). Without an interval the command is treated as overlapping everything, which can only weaken the check, never produce a spurious rejection.
+    package let interval: ObservedInterval?
 
-    package init(lane: UInt8, command: Command, outcome: Outcome) {
+    package init(lane: UInt8, command: Command, outcome: Outcome, interval: ObservedInterval? = nil) {
         self.lane = lane
         self.command = command
         self.outcome = outcome
+        self.interval = interval
     }
 }
 
 package extension LinearizabilityChecker {
-    /// Builds a checker directly from the per-lane responses captured during a preemptive run, keeping only the outcomes — the drivers replay commands by (lane, offset) coordinates. Shared by the synchronous and asynchronous preemptive backends.
+    /// Builds a checker directly from the per-lane responses captured during a preemptive run, keeping the outcomes and the timing intervals; the drivers replay commands by (lane, offset) coordinates. Shared by the synchronous and asynchronous preemptive backends.
     init(laneResponses: [[ObservedResponse<some Any>]]) {
-        self.init(laneOutcomes: laneResponses.map { lane in lane.map(\.outcome) })
+        self.init(
+            laneOutcomes: laneResponses.map { lane in lane.map(\.outcome) },
+            laneIntervals: laneResponses.map { lane in lane.map(\.interval) }
+        )
     }
 }

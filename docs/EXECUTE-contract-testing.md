@@ -141,7 +141,7 @@ Reproduce: .replay("3JK4M2-5")
 
 The replay seed lets you re-run the exact same sequence deterministically for debugging.
 
-`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget, capped at 100 for sequential contracts and 40 for `.tasks` concurrent contracts; `.threads` contracts instead default to a flat 20, because each sequence is re-run many times to reproduce the race. Longer sequences explore deeper states but take longer to test and to reduce. For `.threads` contracts, linearizability checking cost explodes with longer sequences because the checker must try all valid orderings. Contracts with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
+`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget, capped at 100 for sequential contracts and 40 for `.tasks` concurrent contracts; `.threads` contracts instead default to a flat 10, because each sequence is re-run many times to reproduce the race. Longer sequences explore deeper states but take longer to test and to reduce. For `.threads` contracts, linearizability checking cost explodes with longer sequences because the checker must try all valid orderings. Contracts with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
 
 ## Your SUT uses async/await
 
@@ -262,7 +262,7 @@ That confirmation is what stands in for the per-step `@Invariant` checking of `.
 
 ### Oracles and linearizability
 
-A concurrent run is correct when everything it observed could have come from running the same commands one at a time, in some order that keeps each lane's own commands in the order that lane issued them. That property is called linearizability, and it is what `.threads` checks.
+A concurrent run is correct when everything it observed could have come from running the same commands one at a time, in some order that keeps each lane's own commands in the order that lane issued them and never reorders two commands when one had observably returned before the other began. That property is called linearizability, and it is what `.threads` checks. Exhaust timestamps every command's call and return, so an ordering that inverts observed real-time precedence is never accepted as an explanation, and a command that reads stale state after another lane's write has provably completed is caught rather than explained away.
 
 Two things get compared against each candidate ordering: what every command returned, and the final state. Exhaust captures the return values for you — a `@Command` that returns a value (`func getOrElse(key:) -> Int`) has its result recorded per lane during the concurrent run. The final state is compared through an `@Oracle` you write:
 
@@ -292,7 +292,7 @@ final class RacyCounterContract {
 
 An `@Oracle` method defines what "equal final state" means for the SUT. To confirm a suspected failure, Exhaust enumerates the valid sequential orderings, replays the commands on a fresh instance for each one, and checks both the recorded return values and — through the oracle — the final state. If any ordering reproduces what the concurrent run observed, that run was linearizable and Exhaust discards it. If none does, the bug is real.
 
-Checking every ordering, instead of one fixed order, is what keeps order-independent operations from reporting false positives. Two `set("key", to:)` commands on a lock-synchronised store can land in either order. Both are valid, so whichever the threads chose, some ordering reproduces it. A check that only compared against array order would flag the other half of those runs as failures.
+Checking every ordering, instead of one fixed order, is what keeps order-independent operations from reporting false positives. Two `set("key", to:)` commands on a lock-synchronised store can land in either order. Both are valid while the two overlap in time, so whichever the threads chose, some ordering reproduces it; once one has observably returned before the other starts, only the real order counts. A check that only compared against array order would flag the other half of the overlapping runs as failures.
 
 Capturing return values is what catches bugs the final state hides. A hash map whose buggy `delete` resurrects a key can settle into a final state that coincidentally matches a valid ordering, while a `getOrElse` caught mid-race returns a value no ordering would ever produce. The final-state comparison alone passes that run. The recorded response does not.
 
@@ -385,7 +385,7 @@ All settings are passed as variadic arguments to `#execute`:
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `.commandLimit(N)` | auto-estimated (`.threads`: 20) | Maximum commands per generated sequence. Capped at 100 (sequential) or 40 (`.tasks`); `.threads` defaults to a flat 20. |
+| `.commandLimit(N)` | auto-estimated (`.threads`: 10) | Maximum commands per generated sequence. Capped at 100 (sequential) or 40 (`.tasks`); `.threads` defaults to a flat 10. |
 | `.concurrent(N)` | 2 | Number of concurrent lanes (1 through 8). |
 | `.budget(.thorough)` | `.standard` | Controls coverage rows and random sampling iterations. |
 | `.idleTimeoutMs(ms)` | 2000 | Milliseconds before a stalled run is reported without reduction: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. |

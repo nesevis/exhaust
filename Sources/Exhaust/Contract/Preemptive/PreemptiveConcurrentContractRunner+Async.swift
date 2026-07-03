@@ -119,10 +119,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         let commandFailed = SendableBox(false)
         let timedOut = SendableBox(false)
         let caughtException = SendableBox<NSException?>(nil)
-        // `withValue`'s lock serializes appends into realized completion order.
-        let completionOrdered = SendableBox<[ObservedResponse<Spec.Command>]>([])
         let group = DispatchGroup()
 
+        // Observation stays lane-local on purpose: a shared, locked log on the command path would serialize the lanes between commands and flush caches, which both narrows the interleavings the probe can realize and can mask the memory-visibility bugs this runner exists to catch (Lowe, "Testing for Linearizability", section 7.1). Cross-lane ordering is reconstructed afterwards from the per-command timestamps.
         for (offset, laneID) in partition.laneIDs.enumerated() {
             let laneIndices = partition.laneBuckets[laneID] ?? []
             let responseBox = perLaneResponses[offset]
@@ -138,16 +137,27 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
                                 break
                             }
                             let command = taggedCommands[laneIndex].1
+                            let callTime = DispatchTime.now().uptimeNanoseconds
                             do {
                                 let response = try await spec.run(command)
+                                let returnTime = DispatchTime.now().uptimeNanoseconds
                                 let outcome = response.returnValue.map(ObservedResponse<Spec.Command>.Outcome.returned) ?? .returnedVoid
-                                let observed = ObservedResponse<Spec.Command>(lane: laneID, command: command, outcome: outcome)
+                                let observed = ObservedResponse<Spec.Command>(
+                                    lane: laneID,
+                                    command: command,
+                                    outcome: outcome,
+                                    interval: ObservedInterval(callTime: callTime, returnTime: returnTime)
+                                )
                                 results.append(observed)
-                                completionOrdered.withValue { $0.append(observed) }
                             } catch is ContractSkip {
-                                let observed = ObservedResponse<Spec.Command>(lane: laneID, command: command, outcome: .skipped)
+                                let returnTime = DispatchTime.now().uptimeNanoseconds
+                                let observed = ObservedResponse<Spec.Command>(
+                                    lane: laneID,
+                                    command: command,
+                                    outcome: .skipped,
+                                    interval: ObservedInterval(callTime: callTime, returnTime: returnTime)
+                                )
                                 results.append(observed)
-                                completionOrdered.withValue { $0.append(observed) }
                             } catch {
                                 commandFailed.value = true
                                 break
@@ -199,7 +209,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
         let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
         // Void-only, no-skip commands carry no response data, so linearizability reduces to final-state equivalence.
-        let hasResponseInfo = completionOrdered.value.contains { $0.outcome.returnValue != nil || $0.outcome.isSkipped }
+        let hasResponseInfo = collectedResponses.contains { lane in lane.contains { $0.outcome.returnValue != nil || $0.outcome.isSkipped } }
         if hasResponseInfo == false {
             nonisolated(unsafe) let oracleSpec = concurrentSpec
             nonisolated(unsafe) let sequentialResult = sequentialSpec.systemUnderTest
@@ -214,7 +224,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
         }
         // Try the realized completion order as a single linearization witness before the full interleaving search. The prefix array is materialized only here — the passed and no-response-info paths never need it.
         let prefixCommands = partition.prefixIndices.map { taggedCommands[$0].1 }
-        if realizedOrderIsLinearizable(prefix: prefixCommands, realizedOrder: completionOrdered.value, concurrentSpec: concurrentSpec) {
+        if realizedOrderIsLinearizable(prefix: prefixCommands, realizedOrder: realizedCompletionOrder(of: collectedResponses), concurrentSpec: concurrentSpec) {
             return .passed
         }
         return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)

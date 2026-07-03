@@ -118,6 +118,19 @@ private func worstCaseInterleavings(totalCommands: Int, lanes: Int) -> Int {
     return result
 }
 
+// MARK: - Realized Completion Order
+
+/// Merges per-lane observations into the order the commands actually returned, by ascending return timestamp.
+///
+/// This replaces the shared, locked completion log the lanes used to append to: a lock on the command path serializes the lanes between commands, and lock acquisition order can itself invert the true return order under contention. Sorting post-hoc on the per-command timestamps has neither problem. Observations without an interval sort last; the runners always record intervals, so that arm is defensive.
+func realizedCompletionOrder<Command>(
+    of laneResponses: [[ObservedResponse<Command>]]
+) -> [ObservedResponse<Command>] {
+    laneResponses
+        .joined()
+        .sorted { ($0.interval?.returnTime ?? .max) < ($1.interval?.returnTime ?? .max) }
+}
+
 // MARK: - Response Matching
 
 /// Whether a replayed command result matches an observed response, using the same rule as ``LinearizabilityChecker``: skip flags must agree, and non-skipped return values must be structurally equal. Shared by the synchronous and async preemptive witness checks so the cheap realized-order replay and the full interleaving search never disagree on what "the same response" means.
