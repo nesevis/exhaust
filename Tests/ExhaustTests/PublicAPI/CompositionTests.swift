@@ -80,7 +80,7 @@ struct CompositionTests {
         @Test("Very large arrays round-trip correctly")
         func largeArrays() {
             let gen = #gen(.uint8()).array(length: 1000 ... 1000)
-            #expect(#examine(gen, .samples(5), .replay(42)).passed)
+            #expect(#examine(gen, .budget(5), .replay(42)).passed)
         }
 
         @Test("Deeply nested structures round-trip correctly")
@@ -91,7 +91,7 @@ struct CompositionTests {
                 .array(length: 2 ... 3) // [[Int]]
                 .array(length: 2 ... 3) // [[[Int]]]
 
-            #expect(#examine(gen, .samples(10), .replay(42)).passed)
+            #expect(#examine(gen, .budget(10), .replay(42)).passed)
         }
     }
 
@@ -135,7 +135,7 @@ struct CompositionTests {
                 TestCompany(name: name, employees: employees, founded: founded)
             }
 
-            #expect(#examine(companyGen, .samples(20), .replay(42)).passed)
+            #expect(#examine(companyGen, .budget(20), .replay(42)).passed)
         }
 
         @Test("Complex generator composition stability")
@@ -146,7 +146,7 @@ struct CompositionTests {
                 (1, nestedGen),
                 (1, nestedGen.mapped(forward: { $0.reversed() }, backward: { $0.reversed() }))))
 
-            let report = #examine(pickedGen, .samples(100), .replay(42), .reflection(.silent))
+            let report = #examine(pickedGen, .budget(100), .replay(42), .reflection(.silent))
             #expect(report.valuesGenerated == 100)
         }
     }
@@ -198,7 +198,7 @@ struct CompositionTests {
                     backward: { (arr: [Int]) in arr.count }
                 )
 
-            #expect(#examine(gen, .samples(50), .replay(42)).passed)
+            #expect(#examine(gen, .budget(50), .replay(42)).passed)
         }
 
         @Test("bound with dependent generator works in forward direction")
@@ -230,7 +230,7 @@ struct CompositionTests {
             let gen = #gen(.int(), .string(), .bool()) { a, b, c in
                 Thing(a: a, b: b, c: c)
             }
-            #expect(#examine(gen, .samples(20), .replay(42)).passed)
+            #expect(#examine(gen, .budget(20), .replay(42)).passed)
         }
 
         @Test("Test bimap is replayable")
@@ -240,7 +240,7 @@ struct CompositionTests {
                 backward: { Int(bitPattern64: $0) }
             )
 
-            #expect(#examine(gen, .samples(20), .replay(42)).passed)
+            #expect(#examine(gen, .budget(20), .replay(42)).passed)
         }
     }
 }

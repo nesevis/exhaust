@@ -53,13 +53,13 @@ struct LargeNumericGeneratorTests {
     @Test("UInt128 validates with #examine")
     func examineUInt128() {
         let gen = #gen(.uint128())
-        #expect(#examine(gen, .samples(50)).passed)
+        #expect(#examine(gen, .budget(50)).passed)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Int128 validates with #examine")
     func examineInt128() {
         let gen = #gen(.int128())
-        #expect(#examine(gen, .samples(50)).passed)
+        #expect(#examine(gen, .budget(50)).passed)
     }
 }

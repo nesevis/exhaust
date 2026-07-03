@@ -32,13 +32,13 @@
         func customSamples() {
             assertMacro {
                 """
-                #examine(intGen, .samples(500))
+                #examine(intGen, .budget(500))
                 """
             } expansion: {
                 """
                 __ExhaustRuntime.__examine(
                     intGen,
-                    settings: [.samples(500)],
+                    settings: [.budget(500)],
                     fileID: #fileID,
                     filePath: #filePath,
                     line: #line,
@@ -72,13 +72,13 @@
         func samplesAndReplaySeed() {
             assertMacro {
                 """
-                #examine(intGen, .samples(100), .replay(99))
+                #examine(intGen, .budget(100), .replay(99))
                 """
             } expansion: {
                 """
                 __ExhaustRuntime.__examine(
                     intGen,
-                    settings: [.samples(100), .replay(99)],
+                    settings: [.budget(100), .replay(99)],
                     fileID: #fileID,
                     filePath: #filePath,
                     line: #line,

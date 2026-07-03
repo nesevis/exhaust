@@ -29,7 +29,7 @@ public enum ExamineSeverity: Sendable {
 /// Controls test behavior for ``#examine`` validation runs, passed as variadic arguments.
 ///
 /// ```swift
-/// #examine(personGen, .reflection(.warning), .samples(500))
+/// #examine(personGen, .reflection(.warning), .budget(500))
 /// #examine(personGen, .severity(.silent), .reflection(.error))
 /// ```
 public enum ExamineSettings: Sendable {
@@ -52,7 +52,7 @@ public enum ExamineSettings: Sendable {
     case filterHealth(ExamineSeverity)
 
     /// Sets the number of values to generate and validate. Defaults to 200 when omitted.
-    case samples(Int)
+    case budget(Int)
 
     /// Sets a fixed seed for deterministic validation runs.
     ///
@@ -114,7 +114,8 @@ package struct ExamineReportingConfiguration {
                     reflectionOverride = value
                 case let .filterHealth(value):
                     filterHealthOverride = value
-                case let .samples(count):
+                case let .budget(count):
+                    precondition(count >= 0, "Budget must be non-negative")
                     samples = count
                 case let .replay(seed):
                     replaySeed = seed

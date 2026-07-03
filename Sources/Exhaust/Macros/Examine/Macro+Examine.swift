@@ -9,7 +9,7 @@ import ExhaustCore
 /// #examine(personGen)
 ///
 /// // Assert that the generator covers at least 7/10 deciles for every numeric type:
-/// let report = #examine(personGen, .samples(500))
+/// let report = #examine(personGen, .budget(500))
 /// #expect(report.numericCoverage.allSatisfy { $0.decilesCovered >= 7 })
 /// #expect(report.branchCoverage >= 0.9)
 /// ```
@@ -18,7 +18,7 @@ import ExhaustCore
 ///
 /// - Parameters:
 ///   - gen: The generator to validate.
-///   - settings: Variadic ``ExamineSettings`` controlling severity, sample count, seed, and output suppression.
+///   - settings: Variadic ``ExamineSettings`` controlling severity, sample budget, seed, and output suppression.
 /// - Returns: An ``ExamineReport`` with correctness results, coverage metrics, and a representative example of the generator's output structure.
 @freestanding(expression)
 @discardableResult
@@ -32,14 +32,14 @@ public macro examine<GeneratedValue>(
 /// The trailing closure receives two independently replayed values from the same choice tree. Return `true` when the values are equivalent under your domain's equality. A `false` return records a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure, indicating that the generator or its output type introduces non-determinism that the framework cannot see (for example, a stored `UUID()` or a non-deterministic closure inside `.map`).
 ///
 /// ```swift
-/// #examine(personGen, .samples(200)) { lhs, rhs in
+/// #examine(personGen, .budget(200)) { lhs, rhs in
 ///     lhs.name == rhs.name && lhs.age == rhs.age
 /// }
 /// ```
 ///
 /// - Parameters:
 ///   - gen: The generator to validate.
-///   - settings: Variadic ``ExamineSettings`` controlling severity, sample count, seed, and output suppression.
+///   - settings: Variadic ``ExamineSettings`` controlling severity, sample budget, seed, and output suppression.
 ///   - replayCheck: Compares two replayed values for equivalence. Called once per sample with two independent replays of the same choice tree. Return `false` to record a divergence failure.
 /// - Returns: An ``ExamineReport`` with correctness results, replay determinism counts, and coverage metrics.
 @freestanding(expression)
