@@ -5,7 +5,7 @@ import ExhaustCore
 
 /// Runs a synchronous contract property test, dispatching to the `.sequential`, `.tasks`, or `.threads` runner based on the contract's ``ExecutionModel``.
 ///
-/// `.sequential` and `.tasks` contracts run commands one at a time and check `@Invariant` after each step. A synchronous `.tasks` contract has no suspension points to interleave at, so it executes sequentially — use ``AsyncContractSpec`` (async commands) for cooperative interleaving. `.threads` dispatches commands across real GCD threads and checks the `@Oracle` against a sequential replay. On failure, the sequence is reduced to a minimal counterexample.
+/// `.sequential` and `.tasks` contracts run commands one at a time and check `@Invariant` after each step. A synchronous `.tasks` contract has no suspension points to interleave at, so it executes sequentially. Cooperative interleaving requires async commands (``AsyncContractSpec``). `.threads` dispatches commands across real GCD threads and checks the `@Oracle` against a sequential replay. On failure, the sequence is reduced to a minimal counterexample. Always awaited: the test function must be `async` even when every command is synchronous.
 ///
 /// ```swift
 /// @Test func boundedQueueBehavior() async {
@@ -13,17 +13,7 @@ import ExhaustCore
 /// }
 /// ```
 ///
-/// ## Settings
-///
-/// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
-/// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
-/// - `.parallelize(lanes: _)`: number of concurrent execution lanes (one through four, default two). Only meaningful for `.threads` contracts.
-/// - `.replay(_)`: fixed seed for deterministic reproduction.
-/// - `.idleTimeoutMs(_)`: maximum milliseconds the drain loop waits before declaring a timeout (default 2000). Only meaningful for concurrent contracts.
-/// - `.onReport(_)`: registers a closure that receives an ``ExhaustReport`` after the test completes.
-/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
-/// - `.suppress(.logs)`: silences all console output.
-/// - `.log(_)`: controls log verbosity. Defaults to `.error`.
+/// Settings are variadic ``ContractSettings`` values controlling command limits, budgets (``ExhaustBudget``), lane count, deterministic replay, timeouts, output suppression, and diagnostics. Each case documents itself. The full guide is docs/EXECUTE-contract-testing.md.
 ///
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
@@ -43,17 +33,7 @@ public macro execute<Spec: ContractSpec>(
 /// }
 /// ```
 ///
-/// ## Settings
-///
-/// - `.parallelize(lanes: _)`: number of concurrent execution lanes (one through four, default two).
-/// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
-/// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
-/// - `.replay(_)`: fixed seed for deterministic reproduction.
-/// - `.idleTimeoutMs(_)`: maximum milliseconds the drain loop waits before declaring a timeout (default 2000).
-/// - `.onReport(_)`: registers a closure that receives an ``ExhaustReport`` after the test completes.
-/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned value.
-/// - `.suppress(.logs)`: silences all console output.
-/// - `.log(_)`: controls log verbosity. Defaults to `.error`.
+/// Settings are variadic ``ContractSettings`` values controlling command limits, budgets (``ExhaustBudget``), lane count, deterministic replay, timeouts, output suppression, and diagnostics. Each case documents itself. The full guide is docs/EXECUTE-contract-testing.md.
 ///
 /// - Returns: A ``ContractResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
