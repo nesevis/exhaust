@@ -46,7 +46,7 @@ let user = try #example(userGenerator)
 #expect(process(user).isValid)
 ```
 
-Your test now runs against a generated user each time rather than a hand-crafted fixture. Strictly speaking that makes it a property test, just one with a sample size of 1. After all, your assertion is being checked against a generated input instead of a hand-picked one. If you would like determinism you can also specify a `seed` to ensure the generated value is always the same, or a `count` to generate more than one. `#example` generates values at size 50 on Exhaust's 0-to-100 size scale — deliberately middle-of-the-road.
+Your test now runs against a generated user each time rather than a hand-crafted fixture. Strictly speaking that makes it a property test, just one with a sample size of 1. After all, your assertion is being checked against a generated input instead of a hand-picked one. If you would like determinism you can also specify a `seed` to ensure the generated value is always the same, or a `count` to generate more than one. Single values generate at size 50 on Exhaust's 0-to-100 size scale, deliberately middle-of-the-road. The seed accepts the same strings `#exhaust` prints in failure reports, so `#example(gen, seed: "5QF8M2-3")` hands you the exact value a failing run generated.
 
 You're not yet getting everything Exhaust offers this way: just one input per run instead of hundreds, and if the test fails you'll see the whole random value that triggered it rather than a minimal counterexample. Those benefits come with the next step up, when you move the assertion inside an `#exhaust` call.
 
@@ -343,6 +343,17 @@ func myDedupePreservesDistinctElements() {
 ```
 
 Each string replays a specific reduced counterexample. The random distribution still runs, but these particular cases run before it every time.
+
+The trait re-runs the case; sometimes you want the value itself, to step through in a debugger or to pin down in an ordinary example-based test. The same seed extracts it: `#example` accepts failure-report seeds and returns the input exactly as that iteration generated it, before reduction.
+
+```swift
+@Test func dedupeKeepsOneOfEachDuplicate() throws {
+    let input = try #example(generator, seed: "5QF8M2-3")
+    #expect(Set(myDedupe(input)) == Set(input))
+}
+```
+
+A seed is a coordinate in the search, so this extracts the same input only while the generator is unchanged. For a regression that survives generator changes, print the extracted value once and commit the literal. (The reduced counterexample, `[0, 0]` in the report above, is available too: it's the return value of the `#exhaust` call.)
 
 By default, `#exhaust` and `#explore` record failures as Swift Testing issues via `Issue.record`, so they surface in the test runner alongside any `#expect` failures. If you need to assert on the result of the run yourself — checking that a property fails in a particular way, say — there's a way to suppress that reporting and inspect the return value directly.
 

@@ -139,7 +139,7 @@ Some fields fall back to a constant from the example, pinned with `.just(decoded
 > [!Tip]
 > Run `#examine` on a synthesised generator to see which fields are fully generated and which are pinned:
 > ```swift
-> let report = #examine(gen, .samples(50))
+> let report = #examine(gen, .budget(50))
 > // Output includes:
 > //   Correctness: reflection skipped (synthesised generator)
 > //   Pinned fields: 1 field could not be synthesised (constant value from example JSON)
@@ -158,7 +158,7 @@ let person = try #example(personGen)
 let people = try #example(personGen, count: 100, seed: 42)
 ```
 
-`#example` is throwing because generator synthesis can fail at runtime for types whose `Decodable` conformance has invariants that preclude random generation. `#example` generates values at size 50 on Exhaust's 0-to-100 size scale. Specifying a `seed` makes the output deterministic. Specifying `count` generates multiple values.
+`#example` is throwing because generator synthesis can fail at runtime for types whose `Decodable` conformance has invariants that preclude random generation. The single-value form generates at size 50 on Exhaust's 0-to-100 size scale. The `count` form runs the same interpreter as `#exhaust`'s sampling phase, so with the same seed the values match that phase one for one. A seed accepts a raw number or a string copied from a failure report: `#example(gen, seed: "5QF8M2-3")` recreates exactly the value that iteration generated.
 
 ## Recursive generators
 

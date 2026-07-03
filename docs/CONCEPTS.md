@@ -130,7 +130,7 @@ Reproduce: .replay("7MK2N9-4")
 
 It re-runs generation, so if you change the generator, the same seed lands on a different case. This is true of seeds in every property-based testing library. A seed is a coordinate in a search, and the search depends on the generator.
 
-A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))`) so its case runs before the random search every time. While the generator is unchanged it re-tests the same case and catches that regression the moment it returns. To pin an exact input permanently, regardless of later generator changes, commit the literal value and reduce it with `reflecting:` instead.
+A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))`) so its case runs before the random search every time. While the generator is unchanged it re-tests the same case and catches that regression the moment it returns. To pin an exact input permanently, regardless of later generator changes, commit the literal value and reduce it with `reflecting:` instead. When you need the value itself rather than a re-run, `#example(gen, seed: "…")` extracts the input a failure seed points at.
 
 ## Glossary
 
