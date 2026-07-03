@@ -6,8 +6,9 @@
 //
 // The original demonstrates multi-object stateful workflows using bundles:
 // multiple heap instances are created, pushed to, popped from, and merged.
-// This port reframes the problem as a `@Contract` test exercising Exhaust's
-// `Bundle<T>` API.
+// This port reframes the problem as a `@Contract` test where commands select
+// among previously created heaps by resolving a generated index against
+// spec-owned handle state (wrap-around indexing, skip when empty).
 //
 // The SUT is a `BuggyHeap` (a min-heap backed by an array) with a deliberate
 // merge bug: when merging another heap with more than one element, the last
@@ -21,7 +22,7 @@ import Testing
 
 // MARK: - Tests
 
-@Suite("Heap merge contract tests (Bundle)", .serialized, .tags(.contract))
+@Suite("Heap merge contract tests", .serialized, .tags(.contract))
 struct HeapMergeTests {
     @Test("Detects dropped element during merge via invariant or postcondition")
     func detectsDroppedElementDuringMergeViaInvariantOrPostcondition() async throws {
@@ -99,17 +100,17 @@ struct HeapAliasingTests {
 // MARK: - Contract
 
 // Uses parallel arrays (`heaps` and `expectedContents`) indexed by integer
-// handles stored in a `Bundle<Int>`. Each command draws or consumes bundle
-// handles to select which heap to operate on. The `merge` command consumes
-// the source handle (destroying it) and draws the target handle (keeping it),
-// mirroring the Hypothesis tutorial's use of bundle consumption for exclusive
-// ownership.
+// handles stored in the spec-owned `liveHeaps` list. Each command resolves a
+// generated index against `liveHeaps` with wrap-around to select which heap
+// to operate on. The `merge` command removes the source handle (destroying
+// it) and keeps the target handle, mirroring the Hypothesis tutorial's use
+// of bundle consumption for exclusive ownership.
 
 @Contract(.sequential)
 final class HeapMergeContract {
     var expectedContents: [[Int]] = []
     @SystemUnderTest var heaps: [BuggyHeap] = []
-    let heapRefs = Bundle<Int>()
+    var liveHeaps: [Int] = []
 
     @Invariant
     func elementCountsMatch() -> Bool {
@@ -120,12 +121,13 @@ final class HeapMergeContract {
     func newHeap() throws {
         heaps.append(BuggyHeap())
         expectedContents.append([])
-        heapRefs.add(heaps.count - 1)
+        liveHeaps.append(heaps.count - 1)
     }
 
     @Command(weight: 5, .int(in: 0 ... 99), .int(in: 0 ... 50))
     func push(heapIndex: Int, value: Int) throws {
-        guard let idx = heapRefs.draw(at: heapIndex) else { throw skip() }
+        guard liveHeaps.isEmpty == false else { throw skip() }
+        let idx = liveHeaps[heapIndex % liveHeaps.count]
         heaps[idx].push(value)
         expectedContents[idx].append(value)
         expectedContents[idx].sort()
@@ -133,7 +135,8 @@ final class HeapMergeContract {
 
     @Command(weight: 3, .int(in: 0 ... 99))
     func pop(heapIndex: Int) throws {
-        guard let idx = heapRefs.draw(at: heapIndex) else { throw skip() }
+        guard liveHeaps.isEmpty == false else { throw skip() }
+        let idx = liveHeaps[heapIndex % liveHeaps.count]
         guard !heaps[idx].isEmpty else { throw skip() }
         let actual = heaps[idx].pop()
         let expectedMin = expectedContents[idx].removeFirst()
@@ -142,12 +145,9 @@ final class HeapMergeContract {
 
     @Command(weight: 2, .int(in: 0 ... 99), .int(in: 0 ... 99))
     func merge(sourceIndex: Int, targetIndex: Int) throws {
-        guard heapRefs.count >= 2 else { throw skip() }
-        guard let src = heapRefs.consume(at: sourceIndex) else { throw skip() }
-        guard let tgt = heapRefs.draw(at: targetIndex) else {
-            heapRefs.add(src)
-            throw skip()
-        }
+        guard liveHeaps.count >= 2 else { throw skip() }
+        let src = liveHeaps.remove(at: sourceIndex % liveHeaps.count)
+        let tgt = liveHeaps[targetIndex % liveHeaps.count]
         heaps[tgt].merge(heaps[src])
         expectedContents[tgt] = (expectedContents[tgt] + expectedContents[src]).sorted()
     }
@@ -158,10 +158,10 @@ final class HeapMergeContract {
 }
 
 // Faithfully reproduces the MacIver article's multi-heap scenario. Both
-// merge arguments use `draw` (not `consume`), allowing self-merge —
-// `merge(v1, v1)` passes the same heap object for both parameters.
+// merge arguments resolve by index without removal, allowing self-merge —
+// `merge(v1, v1)` selects the same heap object for both parameters.
 // Because `SpliceHeap` is a class, push/pop mutations are visible through
-// all bundle references to that heap.
+// all references to that heap.
 //
 // No separate model is needed. The invariant checks the heap property
 // structurally (parent ≤ children at every index), and the pop
@@ -170,7 +170,6 @@ final class HeapMergeContract {
 @Contract(.sequential)
 final class HeapAliasingContract {
     @SystemUnderTest var allHeaps: [SpliceHeap] = []
-    let heapRefs = Bundle<SpliceHeap>()
 
     @Invariant
     func heapPropertyHolds() -> Bool {
@@ -187,20 +186,19 @@ final class HeapAliasingContract {
 
     @Command(weight: 2)
     func newHeap() throws {
-        let heap = SpliceHeap()
-        allHeaps.append(heap)
-        heapRefs.add(heap)
+        allHeaps.append(SpliceHeap())
     }
 
     @Command(weight: 4, .int(in: 0 ... 99), .int(in: -5 ... 5))
     func push(heapIndex: Int, value: Int) throws {
-        guard let heap = heapRefs.draw(at: heapIndex) else { throw skip() }
-        heap.push(value)
+        guard allHeaps.isEmpty == false else { throw skip() }
+        allHeaps[heapIndex % allHeaps.count].push(value)
     }
 
     @Command(weight: 2, .int(in: 0 ... 99))
     func pop(heapIndex: Int) throws {
-        guard let heap = heapRefs.draw(at: heapIndex) else { throw skip() }
+        guard allHeaps.isEmpty == false else { throw skip() }
+        let heap = allHeaps[heapIndex % allHeaps.count]
         guard !heap.isEmpty else { throw skip() }
         let expectedMin = heap.elements.min()!
         let actual = heap.pop()
@@ -209,11 +207,10 @@ final class HeapAliasingContract {
 
     @Command(weight: 4, .int(in: 0 ... 99), .int(in: 0 ... 99))
     func merge(index1: Int, index2: Int) throws {
-        guard let heap1 = heapRefs.draw(at: index1) else { throw skip() }
-        guard let heap2 = heapRefs.draw(at: index2) else { throw skip() }
-        let merged = heap1.merged(with: heap2)
-        allHeaps.append(merged)
-        heapRefs.add(merged)
+        guard allHeaps.isEmpty == false else { throw skip() }
+        let heap1 = allHeaps[index1 % allHeaps.count]
+        let heap2 = allHeaps[index2 % allHeaps.count]
+        allHeaps.append(heap1.merged(with: heap2))
     }
 
     func failureDescription() -> String? {
@@ -298,16 +295,16 @@ struct BuggyHeap {
     }
 }
 
-// A reference-type min-heap for testing aliased bundle references. Push and
+// A reference-type min-heap for testing aliased handle references. Push and
 // pop use correct sift-up/sift-down. The merge function uses a sorted-splice
 // that treats heap arrays as sorted lists — a subtly wrong assumption since
 // heaps are only partially ordered (parent ≤ children, but siblings are
 // unordered). This is the "interestingly broken" merge from MacIver's article.
 //
-// Because SpliceHeap is a class, the bundle stores references. Drawing the
-// same heap twice yields the same object, enabling self-merge patterns like
-// `merge(heap1=v1, heap2=v1)` that are central to the original Hypothesis
-// counterexample. Push and pop mutate in place, so all bundle references
+// Because SpliceHeap is a class, the handle list stores references. Resolving
+// the same index twice yields the same object, enabling self-merge patterns
+// like `merge(heap1=v1, heap2=v1)` that are central to the original
+// Hypothesis counterexample. Push and pop mutate in place, so all references
 // to the same heap see the latest state.
 
 final class SpliceHeap {

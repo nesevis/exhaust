@@ -62,22 +62,25 @@ struct ConvenienceOverloadTests {
 
     @Test("data(prefix:) produces data starting with prefix")
     func dataWithPrefix() throws {
-        let value = try #example(.data(prefix: .png))
-        #expect(Array(value.prefix([UInt8].png.count)) == .png)
+        let magic: [UInt8] = [0xCA, 0xFE, 0xBA, 0xBE]
+        let value = try #example(.data(prefix: magic))
+        #expect(Array(value.prefix(magic.count)) == magic)
     }
 
     @Test("data(prefix:length:) accepts Int range literal")
     func dataWithPrefixIntRange() throws {
-        let value = try #example(.data(prefix: .jpeg, length: 16 ... 64))
-        let suffixLength = value.count - [UInt8].jpeg.count
+        let magic: [UInt8] = [0xDE, 0xAD, 0xBE, 0xEF]
+        let value = try #example(.data(prefix: magic, length: 16 ... 64))
+        let suffixLength = value.count - magic.count
         #expect(suffixLength >= 16 && suffixLength <= 64)
-        #expect(Array(value.prefix([UInt8].jpeg.count)) == .jpeg)
+        #expect(Array(value.prefix(magic.count)) == magic)
     }
 
     @Test("data(prefix:length:) accepts Int literal")
     func dataWithPrefixIntLength() throws {
-        let value = try #example(.data(prefix: .pdf, length: 32))
-        #expect(value.count == [UInt8].pdf.count + 32)
-        #expect(Array(value.prefix([UInt8].pdf.count)) == .pdf)
+        let magic: [UInt8] = [0xFE, 0xED, 0xFA, 0xCE]
+        let value = try #example(.data(prefix: magic, length: 32))
+        #expect(value.count == magic.count + 32)
+        #expect(Array(value.prefix(magic.count)) == magic)
     }
 }
