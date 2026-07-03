@@ -10,7 +10,7 @@ struct PreemptiveRacyAccountTests {
         let result = try #require(
             await #execute(
                 RacyAccountSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .budget(.custom(coverage: 20000, sampling: 20000)),
                 .suppress(.issueReporting),
                 .idleTimeoutMs(30000),

@@ -32,7 +32,7 @@ public enum ContractSettings {
     /// Sets the number of concurrent execution lanes. Default is ``ConcurrencyLevel/two``.
     ///
     /// Each lane runs its assigned commands concurrently. For `.tasks` contracts, the cooperative scheduler interleaves continuations at every `await` boundary. For `.threads` contracts, each lane dispatches to a separate GCD thread.
-    case concurrent(ConcurrencyLevel)
+    case parallelize(lanes: ConcurrencyLevel)
 
     /// Sets the maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout. Default is 2000.
     ///

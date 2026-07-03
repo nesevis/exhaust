@@ -9,7 +9,7 @@ struct PreemptiveSmokeTestTests {
     func smokeTestCatchesSequentialBugBeforeConcurrentPhase() async {
         let result = await #execute(
             SequentiallyBrokenSpec.self,
-            .concurrent(.two),
+            .parallelize(lanes: .two),
             .commandLimit(10),
             .budget(.custom(coverage: 0, sampling: 0)),
             .suppress(.issueReporting)
@@ -22,7 +22,7 @@ struct PreemptiveSmokeTestTests {
         let result = try #require(
             await #execute(
                 SequentiallyBrokenSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .commandLimit(10),
                 .budget(.custom(coverage: 0, sampling: 0)),
                 .suppress(.issueReporting)

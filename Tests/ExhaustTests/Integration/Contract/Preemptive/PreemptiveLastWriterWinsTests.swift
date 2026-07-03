@@ -9,7 +9,7 @@ struct PreemptiveLastWriterWinsTests {
         var report: ExhaustReport?
         let result = await #execute(
             AtomicLastWriterWinsSpec.self,
-            .concurrent(.two),
+            .parallelize(lanes: .two),
             .idleTimeoutMs(30000),
             .suppress(.issueReporting),
             .onReport { report = $0 }

@@ -62,7 +62,7 @@ struct ResolvedConcurrentConfig {
         var invalidSeed: ReplaySeed?
         for setting in settings {
             switch setting {
-                case let .concurrent(level):
+                case let .parallelize(level):
                     config.concurrencyLevel = level.rawValue
                 case let .budget(budget):
                     config.budget = budget

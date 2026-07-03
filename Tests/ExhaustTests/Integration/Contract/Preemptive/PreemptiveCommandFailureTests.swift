@@ -9,7 +9,7 @@ struct PreemptiveCommandFailureTests {
         let result = try #require(
             await #execute(
                 SyncPrefixFailingSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .suppress(.all)
             )
         )
@@ -21,7 +21,7 @@ struct PreemptiveCommandFailureTests {
         let result = try #require(
             await #execute(
                 SyncLaneFailingSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .suppress(.all)
             )
         )
@@ -33,7 +33,7 @@ struct PreemptiveCommandFailureTests {
         let result = try #require(
             await #execute(
                 AsyncPrefixFailingSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .suppress(.all)
             )
         )
@@ -45,7 +45,7 @@ struct PreemptiveCommandFailureTests {
         let result = try #require(
             await #execute(
                 AsyncLaneFailingSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .suppress(.all)
             )
         )

@@ -228,7 +228,7 @@ The `.sequential` contracts shown above run each command one at a time. Some bug
 @Test func counterIsSafeUnderConcurrency() async {
     await #execute(
         NonAtomicCounterContract.self,
-        .concurrent(.two),
+        .parallelize(lanes: .two),
         .commandLimit(6),
         .budget(.thorough)
     )
@@ -270,11 +270,11 @@ The cooperative scheduler interleaves at `await` suspension points, wherever a c
 
 SUTs that have races at suspension points (the `let v = state; await Task.yield(); state = v + 1` pattern) are exactly what `.tasks` concurrent testing finds well. SUTs whose races are in synchronous code behind an async facade (locks, dispatch queues, atomics) need `.threads` instead.
 
-### Concurrency level
+### Lane count
 
-`.concurrent(N)` controls how many concurrent lanes commands are distributed across. The default is 2, which suffices for most data races. A study of 105 real-world concurrency bugs in MySQL, Apache, Mozilla, and OpenOffice found that 96% manifest with just two threads (Lu et al., [Learning from Mistakes](https://dl.acm.org/doi/10.1145/1346281.1346323), ASPLOS 2008). Use three or more when you suspect the bug requires three-way interleaving (for example, ABA problems or three-participant lost updates). The maximum is four.
+`.parallelize(lanes:)` controls how many concurrent lanes commands are distributed across. The default is 2, which suffices for most data races. A study of 105 real-world concurrency bugs in MySQL, Apache, Mozilla, and OpenOffice found that 96% manifest with just two threads (Lu et al., [Learning from Mistakes](https://dl.acm.org/doi/10.1145/1346281.1346323), ASPLOS 2008). Use three or more when you suspect the bug requires three-way interleaving (for example, ABA problems or three-participant lost updates). The maximum is four.
 
-`.concurrent(.one)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
+`.parallelize(lanes: .one)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
 
 ### Idle timeout
 
@@ -376,7 +376,7 @@ Running the test:
 @Test func counterIsThreadSafe() async {
     await #execute(
         RacyCounterContract.self,
-        .concurrent(.two),
+        .parallelize(lanes: .two),
         .commandLimit(6),
         .budget(.thorough)
     )
@@ -416,7 +416,7 @@ All settings are passed as variadic arguments to `#execute`:
 | Setting | Default | Effect |
 |---------|---------|--------|
 | `.commandLimit(N)` | auto-estimated (`.threads`: 10) | Maximum commands per generated sequence. Estimated from the command domain and coverage budget; `.tasks` caps the estimate at 40, `.threads` defaults to a flat 10. |
-| `.concurrent(N)` | 2 | Number of concurrent lanes (1 through 4). |
+| `.parallelize(lanes:)` | 2 | Number of concurrent lanes (1 through 4). |
 | `.budget(.thorough)` | `.standard` | Controls coverage rows and random sampling iterations. |
 | `.idleTimeoutMs(ms)` | 2000 | Milliseconds before a stalled run is reported without reduction: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. |
 | `.replay("seed")` | — | Deterministic replay from a failure report seed. |

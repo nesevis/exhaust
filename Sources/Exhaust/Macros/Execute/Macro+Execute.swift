@@ -17,7 +17,7 @@ import ExhaustCore
 ///
 /// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
 /// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
-/// - `.concurrent(_)`: number of concurrent execution lanes (one through four, default two). Only meaningful for `.threads` contracts.
+/// - `.parallelize(lanes: _)`: number of concurrent execution lanes (one through four, default two). Only meaningful for `.threads` contracts.
 /// - `.replay(_)`: fixed seed for deterministic reproduction.
 /// - `.idleTimeoutMs(_)`: maximum milliseconds the drain loop waits before declaring a timeout (default 2000). Only meaningful for concurrent contracts.
 /// - `.onReport(_)`: registers a closure that receives an ``ExhaustReport`` after the test completes.
@@ -39,13 +39,13 @@ public macro execute<Spec: ContractSpec>(
 ///
 /// ```swift
 /// @Test func concurrentQueueBehavior() async {
-///     let result = await #execute(ConcurrentQueueContract.self, .concurrent(.two), .commandLimit(12))
+///     let result = await #execute(ConcurrentQueueContract.self, .parallelize(lanes: .two), .commandLimit(12))
 /// }
 /// ```
 ///
 /// ## Settings
 ///
-/// - `.concurrent(_)`: number of concurrent execution lanes (one through four, default two).
+/// - `.parallelize(lanes: _)`: number of concurrent execution lanes (one through four, default two).
 /// - `.commandLimit(_)`: maximum commands per generated sequence. Reduction may produce shorter sequences.
 /// - `.budget(_)`: iteration budgets for coverage and sampling. Defaults to `.standard` (200/200).
 /// - `.replay(_)`: fixed seed for deterministic reproduction.

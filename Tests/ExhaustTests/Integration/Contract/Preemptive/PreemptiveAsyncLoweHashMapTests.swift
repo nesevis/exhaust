@@ -9,7 +9,7 @@ struct PreemptiveAsyncLoweHashMapTests {
     func asyncDetectsGhostEntryFromBuggyDelete() async {
         let result = await #execute(
             AsyncLoweHashMapSpec.self,
-            .concurrent(.two),
+            .parallelize(lanes: .two),
             .replay(.numeric(1337)),
             .commandLimit(20),
             // Very high budget due to the non-deterministic interleaving.

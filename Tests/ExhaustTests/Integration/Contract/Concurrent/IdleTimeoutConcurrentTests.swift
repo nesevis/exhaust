@@ -49,7 +49,7 @@ struct IdleTimeoutConcurrentTests {
         let result = await withIssueReporters([reporter]) {
             await #execute(
                 StallingAsyncSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .commandLimit(2),
                 .idleTimeoutMs(20),
                 .budget(.custom(coverage: 0, sampling: 10)),
@@ -70,7 +70,7 @@ struct IdleTimeoutConcurrentTests {
     func asyncPreemptiveGroupWaitBoundPreventsHangOnSynchronousSUTDeadlock() async {
         _ = await #execute(
             DeadlockingAsyncSpec.self,
-            .concurrent(.two),
+            .parallelize(lanes: .two),
             .commandLimit(2),
             .idleTimeoutMs(50),
             .budget(.custom(coverage: 0, sampling: 50)),

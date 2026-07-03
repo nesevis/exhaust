@@ -10,7 +10,7 @@ struct PreemptiveObjCExceptionTests {
         let result = try #require(
             await #execute(
                 ThrowingObjCSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .commandLimit(4),
                 .budget(.custom(coverage: 0, sampling: 50)),
                 .suppress(.issueReporting)

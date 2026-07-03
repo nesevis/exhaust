@@ -196,7 +196,7 @@ public extension __ExhaustRuntime {
                     collectOpenPBTStats = true
                 case .includeDiff:
                     includeDiff = true
-                case let .parallel(lanes):
+                case let .parallelize(lanes):
                     parallelLanes = UInt8(lanes.rawValue)
                 case let .log(level):
                     logLevel = level

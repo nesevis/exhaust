@@ -5,7 +5,7 @@ import Testing
 struct ParallelExploreTests {
     private static let budget = ExhaustBudget.custom(coverage: 10, sampling: 200)
 
-    @Test("Passing property with .parallel reaches coverage for all directions")
+    @Test("Passing property with .parallelize reaches coverage for all directions")
     func passingPropertyWithParallelReachesCoverageForAllDirections() {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
@@ -16,7 +16,7 @@ struct ParallelExploreTests {
                 ("high", { (value: Int) in value > 70 }),
             ],
             .budget(Self.budget),
-            .parallel,
+            .parallelize,
             .suppress(.all)
         ) { value in
             value >= 0
@@ -38,7 +38,7 @@ struct ParallelExploreTests {
                 ("high", { (value: Int) in value > 70 }),
             ],
             .budget(Self.budget),
-            .parallel,
+            .parallelize,
             .suppress(.all)
         ) { value in
             value < 50
@@ -58,7 +58,7 @@ struct ParallelExploreTests {
                 ("large", { (value: Int) in value >= 5000 }),
             ],
             .budget(.custom(coverage: 100, sampling: 2000)),
-            .parallel,
+            .parallelize,
             .suppress(.all)
         ) { value in
             value < 5
@@ -78,7 +78,7 @@ struct ParallelExploreTests {
                 ("high", { (value: Int) in value >= 50 }),
             ],
             .budget(Self.budget),
-            .parallel,
+            .parallelize,
             .suppress(.all)
         ) { value in
             value >= 0
@@ -102,7 +102,7 @@ struct ParallelExploreTests {
                 ("high", { (value: Int) in value >= 50 }),
             ],
             .budget(Self.budget),
-            .parallel,
+            .parallelize,
             .suppress(.all)
         ) { value in
             value >= 0
@@ -119,7 +119,7 @@ struct ParallelExploreTests {
             gen,
             directions: [("any", { (_: Int) in true })],
             .budget(Self.budget),
-            .parallel,
+            .parallelize,
             .suppress(.all)
         ) { value in
             value >= 0
@@ -139,7 +139,7 @@ struct ParallelExploreTests {
                 ("high", { (value: Int) in value >= 50 }),
             ],
             .budget(Self.budget),
-            .parallel,
+            .parallelize,
             .suppress(.all)
         ) { value in
             value >= 0
@@ -158,7 +158,7 @@ struct ParallelExploreTests {
                 ("small", { (value: Int) in value < 30 }),
             ],
             .budget(.custom(coverage: 20, sampling: 400)),
-            .parallel,
+            .parallelize,
             .suppress(.all)
         ) { value in
             value >= 0

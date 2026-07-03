@@ -155,7 +155,7 @@ struct PreemptiveDetectionBoundaryParityTests {
         let result = try #require(
             await #execute(
                 PreemptiveThreeWayRaceParitySpec.self,
-                .concurrent(.three),
+                .parallelize(lanes: .three),
                 .suppress(.issueReporting)
             )
         )

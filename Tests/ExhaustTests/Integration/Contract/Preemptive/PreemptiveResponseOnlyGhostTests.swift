@@ -10,7 +10,7 @@ struct PreemptiveResponseOnlyGhostTests {
     func responseOnlyViolationShouldBeDetected() async {
         let result = await #execute(
             RacySetSpec.self,
-            .concurrent(.two),
+            .parallelize(lanes: .two),
             .idleTimeoutMs(5000),
             .suppress(.all)
         )

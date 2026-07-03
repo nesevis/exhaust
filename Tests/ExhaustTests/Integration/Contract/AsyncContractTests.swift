@@ -11,7 +11,7 @@ struct AsyncContractTests {
     func passingAsyncSpecProducesNoCounterexample() async {
         let result = await #execute(
             AsyncCounterSpec.self,
-            .concurrent(.one),
+            .parallelize(lanes: .one),
             .commandLimit(8),
             .budget(.custom(coverage: 0, sampling: 100)),
             .suppress(.issueReporting)
@@ -44,7 +44,7 @@ struct AsyncContractTests {
     func asyncContractWithSkipWorksCorrectly() async {
         let result = await #execute(
             AsyncSkipSpec.self,
-            .concurrent(.one),
+            .parallelize(lanes: .one),
             .commandLimit(8),
             .budget(.custom(coverage: 0, sampling: 100)),
             .suppress(.issueReporting)
@@ -57,7 +57,7 @@ struct AsyncContractTests {
     func mixedSyncasyncCommandsProduceAsyncContractSpecConformance() async {
         let result = await #execute(
             MixedAsyncSpec.self,
-            .concurrent(.one),
+            .parallelize(lanes: .one),
             .commandLimit(8),
             .budget(.custom(coverage: 0, sampling: 100)),
             .suppress(.issueReporting)

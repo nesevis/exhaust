@@ -84,14 +84,14 @@ public extension __ExhaustRuntime {
     ) async -> ContractResult<Spec>? {
         if Spec.self is any Actor.Type {
             let requestedLevel = settings.compactMap { setting -> Int? in
-                if case let .concurrent(level) = setting {
+                if case let .parallelize(level) = setting {
                     return level.rawValue
                 }
                 return nil
             }.last
             if let requestedLevel, requestedLevel > 1 {
                 reportIssue(
-                    "Actor isolation serializes all command dispatch. .concurrent(\(requestedLevel)) will be ignored.",
+                    "Actor isolation serializes all command dispatch. .parallelize(lanes: \(requestedLevel)) will be ignored.",
                     severity: .warning,
                     fileID: fileID,
                     filePath: filePath,

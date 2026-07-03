@@ -11,7 +11,7 @@ struct PreemptiveNonAtomicCounterTests {
         let result = try #require(
             await #execute(
                 PreemptiveCounterSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -26,7 +26,7 @@ struct PreemptiveNonAtomicCounterTests {
         let result = try #require(
             await #execute(
                 PreemptiveCounterSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -43,7 +43,7 @@ struct PreemptiveNonAtomicCounterTests {
         var capturedReport: ExhaustReport?
         _ = await #execute(
             PreemptiveCounterSpec.self,
-            .concurrent(.two),
+            .parallelize(lanes: .two),
             .commandLimit(6),
             .budget(.custom(coverage: 0, sampling: 200)),
             .suppress(.issueReporting),
@@ -61,7 +61,7 @@ struct PreemptiveNonAtomicCounterTests {
         let result = try #require(
             await #execute(
                 PreemptiveCounterSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .commandLimit(20),
                 .suppress(.issueReporting)
             )

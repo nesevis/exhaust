@@ -70,7 +70,7 @@ public extension __ExhaustRuntime {
                     }
                 case let .log(level):
                     logLevel = level
-                case .parallel:
+                case .parallelize:
                     shouldParallelize = true
             }
         }

@@ -346,7 +346,7 @@ Each string replays a specific reduced counterexample. The random distribution s
 
 By default, `#exhaust` and `#explore` record failures as Swift Testing issues via `Issue.record`, so they surface in the test runner alongside any `#expect` failures. If you need to assert on the result of the run yourself — checking that a property fails in a particular way, say — there's a way to suppress that reporting and inspect the return value directly.
 
-Exhaust runs single-threaded by default, but the `.parallel(N)` setting splits random sampling across GCD lanes within a single test. Property closures are required to be `@Sendable` to support this.
+Exhaust runs single-threaded by default, but the `.parallelize(lanes:)` setting splits random sampling across GCD lanes within a single test. Property closures are required to be `@Sendable` to support this.
 
 Property closures can be async, throwing or return a simple boolean.
 
@@ -481,7 +481,7 @@ Contracts on an `actor` use `.sequential` because actor isolation serialises all
 
 ```swift
 @Test func sutIsSafeUnderConcurrency() async {
-    await #execute(AsyncContract.self, .concurrent(.two))
+    await #execute(AsyncContract.self, .parallelize(lanes: .two))
 }
 ```
 
