@@ -12,7 +12,7 @@ struct PreemptiveAsyncOracleTests {
         let result = try #require(
             await #execute(
                 AsyncOracleRacyCounterSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .suppress(.issueReporting)
             )
         )
@@ -23,7 +23,7 @@ struct PreemptiveAsyncOracleTests {
     func asyncOraclePassesForThreadSafeSUT() async {
         let result = await #execute(
             AsyncOracleSafeCounterSpec.self,
-            .concurrent(.two),
+            .parallelize(lanes: .two),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "A serialized counter must never diverge from its sequential replay")

@@ -3,8 +3,8 @@ import ExhaustCore
 
 /// Configuration options for `#execute` contract property tests, passed as variadic arguments to control test behavior.
 public enum ContractSettings {
-    /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a default from the command generator's domain size and the coverage budget. Defaults vary by mode: `.sequential` uses the estimate uncapped, `.tasks` caps it at 40, and `.threads` uses a flat default of 10.
-    case commandLimit(UInt)
+    /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a default from the command generator's domain size and the coverage budget. Defaults vary by mode: `.sequential` uses the estimate (its budget-derived ceiling tops out at 100, with a floor of three appearances per command type), `.tasks` caps the estimate at 40, and `.threads` uses a flat default of 10.
+    case commandLimit(Int)
 
     /// Controls iteration budgets for coverage and random sampling. Defaults to `.standard` (200 coverage rows, 200 random samplings).
     case budget(ExhaustBudget)
@@ -32,7 +32,7 @@ public enum ContractSettings {
     /// Sets the number of concurrent execution lanes. Default is ``ConcurrencyLevel/two``.
     ///
     /// Each lane runs its assigned commands concurrently. For `.tasks` contracts, the cooperative scheduler interleaves continuations at every `await` boundary. For `.threads` contracts, each lane dispatches to a separate GCD thread.
-    case concurrent(ConcurrencyLevel)
+    case parallelize(lanes: ConcurrencyLevel)
 
     /// Sets the maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout. Default is 2000.
     ///

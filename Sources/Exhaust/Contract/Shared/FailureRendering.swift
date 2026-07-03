@@ -14,7 +14,7 @@ extension __ExhaustRuntime {
         var discoveryMethod: ContractDiscoveryMethod = .randomSampling
         var seed: UInt64?
         var iteration: Int = 0
-        var budget: UInt64 = 0
+        var budget: Int = 0
         var originalCount: Int = 0
         var sequencesTested: Int = 0
         var reductionInvocations: Int = 0

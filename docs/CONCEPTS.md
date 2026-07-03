@@ -130,7 +130,7 @@ Reproduce: .replay("7MK2N9-4")
 
 It re-runs generation, so if you change the generator, the same seed lands on a different case. This is true of seeds in every property-based testing library. A seed is a coordinate in a search, and the search depends on the generator.
 
-A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))`) so its case runs before the random search every time. While the generator is unchanged it re-tests the same case and catches that regression the moment it returns. To pin an exact input permanently, regardless of later generator changes, commit the literal value and reduce it with `reflecting:` instead.
+A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))`) so its case runs before the random search every time. While the generator is unchanged it re-tests the same case and catches that regression the moment it returns. To pin an exact input permanently, regardless of later generator changes, commit the literal value and reduce it with `reflecting:` instead. When you need the value itself rather than a re-run, `#example(gen, seed: "…")` extracts the input a failure seed points at.
 
 ## Glossary
 
@@ -168,7 +168,6 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 
 ### Contracts
 
-- **Bundle**: a store of entities created by earlier commands so later commands can reference them.
 - **Command**: one operation Exhaust may invoke on the SUT.
 - **Contract**: a specification of a stateful system that Exhaust checks by generating command sequences and verifying invariants after each step.
 - **Cooperative / preemptive**: the two concurrent runners. Cooperative interleaves deterministically at `await` points. Preemptive uses real threads to reach races in locks and atomics.

@@ -43,7 +43,7 @@ public macro gen<each GeneratedValue>(
     _ generators: repeat ReflectiveGenerator<each GeneratedValue>
 ) -> ReflectiveGenerator<(repeat each GeneratedValue)> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
 
-/// Synthesises a generator from a `Decodable` type and example JSON data.
+/// Synthesizes a generator from a `Decodable` type and example JSON data.
 ///
 /// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and coverage analysis treat it identically to a hand-written generator. Use this overload when writing generators for a large number existing types would be impractical.
 ///
@@ -72,7 +72,7 @@ public macro gen<each GeneratedValue>(
 /// ```
 ///
 /// - Parameters:
-///   - type: The `Decodable` type to synthesise a generator for.
+///   - type: The `Decodable` type to synthesize a generator for.
 ///   - data: Example JSON data whose structure matches `T`. The values are used only during the discovery pass and do not constrain the generator's output.
 /// - Returns: A ``ReflectiveGenerator`` that produces arbitrary values of type `T`.
 @freestanding(expression)
@@ -81,7 +81,7 @@ public macro gen<T: Decodable>(
     from data: Data
 ) -> ReflectiveGenerator<T> = #externalMacro(module: "ExhaustMacros", type: "GenerateFromDecodableMacro")
 
-/// Synthesises a generator from a `Codable` instance by encoding it to JSON and discovering the decode pattern.
+/// Synthesizes a generator from a `Codable` instance by encoding it to JSON and discovering the decode pattern.
 ///
 /// Encodes the instance with `JSONEncoder`, then runs `T.init(from:)` once against the resulting JSON to discover the type's decode call pattern and build a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and coverage analysis treat it identically to a hand-written generator. Use this when you already have an instance (for example, from a factory method or test fixture) and want a generator without writing out JSON.
 ///
@@ -117,7 +117,7 @@ public macro gen<T: Codable>(
     from instance: T
 ) -> ReflectiveGenerator<T> = #externalMacro(module: "ExhaustMacros", type: "GenerateFromCodableInstanceMacro")
 
-/// Synthesises a generator from a `Decodable` type and an example JSON string.
+/// Synthesizes a generator from a `Decodable` type and an example JSON string.
 ///
 /// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and coverage analysis treat it identically to a hand-written generator. Use this overload when writing generators for a large number of existing types would be impractical.
 ///
@@ -148,7 +148,7 @@ public macro gen<T: Codable>(
 /// ```
 ///
 /// - Parameters:
-///   - type: The `Decodable` type to synthesise a generator for.
+///   - type: The `Decodable` type to synthesize a generator for.
 ///   - string: Example JSON string whose structure matches `T`. The values are used only during the discovery pass and do not constrain the generator's output.
 /// - Returns: A ``ReflectiveGenerator`` that produces arbitrary values of type `T`.
 @freestanding(expression)

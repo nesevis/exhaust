@@ -9,7 +9,7 @@ struct ParallelGenerationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .budget(.custom(coverage: 0, sampling: 200)),
-            .parallel(.two),
+            .parallelize(lanes: .two),
             .onReport { capturedReport = $0 }
         ) { $0 >= 0 }
 
@@ -23,7 +23,7 @@ struct ParallelGenerationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 10000)),
             .budget(.custom(coverage: 0, sampling: 2000)),
-            .parallel(.two),
+            .parallelize(lanes: .two),
             .suppress(.issueReporting),
             .onReport { capturedReport = $0 }
         ) { $0 < 5 }
@@ -39,7 +39,7 @@ struct ParallelGenerationTests {
         #exhaust(
             #gen(.int(in: 0 ... 100)),
             .budget(.custom(coverage: 0, sampling: 101)),
-            .parallel(.two),
+            .parallelize(lanes: .two),
             .collectOpenPBTStats,
             .onReport { capturedReport = $0 }
         ) { $0 >= 0 }

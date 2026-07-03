@@ -8,10 +8,12 @@ struct UnfoldTests {
     func immediateDoneProducesTheSeedDerivedValue() throws {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .int(in: 1 ... 10),
-            depthRange: 1 ... 5
-        ) { state, _ in
-            .just(.done(state * 2))
-        }
+            depthRange: 1 ... 5,
+            step: { state, _ in
+                .just(.done(state * 2))
+            },
+            finish: { state in state * 2 }
+        )
 
         let values = try #example(gen, count: 20, seed: 42)
         #expect(values.isEmpty == false)
@@ -22,16 +24,15 @@ struct UnfoldTests {
     func countdownAccumulatesStateAcrossIterations() throws {
         let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just((list: [Int](), counter: 0)),
-            depthRange: 1 ... 3
-        ) { state, remaining in
-            if remaining == 0 {
-                return .just(.done(state.list))
-            }
-            return .just(.recurse((
-                list: state.list + [state.counter],
-                counter: state.counter + 1
-            )))
-        }
+            depthRange: 1 ... 3,
+            step: { state, _ in
+                .just(.recurse((
+                    list: state.list + [state.counter],
+                    counter: state.counter + 1
+                )))
+            },
+            finish: { state in state.list }
+        )
 
         let value = try #example(gen, seed: 42)
         #expect(value == [0, 1, 2])
@@ -41,13 +42,15 @@ struct UnfoldTests {
     func stepCanTerminateEarly() throws {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .just(0),
-            depthRange: 1 ... 100
-        ) { state, remaining in
-            if state >= 3 || remaining == 0 {
-                return .just(.done(state))
-            }
-            return .just(.recurse(state + 1))
-        }
+            depthRange: 1 ... 100,
+            step: { state, _ in
+                if state >= 3 {
+                    return .just(.done(state))
+                }
+                return .just(.recurse(state + 1))
+            },
+            finish: { state in state }
+        )
 
         let value = try #example(gen, seed: 42)
         #expect(value == 3)
@@ -57,15 +60,14 @@ struct UnfoldTests {
     func randomDecisionsWithinStepProduceVariedOutput() throws {
         let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just([Int]()),
-            depthRange: 1 ... 5
-        ) { list, remaining in
-            if remaining == 0 {
-                return .just(.done(list))
-            }
-            return .int(in: 0 ... 10).map { element in
-                element == 0 ? .done(list) : .recurse(list + [element])
-            }
-        }
+            depthRange: 1 ... 5,
+            step: { list, _ in
+                .int(in: 0 ... 10).map { element in
+                    element == 0 ? .done(list) : .recurse(list + [element])
+                }
+            },
+            finish: { list in list }
+        )
 
         let values = try #example(gen, count: 50, seed: 42)
         let lengths = Set(values.map(\.count))
@@ -76,15 +78,14 @@ struct UnfoldTests {
     func unfoldWorksWithExhaustForPropertyTesting() {
         let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just([Int]()),
-            depthRange: 1 ... 5
-        ) { list, remaining in
-            if remaining == 0 {
-                return .just(.done(list))
-            }
-            return .bool().map { stop in
-                stop ? .done(list) : .recurse(list + [list.count])
-            }
-        }
+            depthRange: 1 ... 5,
+            step: { list, _ in
+                .bool().map { stop in
+                    stop ? .done(list) : .recurse(list + [list.count])
+                }
+            },
+            finish: { list in list }
+        )
 
         let result = #exhaust(
             gen,
@@ -100,15 +101,14 @@ struct UnfoldTests {
     func failingPropertyFindsAndReducesCounterexample() {
         let gen = ReflectiveGenerator<[Int]>.unfold(
             seed: .just([Int]()),
-            depthRange: 1 ... 10
-        ) { list, remaining in
-            if remaining == 0 {
-                return .just(.done(list))
-            }
-            return .int(in: 1 ... 100).map { element in
-                .recurse(list + [element])
-            }
-        }
+            depthRange: 1 ... 10,
+            step: { list, _ in
+                .int(in: 1 ... 100).map { element in
+                    .recurse(list + [element])
+                }
+            },
+            finish: { list in list }
+        )
 
         let result = #exhaust(
             gen,
@@ -127,18 +127,62 @@ struct UnfoldTests {
     func deterministicReplayWithSeed() throws {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .int(in: 0 ... 100),
-            depthRange: 1 ... 3
-        ) { state, remaining in
-            if remaining == 0 {
-                return .just(.done(state))
-            }
-            return .int(in: 0 ... 10).map { delta in
-                .recurse(state + delta)
-            }
-        }
+            depthRange: 1 ... 3,
+            step: { state, _ in
+                .int(in: 0 ... 10).map { delta in
+                    .recurse(state + delta)
+                }
+            },
+            finish: { state in state }
+        )
 
         let firstValues = try #example(gen, count: 10, seed: 99)
         let secondValues = try #example(gen, count: 10, seed: 99)
         #expect(firstValues == secondValues)
+    }
+
+    @Test("Step is never called with a remaining depth of zero")
+    func stepIsNeverCalledWithZeroRemaining() throws {
+        let observed = RemainingRecorder()
+        let gen = ReflectiveGenerator<Int>.unfold(
+            seed: .just(0),
+            depthRange: 0 ... 5,
+            step: { state, remaining in
+                observed.append(remaining)
+                return .just(.recurse(state + 1))
+            },
+            finish: { state in state }
+        )
+
+        _ = try #example(gen, count: 50, seed: 42)
+        #expect(observed.values.isEmpty == false)
+        #expect(observed.values.allSatisfy { $0 >= 1 })
+    }
+
+    @Test("Depth range lower bound of zero produces finish(seed)")
+    func zeroDepthProducesFinishedSeed() throws {
+        let gen = ReflectiveGenerator<Int>.unfold(
+            seed: .just(7),
+            depthRange: 0 ... 0,
+            step: { _, _ in
+                Issue.record("step must not run when the drawn depth is 0")
+                return .just(.done(-1))
+            },
+            finish: { state in state * 10 }
+        )
+
+        let value = try #example(gen, seed: 42)
+        #expect(value == 70)
+    }
+}
+
+// MARK: - Helpers
+
+/// Collects the `remaining` values a step closure observes. Safe without a lock because `#example` interprets single-threaded.
+private final class RemainingRecorder: @unchecked Sendable {
+    private(set) var values: [Int] = []
+
+    func append(_ value: Int) {
+        values.append(value)
     }
 }

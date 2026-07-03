@@ -42,7 +42,7 @@ struct DetectionBoundaryTests {
         let result = try #require(
             await #execute(
                 ThreeWayRaceSpec.self,
-                .concurrent(.three),
+                .parallelize(lanes: .three),
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 500)),
                 .suppress(.issueReporting)
@@ -61,7 +61,7 @@ struct DetectionBoundaryTests {
         let result = try #require(
             await #execute(
                 ThreeWayRaceSpec.self,
-                .concurrent(.four),
+                .parallelize(lanes: .four),
                 .commandLimit(8),
                 .budget(.custom(coverage: 0, sampling: 500)),
                 .suppress(.issueReporting)

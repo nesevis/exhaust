@@ -32,25 +32,11 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing `Data` with length in the given range.
     static func data(
         length: ClosedRange<Int>,
-        scaling: SizeScaling<UInt64> = .linear
+        scaling: SizeScaling<Int> = .linear
     ) -> ReflectiveGenerator<Data> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return Gen.data(within: range, scaling: scaling)
-    }
-
-    /// Generates arbitrary `Data` values of an exact fixed length.
-    ///
-    /// ```swift
-    /// let gen = #gen(.data(length: 32))
-    /// ```
-    ///
-    /// - Parameter length: The exact number of bytes in each generated `Data`.
-    /// - Returns: A generator producing `Data` of the specified length.
-    static func data(
-        length: UInt64
-    ) -> ReflectiveGenerator<Data> {
-        Gen.data(length: length)
+        return Gen.data(within: range, scaling: LengthConversion.uint64Scaling(scaling))
     }
 
     /// Generates arbitrary `Data` values of an exact fixed length.
@@ -65,17 +51,18 @@ public extension ReflectiveGenerator {
         length: Int
     ) -> ReflectiveGenerator<Data> {
         precondition(length >= 0, "Length must be non-negative")
-        return data(length: UInt64(length))
+        return Gen.data(length: UInt64(length))
     }
 
     // MARK: - Prefix Overloads
 
     /// Generates arbitrary `Data` values starting with fixed bytes, followed by a size-scaled random suffix.
     ///
-    /// Use this when testing code that identifies binary formats by their leading bytes (for example, magic bytes for PNG, JPEG, or PDF). The prefix is constant and never shrunk; only the random suffix participates in generation and reduction.
+    /// Use this when testing code that identifies binary formats by their leading magic bytes. The prefix is constant and never shrunk; only the random suffix participates in generation and reduction.
     ///
     /// ```swift
-    /// let gen = #gen(.data(prefix: .png))
+    /// let magic: [UInt8] = [0xCA, 0xFE, 0xBA, 0xBE]
+    /// let gen = #gen(.data(prefix: magic))
     /// ```
     ///
     /// - Parameter prefix: Fixed bytes prepended to every generated value.
@@ -91,7 +78,8 @@ public extension ReflectiveGenerator {
     /// The `length` parameter controls the number of random bytes after the prefix. The total byte count of each generated value equals the prefix length plus the suffix length.
     ///
     /// ```swift
-    /// let gen = #gen(.data(prefix: .jpeg, length: 256...1024))
+    /// let magic: [UInt8] = [0xCA, 0xFE, 0xBA, 0xBE]
+    /// let gen = #gen(.data(prefix: magic, length: 256...1024))
     /// ```
     ///
     /// - Parameters:
@@ -102,33 +90,19 @@ public extension ReflectiveGenerator {
     static func data(
         prefix: [UInt8],
         length: ClosedRange<Int>,
-        scaling: SizeScaling<UInt64> = .linear
+        scaling: SizeScaling<Int> = .linear
     ) -> ReflectiveGenerator<Data> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return Gen.data(prefix: prefix, within: range, scaling: scaling)
+        return Gen.data(prefix: prefix, within: range, scaling: LengthConversion.uint64Scaling(scaling))
     }
 
     /// Generates arbitrary `Data` values starting with fixed bytes, followed by exactly `length` random bytes.
     ///
     /// ```swift
-    /// let gen = #gen(.data(prefix: .pdf, length: 512))
+    /// let magic: [UInt8] = [0xCA, 0xFE, 0xBA, 0xBE]
+    /// let gen = #gen(.data(prefix: magic, length: 512))
     /// ```
-    ///
-    /// - Parameters:
-    ///   - prefix: Fixed bytes prepended to every generated value.
-    ///   - length: The exact number of random bytes after the prefix.
-    /// - Returns: A generator producing `Data` starting with `prefix` followed by `length` random bytes.
-    static func data(
-        prefix: [UInt8],
-        length: UInt64
-    ) -> ReflectiveGenerator<Data> {
-        Gen.data(prefix: prefix, length: length)
-    }
-
-    /// Generates arbitrary `Data` values starting with fixed bytes, followed by exactly `length` random bytes.
-    ///
-    /// Accepts `Int` so integer literals resolve without explicit type annotation.
     ///
     /// - Parameters:
     ///   - prefix: Fixed bytes prepended to every generated value.
@@ -139,6 +113,6 @@ public extension ReflectiveGenerator {
         length: Int
     ) -> ReflectiveGenerator<Data> {
         precondition(length >= 0, "Length must be non-negative")
-        return data(prefix: prefix, length: UInt64(length))
+        return Gen.data(prefix: prefix, length: UInt64(length))
     }
 }

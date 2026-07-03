@@ -56,8 +56,8 @@ private func runEtnaSeeds<Input>(
     property: @Sendable @escaping (Input) -> Bool,
     seedCount: Int,
     baseSeed: UInt64,
-    coverageBudget: UInt64,
-    samplingBudget: UInt64
+    coverageBudget: Int,
+    samplingBudget: Int
 ) -> [EtnaResult] {
     var results: [EtnaResult] = []
 
@@ -196,8 +196,8 @@ private func printEtnaSummary(workload: String, taskResults: [(name: String, res
 private func registerEtnaBSTBenchmark(
     seedCount: Int,
     baseSeed: UInt64,
-    coverageBudget: UInt64,
-    samplingBudget: UInt64
+    coverageBudget: Int,
+    samplingBudget: Int
 ) {
     typealias InsertFn = @Sendable (Int, Int, EtnaBST) -> EtnaBST
     typealias DeleteFn = @Sendable (Int, EtnaBST) -> EtnaBST
@@ -390,8 +390,8 @@ private func registerEtnaBSTBenchmark(
 private func registerEtnaRBTBenchmark(
     seedCount: Int,
     baseSeed: UInt64,
-    coverageBudget: UInt64,
-    samplingBudget: UInt64
+    coverageBudget: Int,
+    samplingBudget: Int
 ) {
     typealias InsertFn = @Sendable (Int, Int, EtnaRBT) -> EtnaRBT
     typealias DeleteFn = @Sendable (Int, EtnaRBT) -> Result<EtnaRBT, RBTError>
@@ -652,8 +652,8 @@ private func registerEtnaRBTBenchmark(
 private func registerEtnaSTLCBenchmark(
     seedCount: Int,
     baseSeed: UInt64,
-    coverageBudget: UInt64,
-    samplingBudget: UInt64
+    coverageBudget: Int,
+    samplingBudget: Int
 ) {
     let mutants: [(String, STLCConfig)] = [
         ("shift_var_none", stlcConfig_shiftVarNone),

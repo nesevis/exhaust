@@ -94,7 +94,51 @@ package extension Gen {
         _ keyGenerator: Generator<KeyOutput>,
         _ valueGenerator: Generator<ValueOutput>
     ) -> Generator<[KeyOutput: ValueOutput]> {
-        let pairGen = Gen.arrayOf(keyGenerator)._bound(
+        dictionaryOf(keyArrays: Gen.arrayOf(keyGenerator), valueGenerator)
+    }
+
+    /// Generates dictionaries with entry count constrained to explicit bounds.
+    ///
+    /// Use this overload when the count bounds should not scale with the size parameter's default range. Keys are deduplicated first-wins, so the resulting dictionary may have fewer entries than requested when the key generator produces duplicates.
+    ///
+    /// - Parameters:
+    ///   - keyGenerator: Generator for dictionary keys (must be Hashable).
+    ///   - valueGenerator: Generator for dictionary values.
+    ///   - range: The allowed range for the entry count.
+    ///   - scaling: The distribution strategy for the entry count. Defaults to `.linear`
+    /// - Returns: A generator that produces dictionaries with entry count in the specified range.
+    static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
+        _ keyGenerator: Generator<KeyOutput>,
+        _ valueGenerator: Generator<ValueOutput>,
+        within range: ClosedRange<UInt64>,
+        scaling: SizeScaling<UInt64> = .linear
+    ) -> Generator<[KeyOutput: ValueOutput]> {
+        dictionaryOf(keyArrays: Gen.arrayOf(keyGenerator, within: range, scaling: scaling), valueGenerator)
+    }
+
+    /// Generates dictionaries of exactly the specified entry count.
+    ///
+    /// Shorthand for `dictionaryOf(keyGenerator, valueGenerator, within: exactly ... exactly)`. Keys are deduplicated first-wins, so the resulting dictionary may have fewer entries than `exactly`.
+    ///
+    /// - Parameters:
+    ///   - keyGenerator: Generator for dictionary keys (must be Hashable).
+    ///   - valueGenerator: Generator for dictionary values.
+    ///   - exactly: The exact number of entries the dictionary should have.
+    /// - Returns: A generator that produces dictionaries of the specified entry count.
+    static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
+        _ keyGenerator: Generator<KeyOutput>,
+        _ valueGenerator: Generator<ValueOutput>,
+        exactly: UInt64
+    ) -> Generator<[KeyOutput: ValueOutput]> {
+        dictionaryOf(keyArrays: Gen.arrayOf(keyGenerator, exactly: exactly), valueGenerator)
+    }
+
+    /// Builds the dictionary pipeline from a key-array generator: binds a value array of matching length, zips into a dictionary with first-wins key dedup, and reflects back through `keys`/`values` arrays.
+    private static func dictionaryOf<KeyOutput: Hashable, ValueOutput>(
+        keyArrays keyArrayGenerator: Generator<[KeyOutput]>,
+        _ valueGenerator: Generator<ValueOutput>
+    ) -> Generator<[KeyOutput: ValueOutput]> {
+        let pairGen = keyArrayGenerator._bound(
             forward: { keys in
                 Gen.contramap(
                     { (pair: ([KeyOutput], [ValueOutput])) in pair.1 },

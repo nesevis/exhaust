@@ -1,35 +1,20 @@
 /// Runs a classification-aware property test that steers sampling toward each declared direction via per-direction CGS tuning.
 ///
-/// Given a list of named directions (predicate-labeled regions of the output space), `#explore` tunes the generator per direction, draws K samples per direction, and reports per-direction coverage alongside cross-direction overlap and diagnostic findings.
-///
-/// Pass the property as a trailing closure to capture source location for better failure messages:
+/// Directions are named predicates over the output space. Exhaust tunes the generator toward each direction in turn, draws the budgeted number of matching samples, and reports per-direction coverage, cross-direction overlap, and any counterexample. A direction the generator cannot reach is reported rather than silently skipped.
 ///
 /// ```swift
 /// let report = #explore(crossingGen,
 ///     directions: [
 ///         ("northward", { $0.from > 0 && $0.to < 0 }),
 ///         ("southward", { $0.from < 0 && $0.to > 0 }),
-///     ],
-///     .budget(.thorough)
+///     ]
 /// ) { value in
 ///     flightController.updatePosition(value)
 ///     #expect(flightController.heading.isValid)
 /// }
 /// ```
 ///
-/// Or pass a function reference when source capture is not needed:
-///
-/// ```swift
-/// let report = #explore(crossingGen, directions: directions, property: isValid)
-/// ```
-///
-/// ## Settings
-///
-/// - `.budget(_)`: per-direction hit target and attempt budget. Presets: `.quick` (10 hits), `.standard` (30 hits, default), `.thorough` (100 hits), `.extensive` (300 hits).
-/// - `.replay(_)`: fixed seed for deterministic reproduction.
-/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned report.
-/// - `.suppress(.logs)`: silences all console output.
-/// - `.log(_)`: controls log verbosity.
+/// Settings are variadic ``ExploreSettings`` values controlling per-direction budgets (``ExhaustBudget``), deterministic replay, parallel tuning, output suppression, and log verbosity. Each case documents itself. The full mechanism is described in docs/EXPLORE-directed-exploration.md.
 ///
 /// - Returns: An ``ExploreReport`` containing the counterexample (if any), per-direction coverage, and cross-direction diagnostics.
 @freestanding(expression)
@@ -41,30 +26,23 @@ public macro explore<GeneratedValue, PropertyResult>(
     property: @Sendable (GeneratedValue) throws -> PropertyResult
 ) -> ExploreReport<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "ExploreMacro")
 
-/// Runs a classification-aware property test that steers sampling toward each declared direction via per-direction CGS tuning.
+/// Runs a classification-aware property test with an async property closure, steering sampling toward each declared direction via per-direction CGS tuning.
 ///
-/// Given a list of named directions (predicate-labeled regions of the output space), `#explore` tunes the generator per direction, draws K samples per direction, and reports per-direction coverage alongside cross-direction overlap and diagnostic findings. Must be called with `await` since the expanded function is `async`.
+/// Directions are named predicates over the output space. Exhaust tunes the generator toward each direction in turn, draws the budgeted number of matching samples, and reports per-direction coverage, cross-direction overlap, and any counterexample. A direction the generator cannot reach is reported rather than silently skipped. Use this overload when the property needs to `await`. The expanded call is `async`, so call it with `await`.
 ///
 /// ```swift
 /// let report = try await #explore(crossingGen,
 ///     directions: [
 ///         ("northward", { $0.from > 0 && $0.to < 0 }),
 ///         ("southward", { $0.from < 0 && $0.to > 0 }),
-///     ],
-///     .budget(.thorough)
+///     ]
 /// ) { value in
 ///     try await flightController.updatePosition(value)
 ///     #expect(flightController.heading.isValid)
 /// }
 /// ```
 ///
-/// ## Settings
-///
-/// - `.budget(_)`: per-direction hit target and attempt budget. Presets: `.quick` (10 hits), `.standard` (30 hits, default), `.thorough` (100 hits), `.extensive` (300 hits).
-/// - `.replay(_)`: fixed seed for deterministic reproduction.
-/// - `.suppress(.issueReporting)`: skips `reportIssue()` — useful when the caller asserts on the returned report.
-/// - `.suppress(.logs)`: silences all console output.
-/// - `.log(_)`: controls log verbosity.
+/// Settings are variadic ``ExploreSettings`` values controlling per-direction budgets (``ExhaustBudget``), deterministic replay, parallel tuning, output suppression, and log verbosity. Each case documents itself. The full mechanism is described in docs/EXPLORE-directed-exploration.md.
 ///
 /// - Returns: An ``ExploreReport`` containing the counterexample (if any), per-direction coverage, and cross-direction diagnostics.
 @freestanding(expression)

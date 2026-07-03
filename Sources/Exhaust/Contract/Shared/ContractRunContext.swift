@@ -17,7 +17,7 @@ struct ContractRunContext<Spec: ContractSpecBase> {
     let state: ContractRunState<Spec>
 
     var reductionDeadlineNanoseconds: UInt64 {
-        config.budget.samplingBudget * 5 * 1_000_000
+        UInt64(config.budget.samplingBudget) * 5 * 1_000_000
     }
 
     init(

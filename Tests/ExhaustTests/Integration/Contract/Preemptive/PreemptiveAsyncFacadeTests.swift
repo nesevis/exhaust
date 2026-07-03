@@ -10,7 +10,7 @@ struct PreemptiveAsyncFacadeTests {
         let result = try #require(
             await #execute(
                 AsyncRacyCounterSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .commandLimit(6),
                 .budget(.custom(coverage: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -24,7 +24,7 @@ struct PreemptiveAsyncFacadeTests {
         var capturedReport: ExhaustReport?
         _ = await #execute(
             AsyncRacyCounterSpec.self,
-            .concurrent(.two),
+            .parallelize(lanes: .two),
             .commandLimit(6),
             .budget(.custom(coverage: 0, sampling: 200)),
             .suppress(.issueReporting),
@@ -42,7 +42,7 @@ struct PreemptiveAsyncFacadeTests {
             _ = try #require(
                 await #execute(
                     AsyncRacyCounterSpec.self,
-                    .concurrent(.two),
+                    .parallelize(lanes: .two),
                     .commandLimit(6),
                     .budget(.custom(coverage: 0, sampling: 200))
                 )

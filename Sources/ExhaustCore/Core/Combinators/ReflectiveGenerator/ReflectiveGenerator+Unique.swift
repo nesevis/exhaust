@@ -8,7 +8,7 @@
 public extension ReflectiveGenerator {
     /// Creates a generator that only produces unique values, deduplicated by choice sequence.
     ///
-    /// Each generated value's underlying choice sequence is tracked. If a duplicate choice sequence is encountered, the generator retries (up to `maxFilterRuns` from the interpreter context). This is useful when the generator's domain is large but you want to avoid repeating the same random path.
+    /// Each generated value's underlying choice sequence is tracked. If a duplicate choice sequence is encountered, the generator retries, up to the same retry budget `.filter` uses. This is useful when the generator's domain is large but you want to avoid repeating the same random path.
     ///
     /// Unlike `.filter`, `.unique` does not trigger ``FilterType/choiceGradientSampling`` tuning of the inner generator, because the deduplication predicate is stateful (it depends on what has been seen so far) and cannot be learned during a warmup pass. If `.unique()` is slow or exhausts its retry budget, the inner generator likely has a sparse validity condition that should be made explicit.
     /// Apply `.filter` *before* `.unique` so that the choice-gradient tuner can learn the static predicate and bias pick weights toward valid outputs:

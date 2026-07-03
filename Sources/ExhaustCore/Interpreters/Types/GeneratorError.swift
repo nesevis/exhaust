@@ -19,6 +19,8 @@ public enum GeneratorError: LocalizedError {
     case uniqueBudgetExhausted
     /// A generated sequence requested more elements than ``SharedInterpreterHelpers/maximumSequenceLength``.
     case sequenceLengthExceedsMaximum(length: UInt64, maximum: Int)
+    /// A replay seed could not be decoded, or its kind is not supported by the invoking macro.
+    case invalidReplaySeed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -32,6 +34,8 @@ public enum GeneratorError: LocalizedError {
                 "The unique combinator could not find a new distinct value within its retry budget."
             case let .sequenceLengthExceedsMaximum(length, maximum):
                 "A generated sequence requested \(length) elements, exceeding the maximum of \(maximum)."
+            case let .invalidReplaySeed(reason):
+                "Invalid replay seed: \(reason)."
         }
     }
 
@@ -47,6 +51,8 @@ public enum GeneratorError: LocalizedError {
                 "Reduce the number of unique values requested, widen the generator's domain, or increase the retry budget."
             case .sequenceLengthExceedsMaximum:
                 "Narrow the length range passed to `arrayOf(within:)` (or the sequence's length generator); a sequence this long is not tractable to generate."
+            case .invalidReplaySeed:
+                "Copy the seed exactly as printed in the failure report, or pass a raw numeric seed."
         }
     }
 }

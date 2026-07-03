@@ -83,7 +83,6 @@ struct CooperativeContractBackend<Spec: AsyncContractSpec>: ContractBackend {
         let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
 
         let result = ContractResult<Spec>(
-            status: .fail,
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
             trace: traceResult.trace,

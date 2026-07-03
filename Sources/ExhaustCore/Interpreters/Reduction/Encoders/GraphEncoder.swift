@@ -31,7 +31,7 @@ protocol GraphEncoder {
     /// Descriptive name for logging and instrumentation.
     var name: EncoderName { get }
 
-    /// Initialises internal state for a new encoding pass.
+    /// Initializes internal state for a new encoding pass.
     ///
     /// Called once per scope dispatch. The encoder extracts candidates from the scope's operation metadata and prepares its probe state machine. The encoder reads warm-start data from ``EncoderInput/warmStartRecords`` — it never accesses the graph directly.
     mutating func start(scope: EncoderInput)

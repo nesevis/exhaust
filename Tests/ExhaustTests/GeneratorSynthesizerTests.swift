@@ -153,7 +153,7 @@ struct GeneratorSynthesizerTests {
         {"name": "Gaute", "age": 30, "active": true}
         """
         let generator = try #gen(Person.self, from: json)
-        let report = #examine(generator, .samples(20))
+        let report = #examine(generator, .budget(20))
 
         #expect(report.passed)
         #expect(report.valuesGenerated == 20)
@@ -167,7 +167,7 @@ struct GeneratorSynthesizerTests {
         {"name": "test", "priority": "high"}
         """
         let generator = try #gen(WithNonIterable.self, from: json)
-        let report = #examine(generator, .samples(20))
+        let report = #examine(generator, .budget(20))
         print()
 
         #expect(report.passed)

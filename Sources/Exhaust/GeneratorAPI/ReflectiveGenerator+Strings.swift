@@ -35,10 +35,10 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.string(length: 1...20))
     /// ```
     static func string(
-        length: ClosedRange<UInt64>? = nil,
-        scaling: SizeScaling<UInt64> = .linear
+        length: ClosedRange<Int>? = nil,
+        scaling: SizeScaling<Int> = .linear
     ) -> ReflectiveGenerator<String> {
-        Gen.string(length: length, scaling: scaling)
+        Gen.string(length: length.map(LengthConversion.uint64Range), scaling: LengthConversion.uint64Scaling(scaling))
     }
 
     /// Generates a random printable ASCII string (U+0020–U+007E) with size-scaled or fixed length.
@@ -49,30 +49,10 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.asciiString(length: 1...20))
     /// ```
     static func asciiString(
-        length: ClosedRange<UInt64>? = nil,
-        scaling: SizeScaling<UInt64> = .linear
+        length: ClosedRange<Int>? = nil,
+        scaling: SizeScaling<Int> = .linear
     ) -> ReflectiveGenerator<String> {
-        Gen.asciiString(length: length, scaling: scaling)
-    }
-
-    /// Generates a random Unicode string with the given length range.
-    static func string(
-        length: ClosedRange<Int>,
-        scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<String> {
-        precondition(length.lowerBound >= 0, "Length must be non-negative")
-        let uint64Range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return string(length: uint64Range, scaling: scaling)
-    }
-
-    /// Generates a random printable ASCII string with the given length range.
-    static func asciiString(
-        length: ClosedRange<Int>,
-        scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<String> {
-        precondition(length.lowerBound >= 0, "Length must be non-negative")
-        let uint64Range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return asciiString(length: uint64Range, scaling: scaling)
+        Gen.asciiString(length: length.map(LengthConversion.uint64Range), scaling: LengthConversion.uint64Scaling(scaling))
     }
 
     // MARK: - CharacterSet-based generators
@@ -113,27 +93,9 @@ public extension ReflectiveGenerator {
     static func string(
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil,
-        length: ClosedRange<UInt64>? = nil,
-        scaling: SizeScaling<UInt64> = .linear
+        length: ClosedRange<Int>? = nil,
+        scaling: SizeScaling<Int> = .linear
     ) -> ReflectiveGenerator<String> {
-        Gen.string(from: characterSet, simplest: simplest, length: length, scaling: scaling)
-    }
-
-    /// Generates a random string whose characters are drawn from the given `CharacterSet`.
-    ///
-    /// ```swift
-    /// let gen = #gen(.string(from: .letters, length: 1...10))
-    /// ```
-    ///
-    /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
-    static func string(
-        from characterSet: CharacterSet,
-        simplest: Unicode.Scalar? = nil,
-        length: ClosedRange<Int>,
-        scaling: SizeScaling<UInt64> = .linear
-    ) -> ReflectiveGenerator<String> {
-        precondition(length.lowerBound >= 0, "Length must be non-negative")
-        let uint64Range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return string(from: characterSet, simplest: simplest, length: uint64Range, scaling: scaling)
+        Gen.string(from: characterSet, simplest: simplest, length: length.map(LengthConversion.uint64Range), scaling: LengthConversion.uint64Scaling(scaling))
     }
 }

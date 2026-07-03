@@ -113,6 +113,36 @@ func get() throws {
 
 The distinction between `@Invariant` and `check`: invariants run after every command (including commands that didn't write the check). Postconditions run only inside the command that defines them. Use invariants for properties that must always hold. Use postconditions for return-value checks and per-operation guarantees.
 
+## Referencing entities from earlier commands
+
+Some commands operate on things a previous command created: delete a user that `createUser` made, merge a heap into another heap, withdraw a token that was deposited. The command can't take the entity itself as an argument, because the entity doesn't exist until the sequence runs.
+
+The pattern is to take a plain generated index and resolve it against spec-owned state inside the command:
+
+```swift
+@Contract(.sequential)
+final class DatabaseContract {
+    var userIDs: [UserID] = []
+    @SystemUnderTest var db = Database()
+
+    @Command(weight: 3, .string(), .int(in: 18...65))
+    func createUser(name: String, age: Int) {
+        userIDs.append(db.createUser(name: name, age: age))
+    }
+
+    @Command(weight: 2, .int(in: 0...99))
+    func deleteUser(index: Int) throws {
+        guard userIDs.isEmpty == false else { throw skip() }
+        let id = userIDs.remove(at: index % userIDs.count)
+        db.deleteUser(id: id)
+    }
+}
+```
+
+The wrap-around (`index % userIDs.count`) means any index range works: the range's width only affects how evenly selection spreads. Guard on empty and `skip()` when there is nothing to reference yet. To reference without destroying, subscript instead of removing. For reference types, resolving the same index twice yields the same object, so aliasing scenarios (merging a heap with itself, say) come for free.
+
+Keep this state on the spec, next to the model. A command's behaviour then depends only on its arguments and the spec's own state, which is what reduction and replay rely on: remove a `createUser` from the sequence and every later `deleteUser` still resolves to *some* live user, rather than crashing or silently targeting stale storage.
+
 ## Running the test
 
 ```swift
@@ -120,6 +150,8 @@ The distinction between `@Invariant` and `check`: invariants run after every com
     await #execute(CircularQueueContract.self, .commandLimit(10), .budget(.thorough))
 }
 ```
+
+`#execute` is always awaited, so the test function must be `async`. This holds for every execution mode, including `.sequential` contracts whose commands are all synchronous.
 
 Exhaust first runs a coverage phase that systematically covers command-type orderings (every pairwise combination of command types at each position), then switches to random sampling. If a failure is found in either phase, the reducer reduces the command sequence to a minimal counterexample.
 
@@ -141,7 +173,7 @@ Reproduce: .replay("3JK4M2-5")
 
 The replay seed lets you re-run the exact same sequence deterministically for debugging.
 
-`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget, capped at 100 for sequential contracts and 40 for `.tasks` concurrent contracts; `.threads` contracts instead default to a flat 10, because each sequence is re-run many times to reproduce the race. Longer sequences explore deeper states but take longer to test and to reduce. For `.threads` contracts, linearizability checking cost explodes with longer sequences because the checker must try all valid orderings. Contracts with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
+`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget: the estimate's budget-derived ceiling tops out at 100, with a floor of three appearances per command type. `.tasks` contracts cap the estimate at 40; `.threads` contracts instead default to a flat 10, because each sequence is re-run many times to reproduce the race. Longer sequences explore deeper states but take longer to test and to reduce. For `.threads` contracts, linearizability checking cost explodes with longer sequences because the checker must try all valid orderings. Contracts with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
 
 ## Your SUT uses async/await
 
@@ -198,7 +230,7 @@ The `.sequential` contracts shown above run each command one at a time. Some bug
 @Test func counterIsSafeUnderConcurrency() async {
     await #execute(
         NonAtomicCounterContract.self,
-        .concurrent(.two),
+        .parallelize(lanes: .two),
         .commandLimit(6),
         .budget(.thorough)
     )
@@ -240,11 +272,11 @@ The cooperative scheduler interleaves at `await` suspension points, wherever a c
 
 SUTs that have races at suspension points (the `let v = state; await Task.yield(); state = v + 1` pattern) are exactly what `.tasks` concurrent testing finds well. SUTs whose races are in synchronous code behind an async facade (locks, dispatch queues, atomics) need `.threads` instead.
 
-### Concurrency level
+### Lane count
 
-`.concurrent(N)` controls how many concurrent lanes commands are distributed across. The default is 2, which suffices for most data races. A study of 105 real-world concurrency bugs in MySQL, Apache, Mozilla, and OpenOffice found that 96% manifest with just two threads (Lu et al., [Learning from Mistakes](https://dl.acm.org/doi/10.1145/1346281.1346323), ASPLOS 2008). Use three or more when you suspect the bug requires three-way interleaving (for example, ABA problems or three-participant lost updates). The maximum is 8.
+`.parallelize(lanes:)` controls how many concurrent lanes commands are distributed across. The default is 2, which suffices for most data races. A study of 105 real-world concurrency bugs in MySQL, Apache, Mozilla, and OpenOffice found that 96% manifest with just two threads (Lu et al., [Learning from Mistakes](https://dl.acm.org/doi/10.1145/1346281.1346323), ASPLOS 2008). Use three or more when you suspect the bug requires three-way interleaving (for example, ABA problems or three-participant lost updates). The maximum is four.
 
-`.concurrent(.one)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
+`.parallelize(lanes: .one)` runs everything sequentially, useful as a baseline to confirm that the bug genuinely requires concurrency to manifest.
 
 ### Idle timeout
 
@@ -346,7 +378,7 @@ Running the test:
 @Test func counterIsThreadSafe() async {
     await #execute(
         RacyCounterContract.self,
-        .concurrent(.two),
+        .parallelize(lanes: .two),
         .commandLimit(6),
         .budget(.thorough)
     )
@@ -385,8 +417,8 @@ All settings are passed as variadic arguments to `#execute`:
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `.commandLimit(N)` | auto-estimated (`.threads`: 10) | Maximum commands per generated sequence. Capped at 100 (sequential) or 40 (`.tasks`); `.threads` defaults to a flat 10. |
-| `.concurrent(N)` | 2 | Number of concurrent lanes (1 through 8). |
+| `.commandLimit(N)` | auto-estimated (`.threads`: 10) | Maximum commands per generated sequence. Estimated from the command domain and coverage budget; `.tasks` caps the estimate at 40, `.threads` defaults to a flat 10. |
+| `.parallelize(lanes:)` | 2 | Number of concurrent lanes (1 through 4). |
 | `.budget(.thorough)` | `.standard` | Controls coverage rows and random sampling iterations. |
 | `.idleTimeoutMs(ms)` | 2000 | Milliseconds before a stalled run is reported without reduction: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. |
 | `.replay("seed")` | — | Deterministic replay from a failure report seed. |

@@ -11,17 +11,8 @@ public extension ReflectiveGenerator {
     /// ```swift
     /// let small = #gen(.int().array()).resize(10)
     /// ```
-    func resize(_ newSize: UInt64) -> ReflectiveGenerator<Output> {
-        Gen.liftF(.resize(newSize: newSize, next: gen.erase())).wrapped
-    }
-
-    /// Runs this generator with a temporarily modified size parameter.
-    ///
-    /// ```swift
-    /// let small = #gen(.int().array()).resize(10)
-    /// ```
     func resize(_ newSize: Int) -> ReflectiveGenerator<Output> {
         precondition(newSize >= 0, "Size must be non-negative")
-        return resize(UInt64(newSize))
+        return Gen.liftF(.resize(newSize: UInt64(newSize), next: gen.erase())).wrapped
     }
 }

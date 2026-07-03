@@ -32,8 +32,7 @@ extension Date: ExhaustGenerable {
     package static var defaultGenerator: AnyGenerator {
         Gen.date(
             between: Date.distantPast ... Date.distantFuture,
-            interval: .seconds(60),
-            timeZone: .current
+            interval: .seconds(60)
         ).gen.erase()
     }
 }

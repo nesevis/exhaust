@@ -73,7 +73,7 @@ struct CooperativeSchedulerTests {
     func concurrencyLevel1RunsEverythingSequentiallyAndFindsNoConcurrencyBugs() async {
         let result = await #execute(
             NonAtomicCounterSpec.self,
-            .concurrent(.one),
+            .parallelize(lanes: .one),
             .commandLimit(8),
             .budget(.custom(coverage: 0, sampling: 200)),
             .suppress(.issueReporting)

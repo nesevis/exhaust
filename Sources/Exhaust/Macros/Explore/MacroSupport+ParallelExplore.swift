@@ -133,7 +133,7 @@ extension __ExhaustRuntime {
                 directionCoverage: coverageEntries,
                 coOccurrence: mergedCoOccurrence,
                 propertyInvocations: mergedPropertyInvocations,
-                warmupSamples: 0,
+                warmupSamples: nil,
                 totalMilliseconds: elapsed,
                 termination: .propertyFailed,
                 seed: baseSeed
@@ -150,7 +150,7 @@ extension __ExhaustRuntime {
             directionCoverage: coverageEntries,
             coOccurrence: mergedCoOccurrence,
             propertyInvocations: mergedPropertyInvocations,
-            warmupSamples: 0,
+            warmupSamples: nil,
             totalMilliseconds: elapsed,
             termination: allCovered ? .coverageAchieved : .budgetExhausted,
             seed: baseSeed

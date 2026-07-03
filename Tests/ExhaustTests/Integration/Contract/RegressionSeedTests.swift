@@ -30,7 +30,7 @@ struct RegressionSeedTests {
     func cooperativeRegressionSeedReproduces() async {
         let result = await #execute(
             RegressionCounterCooperativeContract.self,
-            .concurrent(.two),
+            .parallelize(lanes: .two),
             .commandLimit(6),
             .budget(.custom(coverage: 0, sampling: 0)),
             .suppress(.issueReporting)

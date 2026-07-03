@@ -16,6 +16,8 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
     private let maxAttemptsPerDirection: Int
     private let regressionSeeds: [UInt64]
     private var prng: Xoshiro256
+    /// CGS tuning failures keyed by direction index, surfaced on the per-direction coverage entries.
+    private var tuningErrors: [Int: String] = [:]
 
     /// Creates a runner with the given generator, property, directions, budget parameters, optional fixed seed, and regression seeds to replay after tuning.
     package init(
@@ -211,6 +213,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
                 event: "explore_tune_error",
                 "direction=\(directionName) error=\(error)"
             )
+            tuningErrors[directionIndex] = "\(error)"
             return nil
         }
     }
@@ -420,7 +423,8 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
                 warmupHits: warmupHits,
                 isCovered: hits >= hitsPerDirection,
                 warmupRuleOfThreeBound: warmupHits > 0 ? 3.0 / Double(warmupHits) : nil,
-                tuningPassRuleOfThreeBound: tuningPassPasses > 0 ? 3.0 / Double(tuningPassPasses) : nil
+                tuningPassRuleOfThreeBound: tuningPassPasses > 0 ? 3.0 / Double(tuningPassPasses) : nil,
+                tuningError: tuningErrors[index]
             ))
         }
 
@@ -459,7 +463,7 @@ package struct ClassificationExploreResult<Output> {
     package let directionCoverage: [DirectionCoverageEntry]
     package let coOccurrence: CoOccurrenceMatrix
     package let propertyInvocations: Int
-    package let warmupSamples: Int
+    package let warmupSamples: Int?
     package let totalMilliseconds: Double
     package let termination: ClassificationExploreTermination
     package let seed: UInt64
@@ -472,7 +476,7 @@ package struct ClassificationExploreResult<Output> {
         directionCoverage: [DirectionCoverageEntry],
         coOccurrence: CoOccurrenceMatrix,
         propertyInvocations: Int,
-        warmupSamples: Int,
+        warmupSamples: Int?,
         totalMilliseconds: Double,
         termination: ClassificationExploreTermination,
         seed: UInt64
@@ -501,6 +505,7 @@ package struct ClassificationExploreResult<Output> {
         package let isCovered: Bool
         package let warmupRuleOfThreeBound: Double?
         package let tuningPassRuleOfThreeBound: Double?
+        package let tuningError: String?
 
         package init(
             name: String,
@@ -511,7 +516,8 @@ package struct ClassificationExploreResult<Output> {
             warmupHits: Int,
             isCovered: Bool,
             warmupRuleOfThreeBound: Double?,
-            tuningPassRuleOfThreeBound: Double?
+            tuningPassRuleOfThreeBound: Double?,
+            tuningError: String? = nil
         ) {
             self.name = name
             self.hits = hits
@@ -522,6 +528,7 @@ package struct ClassificationExploreResult<Output> {
             self.isCovered = isCovered
             self.warmupRuleOfThreeBound = warmupRuleOfThreeBound
             self.tuningPassRuleOfThreeBound = tuningPassRuleOfThreeBound
+            self.tuningError = tuningError
         }
     }
 }

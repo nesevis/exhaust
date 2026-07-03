@@ -22,14 +22,22 @@ public struct ExploreReport<Output> {
     /// Total property invocations across warm-up and all tuning passes.
     public var propertyInvocations: Int
 
-    /// Total samples drawn during the warm-up pass. The parallel `#explore` path skips warm-up, so this is zero there (along with each direction's `warmupHits`, and a nil `warmupRuleOfThreeBound`); the sequential path always runs warm-up, so a zero value identifies the parallel path. Guard against division by zero when computing warm-up rates from a parallel report.
-    public var warmupSamples: Int
+    /// Statistics from the untuned warm-up pass, or `nil` when no warm-up ran (the parallel path skips it, as does a run that exits before sampling).
+    ///
+    /// When this is `nil`, every direction's ``DirectionCoverage/warmup`` is `nil` as well.
+    public var warmup: WarmupStats?
 
     /// Total wall-clock time, in milliseconds.
     public var totalMilliseconds: Double
 
     /// How the run terminated.
     public var termination: ExploreTermination
+}
+
+/// Statistics from the untuned warm-up pass of a sequential `#explore` run.
+public struct WarmupStats: Sendable {
+    /// Total samples drawn during the warm-up pass. The samples are identically distributed, so per-direction rates computed against this denominator are unbiased.
+    public var samples: Int
 }
 
 /// Describes how an `#explore` run terminated.
@@ -59,15 +67,40 @@ public struct DirectionCoverage: Sendable {
     /// Samples from this direction's tuning pass where the property failed.
     public var tuningPassFailures: Int
 
-    /// Hits accumulated during the warm-up pass (identically distributed, valid for rule-of-three bounds). Zero on the parallel `#explore` path, which skips warm-up.
-    public var warmupHits: Int
+    /// Whether this direction met its quota, fell short, or could not be tuned at all.
+    public var outcome: DirectionOutcome
 
-    /// Whether this direction achieved its K-hit quota. A direction whose CGS tuning failed reports `false` with `hits == 0`, the same as a genuinely unreachable direction; the tuning failure is surfaced separately as an `explore_tune_error` log entry rather than in this value.
-    public var isCovered: Bool
+    /// This direction's warm-up results, or `nil` when no warm-up ran.
+    public var warmup: DirectionWarmup?
 
-    /// Rule-of-three upper bound on the in-direction failure rate from the warm-up pass. Valid only when `warmupHits > 0` and based on identically distributed samples.
-    public var warmupRuleOfThreeBound: Double?
+    /// Whether this direction achieved its K-hit quota.
+    public var isCovered: Bool {
+        outcome == .covered
+    }
 
-    /// Rule-of-three upper bound on the in-direction failure rate from this direction's own tuning pass. Valid but describes the failure rate under the CGS-biased distribution, not the generator's natural distribution.
-    public var tuningPassRuleOfThreeBound: Double?
+    /// Rule-of-three upper bound on the in-direction failure rate from this direction's own tuning pass. Nil when the tuning pass produced no passing samples. Describes the failure rate under the CGS-biased distribution, not the generator's natural distribution.
+    public var tuningPassRuleOfThreeBound: Double? {
+        tuningPassPasses > 0 ? 3.0 / Double(tuningPassPasses) : nil
+    }
+}
+
+/// The outcome of a single direction's coverage attempt.
+public enum DirectionOutcome: Sendable, Equatable {
+    /// The direction accumulated its K-hit quota.
+    case covered
+    /// Sampling ran but the quota was not met before the attempt budget ran out. The direction may be rare or unreachable under the generator.
+    case uncovered
+    /// CGS tuning for this direction failed before any tuned sampling could run. The direction may still show incidental hits from other passes. Only produced by the sequential path; the parallel path surfaces tuning failures as thrown errors.
+    case tuningFailed(String)
+}
+
+/// A single direction's results from the warm-up pass.
+public struct DirectionWarmup: Sendable {
+    /// Samples that matched this direction during warm-up.
+    public var hits: Int
+
+    /// Rule-of-three upper bound on the in-direction failure rate. Nil when `hits` is zero. Based on identically distributed samples, so it describes the generator's natural distribution.
+    public var ruleOfThreeBound: Double? {
+        hits > 0 ? 3.0 / Double(hits) : nil
+    }
 }

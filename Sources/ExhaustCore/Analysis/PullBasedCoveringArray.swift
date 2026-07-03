@@ -221,7 +221,7 @@ package final class PullBasedCoveringArrayGenerator {
         rowBuffer = ContiguousArray<UInt16>(repeating: 0, count: domainSizes.count)
     }
 
-    /// Returns the next row that greedily maximises new t-tuple coverage, or `nil` if all t-tuples are already covered.
+    /// Returns the next row that greedily maximizes new t-tuple coverage, or `nil` if all t-tuples are already covered.
     public func next() -> CoveringArrayRow? {
         if totalRemaining == 0 { return nil }
 

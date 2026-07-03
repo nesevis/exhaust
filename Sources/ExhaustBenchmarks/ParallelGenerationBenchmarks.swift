@@ -14,7 +14,7 @@ func registerParallelGenerationBenchmarks() {
                 parserLangGen,
                 .suppress(.all),
                 .budget(.custom(coverage: 0, sampling: 2000)),
-                .parallel(lanes)
+                .parallelize(lanes: lanes)
             ) { _ in true }
         }
 
@@ -23,7 +23,7 @@ func registerParallelGenerationBenchmarks() {
                 bound5Gen,
                 .suppress(.all),
                 .budget(.custom(coverage: 0, sampling: 2000)),
-                .parallel(lanes)
+                .parallelize(lanes: lanes)
             ) { _ in true }
         }
 
@@ -32,7 +32,7 @@ func registerParallelGenerationBenchmarks() {
                 couplingGen,
                 .suppress(.all),
                 .budget(.custom(coverage: 0, sampling: 2000)),
-                .parallel(lanes)
+                .parallelize(lanes: lanes)
             ) { _ in true }
         }
 
@@ -41,7 +41,7 @@ func registerParallelGenerationBenchmarks() {
                 largeUnionListGen,
                 .suppress(.all),
                 .budget(.custom(coverage: 0, sampling: 2000)),
-                .parallel(lanes)
+                .parallelize(lanes: lanes)
             ) { _ in true }
         }
 
@@ -50,7 +50,7 @@ func registerParallelGenerationBenchmarks() {
                 calculatorExpressionGen(depth: 5),
                 .suppress(.all),
                 .budget(.custom(coverage: 0, sampling: 2000)),
-                .parallel(lanes)
+                .parallelize(lanes: lanes)
             ) { _ in true }
         }
     }

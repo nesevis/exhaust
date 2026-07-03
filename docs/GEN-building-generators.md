@@ -7,6 +7,7 @@ If you're new to Exhaust, start with [Getting Started](GETTING_STARTED.md). This
 - [Three modes](#three-modes)
 - [Primitives](#primitives)
 - [Collections](#collections)
+- [Ranges](#ranges)
 - [Choice](#choice)
 - [Composing generators](#composing-generators)
 - [Synthesising generators from Decodable types](#synthesising-generators-from-decodable-types)
@@ -35,7 +36,7 @@ let bools = #gen(.bool())
 let strings = #gen(.string(length: 1...50))
 ```
 
-Generators without an explicit range use size scaling: Exhaust starts small and ramps up across the test run.
+Generators without an explicit range use size scaling: Exhaust starts small and ramps up across the test run. An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it (`.int(in: 0...1000, scaling: .linear)`).
 
 > [!Note]
 > Additional generators are available for dates, UUIDs, SIMD vectors, decimals, and more.
@@ -45,6 +46,16 @@ Generators without an explicit range use size scaling: Exhaust starts small and 
 ```swift
 let arrays = #gen(.int().array(length: 0...10))
 let sets = #gen(.int().set(count: 1...5))
+let lookup = #gen(.dictionary(.asciiString(), .int(), count: 1...5))
+```
+
+## Ranges
+
+`.closedRange` and `.range` draw two bounds from an element generator and sort them, so every produced range is well-formed by construction. Both work with any `Comparable` bound (integers, doubles, dates) and are fully reflectable: the backward pass extracts the bounds.
+
+```swift
+let spans = #gen(.closedRange(.int(in: 0...100)))    // ClosedRange<Int>
+let windows = #gen(.range(.double(in: 0...1)))       // Range<Double>, empty when bounds collide
 ```
 
 ## Choice
@@ -129,7 +140,7 @@ Some fields fall back to a constant from the example, pinned with `.just(decoded
 > [!Tip]
 > Run `#examine` on a synthesised generator to see which fields are fully generated and which are pinned:
 > ```swift
-> let report = #examine(gen, .samples(50))
+> let report = #examine(gen, .budget(50))
 > // Output includes:
 > //   Correctness: reflection skipped (synthesised generator)
 > //   Pinned fields: 1 field could not be synthesised (constant value from example JSON)
@@ -148,7 +159,7 @@ let person = try #example(personGen)
 let people = try #example(personGen, count: 100, seed: 42)
 ```
 
-`#example` is throwing because generator synthesis can fail at runtime for types whose `Decodable` conformance has invariants that preclude random generation. `#example` generates values at size 50 on Exhaust's 0-to-100 size scale. Specifying a `seed` makes the output deterministic. Specifying `count` generates multiple values.
+`#example` is throwing because generator synthesis can fail at runtime for types whose `Decodable` conformance has invariants that preclude random generation. The single-value form generates at size 50 on Exhaust's 0-to-100 size scale. The `count` form runs the same interpreter as `#exhaust`'s sampling phase, so with the same seed the values match that phase one for one. A seed accepts a raw number or a string copied from a failure report: `#example(gen, seed: "5QF8M2-3")` recreates exactly the value that iteration generated.
 
 ## Recursive generators
 
@@ -165,7 +176,7 @@ let jsonGen = #gen(.recursive(base: .null, depthRange: 0...5) { recurse, remaini
     .oneOf(weighted:
         (2, .just(.null)),
         (2, .int(in: 0...99).map { JSONValue.int($0) }),
-        (Int(remaining), recurse().array(length: 0...3).map { JSONValue.array($0) })
+        (remaining, recurse().array(length: 0...3).map { JSONValue.array($0) })
     )
 })
 ```

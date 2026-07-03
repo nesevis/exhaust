@@ -9,7 +9,7 @@ package enum GeneratorSynthesizer {
     /// Builds a generator from an example JSON `Data` value.
     ///
     /// - Parameters:
-    ///   - type: The `Decodable` type to synthesise a generator for.
+    ///   - type: The `Decodable` type to synthesize a generator for.
     ///   - data: Example JSON data whose structure matches `T`.
     /// - Returns: A ``ReflectiveGenerator`` that produces arbitrary values of type `T`.
     package static func makeGenerator<T: Decodable>(
@@ -23,7 +23,7 @@ package enum GeneratorSynthesizer {
     /// Builds a generator from an example JSON string.
     ///
     /// - Parameters:
-    ///   - type: The `Decodable` type to synthesise a generator for.
+    ///   - type: The `Decodable` type to synthesize a generator for.
     ///   - string: Example JSON string whose structure matches `T`.
     /// - Returns: A ``ReflectiveGenerator`` that produces arbitrary values of type `T`.
     package static func makeGenerator<T: Decodable>(

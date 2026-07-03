@@ -15,7 +15,7 @@
 ///
 /// ## Lifecycle
 ///
-/// 1. ``start(scope:)`` extracts the single leaf from the scope's ``ValueMinimizationScope``, reads its current and target bit patterns, and initialises a ``BinarySearchStepper``. Multi-leaf scopes are not supported and produce no probes.
+/// 1. ``start(scope:)`` extracts the single leaf from the scope's ``ValueMinimizationScope``, reads its current and target bit patterns, and initializes a ``BinarySearchStepper``. Multi-leaf scopes are not supported and produce no probes.
 /// 2. ``nextProbe(into:lastAccepted:)`` returns midpoint candidates until convergence. Each candidate writes the next bit pattern into the caller's inout buffer; the mutation is `.leafValues([LeafChange])` with `mayReshape: false` so the enclosing ``GraphComposedEncoder/wrap(downstreamMutation:candidate:upstreamProbe:)`` can flip the flag to `true` when wrapping the downstream probe.
 ///
 /// - SeeAlso: ``GraphComposedEncoder``, ``BinarySearchStepper``

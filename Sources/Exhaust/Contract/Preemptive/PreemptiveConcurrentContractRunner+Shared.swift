@@ -71,7 +71,7 @@ func warnIfInterleavingSpaceIsLarge(
 /// A timed-out probe counts as a pass so a contended host or a hanging system does not produce a false failure, but a high timeout rate means most of the budget produced no signal. The warning reports the rate so a silently-passing run that never actually exercised the system is still visible. Call this on the test's own thread after the pipeline returns, not from inside the dispatched work, so the issue attaches to the running test.
 func warnIfTimeoutFractionHigh(
     timedOutProbes: Int,
-    totalBudget: UInt64,
+    totalBudget: Int,
     fileID: StaticString,
     filePath: StaticString,
     line: UInt,

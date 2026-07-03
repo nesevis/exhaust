@@ -137,7 +137,7 @@ struct ExploreReportTests {
             coOccurrence: CoOccurrenceMatrix(directionCount: 0),
             counterexampleDirections: [],
             propertyInvocations: 100,
-            warmupSamples: 100,
+            warmup: WarmupStats(samples: 100),
             totalMilliseconds: 50.0,
             termination: .coverageAchieved
         )
@@ -157,16 +157,14 @@ struct ExploreReportTests {
                     tuningPassSamples: 50,
                     tuningPassPasses: 49,
                     tuningPassFailures: 1,
-                    warmupHits: 10,
-                    isCovered: true,
-                    warmupRuleOfThreeBound: 3.0 / 10.0,
-                    tuningPassRuleOfThreeBound: nil
+                    outcome: .covered,
+                    warmup: DirectionWarmup(hits: 10)
                 ),
             ],
             coOccurrence: CoOccurrenceMatrix(directionCount: 1),
             counterexampleDirections: [0],
             propertyInvocations: 50,
-            warmupSamples: 100,
+            warmup: WarmupStats(samples: 100),
             totalMilliseconds: 25.0,
             termination: .propertyFailed
         )
@@ -174,4 +172,37 @@ struct ExploreReportTests {
         #expect(report.counterexampleDirections == [0])
         #expect(report.termination == .propertyFailed)
     }
+
+    @Test("isCovered reflects the outcome case")
+    func isCoveredReflectsOutcome() {
+        #expect(makeCoverage(outcome: .covered).isCovered)
+        #expect(makeCoverage(outcome: .uncovered).isCovered == false)
+        #expect(makeCoverage(outcome: .tuningFailed("subdivision failed")).isCovered == false)
+    }
+
+    @Test("Warm-up rule-of-three bound derives from hits")
+    func warmupBoundDerivesFromHits() {
+        #expect(DirectionWarmup(hits: 0).ruleOfThreeBound == nil)
+        #expect(DirectionWarmup(hits: 10).ruleOfThreeBound == 0.3)
+    }
+
+    @Test("Tuning-pass rule-of-three bound derives from passing samples")
+    func tuningBoundDerivesFromPasses() {
+        #expect(makeCoverage(outcome: .covered, tuningPassPasses: 0).tuningPassRuleOfThreeBound == nil)
+        #expect(makeCoverage(outcome: .covered, tuningPassPasses: 30).tuningPassRuleOfThreeBound == 0.1)
+    }
+}
+
+// MARK: - Helpers
+
+private func makeCoverage(outcome: DirectionOutcome, tuningPassPasses: Int = 0) -> DirectionCoverage {
+    DirectionCoverage(
+        name: "direction",
+        hits: 0,
+        tuningPassSamples: 0,
+        tuningPassPasses: tuningPassPasses,
+        tuningPassFailures: 0,
+        outcome: outcome,
+        warmup: nil
+    )
 }

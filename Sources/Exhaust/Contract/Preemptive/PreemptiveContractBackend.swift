@@ -103,7 +103,6 @@ struct PreemptiveContractBackend<Inner: PreemptiveBackend>: ContractBackend {
 
         // The system under test reported to the user is always the concurrent spec that exhibited the failure, never the sequential confirmation replay.
         let result = ContractResult<Spec>(
-            status: .fail,
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
             trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),

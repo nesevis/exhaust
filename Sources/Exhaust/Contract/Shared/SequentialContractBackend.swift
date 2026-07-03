@@ -48,7 +48,6 @@ struct SequentialContractBackend<Spec: ContractSpecBase>: ContractBackend {
         let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
 
         let result = ContractResult<Spec>(
-            status: .fail,
             commands: commands,
             originalCommands: originalCommands,
             trace: outcome.trace,

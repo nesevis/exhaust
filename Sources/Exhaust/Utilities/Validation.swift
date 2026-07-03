@@ -9,7 +9,7 @@ import IssueReporting
 ///
 /// Capture the return value of ``#examine`` to assert on coverage quality:
 /// ```swift
-/// let report = #examine(myGen, .samples(200))
+/// let report = #examine(myGen, .budget(200))
 /// #expect(report.decilesCovered.allSatisfy { $0.value >= 6 })
 /// #expect(report.branchCoverage == 1.0)
 /// ```

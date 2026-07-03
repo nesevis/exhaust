@@ -80,40 +80,39 @@ package extension Gen {
     ///
     /// Use unfold for iterative state machines where each step consumes the previous state and either continues or terminates. For tree-shaped recursion with branching, use ``recursive(base:depthRange:extend:)`` instead.
     ///
-    /// The iteration count is drawn from `depthRange` as a reducible depth-control choice. The reducer can collapse iterations through structural operations to find the minimum number of steps needed to trigger a property failure. Because the chosen depth may be less than the upper bound, `step` should not assume that `remaining` starts at any particular value — use it only for relative decisions (for example, "generate a leaf when `remaining` is zero") rather than absolute thresholds.
+    /// The iteration count is drawn from `depthRange` as a reducible depth-control choice. The reducer can collapse iterations through structural operations to find the minimum number of steps needed to trigger a property failure. `step` is only called while `remaining` is at least 1; when the drawn depth is exhausted, `finish` converts the final state into the output. Because the chosen depth may be less than the upper bound, `step` should use `remaining` only for relative decisions rather than absolute thresholds.
     ///
     /// - Parameters:
     ///   - seed: Generator for the initial state.
-    ///   - depthRange: The range of iteration counts to draw from. The lower bound must be at least 1.
-    ///   - step: Closure that receives the current state and remaining depth, returning a generator of ``UnfoldStep``.
+    ///   - depthRange: The range of iteration counts to draw from. A drawn depth of 0 produces `finish(seed)` directly.
+    ///   - step: Closure that receives the current state and remaining depth (always at least 1), returning a generator of ``UnfoldStep``.
+    ///   - finish: Converts the final state into the output when the drawn depth is exhausted without `step` returning ``UnfoldStep/done(_:)``.
     /// - Returns: A generator producing values built by iterative state transformation.
     static func unfold<State, Output>(
         seed: Generator<State>,
         depthRange: ClosedRange<Int>,
         step: @escaping (State, UInt64) -> Generator<UnfoldStep<State, Output>>,
+        finish: @escaping (State) -> Output,
         fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> Generator<Output> {
-        precondition(depthRange.lowerBound >= 1, "lower bound must be >= 1")
+        precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
         func loop(
             state: Generator<State>,
             remaining: UInt64
         ) -> Generator<Output> {
             state.bindReified(
                 { currentState in
-                    step(currentState, remaining).bindReified(
+                    guard remaining > 0 else {
+                        return Gen.just(finish(currentState))
+                    }
+                    return step(currentState, remaining).bindReified(
                         { result in
                             switch result {
                                 case let .done(output):
                                     return Gen.just(output)
                                 case let .recurse(nextState):
-                                    guard remaining > 0 else {
-                                        preconditionFailure(
-                                            "step returned .recurse at remaining=0; "
-                                                + "step must return .done when remaining is 0"
-                                        )
-                                    }
                                     return loop(
                                         state: Gen.just(nextState),
                                         remaining: remaining - 1

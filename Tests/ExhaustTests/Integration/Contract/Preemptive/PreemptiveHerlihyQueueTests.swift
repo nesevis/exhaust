@@ -20,7 +20,7 @@ struct PreemptiveHerlihyQueueTests {
             var report: ExhaustReport?
             let result = await #execute(
                 HerlihyQueueSpec.self,
-                .concurrent(.two),
+                .parallelize(lanes: .two),
                 .budget(.custom(coverage: 0, sampling: 500_000)),
 //                .log(.debug),
                 .replay(.numeric(seed)),

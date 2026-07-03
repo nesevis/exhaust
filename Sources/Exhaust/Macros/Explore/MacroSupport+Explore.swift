@@ -52,7 +52,7 @@ public extension __ExhaustRuntime {
                             coOccurrence: CoOccurrenceMatrix(directionCount: 0),
                             counterexampleDirections: [],
                             propertyInvocations: 0,
-                            warmupSamples: 0,
+                            warmup: nil,
                             totalMilliseconds: 0,
                             termination: .budgetExhausted
                         )
@@ -70,7 +70,7 @@ public extension __ExhaustRuntime {
                     }
                 case let .log(level):
                     logLevel = level
-                case .parallel:
+                case .parallelize:
                     shouldParallelize = true
             }
         }
@@ -83,6 +83,18 @@ public extension __ExhaustRuntime {
                 }
             }
         #endif
+        budget.preconditionValid()
+
+        if shouldParallelize, seed != nil, suppressIssueReporting == false {
+            reportIssue(
+                ".parallelize has no effect with .replay: replay runs sequentially for deterministic reproduction.",
+                severity: .warning,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+        }
 
         let namedDirections = directions.map { direction in
             (name: direction.0, predicate: { (value: Output) in direction.1(value) })
@@ -108,7 +120,7 @@ public extension __ExhaustRuntime {
             let result: ClassificationExploreResult<Output>
             do {
                 result = try { () throws -> ClassificationExploreResult<Output> in
-                    if shouldParallelize, namedDirections.count > 1 {
+                    if shouldParallelize, seed == nil, namedDirections.count > 1 {
                         return try runParallelExplore(
                             gen: gen,
                             property: property,
@@ -141,23 +153,29 @@ public extension __ExhaustRuntime {
                     coOccurrence: CoOccurrenceMatrix(directionCount: 0),
                     counterexampleDirections: [],
                     propertyInvocations: 0,
-                    warmupSamples: 0,
+                    warmup: nil,
                     totalMilliseconds: 0,
                     termination: .budgetExhausted
                 )
             }
 
+            let warmupRan = result.warmupSamples != nil
             let directionCoverage = result.directionCoverage.map { entry in
-                DirectionCoverage(
+                let outcome: DirectionOutcome = if entry.isCovered {
+                    .covered
+                } else if let tuningError = entry.tuningError {
+                    .tuningFailed(tuningError)
+                } else {
+                    .uncovered
+                }
+                return DirectionCoverage(
                     name: entry.name,
                     hits: entry.hits,
                     tuningPassSamples: entry.tuningPassSamples,
                     tuningPassPasses: entry.tuningPassPasses,
                     tuningPassFailures: entry.tuningPassFailures,
-                    warmupHits: entry.warmupHits,
-                    isCovered: entry.isCovered,
-                    warmupRuleOfThreeBound: entry.warmupRuleOfThreeBound,
-                    tuningPassRuleOfThreeBound: entry.tuningPassRuleOfThreeBound
+                    outcome: outcome,
+                    warmup: warmupRan ? DirectionWarmup(hits: entry.warmupHits) : nil
                 )
             }
 
@@ -194,7 +212,7 @@ public extension __ExhaustRuntime {
             } else {
                 var passMetadata = [
                     "invocations": "\(result.propertyInvocations)",
-                    "warmup_samples": "\(result.warmupSamples)",
+                    "warmup_samples": result.warmupSamples.map { "\($0)" } ?? "none",
                     "seed": "\(result.seed)",
                 ]
                 let coveredCount = directionCoverage.filter(\.isCovered).count
@@ -213,7 +231,7 @@ public extension __ExhaustRuntime {
                 coOccurrence: result.coOccurrence,
                 counterexampleDirections: result.counterexampleDirections,
                 propertyInvocations: result.propertyInvocations,
-                warmupSamples: result.warmupSamples,
+                warmup: result.warmupSamples.map { WarmupStats(samples: $0) },
                 totalMilliseconds: result.totalMilliseconds,
                 termination: termination
             )

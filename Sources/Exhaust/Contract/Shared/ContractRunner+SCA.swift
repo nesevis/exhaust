@@ -496,7 +496,7 @@ extension __ExhaustRuntime {
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
-                coverageBudget: max(config.budget.coverageBudget, UInt64(row) + 1),
+                coverageBudget: max(UInt64(config.budget.coverageBudget), UInt64(row) + 1),
                 concurrencyLevel: concurrencyLevel,
                 property: property
             ))
@@ -520,7 +520,7 @@ extension __ExhaustRuntime {
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
-                coverageBudget: config.budget.coverageBudget,
+                coverageBudget: UInt64(config.budget.coverageBudget),
                 concurrencyLevel: concurrencyLevel,
                 sequenceGenForLength: sequenceGenForLength,
                 property: property
@@ -532,7 +532,7 @@ extension __ExhaustRuntime {
             sources.append(.sampling(
                 sequenceGen: sequenceGen,
                 seed: seed,
-                samplingBudget: config.budget.samplingBudget,
+                samplingBudget: UInt64(config.budget.samplingBudget),
                 property: property
             ))
         }

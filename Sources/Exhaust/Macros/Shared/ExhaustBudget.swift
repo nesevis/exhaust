@@ -38,10 +38,10 @@ public enum ExhaustBudget: Sendable {
     /// Broad coverage at 10x the cost of `.standard`.
     case extensive
     /// Explicit values for all budget aspects.
-    case custom(coverage: UInt64, sampling: UInt64)
+    case custom(coverage: Int, sampling: Int)
 
     /// The iteration budget for structured coverage analysis.
-    public var coverageBudget: UInt64 {
+    public var coverageBudget: Int {
         switch self {
             case .quick: 100
             case .standard: 200
@@ -52,14 +52,13 @@ public enum ExhaustBudget: Sendable {
     }
 
     /// The iteration budget for random sampling.
-    public var samplingBudget: UInt64 {
+    public var samplingBudget: Int {
         switch self {
             case .quick: 100
             case .standard: 200
             case .thorough: 600
             case .extensive: 2000
-            case let .custom(_, sampling):
-                sampling
+            case let .custom(_, sampling): sampling
         }
     }
 
@@ -70,7 +69,7 @@ public enum ExhaustBudget: Sendable {
             case .standard: 30
             case .thorough: 100
             case .extensive: 300
-            case let .custom(coverage, _): Int(coverage)
+            case let .custom(coverage, _): coverage
         }
     }
 
@@ -81,12 +80,20 @@ public enum ExhaustBudget: Sendable {
             case .standard: 300
             case .thorough: 1000
             case .extensive: 3000
-            case let .custom(_, sampling): Int(sampling)
+            case let .custom(_, sampling): sampling
+        }
+    }
+
+    /// Traps when a `.custom` budget carries negative values. Called once when a macro resolves its settings, so the accessors stay plain reads.
+    func preconditionValid() {
+        if case let .custom(coverage, sampling) = self {
+            precondition(coverage >= 0, "Coverage budget must be non-negative")
+            precondition(sampling >= 0, "Sampling budget must be non-negative")
         }
     }
 
     /// Scales both coverage and sampling budgets by a multiplier.
-    public static func * (lhs: ExhaustBudget, rhs: UInt64) -> ExhaustBudget {
+    public static func * (lhs: ExhaustBudget, rhs: Int) -> ExhaustBudget {
         precondition(rhs > 0, "Multiplier must be positive")
         return .custom(
             coverage: lhs.coverageBudget * rhs,
@@ -95,13 +102,13 @@ public enum ExhaustBudget: Sendable {
     }
 
     /// Scales both coverage and sampling budgets by a multiplier.
-    public static func * (lhs: UInt64, rhs: ExhaustBudget) -> ExhaustBudget {
+    public static func * (lhs: Int, rhs: ExhaustBudget) -> ExhaustBudget {
         rhs * lhs
     }
 
-    /// Divides both coverage and sampling budgets by a divisor, flooring at 1.
-    public static func / (lhs: ExhaustBudget, rhs: UInt64) -> ExhaustBudget {
-        let rhs = max(rhs, 1)
+    /// Divides both coverage and sampling budgets by a divisor, flooring the results at 1.
+    public static func / (lhs: ExhaustBudget, rhs: Int) -> ExhaustBudget {
+        precondition(rhs > 0, "Divisor must be positive")
         return .custom(
             coverage: max(1, lhs.coverageBudget / rhs),
             sampling: max(1, lhs.samplingBudget / rhs)

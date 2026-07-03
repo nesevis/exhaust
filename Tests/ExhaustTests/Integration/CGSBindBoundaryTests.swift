@@ -37,16 +37,15 @@ struct CGSBindBoundaryTests {
     func unfoldWithFilterDoesNotCrashCGS() throws {
         let gen = ReflectiveGenerator<Int>.unfold(
             seed: .just(0),
-            depthRange: 1 ... 3
-        ) { state, remaining in
-            if remaining == 0 {
-                return .just(.done(state))
-            }
-            return .oneOf(
-                .just(.done(state)),
-                .just(.recurse(state + 1))
-            )
-        }.filter(.choiceGradientSampling) { $0 >= 0 }
+            depthRange: 1 ... 3,
+            step: { state, _ in
+                .oneOf(
+                    .just(.done(state)),
+                    .just(.recurse(state + 1))
+                )
+            },
+            finish: { state in state }
+        ).filter(.choiceGradientSampling) { $0 >= 0 }
 
         let values = try #example(gen, count: 50, seed: 42)
         #expect(values.allSatisfy { $0 >= 0 })

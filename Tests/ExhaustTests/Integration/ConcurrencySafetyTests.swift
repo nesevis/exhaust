@@ -12,7 +12,7 @@ struct GeneratorSharingTests {
         try await withThrowingTaskGroup(of: [Int].self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    try #example(gen, seed: seed)
+                    try #example(gen, seed: .numeric(seed))
                 }
             }
             for try await values in group {
@@ -33,7 +33,7 @@ struct GeneratorSharingTests {
         try await withThrowingTaskGroup(of: [[String]].self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    try #example(gen, count: 10, seed: seed)
+                    try #example(gen, count: 10, seed: .numeric(seed))
                 }
             }
             for try await batches in group {
@@ -52,7 +52,7 @@ struct GeneratorSharingTests {
         try await withThrowingTaskGroup(of: [[Int]].self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    try #example(gen, count: 5, seed: seed)
+                    try #example(gen, count: 5, seed: .numeric(seed))
                 }
             }
             for try await batches in group {
@@ -76,7 +76,7 @@ struct GeneratorSharingTests {
         try await withThrowingTaskGroup(of: [[String]].self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    try #example(gen, count: 5, seed: seed)
+                    try #example(gen, count: 5, seed: .numeric(seed))
                 }
             }
             for try await batches in group {
@@ -105,7 +105,7 @@ struct GeneratorSharingTests {
         try await withThrowingTaskGroup(of: Void.self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    let values = try #example(gen, count: 10, seed: seed)
+                    let values = try #example(gen, count: 10, seed: .numeric(seed))
                     #expect(values.count == 10)
                 }
             }
@@ -123,7 +123,7 @@ struct GeneratorSharingTests {
         try await withThrowingTaskGroup(of: [String].self) { group in
             for seed in 0 as UInt64 ..< 20 {
                 group.addTask {
-                    try #example(gen, count: 10, seed: seed)
+                    try #example(gen, count: 10, seed: .numeric(seed))
                 }
             }
             for try await batch in group {
@@ -299,8 +299,8 @@ final class YieldingCounterSpec {
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 @Contract(.sequential)
-final class BundleDrawSpec {
-    let tokens = Bundle<Int>()
+final class TokenDrawSpec {
+    var tokens: [Int] = []
     var model: [Int] = []
     @SystemUnderTest var store: TokenStore = .init()
 
@@ -313,12 +313,12 @@ final class BundleDrawSpec {
     func deposit(value: Int) async {
         model.append(value)
         await store.deposit(value)
-        tokens.add(value)
+        tokens.append(value)
     }
 
     @Command(weight: 2)
     func withdraw() async throws {
-        guard let token = tokens.draw(at: 0) else { throw skip() }
+        guard let token = tokens.first else { throw skip() }
         guard let index = model.firstIndex(of: token) else { throw skip() }
         model.remove(at: index)
         await store.withdraw(token)

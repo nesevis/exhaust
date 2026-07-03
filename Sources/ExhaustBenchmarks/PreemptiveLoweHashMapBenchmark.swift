@@ -18,7 +18,7 @@ func registerPreemptiveLoweHashMapBenchmarks() {
             let result = __ExhaustRuntime.blockingAwait {
                 await #execute(
                     LoweHashMapBenchSpec.self,
-                    .concurrent(.two),
+                    .parallelize(lanes: .two),
                     .replay(.numeric(seed)),
                     .budget(.custom(coverage: 10000, sampling: 150_000)),
                     .suppress(.issueReporting),

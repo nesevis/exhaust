@@ -94,7 +94,7 @@ You can also throw errors directly. Any thrown error counts as a failure:
 | `.includeDiff` | off | Includes a structural diff between the original failing value and the reduced counterexample in the failure output. |
 | `.suppress(.issueReporting)` | — | Silences issue reporting. Use when asserting on the return value directly. `.suppress(.logs)` silences console output. `.suppress(.all)` for a completely silent run. |
 | `.log(.debug)` | `.error` | Sets the minimum log level for this test run. Only messages at or above the level are emitted. |
-| `.parallel(N)` | off | Splits the random sampling phase across N parallel GCD lanes. Same seed, same counterexample regardless of lane count. Has no effect with `.replay`. |
+| `.parallelize(lanes:)` | off | Splits the random sampling phase across N parallel GCD lanes. Lanes race, and the first failure cancels the others, so which counterexample is reported can vary between runs. Replaying a reported seed runs single-lane and is deterministic. Has no effect with `.replay`. |
 
 ## Coverage of problematic values
 
@@ -137,7 +137,7 @@ The `.collectOpenPBTStats` setting records per-example data in the [OpenPBTStats
 
 Each line records the example's pass/fail status, a `customDump` representation, and complexity features derived automatically from the choice tree. Filter rejections from CGS or rejection sampling are surfaced as `gave_up` entries.
 
-The attachment is recorded via Swift Testing's `Attachment` API, or via `XCTAttachment` when running under XCTest. Contract tests support `.collectOpenPBTStats` through `ContractSettings`.
+The attachment is recorded via Swift Testing's `Attachment` API, or via `XCTAttachment` when running under XCTest.
 
 ### Why this matters
 

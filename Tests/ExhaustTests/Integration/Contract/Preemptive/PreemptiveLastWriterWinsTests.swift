@@ -9,7 +9,7 @@ struct PreemptiveLastWriterWinsTests {
         var report: ExhaustReport?
         let result = await #execute(
             AtomicLastWriterWinsSpec.self,
-            .concurrent(.two),
+            .parallelize(lanes: .two),
             .idleTimeoutMs(30000),
             .suppress(.issueReporting),
             .onReport { report = $0 }
@@ -18,7 +18,7 @@ struct PreemptiveLastWriterWinsTests {
         print("\(#function): \(result?.commands.count ?? -1) commands total")
         print("\(#function): \(String(describing: result?.trace)) trace total")
         print("\(#function): \(String(describing: result?.originalCommands)) trace total")
-        #expect(result?.status != .fail, "A correctly synchronized SUT should not produce failures. The fixed-ordering oracle would false-positive here; linearizability should accept both orderings.")
+        #expect(result == nil, "A correctly synchronized SUT should not produce failures. The fixed-ordering oracle would false-positive here; linearizability should accept both orderings.")
     }
 }
 

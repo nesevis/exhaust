@@ -1,11 +1,13 @@
 /// Produces arbitrary values for property-based testing.
 ///
-/// Construct generators with static factory methods (`.int()`, `.string()`, `.bool()`, and so on) or the `#gen` macro, then combine them with `.array()`, `.filter()`, `.map()`, and pass the result to `#exhaust`.
+/// Construct generators with the `#gen` macro and static factory methods (`.int()`, `.string()`, `.bool()`, and so on), then combine them with `.array()`, `.filter()`, `.map()`, and pass the result to `#exhaust`. Prefer `#gen(.int(...))` over spelling out `ReflectiveGenerator.int(...)`; the type name is needed only for annotations and `.recursive`/`.unfold` roots.
 ///
 /// ```swift
-/// let gen = ReflectiveGenerator.int(in: 0...100)
-///     .array(length: 1...10)
-///     .filter { $0.contains(where: { $0 > 50 }) }
+/// let gen = #gen(
+///     .int(in: 0...100)
+///         .array(length: 1...10)
+///         .filter { $0.contains(where: { $0 > 50 }) }
+/// )
 ///
 /// #exhaust(gen) { array in
 ///     array.sorted() == array // finds unsorted arrays
@@ -94,7 +96,7 @@ extension ReflectiveGenerator: CustomDebugStringConvertible {
     public var debugDescription: String {
         let typeName = "\(Output.self)"
         let synthesized = isSynthesized ? " (synthesized)" : ""
-        return "ReflectiveGenerator<\(typeName)>(\(synthesized)\n"
+        return "ReflectiveGenerator<\(typeName)>\(synthesized)\n"
             + gen.treeDescription(prefix: "", isLast: true)
     }
 }
