@@ -36,7 +36,7 @@ let bools = #gen(.bool())
 let strings = #gen(.string(length: 1...50))
 ```
 
-Generators without an explicit range use size scaling: Exhaust starts small and ramps up across the test run.
+Generators without an explicit range use size scaling: Exhaust starts small and ramps up across the test run. An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it (`.int(in: 0...1000, scaling: .linear)`).
 
 > [!Note]
 > Additional generators are available for dates, UUIDs, SIMD vectors, decimals, and more.

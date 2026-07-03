@@ -85,6 +85,17 @@ public extension __ExhaustRuntime {
         #endif
         budget.preconditionValid()
 
+        if shouldParallelize, seed != nil, suppressIssueReporting == false {
+            reportIssue(
+                ".parallelize has no effect with .replay: replay runs sequentially for deterministic reproduction.",
+                severity: .warning,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+        }
+
         let namedDirections = directions.map { direction in
             (name: direction.0, predicate: { (value: Output) in direction.1(value) })
         }
@@ -109,7 +120,7 @@ public extension __ExhaustRuntime {
             let result: ClassificationExploreResult<Output>
             do {
                 result = try { () throws -> ClassificationExploreResult<Output> in
-                    if shouldParallelize, namedDirections.count > 1 {
+                    if shouldParallelize, seed == nil, namedDirections.count > 1 {
                         return try runParallelExplore(
                             gen: gen,
                             property: property,

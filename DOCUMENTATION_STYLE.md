@@ -9,7 +9,7 @@
 | `//` inline | Brief clarification of a single line or block | No |
 
 - Never use `/** */`. The codebase uses `///` exclusively.
-- Every `public` and `@_spi(ExhaustInternal)` declaration must have a `///` doc comment.
+- Every `public` declaration must have a `///` doc comment.
 - `internal` declarations in ExhaustCore: doc comment required on types and non-trivial methods.
 - `private`/`fileprivate`: recommended for anything non-trivial (10+ lines or non-obvious behavior).
 
@@ -192,7 +192,6 @@ Do not add `///` doc comments to:
 Always document:
 
 - Every `public` declaration, no exceptions.
-- Every `@_spi(ExhaustInternal)` declaration.
 - Any `private` function longer than 10 lines or with non-obvious behavior.
 - Any `@unchecked Sendable` conformance (explain why it is safe).
 

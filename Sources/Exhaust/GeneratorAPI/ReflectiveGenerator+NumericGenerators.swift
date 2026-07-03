@@ -16,6 +16,7 @@ import ExhaustCore
         /// Generates arbitrary `Float16` values within the given range.
         ///
         /// When no range is specified, generates across the full finite half-precision range with size scaling.
+        /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
         ///
         /// ```swift
         /// let gen = #gen(.float16(in: Float16(-1.0)...Float16(1.0)))
@@ -57,6 +58,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `Double` values within the given range.
     ///
     /// When no range is specified, generates across the full finite double range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.double(in: 0.0...1.0))
@@ -87,6 +89,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `Float` values within the given range.
     ///
     /// When no range is specified, generates across the full finite float range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.float(in: -1.0...1.0))
@@ -158,6 +161,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `UInt8` values within the given range.
     ///
     /// When no range is specified, generates across the full `UInt8` range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.uint8(in: 0...200))
@@ -198,6 +202,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `UInt16` values within the given range.
     ///
     /// When no range is specified, generates across the full `UInt16` range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.uint16(in: 0...1000))
@@ -238,6 +243,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `UInt32` values within the given range.
     ///
     /// When no range is specified, generates across the full `UInt32` range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.uint32(in: 0...100_000))
@@ -278,6 +284,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `UInt64` values within the given range.
     ///
     /// When no range is specified, generates across the full `UInt64` range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.uint64(in: 0...1_000_000))
@@ -318,6 +325,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `UInt` values within the given range.
     ///
     /// When no range is specified, generates across the full `UInt` range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.uint(in: 0...100))
@@ -362,6 +370,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `Int8` values within the given range.
     ///
     /// When no range is specified, generates across the full `Int8` range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.int8(in: -100...100))
@@ -398,6 +407,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `Int16` values within the given range.
     ///
     /// When no range is specified, generates across the full `Int16` range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.int16(in: -1000...1000))
@@ -434,6 +444,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `Int32` values within the given range.
     ///
     /// When no range is specified, generates across the full `Int32` range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.int32(in: -100_000...100_000))
@@ -470,6 +481,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `Int64` values within the given range.
     ///
     /// When no range is specified, generates across the full `Int64` range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.int64(in: -1_000_000...1_000_000))
@@ -503,6 +515,7 @@ public extension ReflectiveGenerator {
     /// Generates arbitrary `Int` values within the given range.
     ///
     /// When no range is specified, generates across the full `Int` range with size scaling.
+    /// An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it.
     ///
     /// ```swift
     /// let gen = #gen(.int(in: 0...100))

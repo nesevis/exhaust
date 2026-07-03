@@ -14,6 +14,8 @@ public extension ReflectiveGenerator {
     ///
     /// Reflection rounds off-grid dates down to the nearest interval step. This means `reflecting:` with a date that does not fall exactly on a grid point will start reduction from the closest earlier grid point rather than rejecting the value.
     ///
+    /// - Note: ``DateStride`` values are fixed-second approximations that compare by duration: a month is 30 days and a year is 365, so `.months(1) == .days(30)`.
+    ///
     /// ```swift
     /// let gen = #gen(.date(
     ///     between: startDate ... endDate,

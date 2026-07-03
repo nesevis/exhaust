@@ -96,7 +96,7 @@ extension ReflectiveGenerator: CustomDebugStringConvertible {
     public var debugDescription: String {
         let typeName = "\(Output.self)"
         let synthesized = isSynthesized ? " (synthesized)" : ""
-        return "ReflectiveGenerator<\(typeName)>(\(synthesized)\n"
+        return "ReflectiveGenerator<\(typeName)>\(synthesized)\n"
             + gen.treeDescription(prefix: "", isLast: true)
     }
 }
