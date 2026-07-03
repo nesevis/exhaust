@@ -63,7 +63,7 @@ struct ContractMachineTests {
         #expect(transitions.contains("statsRecorded"))
         #expect(transitions.contains("assembled"))
         #expect(machine.result != nil)
-        #expect(machine.result?.status == .fail)
+        #expect(machine.result != nil)
     }
 
     @Test("Reduction invocations are tracked in report")
@@ -166,7 +166,7 @@ struct ContractMachineTests {
         let pipeline = makePipeline(propertyPasses: false)
         let config = makeConfig()
         let (result, issues) = pipeline.run(config: config)
-        #expect(result?.status == .fail)
+        #expect(result != nil)
         #expect(issues.isEmpty == false)
     }
 
@@ -320,7 +320,6 @@ private struct StubBackend: ContractBackend {
         context _: ContractRunContext<StubSpec>
     ) -> (result: ContractResult<StubSpec>, issueMessage: String) {
         let result = ContractResult<StubSpec>(
-            status: .fail,
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
             trace: [],

@@ -14,7 +14,7 @@ struct PreemptiveResponseOnlyGhostTests {
             .idleTimeoutMs(5000),
             .suppress(.all)
         )
-        #expect(result?.status == .fail)
+        #expect(result != nil)
     }
 }
 

@@ -2,11 +2,8 @@
 
 /// The result of a failed contract property test.
 ///
-/// Contains the reduced command sequence, a step-by-step execution trace showing what happened at each step, and optionally the typed SUT state at the point of failure.
+/// Contains the reduced command sequence, a step-by-step execution trace showing what happened at each step, and optionally the typed SUT state at the point of failure. `#execute` returns `nil` when every probe passes; a non-nil result always describes a failure. A concurrent probe that stalls past the idle timeout counts as a pass so contention cannot manufacture a failure, and the runner emits a runtime warning when timed-out probes dominate the budget.
 public struct ContractResult<Spec: ContractSpecBase> {
-    /// Whether the contract run found a failure or passed.
-    public let status: ContractStatus
-
     /// The reduced command sequence that triggered the failure.
     public let commands: [Spec.Command]
 
@@ -27,16 +24,6 @@ public struct ContractResult<Spec: ContractSpecBase> {
 
     /// How the failing example was discovered.
     public let discoveryMethod: ContractDiscoveryMethod
-}
-
-/// The outcome of a contract property test run.
-///
-/// A concurrent probe that stalls past the idle timeout does not produce a status of its own: it counts as a pass so contention cannot manufacture a failure, and the runner emits a runtime warning when timed-out probes dominate the budget.
-public enum ContractStatus: Sendable {
-    /// All probes passed within the budget.
-    case pass
-    /// A counterexample was found.
-    case fail
 }
 
 /// Describes how a failing contract example was found.
