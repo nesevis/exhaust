@@ -19,7 +19,7 @@ struct SCABenchmark {
             let start = ContinuousClock.now
             _ = await #execute(
                 BuggyCounterSpec.self,
-                .commandLimit(UInt(length)),
+                .commandLimit(length),
                 .suppress(.issueReporting)
             )
             times.append(ContinuousClock.now - start)

@@ -151,6 +151,8 @@ Keep this state on the spec, next to the model. A command's behaviour then depen
 }
 ```
 
+`#execute` is always awaited, so the test function must be `async`. This holds for every execution mode, including `.sequential` contracts whose commands are all synchronous.
+
 Exhaust first runs a coverage phase that systematically covers command-type orderings (every pairwise combination of command types at each position), then switches to random sampling. If a failure is found in either phase, the reducer reduces the command sequence to a minimal counterexample.
 
 The failure report shows the reduced sequence and the execution trace:

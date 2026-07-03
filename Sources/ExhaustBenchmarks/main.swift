@@ -11,8 +11,8 @@ let reducerConfig = Interpreters.ReducerConfiguration(maxStalls: 2)
 
 // Etna mutation-testing configuration
 let etnaSeedCount = 10
-let etnaCoverageBudget: UInt64 = 0
-let etnaSamplingBudget: UInt64 = 200_000_000
+let etnaCoverageBudget: Int = 0
+let etnaSamplingBudget: Int = 200_000_000
 
 // registerShrinkingChallengeBenchmarks()
 registerECOOPBenchmarks()

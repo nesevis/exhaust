@@ -15,7 +15,7 @@ struct DependentStringChallenge {
     @Test("Bound string dependency")
     func boundStringDependency() {
         let gen = #gen(.int(in: 0 ... 10)).bound(
-            forward: { .string(length: UInt64($0) ... UInt64($0)) },
+            forward: { .string(length: $0 ... $0) },
             backward: \.count
         )
 

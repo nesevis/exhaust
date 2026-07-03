@@ -197,7 +197,7 @@ struct ContractCoverageSourceSelectionTests {
             config.seed = seedSource.map { UInt64($0) }
             config.coverageReplayRow = coverageReplayRow
             config.replayIteration = replayIteration
-            config.budget = .custom(coverage: UInt64(coverageBudget), sampling: 200)
+            config.budget = .custom(coverage: coverageBudget, sampling: 200)
             return config
         }
         #exhaust(configGen) { config in

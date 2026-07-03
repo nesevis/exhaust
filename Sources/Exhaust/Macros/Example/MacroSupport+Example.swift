@@ -28,15 +28,16 @@ public extension __ExhaustRuntime {
     /// Generates an array of values from a generator. Runtime target of `#example` expansion.
     static func __exampleArray<Output>(
         _ refGen: ReflectiveGenerator<Output>,
-        count: UInt64,
+        count: Int,
         seed: UInt64?,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
     ) throws -> [Output] {
+        precondition(count >= 0, "Count must be non-negative")
         let gen = refGen.gen
-        var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: count)
+        var interpreter = ValueInterpreter(gen, seed: seed, maxRuns: UInt64(count))
         var results: [Output] = []
         while let value = try interpreter.next() {
             results.append(value)

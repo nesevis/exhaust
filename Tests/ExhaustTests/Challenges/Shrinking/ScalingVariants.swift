@@ -19,7 +19,7 @@ struct Bound5ScalingVariant {
     @Test("Scaling variant", arguments: ScalingVariant.allCases)
     func scalingVariant(variant: ScalingVariant) {
         let int16Scaling: SizeScaling<Int16> = variant.scaling()
-        let arrayScaling: SizeScaling<UInt64> = variant.scaling()
+        let arrayScaling: SizeScaling<Int> = variant.scaling()
 
         let arr = #gen(.int16(scaling: int16Scaling).array(length: 0 ... 10, scaling: arrayScaling))
             .filter { $0.isEmpty || $0.dropFirst().reduce($0[0], &+) < 256 }
@@ -190,7 +190,7 @@ struct CouplingScalingVariant {
     @Test(arguments: [ScalingVariant.constant])
     func coupling(variant: ScalingVariant) throws {
         let intScaling: SizeScaling<Int> = variant.scaling()
-        let arrayScaling: SizeScaling<UInt64> = variant.scaling()
+        let arrayScaling: SizeScaling<Int> = variant.scaling()
 
         let gen = #gen(.int(in: 0 ... 100, scaling: intScaling))
             .bind { n in
@@ -226,7 +226,7 @@ struct DeletionScalingVariant {
     @Test(arguments: ScalingVariant.allCases)
     func deletion(variant: ScalingVariant) {
         let intScaling: SizeScaling<Int> = variant.scaling()
-        let arrayScaling: SizeScaling<UInt64> = variant.scaling()
+        let arrayScaling: SizeScaling<Int> = variant.scaling()
 
         let numberGen = #gen(.int(in: 0 ... 20, scaling: intScaling))
         let gen = #gen(numberGen.array(length: 2 ... 20, scaling: arrayScaling), numberGen)
@@ -281,7 +281,7 @@ struct DistinctScalingVariant {
     @Test(arguments: ScalingVariant.allCases)
     func distinct(variant: ScalingVariant) {
         let intScaling: SizeScaling<Int> = variant.scaling()
-        let arrayScaling: SizeScaling<UInt64> = variant.scaling()
+        let arrayScaling: SizeScaling<Int> = variant.scaling()
 
         let gen = #gen(.int(scaling: intScaling).array(length: 3 ... 30, scaling: arrayScaling))
 
@@ -304,7 +304,7 @@ struct LargeUnionListScalingVariant {
     @Test("large union list", arguments: [ScalingVariant.constant])
     func largeUnionList(variant: ScalingVariant) {
         let intScaling: SizeScaling<Int> = variant.scaling()
-        let arrayScaling: SizeScaling<UInt64> = variant.scaling()
+        let arrayScaling: SizeScaling<Int> = variant.scaling()
 
         let gen = #gen(.int(scaling: intScaling).array(length: 1 ... 10, scaling: arrayScaling).array(length: 1 ... 10, scaling: arrayScaling))
 
@@ -354,7 +354,7 @@ struct ReverseScalingVariant {
     @Test(arguments: ScalingVariant.allCases)
     func reverse(variant: ScalingVariant) {
         let uintScaling: SizeScaling<UInt> = variant.scaling()
-        let arrayScaling: SizeScaling<UInt64> = variant.scaling()
+        let arrayScaling: SizeScaling<Int> = variant.scaling()
 
         let gen = #gen(.uint(scaling: uintScaling)).array(length: 1 ... 1000, scaling: arrayScaling)
 
@@ -379,7 +379,7 @@ struct LengthListScalingVariant {
     @Test("length list", arguments: ScalingVariant.allCases)
     func lengthList(variant: ScalingVariant) {
         let uintScaling: SizeScaling<UInt> = variant.scaling()
-        let arrayScaling: SizeScaling<UInt64> = variant.scaling()
+        let arrayScaling: SizeScaling<Int> = variant.scaling()
 
         let gen: ReflectiveGenerator<[UInt]> = #gen(.uint(in: 0 ... 1000, scaling: uintScaling)).array(length: 1 ... 100, scaling: arrayScaling)
 

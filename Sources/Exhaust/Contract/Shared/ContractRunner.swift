@@ -79,7 +79,7 @@ public extension __ExhaustRuntime {
             let commandGen = Spec.commandGenerator
             let commandLimit = config.commandLimit ?? estimateCommandLimit(
                 commandGen: commandGen.gen,
-                coverageBudget: config.budget.coverageBudget
+                coverageBudget: UInt64(config.budget.coverageBudget)
             )
             let untaggedSeqGen = commandGen.array(length: 0 ... commandLimit, scaling: .constant).gen
             let taggedSeqGen = untaggedSeqGen.map { commands in
@@ -202,7 +202,7 @@ private extension __ExhaustRuntime {
         let commandGen = Spec.commandGenerator
         let commandLimit = config.commandLimit ?? estimateCommandLimit(
             commandGen: commandGen.gen,
-            coverageBudget: config.budget.coverageBudget
+            coverageBudget: UInt64(config.budget.coverageBudget)
         )
         let untaggedSeqGen = commandGen.array(length: 0 ... commandLimit, scaling: .constant).gen
         let taggedSeqGen = untaggedSeqGen.map { commands in
@@ -293,7 +293,7 @@ extension __ExhaustRuntime {
             switch decoded {
                 case let .coverage(row):
                     replayConfig.coverageReplayRow = row
-                    let needed = UInt64(row) + 1
+                    let needed = row + 1
                     if replayConfig.budget.coverageBudget < needed {
                         replayConfig.budget = .custom(
                             coverage: needed,
@@ -306,7 +306,7 @@ extension __ExhaustRuntime {
                     if replayConfig.budget.samplingBudget < iteration + 1 {
                         replayConfig.budget = .custom(
                             coverage: replayConfig.budget.coverageBudget,
-                            sampling: UInt64(iteration + 1)
+                            sampling: iteration + 1
                         )
                     }
                 case let .sampling(seed, nil):

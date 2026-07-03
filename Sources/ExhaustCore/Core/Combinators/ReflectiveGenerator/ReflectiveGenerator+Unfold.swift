@@ -36,7 +36,7 @@ public extension ReflectiveGenerator {
     static func unfold<State>(
         seed: ReflectiveGenerator<State>,
         depthRange: ClosedRange<Int>,
-        step: @Sendable @escaping (State, UInt64) -> ReflectiveGenerator<UnfoldStep<State, Output>>,
+        step: @Sendable @escaping (State, Int) -> ReflectiveGenerator<UnfoldStep<State, Output>>,
         fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
@@ -44,7 +44,7 @@ public extension ReflectiveGenerator {
         Gen.unfold(
             seed: seed.gen,
             depthRange: depthRange,
-            step: { step($0, $1).gen },
+            step: { step($0, Int($1)).gen },
             fileID: fileID,
             line: line,
             column: column

@@ -112,7 +112,7 @@ private let benchStart = Date(timeIntervalSince1970: 1_767_225_600) // 2026-01-0
 private let benchEnd = Date(timeIntervalSince1970: 1_785_456_000) // 2026-07-31
 private let benchMelbourne = TimeZone(identifier: "Australia/Melbourne")!
 
-private func orderGenerator(nameLength: ClosedRange<UInt64>?) -> ReflectiveGenerator<BenchOrder> {
+private func orderGenerator(nameLength: ClosedRange<Int>?) -> ReflectiveGenerator<BenchOrder> {
     let itemGenerator = #gen(
         nameLength.map { .string(length: $0) } ?? .string(),
         .double(in: 1 ... Double.greatestFiniteMagnitude)

@@ -7,6 +7,7 @@ If you're new to Exhaust, start with [Getting Started](GETTING_STARTED.md). This
 - [Three modes](#three-modes)
 - [Primitives](#primitives)
 - [Collections](#collections)
+- [Ranges](#ranges)
 - [Choice](#choice)
 - [Composing generators](#composing-generators)
 - [Synthesising generators from Decodable types](#synthesising-generators-from-decodable-types)
@@ -45,6 +46,15 @@ Generators without an explicit range use size scaling: Exhaust starts small and 
 ```swift
 let arrays = #gen(.int().array(length: 0...10))
 let sets = #gen(.int().set(count: 1...5))
+```
+
+## Ranges
+
+`.closedRange` and `.range` draw two bounds from an element generator and sort them, so every produced range is well-formed by construction. Both work with any `Comparable` bound (integers, doubles, dates) and are fully reflectable: the backward pass extracts the bounds.
+
+```swift
+let spans = #gen(.closedRange(.int(in: 0...100)))    // ClosedRange<Int>
+let windows = #gen(.range(.double(in: 0...1)))       // Range<Double>, empty when bounds collide
 ```
 
 ## Choice
@@ -165,7 +175,7 @@ let jsonGen = #gen(.recursive(base: .null, depthRange: 0...5) { recurse, remaini
     .oneOf(weighted:
         (2, .just(.null)),
         (2, .int(in: 0...99).map { JSONValue.int($0) }),
-        (Int(remaining), recurse().array(length: 0...3).map { JSONValue.array($0) })
+        (remaining, recurse().array(length: 0...3).map { JSONValue.array($0) })
     )
 })
 ```

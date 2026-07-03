@@ -83,6 +83,7 @@ public extension __ExhaustRuntime {
                 }
             }
         #endif
+        budget.preconditionValid()
 
         let namedDirections = directions.map { direction in
             (name: direction.0, predicate: { (value: Output) in direction.1(value) })

@@ -175,7 +175,7 @@ private extension __ExhaustRuntime {
         let commandGen = Spec.commandGenerator.gen
         let coverageBudget = config.budget.coverageBudget
         let resolvedCommandLimit = config.commandLimit
-            ?? min(estimateCommandLimit(commandGen: commandGen, coverageBudget: coverageBudget), 40)
+            ?? min(estimateCommandLimit(commandGen: commandGen, coverageBudget: UInt64(coverageBudget)), 40)
 
         guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
             deferredIssues.append("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure.")

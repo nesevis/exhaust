@@ -36,6 +36,6 @@ public macro example<GeneratedValue>(
 @freestanding(expression)
 public macro example<GeneratedValue>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
-    count: UInt64,
+    count: Int,
     seed: UInt64? = nil
 ) -> [GeneratedValue] = #externalMacro(module: "ExhaustMacros", type: "ExampleMacro")

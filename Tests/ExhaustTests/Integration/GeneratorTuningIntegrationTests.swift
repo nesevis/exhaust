@@ -86,7 +86,7 @@ struct GeneratorTuningIntegrationTests {
             tree != .leaf && tree.isValidBST()
         }
 
-        let sampleCount: UInt64 = 500
+        let sampleCount = 500
 
         // Raw generation: only a fraction of output satisfies the predicate
         let rawValues = try #example(BST.arbitrary(), count: sampleCount, seed: 42)

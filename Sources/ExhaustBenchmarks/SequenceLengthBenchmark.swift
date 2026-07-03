@@ -35,12 +35,12 @@ func registerSequenceLengthBenchmarks() {
             _ = #exhaust(intArray, .suppress(.issueReporting), .replay(1337)) { _ in true }
         }
 
-        let unicodeString = #gen(.string(length: UInt64(length) ... UInt64(length)))
+        let unicodeString = #gen(.string(length: length ... length))
         benchmark("Gen: Unicode string, length \(length)") {
             _ = #exhaust(unicodeString, .suppress(.issueReporting), .replay(1337)) { _ in true }
         }
 
-        let asciiStringGen = #gen(.asciiString(length: UInt64(length) ... UInt64(length)))
+        let asciiStringGen = #gen(.asciiString(length: length ... length))
         benchmark("Gen: ASCII string, length \(length)") {
             _ = #exhaust(asciiStringGen, .suppress(.issueReporting), .replay(1337)) { _ in true }
         }

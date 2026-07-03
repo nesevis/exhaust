@@ -398,6 +398,12 @@ let generator = #gen(
 
 Now every value drawn from this generator is well-formed by construction. The `lowerBound ≤ upperBound` constraint is a fact about the generator's output rather than a filter in the property body. Notice what the generator deliberately *doesn't* do: it keeps `value` independent of the range. The principle is to encode the structure that's really there in the input domain, and to leave alone whatever isn't.
 
+This particular constraint is common enough that Exhaust ships it. `.closedRange(.int())` produces well-formed `ClosedRange` values with the sorting built in, and unlike the hand-rolled closure it supports reflection, so `reflecting:` can decompose a known range back through it. `.range(.int())` does the same for half-open ranges. The sorted-pair construction above is still the move to reach for when your constraint doesn't have a factory. Check whether it does first.
+
+```swift
+let generator = #gen(.closedRange(.int()), .int())
+```
+
 Exhaust's character and string generators accept a `CharacterSet`, so you can specify exactly which characters will be generated. `.asciiString()` gives you ASCII-only out of the box, and a specific `CharacterSet` gives you any discontiguous alphabet you need, like alphanumerics plus `@` and `.` for email-shaped strings, say.
 
 When a property body reaches for `guard` to skip inputs, that's almost always a signal that the generator should be producing better-shaped inputs. The constraint has to live somewhere — the question is whether it lives in the generator (where it shapes what gets tested) or in the property body (where it silently discards inputs after the fact).

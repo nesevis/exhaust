@@ -67,7 +67,8 @@ struct ResolvedConcurrentConfig {
                 case let .budget(budget):
                     config.budget = budget
                 case let .commandLimit(limit):
-                    config.commandLimit = max(Int(limit), 1)
+                    precondition(limit >= 1, "Command limit must be at least 1")
+                    config.commandLimit = limit
                 case let .replay(replaySeed):
                     if let resolved = replaySeed.resolve() {
                         switch resolved {
@@ -105,6 +106,7 @@ struct ResolvedConcurrentConfig {
                 }
             }
         #endif
+        config.budget.preconditionValid()
 
         return ParseResult(config: config, invalidReplaySeed: invalidSeed)
     }

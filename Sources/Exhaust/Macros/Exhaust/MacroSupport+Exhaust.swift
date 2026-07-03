@@ -217,11 +217,12 @@ public extension __ExhaustRuntime {
                     }
                 }
             #endif
+            budget.preconditionValid()
 
-            let samplingBudget: UInt64 = (replayIteration != nil || coverageReplayRow != nil) ? 1 : budget.samplingBudget
-            let coverageBudget: UInt64 = (replayIteration != nil || coverageReplayRow != nil) ? 0 : budget.coverageBudget
+            let samplingBudget: UInt64 = (replayIteration != nil || coverageReplayRow != nil) ? 1 : UInt64(budget.samplingBudget)
+            let coverageBudget: UInt64 = (replayIteration != nil || coverageReplayRow != nil) ? 0 : UInt64(budget.coverageBudget)
             // Deadline scales with the preset, not the phase budgets — replay collapses those to 1/0 but still reduces one counterexample, so it must keep the full reduction deadline.
-            let reductionDeadlineNanoseconds = (budget.coverageBudget + budget.samplingBudget) * 5 * 1_000_000
+            let reductionDeadlineNanoseconds = UInt64(budget.coverageBudget + budget.samplingBudget) * 5 * 1_000_000
             let reductionConfig = Interpreters.ReducerConfiguration(
                 maxStalls: 2,
                 wallClockDeadlineNanoseconds: reductionDeadlineNanoseconds
@@ -319,7 +320,7 @@ public extension __ExhaustRuntime {
             if let coverageReplayRow {
                 let outcome: CoverageOutcome<Output> = runCoveragePhase(
                     context: context,
-                    coverageBudget: budget.coverageBudget,
+                    coverageBudget: UInt64(budget.coverageBudget),
                     skipToRow: coverageReplayRow,
                     report: &report
                 )

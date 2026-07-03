@@ -144,11 +144,11 @@ final class ExamGraderContract {
 private func examWithMatchingAnswers() -> ReflectiveGenerator<(Exam, [Int?])> {
     #gen(.int(in: 1 ... 5))
         .bind { keyLength in
-            let keyGen = #gen(.int(in: 1 ... 5)).array(length: UInt64(keyLength))
+            let keyGen = #gen(.int(in: 1 ... 5)).array(length: keyLength)
             let answersGen: ReflectiveGenerator<[Int?]> = ReflectiveGenerator.oneOf(
                 weighted: (1, .just(nil)),
                 (2, #gen(.int(in: 1 ... 5)).map { Optional($0) })
-            ).array(length: UInt64(keyLength))
+            ).array(length: keyLength)
             return #gen(keyGen, answersGen).map { answerKey, answers in
                 (Exam(name: "exam", answerKey: answerKey), answers)
             }

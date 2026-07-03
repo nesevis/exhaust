@@ -32,25 +32,11 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing `Data` with length in the given range.
     static func data(
         length: ClosedRange<Int>,
-        scaling: SizeScaling<UInt64> = .linear
+        scaling: SizeScaling<Int> = .linear
     ) -> ReflectiveGenerator<Data> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return Gen.data(within: range, scaling: scaling)
-    }
-
-    /// Generates arbitrary `Data` values of an exact fixed length.
-    ///
-    /// ```swift
-    /// let gen = #gen(.data(length: 32))
-    /// ```
-    ///
-    /// - Parameter length: The exact number of bytes in each generated `Data`.
-    /// - Returns: A generator producing `Data` of the specified length.
-    static func data(
-        length: UInt64
-    ) -> ReflectiveGenerator<Data> {
-        Gen.data(length: length)
+        return Gen.data(within: range, scaling: uint64LengthScaling(scaling))
     }
 
     /// Generates arbitrary `Data` values of an exact fixed length.
@@ -65,7 +51,7 @@ public extension ReflectiveGenerator {
         length: Int
     ) -> ReflectiveGenerator<Data> {
         precondition(length >= 0, "Length must be non-negative")
-        return data(length: UInt64(length))
+        return Gen.data(length: UInt64(length))
     }
 
     // MARK: - Prefix Overloads
@@ -104,11 +90,11 @@ public extension ReflectiveGenerator {
     static func data(
         prefix: [UInt8],
         length: ClosedRange<Int>,
-        scaling: SizeScaling<UInt64> = .linear
+        scaling: SizeScaling<Int> = .linear
     ) -> ReflectiveGenerator<Data> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return Gen.data(prefix: prefix, within: range, scaling: scaling)
+        return Gen.data(prefix: prefix, within: range, scaling: uint64LengthScaling(scaling))
     }
 
     /// Generates arbitrary `Data` values starting with fixed bytes, followed by exactly `length` random bytes.
@@ -124,24 +110,9 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing `Data` starting with `prefix` followed by `length` random bytes.
     static func data(
         prefix: [UInt8],
-        length: UInt64
-    ) -> ReflectiveGenerator<Data> {
-        Gen.data(prefix: prefix, length: length)
-    }
-
-    /// Generates arbitrary `Data` values starting with fixed bytes, followed by exactly `length` random bytes.
-    ///
-    /// Accepts `Int` so integer literals resolve without explicit type annotation.
-    ///
-    /// - Parameters:
-    ///   - prefix: Fixed bytes prepended to every generated value.
-    ///   - length: The exact number of random bytes after the prefix.
-    /// - Returns: A generator producing `Data` starting with `prefix` followed by `length` random bytes.
-    static func data(
-        prefix: [UInt8],
         length: Int
     ) -> ReflectiveGenerator<Data> {
         precondition(length >= 0, "Length must be non-negative")
-        return data(prefix: prefix, length: UInt64(length))
+        return Gen.data(prefix: prefix, length: UInt64(length))
     }
 }
