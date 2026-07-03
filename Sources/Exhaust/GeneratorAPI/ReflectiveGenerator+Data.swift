@@ -36,7 +36,7 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<Data> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return Gen.data(within: range, scaling: uint64LengthScaling(scaling))
+        return Gen.data(within: range, scaling: LengthConversion.uint64Scaling(scaling))
     }
 
     /// Generates arbitrary `Data` values of an exact fixed length.
@@ -94,7 +94,7 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<Data> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return Gen.data(prefix: prefix, within: range, scaling: uint64LengthScaling(scaling))
+        return Gen.data(prefix: prefix, within: range, scaling: LengthConversion.uint64Scaling(scaling))
     }
 
     /// Generates arbitrary `Data` values starting with fixed bytes, followed by exactly `length` random bytes.

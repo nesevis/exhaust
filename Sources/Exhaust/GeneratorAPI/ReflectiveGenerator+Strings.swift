@@ -38,7 +38,7 @@ public extension ReflectiveGenerator {
         length: ClosedRange<Int>? = nil,
         scaling: SizeScaling<Int> = .linear
     ) -> ReflectiveGenerator<String> {
-        Gen.string(length: length.map(uint64LengthRange), scaling: uint64LengthScaling(scaling))
+        Gen.string(length: length.map(LengthConversion.uint64Range), scaling: LengthConversion.uint64Scaling(scaling))
     }
 
     /// Generates a random printable ASCII string (U+0020–U+007E) with size-scaled or fixed length.
@@ -52,7 +52,7 @@ public extension ReflectiveGenerator {
         length: ClosedRange<Int>? = nil,
         scaling: SizeScaling<Int> = .linear
     ) -> ReflectiveGenerator<String> {
-        Gen.asciiString(length: length.map(uint64LengthRange), scaling: uint64LengthScaling(scaling))
+        Gen.asciiString(length: length.map(LengthConversion.uint64Range), scaling: LengthConversion.uint64Scaling(scaling))
     }
 
     // MARK: - CharacterSet-based generators
@@ -96,6 +96,6 @@ public extension ReflectiveGenerator {
         length: ClosedRange<Int>? = nil,
         scaling: SizeScaling<Int> = .linear
     ) -> ReflectiveGenerator<String> {
-        Gen.string(from: characterSet, simplest: simplest, length: length.map(uint64LengthRange), scaling: uint64LengthScaling(scaling))
+        Gen.string(from: characterSet, simplest: simplest, length: length.map(LengthConversion.uint64Range), scaling: LengthConversion.uint64Scaling(scaling))
     }
 }

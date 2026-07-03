@@ -46,6 +46,7 @@ Generators without an explicit range use size scaling: Exhaust starts small and 
 ```swift
 let arrays = #gen(.int().array(length: 0...10))
 let sets = #gen(.int().set(count: 1...5))
+let lookup = #gen(.dictionary(.asciiString(), .int(), count: 1...5))
 ```
 
 ## Ranges

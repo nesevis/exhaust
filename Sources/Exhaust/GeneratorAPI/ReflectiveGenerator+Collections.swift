@@ -44,7 +44,7 @@ public extension ReflectiveGenerator {
         return Gen.arrayOf(
             gen.gen,
             within: UInt64(length.lowerBound) ... UInt64(length.upperBound),
-            scaling: uint64LengthScaling(scaling)
+            scaling: LengthConversion.uint64Scaling(scaling)
         ).wrapped
     }
 
@@ -100,7 +100,7 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<Set<Element>> where Output == Set<Element> {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
         let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)
-        return Gen.setOf(gen.gen, within: range, scaling: uint64LengthScaling(scaling)).wrapped
+        return Gen.setOf(gen.gen, within: range, scaling: LengthConversion.uint64Scaling(scaling)).wrapped
     }
 
     /// Creates a generator that produces sets of an exact fixed count.
@@ -140,6 +140,53 @@ public extension ReflectiveGenerator {
         _ valueGen: ReflectiveGenerator<DictValue>
     ) -> ReflectiveGenerator<[Key: DictValue]> where Output == [Key: DictValue] {
         Gen.dictionaryOf(keyGen.gen, valueGen.gen).wrapped
+    }
+
+    /// Creates a generator that produces dictionaries with entry count within a specified range.
+    ///
+    /// Keys are deduplicated first-wins, so the generated dictionary may have fewer entries than requested when the key generator produces duplicates.
+    ///
+    /// ```swift
+    /// let gen = #gen(.dictionary(.asciiString(), .int(in: 0...100), count: 1...5))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - keyGen: Generator for dictionary keys.
+    ///   - valueGen: Generator for dictionary values.
+    ///   - count: The allowed range of entry counts.
+    ///   - scaling: How the entry count scales with the size parameter. Defaults to `.linear`.
+    /// - Returns: A generator producing dictionaries with entry count in the given range.
+    static func dictionary<Key: Hashable, DictValue>(
+        _ keyGen: ReflectiveGenerator<Key>,
+        _ valueGen: ReflectiveGenerator<DictValue>,
+        count: ClosedRange<Int>,
+        scaling: SizeScaling<Int> = .linear
+    ) -> ReflectiveGenerator<[Key: DictValue]> where Output == [Key: DictValue] {
+        precondition(count.lowerBound >= 0, "Count must be non-negative")
+        let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)
+        return Gen.dictionaryOf(keyGen.gen, valueGen.gen, within: range, scaling: LengthConversion.uint64Scaling(scaling)).wrapped
+    }
+
+    /// Creates a generator that produces dictionaries of an exact entry count.
+    ///
+    /// Keys are deduplicated first-wins, so the generated dictionary may have fewer entries than requested when the key generator produces duplicates.
+    ///
+    /// ```swift
+    /// let gen = #gen(.dictionary(.asciiString(), .int(in: 0...100), count: 3))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - keyGen: Generator for dictionary keys.
+    ///   - valueGen: Generator for dictionary values.
+    ///   - count: The exact number of entries in each generated dictionary.
+    /// - Returns: A generator producing dictionaries of the specified entry count.
+    static func dictionary<Key: Hashable, DictValue>(
+        _ keyGen: ReflectiveGenerator<Key>,
+        _ valueGen: ReflectiveGenerator<DictValue>,
+        count: Int
+    ) -> ReflectiveGenerator<[Key: DictValue]> where Output == [Key: DictValue] {
+        precondition(count >= 0, "Count must be non-negative")
+        return Gen.dictionaryOf(keyGen.gen, valueGen.gen, exactly: UInt64(count)).wrapped
     }
 
     /// Creates a generator that produces random contiguous slices of a generated collection.
@@ -221,7 +268,7 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<[Output]> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
-        return Gen.arrayOf(gen, within: range, scaling: uint64LengthScaling(scaling)).wrapped
+        return Gen.arrayOf(gen, within: range, scaling: LengthConversion.uint64Scaling(scaling)).wrapped
     }
 
     /// Wraps this element generator to produce arrays of an exact fixed length.
@@ -264,7 +311,7 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<Set<Output>> where Output: Hashable {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
         let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)
-        return Gen.setOf(gen, within: range, scaling: uint64LengthScaling(scaling)).wrapped
+        return Gen.setOf(gen, within: range, scaling: LengthConversion.uint64Scaling(scaling)).wrapped
     }
 
     /// Wraps this element generator to produce sets of an exact fixed count.

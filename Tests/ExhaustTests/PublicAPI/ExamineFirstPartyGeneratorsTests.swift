@@ -288,6 +288,34 @@ struct ExamineFirstPartyGeneratorsTests {
         #expect(report.valuesGenerated == 5)
     }
 
+    @Test func dictionaryWithCountRange() {
+        let report = #examine(
+            .dictionary(.int(in: 0 ... 100), .int(in: 0 ... 100), count: 1 ... 5),
+            .budget(10),
+            .reflection(.silent)
+        )
+        #expect(report.valuesGenerated == 10)
+    }
+
+    @Test func dictionaryWithFixedCount() {
+        let report = #examine(
+            .dictionary(.int(in: 0 ... 100), .int(in: 0 ... 100), count: 3),
+            .budget(10),
+            .reflection(.silent)
+        )
+        #expect(report.valuesGenerated == 10)
+    }
+
+    @Test func dictionaryCountStaysWithinBoundsAndDedupesKeys() throws {
+        let values = try #example(
+            .dictionary(.int(in: 0 ... 1000), .bool(), count: 2 ... 5),
+            count: 50,
+            seed: 42
+        )
+        #expect(values.allSatisfy { $0.count <= 5 }, "Key dedup can shrink a dictionary but never grow it")
+        #expect(values.contains { $0.count >= 2 }, "At least some dictionaries should reach the requested range")
+    }
+
     // MARK: - Collections: element
 
     @Test("element(from:) Hashable")
