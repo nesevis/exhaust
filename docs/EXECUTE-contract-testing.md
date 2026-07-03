@@ -113,6 +113,36 @@ func get() throws {
 
 The distinction between `@Invariant` and `check`: invariants run after every command (including commands that didn't write the check). Postconditions run only inside the command that defines them. Use invariants for properties that must always hold. Use postconditions for return-value checks and per-operation guarantees.
 
+## Referencing entities from earlier commands
+
+Some commands operate on things a previous command created: delete a user that `createUser` made, merge a heap into another heap, withdraw a token that was deposited. The command can't take the entity itself as an argument, because the entity doesn't exist until the sequence runs.
+
+The pattern is to take a plain generated index and resolve it against spec-owned state inside the command:
+
+```swift
+@Contract(.sequential)
+final class DatabaseContract {
+    var userIDs: [UserID] = []
+    @SystemUnderTest var db = Database()
+
+    @Command(weight: 3, .string(), .int(in: 18...65))
+    func createUser(name: String, age: Int) {
+        userIDs.append(db.createUser(name: name, age: age))
+    }
+
+    @Command(weight: 2, .int(in: 0...99))
+    func deleteUser(index: Int) throws {
+        guard userIDs.isEmpty == false else { throw skip() }
+        let id = userIDs.remove(at: index % userIDs.count)
+        db.deleteUser(id: id)
+    }
+}
+```
+
+The wrap-around (`index % userIDs.count`) means any index range works: the range's width only affects how evenly selection spreads. Guard on empty and `skip()` when there is nothing to reference yet. To reference without destroying, subscript instead of removing. For reference types, resolving the same index twice yields the same object, so aliasing scenarios (merging a heap with itself, say) come for free.
+
+Keep this state on the spec, next to the model. A command's behaviour then depends only on its arguments and the spec's own state, which is what reduction and replay rely on: remove a `createUser` from the sequence and every later `deleteUser` still resolves to *some* live user, rather than crashing or silently targeting stale storage.
+
 ## Running the test
 
 ```swift
