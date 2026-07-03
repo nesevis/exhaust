@@ -136,11 +136,11 @@ private func alphanumericString(
 package extension Gen {
     /// Generates dates within the given range, quantized to integral multiples of `interval` relative to the lower bound.
     ///
-    /// `timeZone` selects which zone's DST transitions problematic-value analysis includes; it does not change the generated grid. Reflection rounds off-grid dates down to the nearest step rather than rejecting them.
+    /// `timeZone` selects which zone's DST transitions problematic-value analysis includes; it does not change the generated grid. The UTC default has no DST transitions, keeping coverage rows identical across machines. Reflection rounds off-grid dates down to the nearest step rather than rejecting them.
     static func date(
         between range: ClosedRange<Date>,
         interval: DateStride,
-        timeZone: TimeZone = .current
+        timeZone: TimeZone = TimeZone(identifier: "UTC")!
     ) -> ReflectiveGenerator<Date> {
         let lowerSeconds = Int64(range.lowerBound.timeIntervalSinceReferenceDate)
         let upperSeconds = Int64(range.upperBound.timeIntervalSinceReferenceDate)
