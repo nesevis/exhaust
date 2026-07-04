@@ -10,92 +10,6 @@ import ExhaustCore
 import ExhaustTestSupport
 import Testing
 
-private enum AdvancedCoupledFixtures {
-    enum StackAction: Equatable {
-        case push(String)
-        case pop
-    }
-
-    struct BuggyStack {
-        private(set) var storage: [String] = []
-
-        mutating func push(_ value: String) {
-            // Intentional bug: pushes the same value twice.
-            storage.append(value)
-            storage.append(value)
-        }
-
-        mutating func pop() {
-            guard storage.isEmpty == false else { return }
-            storage.removeLast()
-        }
-
-        var count: Int {
-            storage.count
-        }
-    }
-
-    static func stackInvariantHolds(actions: [StackAction]) -> Bool {
-        var stack = BuggyStack()
-        var expectedCount = 0
-
-        for action in actions {
-            switch action {
-                case let .push(value):
-                    stack.push(value)
-                    expectedCount += 1
-                case .pop:
-                    stack.pop()
-                    if expectedCount > 0 {
-                        expectedCount -= 1
-                    }
-            }
-
-            if stack.count != expectedCount {
-                return false
-            }
-        }
-
-        return true
-    }
-
-    static func buggyRLEEncode(_ s: String) -> [(Int, Character)] {
-        guard let first = s.first else { return [] }
-
-        var output: [(Int, Character)] = []
-        var current = first
-        var count = 1
-
-        for character in s.dropFirst() {
-            if character == current {
-                count += 1
-            } else {
-                output.append((count, current))
-                let previousRun = (count, current)
-                current = character
-                // Intentional regression: for a `00` run followed by `1`,
-                // the next-run count is reset incorrectly.
-                if previousRun.1 == "0", previousRun.0 == 2, character == "1" {
-                    count = 0
-                } else {
-                    count = 1
-                }
-            }
-        }
-
-        output.append((count, current))
-        return output
-    }
-
-    static func rleDecode(_ encoded: [(Int, Character)]) -> String {
-        var chars: [Character] = []
-        for (count, character) in encoded where count > 0 {
-            chars.append(contentsOf: repeatElement(character, count: count))
-        }
-        return String(chars)
-    }
-}
-
 @Suite("Advanced & Coupled Scenarios")
 struct AdvancedCoupledScenariosTests {
     private func reduce<Output>(
@@ -256,5 +170,93 @@ struct AdvancedCoupledScenariosTests {
 
         #expect(property(output) == false)
         #expect(output == (10, 6) || output == (10, 14))
+    }
+}
+
+// MARK: - Fixtures
+
+private enum AdvancedCoupledFixtures {
+    enum StackAction: Equatable {
+        case push(String)
+        case pop
+    }
+
+    struct BuggyStack {
+        private(set) var storage: [String] = []
+
+        mutating func push(_ value: String) {
+            // Intentional bug: pushes the same value twice.
+            storage.append(value)
+            storage.append(value)
+        }
+
+        mutating func pop() {
+            guard storage.isEmpty == false else { return }
+            storage.removeLast()
+        }
+
+        var count: Int {
+            storage.count
+        }
+    }
+
+    static func stackInvariantHolds(actions: [StackAction]) -> Bool {
+        var stack = BuggyStack()
+        var expectedCount = 0
+
+        for action in actions {
+            switch action {
+                case let .push(value):
+                    stack.push(value)
+                    expectedCount += 1
+                case .pop:
+                    stack.pop()
+                    if expectedCount > 0 {
+                        expectedCount -= 1
+                    }
+            }
+
+            if stack.count != expectedCount {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    static func buggyRLEEncode(_ s: String) -> [(Int, Character)] {
+        guard let first = s.first else { return [] }
+
+        var output: [(Int, Character)] = []
+        var current = first
+        var count = 1
+
+        for character in s.dropFirst() {
+            if character == current {
+                count += 1
+            } else {
+                output.append((count, current))
+                let previousRun = (count, current)
+                current = character
+                // Intentional regression: for a `00` run followed by `1`,
+                // the next-run count is reset incorrectly.
+                if previousRun.1 == "0", previousRun.0 == 2, character == "1" {
+                    count = 0
+                } else {
+                    count = 1
+                }
+            }
+        }
+
+        output.append((count, current))
+        return output
+    }
+
+    static func rleDecode(_ encoded: [(Int, Character)]) -> String {
+        var chars: [Character] = []
+        for (count, character) in encoded where count > 0 {
+            chars.append(contentsOf: repeatElement(character, count: count))
+        }
+        return String(chars)
     }
 }

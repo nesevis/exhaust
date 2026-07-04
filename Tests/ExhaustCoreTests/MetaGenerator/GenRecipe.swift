@@ -47,7 +47,7 @@ enum InvertibleTransform: String, Equatable, Hashable, CaseIterable {
             case .identity: value
             case .negate: -(value as! Int)
             case .increment: (value as! Int) + 1
-            case .not: !(value as! Bool)
+            case .not: (value as! Bool) == false
         }
     }
 
@@ -56,7 +56,7 @@ enum InvertibleTransform: String, Equatable, Hashable, CaseIterable {
             case .identity: value
             case .negate: -(value as! Int)
             case .increment: (value as! Int) - 1
-            case .not: !(value as! Bool)
+            case .not: (value as! Bool) == false
         }
     }
 

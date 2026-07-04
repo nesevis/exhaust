@@ -3,33 +3,6 @@ import Testing
 
 @Suite("PostCycleEvaluation")
 struct PostCycleDecisionTests {
-    private static let maxStalls = 4
-
-    private static func evaluate(
-        anyAccepted: Bool = false,
-        hadReplacementShortlexRejection: Bool = false,
-        allConverged: Bool = false,
-        improved: Bool = false,
-        structurallyImproved: Bool = false,
-        stallBudget: Int = 4,
-        deferBindInner: Bool = false
-    ) -> ChoiceGraphScheduler.PostCycleEvaluation {
-        ChoiceGraphScheduler.evaluatePostCycle(
-            outcome: .init(
-                anyAccepted: anyAccepted,
-                hadReplacementShortlexRejection: hadReplacementShortlexRejection,
-                allConverged: allConverged,
-                improved: improved,
-                structurallyImproved: structurallyImproved
-            ),
-            stallBudget: stallBudget,
-            maxStalls: maxStalls,
-            deferBindInner: deferBindInner
-        )
-    }
-
-    // MARK: - Convergence Confirmation
-
     @Test("Convergence confirmation when stalled and all converged")
     func confirmConvergenceWhenStalledAndConverged() {
         let result = Self.evaluate(anyAccepted: false, allConverged: true)
@@ -170,4 +143,33 @@ struct PostCycleDecisionTests {
             #expect(description.contains("terminate") == false)
         }
     }
+
+    // MARK: - Helpers
+
+    private static let maxStalls = 4
+
+    private static func evaluate(
+        anyAccepted: Bool = false,
+        hadReplacementShortlexRejection: Bool = false,
+        allConverged: Bool = false,
+        improved: Bool = false,
+        structurallyImproved: Bool = false,
+        stallBudget: Int = 4,
+        deferBindInner: Bool = false
+    ) -> ChoiceGraphScheduler.PostCycleEvaluation {
+        ChoiceGraphScheduler.evaluatePostCycle(
+            outcome: .init(
+                anyAccepted: anyAccepted,
+                hadReplacementShortlexRejection: hadReplacementShortlexRejection,
+                allConverged: allConverged,
+                improved: improved,
+                structurallyImproved: structurallyImproved
+            ),
+            stallBudget: stallBudget,
+            maxStalls: maxStalls,
+            deferBindInner: deferBindInner
+        )
+    }
+
+    // MARK: - Convergence Confirmation
 }

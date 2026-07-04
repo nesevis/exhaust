@@ -16,26 +16,26 @@ struct ChoiceTreeTests {
         @Test("isChoice returns true only for .choice")
         func isChoice() {
             #expect(choiceNode.isChoice)
-            #expect(!branchNode.isChoice)
-            #expect(!justNode.isChoice)
-            #expect(!groupNode.isChoice)
-            #expect(!getSizeNode.isChoice)
+            #expect(branchNode.isChoice == false)
+            #expect(justNode.isChoice == false)
+            #expect(groupNode.isChoice == false)
+            #expect(getSizeNode.isChoice == false)
         }
 
         @Test("isBranch returns true only for .branch")
         func isBranch() {
             #expect(branchNode.isBranch)
-            #expect(!choiceNode.isBranch)
-            #expect(!justNode.isBranch)
-            #expect(!groupNode.isBranch)
+            #expect(choiceNode.isBranch == false)
+            #expect(justNode.isBranch == false)
+            #expect(groupNode.isBranch == false)
         }
 
         @Test("isJust returns true only for .just")
         func isJust() {
             #expect(justNode.isJust)
-            #expect(!choiceNode.isJust)
-            #expect(!branchNode.isJust)
-            #expect(!groupNode.isJust)
+            #expect(choiceNode.isJust == false)
+            #expect(branchNode.isJust == false)
+            #expect(groupNode.isJust == false)
         }
 
         @Test("isSelected returns true only for branch with isSelected: true")
@@ -56,14 +56,14 @@ struct ChoiceTreeTests {
     struct ContainsPicks {
         @Test("Leaf nodes without branches return false")
         func leafsReturnFalse() {
-            #expect(!ChoiceTree.just.containsPicks)
-            #expect(!ChoiceTree.getSize(10).containsPicks)
+            #expect(ChoiceTree.just.containsPicks == false)
+            #expect(ChoiceTree.getSize(10).containsPicks == false)
 
             let choice = ChoiceTree.choice(
                 ChoiceValue(UInt64(1), tag: .uint64),
                 ChoiceMetadata(validRange: 0 ... 10)
             )
-            #expect(!choice.containsPicks)
+            #expect(choice.containsPicks == false)
         }
 
         @Test("Branch node returns true")
@@ -101,7 +101,7 @@ struct ChoiceTreeTests {
                 elements: [.just, .just],
                 ChoiceMetadata(validRange: 0 ... 10)
             )
-            #expect(!seq.containsPicks)
+            #expect(seq.containsPicks == false)
         }
 
         @Test("Resize containing branch returns true")

@@ -60,7 +60,7 @@ final class CircularBufferContract {
 
     @Command(weight: 2)
     func read() throws {
-        guard !buffer.isEmpty else { throw skip() }
+        guard buffer.isEmpty == false else { throw skip() }
         _ = buffer.read()
     }
 
@@ -92,7 +92,7 @@ final class SortedBackingContract {
 
     @Command(weight: 2)
     func dequeue() throws {
-        guard !queue.isEmpty else { throw skip() }
+        guard queue.isEmpty == false else { throw skip() }
         _ = queue.dequeue()
     }
 
@@ -166,7 +166,7 @@ struct BuggyPriorityQueue {
     }
 
     mutating func dequeue() -> Int? {
-        guard !elements.isEmpty else { return nil }
+        guard elements.isEmpty == false else { return nil }
         // Finds and removes the minimum — correct behavior, but the
         // invariant checks sorted order of the backing store.
         if let minIndex = elements.indices.min(by: { elements[$0] < elements[$1] }) {

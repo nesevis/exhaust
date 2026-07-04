@@ -94,7 +94,7 @@ struct ComplexityScalingTests {
         var iter = ValueInterpreter(gen, seed: 42, maxRuns: 100)
         var lengths: [Int] = []
         for _ in 0 ..< 100 {
-            let array = try iter.next()!
+            let array = try #require(try iter.next())
             lengths.append(array.count)
         }
 
@@ -118,7 +118,7 @@ private func generateSigned(
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: UInt64(count))
     var magnitudes: [Double] = []
     for _ in 0 ..< count {
-        let value = try iter.next()!
+        let value = try #require(try iter.next())
         magnitudes.append(abs(Double(value)))
     }
     return magnitudes
@@ -132,7 +132,7 @@ private func generateUnsigned(
     var iter = ValueInterpreter(gen, seed: seed, maxRuns: UInt64(count))
     var magnitudes: [Double] = []
     for _ in 0 ..< count {
-        let value = try iter.next()!
+        let value = try #require(try iter.next())
         magnitudes.append(Double(value))
     }
     return magnitudes

@@ -49,7 +49,7 @@ struct BuggyCounterTests {
 
         // Trace descriptions should be non-empty
         for step in result.trace {
-            #expect(!step.description.isEmpty)
+            #expect(step.description.isEmpty == false)
         }
     }
 

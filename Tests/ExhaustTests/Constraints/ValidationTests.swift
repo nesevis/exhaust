@@ -22,7 +22,7 @@ struct ValidationTests {
 
         withKnownIssue {
             let report = gen.gen.validate(samples: 50, seed: 42)
-            #expect(!report.passed)
+            #expect(report.passed == false)
             #expect(report.failures.contains { failure in
                 if case .reflectionRoundTripMismatch = failure { return true }
                 return false

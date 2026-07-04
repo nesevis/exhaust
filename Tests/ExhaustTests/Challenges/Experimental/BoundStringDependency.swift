@@ -24,7 +24,7 @@ struct DependentStringChallenge {
             .suppress(.issueReporting),
             .log(.debug)
         ) { value in
-            !(4 ... 5 ~= value.count)
+            (4 ... 5 ~= value.count) == false
         }
 
         #expect(output == "    ")

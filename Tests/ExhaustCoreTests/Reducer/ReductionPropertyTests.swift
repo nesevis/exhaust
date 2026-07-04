@@ -58,16 +58,22 @@ struct ReductionPropertyTests {
 
     @Test("Reduced nested array is shortlex-smaller than original", .tags(.slow))
     func monotonicityNestedArray() throws {
+        // Constant scaling so the first draw can reach the three elements the property needs;
+        // under the default linear ramp every seed produced a near-empty array and the loop
+        // silently skipped all of them.
         let gen = Gen.arrayOf(
-            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 20), within: 0 ... 3),
-            within: 1 ... 4
+            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 20), within: 0 ... 3, scaling: .constant),
+            within: 1 ... 4,
+            scaling: .constant
         )
 
+        var exercised = 0
         for seed: UInt64 in [42, 99, 137, 271, 500] {
             let (value, tree) = try generate(gen, seed: seed)
 
             let property: ([[UInt64]]) -> Bool = { $0.flatMap(\.self).count < 3 }
             guard property(value) == false else { continue }
+            exercised += 1
 
             let (reduced, _) = try #require(
                 try Interpreters.choiceGraphReduce(
@@ -85,6 +91,7 @@ struct ReductionPropertyTests {
                 "Seed \(seed): reduced sequence must not grow"
             )
         }
+        #expect(exercised > 0, "At least one seed must produce a counterexample, or the test verifies nothing")
     }
 
     // MARK: - Idempotence

@@ -477,8 +477,8 @@ struct DateProblematicValueTests {
         // If they mapped to steps, they'd be negative or > numSteps
         let unixStep = (unixEpoch - lower) / interval
         let y2038Step = (y2038 - lower) / interval
-        #expect(!values.contains(unixStep.bitPattern64))
-        #expect(!values.contains(y2038Step.bitPattern64))
+        #expect(values.contains(unixStep.bitPattern64) == false)
+        #expect(values.contains(y2038Step.bitPattern64) == false)
     }
 }
 

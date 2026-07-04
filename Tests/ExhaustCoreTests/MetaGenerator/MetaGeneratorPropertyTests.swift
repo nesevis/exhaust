@@ -175,12 +175,12 @@ struct MetaGeneratorPropertyTests {
 
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
             while let (value, tree) = try valueIter.next() {
-                guard !property(value) else { continue }
+                guard property(value) == false else { continue }
                 guard case let .reduced(_, _, shrunk) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else { continue }
                 #expect(
-                    !property(shrunk),
+                    property(shrunk) == false,
                     "Shrunk value passes property but shouldn't, recipe: \(recipe)"
                 )
             }

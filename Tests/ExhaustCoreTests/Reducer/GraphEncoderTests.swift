@@ -10,60 +10,6 @@ import Testing
 
 @Suite("GraphEncoders")
 struct GraphEncoderTests {
-    // MARK: - Helpers
-
-    /// Builds a scope for a removal transformation from a tree.
-    private static func removalScope(
-        tree: ChoiceTree,
-        graph: ChoiceGraph
-    ) -> EncoderInput? {
-        let sequence = ChoiceSequence.flatten(tree)
-        let scopes = RemovalQuery.elementRemovalScopes(graph: graph)
-        guard let firstScope = scopes.first else { return nil }
-        let transformation = GraphTransformation(
-            operation: .remove(.elements(firstScope)),
-            priority: DispatchPriority(
-                structuralBenefit: firstScope.maxBatch,
-                valueBenefit: 0,
-                reductionMagnitude: 0,
-                estimatedCost: firstScope.maxBatch
-            )
-        )
-        return EncoderInput(
-            transformation: transformation,
-            baseSequence: sequence,
-            tree: tree,
-            graph: graph,
-            warmStartRecords: [:]
-        )
-    }
-
-    /// Builds a scope for integer minimization from a tree.
-    private static func minimizationScope(
-        tree: ChoiceTree,
-        graph: ChoiceGraph
-    ) -> EncoderInput? {
-        let sequence = ChoiceSequence.flatten(tree)
-        let scopes = MinimizationQuery.build(graph: graph)
-        guard let firstScope = scopes.first else { return nil }
-        let transformation = GraphTransformation(
-            operation: .minimize(firstScope),
-            priority: DispatchPriority(
-                structuralBenefit: 0,
-                valueBenefit: 0,
-                reductionMagnitude: 0,
-                estimatedCost: 10
-            )
-        )
-        return EncoderInput(
-            transformation: transformation,
-            baseSequence: sequence,
-            tree: tree,
-            graph: graph,
-            warmStartRecords: [:]
-        )
-    }
-
     // MARK: - GraphStructuralEncoder (Removal)
 
     @Test("Removal encoder removes members of the deletion antichain")
@@ -257,6 +203,60 @@ struct GraphEncoderTests {
         while encoder.nextProbe(into: &candidateBuffer, lastAccepted: false) != nil {}
 
         #expect(encoder.convergenceRecords.isEmpty == false)
+    }
+
+    // MARK: - Helpers
+
+    /// Builds a scope for a removal transformation from a tree.
+    private static func removalScope(
+        tree: ChoiceTree,
+        graph: ChoiceGraph
+    ) -> EncoderInput? {
+        let sequence = ChoiceSequence.flatten(tree)
+        let scopes = RemovalQuery.elementRemovalScopes(graph: graph)
+        guard let firstScope = scopes.first else { return nil }
+        let transformation = GraphTransformation(
+            operation: .remove(.elements(firstScope)),
+            priority: DispatchPriority(
+                structuralBenefit: firstScope.maxBatch,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: firstScope.maxBatch
+            )
+        )
+        return EncoderInput(
+            transformation: transformation,
+            baseSequence: sequence,
+            tree: tree,
+            graph: graph,
+            warmStartRecords: [:]
+        )
+    }
+
+    /// Builds a scope for integer minimization from a tree.
+    private static func minimizationScope(
+        tree: ChoiceTree,
+        graph: ChoiceGraph
+    ) -> EncoderInput? {
+        let sequence = ChoiceSequence.flatten(tree)
+        let scopes = MinimizationQuery.build(graph: graph)
+        guard let firstScope = scopes.first else { return nil }
+        let transformation = GraphTransformation(
+            operation: .minimize(firstScope),
+            priority: DispatchPriority(
+                structuralBenefit: 0,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: 10
+            )
+        )
+        return EncoderInput(
+            transformation: transformation,
+            baseSequence: sequence,
+            tree: tree,
+            graph: graph,
+            warmStartRecords: [:]
+        )
     }
 }
 

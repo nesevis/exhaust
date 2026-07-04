@@ -59,7 +59,7 @@ struct ClosedRangeChunkingTests {
     func subRangesAreContiguousAndCoverOriginalRange() throws {
         try exhaustCheck(rangeAndChunksGen) { range, chunks in
             let result = range.split(into: chunks)
-            guard !result.isEmpty else { return true }
+            guard result.isEmpty == false else { return true }
             guard result.first?.lowerBound == range.lowerBound else { return false }
             guard result.last?.upperBound == range.upperBound else { return false }
             return zip(result, result.dropFirst()).allSatisfy { current, next in

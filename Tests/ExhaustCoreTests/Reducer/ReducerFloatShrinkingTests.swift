@@ -11,22 +11,12 @@ import Testing
 
 @Suite("Reducer Float Shrinking")
 struct ReducerFloatShrinkingTests {
-    private func reduce<Output>(
-        _ gen: Generator<Output>,
-        startingAt value: Output,
-        config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
-        property: (Output) -> Bool
-    ) throws -> Output? {
-        guard try (Interpreters.reflect(gen, with: value)) != nil else { return nil }
-        return try reduceFromReflection(gen, startingAt: value, config: config, property: property)
-    }
-
     @Test("Double truncation finds coarse fractional boundary")
     func doubleTruncationBoundary() throws {
         let gen = Gen.choose(in: 0.0 ... 10.0)
         let property: (Double) -> Bool = { value in
             // Failing window starts at a dyadic fraction that truncation can discover.
-            !(value >= 3.125 && value < 3.2)
+            (value >= 3.125 && value < 3.2) == false
         }
 
         let output = try reduce(gen, startingAt: 3.14159, property: property)
@@ -38,7 +28,7 @@ struct ReducerFloatShrinkingTests {
     func floatNaNReduction() throws {
         let gen = Gen.choose(in: 0 ... 10000.0)
         let property: (Double) -> Bool = { value in
-            !value.isNaN
+            value.isNaN == false
         }
 
         let output = try reduce(gen, startingAt: Double.nan, property: property)
@@ -63,7 +53,7 @@ struct ReducerFloatShrinkingTests {
         let gen = Gen.choose(in: 0.0 ... 10.0)
         let property: (Double) -> Bool = { value in
             let fraction = value.truncatingRemainder(dividingBy: 1.0)
-            return !(value >= 0.75 && fraction == 0.75)
+            return (value >= 0.75 && fraction == 0.75) == false
         }
 
         let output = try reduce(gen, startingAt: 3.75, property: property)
@@ -76,7 +66,7 @@ struct ReducerFloatShrinkingTests {
         let gen = Gen.choose(in: Float(0) ... Float(10))
         let property: (Float) -> Bool = { value in
             let fraction = value.truncatingRemainder(dividingBy: 1)
-            return !(value >= 0.75 && fraction == 0.75)
+            return (value >= 0.75 && fraction == 0.75) == false
         }
 
         let output = try reduce(gen, startingAt: Float(3.75), property: property)
@@ -119,5 +109,17 @@ struct ReducerFloatShrinkingTests {
         let output = try reduce(gen, startingAt: Float(7.75), property: property)
 
         #expect(output == 0.0)
+    }
+
+    // MARK: - Helpers
+
+    private func reduce<Output>(
+        _ gen: Generator<Output>,
+        startingAt value: Output,
+        config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
+        property: (Output) -> Bool
+    ) throws -> Output? {
+        guard try (Interpreters.reflect(gen, with: value)) != nil else { return nil }
+        return try reduceFromReflection(gen, startingAt: value, config: config, property: property)
     }
 }

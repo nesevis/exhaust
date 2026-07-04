@@ -184,7 +184,7 @@ struct OnlineCGSInterpreterTests {
         let values = try Array(collecting: &fallbackIterator)
 
         // Should still produce values (not crash)
-        #expect(!values.isEmpty, "All-zero fallback should still produce values")
+        #expect(values.isEmpty == false, "All-zero fallback should still produce values")
 
         // Should produce values from both branches (equal weights)
         let lowCount = values.count { $0 <= 10 }

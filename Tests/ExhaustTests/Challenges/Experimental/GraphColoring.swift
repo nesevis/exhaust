@@ -12,6 +12,154 @@ import Testing
 
 @Suite("Experimental Challenge: Graph Coloring", .tags(.challenge, .slow))
 struct GraphColoringChallenge {
+    @Test("Graph coloring — starting-graph distribution", .disabled("Slow analysis"))
+    func graphColoringStartingDistribution() {
+        let seedCount = 1000
+        let baseSeed: UInt64 = 1337
+        var startingTopologies: [Topology: Int] = [:]
+        var reducedTopologies: [Topology: Int] = [:]
+        // Seeds whose reduced result is not the global minimum K_3, grouped by
+        // the basin the reducer got stuck in. These are the regression targets
+        // for any future reducer improvement aimed at basin-crossing.
+        var stuckSeeds: [Topology: [(seed: UInt64, original: Graph, reduced: Graph)]] = [:]
+
+        // Per-run metrics collected via ``.onReport`` — one sample per seed,
+        // used to compute means comparable to Hypothesis's run_challenge.py
+        // output (evaluations, shrink time).
+        var propertyInvocations: [Int] = []
+        var reductionInvocations: [Int] = []
+        var totalMaterializations: [Int] = []
+        var reductionMs: [Double] = []
+        var totalMs: [Double] = []
+
+        for seedOffset in 0 ..< seedCount {
+            let seed = baseSeed + UInt64(seedOffset)
+            // Capture the first failing graph per seed in a lock-guarded box.
+            let box = FailureCaptureBox()
+            let wrappedProperty: @Sendable (Graph) -> Bool = { graph in
+                let passed = Self.property(graph)
+                if passed == false {
+                    box.recordFirstFailure(graph)
+                }
+                return passed
+            }
+
+            let reportBox = ReportCaptureBox()
+            let reduced = #exhaust(
+                Self.gen,
+                .suppress(.issueReporting),
+                .budget(.extensive),
+                .replay(.numeric(seed)),
+                .onReport { reportBox.record($0) },
+                property: wrappedProperty
+            )
+
+            if let original = box.firstFailure {
+                startingTopologies[Self.classify(original), default: 0] += 1
+            }
+            if let reduced {
+                let reducedClass = Self.classify(reduced)
+                reducedTopologies[reducedClass, default: 0] += 1
+                if reducedClass != .triangleExact, let original = box.firstFailure {
+                    stuckSeeds[reducedClass, default: []].append(
+                        (seed: seed, original: original, reduced: reduced)
+                    )
+                }
+            } else {
+                print("Failed to reduce? \(box.firstFailure as Any)")
+            }
+
+            if let report = reportBox.report {
+                propertyInvocations.append(report.propertyInvocations)
+                reductionInvocations.append(report.reductionInvocations)
+                totalMaterializations.append(report.totalMaterializations)
+                reductionMs.append(report.reductionMilliseconds)
+                totalMs.append(report.totalMilliseconds)
+            }
+        }
+
+        print("[GraphColoring] Starting-graph distribution (N=\(seedCount)):")
+        for (topology, count) in startingTopologies.sorted(by: { $0.value > $1.value }) {
+            print("  \(topology.rawValue): \(count)")
+        }
+        print("[GraphColoring] Reduced-graph distribution:")
+        for (topology, count) in reducedTopologies.sorted(by: { $0.value > $1.value }) {
+            print("  \(topology.rawValue): \(count)")
+        }
+
+        let nonTriangleStarts = startingTopologies
+            .filter { $0.key != .triangleExact }
+            .values
+            .reduce(0, +)
+        print("[GraphColoring] Non-triangle starts: \(nonTriangleStarts)/\(seedCount)")
+
+        // Per-run metrics — mean and median across all runs where a report
+        // was produced. Directly comparable to Hypothesis's `evaluations`
+        // (property invocations) and `shrink_time_ms` (reduction milliseconds).
+        if propertyInvocations.isEmpty == false {
+            print("[GraphColoring] Run metrics (N=\(propertyInvocations.count)):")
+            printMetric("property invocations", values: propertyInvocations)
+            printMetric("reduction invocations", values: reductionInvocations)
+            printMetric("materializations", values: totalMaterializations)
+            printMetric("reduction (ms)", values: reductionMs, format: "%.2f")
+            printMetric("total (ms)", values: totalMs, format: "%.2f")
+        }
+
+        // Seeds where the reducer failed to reach K_3. Each entry is a candidate
+        // for a pinned regression test: replay that seed, exercise the same
+        // buggy starting graph, and measure whether the reducer eventually
+        // crosses the basin.
+        if stuckSeeds.isEmpty == false {
+            print("[GraphColoring] Stuck-not-triangle seeds:")
+            for (topology, entries) in stuckSeeds.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
+                print("  \(topology.rawValue): \(entries.count) seed(s)")
+                for entry in entries {
+                    print("    seed=\(entry.seed)")
+                    print("      original: \(entry.original)")
+                    print("      reduced:  \(entry.reduced)")
+                }
+            }
+        }
+    }
+
+    private func printMetric(_ label: String, values: [some BinaryInteger]) {
+        guard values.isEmpty == false else { return }
+        let mean = Double(values.reduce(0, +)) / Double(values.count)
+        let sorted = values.sorted()
+        let median = sorted[sorted.count / 2]
+        print("  \(label): mean=\(String(format: "%.1f", mean)) median=\(median) max=\(sorted.last!)")
+    }
+
+    private func printMetric(_ label: String, values: [Double], format: String) {
+        guard values.isEmpty == false else { return }
+        let mean = values.reduce(0, +) / Double(values.count)
+        let sorted = values.sorted()
+        let median = sorted[sorted.count / 2]
+        print("  \(label): mean=\(String(format: format, mean)) median=\(String(format: format, median)) max=\(String(format: format, sorted.last!))")
+    }
+
+    @Test("Graph coloring shrinks to a canonical CE class")
+    func graphColoringRandomSeed() {
+        let result = #exhaust(
+            Self.gen,
+            .suppress(.issueReporting),
+            .budget(.extensive),
+            property: Self.property
+        )
+
+        guard let value = result else {
+            return
+        }
+//        print("[CE] \(value)")
+
+        // Sanity-check the result is a counterexample.
+        #expect(Self.property(value) == false)
+
+        #expect(value.distinctVertices == [0, 1, 2])
+    }
+
+    // MARK: - Fixtures and Helpers
+
     /*
      Multi-leaf bind-inner shrinking challenge with multiple local minima.
 
@@ -213,157 +361,12 @@ struct GraphColoringChallenge {
         }
     }
 
-    /// Characterisation test — runs many seeds, captures the first failing graph per seed
-    /// (before any reduction), and reports the distribution of starting topologies.
-    ///
-    /// Not a pass/fail test. Tells you whether random generation is producing
-    /// already-canonical CEs (trivial reduction) or larger starting graphs that
-    /// require basin-crossing work to reach the minimum.
-    @Test("Graph coloring — starting-graph distribution", .disabled("Slow analysis"))
-    func graphColoringStartingDistribution() {
-        let seedCount = 1000
-        let baseSeed: UInt64 = 1337
-        var startingTopologies: [Topology: Int] = [:]
-        var reducedTopologies: [Topology: Int] = [:]
-        // Seeds whose reduced result is not the global minimum K_3, grouped by
-        // the basin the reducer got stuck in. These are the regression targets
-        // for any future reducer improvement aimed at basin-crossing.
-        var stuckSeeds: [Topology: [(seed: UInt64, original: Graph, reduced: Graph)]] = [:]
-
-        // Per-run metrics collected via ``.onReport`` — one sample per seed,
-        // used to compute means comparable to Hypothesis's run_challenge.py
-        // output (evaluations, shrink time).
-        var propertyInvocations: [Int] = []
-        var reductionInvocations: [Int] = []
-        var totalMaterializations: [Int] = []
-        var reductionMs: [Double] = []
-        var totalMs: [Double] = []
-
-        for seedOffset in 0 ..< seedCount {
-            let seed = baseSeed + UInt64(seedOffset)
-            // Capture the first failing graph per seed in a lock-guarded box.
-            let box = FailureCaptureBox()
-            let wrappedProperty: @Sendable (Graph) -> Bool = { graph in
-                let passed = Self.property(graph)
-                if passed == false {
-                    box.recordFirstFailure(graph)
-                }
-                return passed
-            }
-
-            let reportBox = ReportCaptureBox()
-            let reduced = #exhaust(
-                Self.gen,
-                .suppress(.issueReporting),
-                .budget(.extensive),
-                .replay(.numeric(seed)),
-                .onReport { reportBox.record($0) },
-                property: wrappedProperty
-            )
-
-            if let original = box.firstFailure {
-                startingTopologies[Self.classify(original), default: 0] += 1
-            }
-            if let reduced {
-                let reducedClass = Self.classify(reduced)
-                reducedTopologies[reducedClass, default: 0] += 1
-                if reducedClass != .triangleExact, let original = box.firstFailure {
-                    stuckSeeds[reducedClass, default: []].append(
-                        (seed: seed, original: original, reduced: reduced)
-                    )
-                }
-            } else {
-                print("Failed to reduce? \(box.firstFailure as Any)")
-            }
-
-            if let report = reportBox.report {
-                propertyInvocations.append(report.propertyInvocations)
-                reductionInvocations.append(report.reductionInvocations)
-                totalMaterializations.append(report.totalMaterializations)
-                reductionMs.append(report.reductionMilliseconds)
-                totalMs.append(report.totalMilliseconds)
-            }
-        }
-
-        print("[GraphColoring] Starting-graph distribution (N=\(seedCount)):")
-        for (topology, count) in startingTopologies.sorted(by: { $0.value > $1.value }) {
-            print("  \(topology.rawValue): \(count)")
-        }
-        print("[GraphColoring] Reduced-graph distribution:")
-        for (topology, count) in reducedTopologies.sorted(by: { $0.value > $1.value }) {
-            print("  \(topology.rawValue): \(count)")
-        }
-
-        let nonTriangleStarts = startingTopologies
-            .filter { $0.key != .triangleExact }
-            .values
-            .reduce(0, +)
-        print("[GraphColoring] Non-triangle starts: \(nonTriangleStarts)/\(seedCount)")
-
-        // Per-run metrics — mean and median across all runs where a report
-        // was produced. Directly comparable to Hypothesis's `evaluations`
-        // (property invocations) and `shrink_time_ms` (reduction milliseconds).
-        if propertyInvocations.isEmpty == false {
-            print("[GraphColoring] Run metrics (N=\(propertyInvocations.count)):")
-            printMetric("property invocations", values: propertyInvocations)
-            printMetric("reduction invocations", values: reductionInvocations)
-            printMetric("materializations", values: totalMaterializations)
-            printMetric("reduction (ms)", values: reductionMs, format: "%.2f")
-            printMetric("total (ms)", values: totalMs, format: "%.2f")
-        }
-
-        // Seeds where the reducer failed to reach K_3. Each entry is a candidate
-        // for a pinned regression test: replay that seed, exercise the same
-        // buggy starting graph, and measure whether the reducer eventually
-        // crosses the basin.
-        if stuckSeeds.isEmpty == false {
-            print("[GraphColoring] Stuck-not-triangle seeds:")
-            for (topology, entries) in stuckSeeds.sorted(by: { $0.key.rawValue < $1.key.rawValue }) {
-                print("  \(topology.rawValue): \(entries.count) seed(s)")
-                for entry in entries {
-                    print("    seed=\(entry.seed)")
-                    print("      original: \(entry.original)")
-                    print("      reduced:  \(entry.reduced)")
-                }
-            }
-        }
-    }
-
-    private func printMetric(_ label: String, values: [some BinaryInteger]) {
-        guard values.isEmpty == false else { return }
-        let mean = Double(values.reduce(0, +)) / Double(values.count)
-        let sorted = values.sorted()
-        let median = sorted[sorted.count / 2]
-        print("  \(label): mean=\(String(format: "%.1f", mean)) median=\(median) max=\(sorted.last!)")
-    }
-
-    private func printMetric(_ label: String, values: [Double], format: String) {
-        guard values.isEmpty == false else { return }
-        let mean = values.reduce(0, +) / Double(values.count)
-        let sorted = values.sorted()
-        let median = sorted[sorted.count / 2]
-        print("  \(label): mean=\(String(format: format, mean)) median=\(String(format: format, median)) max=\(String(format: format, sorted.last!))")
-    }
-
-    @Test("Graph coloring shrinks to a canonical CE class")
-    func graphColoringRandomSeed() {
-        let result = #exhaust(
-            Self.gen,
-            .suppress(.issueReporting),
-            .budget(.extensive),
-            property: Self.property
-        )
-
-        guard let value = result else {
-            return
-        }
-//        print("[CE] \(value)")
-
-        // Sanity-check the result is a counterexample.
-        #expect(Self.property(value) == false)
-
-        #expect(value.distinctVertices == [0, 1, 2])
-    }
+    // Characterisation test — runs many seeds, captures the first failing graph per seed
+    // (before any reduction), and reports the distribution of starting topologies.
+    //
+    // Not a pass/fail test. Tells you whether random generation is producing
+    // already-canonical CEs (trivial reduction) or larger starting graphs that
+    // require basin-crossing work to reach the minimum.
 }
 
 // MARK: - Helpers

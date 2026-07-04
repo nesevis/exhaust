@@ -137,7 +137,7 @@ final class HeapMergeContract {
     func pop(heapIndex: Int) throws {
         guard liveHeaps.isEmpty == false else { throw skip() }
         let idx = liveHeaps[heapIndex % liveHeaps.count]
-        guard !heaps[idx].isEmpty else { throw skip() }
+        guard heaps[idx].isEmpty == false else { throw skip() }
         let actual = heaps[idx].pop()
         let expectedMin = expectedContents[idx].removeFirst()
         try check(actual == expectedMin, "pop must return the minimum element")
@@ -199,7 +199,7 @@ final class HeapAliasingContract {
     func pop(heapIndex: Int) throws {
         guard allHeaps.isEmpty == false else { throw skip() }
         let heap = allHeaps[heapIndex % allHeaps.count]
-        guard !heap.isEmpty else { throw skip() }
+        guard heap.isEmpty == false else { throw skip() }
         let expectedMin = heap.elements.min()!
         let actual = heap.pop()
         try check(actual == expectedMin, "pop must return the minimum element")
@@ -233,7 +233,7 @@ struct BuggyHeap {
     }
 
     mutating func pop() -> Int? {
-        guard !elements.isEmpty else { return nil }
+        guard elements.isEmpty == false else { return nil }
         if elements.count == 1 { return elements.removeLast() }
         let min = elements[0]
         elements[0] = elements.removeLast()
@@ -316,7 +316,7 @@ final class SpliceHeap {
     }
 
     func pop() -> Int? {
-        guard !elements.isEmpty else { return nil }
+        guard elements.isEmpty == false else { return nil }
         if elements.count == 1 { return elements.removeLast() }
         let min = elements[0]
         elements[0] = elements.removeLast()
