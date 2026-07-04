@@ -73,9 +73,9 @@
 //  Reason: no `allow_subnormal` toggle or FTZ-runtime contract hooks in Exhaust.
 //
 
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 // MARK: - Shrinking parity tests
 

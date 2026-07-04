@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 26/3/2026.
 //
 
+import Exhaust
 import ExhaustTestSupport
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Experimental Challenge: Sparse Modular Zigzag", .tags(.challenge))
 struct SparseModularZigzagChallenge {

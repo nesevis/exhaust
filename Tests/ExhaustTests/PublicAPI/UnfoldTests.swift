@@ -1,6 +1,5 @@
-import ExhaustCore
+import Exhaust
 import Testing
-@testable import Exhaust
 
 @Suite("Unfold Combinator")
 struct UnfoldTests {

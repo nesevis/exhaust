@@ -6,8 +6,8 @@
 //  that violate their specified constraints.
 //
 
+import Exhaust
 import Testing
-@testable import Exhaust
 
 @Suite("Constraint Violation Prevention")
 struct ConstraintViolationTests {

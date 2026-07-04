@@ -172,7 +172,7 @@ indirect enum JSONValue: Equatable {
     case array([JSONValue])
 }
 
-let jsonGen = #gen(.recursive(base: .null, depthRange: 0...5) { recurse, remaining in
+let jsonGen = #gen(.recursive(baseValue: .null, depthRange: 0...5) { recurse, remaining in
     .oneOf(weighted:
         (2, .just(.null)),
         (2, .int(in: 0...99).map { JSONValue.int($0) }),

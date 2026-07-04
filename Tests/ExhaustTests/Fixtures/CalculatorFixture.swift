@@ -6,7 +6,7 @@
 //  https://github.com/jlink/shrinking-challenge/blob/main/challenges/calculator.md
 //
 
-@testable import Exhaust
+import Exhaust
 
 /// Calculator AST plus generator and reference evaluator.
 ///

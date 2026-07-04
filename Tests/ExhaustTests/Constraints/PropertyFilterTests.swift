@@ -5,9 +5,9 @@
 //  Property test for .filter that requires the Exhaust module.
 //
 
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Generator Contracts — Filter")
 struct GeneratorContractFilterTests {

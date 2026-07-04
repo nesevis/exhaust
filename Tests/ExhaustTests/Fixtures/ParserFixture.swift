@@ -8,8 +8,8 @@
 
 // swiftlint:disable file_length type_body_length nesting
 
+import Exhaust
 import Foundation
-@testable import Exhaust
 
 /// Mini language plus a buggy serializer/parser. The property `parse(serialize(lang)) == lang` (or its `Codable` JSON equivalent) fails because:
 ///

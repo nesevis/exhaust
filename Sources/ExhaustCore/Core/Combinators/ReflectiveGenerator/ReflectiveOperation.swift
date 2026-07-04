@@ -164,7 +164,7 @@ package enum ReflectiveOperation {
     ///
     /// Exists as a primitive rather than using ``FreerMonad/pure`` because the reflector must distinguish a deliberate constant from a continuation terminal. Both are `.pure` in the Freer Monad; `.just` is the marker that tells interpreters which one they are looking at.
     ///
-    /// Common uses: base cases of ``Gen/recursive(base:maxDepth:extend:)`` generators, default branches of pick operations, and placeholder generators in opaque zips.
+    /// Common uses: base cases of ``Gen/recursive(baseValue:depthRange:extend:)`` generators, default branches of pick operations, and placeholder generators in opaque zips.
     ///
     /// - Parameter value: The constant value to always produce.
     case just(Any)

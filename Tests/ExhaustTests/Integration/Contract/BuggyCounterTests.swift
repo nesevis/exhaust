@@ -69,17 +69,18 @@ struct BuggyCounterTests {
 
     @Test("Sequential contract SCA coverage failure carries U-prefixed replay seed")
     func sequentialContractSCACoverageFailureCarriesUPrefixedReplaySeed() async throws {
+        // A sampling-free budget forces the coverage source, so the U-prefix assertion always runs.
         let result = try #require(
             await #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(4),
+                .budget(.custom(coverage: 200, sampling: 0)),
                 .suppress(.issueReporting)
             )
         )
-        if result.discoveryMethod == .coverage {
-            let replaySeed = try #require(result.replaySeed)
-            #expect(replaySeed.hasPrefix("U"), "SCA coverage replay seed should have U prefix")
-        }
+        #expect(result.discoveryMethod == .coverage)
+        let replaySeed = try #require(result.replaySeed)
+        #expect(replaySeed.hasPrefix("U"), "SCA coverage replay seed should have U prefix")
     }
 }
 
@@ -92,8 +93,7 @@ struct SCAReductionCoverageTests {
                 PairwiseBugSpec.self,
                 .commandLimit(3),
                 .budget(.custom(coverage: 200, sampling: 0)),
-                .suppress(.issueReporting),
-                .log(.debug)
+                .suppress(.issueReporting)
             )
         )
         #expect(result.discoveryMethod == .coverage)

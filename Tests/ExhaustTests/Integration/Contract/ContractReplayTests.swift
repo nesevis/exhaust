@@ -1,7 +1,7 @@
+import Exhaust
 import ExhaustTestSupport
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Contract replay seed resolution", .serialized, .tags(.contract))
 struct ContractReplayTests {

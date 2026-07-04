@@ -111,7 +111,7 @@ struct LargeDomainAnalysisTests {
         #expect(profile.parameters[1].domainSize == 2)
     }
 
-    @Test("Array with minimum length > 2 produces non-empty domain", .disabled())
+    @Test("Array with minimum length > 2 produces non-empty domain")
     func arrayMinLengthAboveTwo() {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: UInt64(5) ... 10, scaling: .constant)
         let profile = analyzeLargeDomain(gen)
@@ -752,7 +752,6 @@ struct CharacterProblematicIndicesTests {
             case .enumerable: "enumerable"
             case .large: "large"
         }
-        print("Analysis: \(analysisKind), params=\(profile.parameterCount), domains=\(domainSizes)")
         #expect(domainSizes.isEmpty == false, "Analysis should produce at least one parameter")
 
         var rowsTested = 0

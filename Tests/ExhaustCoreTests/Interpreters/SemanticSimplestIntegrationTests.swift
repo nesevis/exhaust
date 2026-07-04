@@ -2,40 +2,29 @@
 //  SemanticSimplestIntegrationTests.swift
 //  ExhaustCoreTests
 //
-//  ChoiceValue.semanticSimplest tests that verify behavior across generated values.
+//  `semanticSimplest` does not depend on the stored value, only on the tag, so
+//  edge-case inputs per tag cover it without drawing generated values.
 //
 
 import ExhaustCore
 import Testing
 
-@Suite("ChoiceValue.semanticSimplest Integration")
+@Suite("ChoiceValue.semanticSimplest")
 struct SemanticSimplestIntegrationTests {
-    @Test("Unsigned semanticSimplest is always .unsigned(0, ...)")
-    func unsignedSimplest() throws {
-        let gen = Gen.choose(in: UInt64(0) ... UInt64(100_000))
-        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
-        while let rawValue = try iterator.next() {
-            #expect(ChoiceValue(rawValue, tag: .uint64).semanticSimplest == ChoiceValue(UInt64(0), tag: .uint64))
-        }
+    @Test("Unsigned semanticSimplest is always .unsigned(0, ...)", arguments: [UInt64(0), 1, 42, 100_000, UInt64.max])
+    func unsignedSimplest(rawValue: UInt64) {
+        #expect(ChoiceValue(rawValue, tag: .uint64).semanticSimplest == ChoiceValue(UInt64(0), tag: .uint64))
     }
 
-    @Test("Signed semanticSimplest always has value 0")
-    func signedSimplest() throws {
-        let gen = Gen.choose(in: Int64(-50000) ... Int64(50000))
-        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
-        while let rawValue = try iterator.next() {
-            let simplest = ChoiceValue(rawValue, tag: .int64).semanticSimplest
-            #expect(simplest.decodedSignedValue == 0)
-        }
+    @Test("Signed semanticSimplest always has value 0", arguments: [Int64(0), 1, -1, 50000, -50000, Int64.max, Int64.min])
+    func signedSimplest(rawValue: Int64) {
+        let simplest = ChoiceValue(rawValue, tag: .int64).semanticSimplest
+        #expect(simplest.decodedSignedValue == 0)
     }
 
-    @Test("Float semanticSimplest is always 0.0")
-    func floatSimplest() throws {
-        let gen = Gen.choose(in: -1000.0 ... 1000.0)
-        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
-        while let rawValue = try iterator.next() {
-            let simplest = ChoiceValue(rawValue, tag: .double).semanticSimplest
-            #expect(simplest.decodedDoubleValue == 0.0)
-        }
+    @Test("Float semanticSimplest is always 0.0", arguments: [0.0, -0.0, 1.0, -1000.0, 1000.0, Double.greatestFiniteMagnitude, -Double.greatestFiniteMagnitude])
+    func floatSimplest(rawValue: Double) {
+        let simplest = ChoiceValue(rawValue, tag: .double).semanticSimplest
+        #expect(simplest.decodedDoubleValue == 0.0)
     }
 }

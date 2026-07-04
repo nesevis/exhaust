@@ -6,9 +6,9 @@
 //  to measure how long problematic-value analysis takes at different scales.
 //
 
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Large Domain Budget Stress Tests")
 struct LargeDomainBudgetTests {
@@ -92,7 +92,7 @@ struct LargeDomainBudgetTests {
         #expect(counterExample == nil)
     }
 
-    @Test("2-param: day-of-week consistency across DST", .disabled("This fails and finds two dates in August. Need to figure out what that is"))
+    @Test("2-param: day-of-week consistency across DST")
     func twoParamDayOfWeekConsistency() {
         let gen = #gen(
             .date(between: Self.year2024, interval: .hours(1)),
@@ -100,7 +100,11 @@ struct LargeDomainBudgetTests {
         )
 
         // Property: if two dates are exactly 7 calendar days apart,
-        // they fall on the same weekday
+        // they fall on the same weekday.
+        //
+        // The guard must require an exact gap: `dateComponents([.day]).day == 7` alone matches any
+        // difference in [7 days, 8 days), so a pair 7 days and 23 hours apart (different weekdays,
+        // no DST involved) is a false counterexample. That was the earlier "two dates in August".
         let counterExample = #exhaust(
             gen,
             .suppress(.issueReporting),
@@ -108,8 +112,8 @@ struct LargeDomainBudgetTests {
         ) { date1, date2 in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
-            let dayDiff = calendar.dateComponents([.day], from: date1, to: date2).day!
-            guard dayDiff == 7 else { return true }
+            let gap = calendar.dateComponents([.day, .hour, .minute, .second], from: date1, to: date2)
+            guard gap.day == 7, gap.hour == 0, gap.minute == 0, gap.second == 0 else { return true }
             let weekday1 = calendar.component(.weekday, from: date1)
             let weekday2 = calendar.component(.weekday, from: date2)
             return weekday1 == weekday2

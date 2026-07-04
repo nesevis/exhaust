@@ -1,5 +1,5 @@
+import Exhaust
 import Testing
-@testable import Exhaust
 
 struct SwiftTestingIntegrationTests {
     // MARK: - Void property with #expect

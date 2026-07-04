@@ -65,7 +65,6 @@ struct ExamineCoverageTests {
             .budget(100),
             .suppress(.issueReporting)
         )
-        print()
         #expect(report.branchCoverage == 1.0)
     }
 

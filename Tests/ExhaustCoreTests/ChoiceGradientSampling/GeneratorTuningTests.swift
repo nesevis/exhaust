@@ -257,7 +257,6 @@ struct GeneratorTuningTests {
 
         let leafWeight = choices[0].weight
         let nodeWeight = choices[1].weight
-        print("BST weights — leaf: \(leafWeight), node: \(nodeWeight)")
 
         #expect(leafWeight > 0, "Leaf branch should have positive weight")
         #expect(nodeWeight > 0, "Node branch should have positive weight")

@@ -3,8 +3,8 @@
 //  ExhaustTests
 //
 
+import Exhaust
 import Testing
-@testable import Exhaust
 
 @Suite("Coverage Budget")
 struct CoverageBudgetTests {

@@ -38,8 +38,6 @@ struct OnlineCGSInterpreterTests {
         let naiveValues = try Array(collecting: &naiveIterator)
         let naiveHitRate = Double(naiveValues.count(where: predicate)) / Double(naiveValues.count)
 
-        print("Pick guidance — naive: \(String(format: "%.1f%%", naiveHitRate * 100)), CGS: \(String(format: "%.1f%%", cgsHitRate * 100))")
-
         #expect(cgsHitRate > naiveHitRate,
                 "CGS hit rate (\(cgsHitRate)) should exceed naive (\(naiveHitRate))")
         #expect(cgsHitRate > 0.7, "CGS should strongly favour the valid branch, got \(cgsHitRate)")
@@ -102,8 +100,6 @@ struct OnlineCGSInterpreterTests {
         let naiveValues = try Array(collecting: &naiveZipIterator)
         let naiveHitRate = Double(naiveValues.count(where: predicate)) / Double(naiveValues.count)
 
-        print("Zip guidance — naive: \(String(format: "%.1f%%", naiveHitRate * 100)), CGS: \(String(format: "%.1f%%", cgsHitRate * 100))")
-
         #expect(cgsHitRate >= naiveHitRate,
                 "CGS zip hit rate (\(cgsHitRate)) should be at least as good as naive (\(naiveHitRate))")
     }
@@ -127,7 +123,6 @@ struct OnlineCGSInterpreterTests {
         let hitRate = Double(cgsValues.count(where: predicate)) / Double(cgsValues.count)
 
         // Naive baseline is ~10% (100/1000)
-        print("ChooseBits subdivision — CGS hit rate: \(String(format: "%.1f%%", hitRate * 100))")
 
         #expect(hitRate > 0.15,
                 "ChooseBits subdivision should concentrate in low range, got hit rate \(hitRate)")
@@ -159,9 +154,6 @@ struct OnlineCGSInterpreterTests {
 
         let heights = Dictionary(grouping: validTrees, by: \.height).mapValues(\.count)
         let uniqueTrees = Set(validTrees)
-
-        print("Smoothed eager CGS BST: \(validTrees.count) valid, \(uniqueTrees.count) unique")
-        print("Heights: \(heights.sorted(by: { $0.key < $1.key }))")
 
         let tallTreeCount = validTrees.count { $0.height >= 2 }
         #expect(tallTreeCount > 0,

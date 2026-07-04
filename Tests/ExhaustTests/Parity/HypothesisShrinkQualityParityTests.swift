@@ -6,9 +6,9 @@
 //  tests/quality/test_shrink_quality.py.
 //
 
+import Exhaust
 import ExhaustTestSupport
 import Testing
-@testable import Exhaust
 
 @Suite("Hypothesis Shrink Quality Parity")
 struct HypothesisShrinkQualityParityTests {

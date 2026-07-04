@@ -152,7 +152,3 @@ struct ReductionPropertyTests {
         // .unreduced / .failure is also acceptable — it means the reducer found no improvement
     }
 }
-
-private extension Tag {
-    @Tag static var slow: Self
-}

@@ -16,9 +16,8 @@ struct OptionalTests {
         var sawNil = false
         var sawSome = false
 
-        for _ in 0 ..< 200 {
-            var iterator = ValueInterpreter(gen)
-            guard let value = try iterator.next() else { break }
+        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
+        while let value = try iterator.next() {
             if value == nil {
                 sawNil = true
             } else {
@@ -35,13 +34,15 @@ struct OptionalTests {
     func nonNilValuesSatisfyConstraints() throws {
         let gen = optionalGen(Gen.choose(in: 10 ... 20) as Generator<Int>)
 
-        for _ in 0 ..< 100 {
-            var iterator = ValueInterpreter(gen)
-            guard let value = try iterator.next() else { break }
+        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 100)
+        var drawn = 0
+        while let value = try iterator.next() {
+            drawn += 1
             if let unwrapped = value {
                 #expect(10 ... 20 ~= unwrapped)
             }
         }
+        #expect(drawn == 100)
     }
 
     @Test("Round-trips through reflect and replay", arguments: [UInt64(1), 7, 42, 100, 999, 12345])
@@ -71,8 +72,8 @@ struct OptionalTests {
             exactly: 5
         )
 
-        var iterator = ValueInterpreter(gen)
-        let array = try iterator.next()!
+        var iterator = ValueInterpreter(gen, seed: 42)
+        let array = try #require(try iterator.next())
         #expect(array.count == 5)
 
         _ = try validateGenerator(gen)
@@ -86,9 +87,8 @@ struct OptionalTests {
         var sawSomeNone = false // .some(.none)
         var sawSomeSome = false // .some(.some(_))
 
-        for _ in 0 ..< 500 {
-            var iterator = ValueInterpreter(gen)
-            guard let value = try iterator.next() else { break }
+        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 500)
+        while let value = try iterator.next() {
             switch value {
                 case .none:
                     sawNone = true

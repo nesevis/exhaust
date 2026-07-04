@@ -84,37 +84,18 @@ struct MonadLawTests {
 
 @Suite("Partial Monadic Profunctor law tests")
 struct PartialMonadicProfunctorLawTests {
-    // MARK: - PMP Law 1: contramap Just . prune = id
-
-    /// A Partial Monadic Profunctor must satisfy: `Gen.contramap({ $0 }, Gen.prune(generator))` is equivalent to `generator`
+    /// A Partial Monadic Profunctor must satisfy: `Gen.contramap({ $0 }, Gen.prune(generator))` is equivalent to `generator`.
     @Test("PMP Law 1: contramap(Just) . prune == identity")
     func pmpLaw1_ContramapJustPruneIsIdentity() throws {
-        // Arrange
-        let generator = Gen.just(Int(42))
-
-        // Act: contramap(Just) . prune should be identity
-        // Type discovery here is bad now with input parameterisation removed
+        let generator = Gen.choose(in: -1000 ... 1000) as Generator<Int>
         let lhs = Gen.contramap({ $0 as Int }, Gen.prune(generator))
-        let rhs = generator
-
-        var lhsIterator = ValueInterpreter(lhs)
-        var rhsIterator = ValueInterpreter(rhs)
-
-        // Test via generation - both should produce same value
-        let lhsValue = try lhsIterator.next()
-        let rhsValue = try rhsIterator.next()
-
-        // Assert
-        #expect(lhsValue == rhsValue)
+        try assertSameForwardOutput(lhs, generator)
     }
 
-    // MARK: - PMP Law 2: contramap (f >=> g) . prune = contramap f . prune . contramap g . prune
-
-    /// A PMP must satisfy: `contramap(compose(f,g)) . prune` is equivalent to `contramap(f) . prune . contramap(g) . prune`
+    /// A PMP must satisfy: `contramap(compose(f,g)) . prune` is equivalent to `contramap(f) . prune . contramap(g) . prune`.
     @Test("PMP Law 2: Composition associativity")
     func pmpLaw2_CompositionAssociativity() throws {
-        // Arrange
-        let generator = Gen.just("hello")
+        let generator = (Gen.choose(in: 1 ... 100) as Generator<Int>).map { "value-\($0)" }
 
         let f: (String) -> Int? = { str in str.isEmpty ? nil : str.count }
         let g: (Int) -> String? = { num in num > 0 ? "length-\(num)" : nil }
@@ -124,162 +105,85 @@ struct PartialMonadicProfunctorLawTests {
             return g(intermediate)
         }
 
-        // Act
-        // LHS: contramap(compose(f,g)) . prune
         let lhs = Gen.contramap(composed, Gen.prune(generator))
-
-        // RHS: contramap(f) . prune . contramap(g) . prune
         let rhs = Gen.contramap(g, Gen.prune(Gen.contramap(f, Gen.prune(generator))))
-
-        var lhsIterator = ValueInterpreter(lhs)
-        var rhsIterator = ValueInterpreter(rhs)
-
-        // Test via generation - both should produce same value
-        let lhsValue = try lhsIterator.next()
-        let rhsValue = try rhsIterator.next()
-
-        // Assert
-        #expect(lhsValue == rhsValue)
+        try assertSameForwardOutput(lhs, rhs)
     }
 
-    // MARK: - PMP Law 3: (contramap f . prune) (return y) = return y
-
-    /// A PMP must satisfy: `Gen.contramap(f, Gen.prune(.pure(y)))` is equivalent to `.pure(y)`
+    /// A PMP must satisfy: `Gen.contramap(f, Gen.prune(.pure(y)))` is equivalent to `.pure(y)`.
     @Test("PMP Law 3: contramap . prune over pure values")
     func pmpLaw3_contramapPruneOverPure() throws {
-        // Arrange
         let pureValue = "test"
         let transform: (String) -> Int? = { $0.isEmpty == false ? $0.count : nil }
 
-        // Act
         let lhs = Gen.contramap(transform, Gen.prune(Generator.pure(pureValue)))
         let rhs = Generator<String>.pure(pureValue)
-
-        var lhsIterator = ValueInterpreter(lhs)
-        var rhsIterator = ValueInterpreter(rhs)
-
-        // Test via generation - both should produce same value
-        let lhsValue = try lhsIterator.next()
-        let rhsValue = try rhsIterator.next()
-
-        // Assert
-        #expect(lhsValue == rhsValue)
+        try assertSameForwardOutput(lhs, rhs)
     }
 
-    // MARK: - PMP Law 4: (contramap f . prune) (x >>= g) = (contramap f . prune) x >>= (contramap f . prune) . g
-
-    /// A PMP must satisfy: `(contramap f . prune)(x >>= g)` is equivalent to `(contramap f . prune) x >>= (contramap f . prune) . g`
+    /// A PMP must satisfy: `(contramap f . prune)(x >>= g)` is equivalent to `(contramap f . prune) x >>= (contramap f . prune) . g`.
     @Test("PMP Law 4: contramap . prune distributes over bind")
     func pmpLaw4_contramapPruneDistributesOverBind() throws {
-        // Arrange - carefully chosen types for the law to work
-        let baseGenerator = Generator<Int>.pure(5)
+        let baseGenerator = Gen.choose(in: 1 ... 50) as Generator<Int>
         // Crucial: bindFunction must return a generator with the SAME input type as base
         let bindFunction: (Int) -> Generator<String> = { val in
-            Generator<String>.pure("Value: \(val)")
+            (Gen.choose(in: 0 ... 9) as Generator<Int>).map { "Value: \(val).\($0)" }
         }
         // transform maps from NewInput to original input type (Optional)
         let transform: (String) -> Int? = { str in
             str.hasPrefix("Value:") ? str.count : nil
         }
 
-        // Act
         // LHS: (contramap f . prune)(x >>= g)
-        let boundGenerator = baseGenerator.bind(bindFunction) // Generator<Int, String>
-        let lhs = Gen.contramap(transform, Gen.prune(boundGenerator)) // Generator<String, String>
+        let boundGenerator = baseGenerator.bind(bindFunction)
+        let lhs = Gen.contramap(transform, Gen.prune(boundGenerator))
 
         // RHS: (contramap f . prune) x >>= (contramap f . prune) . g
-        let transformedBase = Gen.contramap(transform, Gen.prune(baseGenerator)) // Generator<String, Int>
-
-        // The bind function applies (contramap f . prune) to the result of g
+        let transformedBase = Gen.contramap(transform, Gen.prune(baseGenerator))
         let transformedFunction: (Int) -> Generator<String> = { val in
-            let resultGenerator = bindFunction(val) // Generator<Int, String>
-            return Gen.contramap(transform, Gen.prune(resultGenerator)) // Generator<String, String>
+            Gen.contramap(transform, Gen.prune(bindFunction(val)))
         }
-        let rhs = transformedBase.bind(transformedFunction) // Generator<String, String>
+        let rhs = transformedBase.bind(transformedFunction)
 
-        var lhsIterator = ValueInterpreter(lhs)
-        var rhsIterator = ValueInterpreter(rhs)
-
-        // Test via generation - both should produce same value
-        let lhsValue = try lhsIterator.next()
-        let rhsValue = try rhsIterator.next()
-
-        // Assert
-        #expect(lhsValue == rhsValue)
+        try assertSameForwardOutput(lhs, rhs)
     }
 
     // MARK: - Additional Profunctor Laws
 
-    /// A Profunctor must satisfy: `Gen.contramap(identity, generator)` is equivalent to `generator`
+    /// A Profunctor must satisfy: `Gen.contramap(identity, generator)` is equivalent to `generator`.
     @Test("Profunctor Law 1: contramap(identity) == identity")
     func profunctorLaw1_contramapIdentity() throws {
-        // Arrange
-        let generator = Gen.just(42)
+        let generator = Gen.choose(in: -1000 ... 1000) as Generator<Int>
         let identity: (Int) -> Int = { $0 }
 
-        // Act
         let lhs = Gen.contramap(identity, generator)
-        let rhs = generator
-
-        var lhsIterator = ValueInterpreter(lhs)
-        var rhsIterator = ValueInterpreter(rhs)
-
-        // Test via generation - both should produce same value
-        let lhsValue = try lhsIterator.next()
-        let rhsValue = try rhsIterator.next()
-
-        // Assert
-        #expect(lhsValue == rhsValue)
+        try assertSameForwardOutput(lhs, generator)
     }
 
-    /// A Profunctor must satisfy: `contramap(f . g)` is equivalent to `contramap(g, contramap(f, generator))`
+    /// A Profunctor must satisfy: `contramap(f . g)` is equivalent to `contramap(g, contramap(f, generator))`.
     @Test("Profunctor Law 2: contramap(compose(f,g)) == contramap(g) . contramap(f)")
     func profunctorLaw2_contramapComposition() throws {
-        // Arrange
-        let generator = Gen.just(100)
+        let generator = Gen.choose(in: 1 ... 1000) as Generator<Int>
         let f: (String) -> Int = { $0.count }
         let g: (Int) -> String = { "Value: \($0)" }
         let composed: (String) -> String = { str in g(f(str)) }
 
-        // Act
         let lhs = Gen.contramap(composed, generator)
         let rhs = Gen.contramap(g, Gen.contramap(f, generator))
-
-        var lhsIterator = ValueInterpreter(lhs)
-        var rhsIterator = ValueInterpreter(rhs)
-
-        // Test via generation - both should produce same value
-        let lhsValue = try lhsIterator.next()
-        let rhsValue = try rhsIterator.next()
-
-        // Assert
-        #expect(lhsValue == rhsValue)
+        try assertSameForwardOutput(lhs, rhs)
     }
 
     // MARK: - Comap Law Tests
 
-    /// The comap combinator should be equivalent to `contramap(transform, prune(generator))`
+    /// The comap combinator should be equivalent to `contramap(transform, prune(generator))`.
     @Test("Comap is equivalent to contramap . prune")
     func comapEquivalence() throws {
-        // Arrange
-        let generator = Gen.just(42)
+        let generator = Gen.choose(in: -1000 ... 1000) as Generator<Int>
         let transform: (String) -> Int? = { str in str.isEmpty ? nil : str.count }
 
-        // Act
         let comapResult = Gen.comap(transform, generator)
         let contramapPruneResult = Gen.contramap(transform, Gen.prune(generator))
-
-        // Test via generation with valid input
-
-        var lhsIterator = ValueInterpreter(comapResult)
-        var rhsIterator = ValueInterpreter(contramapPruneResult)
-
-        // Test via generation - both should produce same value
-        let lhsValue = try lhsIterator.next()
-        let rhsValue = try rhsIterator.next()
-
-        // Assert
-        #expect(lhsValue == rhsValue)
+        try assertSameForwardOutput(comapResult, contramapPruneResult)
     }
 }
 
@@ -331,5 +235,25 @@ private func interpretLogRecursive<Value>(_ monad: LoggingFreerMonad<Value>, log
                     }
                     return value
             }
+    }
+}
+
+// MARK: - Law Test Helpers
+
+/// Draws `draws` values from each generator with the same seed and asserts pairwise equality. The wrappers under test consume no entropy of their own, so equal seeds must give equal forward output on every draw, not just the first.
+private func assertSameForwardOutput<Value: Equatable>(
+    _ lhs: Generator<Value>,
+    _ rhs: Generator<Value>,
+    seed: UInt64 = 42,
+    draws: Int = 20,
+    sourceLocation: SourceLocation = #_sourceLocation
+) throws {
+    var lhsIterator = ValueInterpreter(lhs, seed: seed, maxRuns: UInt64(draws))
+    var rhsIterator = ValueInterpreter(rhs, seed: seed, maxRuns: UInt64(draws))
+
+    for draw in 0 ..< draws {
+        let lhsValue = try #require(try lhsIterator.next(), sourceLocation: sourceLocation)
+        let rhsValue = try #require(try rhsIterator.next(), sourceLocation: sourceLocation)
+        #expect(lhsValue == rhsValue, "Draw \(draw): lhs=\(lhsValue), rhs=\(rhsValue)", sourceLocation: sourceLocation)
     }
 }

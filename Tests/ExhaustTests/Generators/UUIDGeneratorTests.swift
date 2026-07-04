@@ -3,9 +3,9 @@
 //  Exhaust
 //
 
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("UUID Generator")
 struct UUIDGeneratorTests {

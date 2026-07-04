@@ -1,5 +1,5 @@
+import Exhaust
 import XCTest
-@testable import Exhaust
 
 /// Verifies that `#exhaust` records XCTest failures when a property fails.
 ///

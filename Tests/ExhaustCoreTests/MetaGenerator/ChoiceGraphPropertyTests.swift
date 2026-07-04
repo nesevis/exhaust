@@ -6,12 +6,12 @@ import Testing
 struct ChoiceGraphPropertyTests {
     private let intRecipeGen = recipeGenerator(producing: .int, maxDepth: 1)
 
-    @Test("Every leaf node has a non-nil position range")
-    func leafNodesHavePositions() throws {
-        var recipeIter = ValueInterpreter(intRecipeGen, maxRuns: 30)
+    @Test("Every leaf node has a non-nil position range", arguments: recipeSeeds)
+    func leafNodesHavePositions(seed: UInt64) throws {
+        var recipeIter = ValueInterpreter(intRecipeGen, seed: seed, maxRuns: 30)
         while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, maxRuns: 5)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed &+ 1, maxRuns: 5)
             while let (_, tree) = try valueIter.next() {
                 let graph = ChoiceGraph.build(from: tree)
                 for leafID in graph.leafNodes {
@@ -24,12 +24,12 @@ struct ChoiceGraphPropertyTests {
         }
     }
 
-    @Test("Position ranges of leaf nodes are non-overlapping")
-    func positionRangesNonOverlapping() throws {
-        var recipeIter = ValueInterpreter(intRecipeGen, maxRuns: 30)
+    @Test("Position ranges of leaf nodes are non-overlapping", arguments: recipeSeeds)
+    func positionRangesNonOverlapping(seed: UInt64) throws {
+        var recipeIter = ValueInterpreter(intRecipeGen, seed: seed, maxRuns: 30)
         while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, maxRuns: 5)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed &+ 1, maxRuns: 5)
             while let (_, tree) = try valueIter.next() {
                 let graph = ChoiceGraph.build(from: tree)
                 let ranges = graph.leafNodes.compactMap { graph.nodes[$0].positionRange }
@@ -45,12 +45,12 @@ struct ChoiceGraphPropertyTests {
         }
     }
 
-    @Test("Parent links are consistent with children links")
-    func parentChildConsistency() throws {
-        var recipeIter = ValueInterpreter(intRecipeGen, maxRuns: 30)
+    @Test("Parent links are consistent with children links", arguments: recipeSeeds)
+    func parentChildConsistency(seed: UInt64) throws {
+        var recipeIter = ValueInterpreter(intRecipeGen, seed: seed, maxRuns: 30)
         while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, maxRuns: 5)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed &+ 1, maxRuns: 5)
             while let (_, tree) = try valueIter.next() {
                 let graph = ChoiceGraph.build(from: tree)
                 for (index, node) in graph.nodes.enumerated() {
@@ -65,12 +65,12 @@ struct ChoiceGraphPropertyTests {
         }
     }
 
-    @Test("Topological order contains no duplicates and all entries are valid node IDs")
-    func topologicalOrderValid() throws {
-        var recipeIter = ValueInterpreter(intRecipeGen, maxRuns: 30)
+    @Test("Topological order contains no duplicates and all entries are valid node IDs", arguments: recipeSeeds)
+    func topologicalOrderValid(seed: UInt64) throws {
+        var recipeIter = ValueInterpreter(intRecipeGen, seed: seed, maxRuns: 30)
         while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, maxRuns: 5)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed &+ 1, maxRuns: 5)
             while let (_, tree) = try valueIter.next() {
                 let graph = ChoiceGraph.build(from: tree)
                 let orderSet = Set(graph.topologicalOrder)
@@ -88,12 +88,12 @@ struct ChoiceGraphPropertyTests {
         }
     }
 
-    @Test("Live node IDs reference valid nodes with non-nil position ranges")
-    func liveNodeIDsValid() throws {
-        var recipeIter = ValueInterpreter(intRecipeGen, maxRuns: 30)
+    @Test("Live node IDs reference valid nodes with non-nil position ranges", arguments: recipeSeeds)
+    func liveNodeIDsValid(seed: UInt64) throws {
+        var recipeIter = ValueInterpreter(intRecipeGen, seed: seed, maxRuns: 30)
         while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, maxRuns: 5)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: seed &+ 1, maxRuns: 5)
             while let (_, tree) = try valueIter.next() {
                 let graph = ChoiceGraph.build(from: tree)
                 for nodeID in graph.liveNodeIDs {
@@ -110,3 +110,8 @@ struct ChoiceGraphPropertyTests {
         }
     }
 }
+
+// MARK: - Helpers
+
+/// Seeds for the recipe interpreter; each test replays identically across runs while still covering 90 recipes.
+private let recipeSeeds: [UInt64] = [1, 42, 9999]

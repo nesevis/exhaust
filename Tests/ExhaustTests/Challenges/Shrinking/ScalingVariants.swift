@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 17/3/2026.
 //
 
+import Exhaust
 import ExhaustTestSupport
 import Foundation
 import Testing
-@testable import Exhaust
 
 // MARK: - Bound5
 

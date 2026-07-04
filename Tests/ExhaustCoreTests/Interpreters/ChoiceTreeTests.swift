@@ -4,6 +4,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 @Suite("ChoiceTree")
@@ -111,6 +112,22 @@ struct ChoiceTreeTests {
             )
             let resize = ChoiceTree.resize(newSize: 50, choices: [branch])
             #expect(resize.containsPicks)
+        }
+
+        @Test("Generated trees distinguish pick-based from chooseBits-only generators")
+        func structuralProbe() throws {
+            #expect(try probeContainsPicks(BST.arbitrary()), "BST should contain picks")
+            let sortedGen = Gen.arrayOf(Gen.choose(in: 0 ... 9 as ClosedRange<UInt>), exactly: 8)
+            #expect(try probeContainsPicks(sortedGen) == false, "A plain array generator should not contain picks")
+        }
+
+        /// Runs the generator a handful of times and returns true as soon as any tree contains a pick site.
+        private func probeContainsPicks(_ generator: Generator<some Any>) throws -> Bool {
+            var iterator = ValueAndChoiceTreeInterpreter(generator, seed: 42, maxRuns: 10)
+            while let (_, tree) = try iterator.next() {
+                if tree.containsPicks { return true }
+            }
+            return false
         }
     }
 

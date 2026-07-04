@@ -6,9 +6,9 @@
 //  the Exhaust module (.filter, #gen macros, etc.).
 //
 
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Choice Gradient Sampling Integration")
 struct GeneratorTuningIntegrationTests {

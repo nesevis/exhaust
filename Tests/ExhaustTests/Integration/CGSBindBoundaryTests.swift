@@ -1,6 +1,5 @@
-import ExhaustCore
+import Exhaust
 import Testing
-@testable import Exhaust
 
 @Suite("CGS Derivative Context Through Bind Boundaries")
 struct CGSBindBoundaryTests {

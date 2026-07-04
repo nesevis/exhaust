@@ -1,7 +1,7 @@
+import Exhaust
 import ExhaustTestSupport
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Experimental Challenge: fast-check Dichotomy", .tags(.challenge))
 struct FastCheckDichotomyChallenge {

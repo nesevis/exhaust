@@ -1,6 +1,7 @@
 import Testing
 @testable import ExhaustCore
 
+@Suite("ReplaySeed Crockford Base32 encoding")
 struct ReplaySeedTests {
     @Test func encodesZero() {
         #expect(ReplaySeed.encode(0) == "0")
@@ -95,16 +96,7 @@ struct ReplaySeedTests {
         #expect(ReplaySeed.decode(tooLong) == nil)
     }
 
-    @Test func encodedOutputContainsOnlyValidCharacters() {
-        let validCharacters = Set("0123456789ABCDEFGHJKMNPQRSTVWXYZ")
-        let values: [UInt64] = [0, 1, 42, 12345, UInt64.max]
-        for value in values {
-            let encoded = ReplaySeed.encode(value)
-            for character in encoded {
-                #expect(validCharacters.contains(character), "Invalid character '\(character)' in encoding of \(value)")
-            }
-        }
-    }
+    // The valid-alphabet and maximum-length checks live as properties in CrockfordBase32PropertyTests.
 
     @Test func decodesSuffixlessSeedWithNilIteration() {
         let decoded = ReplaySeed.decodeWithIteration("1A")

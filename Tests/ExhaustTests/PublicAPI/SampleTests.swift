@@ -1,7 +1,5 @@
+import Exhaust
 import Testing
-@testable import Exhaust
-
-// SPI import removed — no internal ExhaustCore types needed
 
 @Suite("#example runtime tests")
 struct ExampleTests {
@@ -14,7 +12,6 @@ struct ExampleTests {
     @Test("Array example produces the requested count")
     func arrayCount() throws {
         let values = try #example(.int(in: 1 ... 100), count: 20)
-        print()
         #expect(values.count == 20)
         for value in values {
             #expect((1 ... 100).contains(value))

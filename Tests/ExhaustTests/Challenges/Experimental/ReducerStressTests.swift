@@ -3,11 +3,10 @@
 //  Exhaust
 //
 
-import ExhaustCore
+import Exhaust
 import ExhaustTestSupport
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Reducer Stress Tests", .tags(.challenge, .slow))
 struct ReducerStressTests {

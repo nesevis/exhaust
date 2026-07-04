@@ -19,13 +19,14 @@ struct GeneratorCompositionEdgeCaseTests {
 
         let composed = Gen.zip(constantGen, normalGen)
 
-        // Generate multiple values
-        for _ in 0 ..< 10 {
-            var iterator = ValueInterpreter(composed)
-            let (constant, _) = try iterator.next()!
+        var iterator = ValueInterpreter(composed, seed: 42, maxRuns: 10)
+        var drawn = 0
+        while let (constant, _) = try iterator.next() {
+            drawn += 1
             #expect(constant == 42) // Constant should always be the same
             // String can be anything
         }
+        #expect(drawn == 10)
     }
 
     @Test("Zipping many generators maintains correctness")
@@ -39,14 +40,15 @@ struct GeneratorCompositionEdgeCaseTests {
         )
 
         // Verify all components are generated correctly
-        for _ in 0 ..< 20 {
-            var iterator = ValueInterpreter(gen)
-            let (_, _, _, _, ranged) = try iterator.next()!
-
+        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 20)
+        var drawn = 0
+        while let (_, _, _, _, ranged) = try iterator.next() {
+            drawn += 1
             // Type checking ensures correctness, but verify range constraint
             #expect(ranged >= 1)
             #expect(ranged <= 100)
         }
+        #expect(drawn == 20)
     }
 
     @Test("Nested composition with multiple levels")
@@ -58,7 +60,7 @@ struct GeneratorCompositionEdgeCaseTests {
         let middleGen = Gen.zip(innerGen, Gen.choose(from: [true, false]))
         let outerGen = Gen.zip(middleGen, Gen.choose(in: UInt.min ... UInt.max, scaling: UInt.defaultScaling))
 
-        var iterator = ValueInterpreter(outerGen)
+        var iterator = ValueInterpreter(outerGen, seed: 42)
         let value = try #require(try iterator.next())
         let ((_, _), _) = value.0
         _ = value.1
@@ -71,9 +73,8 @@ struct GeneratorCompositionEdgeCaseTests {
 
         let composed = Gen.zip(emptyArrayGen, normalGen)
 
-        for _ in 0 ..< 10 {
-            var iterator = ValueInterpreter(composed)
-            let (emptyArray, _) = try iterator.next()!
+        var iterator = ValueInterpreter(composed, seed: 42, maxRuns: 10)
+        while let (emptyArray, _) = try iterator.next() {
             #expect(emptyArray.isEmpty)
         }
     }
@@ -89,12 +90,14 @@ struct GeneratorCompositionEdgeCaseTests {
         let independentGen = stringGen()
         let composed = Gen.zip(dependentGen, independentGen)
 
-        for _ in 0 ..< 20 {
-            var iterator = ValueInterpreter(composed)
-            let ((first, second), _) = try iterator.next()!
+        var iterator = ValueInterpreter(composed, seed: 42, maxRuns: 20)
+        var drawn = 0
+        while let ((first, second), _) = try iterator.next() {
+            drawn += 1
             #expect(second >= first)
             #expect(second <= first + 10)
         }
+        #expect(drawn == 20)
     }
 
     @Test("Composition preserves replay behavior")
@@ -105,8 +108,8 @@ struct GeneratorCompositionEdgeCaseTests {
             Gen.choose(from: [true, false])
         )
 
-        var iterator = ValueInterpreter(gen)
-        let generated = try iterator.next()!
+        var iterator = ValueInterpreter(gen, seed: 42)
+        let generated = try #require(try iterator.next())
         let recipe = try #require(try Interpreters.reflect(gen, with: generated))
         let replayed = try #require(try Interpreters.replay(gen, using: recipe))
 
@@ -123,10 +126,8 @@ struct GeneratorCompositionEdgeCaseTests {
 
         let composed = Gen.zip(arrayGen, scalarGen)
 
-        for _ in 0 ..< 20 {
-            var iterator = ValueInterpreter(composed)
-            let (array, _) = try iterator.next()!
-            #expect(array.count >= 0) // swiftlint:disable:this empty_count
+        var iterator = ValueInterpreter(composed, seed: 42, maxRuns: 20)
+        while let (array, _) = try iterator.next() {
             #expect(array.count <= 5)
         }
     }
@@ -146,10 +147,10 @@ struct GeneratorCompositionEdgeCaseTests {
 
         let composed = Gen.zip(nestedGen, stringGen())
 
-        for _ in 0 ..< 10 {
-            var iterator = ValueInterpreter(composed)
-            let (nested, _) = try iterator.next()!
-
+        var iterator = ValueInterpreter(composed, seed: 42, maxRuns: 10)
+        var drawn = 0
+        while let (nested, _) = try iterator.next() {
+            drawn += 1
             // Verify structure depth
             #expect(nested.count >= 1)
             #expect(nested.count <= 2)
@@ -164,5 +165,6 @@ struct GeneratorCompositionEdgeCaseTests {
                 }
             }
         }
+        #expect(drawn == 10)
     }
 }

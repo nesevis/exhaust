@@ -48,8 +48,6 @@ struct ChoiceTreeVisualizationTests {
             .choice(ChoiceValue(UInt64(50), tag: .uint), meta100),
         ])
         let result = tree.visualization(width: 40)
-        print("--- Two choices ---")
-        print(result)
         // 0 → minimal (·), 50/100=0.5 → high (◎)
         #expect(result.contains("·"))
         #expect(result.contains("✳"))
@@ -63,8 +61,6 @@ struct ChoiceTreeVisualizationTests {
             .choice(ChoiceValue(UInt64(95), tag: .uint), meta100),
         ])
         let result = tree.visualization(width: 40)
-        print("--- Three choices ---")
-        print(result)
         // Should use box-drawing with rounded corners for 3+ children
         #expect(result.contains("╰") || result.contains("╯") || result.contains("┴"))
     }
@@ -79,8 +75,6 @@ struct ChoiceTreeVisualizationTests {
             ]),
         ])
         let result = tree.visualization(width: 40)
-        print("--- Nested group ---")
-        print(result)
         let lines = result.split(separator: "\n")
         // Multi-level tree should have at least 3 lines
         #expect(lines.count >= 3)
@@ -109,8 +103,6 @@ struct ChoiceTreeVisualizationTests {
             ])
         )
         let result = tree.visualization(width: 40)
-        print("--- Bind with getSize ---")
-        print(result)
         #expect(result.contains("·"))
     }
 
@@ -126,8 +118,6 @@ struct ChoiceTreeVisualizationTests {
             meta256
         )
         let result = tree.visualization(width: 40)
-        print("--- Sequence ---")
-        print(result)
         // All three elements should be visible
         #expect(result.contains("·"))
         #expect(result.contains("❋"))
@@ -147,8 +137,6 @@ struct ChoiceTreeVisualizationTests {
             ]),
         ])
         let result = tree.visualization(width: 60)
-        print("--- Deep tree ---")
-        print(result)
         let lines = result.split(separator: "\n")
         // Should have multiple levels
         #expect(lines.count >= 5)
@@ -175,8 +163,6 @@ struct ChoiceTreeVisualizationTests {
             ]),
         ])
         let result = tree.visualization(width: 60)
-        print("--- Deep tree ---")
-        print(result)
         let lines = result.split(separator: "\n")
         // Should have multiple levels
         #expect(lines.count >= 5)
@@ -210,8 +196,6 @@ struct ChoiceTreeVisualizationTests {
             .choice(ChoiceValue(UInt64(90), tag: .uint), meta100),
         ])
         let result = tree.visualization(width: 50)
-        print("--- Wide (5 children) ---")
-        print(result)
         #expect(result.contains("·"))
     }
 
@@ -230,11 +214,6 @@ struct ChoiceTreeVisualizationTests {
         ])
         let result = tree.visualization(width: 80)
         let lines = result.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-
-        print("--- Wide alignment check ---")
-        for (index, line) in lines.enumerated() {
-            print("Row \(index): |\(line)|")
-        }
 
         // Check: every ╰ and ╯ on a bar row should have a non-space character
         // directly above it (a leaf symbol or another connector)

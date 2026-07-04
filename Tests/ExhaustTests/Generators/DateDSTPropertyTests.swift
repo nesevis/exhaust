@@ -6,9 +6,9 @@
 //  that random testing is unlikely to find.
 //
 
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Date DST Property Tests")
 struct DateDSTPropertyTests {

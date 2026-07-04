@@ -3,9 +3,9 @@
 //  Exhaust
 //
 
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 // MARK: - Float16 Generator
 

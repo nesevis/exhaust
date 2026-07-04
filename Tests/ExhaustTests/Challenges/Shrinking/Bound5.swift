@@ -5,11 +5,11 @@
 //  Created by Chris Kolbu on 11/2/2026.
 //
 
+import Exhaust
 import ExhaustTestSupport
 import Foundation
 import OSLog
 import Testing
-@testable import Exhaust
 
 @MainActor
 @Suite("Shrinking Challenge: Bound5", .tags(.challenge))

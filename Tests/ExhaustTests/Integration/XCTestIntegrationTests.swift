@@ -1,5 +1,5 @@
+import Exhaust
 import XCTest
-@testable import Exhaust
 
 /// Integration tests for XCTest-specific behavior in the `#exhaust` pipeline.
 final class XCTestIntegrationTests: XCTestCase {

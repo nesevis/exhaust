@@ -1,6 +1,6 @@
+import Exhaust
 import ExhaustTestSupport
 import Testing
-@testable import Exhaust
 
 @MainActor
 @Suite("Shrinking Challenge: Nash-Gap Validation", .tags(.challenge))

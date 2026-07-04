@@ -3,9 +3,9 @@
 //  Exhaust
 //
 
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Large Domain Coverage Integration")
 struct LargeDomainCoverageIntegrationTests {

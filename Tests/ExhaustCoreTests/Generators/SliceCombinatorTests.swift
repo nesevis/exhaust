@@ -35,7 +35,7 @@ struct SliceCombinatorTests {
         while let (source, sub) = try iterator.next() {
             #expect(sub.count <= source.count)
             // The subsequence must appear contiguously in the source
-            if !sub.isEmpty {
+            if sub.isEmpty == false {
                 let found = source.indices.contains { start in
                     let end = start + sub.count
                     guard end <= source.count else { return false }
@@ -48,19 +48,13 @@ struct SliceCombinatorTests {
         #expect(checked > 0)
     }
 
-    @Test("Gen.slice works via Gen.slice static method")
-    func staticSlice() throws {
-        let gen = Gen.slice(of: Gen.arrayOf(Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)))
-        var iterator = ValueInterpreter(gen, seed: 7)
+    @Test("Gen.slice of an empty collection returns an empty slice")
+    func emptySlice() throws {
+        let source: [Int] = []
+        let gen = Gen.slice(of: source)
+        var iterator = ValueInterpreter(gen, seed: 1)
 
-        var generated = 0
-        while let subseq = try iterator.next() {
-            let slice = Array(subseq)
-            for element in slice {
-                #expect(element is Int)
-            }
-            generated += 1
-        }
-        #expect(generated > 0)
+        let slice = try #require(try iterator.next())
+        #expect(slice.isEmpty)
     }
 }

@@ -1,5 +1,4 @@
 import Exhaust
-import ExhaustCore
 import Foundation
 import Testing
 

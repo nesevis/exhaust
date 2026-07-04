@@ -12,7 +12,7 @@ import Testing
 
 // MARK: - Recipe Type (output type tracking)
 
-indirect enum RecipeType: Equatable, Hashable, CustomStringConvertible {
+indirect enum RecipeType: Equatable, Hashable, Sendable, CustomStringConvertible {
     case int
     case bool
     case arrayOf(RecipeType)
@@ -192,6 +192,27 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
         }
     }
 
+    /// Total number of recipe nodes. Interpreting a recipe recurses through fat ReflectiveOperation switch frames, and debug builds allocate all cases per frame, so the invariant harness budgets by node count rather than nesting depth alone.
+    var nodeCount: Int {
+        switch self {
+            case .leaf:
+                return 1
+            case let .combinator(kind):
+                switch kind {
+                    case let .mapped(inner, _): return 1 + inner.nodeCount
+                    case let .array(inner, lengthRange: _): return 1 + inner.nodeCount
+                    case let .oneOf(recipes): return 1 + recipes.reduce(0) { $0 + $1.nodeCount }
+                    case let .filtered(inner, _): return 1 + inner.nodeCount
+                    case let .resized(inner, size: _): return 1 + inner.nodeCount
+                    case let .zipped(a, b): return 1 + a.nodeCount + b.nodeCount
+                    case let .optional(inner): return 1 + inner.nodeCount
+                    case let .boundArray(element: element, maxLength: _): return 1 + element.nodeCount
+                    case let .boundRange(inner): return 1 + inner.nodeCount
+                    case let .recursive(base: base, maxDepth: _): return 1 + base.nodeCount
+                }
+        }
+    }
+
     var outputType: RecipeType {
         switch self {
             case let .leaf(kind):
@@ -245,6 +266,8 @@ func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<Gen
         (1, filteredGenerator(producing: type, maxDepth: maxDepth)),
         (1, resizedGenerator(producing: type, maxDepth: maxDepth)),
         (1, zippedGenerator(producing: type, maxDepth: maxDepth)),
+        (1, optionalGenerator(producing: type, maxDepth: maxDepth)),
+        (1, recursiveGenerator(producing: type, maxDepth: maxDepth)),
     ]
     if type == .int {
         choices.append((1, boundRangeGenerator(maxDepth: maxDepth)))
@@ -502,7 +525,10 @@ private func buildCombinator(
 
         case let .recursive(base: base, maxDepth: maxDepth):
             let baseGen = buildGenerator(from: base)
-            return Gen.recursive(base: baseGen, depthRange: 0 ... Int(maxDepth)) { recurse, remaining in
+            // The UInt64 depthRange selects the base-as-generator overload. An Int range would
+            // resolve to the base-as-VALUE overload, and with Output == Any that traps the
+            // generator itself as the base value.
+            return Gen.recursive(base: baseGen, depthRange: 0 ... maxDepth) { recurse, remaining in
                 Gen.pick(choices: [
                     (1, baseGen),
                     (Int(remaining), recurse().map(\.self)),

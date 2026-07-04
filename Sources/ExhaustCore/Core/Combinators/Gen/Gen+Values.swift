@@ -4,7 +4,7 @@
 package extension Gen {
     /// Produces a constant value, accepting any target during reflection.
     ///
-    /// Use `just` for base cases and placeholders where the constant's identity does not matter to the property — for example, default branches in a ``pick`` or leaf values in ``recursive(base:depthRange:extend:)``. Because reflection always succeeds regardless of the target value, `just` cannot detect structural mismatches. When the constant must match exactly during reflection, use ``exact(_:)`` instead.
+    /// Use `just` for base cases and placeholders where the constant's identity does not matter to the property — for example, default branches in a ``pick`` or leaf values in ``recursive(baseValue:depthRange:extend:)``. Because reflection always succeeds regardless of the target value, `just` cannot detect structural mismatches. When the constant must match exactly during reflection, use ``exact(_:)`` instead.
     ///
     /// - Parameter value: The constant value to always generate.
     /// - Returns: A generator that produces `value` on every invocation.
