@@ -18,6 +18,44 @@ let couplingProperty: @Sendable ([Int]) -> Bool = { arr in
     }
 }
 
+// MARK: - Mixed Coupling
+
+// The NashGapValidation shape: coupled pairs among independent high-value coordinates. Batch zeroing fails on the coupled coordinates (zeroing one breaks the pair sum unless its partner covers it), producing zeroingDependency convergence verdicts, while the independent coordinates converge monotonically to their floors. Redistribution between coupled coordinates is productive (move magnitude, then zero the source); redistribution involving an independent coordinate must fail. This is the workload the Nash-gap dependency-tier ordering exists for.
+
+let mixedCouplingGen = #gen(
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30)
+)
+
+/// Fails when both coupled sums hold (`a + b >= 10`, `c + d >= 10`) and all four independent coordinates are at least 15.
+let mixedCouplingProperty: @Sendable ((Int, Int, Int, Int, Int, Int, Int, Int)) -> Bool = { t in
+    t.0 + t.1 < 10 || t.2 + t.3 < 10 || t.4 < 15 || t.5 < 15 || t.6 < 15 || t.7 < 15
+}
+
+let wideMixedCouplingGen = #gen(
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40)
+)
+
+/// Fails when all three coupled sums hold (`>= 8` each) and all four independent coordinates are at least 20. More coordinates means more unproductive independent-to-independent redistribution pairs for the tier ordering to demote.
+let wideMixedCouplingProperty: @Sendable ((Int, Int, Int, Int, Int, Int, Int, Int, Int, Int)) -> Bool = { t in
+    t.0 + t.1 < 8 || t.2 + t.3 < 8 || t.4 + t.5 < 8 || t.6 < 20 || t.7 < 20 || t.8 < 20 || t.9 < 20
+}
+
 // MARK: - Deletion
 
 let deletionGen = {

@@ -174,7 +174,7 @@ enum ExchangeScope {
 
 /// Scope for redistribution along type-compatibility edges.
 struct RedistributionScope {
-    /// Source-sink pairs from type-compatibility edges, ordered by Nash-gap regret.
+    /// Source-sink pairs from type-compatibility edges. Unordered at the query level; ``GraphRedistributionEncoder`` orders them by full-delta candidate shortlex.
     let pairs: [RedistributionPair]
 }
 

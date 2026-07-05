@@ -42,6 +42,14 @@ func registerECOOPBenchmarks() {
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
+        name: "MixedCoupling", gen: mixedCouplingGen.gen, property: mixedCouplingProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    registerECOOPPair(
+        name: "MixedCoupling (wide)", gen: wideMixedCouplingGen.gen, property: wideMixedCouplingProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    registerECOOPPair(
         name: "Difference: Must Not Be Zero",
         gen: differenceMustNotBeZeroGen.gen, property: differenceMustNotBeZeroProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000

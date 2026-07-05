@@ -202,6 +202,7 @@ extension ReductionMachine {
             }
         }
 
+        // Length only, deliberately not full shortlex. A lex tiebreak among equal-length candidates was tried and reverted: it preferred perturbations that decode successfully, triggering full exploitation loops in relax rounds that previously ended cheaply at the perturbation stage.
         candidates.sort { $0.count < $1.count }
         return candidates
     }
