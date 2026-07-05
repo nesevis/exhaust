@@ -193,8 +193,44 @@ extension ReductionMachine {
     ///
     /// Called identically whether the pass was stepped (via the main dispatching loop) or run to completion (via reorder/relax). Handles convergence recording, gate outcome, shortlex rejection propagation, stats accumulation, logging, and acceptance evaluation routing.
     mutating func applyPassReport(_ report: PassReport) -> Transition {
+        passCounter += 1
+
         if report.convergenceRecords.isEmpty == false {
-            graph.recordConvergence(byNodeID: report.convergenceRecords)
+            let motion = graph.recordConvergence(
+                byNodeID: report.convergenceRecords,
+                rebuildGeneration: stats.graphStats.fullGraphRebuilds
+            )
+            for motionNodeID in motion.valueMotionNodeIDs {
+                let sincePass = lastConvergencePass[motionNodeID] ?? 0
+                var partnerNodes: Set<Int> = []
+                for entry in valueChangeLog where entry.passIndex > sincePass {
+                    for changedNodeID in entry.nodeIDs where changedNodeID != motionNodeID {
+                        partnerNodes.insert(changedNodeID)
+                        graph.couplingDependents[changedNodeID, default: []].insert(motionNodeID)
+                        if collectStats {
+                            let edge = CouplingEdge(motionNodeID: motionNodeID, changedNodeID: changedNodeID)
+                            stats.couplingEdges[edge, default: 0] += 1
+                        }
+                    }
+                }
+                if collectStats {
+                    stats.floorMotionPartnerCounts[partnerNodes.count, default: 0] += 1
+                }
+            }
+
+            if collectStats {
+                stats.structuralFloorMotionEvents += motion.structural
+                stats.valueFloorMotionEvents += motion.value
+                stats.valueFloorMotionNodeIDs.formUnion(motion.valueMotionNodeIDs)
+            }
+
+            for nodeID in report.convergenceRecords.keys {
+                lastConvergencePass[nodeID] = passCounter
+            }
+        }
+
+        if report.acceptedLeafNodeIDs.isEmpty == false {
+            valueChangeLog.append((passIndex: passCounter, nodeIDs: report.acceptedLeafNodeIDs))
         }
 
         if let fingerprint = report.boundValueFingerprint {
@@ -212,6 +248,12 @@ extension ReductionMachine {
             stats.encoderProbesAccepted[report.encoderName, default: 0] += report.acceptCount
             stats.encoderProbesRejectedByCache[report.encoderName, default: 0] += report.cacheHitCount
             stats.encoderProbesRejectedByDecoder[report.encoderName, default: 0] += report.decoderRejectCount
+
+            if report.anyAccepted,
+               case .exchange(.redistribution) = report.transformation.operation
+            {
+                stats.redistributionAcceptanceNodeIDs.formUnion(report.acceptedLeafNodeIDs)
+            }
         }
 
         ChoiceGraphScheduler.logReducer("graph_encoder_pass", isInstrumented: isInstrumented, metadata: [
@@ -271,9 +313,16 @@ extension ReductionMachine {
 
         let latestTreeIsStripped = pendingReport?.latestTreeIsStripped ?? false
 
+        // Leaves that accepted in the pass triggering this rebuild hold stale values in the old graph (reshape and stateful passes skip the in-place apply), so they are exempt from the transfer value guard.
+        var valueGuardExemptNodeIDs: Set<Int> = []
+        if let report = pendingReport {
+            valueGuardExemptNodeIDs = report.acceptedLeafNodeIDs
+                .union(report.convergenceRecords.keys)
+        }
+
         let graphBefore = graph
         let graphStart = monotonicNanoseconds()
-        let diff = rebuildAndUpdateGraph()
+        let diff = rebuildAndUpdateGraph(valueGuardExemptNodeIDs: valueGuardExemptNodeIDs)
         graphIsStripped = latestTreeIsStripped
 
         if let boundRange = boundPositionRange {
@@ -311,6 +360,8 @@ extension ReductionMachine {
             stats.stepTimings.rebuildSourceNanoseconds += sourceEnd - graphEnd
         }
 
+        valueChangeLog = []
+        lastConvergencePass = [:]
         pendingReport = nil
         dispatchPhase = .dispatch
         return .rebuilt(sequenceLength: sequence.count, structurallyChanged: diff.isStructurallyIdentical == false)

@@ -156,6 +156,17 @@ package struct ReductionMachine: ProbeSessionState {
     var hadReplacementShortlexRejection: Bool = false
     var sequenceBeforeCycle: ChoiceSequence = []
 
+    // MARK: - Coupling Attribution
+
+    /// Log of value changes, ordered by pass. Each entry records which nodes changed in an accepted pass. Used to attribute coupling edges by scanning entries between a node's last convergence and the current pass.
+    var valueChangeLog: [(passIndex: Int, nodeIDs: Set<Int>)] = []
+
+    /// The pass index at which each node's convergence was last recorded. When floor motion is detected at node A, the coupling partners are nodes that changed in passes after `lastConvergencePass[A]`.
+    var lastConvergencePass: [Int: Int] = [:]
+
+    /// Monotonic pass counter incremented on each `applyPassReport` call.
+    var passCounter: Int = 0
+
     // MARK: - Active Probe Session
 
     var activeSession: ProbeSession?
@@ -444,10 +455,15 @@ package struct ReductionMachine: ProbeSessionState {
     }
 
     /// Rebuilds the ``ChoiceGraph`` from the current tree, inheriting bind classifications and convergence records from the previous graph. Returns the diff so the caller can decide whether to rebuild structural or value-only sources.
-    mutating func rebuildAndUpdateGraph() -> ChoiceGraphDiff {
+    ///
+    /// - Parameter valueGuardExemptNodeIDs: Old-graph leaves whose values are stale because they accepted a change in the pass triggering this rebuild. Their convergence records transfer without the anti-aliasing value guard. See ``ChoiceGraphScheduler/extractAllConvergence(from:valueGuardExemptNodeIDs:)``.
+    mutating func rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Set<Int> = []) -> ChoiceGraphDiff {
         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
-        let oldConvergence = ChoiceGraphScheduler.extractAllConvergence(from: graph)
+        let oldConvergence = ChoiceGraphScheduler.extractAllConvergence(
+            from: graph,
+            valueGuardExemptNodeIDs: valueGuardExemptNodeIDs
+        )
         let inheritedClassifications = graph.bindClassifications
         let inheritedObservations = graph.bindTopologyObservations
         var newGraph = ChoiceGraph.build(
@@ -458,6 +474,9 @@ package struct ReductionMachine: ProbeSessionState {
         newGraph.observeBindTopologies(tree: tree)
         ChoiceGraphScheduler.transferConvergence(oldConvergence, to: &newGraph)
         let diff = ChoiceGraphDiff.diff(old: graph, new: newGraph)
+        if diff.isStructurallyIdentical {
+            newGraph.couplingDependents = graph.couplingDependents
+        }
         stats.graphStats.fullGraphRebuilds += 1
         graph = newGraph
         return diff

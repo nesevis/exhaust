@@ -133,7 +133,10 @@ extension ReductionMachine {
             _ = applyPassReport(report)
 
             if report.anyAccepted, report.anyRequiresRebuild {
-                _ = rebuildAndUpdateGraph()
+                _ = rebuildAndUpdateGraph(
+                    valueGuardExemptNodeIDs: report.acceptedLeafNodeIDs
+                        .union(report.convergenceRecords.keys)
+                )
                 exploitSources = CandidateSourceBuilder.buildSources(from: graph)
             }
         }
