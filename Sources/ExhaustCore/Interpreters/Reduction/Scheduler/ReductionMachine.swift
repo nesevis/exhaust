@@ -75,6 +75,7 @@ package struct ReductionMachine: ProbeSessionState {
 
         case convergenceConfirmed(anyStale: Bool)
         case relaxRoundCompleted(improved: Bool)
+        case relationPassCompleted(accepted: Bool)
         case deferralReleased
 
         case reorderCompleted(accepted: Bool)
@@ -336,6 +337,9 @@ package struct ReductionMachine: ProbeSessionState {
             case .confirmConvergence:
                 let anyStale = try confirmConvergence()
                 return .convergenceConfirmed(anyStale: anyStale)
+            case .relationPass:
+                let accepted = try runRelationPass()
+                return .relationPassCompleted(accepted: accepted)
             case .relaxRound:
                 let improved = try runRelaxRound()
                 if improved {
@@ -450,6 +454,53 @@ package struct ReductionMachine: ProbeSessionState {
 
         if isInstrumented, report.anyAccepted {
             ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
+        }
+        return report.anyAccepted
+    }
+
+    /// Runs the relation encoder over stall-converged leaf pairs, returning true when any probe was accepted.
+    ///
+    /// Runs as a post-cycle action rather than a dispatched source because the stall gate depends on convergence records that value search writes mid-cycle: a workload that stalls in its first cycle terminates before any source rebuild could observe them. An acceptance sets `anyAccepted` through ``applyPassReport(_:)``, so the termination check re-enters the cycle loop and value search re-certifies the moved leaves.
+    private mutating func runRelationPass() throws -> Bool {
+        guard let relationScope = RelationQuery.build(graph: graph) else {
+            return false
+        }
+        let transformation = GraphTransformation(
+            operation: .exchange(.relation(relationScope)),
+            priority: DispatchPriority(
+                structuralBenefit: 0,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: relationScope.pairs.count * 8
+            )
+        )
+        let scope = EncoderInput(
+            transformation: transformation,
+            baseSequence: sequence,
+            tree: tree,
+            graph: graph,
+            warmStartRecords: [:]
+        )
+        var encoder: EncoderDispatch = .relation(GraphRelationEncoder())
+        encoder.start(scope: scope)
+
+        let hasBind = sequence.contains { entry in
+            if case .bind = entry { return true }
+            return false
+        }
+        var session = ProbeSession(
+            encoder: encoder,
+            transformation: transformation,
+            boundValueFingerprint: nil,
+            baseSequence: sequence,
+            hasBind: hasBind
+        )
+        let report = try session.runToCompletion(state: &self)
+
+        _ = applyPassReport(report)
+
+        if isInstrumented, report.anyAccepted {
+            ExhaustLog.notice(category: .reducer, event: "graph_relation_pass_accepted")
         }
         return report.anyAccepted
     }

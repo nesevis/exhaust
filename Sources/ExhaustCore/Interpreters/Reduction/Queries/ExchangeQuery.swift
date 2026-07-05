@@ -83,6 +83,10 @@ enum ExchangeQuery {
             scopes.append(.tandem(TandemScope(groups: tandemGroups)))
         }
 
+        if let relationScope = RelationQuery.build(graph: graph) {
+            scopes.append(.relation(relationScope))
+        }
+
         return scopes
     }
 

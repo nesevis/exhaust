@@ -20,6 +20,26 @@ public struct ReductionStats: Sendable {
     /// Total reduction cycles completed.
     package var cycles: Int
 
+    /// Floor-motion events where a graph rebuild happened between the old and new convergence record. The floor shifted because the sequence structure changed (deletion, bind reshape), not because a partner coordinate's value moved.
+    package var structuralFloorMotionEvents: Int
+
+    /// Floor-motion events within the same rebuild generation. The floor shifted because a partner coordinate's value movement changed the property boundary for this leaf. This is the observable signal for inter-coordinate value coupling (R8).
+    package var valueFloorMotionEvents: Int
+
+    // MARK: - Coupling Diagnostics
+
+    /// Node IDs that experienced value floor motion at least once during this run.
+    package var valueFloorMotionNodeIDs: Set<Int> = []
+
+    /// Node IDs that were part of an accepted redistribution pair (source or sink) at least once during this run.
+    package var redistributionAcceptanceNodeIDs: Set<Int> = []
+
+    /// Measured coupling edges. Each entry records that `motionNodeID`'s convergence floor shifted after `changedNodeID`'s value was accepted. Multiple observations of the same edge increment `count`.
+    package var couplingEdges: [CouplingEdge: Int] = [:]
+
+    /// Distribution of partner counts per value floor-motion event. Key is the number of distinct nodes that changed between the shifting node's previous and current convergence. A count of 1 means the floor shift is attributable to a single partner (pairwise). Counts of 2+ mean multiple partners changed and the coupling may be k-ary.
+    package var floorMotionPartnerCounts: [Int: Int] = [:]
+
     /// True when the reduction phase was terminated early by the wall-clock deadline.
     package var reductionWasCapped: Bool = false
 
@@ -44,6 +64,8 @@ public struct ReductionStats: Sendable {
         encoderProbesRejectedByDecoder = [:]
         totalMaterializations = 0
         cycles = 0
+        structuralFloorMotionEvents = 0
+        valueFloorMotionEvents = 0
         graphStats = ChoiceGraphStats()
     }
 
@@ -63,6 +85,16 @@ public struct ReductionStats: Sendable {
         }
         totalMaterializations += other.totalMaterializations
         cycles += other.cycles
+        structuralFloorMotionEvents += other.structuralFloorMotionEvents
+        valueFloorMotionEvents += other.valueFloorMotionEvents
+        valueFloorMotionNodeIDs.formUnion(other.valueFloorMotionNodeIDs)
+        redistributionAcceptanceNodeIDs.formUnion(other.redistributionAcceptanceNodeIDs)
+        for (edge, count) in other.couplingEdges {
+            couplingEdges[edge, default: 0] += count
+        }
+        for (partnerCount, events) in other.floorMotionPartnerCounts {
+            floorMotionPartnerCounts[partnerCount, default: 0] += events
+        }
         reductionWasCapped = reductionWasCapped || other.reductionWasCapped
         for (key, value) in other.filterObservations {
             filterObservations[key, default: FilterObservation()].merge(value)
@@ -86,6 +118,7 @@ public extension ReductionStats {
         public var rebuild: UInt64 = 0
         public var convergenceConfirmation: UInt64 = 0
         public var relaxRound: UInt64 = 0
+        public var relationPass: UInt64 = 0
         public var reorder: UInt64 = 0
 
         public var dispatchCount: Int = 0
@@ -106,6 +139,7 @@ public extension ReductionStats {
             rebuild += other.rebuild
             convergenceConfirmation += other.convergenceConfirmation
             relaxRound += other.relaxRound
+            relationPass += other.relationPass
             reorder += other.reorder
             dispatchCount += other.dispatchCount
             encodeCount += other.encodeCount
@@ -134,6 +168,8 @@ public extension ReductionStats {
                     convergenceConfirmation += elapsed
                 case .relaxRoundCompleted:
                     relaxRound += elapsed
+                case .relationPassCompleted:
+                    relationPass += elapsed
                 case .reorderCompleted:
                     reorder += elapsed
                 case .sourcesBuilt:
@@ -143,4 +179,15 @@ public extension ReductionStats {
             }
         }
     }
+}
+
+// MARK: - Coupling Edge
+
+/// A directed edge in the measured coupling graph: `motionNodeID`'s convergence floor shifted after `changedNodeID`'s value was accepted.
+public struct CouplingEdge: Hashable, Sendable {
+    /// The node whose convergence floor shifted.
+    public let motionNodeID: Int
+
+    /// The node whose value change preceded the floor shift.
+    public let changedNodeID: Int
 }

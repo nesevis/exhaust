@@ -65,6 +65,11 @@ func registerECOOPBenchmarks() {
         config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
     )
     registerECOOPPair(
+        name: "RatioCoupling",
+        gen: ratioCouplingGen.gen, property: ratioCouplingProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
+    )
+    registerECOOPPair(
         name: "Distinct", gen: distinctGen.gen, property: distinctProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
@@ -138,6 +143,12 @@ private struct SeedResult {
     let encoderProbesRejectedByCache: [EncoderName: Int]
     let encoderProbesRejectedByDecoder: [EncoderName: Int]
     let stepTimings: ReductionStats.StepTimings?
+    let structuralFloorMotionEvents: Int
+    let valueFloorMotionEvents: Int
+    let valueFloorMotionNodeIDs: Set<Int>
+    let redistributionAcceptanceNodeIDs: Set<Int>
+    let couplingEdges: [CouplingEdge: Int]
+    let floorMotionPartnerCounts: [Int: Int]
 }
 
 // MARK: - Runner
@@ -210,7 +221,13 @@ private func registerECOOPChallenge<Output>(
                 encoderProbesAccepted: reduceResult?.stats.encoderProbesAccepted ?? [:],
                 encoderProbesRejectedByCache: reduceResult?.stats.encoderProbesRejectedByCache ?? [:],
                 encoderProbesRejectedByDecoder: reduceResult?.stats.encoderProbesRejectedByDecoder ?? [:],
-                stepTimings: reduceResult?.stats.stepTimings
+                stepTimings: reduceResult?.stats.stepTimings,
+                structuralFloorMotionEvents: reduceResult?.stats.structuralFloorMotionEvents ?? 0,
+                valueFloorMotionEvents: reduceResult?.stats.valueFloorMotionEvents ?? 0,
+                valueFloorMotionNodeIDs: reduceResult?.stats.valueFloorMotionNodeIDs ?? [],
+                redistributionAcceptanceNodeIDs: reduceResult?.stats.redistributionAcceptanceNodeIDs ?? [],
+                couplingEdges: reduceResult?.stats.couplingEdges ?? [:],
+                floorMotionPartnerCounts: reduceResult?.stats.floorMotionPartnerCounts ?? [:]
             ))
         }
 
@@ -252,6 +269,59 @@ private func printECOOPReport(
     }
 
     print("[\(name) ECOOP] seeds=\(foundCount)/\(seedCount)\(sizeReport) iter_to_fail: mean=\(f1(genIterStats.mean)) median=\(f1(genIterStats.median)) | invocations: mean=\(f1(invocStats.mean)) (\(f1(invocStats.ciLow))–\(f1(invocStats.ciHigh))) median=\(f1(invocStats.median)) | mats: mean=\(f1(matStats.mean)) (\(f1(matStats.ciLow))–\(f1(matStats.ciHigh))) median=\(f1(matStats.median)) | gen(ms): mean=\(f2(genStats.mean)) median=\(f2(genStats.median)) | reduce(ms): mean=\(f2(reduceStats.mean)) (\(f2(reduceStats.ciLow))–\(f2(reduceStats.ciHigh))) median=\(f2(reduceStats.median)) | unique_CEs=\(uniqueCEs.count)")
+
+    let totalStructuralMotion = results.map(\.structuralFloorMotionEvents).reduce(0, +)
+    let totalValueMotion = results.map(\.valueFloorMotionEvents).reduce(0, +)
+    if totalStructuralMotion + totalValueMotion > 0 {
+        let structStats = summaryStats(results.map { Double($0.structuralFloorMotionEvents) })
+        let valueStats = summaryStats(results.map { Double($0.valueFloorMotionEvents) })
+        print("[\(name) ECOOP] floor_motion: structural=\(totalStructuralMotion) (mean=\(f1(structStats.mean))) value=\(totalValueMotion) (mean=\(f1(valueStats.mean)))")
+    }
+
+    let seedsWithValueMotion = results.filter { $0.valueFloorMotionNodeIDs.isEmpty == false }
+    if seedsWithValueMotion.isEmpty == false {
+        var overlapCount = 0
+        var motionOnlyCount = 0
+        var redistOnlyCount = 0
+        for result in seedsWithValueMotion {
+            let overlap = result.valueFloorMotionNodeIDs.intersection(result.redistributionAcceptanceNodeIDs)
+            let motionOnly = result.valueFloorMotionNodeIDs.subtracting(result.redistributionAcceptanceNodeIDs)
+            let redistOnly = result.redistributionAcceptanceNodeIDs.subtracting(result.valueFloorMotionNodeIDs)
+            overlapCount += overlap.count
+            motionOnlyCount += motionOnly.count
+            redistOnlyCount += redistOnly.count
+        }
+        let seedsWithRedist = seedsWithValueMotion.count(where: { $0.redistributionAcceptanceNodeIDs.isEmpty == false })
+        print("[\(name) ECOOP] coupling_correlation: seeds_with_value_motion=\(seedsWithValueMotion.count) seeds_also_with_redist=\(seedsWithRedist) | nodes: overlap=\(overlapCount) motion_only=\(motionOnlyCount) redist_only=\(redistOnlyCount)")
+    }
+
+    var aggregatedEdges: [CouplingEdge: Int] = [:]
+    for result in results {
+        for (edge, count) in result.couplingEdges {
+            aggregatedEdges[edge, default: 0] += count
+        }
+    }
+    if aggregatedEdges.isEmpty == false {
+        let sortedEdges = aggregatedEdges.sorted { $0.value > $1.value }
+        let uniqueNodes = Set(sortedEdges.flatMap { [$0.key.motionNodeID, $0.key.changedNodeID] })
+        print("[\(name) ECOOP] coupling_graph: \(sortedEdges.count) edges, \(uniqueNodes.count) nodes")
+        for (edge, count) in sortedEdges {
+            print("  \(edge.changedNodeID) -> \(edge.motionNodeID): \(count)")
+        }
+    }
+
+    var aggregatedPartnerCounts: [Int: Int] = [:]
+    for result in results {
+        for (partnerCount, events) in result.floorMotionPartnerCounts {
+            aggregatedPartnerCounts[partnerCount, default: 0] += events
+        }
+    }
+    if aggregatedPartnerCounts.isEmpty == false {
+        let sorted = aggregatedPartnerCounts.sorted { $0.key < $1.key }
+        let total = sorted.map(\.value).reduce(0, +)
+        let components = sorted.map { "\($0.key):\($0.value)" }.joined(separator: " ")
+        print("[\(name) ECOOP] partner_count_distribution (partners:events, total=\(total)): \(components)")
+    }
 
     // Per-encoder probe breakdown (summed across all seeds).
     // Per-encoder rejection breakdown:
@@ -302,6 +372,7 @@ private func printECOOPReport(
         var totalReb: UInt64 = 0
         var totalCC: UInt64 = 0
         var totalRlx: UInt64 = 0
+        var totalRel: UInt64 = 0
         var totalReord: UInt64 = 0
         for timing in timingResults {
             totalSrc += timing.buildSources
@@ -311,6 +382,7 @@ private func printECOOPReport(
             totalReb += timing.rebuild
             totalCC += timing.convergenceConfirmation
             totalRlx += timing.relaxRound
+            totalRel += timing.relationPass
             totalReord += timing.reorder
         }
         var totalRebGraph: UInt64 = 0
@@ -320,8 +392,8 @@ private func printECOOPReport(
             totalRebSource += timing.rebuildSourceNanoseconds
         }
         let toMs: (UInt64) -> String = { String(format: "%.2f", Double($0) / 1_000_000) }
-        let totalNs = totalSrc + totalDisp + totalEnc + totalDec + totalReb + totalCC + totalRlx + totalReord
-        print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms src=\(toMs(totalSrc)) disp=\(toMs(totalDisp)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb))(graph=\(toMs(totalRebGraph))/src=\(toMs(totalRebSource))) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) reord=\(toMs(totalReord))")
+        let totalNs = totalSrc + totalDisp + totalEnc + totalDec + totalReb + totalCC + totalRlx + totalRel + totalReord
+        print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms src=\(toMs(totalSrc)) disp=\(toMs(totalDisp)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb))(graph=\(toMs(totalRebGraph))/src=\(toMs(totalRebSource))) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) rel=\(toMs(totalRel)) reord=\(toMs(totalReord))")
     }
 
     if enableCounterExamples {

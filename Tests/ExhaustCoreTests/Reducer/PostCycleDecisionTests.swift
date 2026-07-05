@@ -21,6 +21,38 @@ struct PostCycleDecisionTests {
         #expect(result.actions.contains(.confirmConvergence) == false)
     }
 
+    // MARK: - Relation Pass
+
+    @Test("Relation pass when stalled and all converged")
+    func relationPassWhenStalledAndConverged() {
+        let result = Self.evaluate(anyAccepted: false, allConverged: true)
+        #expect(result.actions.contains(.relationPass))
+    }
+
+    @Test("Relation pass follows convergence confirmation")
+    func relationPassFollowsConfirmation() {
+        let result = Self.evaluate(anyAccepted: false, allConverged: true)
+        let confirmIndex = result.actions.firstIndex(of: .confirmConvergence)
+        let relationIndex = result.actions.firstIndex(of: .relationPass)
+        #expect(confirmIndex != nil)
+        #expect(relationIndex != nil)
+        if let confirmIndex, let relationIndex {
+            #expect(confirmIndex < relationIndex)
+        }
+    }
+
+    @Test("No relation pass when any accepted")
+    func noRelationPassWhenAccepted() {
+        let result = Self.evaluate(anyAccepted: true, allConverged: true)
+        #expect(result.actions.contains(.relationPass) == false)
+    }
+
+    @Test("No relation pass when not all converged")
+    func noRelationPassWhenNotConverged() {
+        let result = Self.evaluate(anyAccepted: false, allConverged: false)
+        #expect(result.actions.contains(.relationPass) == false)
+    }
+
     // MARK: - Relax Round
 
     @Test("Relax round when stalled with replacement shortlex rejections")

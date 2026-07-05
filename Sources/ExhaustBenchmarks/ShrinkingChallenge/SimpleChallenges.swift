@@ -98,6 +98,15 @@ let differenceMustNotBeOneProperty: @Sendable ([Int]) -> Bool = { arr in
     return arr[0] < 10 || diff != 1
 }
 
+// MARK: - RatioCoupling
+
+/// The uncovered joint-move geometry from difference-family-query-floor.md. The failing set {x = 2y, x >= 20} is preserved by none of the original roster's joint moves: lockstep's common delta breaks the ratio, redistribution's sum-conserving transfer breaks it, and batch bisection (the one proportional-step move) requires four or more unconverged leaves so it never fires on a two-leaf scope. Without relation search the reducer stalls at the initial failing point on every seed (measured 2026-07-05: 433 unique counterexamples, zero acceptances in any encoder, and zero coupling-instrumentation signal since floor motion and the gluing witness both require acceptances to observe anything). The relationSearch encoder was built from this falsifier and closes it: measured same day, all 1000 seeds reach [20, 10]. This benchmark guards that encoder's stall gate end to end.
+let ratioCouplingGen = #gen(.int(in: 1 ... 1000)).array(length: 2)
+
+let ratioCouplingProperty: @Sendable ([Int]) -> Bool = { arr in
+    arr[0] < 20 || arr[0] != 2 * arr[1]
+}
+
 // MARK: - Distinct
 
 let distinctGen = #gen(.int().array(length: 3 ... 30))
