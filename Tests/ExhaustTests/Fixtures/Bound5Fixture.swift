@@ -6,7 +6,7 @@
 //  https://github.com/jlink/shrinking-challenge/blob/main/challenges/bound5.md
 //
 
-@testable import Exhaust
+import Exhaust
 
 /// 5-tuple of `Int16` lists where each list sums to less than 256, but the total can overflow `5 × 256`. The challenge property fails on overflow; the minimal counterexample has two non-empty lists.
 enum Bound5Fixture {

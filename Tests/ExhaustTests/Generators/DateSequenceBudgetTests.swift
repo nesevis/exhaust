@@ -6,9 +6,9 @@
 //  verifying that the capped element model keeps things tractable.
 //
 
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Date Sequence Budget Tests")
 struct DateSequenceBudgetTests {

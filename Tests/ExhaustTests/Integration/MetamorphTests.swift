@@ -3,41 +3,6 @@ import Testing
 
 @Suite("Metamorphic Transform")
 struct MetamorphTests {
-    // MARK: - Helpers
-
-    /// Builds a metamorphic generator that pairs an Int with its negation.
-    private func intNegateGen() -> Generator<[Any]> {
-        let inner = Gen.choose(in: 1 ... 100 as ClosedRange<Int>)
-        return .impure(
-            operation: .transform(
-                kind: .metamorphic(
-                    transforms: [{ value in -(value as! Int) as Any }],
-                    inputType: Int.self
-                ),
-                inner: inner.erase()
-            ),
-            continuation: { .pure($0 as! [Any]) }
-        )
-    }
-
-    /// Builds a metamorphic generator with two transforms on Int.
-    private func intDoubleAndNegateGen() -> Generator<[Any]> {
-        let inner = Gen.choose(in: 1 ... 100 as ClosedRange<Int>)
-        return .impure(
-            operation: .transform(
-                kind: .metamorphic(
-                    transforms: [
-                        { value in (value as! Int) * 2 as Any },
-                        { value in -(value as! Int) as Any },
-                    ],
-                    inputType: Int.self
-                ),
-                inner: inner.erase()
-            ),
-            continuation: { .pure($0 as! [Any]) }
-        )
-    }
-
     // MARK: - ValueInterpreter (Generation)
 
     @Test("ValueInterpreter produces original at index zero and transformed copies")
@@ -261,5 +226,40 @@ struct MetamorphTests {
                     Issue.record("Materialize should succeed for metamorphic round-trip")
             }
         }
+    }
+
+    // MARK: - Helpers
+
+    /// Builds a metamorphic generator that pairs an Int with its negation.
+    private func intNegateGen() -> Generator<[Any]> {
+        let inner = Gen.choose(in: 1 ... 100 as ClosedRange<Int>)
+        return .impure(
+            operation: .transform(
+                kind: .metamorphic(
+                    transforms: [{ value in -(value as! Int) as Any }],
+                    inputType: Int.self
+                ),
+                inner: inner.erase()
+            ),
+            continuation: { .pure($0 as! [Any]) }
+        )
+    }
+
+    /// Builds a metamorphic generator with two transforms on Int.
+    private func intDoubleAndNegateGen() -> Generator<[Any]> {
+        let inner = Gen.choose(in: 1 ... 100 as ClosedRange<Int>)
+        return .impure(
+            operation: .transform(
+                kind: .metamorphic(
+                    transforms: [
+                        { value in (value as! Int) * 2 as Any },
+                        { value in -(value as! Int) as Any },
+                    ],
+                    inputType: Int.self
+                ),
+                inner: inner.erase()
+            ),
+            continuation: { .pure($0 as! [Any]) }
+        )
     }
 }

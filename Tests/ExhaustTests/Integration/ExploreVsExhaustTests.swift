@@ -1,5 +1,5 @@
+import Exhaust
 import Testing
-@testable import Exhaust
 
 @Suite("Explore macro integration")
 struct ExploreMacroIntegrationTests {

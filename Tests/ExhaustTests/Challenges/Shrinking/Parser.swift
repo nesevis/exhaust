@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 21/3/2026.
 //
 
+import Exhaust
 import ExhaustTestSupport
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Shrinking Challenge: Parser", .tags(.challenge))
 struct ParserShrinkingChallenge {

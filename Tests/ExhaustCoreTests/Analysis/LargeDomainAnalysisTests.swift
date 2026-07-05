@@ -111,7 +111,7 @@ struct LargeDomainAnalysisTests {
         #expect(profile.parameters[1].domainSize == 2)
     }
 
-    @Test("Array with minimum length > 2 produces non-empty domain", .disabled())
+    @Test("Array with minimum length > 2 produces non-empty domain")
     func arrayMinLengthAboveTwo() {
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: UInt64(5) ... 10, scaling: .constant)
         let profile = analyzeLargeDomain(gen)
@@ -477,8 +477,8 @@ struct DateProblematicValueTests {
         // If they mapped to steps, they'd be negative or > numSteps
         let unixStep = (unixEpoch - lower) / interval
         let y2038Step = (y2038 - lower) / interval
-        #expect(!values.contains(unixStep.bitPattern64))
-        #expect(!values.contains(y2038Step.bitPattern64))
+        #expect(values.contains(unixStep.bitPattern64) == false)
+        #expect(values.contains(y2038Step.bitPattern64) == false)
     }
 }
 
@@ -752,7 +752,6 @@ struct CharacterProblematicIndicesTests {
             case .enumerable: "enumerable"
             case .large: "large"
         }
-        print("Analysis: \(analysisKind), params=\(profile.parameterCount), domains=\(domainSizes)")
         #expect(domainSizes.isEmpty == false, "Analysis should produce at least one parameter")
 
         var rowsTested = 0

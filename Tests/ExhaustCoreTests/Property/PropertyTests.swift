@@ -443,11 +443,11 @@ struct ShrinkingPropertyTests {
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 50)
         while let (value, tree) = try iterator.next() {
-            guard !property(value) else { continue }
+            guard property(value) == false else { continue }
             guard case let .reduced(_, _, shrunk) = try Interpreters.choiceGraphReduce(
                 gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
             ) else { continue }
-            #expect(!property(shrunk), "Shrunk value \(shrunk) no longer fails the property")
+            #expect(property(shrunk) == false, "Shrunk value \(shrunk) no longer fails the property")
         }
     }
 
@@ -458,7 +458,7 @@ struct ShrinkingPropertyTests {
 
         var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 50)
         while let (value, tree) = try iterator.next() {
-            guard !property(value) else { continue }
+            guard property(value) == false else { continue }
             let originalSequence = ChoiceSequence.flatten(tree)
             guard case let .reduced(shrunkSequence, _, _) = try Interpreters.choiceGraphReduce(
                 gen: gen, tree: tree, config: .init(maxStalls: 2), property: property

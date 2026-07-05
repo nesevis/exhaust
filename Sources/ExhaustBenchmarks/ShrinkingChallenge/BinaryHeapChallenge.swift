@@ -51,7 +51,7 @@ func binaryHeapGen(min: Int = 0, depth: UInt64) -> ReflectiveGenerator<Heap<Int>
 /// Recursive combinator variant — flat choice tree, no nested binds. Validity enforced by filter instead of by construction.
 func binaryHeapGenRecursive(maxValue: Int = .max) -> ReflectiveGenerator<Heap<Int>> {
     ReflectiveGenerator<Heap<Int>>.recursive(
-        base: Heap<Int>.empty,
+        baseValue: Heap<Int>.empty,
         depthRange: 0 ... 20
     ) { recurse, _ in
         let nodeGen = #gen(.int(in: 0 ... maxValue), recurse(), recurse())

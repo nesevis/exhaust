@@ -4,6 +4,9 @@
 //
 //  Created by Chris Kolbu on 12/2/2026.
 //
+//  Round-trip tests: generate, reflect into a choice tree, flatten, and materialize back.
+//  One test per generator shape so a failure names the operation that broke.
+//
 
 import ExhaustCore
 import ExhaustTestSupport
@@ -12,158 +15,117 @@ import Testing
 
 @Suite("Materialize")
 struct MaterializeTests {
-    // MARK: - Helpers
+    // MARK: - Scalar round-trips
 
-    /// Reflects a value into a choice tree, flattens it, and materializes back.
-    private func materializeViaReflection<Output>(
-        _ gen: Generator<Output>,
-        _ value: Output
-    ) -> Output? {
-        guard let tree = try? Interpreters.reflect(gen, with: value) else { return nil }
-        let sequence = ChoiceSequence.flatten(tree)
-        switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
-            case let .success(output, _, _): return output
-            case .rejected, .failed: return nil
-        }
+    @Test("UInt64 choose round-trips through materialize")
+    func uint64Roundtrip() throws {
+        try assertMaterializeRoundTrip(Gen.choose(in: UInt64(0) ... 1000), runs: 200)
     }
 
-    // MARK: - Round-trip properties
-
-    @Test("Scalar generators round-trip through materialize")
-    func scalarRoundtrip() throws {
-        let uint64Gen = Gen.choose(in: UInt64(0) ... 1000)
-        var uint64Iter = ValueInterpreter(uint64Gen, seed: 42, maxRuns: 200)
-        while let value = try uint64Iter.next() {
-            #expect(materializeViaReflection(uint64Gen, value) == value)
-        }
-
-        let intGen = Gen.choose(in: -10000 ... 10000) as Generator<Int>
-        var intIter = ValueInterpreter(intGen, seed: 42, maxRuns: 200)
-        while let value = try intIter.next() {
-            #expect(materializeViaReflection(intGen, value) == value)
-        }
-
-        let booleanGen = Gen.choose(from: [true, false])
-        var boolIter = ValueInterpreter(booleanGen, seed: 42, maxRuns: 10)
-        while let value = try boolIter.next() {
-            #expect(materializeViaReflection(booleanGen, value) == value)
-        }
-
-        let characterGen = charGen(from: .decimalDigits)
-        var charIter = ValueInterpreter(characterGen, seed: 42, maxRuns: 200)
-        while let value = try charIter.next() {
-            #expect(materializeViaReflection(characterGen, value) == value)
-        }
-
-        let justIntGen = Gen.just(42)
-        var justIntIter = ValueInterpreter(justIntGen, seed: 42, maxRuns: 10)
-        while let value = try justIntIter.next() {
-            #expect(materializeViaReflection(justIntGen, value) == value)
-        }
-
-        let justStrGen = Gen.just("hello")
-        var justStrIter = ValueInterpreter(justStrGen, seed: 42, maxRuns: 10)
-        while let value = try justStrIter.next() {
-            #expect(materializeViaReflection(justStrGen, value) == value)
-        }
+    @Test("Int choose round-trips through materialize")
+    func intRoundtrip() throws {
+        try assertMaterializeRoundTrip(Gen.choose(in: -10000 ... 10000) as Generator<Int>, runs: 200)
     }
 
-    @Test("Branching generators round-trip through materialize")
-    func branchingRoundtrip() throws {
-        let simpleGen = Gen.pick(choices: [
+    @Test("Bool round-trips through materialize")
+    func boolRoundtrip() throws {
+        try assertMaterializeRoundTrip(Gen.choose(from: [true, false]), runs: 10)
+    }
+
+    @Test("Character round-trips through materialize")
+    func characterRoundtrip() throws {
+        try assertMaterializeRoundTrip(charGen(from: .decimalDigits), runs: 200)
+    }
+
+    @Test("Just values round-trip through materialize")
+    func justRoundtrip() throws {
+        try assertMaterializeRoundTrip(Gen.just(42), runs: 10)
+        try assertMaterializeRoundTrip(Gen.just("hello"), runs: 10)
+    }
+
+    // MARK: - Branching round-trips
+
+    @Test("Pick of constants round-trips through materialize")
+    func pickOfConstantsRoundtrip() throws {
+        let gen = Gen.pick(choices: [
             (1, Gen.just("alpha")),
             (1, Gen.just("beta")),
             (1, Gen.just("gamma")),
         ])
-        var simpleIter = ValueInterpreter(simpleGen, seed: 42, maxRuns: 200)
-        while let value = try simpleIter.next() {
-            #expect(materializeViaReflection(simpleGen, value) == value)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200)
+    }
 
-        let withSubGen = Gen.pick(choices: [
+    @Test("Pick with sub-generators round-trips through materialize")
+    func pickWithSubGeneratorsRoundtrip() throws {
+        let gen = Gen.pick(choices: [
             (1, Gen.choose(in: UInt64(0) ... 10)),
             (1, Gen.choose(in: UInt64(100) ... 200)),
         ])
-        var withSubIter = ValueInterpreter(withSubGen, seed: 42, maxRuns: 200)
-        while let value = try withSubIter.next() {
-            #expect(materializeViaReflection(withSubGen, value) == value)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200)
     }
 
-    @Test("Collection generators round-trip through materialize")
-    func collectionRoundtrip() throws {
-        let fixedGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 5 ... 5)
-        var fixedIter = ValueInterpreter(fixedGen, seed: 42, maxRuns: 200)
-        while let value = try fixedIter.next() {
-            #expect(materializeViaReflection(fixedGen, value) == value)
-        }
+    // MARK: - Collection round-trips
 
-        let varGen = Gen.arrayOf(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling), within: 2 ... 8)
-        var varIter = ValueInterpreter(varGen, seed: 42, maxRuns: 200)
-        while let value = try varIter.next() {
-            #expect(materializeViaReflection(varGen, value) == value)
-        }
+    @Test("Fixed-length array round-trips through materialize")
+    func fixedLengthArrayRoundtrip() throws {
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 5 ... 5)
+        try assertMaterializeRoundTrip(gen, runs: 200)
+    }
 
+    @Test("Variable-length array round-trips through materialize")
+    func variableLengthArrayRoundtrip() throws {
+        let gen = Gen.arrayOf(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling), within: 2 ... 8)
+        try assertMaterializeRoundTrip(gen, runs: 200)
+    }
+
+    @Test("Nested arrays round-trip through materialize")
+    func nestedArrayRoundtrip() throws {
         let innerGen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 3 ... 3)
-        let nestedGen = Gen.arrayOf(innerGen, within: 2 ... 2)
-        var nestedIter = ValueInterpreter(nestedGen, seed: 42, maxRuns: 200)
-        while let value = try nestedIter.next() {
-            #expect(materializeViaReflection(nestedGen, value) == value)
-        }
-
-        let strGen = stringGen()
-        var strIter = ValueInterpreter(strGen, seed: 42, maxRuns: 200)
-        while let value = try strIter.next() {
-            #expect(materializeViaReflection(strGen, value) == value)
-        }
+        let gen = Gen.arrayOf(innerGen, within: 2 ... 2)
+        try assertMaterializeRoundTrip(gen, runs: 200)
     }
 
-    @Test("Composite generators round-trip through materialize")
-    func compositeRoundtrip() throws {
-        let zip2Gen = Gen.zip(
+    @Test("Strings round-trip through materialize")
+    func stringRoundtrip() throws {
+        try assertMaterializeRoundTrip(stringGen(), runs: 200)
+    }
+
+    // MARK: - Composite round-trips
+
+    @Test("Zip of two generators round-trips through materialize")
+    func zipTwoRoundtrip() throws {
+        let gen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
             Gen.choose(from: [true, false])
         )
-        var zip2Iter = ValueInterpreter(zip2Gen, seed: 42, maxRuns: 200)
-        while let value = try zip2Iter.next() {
-            guard let mat = materializeViaReflection(zip2Gen, value) else {
-                Issue.record("materializeViaReflection returned nil")
-                continue
-            }
-            #expect(mat.0 == value.0 && mat.1 == value.1)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200, equals: { $0 == $1 })
+    }
 
-        let zip3Gen = Gen.zip(
+    @Test("Zip of three generators round-trips through materialize")
+    func zipThreeRoundtrip() throws {
+        let gen = Gen.zip(
             Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling),
             Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
             Gen.choose(from: [true, false])
         )
-        var zip3Iter = ValueInterpreter(zip3Gen, seed: 42, maxRuns: 200)
-        while let value = try zip3Iter.next() {
-            guard let mat = materializeViaReflection(zip3Gen, value) else {
-                Issue.record("materializeViaReflection returned nil")
-                continue
-            }
-            #expect(mat.0 == value.0 && mat.1 == value.1 && mat.2 == value.2)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200, equals: { $0 == $1 })
+    }
 
-        let zipArrayGen = Gen.zip(
+    @Test("Zip of two arrays round-trips through materialize")
+    func zipOfArraysRoundtrip() throws {
+        let gen = Gen.zip(
             Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 1 ... 5),
             Gen.arrayOf(Gen.choose(in: UInt64(0) ... 100), within: 1 ... 5)
         )
-        var zipArrayIter = ValueInterpreter(zipArrayGen, seed: 42, maxRuns: 200)
-        while let value = try zipArrayIter.next() {
-            guard let mat = materializeViaReflection(zipArrayGen, value) else {
-                Issue.record("materializeViaReflection returned nil")
-                continue
-            }
-            #expect(mat.0 == value.0 && mat.1 == value.1)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200, equals: { $0 == $1 })
+    }
 
-        let baseFilterGen = Gen.choose(in: UInt64(0) ... 100)
-        let filterGen: Generator<UInt64> = .impure(
+    @Test("Filtered generator round-trips through materialize")
+    func filterRoundtrip() throws {
+        let baseGen = Gen.choose(in: UInt64(0) ... 100)
+        let gen: Generator<UInt64> = .impure(
             operation: .filter(
-                gen: baseFilterGen.erase(),
+                gen: baseGen.erase(),
                 fingerprint: Gen.sourceFingerprint(fileID: #fileID, line: #line, column: #column),
                 filterType: .auto,
                 predicate: { ($0 as! UInt64) % 2 == 0 },
@@ -171,94 +133,85 @@ struct MaterializeTests {
             ),
             continuation: { .pure($0 as! UInt64) }
         )
-        var filterIter = ValueInterpreter(filterGen, seed: 42, maxRuns: 200)
-        while let value = try filterIter.next() {
-            #expect(materializeViaReflection(filterGen, value) == value)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200)
+    }
 
-        let classifyGen = Gen.classify(
+    @Test("Classified generator round-trips through materialize")
+    func classifyRoundtrip() throws {
+        let gen = Gen.classify(
             Gen.choose(in: UInt64(0) ... 100),
             ("small", { $0 < 50 }),
             ("large", { $0 >= 50 })
         )
-        var classifyIter = ValueInterpreter(classifyGen, seed: 42, maxRuns: 200)
-        while let value = try classifyIter.next() {
-            #expect(materializeViaReflection(classifyGen, value) == value)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200)
+    }
 
-        let resizeGen = Gen.resize(50, Gen.arrayOf(Gen.choose(in: 1000 ... 10000) as Generator<Int>))
-        var resizeIter = ValueInterpreter(resizeGen, seed: 42, maxRuns: 200)
-        while let value = try resizeIter.next() {
-            #expect(materializeViaReflection(resizeGen, value) == value)
-        }
+    @Test("Resized generator round-trips through materialize")
+    func resizeRoundtrip() throws {
+        let gen = Gen.resize(50, Gen.arrayOf(Gen.choose(in: 1000 ... 10000) as Generator<Int>))
+        try assertMaterializeRoundTrip(gen, runs: 200)
+    }
 
-        let pickArrayGen = Gen.pick(choices: [
+    @Test("Pick of arrays round-trips through materialize")
+    func pickOfArraysRoundtrip() throws {
+        let gen = Gen.pick(choices: [
             (1, Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 3 ... 3)),
             (1, Gen.arrayOf(Gen.choose(in: UInt64(100) ... 200), within: 2 ... 2)),
         ])
-        var pickArrayIter = ValueInterpreter(pickArrayGen, seed: 42, maxRuns: 200)
-        while let value = try pickArrayIter.next() {
-            #expect(materializeViaReflection(pickArrayGen, value) == value)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200)
+    }
 
-        let deepGen = Gen.zip(
+    @Test("Zip of array and scalar round-trips through materialize")
+    func zipOfArrayAndScalarRoundtrip() throws {
+        let gen = Gen.zip(
             Gen.arrayOf(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling), within: 3 ... 3),
             Gen.choose(in: UInt64(0) ... 100)
         )
-        var deepIter = ValueInterpreter(deepGen, seed: 42, maxRuns: 200)
-        while let value = try deepIter.next() {
-            guard let mat = materializeViaReflection(deepGen, value) else {
-                Issue.record("materializeViaReflection returned nil")
-                continue
-            }
-            #expect(mat.0 == value.0 && mat.1 == value.1)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200, equals: { $0 == $1 })
+    }
 
+    @Test("Zip of pick and array round-trips through materialize")
+    func zipOfPickAndArrayRoundtrip() throws {
         let pickPart = Gen.pick(choices: [
             (1, Gen.choose(in: UInt64(0) ... 10)),
             (1, Gen.choose(in: UInt64(11) ... 20)),
         ])
-        let zipPickGen = Gen.zip(
+        let gen = Gen.zip(
             pickPart,
             Gen.arrayOf(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling), within: 3 ... 3)
         )
-        var zipPickIter = ValueInterpreter(zipPickGen, seed: 42, maxRuns: 200)
-        while let value = try zipPickIter.next() {
-            guard let mat = materializeViaReflection(zipPickGen, value) else {
-                Issue.record("materializeViaReflection returned nil")
-                continue
-            }
-            #expect(mat.0 == value.0 && mat.1 == value.1)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200, equals: { $0 == $1 })
     }
 
-    @Test("Mapped generators round-trip through materialize")
-    func mappedRoundtrip() throws {
-        let mappedGen = Gen.contramap(
+    // MARK: - Mapped round-trips
+
+    @Test("Contramapped scalar round-trips through materialize")
+    func contramappedScalarRoundtrip() throws {
+        let gen = Gen.contramap(
             { (v: Int) -> UInt64 in UInt64(v) },
             Gen.choose(in: UInt64(0) ... 10000).map { Int($0) }
         )
-        var mappedIter = ValueInterpreter(mappedGen, seed: 42, maxRuns: 200)
-        while let value = try mappedIter.next() {
-            #expect(materializeViaReflection(mappedGen, value) == value)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200)
+    }
 
+    @Test("Contramapped struct round-trips through materialize")
+    func contramappedStructRoundtrip() throws {
         struct Point: Equatable {
             let x: UInt64
             let y: UInt64
         }
-        let pointGen = Gen.contramap(
+        let gen = Gen.contramap(
             { (p: Point) -> (UInt64, UInt64) in (p.x, p.y) },
             Gen.zip(
                 Gen.choose(in: UInt64(0) ... 100),
                 Gen.choose(in: UInt64(0) ... 100)
             ).map { Point(x: $0.0, y: $0.1) }
         )
-        var pointIter = ValueInterpreter(pointGen, seed: 42, maxRuns: 200)
-        while let value = try pointIter.next() {
-            #expect(materializeViaReflection(pointGen, value) == value)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200)
+    }
 
+    @Test("Contramapped struct with pick and string round-trips through materialize")
+    func contramappedPickStringStructRoundtrip() throws {
         struct Person: Equatable {
             let age: UInt64
             let name: String
@@ -267,14 +220,11 @@ struct MaterializeTests {
             (1, Gen.choose(in: UInt64(0) ... 10)),
             (1, Gen.choose(in: UInt64(11) ... 84)),
         ])
-        let personGen = Gen.contramap(
+        let gen = Gen.contramap(
             { (p: Person) -> (UInt64, String) in (p.age, p.name) },
             Gen.zip(ageGen, stringGen()).map { Person(age: $0.0, name: $0.1) }
         )
-        var personIter = ValueInterpreter(personGen, seed: 42, maxRuns: 200)
-        while let value = try personIter.next() {
-            #expect(materializeViaReflection(personGen, value) == value)
-        }
+        try assertMaterializeRoundTrip(gen, runs: 200)
     }
 
     // MARK: - Idempotence
@@ -320,7 +270,7 @@ struct MaterializeTests {
                     emptySequence.append(element)
                     insideSequence = false
                 default:
-                    if !insideSequence {
+                    if insideSequence == false {
                         emptySequence.append(element)
                     }
             }
@@ -419,4 +369,47 @@ struct MaterializeTests {
         #expect(total > 0)
         #expect(roundTripFailures == 0, "VACTI tree missing continuation nodes: \(roundTripFailures)/\(total) round-trips failed")
     }
+}
+
+// MARK: - Helpers
+
+/// Reflects a value into a choice tree, flattens it, and materializes back.
+private func materializeViaReflection<Output>(
+    _ gen: Generator<Output>,
+    _ value: Output
+) -> Output? {
+    guard let tree = try? Interpreters.reflect(gen, with: value) else { return nil }
+    let sequence = ChoiceSequence.flatten(tree)
+    switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
+        case let .success(output, _, _): return output
+        case .rejected, .failed: return nil
+    }
+}
+
+/// Generates `runs` values and asserts each one survives reflect → flatten → materialize unchanged.
+private func assertMaterializeRoundTrip<Output>(
+    _ gen: Generator<Output>,
+    seed: UInt64 = 42,
+    runs: UInt64,
+    equals: (Output, Output) -> Bool,
+    sourceLocation: SourceLocation = #_sourceLocation
+) throws {
+    var iterator = ValueInterpreter(gen, seed: seed, maxRuns: runs)
+    while let value = try iterator.next() {
+        guard let materialized = materializeViaReflection(gen, value) else {
+            Issue.record("materializeViaReflection returned nil for \(value)", sourceLocation: sourceLocation)
+            continue
+        }
+        #expect(equals(materialized, value), "Materialized \(materialized) != original \(value)", sourceLocation: sourceLocation)
+    }
+}
+
+/// Equatable convenience overload.
+private func assertMaterializeRoundTrip(
+    _ gen: Generator<some Equatable>,
+    seed: UInt64 = 42,
+    runs: UInt64,
+    sourceLocation: SourceLocation = #_sourceLocation
+) throws {
+    try assertMaterializeRoundTrip(gen, seed: seed, runs: runs, equals: { $0 == $1 }, sourceLocation: sourceLocation)
 }

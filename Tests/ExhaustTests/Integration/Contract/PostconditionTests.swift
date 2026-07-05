@@ -78,7 +78,7 @@ final class SetUniquenessContract {
     func remove(element: Int) throws {
         uniqueSet.remove(element)
         // Postcondition: after remove, the element is gone
-        try check(!uniqueSet.contains(element), "removed element must not be contained")
+        try check(uniqueSet.contains(element) == false, "removed element must not be contained")
     }
 
     @Command(weight: 1)
@@ -111,7 +111,7 @@ final class StackLIFOContract {
 
     @Command(weight: 2)
     func pop() throws {
-        guard !stack.isEmpty else { throw skip() }
+        guard stack.isEmpty == false else { throw skip() }
         let previousCount = stack.count
         _ = stack.pop()
         // Postcondition: count decreased by 1
@@ -189,7 +189,7 @@ struct BuggyStack<Element: Equatable> {
     }
 
     mutating func pop() -> Element? {
-        guard !elements.isEmpty else { return nil }
+        guard elements.isEmpty == false else { return nil }
         return elements.removeLast()
     }
 

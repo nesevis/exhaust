@@ -12,7 +12,7 @@ public extension ReflectiveGenerator {
     ///
     /// ```swift
     /// let treeGen: ReflectiveGenerator<Tree> = #gen(.recursive(
-    ///     base: .leaf,
+    ///     baseValue: .leaf,
     ///     depthRange: 0...5
     /// ) { recurse, remaining in
     ///     .oneOf(
@@ -22,17 +22,19 @@ public extension ReflectiveGenerator {
     /// })
     /// ```
     ///
+    /// The `baseValue` label is deliberate: with a plain `base:` label and an `Any`-typed `Output`, a generator argument can satisfy this overload too, silently capturing the generator itself as the base value. The distinct label makes that mistake unrepresentable.
+    ///
     /// - Parameters:
-    ///   - base: The ground value used when recursion bottoms out.
+    ///   - baseValue: The ground value used when recursion bottoms out.
     ///   - depthRange: The range of recursive layers to unfold.
     ///   - extend: Closure that builds one recursive layer from the previous layer.
     /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive(
-        base: Output,
+        baseValue: Output,
         depthRange: ClosedRange<Int>,
         extend: @Sendable @escaping (@Sendable @escaping () -> ReflectiveGenerator<Output>, Int) -> ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        recursive(base: Gen.just(base).wrapped, depthRange: depthRange, extend: extend)
+        recursive(base: Gen.just(baseValue).wrapped, depthRange: depthRange, extend: extend)
     }
 
     /// Creates a recursive generator with a generator base case and a reducible depth range.

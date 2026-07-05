@@ -5,10 +5,10 @@
 //  Created by Chris Kolbu on 17/2/2026.
 //
 
+import Exhaust
 import ExhaustTestSupport
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Experimental Challenge: Strictly Increasing Run", .tags(.challenge))
 struct StrictlyIncreasingRunChallenge {

@@ -1,5 +1,4 @@
 import Exhaust
-import ExhaustCore
 import Foundation
 import Testing
 
@@ -12,7 +11,6 @@ struct GeneratorSynthesizerTests {
         """
         let generator = try #gen(Person.self, from: json)
         let values = try #example(generator, count: 20)
-        print()
 
         #expect(Set(values.map(\.name)).count > 1)
         #expect(Set(values.map(\.age)).count > 1)
@@ -129,7 +127,6 @@ struct GeneratorSynthesizerTests {
         let example = Person(name: "Gaute", age: 30, active: true)
         let generator = try #gen(from: example)
         let values = try #example(generator, count: 20)
-        print(generator.debugDescription)
 
         #expect(Set(values.map(\.name)).count > 1)
         #expect(Set(values.map(\.age)).count > 1)
@@ -168,7 +165,6 @@ struct GeneratorSynthesizerTests {
         """
         let generator = try #gen(WithNonIterable.self, from: json)
         let report = #examine(generator, .budget(20))
-        print()
 
         #expect(report.passed)
         #expect(report.pinnedFieldCount == 1)

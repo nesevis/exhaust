@@ -5,8 +5,8 @@
 //  Reducer test that requires #exhaust macro (Exhaust module).
 //
 
+import Exhaust
 import Testing
-@testable import Exhaust
 
 @Suite("Reducer Pass 5 Integration")
 struct ReducerReduceValuesIntegrationTests {

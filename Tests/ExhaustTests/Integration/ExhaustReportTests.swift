@@ -1,5 +1,5 @@
+import Exhaust
 import Testing
-@testable import Exhaust
 
 @Suite("ExhaustReport")
 struct ExhaustReportTests {

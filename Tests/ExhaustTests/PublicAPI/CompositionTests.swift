@@ -6,8 +6,8 @@
 //  array generation, and complex structure composition.
 //
 
+import Exhaust
 import Testing
-@testable import Exhaust
 
 // MARK: - Test Structures
 

@@ -6,7 +6,7 @@
 //  https://github.com/jlink/shrinking-challenge/blob/main/challenges/binheap.md
 //
 
-@testable import Exhaust
+import Exhaust
 
 /// Min-heap of `Int` plus a buggy `toSortedList` that violates the property `toSortedList(h).sorted() == toList(h).sorted()`.
 enum BinaryHeapFixture {
@@ -113,7 +113,7 @@ enum BinaryHeapFixture {
     /// Recursive combinator variant. Depth is controlled by `.recursive` instead of an outer `bind`. The min-value constraint is dropped — invalid heaps are filtered by ``invariant(_:)`` in the property.
     static func heapGenRecursive(maxValue: Int = .max) -> ReflectiveGenerator<Heap<Int>> {
         .recursive(
-            base: Heap<Int>.empty,
+            baseValue: Heap<Int>.empty,
             depthRange: 0 ... 10
         ) { recurse, _ in
             let nodeGen = #gen(.int(in: 0 ... maxValue), recurse(), recurse())

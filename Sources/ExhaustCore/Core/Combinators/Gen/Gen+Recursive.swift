@@ -11,7 +11,7 @@ package extension Gen {
     /// To terminate early, return a generator that doesn't call `recurse()`. This short-circuits the recursion — inner layers are never reached since `recurse()` is the only way to reference them:
     ///
     /// ```swift
-    /// Gen.recursive(base: .leaf, maxDepth: 5) { recurse, remaining in
+    /// Gen.recursive(baseValue: .leaf, depthRange: 0 ... 5) { recurse, remaining in
     ///     guard remaining > 1 else { return .just(.leaf) }
     ///     Gen.pick(choices: [
     ///         (1, .just(.leaf)),
@@ -20,13 +20,15 @@ package extension Gen {
     /// }
     /// ```
     ///
+    /// The `baseValue` label is deliberate: with a plain `base:` label and a generic `Output`, a `Generator` argument can satisfy this overload too (any value converts to `Output == Any`), silently capturing the generator itself as the base value. The distinct label makes that mistake unrepresentable.
+    ///
     /// - Parameters:
-    ///   - base: The ground value used when recursion bottoms out.
+    ///   - baseValue: The ground value used when recursion bottoms out.
     ///   - depthRange: The range of recursive layers to unfold.
     ///   - extend: Closure that builds one recursive layer from the previous layer.
     /// - Returns: A generator that produces recursive values with depth-controlled structure.
     static func recursive<Output>(
-        base: Output,
+        baseValue: Output,
         depthRange: ClosedRange<Int>,
         extend: @escaping (
             @escaping () -> Generator<Output>,
@@ -34,7 +36,7 @@ package extension Gen {
         ) -> Generator<Output>
     ) -> Generator<Output> {
         precondition(depthRange.lowerBound >= 0, "lower bound must be >= 0")
-        return recursive(base: Gen.just(base), depthRange: UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound), extend: extend)
+        return recursive(base: Gen.just(baseValue), depthRange: UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound), extend: extend)
     }
 
     /// Creates a recursive generator with a generator base case.

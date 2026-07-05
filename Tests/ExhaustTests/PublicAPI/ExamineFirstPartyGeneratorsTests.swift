@@ -1,6 +1,6 @@
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 // swiftlint:disable type_body_length
 
@@ -496,9 +496,9 @@ struct ExamineFirstPartyGeneratorsTests {
         #expect(report.passed)
     }
 
-    @Test(.disabled("Flaky if it happens to hit n == $0"))
-    func boundBidirectional() {
-        withKnownIssue("Bound with data-dependent inner range — replay non-determinism") {
+    @Test func boundBidirectional() {
+        // Intermittent: the replay non-determinism only bites when a sample hits n == bound value.
+        withKnownIssue("Bound with data-dependent inner range — replay non-determinism", isIntermittent: true) {
             let report = #examine(
                 .int(in: 1 ... 10).bound(
                     forward: { n in .int(in: 0 ... n) },

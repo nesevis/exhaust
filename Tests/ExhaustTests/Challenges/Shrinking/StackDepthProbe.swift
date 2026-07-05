@@ -5,10 +5,10 @@
 //  Probes for bind-bound materialization at extreme depths.
 //
 
+import Exhaust
 import ExhaustTestSupport
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Bind-Bound Materialization Probe", .tags(.challenge))
 struct BindBoundMaterializationProbe {
@@ -16,6 +16,21 @@ struct BindBoundMaterializationProbe {
         case leaf(Int)
         case add(SimpleExp, SimpleExp)
     }
+
+    /// Smoke test, debug-mode limitation, not a product bug: ReflectiveOperation is a huge switch in
+    /// most interpreters and debug builds allocate all cases in each frame, so depth-100 replay
+    /// overflows the stack. Release builds handle it. Disabled rather than withKnownIssue because a
+    /// stack overflow kills the test process instead of recording an issue.
+    @Test("Depth 100 with coverage — overflows the debug-mode stack in coverage replay", .disabled("Debug-only stack overflow (fat ReflectiveOperation switch frames); passes in release"))
+    func depth100WithCoverage() {
+        let gen = #gen(.int(in: 0 ... 100))
+            .bind { depth in Self.fullExpAtDepth(depth) }
+        // Completion is the assertion: the property always passes, so reaching this line means no overflow.
+        let result = #exhaust(gen, .suppress(.issueReporting), .budget(.custom(coverage: 200, sampling: 1))) { _ in true }
+        #expect(result == nil, "Property always passes, so no counterexample can exist")
+    }
+
+    // MARK: - Helpers
 
     static func fullExpAtDepth(_ depth: Int) -> ReflectiveGenerator<SimpleExp> {
         let leafGen = #gen(.int(in: 0 ... 10))
@@ -52,13 +67,5 @@ struct BindBoundMaterializationProbe {
             (100, binOp()), (100, binOp()), (100, binOp()),
             (100, binOp()), (100, binOp()), (100, binOp()),
             (100, binOp())))
-    }
-
-    @Test("Depth 100 with coverage — hangs in coverage replay", .disabled())
-    func depth100WithCoverage() {
-        let gen = #gen(.int(in: 0 ... 100))
-            .bind { depth in Self.fullExpAtDepth(depth) }
-        let result = #exhaust(gen, .suppress(.issueReporting), .budget(.custom(coverage: 200, sampling: 1))) { _ in true }
-        print("Depth 100: \(String(describing: result))")
     }
 }

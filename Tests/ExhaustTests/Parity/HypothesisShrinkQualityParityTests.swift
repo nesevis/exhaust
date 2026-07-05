@@ -6,34 +6,12 @@
 //  tests/quality/test_shrink_quality.py.
 //
 
+import Exhaust
 import ExhaustTestSupport
 import Testing
-@testable import Exhaust
 
 @Suite("Hypothesis Shrink Quality Parity")
 struct HypothesisShrinkQualityParityTests {
-    private func reduce<Output>(
-        _ gen: ReflectiveGenerator<Output>,
-        startingAt value: Output,
-        config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
-        property: (Output) -> Bool
-    ) throws -> Output {
-        try reduceFromReflection(gen.gen, startingAt: value, config: config, property: property)
-    }
-
-    private func startPair(
-        range: ClosedRange<Int>,
-        gap: Int
-    ) -> (Int, Int) {
-        for lhs in stride(from: range.upperBound, through: range.lowerBound, by: -1) {
-            let rhs = lhs + gap
-            if range.contains(rhs) {
-                return (lhs, rhs)
-            }
-        }
-        return (0, gap)
-    }
-
     @Test("Hypothesis::test_sum_of_pair_mixed")
     func sumOfPairMixed() throws {
         let floatIntGen = #gen(
@@ -250,6 +228,30 @@ struct HypothesisShrinkQualityParityTests {
             #expect(output.2 == 0.0)
             #expect(output.3 == gap)
         }
+    }
+
+    // MARK: - Helpers
+
+    private func reduce<Output>(
+        _ gen: ReflectiveGenerator<Output>,
+        startingAt value: Output,
+        config: Interpreters.ReducerConfiguration = .init(maxStalls: 2),
+        property: (Output) -> Bool
+    ) throws -> Output {
+        try reduceFromReflection(gen.gen, startingAt: value, config: config, property: property)
+    }
+
+    private func startPair(
+        range: ClosedRange<Int>,
+        gap: Int
+    ) -> (Int, Int) {
+        for lhs in stride(from: range.upperBound, through: range.lowerBound, by: -1) {
+            let rhs = lhs + gap
+            if range.contains(rhs) {
+                return (lhs, rhs)
+            }
+        }
+        return (0, gap)
     }
 }
 

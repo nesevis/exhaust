@@ -3,9 +3,9 @@
 //  Exhaust
 //
 
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Large Domain Coverage Integration")
 struct LargeDomainCoverageIntegrationTests {
@@ -16,7 +16,7 @@ struct LargeDomainCoverageIntegrationTests {
         // but among full range: 100 / (10001^2) ≈ 0.0001%
         let gen = #gen(.int(in: 0 ... 10000), .int(in: 0 ... 10000))
         let result = #exhaust(gen, .budget(.custom(coverage: 2000, sampling: 0)), .suppress(.issueReporting)) { a, b in
-            !(a == 0 && b == 10000)
+            (a == 0 && b == 10000) == false
         }
         #expect(result != nil, "Problematic-value coverage should find (0, 10000)")
     }
@@ -25,7 +25,7 @@ struct LargeDomainCoverageIntegrationTests {
     func threeParameterProblematicValueInteractionIsFound() {
         let gen = #gen(.int(in: 0 ... 10000), .int(in: 0 ... 10000), .int(in: 0 ... 10000))
         let result = #exhaust(gen, .budget(.custom(coverage: 2000, sampling: 0)), .suppress(.issueReporting)) { a, b, _ in
-            !(a == 0 && b == 10000)
+            (a == 0 && b == 10000) == false
         }
         #expect(result != nil, "Problematic-value coverage should find the (0, 10000) pair")
     }

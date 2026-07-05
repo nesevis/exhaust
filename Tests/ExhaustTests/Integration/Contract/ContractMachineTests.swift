@@ -1,4 +1,3 @@
-import ExhaustCore
 import Testing
 @testable import Exhaust
 
@@ -62,7 +61,6 @@ struct ContractMachineTests {
         #expect(transitions.contains("reduced"))
         #expect(transitions.contains("statsRecorded"))
         #expect(transitions.contains("assembled"))
-        #expect(machine.result != nil)
         #expect(machine.result != nil)
     }
 

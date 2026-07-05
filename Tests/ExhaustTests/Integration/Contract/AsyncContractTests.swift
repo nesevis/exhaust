@@ -30,7 +30,7 @@ struct AsyncContractTests {
         )
         #expect(result != nil, "Buggy async counter should fail")
         if let result {
-            #expect(!result.trace.isEmpty)
+            #expect(result.trace.isEmpty == false)
             let hasFailure = result.trace.contains { step in
                 if case .invariantFailed = step.outcome { return true }
                 return false
@@ -202,7 +202,7 @@ final class AsyncSkipSpec {
 
     @Command(weight: 2)
     func decrement() async throws {
-        guard !expected.isEmpty else { throw skip() }
+        guard expected.isEmpty == false else { throw skip() }
         expected.append(expected.last! - 1)
         await counter.decrement()
     }

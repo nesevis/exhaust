@@ -73,7 +73,7 @@ final class CircularQueueContract {
 
     @Command(weight: 3)
     func get() throws {
-        guard !queue.isEmpty else { throw skip() }
+        guard queue.isEmpty == false else { throw skip() }
         let expectedValue = expected.removeFirst()
         let actual = queue.get()
         try check(actual == expectedValue, "get must return elements in FIFO order")

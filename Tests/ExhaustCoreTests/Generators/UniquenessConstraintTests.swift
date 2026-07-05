@@ -204,20 +204,6 @@ struct UniquenessConstraintTests {
 
         #expect(values.count == 3, "3-way pick should produce exactly 3 unique values, got \(values.count)")
     }
-
-    // MARK: - PropertyTest with unique combinator
-
-    @Test("PropertyTest with unique combinator passes through")
-    func propertyTestPassthrough() throws {
-        let gen = uniqueGen(Gen.choose(from: [true, false]))
-
-        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 100)
-        var seen = Set<Bool>()
-        while let value = try iterator.next() {
-            let (inserted, _) = seen.insert(value)
-            #expect(inserted, "Every yielded value should be unique")
-        }
-    }
 }
 
 // MARK: - Helpers

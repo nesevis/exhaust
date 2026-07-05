@@ -1,5 +1,5 @@
+import Exhaust
 import Testing
-@testable import Exhaust
 
 @Suite("Dedupe property tests")
 struct DedupePropertyTests {

@@ -1,6 +1,6 @@
+import Exhaust
 import ExhaustTestSupport
 import Testing
-@testable import Exhaust
 
 @Suite("All-skip concurrent contract tests", .serialized, .tags(.contract))
 struct AllSkipConcurrentTests {

@@ -8,9 +8,10 @@ struct MetaGeneratorPropertyTests {
 
     // MARK: 1. Reflection Round-Trip
 
-    @Test("Generated generators round-trip through reflect and replay")
-    func reflectionRoundTrip() throws {
-        let badRecipe = try findMinimalCounterexample(simpleIntRecipeGen, maxIterations: 50) { recipe in
+    @Test("Generated generators round-trip through reflect and replay", arguments: metaRecipeTypes)
+    func reflectionRoundTrip(type: RecipeType) throws {
+        let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 1), maxIterations: 50) { recipe in
+            guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
             let gen = buildGenerator(from: recipe)
             return checkAllValues(gen, maxRuns: 10) { value in
                 guard let tree = try Interpreters.reflect(gen, with: value) else { return true }
@@ -23,9 +24,10 @@ struct MetaGeneratorPropertyTests {
 
     // MARK: 2. Replay Determinism
 
-    @Test("Replaying the same ChoiceTree produces identical values")
-    func replayDeterminism() throws {
-        let badRecipe = try findMinimalCounterexample(simpleIntRecipeGen, maxIterations: 50) { recipe in
+    @Test("Replaying the same ChoiceTree produces identical values", arguments: metaRecipeTypes)
+    func replayDeterminism(type: RecipeType) throws {
+        let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 1), maxIterations: 50) { recipe in
+            guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
             let gen = buildGenerator(from: recipe)
             return checkAllTrees(gen, maxRuns: 10) { tree in
                 guard let r1 = try Interpreters.replay(gen, using: tree),
@@ -38,9 +40,10 @@ struct MetaGeneratorPropertyTests {
 
     // MARK: 3. Materialize Agreement
 
-    @Test("Materialize with flattened tree agrees with replay")
-    func materializeAgreement() throws {
-        let badRecipe = try findMinimalCounterexample(simpleIntRecipeGen, maxIterations: 50) { recipe in
+    @Test("Materialize with flattened tree agrees with replay", arguments: metaRecipeTypes)
+    func materializeAgreement(type: RecipeType) throws {
+        let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 1), maxIterations: 50) { recipe in
+            guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
             let gen = buildGenerator(from: recipe)
             return checkAllValues(gen, maxRuns: 10) { value in
                 guard let reflectedTree = try Interpreters.reflect(gen, with: value) else { return true }
@@ -51,6 +54,37 @@ struct MetaGeneratorPropertyTests {
             }
         }
         #expect(badRecipe == nil, "Materialize disagrees with replay for minimal recipe: \(badRecipe!)")
+    }
+
+    // MARK: 3b. Interpreter Parity
+
+    @Test("VI and VACTI consume the PRNG identically for random recipes", arguments: metaRecipeTypes)
+    func interpreterParity(type: RecipeType) throws {
+        var recipeIter = ValueInterpreter(recipeGenerator(producing: type, maxDepth: 1), seed: 42, maxRuns: 30)
+        var checkedRecipes = 0
+        while let recipe = try recipeIter.next() {
+            guard recipe.nodeCount <= metaRecipeNodeBudget else { continue }
+            checkedRecipes += 1
+            let gen = buildGenerator(from: recipe)
+            var vi = ValueInterpreter(gen, seed: 7, maxRuns: 5)
+            var vacti = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 7, maxRuns: 5)
+            for iteration in 0 ..< 5 {
+                let viValue = try vi.next()
+                let vactiPair = try vacti.next()
+                switch (viValue, vactiPair) {
+                    case (nil, nil):
+                        continue
+                    case let (.some(a), .some(pair)):
+                        #expect(
+                            anyEquals(a, pair.0),
+                            "Iteration \(iteration): VI=\(a), VACTI=\(pair.0) for recipe: \(recipe)"
+                        )
+                    default:
+                        Issue.record("Iteration \(iteration): one interpreter exhausted before the other for recipe: \(recipe)")
+                }
+            }
+        }
+        #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
     }
 
     // MARK: 4. Functor Identity
@@ -131,7 +165,7 @@ struct MetaGeneratorPropertyTests {
     @Test("Reduced values still fail the original property")
     func reductionPreservesFailure() throws {
         let intLeafGen = recipeGenerator(producing: .int, maxDepth: 0)
-        var recipeIter = ValueInterpreter(intLeafGen, maxRuns: 20)
+        var recipeIter = ValueInterpreter(intLeafGen, seed: 42, maxRuns: 20)
         while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
             let property: (Any) -> Bool = { value in
@@ -141,12 +175,12 @@ struct MetaGeneratorPropertyTests {
 
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
             while let (value, tree) = try valueIter.next() {
-                guard !property(value) else { continue }
+                guard property(value) == false else { continue }
                 guard case let .reduced(_, _, shrunk) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
                 ) else { continue }
                 #expect(
-                    !property(shrunk),
+                    property(shrunk) == false,
                     "Shrunk value passes property but shouldn't, recipe: \(recipe)"
                 )
             }
@@ -158,7 +192,7 @@ struct MetaGeneratorPropertyTests {
     @Test("Filtered generators only produce values satisfying the predicate")
     func filterCorrectness() throws {
         let intLeafGen = recipeGenerator(producing: .int, maxDepth: 0)
-        var recipeIter = ValueInterpreter(intLeafGen, maxRuns: 20)
+        var recipeIter = ValueInterpreter(intLeafGen, seed: 42, maxRuns: 20)
         while let recipe = try recipeIter.next() {
             for predicate in KnownPredicate.applicable(to: recipe.outputType) {
                 let innerGen: AnyGenerator
@@ -181,7 +215,7 @@ struct MetaGeneratorPropertyTests {
                     continuation: { .pure($0) }
                 )
 
-                var valueIter = ValueInterpreter(filteredGen, maxRuns: 15)
+                var valueIter = ValueInterpreter(filteredGen, seed: 42, maxRuns: 15)
                 while let value = try valueIter.next() {
                     #expect(
                         predicate.evaluate(value),
@@ -201,7 +235,7 @@ struct MetaGeneratorPropertyTests {
             guard case let .leaf(.int(range)) = recipe else { return true }
             let gen = Gen.choose(in: range)
             do {
-                var valueIter = ValueInterpreter(gen, maxRuns: 20)
+                var valueIter = ValueInterpreter(gen, seed: 42, maxRuns: 20)
                 while let value = try valueIter.next() {
                     if range.contains(value) == false { return false }
                 }
@@ -227,7 +261,7 @@ struct MetaGeneratorPropertyTests {
 
         for recipe in justRecipes {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 5)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 5)
             var first: Any?
             while let (value, _) = try valueIter.next() {
                 if let first {
@@ -253,7 +287,7 @@ struct MetaGeneratorPropertyTests {
 
         for recipe in justRecipes {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 3)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 3)
             while let (value, _) = try valueIter.next() {
                 guard let tree = try? Interpreters.reflect(gen, with: value) else { continue }
                 guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
@@ -277,7 +311,7 @@ struct MetaGeneratorPropertyTests {
 
         for recipe in zippedRecipes {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 10)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 10)
             while let (value, _) = try valueIter.next() {
                 guard let tree = try? Interpreters.reflect(gen, with: value) else { continue }
                 guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
@@ -299,7 +333,7 @@ struct MetaGeneratorPropertyTests {
 
         for recipe in zippedRecipes {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 10)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 10)
             while let (_, tree) = try valueIter.next() {
                 let r1 = try? Interpreters.replay(gen, using: tree)
                 let r2 = try? Interpreters.replay(gen, using: tree)
@@ -321,7 +355,7 @@ struct MetaGeneratorPropertyTests {
 
         for recipe in zippedRecipes {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 10)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 10)
             while let (value, _) = try valueIter.next() {
                 guard let reflectedTree = try? Interpreters.reflect(gen, with: value) else { continue }
                 guard let replayed = try? Interpreters.replay(gen, using: reflectedTree) else { continue }
@@ -373,7 +407,7 @@ struct MetaGeneratorPropertyTests {
 
         for recipe in optionalRecipes {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 15)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 15)
             while let (_, tree) = try valueIter.next() {
                 let r1 = try? Interpreters.replay(gen, using: tree)
                 let r2 = try? Interpreters.replay(gen, using: tree)
@@ -395,7 +429,7 @@ struct MetaGeneratorPropertyTests {
 
         for recipe in optionalRecipes {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 15)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 15)
             while let (value, _) = try valueIter.next() {
                 guard let reflectedTree = try? Interpreters.reflect(gen, with: value) else { continue }
                 guard let replayed = try? Interpreters.replay(gen, using: reflectedTree) else { continue }
@@ -420,13 +454,17 @@ struct MetaGeneratorPropertyTests {
 
     // MARK: 14. Random Recipes with Just/Zip
 
-    @Test("Random recipes with just and zip round-trip through reflect and replay", .disabled("This blows the stack when ran repeatedly"))
+    /// Debug builds have no tail-call optimization and fat stack frames, so interpreting deep
+    /// recipe-built generators overflows the stack. Depth-1 recipes (the other tests in this
+    /// suite) are safe; any deeper sweep needs a recipe-size budget calibrated to the debug
+    /// stack, not just a maxDepth cap.
+    @Test("Random recipes with just and zip round-trip through reflect and replay", .disabled("Depth-2 recipes overflow the debug-mode stack; see comment above"))
     func randomJustZipRecipesRoundTrip() throws {
         let recipeGen = recipeGenerator(producing: .int, maxDepth: 2)
-        var recipeIter = ValueInterpreter(recipeGen, maxRuns: 40)
+        var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 40)
         while let recipe = try recipeIter.next() {
             let gen = buildGenerator(from: recipe)
-            var valueIter = ValueAndChoiceTreeInterpreter(gen, maxRuns: 5)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 5)
             while let (value, _) = try valueIter.next() {
                 guard let tree = try? Interpreters.reflect(gen, with: value) else { continue }
                 guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
@@ -448,7 +486,7 @@ private func checkAllValues(
     check: (Any) throws -> Bool
 ) -> Bool {
     do {
-        var iter = ValueAndChoiceTreeInterpreter(gen, maxRuns: maxRuns)
+        var iter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: maxRuns)
         while let (value, _) = try iter.next() {
             if try check(value) == false { return false }
         }
@@ -465,7 +503,7 @@ private func checkAllTrees(
     check: (ChoiceTree) throws -> Bool
 ) -> Bool {
     do {
-        var iter = ValueAndChoiceTreeInterpreter(gen, maxRuns: maxRuns)
+        var iter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: maxRuns)
         while let (_, tree) = try iter.next() {
             if try check(tree) == false { return false }
         }
@@ -494,3 +532,11 @@ private func checkPairedValues(
     }
     return true
 }
+
+// MARK: - Matrix Configuration
+
+/// Output types the universal invariants sweep over. Every operation the recipe language can produce for these types gets each invariant automatically.
+let metaRecipeTypes: [RecipeType] = [.int, .bool, .arrayOf(.int)]
+
+/// Node-count ceiling for recipes fed to the invariants. Debug builds allocate all ReflectiveOperation switch cases in each interpreter frame, so total recipe size, not nesting depth alone, is what overflows the stack. This is a fixed constant of the debug test environment, not a knob to scale up.
+let metaRecipeNodeBudget = 24

@@ -1,7 +1,7 @@
+import Exhaust
 import ExhaustTestSupport
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Preemptive concurrent contract: async facade over racy dispatch queue", .serialized, .tags(.contract))
 struct PreemptiveAsyncFacadeTests {

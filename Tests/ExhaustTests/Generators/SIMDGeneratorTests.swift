@@ -3,8 +3,8 @@
 //  Exhaust
 //
 
+import Exhaust
 import Testing
-@testable import Exhaust
 
 @Suite("SIMD Generators")
 struct SIMDGeneratorTests {

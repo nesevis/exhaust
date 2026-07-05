@@ -3,8 +3,8 @@
 //  Exhaust
 //
 
+import Exhaust
 import Testing
-@testable import Exhaust
 
 @Suite("Int128 / UInt128 Generators")
 struct LargeNumericGeneratorTests {

@@ -1,6 +1,6 @@
+import Exhaust
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Convenience overloads for Int/Double literal ranges")
 struct ConvenienceOverloadTests {

@@ -17,10 +17,10 @@ struct CoreGeneratorTests {
         @Test("Gen.choose produces values within specified range")
         func genChooseRange() throws {
             let gen = Gen.choose(in: 10 ... 20) as Generator<Int>
-            var iterator = ValueInterpreter(gen)
+            var iterator = ValueInterpreter(gen, seed: 42)
 
             for _ in 0 ..< 50 {
-                let value = try iterator.next()!
+                let value = try #require(try iterator.next())
                 #expect(10 ... 20 ~= value)
             }
         }
@@ -86,10 +86,10 @@ struct CoreGeneratorTests {
         func genJust() throws {
             let value = "constant"
             let gen = Gen.just(value)
-            var iterator = ValueInterpreter(gen)
+            var iterator = ValueInterpreter(gen, seed: 42)
 
             for _ in 0 ..< 10 {
-                let generated = try iterator.next()!
+                let generated = try #require(try iterator.next())
                 #expect(generated == value)
             }
         }
@@ -108,15 +108,12 @@ struct CoreGeneratorTests {
                 Gen.just("constant"),
             ]
 
-            var seedIter = ValueInterpreter(
-                Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling) as Generator<UInt64>
-            )
-            let seeds = try seedIter.prefix(10)
+            let seeds: [UInt64] = [42, 1337]
 
             for (index, gen) in generators.enumerated() {
-                var iterator = ValueInterpreter(gen, seed: seeds.randomElement()!)
+                var iterator = ValueInterpreter(gen, seed: seeds[index])
                 for iteration in 0 ..< 10 {
-                    let generated = try iterator.next()!
+                    let generated = try #require(try iterator.next())
                     if let recipe = try Interpreters.reflect(gen, with: generated) {
                         if let replayed = try Interpreters.replay(gen, using: recipe) {
                             #expect(generated == replayed)
@@ -149,60 +146,5 @@ struct CoreGeneratorTests {
         }
     }
 
-    @Suite("ChoiceTreeGeneratorTests")
-    struct ChoiceTreeGeneratorTests {
-        @Test("Simple integer test for RNG consistency")
-        func simpleIntegerRNGConsistency() throws {
-            let gen = Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling)
-            var iterator = ValueInterpreter(gen, seed: 42)
-            let output1 = try iterator.next()!
-
-            var thing = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-            let (output2, _) = try thing.next()!
-
-            #expect(output1 == output2, "First values should match: \(output1) vs \(output2)")
-        }
-
-        @Test("RNG state consistency between interpreters")
-        func rNGStateConsistency() throws {
-            // Use a simple generator that just picks between two values
-            let gen = Gen.pick(choices: [(1, Gen.just(100)), (1, Gen.just(200))])
-
-            var vi = ValueInterpreter(gen, seed: 42, maxRuns: 5)
-            var vact = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 42, maxRuns: 5)
-
-            let vi1 = try vi.next()!
-            let (vact1, _) = try vact.next()!
-
-            let vi2 = try vi.next()!
-            let (vact2, _) = try vact.next()!
-
-            let vi3 = try vi.next()!
-            let (vact3, _) = try vact.next()!
-
-            #expect(vi1 == vact1, "First: \(vi1) vs \(vact1)")
-            #expect(vi2 == vact2, "Second: \(vi2) vs \(vact2)")
-            #expect(vi3 == vact3, "Third: \(vi3) vs \(vact3)")
-        }
-
-        @Test("ValueInterpreter output for seed should match with and without materializePicks")
-        func materializePicksDoesNotChangeSeedOutput() throws {
-            let gen = stringGen()
-            var iterator = ValueInterpreter(gen, seed: 4)
-            _ = try iterator.next()
-            _ = try iterator.next()
-            let output = try iterator.next()!
-            var thing = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 4)
-            _ = try thing.next()
-            _ = try thing.next()
-            let test = try thing.next()
-            let (output2, _) = try #require(test)
-
-            print("ValueInterpreter output: \(output.description)")
-            print("ValueAndChoiceTreeInterpreter output: \(output2.description)")
-
-            #expect(output == output2)
-            print()
-        }
-    }
+    // VI/VACTI RNG parity is covered exhaustively in Interpreters/InterpreterRNGParityTests.swift.
 }

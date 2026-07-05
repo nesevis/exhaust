@@ -1,5 +1,5 @@
+import Exhaust
 import Testing
-@testable import Exhaust
 
 @Suite("Bind-inner filter defers CGS tuning")
 struct BindInnerFilterTests {

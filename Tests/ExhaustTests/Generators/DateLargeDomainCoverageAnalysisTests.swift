@@ -8,11 +8,10 @@
 //  covered at a given budget will NEVER be covered at that budget.
 //
 
-import ExhaustCore
+import Exhaust
 import ExhaustTestSupport
 import Foundation
 import Testing
-@testable import Exhaust
 
 @Suite("Date Large Domain Coverage Analysis", .serialized)
 struct DateLargeDomainCoverageAnalysis {

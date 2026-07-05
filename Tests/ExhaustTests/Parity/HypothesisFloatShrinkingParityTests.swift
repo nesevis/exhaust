@@ -11,24 +11,6 @@ import ExhaustTestSupport
 import Foundation
 import Testing
 
-private enum Helpers {
-    static func minimalDouble(
-        from start: Double,
-        in range: ClosedRange<Double>? = nil,
-        where condition: (Double) -> Bool
-    ) throws -> Double {
-        let gen: Generator<Double> = if let range {
-            Gen.choose(in: range)
-        } else {
-            Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: Double.defaultScaling)
-        }
-
-        return try reduceFromReflection(gen, startingAt: start) { value in
-            !condition(value)
-        }
-    }
-}
-
 @Suite("Hypothesis Float Shrinking Parity")
 struct HypothesisFloatShrinkingParityTests {
     @Test("Shrinks > 1 to 2.0")
@@ -59,7 +41,7 @@ struct HypothesisFloatShrinkingParityTests {
                 gen,
                 startingAt: start
             ) { value in
-                value.count != n || !value.contains(where: { $0 != 0.0 })
+                value.count != n || value.contains(where: { $0 != 0.0 }) == false
             }
 
             #expect(output.count == n)
@@ -190,6 +172,26 @@ struct HypothesisFloatEncodingParityTests {
         var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
         while let value = try iterator.next() {
             #expect(FloatShortlex.shortlexKey(for: value) > FloatShortlex.shortlexKey(for: 1.0))
+        }
+    }
+}
+
+// MARK: - Helpers
+
+private enum Helpers {
+    static func minimalDouble(
+        from start: Double,
+        in range: ClosedRange<Double>? = nil,
+        where condition: (Double) -> Bool
+    ) throws -> Double {
+        let gen: Generator<Double> = if let range {
+            Gen.choose(in: range)
+        } else {
+            Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: Double.defaultScaling)
+        }
+
+        return try reduceFromReflection(gen, startingAt: start) { value in
+            condition(value) == false
         }
     }
 }
