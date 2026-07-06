@@ -64,10 +64,10 @@ struct ExamineTests {
 
     @Test("#exhaust emits runtime warning for sparse filter")
     func exhaustSparseFilterWarning() {
-        // ~0.5% validity — well below the 2% threshold
-        let gen = #gen(.int(in: 0 ... 999, scaling: .constant))
-            .filter(.rejectionSampling) { $0 < 5 }
         withKnownIssue {
+            // ~0.5% validity — well below the 2% threshold
+            let gen = #gen(.int(in: 0 ... 999, scaling: .constant))
+                .filter(.rejectionSampling) { $0 < 5 }
             #exhaust(gen, .budget(.custom(coverage: 0, sampling: 30))) { _ in true }
         } matching: { issue in
             issue.description.contains("Filter validity rate")
