@@ -64,7 +64,7 @@ public extension __ExhaustRuntime {
     ) -> ContractResult<Spec>? {
         let parsed = ResolvedConcurrentConfig.parse(settings)
         guard parsed.invalidReplaySeed == nil else {
-            reportIssue("Invalid replay seed", fileID: fileID, filePath: filePath, line: line, column: column)
+            reportError("Invalid replay seed", fileID: fileID, filePath: filePath, line: line, column: column)
             return nil
         }
         var config = parsed.config
@@ -129,7 +129,7 @@ public extension __ExhaustRuntime {
             )
             for issue in deferredIssues {
                 ExhaustLog.error(category: .propertyTest, event: "contract_failed", issue)
-                reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
+                reportError(issue, fileID: fileID, filePath: filePath, line: line, column: column)
             }
 
             return result
@@ -154,7 +154,7 @@ public extension __ExhaustRuntime {
     ) async -> ContractResult<Spec>? {
         let parsed = ResolvedConcurrentConfig.parse(settings)
         guard parsed.invalidReplaySeed == nil else {
-            reportIssue("Invalid replay seed", fileID: fileID, filePath: filePath, line: line, column: column)
+            reportError("Invalid replay seed", fileID: fileID, filePath: filePath, line: line, column: column)
             return nil
         }
         var config = parsed.config
@@ -181,7 +181,7 @@ public extension __ExhaustRuntime {
             }
         }
         for issue in deferredIssues {
-            reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
+            reportError(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }
         return result
     }

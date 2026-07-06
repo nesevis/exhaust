@@ -76,7 +76,7 @@ public extension __ExhaustRuntime {
             results.append(value)
         }
         if results.count < count {
-            reportIssue(
+            reportError(
                 "#example: generator produced \(results.count) of \(count) requested values. If the generator uses a sparse filter, consider restructuring it to produce valid values directly.",
                 fileID: fileID,
                 filePath: filePath,
@@ -99,12 +99,12 @@ public extension __ExhaustRuntime {
             return (nil, nil)
         }
         guard let resolved = seed.resolve() else {
-            reportIssue("Invalid replay seed: \(seed)", fileID: fileID, filePath: filePath, line: line, column: column)
+            reportError("Invalid replay seed: \(seed)", fileID: fileID, filePath: filePath, line: line, column: column)
             throw GeneratorError.invalidReplaySeed("\(seed)")
         }
         switch resolved {
             case let .coverage(row):
-                reportIssue(
+                reportError(
                     "Coverage replay seeds (U-prefixed) cannot be replayed by #example, which has no covering array. Use #exhaust(gen, .replay(...)) instead.",
                     fileID: fileID,
                     filePath: filePath,
@@ -114,7 +114,7 @@ public extension __ExhaustRuntime {
                 throw GeneratorError.invalidReplaySeed("coverage row \(row) is not replayable by #example")
             case let .sampling(numericSeed, iteration):
                 if let iteration, iteration < 1 {
-                    reportIssue("Invalid replay seed iteration: \(iteration)", fileID: fileID, filePath: filePath, line: line, column: column)
+                    reportError("Invalid replay seed iteration: \(iteration)", fileID: fileID, filePath: filePath, line: line, column: column)
                     throw GeneratorError.invalidReplaySeed("iteration \(iteration) is not a valid 1-based index")
                 }
                 return (numericSeed, iteration)

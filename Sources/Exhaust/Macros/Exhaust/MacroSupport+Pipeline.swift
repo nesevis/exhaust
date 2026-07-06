@@ -342,7 +342,7 @@ package extension __ExhaustRuntime {
                 }
             }
         } catch {
-            reportIssue(
+            reportError(
                 localizedErrorMessage(error),
                 fileID: context.fileID,
                 filePath: context.filePath,
@@ -369,9 +369,8 @@ package extension __ExhaustRuntime {
         guard context.suppressIssueReporting == false else { return }
         for (_, observation) in observations where observation.attempts >= 20 {
             if observation.validityRate < 0.02, let location = observation.sourceLocation {
-                reportIssue(
+                reportWarning(
                     "Filter validity rate \(String(format: "%.1f", observation.validityRate * 100))% over \(observation.attempts) attempts. Generation is spending most of its time on rejection. Consider widening the input range or relaxing the predicate.",
-                    severity: .warning,
                     fileID: location.fileID,
                     filePath: location.filePath,
                     line: location.line,
@@ -446,7 +445,7 @@ package extension __ExhaustRuntime {
             DispatchQueue.concurrentPerform(iterations: laneCount) { laneIndex in
                 let startIndex = UInt64(laneIndex) * baseIterationsPerLane
                 let iterationsForLane = baseIterationsPerLane + (laneIndex == laneCount - 1 ? remainder : 0)
-                let batchResult = runSamplingBatch(
+                nonisolated(unsafe) let batchResult = runSamplingBatch(
                     gen: unsafeContext.gen,
                     property: unsafeContext.property,
                     baseSeed: baseSeed,
@@ -471,9 +470,8 @@ package extension __ExhaustRuntime {
         if context.suppressIssueReporting == false {
             for (_, observation) in mergedFilterObservations where observation.attempts >= 20 {
                 if observation.validityRate < 0.02, let location = observation.sourceLocation {
-                    reportIssue(
+                    reportWarning(
                         "Filter validity rate \(String(format: "%.1f", observation.validityRate * 100))% over \(observation.attempts) attempts. Generation is spending most of its time on rejection. Consider widening the input range or relaxing the predicate.",
-                        severity: .warning,
                         fileID: location.fileID,
                         filePath: location.filePath,
                         line: location.line,
@@ -493,7 +491,7 @@ package extension __ExhaustRuntime {
         // Report first error from any batch.
         for batch in batchResults {
             if let error = batch.error {
-                reportIssue(
+                reportError(
                     localizedErrorMessage(error),
                     fileID: context.fileID,
                     filePath: context.filePath,
@@ -614,7 +612,7 @@ package extension __ExhaustRuntime {
                     )
                 }
                 if context.suppressIssueReporting == false {
-                    reportIssue(
+                    reportError(
                         rendered,
                         fileID: context.fileID,
                         filePath: context.filePath,
@@ -625,7 +623,7 @@ package extension __ExhaustRuntime {
                 return .reduced(reducedValue)
             }
         } catch {
-            reportIssue(
+            reportError(
                 localizedErrorMessage(error),
                 fileID: context.fileID,
                 filePath: context.filePath,
@@ -659,7 +657,7 @@ package extension __ExhaustRuntime {
         report.renderedFailure = rendered
         report.replaySeed = failure.encodedReplaySeed
         if context.suppressIssueReporting == false {
-            reportIssue(
+            reportError(
                 rendered,
                 fileID: context.fileID,
                 filePath: context.filePath,
@@ -698,7 +696,7 @@ package extension __ExhaustRuntime {
         guard property(value) == false else {
             let message = "reflecting: value passes the property — reduction requires a failing value"
             if suppressIssueReporting == false {
-                reportIssue(
+                reportError(
                     message,
                     fileID: fileID,
                     filePath: filePath,
@@ -713,7 +711,7 @@ package extension __ExhaustRuntime {
         guard let tree = try Interpreters.reflect(gen, with: value) else {
             let message = "reflecting: could not reflect value into choice tree"
             if suppressIssueReporting == false {
-                reportIssue(
+                reportError(
                     message,
                     fileID: fileID,
                     filePath: filePath,
@@ -779,7 +777,7 @@ package extension __ExhaustRuntime {
                 reduction: 1 + propertyInvocationCount
             )
             if suppressIssueReporting == false {
-                reportIssue(
+                reportError(
                     rendered,
                     fileID: fileID,
                     filePath: filePath,
@@ -826,7 +824,7 @@ package extension __ExhaustRuntime {
             reduction: 1 + propertyInvocationCount
         )
         if suppressIssueReporting == false {
-            reportIssue(
+            reportError(
                 rendered,
                 fileID: fileID,
                 filePath: filePath,

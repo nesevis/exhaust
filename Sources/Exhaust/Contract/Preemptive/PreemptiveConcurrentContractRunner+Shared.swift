@@ -121,9 +121,8 @@ func warnIfInterleavingSpaceIsLarge(
         return
     }
     let millions = interleavings / 1_000_000
-    reportIssue(
+    reportWarning(
         "Worst-case linearizability search space is ~\(millions)M interleavings (commandLimit=\(commandLimit), lanes=\(laneCount)). Each oracle-flagged probe runs an exhaustive DFS over this space. Reduce .commandLimit or .concurrent level to improve performance.",
-        severity: .warning,
         fileID: fileID,
         filePath: filePath,
         line: line,
@@ -152,9 +151,8 @@ func warnIfTimeoutFractionHigh(
         return
     }
     let percentage = Int((fraction * 100).rounded())
-    reportIssue(
+    reportWarning(
         "\(timedOutProbes) of \(totalBudget) budgeted probes timed out (\(percentage)%). Timed-out probes count as passes, so this run may have passed without exercising the system. A saturated machine, an idle timeout set too low, or a genuinely hanging command can cause this. Raise .idleTimeoutMs, reduce parallelism, or check for a hang.",
-        severity: .warning,
         fileID: fileID,
         filePath: filePath,
         line: line,

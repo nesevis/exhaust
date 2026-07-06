@@ -98,38 +98,41 @@ struct DoubleGeneratorTests {
 
 // MARK: - CGFloat Generator
 
-@Suite("CGFloat Generator")
-struct CGFloatGeneratorTests {
-    @Test("Generated values are within range")
-    func valuesWithinRange() throws {
-        let gen = #gen(.cgfloat(in: 0.0 ... 320.0))
-        let values = try #example(gen, count: 50, seed: 42)
+// The .cgfloat factory is only declared where CoreGraphics exists; this mirrors the product's condition in ReflectiveGenerator+NumericGenerators.swift.
+#if canImport(CoreGraphics)
+    @Suite("CGFloat Generator")
+    struct CGFloatGeneratorTests {
+        @Test("Generated values are within range")
+        func valuesWithinRange() throws {
+            let gen = #gen(.cgfloat(in: 0.0 ... 320.0))
+            let values = try #example(gen, count: 50, seed: 42)
 
-        for value in values {
-            #expect(value >= 0.0)
-            #expect(value <= 320.0)
+            for value in values {
+                #expect(value >= 0.0)
+                #expect(value <= 320.0)
+            }
+        }
+
+        @Test("Full-range generation produces finite values")
+        func fullRangeFinite() throws {
+            let gen = #gen(.cgfloat())
+            let values = try #example(gen, count: 50, seed: 42)
+
+            for value in values {
+                #expect(value.isFinite)
+            }
+        }
+
+        @Test("Deterministic: same seed produces same values")
+        func deterministic() throws {
+            let gen = #gen(.cgfloat(in: -100.0 ... 100.0))
+
+            let values1 = try #example(gen, count: 20, seed: 99)
+            let values2 = try #example(gen, count: 20, seed: 99)
+            #expect(values1 == values2)
         }
     }
-
-    @Test("Full-range generation produces finite values")
-    func fullRangeFinite() throws {
-        let gen = #gen(.cgfloat())
-        let values = try #example(gen, count: 50, seed: 42)
-
-        for value in values {
-            #expect(value.isFinite)
-        }
-    }
-
-    @Test("Deterministic: same seed produces same values")
-    func deterministic() throws {
-        let gen = #gen(.cgfloat(in: -100.0 ... 100.0))
-
-        let values1 = try #example(gen, count: 20, seed: 99)
-        let values2 = try #example(gen, count: 20, seed: 99)
-        #expect(values1 == values2)
-    }
-}
+#endif
 
 // MARK: - Data Generator
 

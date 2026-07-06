@@ -29,7 +29,7 @@ public extension __ExhaustRuntime {
     ) async -> ContractResult<Spec>? {
         let parsed = ResolvedConcurrentConfig.parse(settings)
         if let invalidSeed = parsed.invalidReplaySeed {
-            reportIssue(
+            reportError(
                 "Invalid replay seed: \(invalidSeed)",
                 fileID: fileID, filePath: filePath, line: line, column: column
             )
@@ -62,7 +62,7 @@ public extension __ExhaustRuntime {
             }
         }
         for issue in deferredIssues {
-            reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
+            reportError(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }
         warnIfTimeoutFractionHigh(
             timedOutProbes: timedOutProbeCount.value,
@@ -126,13 +126,13 @@ private struct AsyncPreemptiveChecker<Spec: AsyncContractSpec>: PreemptiveBacken
 
         // Observation stays lane-local on purpose: a shared, locked log on the command path would serialize the lanes between commands and flush caches, which both narrows the interleavings the probe can realize and can mask the memory-visibility bugs this runner exists to catch (Lowe, "Testing for Linearizability", section 7.1). Cross-lane ordering is reconstructed afterwards from the per-command timestamps.
         let rendezvous = LaneRendezvous(laneCount: partition.laneIDs.count)
+        nonisolated(unsafe) let spec = concurrentSpec
         for (offset, laneID) in partition.laneIDs.enumerated() {
             let laneIndices = partition.laneBuckets[laneID] ?? []
             let responseBox = perLaneResponses[offset]
             group.enter()
             DispatchQueue.global().async {
                 var exception: NSException?
-                nonisolated(unsafe) let spec = concurrentSpec
                 let succeeded = exhaust_runCatchingObjCException({
                     let responses: [ObservedResponse<Spec.Command>]? = awaitOrTimeout("lane") {
                         // Rendezvous inside the bridged task rather than at the top of the GCD block, so the per-lane drain-loop setup skew is also absorbed before the first command. On the macOS 15+ drain-loop path the task runs on this lane's own GCD thread, so the spin never occupies the cooperative pool.

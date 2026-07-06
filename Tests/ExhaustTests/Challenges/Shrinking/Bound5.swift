@@ -8,7 +8,6 @@
 import Exhaust
 import ExhaustTestSupport
 import Foundation
-import OSLog
 import Testing
 
 @MainActor

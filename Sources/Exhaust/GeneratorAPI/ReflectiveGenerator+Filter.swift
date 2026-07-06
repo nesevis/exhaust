@@ -47,7 +47,7 @@ public extension ReflectiveGenerator {
                 line: line,
                 column: column,
                 onBudgetExhausted: {
-                    reportIssue(
+                    reportError(
                         "Filter exhausted its retry budget (\(__ExhaustRuntime.maxFilterRuns) attempts) without producing a valid value. Consider restructuring the generator to produce valid values directly.",
                         fileID: fileID,
                         filePath: filePath,

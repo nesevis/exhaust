@@ -3,16 +3,19 @@ import XCTest
 
 /// Integration tests for XCTest-specific behavior in the `#exhaust` pipeline.
 final class XCTestIntegrationTests: XCTestCase {
-    func testXCTSkipTreatedAsPassingValue() {
-        let result = #exhaust(
-            #gen(.int(in: 0 ... 100)),
-            .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 10))
-        ) { _ in
-            throw XCTSkip("Skipping everything")
+    // The pipeline's silent probing under XCTest relies on expected-failure support (XCTExpectFailure via IssueReporting), which corelibs-xctest does not provide; on Linux IssueReporting reports "Expecting failures is unavailable in XCTest on this platform" instead.
+    #if canImport(ObjectiveC)
+        func testXCTSkipTreatedAsPassingValue() {
+            let result = #exhaust(
+                #gen(.int(in: 0 ... 100)),
+                .suppress(.issueReporting),
+                .budget(.custom(coverage: 0, sampling: 10))
+            ) { _ in
+                throw XCTSkip("Skipping everything")
+            }
+            XCTAssertNil(result, "XCTSkip should be treated as passing, not as a counterexample")
         }
-        XCTAssertNil(result, "XCTSkip should be treated as passing, not as a counterexample")
-    }
+    #endif
 
     /// When an XTUnwrap fails it takes ~400ms to report a failure
     func doNotRun_testVoidClosureDoesNotWork() throws {

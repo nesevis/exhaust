@@ -28,7 +28,7 @@ public extension __ExhaustRuntime {
     ) async -> ContractResult<Spec>? {
         let parsed = ResolvedConcurrentConfig.parse(settings)
         if let invalidSeed = parsed.invalidReplaySeed {
-            reportIssue(
+            reportError(
                 "Invalid replay seed: \(invalidSeed)",
                 fileID: fileID, filePath: filePath, line: line, column: column
             )
@@ -62,7 +62,7 @@ public extension __ExhaustRuntime {
             }
         }
         for issue in deferredIssues {
-            reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
+            reportError(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }
         warnIfTimeoutFractionHigh(
             timedOutProbes: timedOutProbeCount.value,

@@ -27,7 +27,7 @@ public extension __ExhaustRuntime {
         var seed: UInt64?
         if let replaySeed = config.replaySeed {
             guard let resolved = replaySeed.resolve() else {
-                reportIssue(
+                reportError(
                     "Invalid replay seed: \(replaySeed)",
                     fileID: fileID,
                     filePath: filePath,
@@ -90,7 +90,7 @@ public extension __ExhaustRuntime {
         var seed: UInt64?
         if let replaySeed = config.replaySeed {
             guard let resolved = replaySeed.resolve() else {
-                reportIssue(
+                reportError(
                     "Invalid replay seed: \(replaySeed)",
                     fileID: fileID,
                     filePath: filePath,

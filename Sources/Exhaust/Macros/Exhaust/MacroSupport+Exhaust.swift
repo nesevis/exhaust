@@ -220,9 +220,8 @@ public extension __ExhaustRuntime {
             budget.preconditionValid()
 
             if parallelLanes > 1, seed != nil, suppressIssueReporting == false {
-                reportIssue(
+                reportWarning(
                     ".parallelize has no effect with .replay: replay runs single-lane for deterministic reproduction.",
-                    severity: .warning,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -243,7 +242,7 @@ public extension __ExhaustRuntime {
             defer { onReportClosure?(report) }
 
             if let invalidReplaySeed {
-                reportIssue(
+                reportError(
                     "Invalid replay seed: \(invalidReplaySeed)",
                     fileID: fileID,
                     filePath: filePath,
@@ -321,7 +320,7 @@ public extension __ExhaustRuntime {
                     )
                     return (result, nil)
                 } catch {
-                    reportIssue(localizedErrorMessage(error), fileID: fileID, filePath: filePath, line: line, column: column)
+                    reportError(localizedErrorMessage(error), fileID: fileID, filePath: filePath, line: line, column: column)
                     return (reflecting, nil)
                 }
             }
@@ -437,7 +436,7 @@ public extension __ExhaustRuntime {
             for encodedSeed in traitConfig.regressions {
                 guard ReplaySeed.Resolved.decode(encodedSeed) != nil
                 else {
-                    reportIssue(
+                    reportError(
                         "Invalid regression seed: \(encodedSeed)",
                         fileID: fileID,
                         filePath: filePath,
@@ -569,7 +568,7 @@ public extension __ExhaustRuntime {
                 }
                 if suppressIssueReporting == false {
                     if let rendered = capturedRenderedFailure {
-                        reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
+                        reportError(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
                     }
 
                     // Re-run without suppression so #expect failures record with reduced values.
@@ -738,7 +737,7 @@ public extension __ExhaustRuntime {
             }
             if suppressIssueReporting == false {
                 if let rendered = capturedRenderedFailure {
-                    reportIssue(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
+                    reportError(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
                 }
 
                 do {

@@ -34,7 +34,7 @@ public extension __ExhaustRuntime {
                 )
             case .tasks:
                 guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
-                    reportIssue(
+                    reportError(
                         "@Contract(.tasks) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, or visionOS 2+",
                         fileID: fileID,
                         filePath: filePath,
@@ -90,9 +90,8 @@ public extension __ExhaustRuntime {
                 return nil
             }.last
             if let requestedLevel, requestedLevel > 1 {
-                reportIssue(
+                reportWarning(
                     "Actor isolation serializes all command dispatch. .parallelize(lanes: \(requestedLevel)) will be ignored.",
-                    severity: .warning,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -103,7 +102,7 @@ public extension __ExhaustRuntime {
 
         let parsed = ResolvedConcurrentConfig.parse(settings)
         if let invalidSeed = parsed.invalidReplaySeed {
-            reportIssue(
+            reportError(
                 "Invalid replay seed: \(invalidSeed)",
                 fileID: fileID,
                 filePath: filePath,
@@ -137,7 +136,7 @@ public extension __ExhaustRuntime {
             }
         }
         for issue in deferredIssues {
-            reportIssue(issue, fileID: fileID, filePath: filePath, line: line, column: column)
+            reportError(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }
         warnIfTimeoutFractionHigh(
             timedOutProbes: timedOutProbeCount.value,

@@ -457,7 +457,7 @@ private extension Generator where Operation == ReflectiveOperation {
             switch failure {
                 case let .lowFilterValidityRate(fingerprint, _, _):
                     if let location = report.filterObservations[fingerprint]?.sourceLocation {
-                        reportIssue(
+                        reportConfiguredIssue(
                             "\(failure)",
                             severity: issueSeverity,
                             fileID: location.fileID,
@@ -466,7 +466,7 @@ private extension Generator where Operation == ReflectiveOperation {
                             column: location.column
                         )
                     } else {
-                        reportIssue(
+                        reportConfiguredIssue(
                             "\(failure)",
                             severity: issueSeverity,
                             fileID: fileID,
@@ -476,7 +476,7 @@ private extension Generator where Operation == ReflectiveOperation {
                         )
                     }
                 default:
-                    reportIssue(
+                    reportConfiguredIssue(
                         "\(failure)",
                         severity: issueSeverity,
                         fileID: fileID,

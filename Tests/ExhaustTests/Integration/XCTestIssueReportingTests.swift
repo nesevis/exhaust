@@ -8,18 +8,21 @@ import XCTest
 /// property should produce an XCTest failure, and `.suppress(.issueReporting)` should
 /// prevent it.
 final class XCTestIssueReportingTests: XCTestCase {
-    func testFailingPropertyRecordsXCTestFailure() {
-        // reportIssue bridges to XCTFail, so #exhaust records an XCTest failure
-        // for the failing property. XCTExpectFailure marks this as intentional.
-        XCTExpectFailure("exhaust should report property failure via XCTFail")
-        let result = #exhaust(
-            #gen(.int(in: 0 ... 100)),
-            .budget(.custom(coverage: 0, sampling: 10))
-        ) { value in
-            value < 0
+    // XCTExpectFailure exists only in Apple's XCTest, not corelibs-xctest, so this test cannot run on Linux: without the marker the intentional failure would fail the suite.
+    #if canImport(ObjectiveC)
+        func testFailingPropertyRecordsXCTestFailure() {
+            // reportIssue bridges to XCTFail, so #exhaust records an XCTest failure
+            // for the failing property. XCTExpectFailure marks this as intentional.
+            XCTExpectFailure("exhaust should report property failure via XCTFail")
+            let result = #exhaust(
+                #gen(.int(in: 0 ... 100)),
+                .budget(.custom(coverage: 0, sampling: 10))
+            ) { value in
+                value < 0
+            }
+            XCTAssertNotNil(result, "Should return a counterexample")
         }
-        XCTAssertNotNil(result, "Should return a counterexample")
-    }
+    #endif
 
     func testSuppressedPropertyDoesNotRecordXCTestFailure() {
         // With suppressIssueReporting, no XCTest issue should be recorded.

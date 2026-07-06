@@ -38,7 +38,7 @@ public extension __ExhaustRuntime {
                     budget = exploreBudget
                 case let .replay(replaySeed):
                     guard let resolved = replaySeed.resolve() else {
-                        reportIssue(
+                        reportError(
                             "Invalid replay seed: \(replaySeed)",
                             fileID: fileID,
                             filePath: filePath,
@@ -86,9 +86,8 @@ public extension __ExhaustRuntime {
         budget.preconditionValid()
 
         if shouldParallelize, seed != nil, suppressIssueReporting == false {
-            reportIssue(
+            reportWarning(
                 ".parallelize has no effect with .replay: replay runs sequentially for deterministic reproduction.",
-                severity: .warning,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -105,7 +104,7 @@ public extension __ExhaustRuntime {
             if let traitConfig = ExhaustTraitConfiguration.current {
                 for encodedSeed in traitConfig.regressions {
                     guard let decoded = ReplaySeed.decodeWithIteration(encodedSeed) else {
-                        reportIssue(
+                        reportError(
                             "Invalid regression seed: \(encodedSeed)",
                             fileID: fileID, filePath: filePath, line: line, column: column
                         )
@@ -142,7 +141,7 @@ public extension __ExhaustRuntime {
                     return try runner.run()
                 }()
             } catch {
-                reportIssue(
+                reportError(
                     "Generator failed during exploration: \(error)",
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
@@ -201,7 +200,7 @@ public extension __ExhaustRuntime {
                 failure.reductionProducedNoImprovement = result.reducedSequence == nil
                 let rendered = failure.render()
                 if suppressIssueReporting == false {
-                    reportIssue(
+                    reportError(
                         rendered,
                         fileID: fileID,
                         filePath: filePath,
@@ -297,7 +296,7 @@ public extension __ExhaustRuntime {
                     } catch {}
 
                     let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: report.propertyInvocations).encoded
-                    reportIssue(
+                    reportError(
                         "Reproduce: .replay(\"\(encoded)\")",
                         fileID: fileID,
                         filePath: filePath,
@@ -427,7 +426,7 @@ public extension __ExhaustRuntime {
                     }
 
                     let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: report.propertyInvocations).encoded
-                    reportIssue(
+                    reportError(
                         "Reproduce: .replay(\"\(encoded)\")",
                         fileID: fileID,
                         filePath: filePath,

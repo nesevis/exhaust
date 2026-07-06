@@ -1,7 +1,8 @@
 #if canImport(ObjectiveC)
 // On Apple platforms `exhaust_runCatchingObjCException` comes from the ExhaustObjCSupport target, an Objective-C `@try`/`@catch` wrapper. See ExhaustObjCSupport.h.
 #else
-    import Foundation
+    /// Stand-in for Foundation's `NSException`, which swift-corelibs-foundation does not provide. The preemptive runners only store and nil-check caught exceptions, and on platforms without an Objective-C runtime none can ever be raised, so no instance is ever created.
+    final class NSException {}
 
     /// Runs the block directly on platforms without an Objective-C runtime.
     ///
