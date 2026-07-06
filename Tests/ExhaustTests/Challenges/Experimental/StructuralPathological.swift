@@ -87,12 +87,11 @@ struct StructuralPathologicalChallenge {
 
         let output = #exhaust(
             gen,
-            .suppress(.issueReporting)
-//            .replay(1337)
+            .suppress(.issueReporting),
+            .replay(1337)
         ) { arr in
             arr.reduce(0, +) < 8
         }
-
         #expect(output == [0, 8])
     }
 
