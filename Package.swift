@@ -5,6 +5,15 @@ import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
+/// True when the manifest is being compiled on an Apple host. XCFrameworks are an Apple-only distribution format, so the release workflow rewrites `usePrecompiled` below into an expression gated on this constant: Apple hosts consume the prebuilt ExhaustCore binary, Linux hosts build ExhaustCore from source off the same release tag.
+let isDarwinHost: Bool = {
+    #if canImport(Darwin)
+        return true
+    #else
+        return false
+    #endif
+}()
+
 let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil
 
 let swiftLintPlugins: [Target.PluginUsage] = []

@@ -16,6 +16,8 @@ permissions:
 jobs:
   build-and-release:
     runs-on: macos-26
+    outputs:
+      vtag: ${{ steps.version.outputs.vtag }}
 
     steps:
       - uses: actions/checkout@v6
@@ -164,9 +166,12 @@ jobs:
         run: |
           URL="https://github.com/nesevis/exhaust/releases/download/$VTAG/ExhaustCore.xcframework.zip"
 
-          # Switch to precompiled mode
+          # Switch to precompiled mode on Apple hosts only. XCFrameworks do not resolve on Linux,
+          # so Linux consumers of the same release tag build ExhaustCore from source.
+          # EXHAUST_FORCE_SOURCE is the escape hatch for Apple hosts cross-compiling to Linux
+          # with a Swift SDK, where the host check alone would wrongly pick the binary.
           sed -i '' \
-            's|let usePrecompiled = ProcessInfo.processInfo.environment\["EXHAUST_RELEASE"\] != nil|let usePrecompiled = true|' \
+            's|let usePrecompiled = ProcessInfo.processInfo.environment\["EXHAUST_RELEASE"\] != nil|let usePrecompiled = isDarwinHost \&\& ProcessInfo.processInfo.environment["EXHAUST_FORCE_SOURCE"] == nil|' \
             Package.swift
 
           # Point binary target at the release URL
@@ -200,3 +205,23 @@ jobs:
               --generate-notes \
               "Frameworks/ExhaustCore.xcframework.zip#ExhaustCore.xcframework.zip"
           fi
+
+  # A Linux consumer of the release tag gets the rewritten manifest with usePrecompiled == false
+  # and builds ExhaustCore from source. This job proves that path against the pushed release
+  # branch before anyone hits it.
+  verify-linux:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    container: swift:6.3
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: release/${{ needs.build-and-release.outputs.vtag }}
+
+      - name: Build release manifest from source
+        run: swift build
