@@ -6,6 +6,8 @@ final class XCTestIntegrationTests: XCTestCase {
     // The pipeline's silent probing under XCTest relies on expected-failure support (XCTExpectFailure via IssueReporting), which corelibs-xctest does not provide; on Linux IssueReporting reports "Expecting failures is unavailable in XCTest on this platform" instead.
     #if canImport(ObjectiveC)
         func testXCTSkipTreatedAsPassingValue() {
+            // A skipped invocation is not a counterexample, so the result stays nil. A run whose every invocation was skipped asserts nothing, so it must report a pointless-run failure; XCTExpectFailure fails this test if that failure ever stops firing.
+            XCTExpectFailure("All invocations were skipped, so the run reports a pointless-run failure")
             let result = #exhaust(
                 #gen(.int(in: 0 ... 100)),
                 .suppress(.issueReporting),

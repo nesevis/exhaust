@@ -171,6 +171,7 @@ package extension __ExhaustRuntime {
         var filterObservations: [UInt64: FilterObservation] = [:]
         var statsLines: [OpenPBTStatsLine] = []
         var error: (any Error)?
+        var uniqueExhaustionTruncatedRun = false
     }
 
     /// Runs a contiguous range of sampling iterations, returning the first failure (if any).
@@ -283,6 +284,7 @@ package extension __ExhaustRuntime {
         }
 
         result.filterObservations = interpreter.filterObservations
+        result.uniqueExhaustionTruncatedRun = interpreter.uniqueExhaustionTruncatedRun
         return result
     }
 
@@ -342,6 +344,7 @@ package extension __ExhaustRuntime {
                 }
             }
         } catch {
+            report.generationErrorOccurred = true
             reportError(
                 localizedErrorMessage(error),
                 fileID: context.fileID,
@@ -353,12 +356,37 @@ package extension __ExhaustRuntime {
 
         report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
         emitFilterWarnings(interpreter.filterObservations, context: context)
+        if interpreter.uniqueExhaustionTruncatedRun {
+            recordUniqueExhaustion(iterations: iterations, context: context, report: &report)
+        }
         report.setInvocations(
             coverage: coverageIterations,
             randomSampling: iterations,
             reduction: 0
         )
         return nil
+    }
+
+    /// Records a unique-exhaustion truncation in the report and surfaces it as a warning.
+    ///
+    /// Exhaustion inside the interpreter only logs at warning level, which the default configuration never prints, so a run that executed a fraction of its budget would otherwise pass with no signal.
+    private static func recordUniqueExhaustion(
+        iterations: Int,
+        context: PipelineContext<some Any>,
+        report: inout ExhaustReport
+    ) {
+        report.runTruncatedByUniqueExhaustion = true
+        let message = "A unique site exhausted its retry budget after \(iterations) of \(context.samplingBudget) sampling iterations. The remaining iterations did not run."
+        report.uniqueExhaustionWarning = message
+        if context.suppressIssueReporting == false {
+            reportWarning(
+                message,
+                fileID: context.fileID,
+                filePath: context.filePath,
+                line: context.line,
+                column: context.column
+            )
+        }
     }
 
     /// Emits filter validity warnings when the rejection rate exceeds 98%.
@@ -491,6 +519,7 @@ package extension __ExhaustRuntime {
         // Report first error from any batch.
         for batch in batchResults {
             if let error = batch.error {
+                report.generationErrorOccurred = true
                 reportError(
                     localizedErrorMessage(error),
                     fileID: context.fileID,
@@ -509,6 +538,9 @@ package extension __ExhaustRuntime {
 
         guard let failure = winningFailure else {
             report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
+            if batchResults.contains(where: \.uniqueExhaustionTruncatedRun) {
+                recordUniqueExhaustion(iterations: totalIterations, context: context, report: &report)
+            }
             report.setInvocations(
                 coverage: coverageIterations,
                 randomSampling: totalIterations,
@@ -837,18 +869,31 @@ package extension __ExhaustRuntime {
 
     // MARK: - Detection and Async Bridges
 
+    /// Returns whether an error thrown from a property closure is a skip marker rather than a failure.
+    static func isSkipError(_ error: any Error) -> Bool {
+        if error is PropertySkip { return true }
+        #if canImport(XCTest)
+            if error is XCTSkip { return true }
+        #endif
+        return false
+    }
+
     /// Wraps a throwing `Void`-returning closure into `(Output) -> Bool` via try/catch.
+    ///
+    /// A thrown skip marker (``PropertySkip`` or `XCTSkip`) counts as a pass and is tallied into `skipCounter`, so the run can warn on a high skip rate and fail when every invocation was skipped.
     static func wrapDetectionProperty<Output>(
-        _ detection: @escaping @Sendable (Output) throws -> Void
+        _ detection: @escaping @Sendable (Output) throws -> Void,
+        countingSkipsInto skipCounter: SkipCounter? = nil
     ) -> @Sendable (Output) -> Bool {
         { value in
             do {
                 try detection(value)
                 return true
             } catch {
-                #if canImport(XCTest)
-                    if error is XCTSkip { return true }
-                #endif
+                if isSkipError(error) {
+                    skipCounter?.increment()
+                    return true
+                }
                 return false
             }
         }
@@ -856,7 +901,8 @@ package extension __ExhaustRuntime {
 
     /// Bridges an async Bool-returning property to a synchronous one via ``blockingAwait(_:)``.
     static func bridgeAsyncProperty<Output>(
-        _ property: @escaping @Sendable (Output) async throws -> Bool
+        _ property: @escaping @Sendable (Output) async throws -> Bool,
+        countingSkipsInto skipCounter: SkipCounter? = nil
     ) -> @Sendable (Output) -> Bool {
         { value in
             let valueBox = UnsafeSendableBox(value)
@@ -864,9 +910,10 @@ package extension __ExhaustRuntime {
                 do {
                     return try await property(valueBox.value)
                 } catch {
-                    #if canImport(XCTest)
-                        if error is XCTSkip { return true }
-                    #endif
+                    if isSkipError(error) {
+                        skipCounter?.increment()
+                        return true
+                    }
                     return false
                 }
             }
@@ -875,7 +922,8 @@ package extension __ExhaustRuntime {
 
     /// Bridges an async Void-returning detection closure to a synchronous Bool via ``blockingAwait(_:)``.
     static func bridgeAsyncDetection<Output>(
-        _ detection: @escaping @Sendable (Output) async throws -> Void
+        _ detection: @escaping @Sendable (Output) async throws -> Void,
+        countingSkipsInto skipCounter: SkipCounter? = nil
     ) -> @Sendable (Output) -> Bool {
         { value in
             let valueBox = UnsafeSendableBox(value)
@@ -883,11 +931,11 @@ package extension __ExhaustRuntime {
                 do {
                     try await detection(valueBox.value)
                 } catch {
-                    #if canImport(XCTest)
-                        if (error is XCTSkip) == false { return false }
-                    #else
-                        return false
-                    #endif
+                    if isSkipError(error) {
+                        skipCounter?.increment()
+                        return true
+                    }
+                    return false
                 }
                 return true
             }

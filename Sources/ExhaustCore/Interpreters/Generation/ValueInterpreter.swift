@@ -432,7 +432,8 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 effectiveRange = min ... max
             }
 
-            for _ in 0 ..< count {
+            for elementIndex in 0 ..< count {
+                try SharedInterpreterHelpers.checkGenerationDeadline(context.deadlineNanoseconds, elementIndex: elementIndex)
                 let rawBits = context.prng.next(in: effectiveRange)
                 let randomBits: Any = tag.isFloatingPoint
                     ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
@@ -465,7 +466,8 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 elements.append(element)
             }
         } else {
-            for _ in 0 ..< count {
+            for elementIndex in 0 ..< count {
+                try SharedInterpreterHelpers.checkGenerationDeadline(context.deadlineNanoseconds, elementIndex: elementIndex)
                 guard let element = try generateRecursiveAny(
                     elementGen, context: &context
                 ) else {

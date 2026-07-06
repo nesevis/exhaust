@@ -29,6 +29,9 @@ package struct GenerationContext: ~Copyable {
     /// Pseudorandom number generator driving value generation.
     package var prng: Xoshiro256
 
+    /// Absolute monotonic deadline for materializing the current value, or zero when generation is not deadline-bound. Set per value by the generation interpreters and checked on a sampled cadence inside sequence element loops, so a multiplicatively nested or otherwise intractable value fails with a diagnosis instead of hanging the test.
+    package var deadlineNanoseconds: UInt64 = 0
+
     // MARK: - Caches
 
     /// Seen keys for `unique(by:)` deduplication, keyed by site fingerprint.

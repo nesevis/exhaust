@@ -34,7 +34,7 @@ public enum ContractSettings {
     /// Each lane runs its assigned commands concurrently. For `.tasks` contracts, the cooperative scheduler interleaves continuations at every `await` boundary. For `.threads` contracts, each lane dispatches to a separate GCD thread.
     case parallelize(lanes: ConcurrencyLevel)
 
-    /// Sets the maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout. Default is 2000.
+    /// Sets the maximum milliseconds the drain loop waits with no pending continuations before declaring a timeout. Default is 2000. Zero or negative values disable the timeout entirely, so the runner waits unbounded.
     ///
     /// When the idle timeout fires, the test reports the current command sequence as a failure without attempting reduction (since each reduction probe would also time out).
     case idleTimeoutMs(Int)

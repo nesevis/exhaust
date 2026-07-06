@@ -84,13 +84,15 @@ public extension ReflectiveGenerator {
 
     /// Creates a generator that produces sets with count within a specified range.
     ///
+    /// The count controls how many elements are drawn, and duplicates collapse. When the element generator repeats a value, the resulting set is smaller than the count, even below the range's lower bound (for example, drawing `Bool` three times can produce a 1-element set).
+    ///
     /// ```swift
     /// let gen = #gen(.set(.int(in: 0...100), count: 1...5))
     /// ```
     ///
     /// - Parameters:
     ///   - gen: Generator for each set element.
-    ///   - count: The allowed range of set sizes.
+    ///   - count: The allowed range of element draws per set.
     ///   - scaling: How set size scales with the size parameter. Defaults to `.linear`.
     /// - Returns: A generator producing sets with count in the given range.
     static func set<Element: Hashable>(
@@ -103,7 +105,9 @@ public extension ReflectiveGenerator {
         return Gen.setOf(gen.gen, within: range, scaling: LengthConversion.uint64Scaling(scaling)).wrapped
     }
 
-    /// Creates a generator that produces sets of an exact fixed count.
+    /// Creates a generator that produces sets from an exact number of element draws.
+    ///
+    /// The count controls how many elements are drawn, and duplicates collapse. When the element generator repeats a value, the resulting set is smaller than `count`.
     ///
     /// ```swift
     /// let gen = #gen(.set(.int(in: 0...100), count: 3))
@@ -111,8 +115,8 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameters:
     ///   - gen: Generator for each set element.
-    ///   - count: The exact number of elements in each generated set.
-    /// - Returns: A generator producing sets of the specified size.
+    ///   - count: The exact number of element draws per set.
+    /// - Returns: A generator producing sets of at most `count` elements.
     static func set<Element: Hashable>(
         _ gen: ReflectiveGenerator<Element>,
         count: Int
@@ -218,7 +222,8 @@ public extension ReflectiveGenerator {
     static func slice<C: Collection>(
         of collection: C
     ) -> ReflectiveGenerator<C.SubSequence> where Output == C.SubSequence {
-        Gen.slice(of: collection).wrapped
+        precondition(collection.isEmpty == false, "Cannot slice an empty collection")
+        return Gen.slice(of: collection).wrapped
     }
 
     /// Creates a generator that produces randomly shuffled versions of a generated collection.
@@ -297,12 +302,14 @@ public extension ReflectiveGenerator {
 
     /// Wraps this element generator to produce sets with count in a specified range.
     ///
+    /// The count controls how many elements are drawn, and duplicates collapse. When the element generator repeats a value, the resulting set is smaller than the count, even below the range's lower bound.
+    ///
     /// ```swift
     /// let gen = #gen(.int(in: 0...100)).set(count: 1...5)
     /// ```
     ///
     /// - Parameters:
-    ///   - count: The allowed range of set sizes.
+    ///   - count: The allowed range of element draws per set.
     ///   - scaling: How set size scales with the size parameter. Defaults to `.linear`.
     /// - Returns: A generator producing sets with count in the given range.
     func set(
@@ -314,14 +321,16 @@ public extension ReflectiveGenerator {
         return Gen.setOf(gen, within: range, scaling: LengthConversion.uint64Scaling(scaling)).wrapped
     }
 
-    /// Wraps this element generator to produce sets of an exact fixed count.
+    /// Wraps this element generator to produce sets from an exact number of element draws.
+    ///
+    /// The count controls how many elements are drawn, and duplicates collapse. When the element generator repeats a value, the resulting set is smaller than `count`.
     ///
     /// ```swift
     /// let gen = #gen(.int(in: 0...100)).set(count: 3)
     /// ```
     ///
-    /// - Parameter count: The exact number of elements in each generated set.
-    /// - Returns: A generator producing sets of the specified size.
+    /// - Parameter count: The exact number of element draws per set.
+    /// - Returns: A generator producing sets of at most `count` elements.
     func set(count: Int) -> ReflectiveGenerator<Set<Output>> where Output: Hashable {
         precondition(count >= 0, "Count must be non-negative")
         return Gen.setOf(gen, exactly: UInt64(count)).wrapped
@@ -362,7 +371,8 @@ public extension ReflectiveGenerator {
     static func element<C: Collection>(
         from collection: C
     ) -> ReflectiveGenerator<C.Element> where Output == C.Element, C.Element: Hashable {
-        Gen.element(from: collection).wrapped
+        precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
+        return Gen.element(from: collection).wrapped
     }
 
     /// Picks a random element from a fixed collection.
@@ -378,7 +388,8 @@ public extension ReflectiveGenerator {
     static func element<C: Collection>(
         from collection: C
     ) -> ReflectiveGenerator<C.Element> where Output == C.Element, C.Element: Equatable {
-        Gen.element(from: collection).wrapped
+        precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
+        return Gen.element(from: collection).wrapped
     }
 
     /// Picks a random element from a fixed collection, identified by a hashable key path during reflection.
@@ -397,7 +408,8 @@ public extension ReflectiveGenerator {
         from collection: C,
         id path: KeyPath<C.Element, some Hashable>
     ) -> ReflectiveGenerator<C.Element> where Output == C.Element {
-        Gen.element(from: collection, id: path).wrapped
+        precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
+        return Gen.element(from: collection, id: path).wrapped
     }
 
     /// Picks a random element from a fixed collection, identified by an equatable key path during reflection.
@@ -416,6 +428,7 @@ public extension ReflectiveGenerator {
         from collection: C,
         id path: KeyPath<C.Element, some Equatable>
     ) -> ReflectiveGenerator<C.Element> where Output == C.Element {
-        Gen.element(from: collection, id: path).wrapped
+        precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
+        return Gen.element(from: collection, id: path).wrapped
     }
 }

@@ -1,12 +1,13 @@
 // Configuration options for `#explore` classification-aware property tests.
 //
-// Pass these as variadic arguments to `#explore` to control test behavior:
+// Pass these as variadic arguments to `#explore` after the directions to control test behavior:
 // ```swift
-// let report = #explore(crossingGen, .budget(.thorough),
+// let report = #explore(crossingGen,
 //     directions: [
 //         ("northward", { $0.from > 0 && $0.to < 0 }),
 //         ("southward", { $0.from < 0 && $0.to > 0 }),
-//     ]
+//     ],
+//     .budget(.thorough)
 // ) { value in
 //     flightController.updatePosition(value)
 //     #expect(flightController.heading.isValid)

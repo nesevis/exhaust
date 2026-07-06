@@ -59,7 +59,10 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column
     ) throws -> [Output] {
-        precondition(count >= 0, "Count must be non-negative")
+        guard count >= 0 else {
+            reportError("#example count must be non-negative; got \(count)", fileID: fileID, filePath: filePath, line: line, column: column)
+            throw GeneratorError.invalidExampleCount(count)
+        }
         let gen = refGen.gen
         let resolved = try resolveExampleSeed(seed, fileID: fileID, filePath: filePath, line: line, column: column)
         let startIndex = UInt64((resolved.iteration ?? 1) - 1)

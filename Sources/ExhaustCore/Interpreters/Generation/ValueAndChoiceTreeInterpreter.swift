@@ -62,6 +62,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         context.filterObservations
     }
 
+    /// Whether the run ended before `maxRuns` because a `unique` site exhausted its retry budget. The exhaustion itself only logs at warning level, so the sampling pipeline reads this to surface the truncation through the issue channel.
+    package private(set) var uniqueExhaustionTruncatedRun = false
+
     // MARK: - Iterator
 
     public mutating func next() throws -> Element? {
@@ -73,6 +76,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         if context.isFixed == false {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
+        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
 
         defer {
             context.runs += 1
@@ -99,6 +103,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     "requested": "\(context.maxRuns)",
                 ]
             )
+            uniqueExhaustionTruncatedRun = true
             context.runs = context.maxRuns
             return nil
         } catch GeneratorError.sparseValidityCondition {
@@ -133,6 +138,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         if context.isFixed == false {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
         }
+        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
 
         defer { context.runs += 1 }
         do {
@@ -150,6 +156,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     "requested": "\(context.maxRuns)",
                 ]
             )
+            uniqueExhaustionTruncatedRun = true
             context.runs = context.maxRuns
             return nil
         } catch GeneratorError.sparseValidityCondition {
@@ -170,6 +177,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     public mutating func reproduceWithTree() throws -> Element? {
         let failingRunIndex = context.runs - 1
         context.prng = Xoshiro256.derive(from: context.baseSeed, at: failingRunIndex)
+        // Refresh the deadline: the absolute deadline armed for the original generation has been ticking through the property invocation, and a stale one could expire immediately.
+        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
 
         let savedRuns = context.runs
         context.runs = failingRunIndex
@@ -591,7 +600,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             )
             let metadata = ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit, typeTagPayload: typeTagPayload)
 
-            for _ in 0 ..< count {
+            for elementIndex in 0 ..< count {
+                try SharedInterpreterHelpers.checkGenerationDeadline(context.deadlineNanoseconds, elementIndex: elementIndex)
                 let rawBits = context.prng.next(in: effectiveRange)
                 let randomBits = tag.isFloatingPoint
                     ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
@@ -607,7 +617,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 elements.append(elementTree)
             }
         } else {
-            for _ in 0 ..< count {
+            for elementIndex in 0 ..< count {
+                try SharedInterpreterHelpers.checkGenerationDeadline(context.deadlineNanoseconds, elementIndex: elementIndex)
                 guard let (result, element) = try generateRecursiveAny(
                     elementGen, context: &context
                 ) else {

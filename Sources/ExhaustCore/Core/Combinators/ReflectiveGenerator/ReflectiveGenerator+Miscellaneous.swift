@@ -41,6 +41,8 @@ public extension ReflectiveGenerator {
 
     /// Creates a generator that randomly selects from weighted generators.
     ///
+    /// Entries with weight zero are removed before the pick is built: a branch that can never be drawn does not appear in the choice layout. When that removal leaves exactly one entry, its generator is returned directly with no pick node; a list that starts with a single entry keeps its pick. At least one entry must have a nonzero weight.
+    ///
     /// ```swift
     /// let gen = #gen(.oneOf(weighted: (1, .just(0)), (5, .int(in: 1...100))))
     /// ```
@@ -50,7 +52,7 @@ public extension ReflectiveGenerator {
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
-        Gen.pick(choices: choices.map { ($0.0, $0.1.gen) }, fileID: fileID, line: line, column: column).wrapped
+        oneOf(weighted: choices, fileID: fileID, line: line, column: column)
     }
 
     /// Selects from an array of generators with equal weight.
@@ -70,6 +72,8 @@ public extension ReflectiveGenerator {
 
     /// Selects from an array of weighted generators.
     ///
+    /// Entries with weight zero are removed before the pick is built: a branch that can never be drawn does not appear in the choice layout. When that removal leaves exactly one entry, its generator is returned directly with no pick node; a list that starts with a single entry keeps its pick. At least one entry must have a nonzero weight.
+    ///
     /// ```swift
     /// let choices: [(Int, ReflectiveGenerator<Int>)] = [(1, .just(0)), (5, .int(in: 1...100))]
     /// let gen = #gen(.oneOf(weighted: choices))
@@ -80,12 +84,19 @@ public extension ReflectiveGenerator {
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
-        Gen.pick(choices: choices.map { ($0.0, $0.1.gen) }, fileID: fileID, line: line, column: column).wrapped
+        let activeChoices = choices.filter { $0.0 != 0 }
+        precondition(activeChoices.isEmpty == false, "At least one oneOf choice must have a nonzero weight")
+        // A list that starts with one entry keeps its pick node: the @Contract macro synthesizes single-command generators this way, and the concurrent runners require a top-level pick.
+        let zeroWeightRemovalOccurred = activeChoices.count < choices.count
+        if zeroWeightRemovalOccurred, activeChoices.count == 1, let onlyChoice = activeChoices.first {
+            return onlyChoice.1
+        }
+        return Gen.pick(choices: activeChoices.map { ($0.0, $0.1.gen) }, fileID: fileID, line: line, column: column).wrapped
     }
 
     /// Wraps this generator to produce optional values, choosing between `nil` and a generated value.
     ///
-    /// The `someWeight` and `noneWeight` parameters control the relative frequency of `.some` versus `nil`. The defaults produce `nil` roughly 20% of the time.
+    /// The `someWeight` and `noneWeight` parameters control the relative frequency of `.some` versus `nil`. The defaults produce `nil` roughly 20% of the time. Both weights must be at least 1; a zero or negative weight traps at construction. To never produce `nil`, use the wrapped generator without `optional`; to always produce `nil`, use `.just(nil)`.
     ///
     /// ```swift
     /// let gen = #gen(.int(in: 0...10)).optional()
@@ -93,8 +104,8 @@ public extension ReflectiveGenerator {
     /// ```
     ///
     /// - Parameters:
-    ///   - someWeight: Relative weight for generating a value. Defaults to 4.
-    ///   - noneWeight: Relative weight for generating `nil`. Defaults to 1.
+    ///   - someWeight: Relative weight for generating a value. Must be at least 1. Defaults to 4.
+    ///   - noneWeight: Relative weight for generating `nil`. Must be at least 1. Defaults to 1.
     func optional(
         someWeight: Int = 4,
         noneWeight: Int = 1
@@ -107,7 +118,7 @@ public extension ReflectiveGenerator {
 
     /// Wraps a generator to produce optional values, choosing between `nil` and a generated value.
     ///
-    /// The `someWeight` and `noneWeight` parameters control the relative frequency of `.some` versus `nil`. The defaults produce `nil` roughly 20% of the time.
+    /// The `someWeight` and `noneWeight` parameters control the relative frequency of `.some` versus `nil`. The defaults produce `nil` roughly 20% of the time. Both weights must be at least 1; a zero or negative weight traps at construction. To never produce `nil`, use the wrapped generator without `optional`; to always produce `nil`, use `.just(nil)`.
     ///
     /// ```swift
     /// let gen = #gen(.optional(.int(in: 0...10)))
@@ -116,8 +127,8 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameters:
     ///   - gen: The generator to wrap.
-    ///   - someWeight: Relative weight for generating a value. Defaults to 4.
-    ///   - noneWeight: Relative weight for generating `nil`. Defaults to 1.
+    ///   - someWeight: Relative weight for generating a value. Must be at least 1. Defaults to 4.
+    ///   - noneWeight: Relative weight for generating `nil`. Must be at least 1. Defaults to 1.
     static func optional(
         _ gen: ReflectiveGenerator<Output>,
         someWeight: Int = 4,
