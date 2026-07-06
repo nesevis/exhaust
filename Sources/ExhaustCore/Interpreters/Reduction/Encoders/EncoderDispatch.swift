@@ -4,6 +4,7 @@ indirect enum EncoderDispatch {
     case value(GraphValueEncoder)
     case redistribution(GraphRedistributionEncoder)
     case lockstep(GraphLockstepEncoder)
+    case relation(GraphRelationEncoder)
     case swap(GraphSwapEncoder)
     case reorder(GraphReorderEncoder)
     case laneCollapse(GraphLaneCollapseEncoder)
@@ -19,6 +20,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .value(encoder): encoder.name
             case let .redistribution(encoder): encoder.name
             case let .lockstep(encoder): encoder.name
+            case let .relation(encoder): encoder.name
             case let .swap(encoder): encoder.name
             case let .reorder(encoder): encoder.name
             case let .laneCollapse(encoder): encoder.name
@@ -42,6 +44,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .lockstep(encoder):
                 encoder.start(scope: scope)
                 self = .lockstep(encoder)
+            case var .relation(encoder):
+                encoder.start(scope: scope)
+                self = .relation(encoder)
             case var .swap(encoder):
                 encoder.start(scope: scope)
                 self = .swap(encoder)
@@ -81,6 +86,10 @@ extension EncoderDispatch: GraphEncoder {
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .lockstep(encoder)
                 return result
+            case var .relation(encoder):
+                let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
+                self = .relation(encoder)
+                return result
             case var .swap(encoder):
                 let result = encoder.nextProbe(into: &candidate, lastAccepted: lastAccepted)
                 self = .swap(encoder)
@@ -114,6 +123,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .value(encoder): encoder.hadReplacementShortlexRejection
             case let .redistribution(encoder): encoder.hadReplacementShortlexRejection
             case let .lockstep(encoder): encoder.hadReplacementShortlexRejection
+            case let .relation(encoder): encoder.hadReplacementShortlexRejection
             case let .swap(encoder): encoder.hadReplacementShortlexRejection
             case let .reorder(encoder): encoder.hadReplacementShortlexRejection
             case let .laneCollapse(encoder): encoder.hadReplacementShortlexRejection
@@ -129,6 +139,7 @@ extension EncoderDispatch: GraphEncoder {
             case let .value(encoder): encoder.convergenceRecords
             case let .redistribution(encoder): encoder.convergenceRecords
             case let .lockstep(encoder): encoder.convergenceRecords
+            case let .relation(encoder): encoder.convergenceRecords
             case let .swap(encoder): encoder.convergenceRecords
             case let .reorder(encoder): encoder.convergenceRecords
             case let .laneCollapse(encoder): encoder.convergenceRecords
@@ -152,6 +163,9 @@ extension EncoderDispatch: GraphEncoder {
             case var .lockstep(encoder):
                 encoder.flushPartialConvergence()
                 self = .lockstep(encoder)
+            case var .relation(encoder):
+                encoder.flushPartialConvergence()
+                self = .relation(encoder)
             case var .swap(encoder):
                 encoder.flushPartialConvergence()
                 self = .swap(encoder)
@@ -177,6 +191,12 @@ extension EncoderDispatch: GraphEncoder {
     var isStateful: Bool {
         if case .composed = self { return true }
         return false
+    }
+
+    /// Upstream probes that produced a valid lift in the current pass, for the ``GraphComposedEncoder`` case; nil for every other encoder.
+    var composedUpstreamProbesUsed: Int? {
+        if case let .composed(encoder) = self { return encoder.upstreamProbesUsed }
+        return nil
     }
 
     /// Re-derives cached scope state from the live graph after a structural mutation. No-op for non-stateful encoders.

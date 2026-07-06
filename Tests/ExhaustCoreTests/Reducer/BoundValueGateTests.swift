@@ -118,6 +118,34 @@ struct BoundValueGateTests {
         #expect(gate.decayedBudget(fingerprint: fingerprint) == 1)
     }
 
+    // MARK: - First Dispatch
+
+    @Test("isFirstDispatch is true only before any recorded outcome")
+    func firstDispatchTracksOutcomeHistory() {
+        var gate = BoundValueGate(baseBudget: Self.tuning.boundValueBaseBudget)
+        let rejectedFingerprint: UInt64 = 0x7777
+        let acceptedFingerprint: UInt64 = 0x8888
+
+        #expect(gate.isFirstDispatch(fingerprint: rejectedFingerprint))
+        #expect(gate.isFirstDispatch(fingerprint: acceptedFingerprint))
+
+        gate.recordOutcome(fingerprint: rejectedFingerprint, accepted: false)
+        gate.recordOutcome(fingerprint: acceptedFingerprint, accepted: true)
+
+        #expect(gate.isFirstDispatch(fingerprint: rejectedFingerprint) == false)
+        #expect(gate.isFirstDispatch(fingerprint: acceptedFingerprint) == false)
+        #expect(gate.isFirstDispatch(fingerprint: 0x9999), "An unseen fingerprint stays first-dispatch regardless of other fingerprints' outcomes")
+    }
+
+    @Test("Cycle reset and dispatch marking do not consume first-dispatch status")
+    func firstDispatchSurvivesCycleBookkeeping() {
+        var gate = BoundValueGate(baseBudget: Self.tuning.boundValueBaseBudget)
+        let fingerprint: UInt64 = 0xABAB
+        gate.markDispatched(fingerprint)
+        gate.resetForNewCycle()
+        #expect(gate.isFirstDispatch(fingerprint: fingerprint), "Only a recorded outcome ends first-dispatch status; per-cycle bookkeeping does not")
+    }
+
     // MARK: - Decision Priority
 
     @Test("Per-cycle dedup takes precedence over acceptance deferral")

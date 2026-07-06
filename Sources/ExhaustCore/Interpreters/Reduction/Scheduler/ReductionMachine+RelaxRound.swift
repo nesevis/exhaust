@@ -79,6 +79,14 @@ extension ReductionMachine {
         }
 
         guard perturbationAccepted else {
+            if collectDiagnostics {
+                stats.relaxRoundLog.append(RelaxRoundRecord(
+                    candidateCount: candidates.count,
+                    materializationsUsed: materializationsUsed,
+                    perturbationDecoded: false,
+                    committed: false
+                ))
+            }
             ChoiceGraphScheduler.logReducer("relax_round_no_perturbation", isInstrumented: isInstrumented, metadata: [:])
             return false
         }
@@ -121,6 +129,7 @@ extension ReductionMachine {
             var exploitEncoder = ChoiceGraphScheduler.selectEncoder(for: exploitTransformation.operation)
             exploitEncoder.start(scope: exploitScope)
 
+            captureDispatchBaseline()
             var session = ProbeSession(
                 encoder: exploitEncoder,
                 transformation: exploitTransformation,
@@ -133,13 +142,26 @@ extension ReductionMachine {
             _ = applyPassReport(report)
 
             if report.anyAccepted, report.anyRequiresRebuild {
-                _ = rebuildAndUpdateGraph()
+                _ = rebuildAndUpdateGraph(
+                    valueGuardExemptNodeIDs: report.acceptedLeafNodeIDs
+                        .union(report.convergenceRecords.keys)
+                )
                 exploitSources = CandidateSourceBuilder.buildSources(from: graph)
             }
         }
         rejectCache = savedRejectCache
 
-        if sequence.shortLexPrecedes(checkpointSequence) {
+        let excursionCommitted = sequence.shortLexPrecedes(checkpointSequence)
+        if collectDiagnostics {
+            stats.relaxRoundLog.append(RelaxRoundRecord(
+                candidateCount: candidates.count,
+                materializationsUsed: materializationsUsed,
+                perturbationDecoded: true,
+                committed: excursionCommitted
+            ))
+        }
+
+        if excursionCommitted {
             ChoiceGraphScheduler.logReducer("relax_round_committed", isInstrumented: isInstrumented, metadata: [
                 "old_seq_len": "\(checkpointSequence.count)", "new_seq_len": "\(sequence.count)",
             ])
@@ -202,6 +224,7 @@ extension ReductionMachine {
             }
         }
 
+        // Length only, deliberately not full shortlex. A lex tiebreak among equal-length candidates was tried and reverted: it preferred perturbations that decode successfully, triggering full exploitation loops in relax rounds that previously ended cheaply at the perturbation stage.
         candidates.sort { $0.count < $1.count }
         return candidates
     }

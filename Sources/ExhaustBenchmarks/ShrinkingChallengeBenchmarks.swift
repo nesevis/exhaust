@@ -3,8 +3,24 @@ import Exhaust
 import ExhaustCore
 import Foundation
 
-/// Returns strategy variants of a base config.
-private func withStrategies(
+/// Returns strategy variants of a base config, one benchmark registration per variant. Drives both the shrinking-challenge registrations in this file and the ECOOP registrations in `ECOOPBenchmarks.swift`; the first entry is the committed baseline, and the ECOOP report keeps its name unsuffixed so baseline blocks stay comparable across sessions.
+///
+/// The committed list holds only the adaptive baseline. For an A/B counterexample-distribution comparison, append a named variant for the session — flipped on and reverted like `collectDiagnostics` — and compare the per-seed CE description sets between the two printed reports (first-order stochastic dominance, not just unique counts). Example:
+///
+/// ```swift
+/// var relaxOffTuning = base.tuning
+/// relaxOffTuning.relaxMaterializationBudget = 0
+/// let relaxOff = Interpreters.ReducerConfiguration(
+///     maxStalls: base.maxStalls,
+///     wallClockDeadlineNanoseconds: base.wallClockDeadlineNanoseconds,
+///     enabledEncoders: base.enabledEncoders,
+///     tuning: relaxOffTuning
+/// )
+/// return [("adaptive", base), ("relax-off", relaxOff)]
+/// ```
+///
+/// An `enabledEncoders` subset works the same way: rebuild the configuration with, for example, `enabledEncoders: Set(EncoderName.allCases).subtracting([.relationSearch])` to measure one encoder's contribution.
+func withStrategies(
     _ base: Interpreters.ReducerConfiguration = reducerConfig
 ) -> [(name: String, config: Interpreters.ReducerConfiguration)] {
     [("adaptive", base)]

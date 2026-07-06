@@ -75,6 +75,7 @@ package struct ReductionMachine: ProbeSessionState {
 
         case convergenceConfirmed(anyStale: Bool)
         case relaxRoundCompleted(improved: Bool)
+        case relationPassCompleted(accepted: Bool)
         case deferralReleased
 
         case reorderCompleted(accepted: Bool)
@@ -154,7 +155,35 @@ package struct ReductionMachine: ProbeSessionState {
     var scopeRejectionCache: CandidateRejectionCache = .init()
     var anyAccepted: Bool = false
     var hadReplacementShortlexRejection: Bool = false
+
+    /// True once any pass in the run accepted a probe. Unlike ``anyAccepted``, never reset: a run that terminates with this still false could not improve the input even once, which is the silent-stall presentation the stall diagnostic warns about.
+    var anyAcceptanceEverOccurred: Bool = false
+
+    /// Consecutive migration passes that rejected every probe, across the whole run. Reset by any migration acceptance. When this reaches ``SchedulerTuning/migrationDemotionThreshold`` (and the threshold is nonzero), dispatch skips migration transformations for the rest of the run.
+    var migrationConsecutiveRejects: Int = 0
     var sequenceBeforeCycle: ChoiceSequence = []
+
+    // MARK: - Coupling Attribution
+
+    /// Log of value changes, ordered by pass. Each entry records which nodes changed in an accepted pass. Used to attribute coupling edges by scanning entries between a node's last convergence and the current pass.
+    var valueChangeLog: [(passIndex: Int, nodeIDs: Set<Int>)] = []
+
+    /// The pass index at which each node's convergence was last recorded. When floor motion is detected at node A, the coupling partners are nodes that changed in passes after `lastConvergencePass[A]`.
+    var lastConvergencePass: [Int: Int] = [:]
+
+    /// Monotonic pass counter incremented on each `applyPassReport` call.
+    var passCounter: Int = 0
+
+    // MARK: - Research Diagnostics
+
+    /// Enables the research diagnostics: floor-motion counters, coupling attribution (`couplingDependents`, coupling edges, partner counts), redistribution acceptance sets, and the per-dispatch log that feeds the `dispatch_stats` and `indexability` benchmark reports. Deliberately a maintainer-set literal rather than configuration surface: `collectStats` is always on in normal use, so these per-pass costs (attribution scans, two O(*n*) distance sums, record appends) must not ride it. Flip to true for a diagnostics session over the benchmark suite; the benchmark report blocks appear only when this was set.
+    var collectDiagnostics = false
+
+    /// Sequence length at the start of the pass currently in flight. Captured by ``captureDispatchBaseline()`` so ``applyPassReport(_:)`` can record the pass's ``DispatchRecord/sequenceLengthDelta``.
+    var dispatchBaselineLength: Int = 0
+
+    /// Total distance-to-reduction-target at the start of the pass currently in flight.
+    var dispatchBaselineTargetDistance: Double = 0
 
     // MARK: - Active Probe Session
 
@@ -325,6 +354,9 @@ package struct ReductionMachine: ProbeSessionState {
             case .confirmConvergence:
                 let anyStale = try confirmConvergence()
                 return .convergenceConfirmed(anyStale: anyStale)
+            case .relationPass:
+                let accepted = try runRelationPass()
+                return .relationPassCompleted(accepted: accepted)
             case .relaxRound:
                 let improved = try runRelaxRound()
                 if improved {
@@ -384,8 +416,40 @@ package struct ReductionMachine: ProbeSessionState {
     private mutating func stepReorderPass() throws -> Transition {
         let skipReorder = enabledEncoders.map { $0.contains(.numericReorder) == false } ?? false
         let accepted = skipReorder ? false : try runReorderPass()
+        recordStallDiagnostic()
         phase = .done
         return .reorderCompleted(accepted: accepted)
+    }
+
+    /// Populates the stall-diagnostic fields on ``ReductionStats`` at termination.
+    ///
+    /// A leaf is stalled when it holds a convergence record whose bound equals its current bit pattern while that pattern differs from the reduction target: the encoder proved the leaf cannot move alone, and it did not reach its target. Stalled leaves are normal at the end of a successful reduction (a property demanding nonzero values leaves every surviving leaf short of its target), so the count alone is not a warning signal — the warning condition is a nonzero count on a run where ``anyAcceptanceEverOccurred`` is still false. Control-scope leaves (depth, lane, bind-inner) are machinery, not user values, and are excluded.
+    private mutating func recordStallDiagnostic() {
+        var stalledCount = 0
+        var residualDistance: Double = 0
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            guard case let .chooseBits(metadata) = node.kind else {
+                continue
+            }
+            let annotation = node.scopeAnnotation
+            if annotation.isDepthControl || annotation.isLaneControl || annotation.isBindInner {
+                continue
+            }
+            let bitPattern = metadata.value.bitPattern64
+            let target = metadata.value.reductionTarget(in: metadata.validRange)
+            guard bitPattern != target else {
+                continue
+            }
+            guard let record = graph.convergenceStore[nodeID], record.bound == bitPattern else {
+                continue
+            }
+            stalledCount += 1
+            residualDistance += Double(bitPattern > target ? bitPattern - target : target - bitPattern)
+        }
+        stats.stalledLeafCount = stalledCount
+        stats.stalledLeafResidualDistance = residualDistance
+        stats.anyAcceptanceEverOccurred = anyAcceptanceEverOccurred
     }
 
     // MARK: - Helpers
@@ -424,6 +488,7 @@ package struct ReductionMachine: ProbeSessionState {
         let savedRejectCache = rejectCache
         rejectCache = []
 
+        captureDispatchBaseline()
         var session = ProbeSession(
             encoder: encoder,
             transformation: reorderTransformation,
@@ -443,11 +508,91 @@ package struct ReductionMachine: ProbeSessionState {
         return report.anyAccepted
     }
 
+    /// Snapshots the sequence's length and total target distance ahead of a probe session, so the completed pass's dispatch record can carry improvement deltas. No-op unless diagnostics are enabled.
+    mutating func captureDispatchBaseline() {
+        guard collectDiagnostics else {
+            return
+        }
+        dispatchBaselineLength = sequence.count
+        dispatchBaselineTargetDistance = sequenceTargetDistance()
+    }
+
+    /// Sums each value entry's absolute pattern-space distance to its reduction target. Distance to target rather than raw pattern keeps the scalar meaningful for signed encodings and range-constrained values. Floating point because full-range leaves contribute distances near 2^63 and integer sums would overflow.
+    func sequenceTargetDistance() -> Double {
+        var total: Double = 0
+        for entry in sequence {
+            guard let value = entry.value else {
+                continue
+            }
+            let bitPattern = value.choice.bitPattern64
+            let target = value.choice.reductionTarget(in: value.validRange)
+            let distance = bitPattern > target ? bitPattern - target : target - bitPattern
+            total += Double(distance)
+        }
+        return total
+    }
+
+    /// Runs the relation encoder over stall-converged leaf pairs, returning true when any probe was accepted.
+    ///
+    /// Runs as a post-cycle action rather than a dispatched source because the stall gate depends on convergence records that value search writes mid-cycle: a workload that stalls in its first cycle terminates before any source rebuild could observe them. An acceptance sets `anyAccepted` through ``applyPassReport(_:)``, so the termination check re-enters the cycle loop and value search re-certifies the moved leaves.
+    private mutating func runRelationPass() throws -> Bool {
+        if let enabled = enabledEncoders, enabled.contains(.relationSearch) == false {
+            return false
+        }
+        guard let relationScope = RelationQuery.build(graph: graph) else {
+            return false
+        }
+        let transformation = GraphTransformation(
+            operation: .exchange(.relation(relationScope)),
+            priority: DispatchPriority(
+                structuralBenefit: 0,
+                valueBenefit: 0,
+                reductionMagnitude: 0,
+                estimatedCost: relationScope.pairs.count * 8
+            )
+        )
+        let scope = EncoderInput(
+            transformation: transformation,
+            baseSequence: sequence,
+            tree: tree,
+            graph: graph,
+            warmStartRecords: [:]
+        )
+        var encoder: EncoderDispatch = .relation(GraphRelationEncoder())
+        encoder.start(scope: scope)
+
+        let hasBind = sequence.contains { entry in
+            if case .bind = entry { return true }
+            return false
+        }
+        captureDispatchBaseline()
+        var session = ProbeSession(
+            encoder: encoder,
+            transformation: transformation,
+            boundValueFingerprint: nil,
+            baseSequence: sequence,
+            hasBind: hasBind
+        )
+        let report = try session.runToCompletion(state: &self)
+
+        _ = applyPassReport(report)
+
+        if isInstrumented, report.anyAccepted {
+            ExhaustLog.notice(category: .reducer, event: "graph_relation_pass_accepted")
+        }
+        return report.anyAccepted
+    }
+
     /// Rebuilds the ``ChoiceGraph`` from the current tree, inheriting bind classifications and convergence records from the previous graph. Returns the diff so the caller can decide whether to rebuild structural or value-only sources.
-    mutating func rebuildAndUpdateGraph() -> ChoiceGraphDiff {
+    ///
+    /// - Parameter valueGuardExemptNodeIDs: Old-graph leaves whose values are stale because they accepted a change in the pass triggering this rebuild. Their convergence records transfer without the anti-aliasing value guard. See ``ChoiceGraphScheduler/extractAllConvergence(from:valueGuardExemptNodeIDs:)``.
+    mutating func rebuildAndUpdateGraph(valueGuardExemptNodeIDs: Set<Int> = []) -> ChoiceGraphDiff {
         stats.graphStats.dynamicRegionRebuilds += graph.graphStats.dynamicRegionRebuilds
         stats.graphStats.dynamicRegionNodesRebuilt += graph.graphStats.dynamicRegionNodesRebuilt
-        let oldConvergence = ChoiceGraphScheduler.extractAllConvergence(from: graph)
+        let oldConvergence = ChoiceGraphScheduler.extractAllConvergence(
+            from: graph,
+            valueGuardExemptNodeIDs: valueGuardExemptNodeIDs
+        )
         let inheritedClassifications = graph.bindClassifications
         let inheritedObservations = graph.bindTopologyObservations
         var newGraph = ChoiceGraph.build(
@@ -458,6 +603,9 @@ package struct ReductionMachine: ProbeSessionState {
         newGraph.observeBindTopologies(tree: tree)
         ChoiceGraphScheduler.transferConvergence(oldConvergence, to: &newGraph)
         let diff = ChoiceGraphDiff.diff(old: graph, new: newGraph)
+        if diff.isStructurallyIdentical {
+            newGraph.couplingDependents = graph.couplingDependents
+        }
         stats.graphStats.fullGraphRebuilds += 1
         graph = newGraph
         return diff

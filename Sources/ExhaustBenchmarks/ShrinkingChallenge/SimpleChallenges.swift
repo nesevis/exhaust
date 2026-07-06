@@ -18,6 +18,44 @@ let couplingProperty: @Sendable ([Int]) -> Bool = { arr in
     }
 }
 
+// MARK: - Mixed Coupling
+
+// The NashGapValidation shape: coupled pairs among independent high-value coordinates. Batch zeroing fails on the coupled coordinates (zeroing one breaks the pair sum unless its partner covers it), producing zeroingDependency convergence verdicts, while the independent coordinates converge monotonically to their floors. Redistribution between coupled coordinates is productive (move magnitude, then zero the source); redistribution involving an independent coordinate must fail. This is the workload the Nash-gap dependency-tier ordering exists for.
+
+let mixedCouplingGen = #gen(
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30),
+    .int(in: 0 ... 30)
+)
+
+/// Fails when both coupled sums hold (`a + b >= 10`, `c + d >= 10`) and all four independent coordinates are at least 15.
+let mixedCouplingProperty: @Sendable ((Int, Int, Int, Int, Int, Int, Int, Int)) -> Bool = { t in
+    t.0 + t.1 < 10 || t.2 + t.3 < 10 || t.4 < 15 || t.5 < 15 || t.6 < 15 || t.7 < 15
+}
+
+let wideMixedCouplingGen = #gen(
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40),
+    .int(in: 0 ... 40)
+)
+
+/// Fails when all three coupled sums hold (`>= 8` each) and all four independent coordinates are at least 20. More coordinates means more unproductive independent-to-independent redistribution pairs for the tier ordering to demote.
+let wideMixedCouplingProperty: @Sendable ((Int, Int, Int, Int, Int, Int, Int, Int, Int, Int)) -> Bool = { t in
+    t.0 + t.1 < 8 || t.2 + t.3 < 8 || t.4 + t.5 < 8 || t.6 < 20 || t.7 < 20 || t.8 < 20 || t.9 < 20
+}
+
 // MARK: - Deletion
 
 let deletionGen = {
@@ -58,6 +96,15 @@ let differenceMustNotBeOneGen = #gen(.int(in: 1 ... 1000)).array(length: 2)
 let differenceMustNotBeOneProperty: @Sendable ([Int]) -> Bool = { arr in
     let diff = abs(arr[0] - arr[1])
     return arr[0] < 10 || diff != 1
+}
+
+// MARK: - RatioCoupling
+
+/// A joint-move geometry no non-relation encoder can cross. The failing set {x = 2y, x >= 20} is preserved by none of the other encoders' joint moves: lockstep's common delta breaks the ratio, redistribution's sum-conserving transfer breaks it, and batch bisection (the one proportional-step move) requires four or more unconverged leaves so it never fires on a two-leaf scope. Without relation search the reducer stalls at the initial failing point on every seed, with zero acceptances in any encoder and zero coupling-instrumentation signal (floor motion and the gluing witness both require acceptances to observe anything). The relationSearch encoder closes it: every seed reaches [20, 10]. This benchmark guards that encoder's stall gate end to end.
+let ratioCouplingGen = #gen(.int(in: 1 ... 1000)).array(length: 2)
+
+let ratioCouplingProperty: @Sendable ([Int]) -> Bool = { arr in
+    arr[0] < 20 || arr[0] != 2 * arr[1]
 }
 
 // MARK: - Distinct

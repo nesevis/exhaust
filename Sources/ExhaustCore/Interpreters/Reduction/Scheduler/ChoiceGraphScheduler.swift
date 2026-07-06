@@ -204,6 +204,8 @@ enum ChoiceGraphScheduler {
                 .redistribution(GraphRedistributionEncoder())
             case .exchange(.tandem):
                 .lockstep(GraphLockstepEncoder())
+            case .exchange(.relation):
+                .relation(GraphRelationEncoder())
             case .reorder:
                 .reorder(GraphReorderEncoder())
         }
@@ -220,9 +222,10 @@ enum ChoiceGraphScheduler {
         let structurallyImproved: Bool
     }
 
-    /// Actions the machine should take after a reduction cycle completes. Termination is not an action — it depends on post-effect state (a successful relax round prevents termination, and convergence confirmation can clear stale floors that change the ``allValuesConverged`` result).
+    /// Actions the machine should take after a reduction cycle completes. Termination is not an action — it depends on post-effect state (a successful relax round prevents termination, convergence confirmation can clear stale floors that change the ``allValuesConverged`` result, and a relation-pass acceptance re-enters the loop).
     enum PostCycleAction: Equatable, Sendable {
         case confirmConvergence
+        case relationPass
         case relaxRound
         case releaseDeferral
     }
@@ -245,6 +248,8 @@ enum ChoiceGraphScheduler {
 
         if outcome.anyAccepted == false, outcome.allConverged {
             actions.append(.confirmConvergence)
+            // The relation pass must run post-cycle, after confirmation: convergence records are written mid-cycle by value search, so on a workload that stalls in its first cycle the machine terminates before any source rebuild could see them. This is the only point where the stall signature (all converged, zero accepts) is both observable and actionable.
+            actions.append(.relationPass)
         }
 
         if outcome.anyAccepted == false, outcome.hadReplacementShortlexRejection {

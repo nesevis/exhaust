@@ -7,15 +7,24 @@ public extension __ExhaustRuntime {
         label: String,
         forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {
-        Gen.contramap(
-            { (output: Output) throws -> Any in
-                guard let value = _mirrorExtract(output, label: label) else {
-                    throw ReflectionError.contramapWasWrongType
-                }
-                return value
-            },
-            generator.gen.map(forward)
-        ).wrapped
+        // The macro derives the backward from the same member label the forward initializer consumes, so `_mirrorExtract` inverts the forward by construction of the expansion and the `.isomorph` guarantee holds. One transform node replaces the contramap + map sandwich this method emitted previously.
+        Gen.liftF(.transform(
+            kind: .isomorph(
+                forward: { forward($0 as! Input) },
+                backward: { output in
+                    // Reflection probes pick branches against a shared final output, so a mismatched value is a normal rejection. Throw instead of trapping.
+                    guard let typed = output as? Output,
+                          let value = _mirrorExtract(typed, label: label)
+                    else {
+                        throw ReflectionError.contramapWasWrongType
+                    }
+                    return value
+                },
+                inputType: Input.self,
+                outputType: Output.self
+            ),
+            inner: generator.gen.erase()
+        )).wrapped
     }
 
     /// Maps a single generator with a failable backward closure for extraction.
@@ -26,15 +35,23 @@ public extension __ExhaustRuntime {
         backward: @Sendable @escaping (Output) -> Input?,
         forward: @Sendable @escaping (Input) -> Output
     ) -> ReflectiveGenerator<Output> {
-        Gen.contramap(
-            { (output: Output) throws -> Input in
-                guard let input = backward(output) else {
-                    throw ReflectionError.contramapWasWrongType
-                }
-                return input
-            },
-            generator.gen.map(forward)
-        ).wrapped
+        // The macro expands an enum case constructor to the forward closure and a pattern match over the same case to the backward, so the pair inverts by construction. A `nil` from the pattern match means a different case: a normal rejection during pick-branch probing, surfaced as a throw.
+        Gen.liftF(.transform(
+            kind: .isomorph(
+                forward: { forward($0 as! Input) },
+                backward: { output in
+                    guard let typed = output as? Output,
+                          let input = backward(typed)
+                    else {
+                        throw ReflectionError.contramapWasWrongType
+                    }
+                    return input
+                },
+                inputType: Input.self,
+                outputType: Output.self
+            ),
+            inner: generator.gen.erase()
+        )).wrapped
     }
 
     /// Zips multiple generators with a forward transform and Mirror-based backward extraction.

@@ -8,9 +8,14 @@
 /// Stores the convergence bound and observation from a prior encoder pass.
 ///
 /// Carries warm-start data (`bound`), the encoder's observation (`signal`), the configuration that produced it (`configuration`), and the cycle number for staleness detection. Stored in ``ChoiceGraph/convergenceStore`` keyed by node ID and harvested by the scheduler after each probe loop.
+///
+/// When a leaf's convergence record is overwritten by a later cycle, ``priorBound`` captures the previous floor. A non-nil value where `priorBound != bound` indicates floor motion: the leaf's convergence point shifted, which is the observable signal for inter-coordinate coupling.
 package struct ConvergedOrigin: Sendable {
     /// The bit-pattern value at which the search converged. Warm-start data.
     package let bound: UInt64
+
+    /// The bound from the previous convergence record at this leaf, if any. Non-nil when this record overwrites a prior entry in the convergence store. A difference between `priorBound` and `bound` indicates that a partner coordinate's movement shifted this leaf's convergence floor.
+    package let priorBound: UInt64?
 
     /// Describes what the encoder observed at convergence. Factory decision data.
     package let signal: ConvergenceSignal
@@ -21,17 +26,24 @@ package struct ConvergedOrigin: Sendable {
     /// The cycle in which this observation was recorded. Staleness detection.
     package let cycle: Int
 
+    /// The graph rebuild generation at which this record was written to the convergence store. Stamped by ``ChoiceGraph/recordConvergence(byNodeID:rebuildGeneration:)``, not by encoders. Used to distinguish structural floor motion (rebuild between old and new record) from value floor motion (same generation, floor shifted by partner movement).
+    package let rebuildGeneration: Int
+
     /// Creates a convergence record with the given warm-start bound, signal, configuration, and cycle.
     package init(
         bound: UInt64,
+        priorBound: UInt64? = nil,
         signal: ConvergenceSignal,
         configuration: EncoderConfiguration,
-        cycle: Int
+        cycle: Int,
+        rebuildGeneration: Int = 0
     ) {
         self.bound = bound
+        self.priorBound = priorBound
         self.signal = signal
         self.configuration = configuration
         self.cycle = cycle
+        self.rebuildGeneration = rebuildGeneration
     }
 }
 

@@ -189,11 +189,15 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
     private var downstream: EncoderDispatch
     private let lift: (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput?
     private let upstreamBudget: Int
+    private let totalProbeCap: Int
 
     private var parentScope: EncoderInput?
     private var currentUpstreamProbe: EncoderProbe?
     private var downstreamActive = false
-    private var upstreamProbesUsed = 0
+    private var probesEmitted = 0
+
+    /// Upstream probes that produced a valid lift during the current pass. Each one paid a generator materialization plus a downstream search, so this is the composition's expensive axis. Read by the pass report for diagnostics; deliberately not cleared by ``refreshState(graph:sequence:)`` so accepting passes report their true lift spend.
+    private(set) var upstreamProbesUsed = 0
 
     /// Creates a composition and starts the upstream encoder on `upstreamScope`.
     ///
@@ -203,6 +207,7 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
     ///   - upstreamScope: The scope the upstream encoder searches over. Fixed for the lifetime of this composition.
     ///   - downstream: Encoder driving the inner iteration. Receives a fresh lifted scope per upstream probe.
     ///   - upstreamBudget: Maximum number of upstream probes pulled per ``start(scope:)`` call. Each upstream probe triggers one ``lift`` invocation (a generator materialisation) plus a downstream search, so this caps the most expensive part of the composition. Pass a larger value when the upstream domain is small relative to the budget.
+    ///   - totalProbeCap: Maximum probes the composition emits per ``start(scope:)`` call, across all lifts. Zero means uncapped. Intended for a bind fingerprint's first dispatch of the run, where a fruitless multi-leaf covering enumeration would otherwise run to exhaustion before the gate can blacklist the bind.
     ///   - lift: Closure that materializes the upstream probe and constructs the downstream scope. Returns `nil` to skip the upstream probe (for example when the materialization fails).
     init(
         name: EncoderName,
@@ -210,12 +215,14 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
         upstreamScope: EncoderInput,
         downstream: EncoderDispatch,
         upstreamBudget: Int = 15,
+        totalProbeCap: Int = 0,
         lift: @escaping (ChoiceSequence, EncoderProbe, EncoderInput) -> EncoderInput?
     ) {
         self.name = name
         self.upstream = upstream
         self.downstream = downstream
         self.upstreamBudget = upstreamBudget
+        self.totalProbeCap = totalProbeCap
         self.lift = lift
         self.upstream.start(scope: upstreamScope)
     }
@@ -232,13 +239,19 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
         currentUpstreamProbe = nil
         downstreamActive = false
         upstreamProbesUsed = 0
+        probesEmitted = 0
     }
 
     mutating func nextProbe(into candidate: inout ChoiceSequence, lastAccepted: Bool) -> EncoderProbe? {
+        if totalProbeCap > 0, probesEmitted >= totalProbeCap {
+            return nil
+        }
+
         // Drain the active downstream first.
         if downstreamActive {
             if let downstreamMutation = downstream.nextProbe(into: &candidate, lastAccepted: lastAccepted) {
                 guard let upstreamProbe = currentUpstreamProbe else { return nil }
+                probesEmitted += 1
                 return wrap(downstreamMutation: downstreamMutation, candidate: candidate, upstreamProbe: upstreamProbe)
             }
             downstreamActive = false
@@ -255,6 +268,7 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
             downstreamActive = true
             currentUpstreamProbe = upstreamMutation
             if let firstDownstreamMutation = downstream.nextProbe(into: &candidate, lastAccepted: false) {
+                probesEmitted += 1
                 return wrap(downstreamMutation: firstDownstreamMutation, candidate: candidate, upstreamProbe: upstreamMutation)
             }
             downstreamActive = false
@@ -265,11 +279,12 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
     /// Resets the composition to idle when a mid-pass structural acceptance has updated the live sequence.
     ///
     /// The composition caches the pre-dispatch scope, the in-flight upstream probe, and the downstream iterator. After any accepted probe triggers a reshape or full rebuild, all three are stale — the upstream binary search was calibrated to the old sequence, the lifted downstream scope was built from the old tree, and continuing would emit probes that may not shortlex-precede the new live sequence. Resetting to idle aborts the current pass; the scheduler re-dispatches a fresh composition next cycle.
+    ///
+    /// ``upstreamProbesUsed`` is intentionally left intact: with `parentScope` nil the budget loop is unreachable, so the counter is dead for control flow, and clearing it would erase the lift spend from the pass report of exactly the accepting passes.
     mutating func refreshState(graph _: ChoiceGraph, sequence _: ChoiceSequence) {
         parentScope = nil
         currentUpstreamProbe = nil
         downstreamActive = false
-        upstreamProbesUsed = 0
     }
 
     /// Replaces a downstream probe's mutation with the upstream's mutation, lifted to set ``LeafChange/mayReshape`` to `true`.

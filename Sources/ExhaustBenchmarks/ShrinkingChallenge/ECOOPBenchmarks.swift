@@ -42,6 +42,14 @@ func registerECOOPBenchmarks() {
         config: config, seedCount: seedCount, baseSeed: baseSeed
     )
     registerECOOPPair(
+        name: "MixedCoupling", gen: mixedCouplingGen.gen, property: mixedCouplingProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    registerECOOPPair(
+        name: "MixedCoupling (wide)", gen: wideMixedCouplingGen.gen, property: wideMixedCouplingProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed
+    )
+    registerECOOPPair(
         name: "Difference: Must Not Be Zero",
         gen: differenceMustNotBeZeroGen.gen, property: differenceMustNotBeZeroProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
@@ -54,6 +62,11 @@ func registerECOOPBenchmarks() {
     registerECOOPPair(
         name: "Difference: Must Not Be One",
         gen: differenceMustNotBeOneGen.gen, property: differenceMustNotBeOneProperty,
+        config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
+    )
+    registerECOOPPair(
+        name: "RatioCoupling",
+        gen: ratioCouplingGen.gen, property: ratioCouplingProperty,
         config: config, seedCount: seedCount, baseSeed: baseSeed, maxGenerationRuns: 500_000
     )
     registerECOOPPair(
@@ -92,6 +105,8 @@ func registerECOOPBenchmarks() {
 }
 
 /// Registers a benchmark for a single challenge using the graph-based reducer.
+///
+/// One registration per `withStrategies` variant, all sharing the same base seed so per-seed results pair exactly. The first variant (the committed baseline) keeps the plain challenge name so its report blocks stay comparable across sessions; session variants are suffixed with the strategy name.
 func registerECOOPPair<Output>(
     name: String,
     gen: Generator<Output>,
@@ -102,16 +117,18 @@ func registerECOOPPair<Output>(
     maxGenerationRuns: UInt64 = 10000,
     sizeMetric: ((Output) -> Int)? = nil
 ) {
-    registerECOOPChallenge(
-        name: name,
-        gen: gen,
-        property: property,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed,
-        maxGenerationRuns: maxGenerationRuns,
-        sizeMetric: sizeMetric
-    )
+    for (strategyIndex, strategy) in withStrategies(config).enumerated() {
+        registerECOOPChallenge(
+            name: strategyIndex == 0 ? name : "\(name) [\(strategy.name)]",
+            gen: gen,
+            property: property,
+            config: strategy.config,
+            seedCount: seedCount,
+            baseSeed: baseSeed,
+            maxGenerationRuns: maxGenerationRuns,
+            sizeMetric: sizeMetric
+        )
+    }
 }
 
 // MARK: - Per-Seed Result
@@ -120,16 +137,15 @@ private struct SeedResult {
     let seed: UInt64
     let generationIterations: Int
     let invocations: Int
-    let materializations: Int
     let generationMilliseconds: Double
     let reductionMilliseconds: Double
     let size: Int?
     let counterexampleDescription: String
-    let encoderProbes: [EncoderName: Int]
-    let encoderProbesAccepted: [EncoderName: Int]
-    let encoderProbesRejectedByCache: [EncoderName: Int]
-    let encoderProbesRejectedByDecoder: [EncoderName: Int]
-    let stepTimings: ReductionStats.StepTimings?
+    let stats: ReductionStats?
+
+    var materializations: Int {
+        stats?.totalMaterializations ?? 0
+    }
 }
 
 // MARK: - Runner
@@ -188,21 +204,15 @@ private func registerECOOPChallenge<Output>(
             let reductionMs = Double(reduceEnd - reduceStart) / 1_000_000.0
 
             let output = reduceResult?.outcome.counterexample?.1 ?? value
-            let materializationCount = reduceResult?.stats.totalMaterializations ?? 0
             results.append(SeedResult(
                 seed: seed,
                 generationIterations: generationIterations,
                 invocations: invocationCount,
-                materializations: materializationCount,
                 generationMilliseconds: generationMs,
                 reductionMilliseconds: reductionMs,
                 size: sizeMetric?(output),
                 counterexampleDescription: String(describing: output),
-                encoderProbes: reduceResult?.stats.encoderProbes ?? [:],
-                encoderProbesAccepted: reduceResult?.stats.encoderProbesAccepted ?? [:],
-                encoderProbesRejectedByCache: reduceResult?.stats.encoderProbesRejectedByCache ?? [:],
-                encoderProbesRejectedByDecoder: reduceResult?.stats.encoderProbesRejectedByDecoder ?? [:],
-                stepTimings: reduceResult?.stats.stepTimings
+                stats: reduceResult?.stats
             ))
         }
 
@@ -245,79 +255,13 @@ private func printECOOPReport(
 
     print("[\(name) ECOOP] seeds=\(foundCount)/\(seedCount)\(sizeReport) iter_to_fail: mean=\(f1(genIterStats.mean)) median=\(f1(genIterStats.median)) | invocations: mean=\(f1(invocStats.mean)) (\(f1(invocStats.ciLow))–\(f1(invocStats.ciHigh))) median=\(f1(invocStats.median)) | mats: mean=\(f1(matStats.mean)) (\(f1(matStats.ciLow))–\(f1(matStats.ciHigh))) median=\(f1(matStats.median)) | gen(ms): mean=\(f2(genStats.mean)) median=\(f2(genStats.median)) | reduce(ms): mean=\(f2(reduceStats.mean)) (\(f2(reduceStats.ciLow))–\(f2(reduceStats.ciHigh))) median=\(f2(reduceStats.median)) | unique_CEs=\(uniqueCEs.count)")
 
-    // Per-encoder probe breakdown (summed across all seeds).
-    // Per-encoder rejection breakdown:
-    // each `rejDec` is one materialization that did not reach the property.
-    var totalEmitted: [EncoderName: Int] = [:]
-    var totalAccepted: [EncoderName: Int] = [:]
-    var totalCacheRej: [EncoderName: Int] = [:]
-    var totalDecRej: [EncoderName: Int] = [:]
-    for result in results {
-        for (encoder, count) in result.encoderProbes {
-            totalEmitted[encoder, default: 0] += count
-        }
-        for (encoder, count) in result.encoderProbesAccepted {
-            totalAccepted[encoder, default: 0] += count
-        }
-        for (encoder, count) in result.encoderProbesRejectedByCache {
-            totalCacheRej[encoder, default: 0] += count
-        }
-        for (encoder, count) in result.encoderProbesRejectedByDecoder {
-            totalDecRej[encoder, default: 0] += count
-        }
-    }
-    let allEncoders = Set(totalEmitted.keys)
-        .union(totalAccepted.keys)
-        .union(totalCacheRej.keys)
-        .union(totalDecRej.keys)
-    if allEncoders.isEmpty == false {
-        let sortedEncoders = allEncoders.sorted { lhs, rhs in
-            (totalDecRej[lhs] ?? 0) > (totalDecRej[rhs] ?? 0)
-        }
-        print("[\(name) ECOOP] encoder breakdown (summed across \(foundCount) seeds, sorted by rejDec descending):")
-        for encoder in sortedEncoders {
-            let emit = totalEmitted[encoder] ?? 0
-            let acc = totalAccepted[encoder] ?? 0
-            let cacheRej = totalCacheRej[encoder] ?? 0
-            let decRej = totalDecRej[encoder] ?? 0
-            print("  \(encoder.rawValue): emit=\(emit) acc=\(acc) rejCache=\(cacheRej) rejDec=\(decRej)")
-        }
-    }
-
-    // Per-step timing breakdown (summed across all seeds).
-    let timingResults = results.compactMap(\.stepTimings)
-    if timingResults.isEmpty == false {
-        var totalSrc: UInt64 = 0
-        var totalDisp: UInt64 = 0
-        var totalEnc: UInt64 = 0
-        var totalDec: UInt64 = 0
-        var totalReb: UInt64 = 0
-        var totalCC: UInt64 = 0
-        var totalRlx: UInt64 = 0
-        var totalReord: UInt64 = 0
-        for timing in timingResults {
-            totalSrc += timing.buildSources
-            totalDisp += timing.dispatch
-            totalEnc += timing.encode
-            totalDec += timing.decode
-            totalReb += timing.rebuild
-            totalCC += timing.convergenceConfirmation
-            totalRlx += timing.relaxRound
-            totalReord += timing.reorder
-        }
-        var totalRebGraph: UInt64 = 0
-        var totalRebSource: UInt64 = 0
-        for timing in timingResults {
-            totalRebGraph += timing.rebuildGraphNanoseconds
-            totalRebSource += timing.rebuildSourceNanoseconds
-        }
-        let toMs: (UInt64) -> String = { String(format: "%.2f", Double($0) / 1_000_000) }
-        let totalNs = totalSrc + totalDisp + totalEnc + totalDec + totalReb + totalCC + totalRlx + totalReord
-        print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms src=\(toMs(totalSrc)) disp=\(toMs(totalDisp)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb))(graph=\(toMs(totalRebGraph))/src=\(toMs(totalRebSource))) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) reord=\(toMs(totalReord))")
-    }
+    printCouplingDiagnostics(name: name, results: results)
+    printDispatchReport(name: name, results: results)
+    printRelaxBarrierReport(name: name, results: results)
+    printEncoderBreakdownReport(name: name, results: results, foundCount: foundCount)
+    printTimingReport(name: name, results: results)
 
     if enableCounterExamples {
-        // Group seeds by counterexample for reproducibility.
         var seedsByCE: [String: [UInt64]] = [:]
         for result in results {
             seedsByCE[result.counterexampleDescription, default: []].append(result.seed)
@@ -332,7 +276,6 @@ private func printECOOPReport(
         }
     }
 
-    // Top seeds by materialization count.
     let worstSeeds = results.sorted { $0.materializations > $1.materializations }.prefix(5)
     if let worst = worstSeeds.first, worst.materializations > Int(matStats.mean * 2) {
         print("[\(name) ECOOP] highest-mat seeds:")
@@ -340,6 +283,366 @@ private func printECOOPReport(
             print("  seed \(result.seed): mats=\(result.materializations) invocations=\(result.invocations) reduce=\(f2(result.reductionMilliseconds))ms CE=\(result.counterexampleDescription)")
         }
     }
+}
+
+// MARK: - Coupling Diagnostics
+
+private func printCouplingDiagnostics(name: String, results: [SeedResult]) {
+    let totalStructuralMotion = results.map { $0.stats?.structuralFloorMotionEvents ?? 0 }.reduce(0, +)
+    let totalValueMotion = results.map { $0.stats?.valueFloorMotionEvents ?? 0 }.reduce(0, +)
+    if totalStructuralMotion + totalValueMotion > 0 {
+        let structStats = summaryStats(results.map { Double($0.stats?.structuralFloorMotionEvents ?? 0) })
+        let valueStats = summaryStats(results.map { Double($0.stats?.valueFloorMotionEvents ?? 0) })
+        print("[\(name) ECOOP] floor_motion: structural=\(totalStructuralMotion) (mean=\(f1(structStats.mean))) value=\(totalValueMotion) (mean=\(f1(valueStats.mean)))")
+    }
+
+    let seedsWithValueMotion = results.filter { ($0.stats?.valueFloorMotionNodeIDs ?? []).isEmpty == false }
+    if seedsWithValueMotion.isEmpty == false {
+        var overlapCount = 0
+        var motionOnlyCount = 0
+        var redistOnlyCount = 0
+        for result in seedsWithValueMotion {
+            let motionNodeIDs = result.stats?.valueFloorMotionNodeIDs ?? []
+            let redistNodeIDs = result.stats?.redistributionAcceptanceNodeIDs ?? []
+            let overlap = motionNodeIDs.intersection(redistNodeIDs)
+            let motionOnly = motionNodeIDs.subtracting(redistNodeIDs)
+            let redistOnly = redistNodeIDs.subtracting(motionNodeIDs)
+            overlapCount += overlap.count
+            motionOnlyCount += motionOnly.count
+            redistOnlyCount += redistOnly.count
+        }
+        let seedsWithRedist = seedsWithValueMotion.count(where: { ($0.stats?.redistributionAcceptanceNodeIDs ?? []).isEmpty == false })
+        print("[\(name) ECOOP] coupling_correlation: seeds_with_value_motion=\(seedsWithValueMotion.count) seeds_also_with_redist=\(seedsWithRedist) | nodes: overlap=\(overlapCount) motion_only=\(motionOnlyCount) redist_only=\(redistOnlyCount)")
+    }
+
+    var aggregatedEdges: [CouplingEdge: Int] = [:]
+    for result in results {
+        for (edge, count) in result.stats?.couplingEdges ?? [:] {
+            aggregatedEdges[edge, default: 0] += count
+        }
+    }
+    if aggregatedEdges.isEmpty == false {
+        let sortedEdges = aggregatedEdges.sorted { $0.value > $1.value }
+        let uniqueNodes = Set(sortedEdges.flatMap { [$0.key.motionNodeID, $0.key.changedNodeID] })
+        print("[\(name) ECOOP] coupling_graph: \(sortedEdges.count) edges, \(uniqueNodes.count) nodes")
+        for (edge, count) in sortedEdges {
+            print("  \(edge.changedNodeID) -> \(edge.motionNodeID): \(count)")
+        }
+    }
+
+    var aggregatedPartnerCounts: [Int: Int] = [:]
+    for result in results {
+        for (partnerCount, events) in result.stats?.floorMotionPartnerCounts ?? [:] {
+            aggregatedPartnerCounts[partnerCount, default: 0] += events
+        }
+    }
+    if aggregatedPartnerCounts.isEmpty == false {
+        let sorted = aggregatedPartnerCounts.sorted { $0.key < $1.key }
+        let total = sorted.map(\.value).reduce(0, +)
+        let components = sorted.map { "\($0.key):\($0.value)" }.joined(separator: " ")
+        print("[\(name) ECOOP] partner_count_distribution (partners:events, total=\(total)): \(components)")
+    }
+}
+
+// MARK: - Dispatch Report
+
+/// Per-dispatch aggregation: the reservation-value table and the indexability signal. A dispatch is one completed encoder pass; "prior accept" means an earlier pass in the same cycle of the same seed accepted at least one probe.
+private func printDispatchReport(name: String, results: [SeedResult]) {
+    let allDispatchLogs = results.compactMap { $0.stats?.dispatchLog }.filter { $0.isEmpty == false }
+    guard allDispatchLogs.isEmpty == false else {
+        return
+    }
+
+    var aggregates: [EncoderName: DispatchAggregate] = [:]
+    for log in allDispatchLogs {
+        var cyclesWithAccept: Set<Int> = []
+        for record in log {
+            var aggregate = aggregates[record.encoderName, default: DispatchAggregate()]
+            aggregate.dispatches += 1
+            aggregate.totalProbes += record.probeCount
+            let accepted = record.acceptCount > 0
+            if accepted {
+                aggregate.acceptingDispatches += 1
+                aggregate.totalLengthDeltaGivenAccept += record.sequenceLengthDelta
+                aggregate.totalDistanceDeltaGivenAccept += record.targetDistanceDelta
+            } else {
+                aggregate.probesGivenReject += record.probeCount
+            }
+            if cyclesWithAccept.contains(record.cycle) {
+                aggregate.dispatchesWithPrior += 1
+                aggregate.decoderRejectsWithPrior += record.decoderRejectCount
+                if accepted {
+                    aggregate.acceptsWithPrior += 1
+                }
+            } else {
+                aggregate.dispatchesWithoutPrior += 1
+                aggregate.decoderRejectsWithoutPrior += record.decoderRejectCount
+                if accepted {
+                    aggregate.acceptsWithoutPrior += 1
+                }
+            }
+            aggregates[record.encoderName] = aggregate
+            if accepted {
+                cyclesWithAccept.insert(record.cycle)
+            }
+        }
+    }
+    print("[\(name) ECOOP] dispatch_stats (per encoder: dispatches, accept rate, mean probes; given accept: mean len/dist improvement; given reject: mean probes):")
+    for encoder in aggregates.keys.sorted(by: { (aggregates[$0]?.dispatches ?? 0) > (aggregates[$1]?.dispatches ?? 0) }) {
+        guard let aggregate = aggregates[encoder] else {
+            continue
+        }
+        let meanDistance = aggregate.acceptingDispatches == 0
+            ? "-"
+            : String(format: "%.4g", aggregate.totalDistanceDeltaGivenAccept / Double(aggregate.acceptingDispatches))
+        let rejectingDispatches = aggregate.dispatches - aggregate.acceptingDispatches
+        print("  \(encoder.rawValue): n=\(aggregate.dispatches) acc_rate=\(formatRate(aggregate.acceptingDispatches, aggregate.dispatches)) probes=\(formatMean(aggregate.totalProbes, aggregate.dispatches)) | acc_len=\(formatMean(aggregate.totalLengthDeltaGivenAccept, aggregate.acceptingDispatches)) acc_dist=\(meanDistance) | rej_probes=\(formatMean(aggregate.probesGivenReject, rejectingDispatches))")
+    }
+    print("[\(name) ECOOP] indexability (accept rate and decoder rejects with vs without a prior accept in the same cycle):")
+    for encoder in aggregates.keys.sorted(by: { (aggregates[$0]?.dispatches ?? 0) > (aggregates[$1]?.dispatches ?? 0) }) {
+        guard let aggregate = aggregates[encoder] else {
+            continue
+        }
+        print("  \(encoder.rawValue): prior=\(formatRate(aggregate.acceptsWithPrior, aggregate.dispatchesWithPrior)) (n=\(aggregate.dispatchesWithPrior), rejDec=\(aggregate.decoderRejectsWithPrior)) none=\(formatRate(aggregate.acceptsWithoutPrior, aggregate.dispatchesWithoutPrior)) (n=\(aggregate.dispatchesWithoutPrior), rejDec=\(aggregate.decoderRejectsWithoutPrior))")
+    }
+
+    printComposedSpendReport(name: name, allDispatchLogs: allDispatchLogs)
+    printMigrationDemotionReport(name: name, allDispatchLogs: allDispatchLogs)
+}
+
+/// Composed-spend attribution: whether the composed encoder's probes are many distinct binds each paying once (classification cost) or few binds re-paying within a seed (a gate defect). Groups composed dispatches by bind fingerprint within each seed; the redispatch distribution's key is dispatches per (seed, bind) pair.
+private func printComposedSpendReport(name: String, allDispatchLogs: [[DispatchRecord]]) {
+    var composedDispatches = 0
+    var composedAcceptingDispatches = 0
+    var composedUpstreamLifts = 0
+    var composedProbes = 0
+    var composedCacheHits = 0
+    var composedDecoderRejects = 0
+    var seedsWithComposed = 0
+    var distinctBindsPerSeedTotal = 0
+    var allComposedFingerprints: Set<UInt64> = []
+    var redispatchDistribution: [Int: Int] = [:]
+    var verdictCounts: [String: Int] = [:]
+    for log in allDispatchLogs {
+        var dispatchesPerFingerprint: [UInt64: Int] = [:]
+        for record in log where record.encoderName == .composed {
+            composedDispatches += 1
+            composedProbes += record.probeCount
+            composedCacheHits += record.cacheHitCount
+            composedDecoderRejects += record.decoderRejectCount
+            composedUpstreamLifts += record.composedUpstreamLifts ?? 0
+            if record.acceptCount > 0 {
+                composedAcceptingDispatches += 1
+            }
+            let verdict = record.bindClassification.map { "\($0.topology)/\($0.liftability)" } ?? "-"
+            verdictCounts[verdict, default: 0] += 1
+            if let fingerprint = record.boundValueFingerprint {
+                dispatchesPerFingerprint[fingerprint, default: 0] += 1
+                allComposedFingerprints.insert(fingerprint)
+            }
+        }
+        if dispatchesPerFingerprint.isEmpty == false {
+            seedsWithComposed += 1
+            distinctBindsPerSeedTotal += dispatchesPerFingerprint.count
+            for (_, dispatchCount) in dispatchesPerFingerprint {
+                redispatchDistribution[dispatchCount, default: 0] += 1
+            }
+        }
+    }
+    guard composedDispatches > 0 else {
+        return
+    }
+    let redispatchComponents = redispatchDistribution.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: " ")
+    let verdictComponents = verdictCounts.sorted { $0.value > $1.value }.map { "\($0.key):\($0.value)" }.joined(separator: " ")
+    print("[\(name) ECOOP] composed_spend (n=\(composedDispatches) accepting=\(composedAcceptingDispatches) lifts=\(composedUpstreamLifts) probes=\(composedProbes) cacheHits=\(composedCacheHits) rejDec=\(composedDecoderRejects)):")
+    print("  seeds_with_composed=\(seedsWithComposed) distinct_binds_per_seed=\(formatMean(distinctBindsPerSeedTotal, seedsWithComposed)) distinct_binds_total=\(allComposedFingerprints.count) redispatch_per_bind (dispatches:seed-bind pairs): \(redispatchComponents) verdicts: \(verdictComponents)")
+}
+
+/// Migration-demotion sizing: replay each seed's log against the rule "after k consecutive fully-rejected migration dispatches, skip migration for the rest of the run". Rejected dispatches cannot change the destination, so the replay is faithful for lost acceptances; saved probe counts are approximate because skipped rejects also stop feeding the reject cache.
+private func printMigrationDemotionReport(name: String, allDispatchLogs: [[DispatchRecord]]) {
+    var migrationDispatches = 0
+    var migrationAcceptingByCycle: [Int: Int] = [:]
+    var outcomesByThreshold: [Int: DemotionOutcome] = [:]
+    for log in allDispatchLogs {
+        for record in log where record.encoderName == .migration {
+            migrationDispatches += 1
+            if record.acceptCount > 0 {
+                migrationAcceptingByCycle[record.cycle, default: 0] += 1
+            }
+        }
+        for threshold in 1 ... 5 {
+            var consecutiveRejected = 0
+            var demoted = false
+            var outcome = outcomesByThreshold[threshold, default: DemotionOutcome()]
+            for record in log where record.encoderName == .migration {
+                if demoted {
+                    outcome.skippedDispatches += 1
+                    outcome.savedProbes += record.probeCount
+                    outcome.savedDecoderRejects += record.decoderRejectCount
+                    if record.acceptCount > 0 {
+                        outcome.lostAcceptingDispatches += 1
+                    }
+                    continue
+                }
+                if record.acceptCount > 0 {
+                    consecutiveRejected = 0
+                } else {
+                    consecutiveRejected += 1
+                    if consecutiveRejected >= threshold {
+                        demoted = true
+                    }
+                }
+            }
+            outcomesByThreshold[threshold] = outcome
+        }
+    }
+    guard migrationDispatches > 0 else {
+        return
+    }
+    let cycleComponents = migrationAcceptingByCycle.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: " ")
+    print("[\(name) ECOOP] migration_demotion (n=\(migrationDispatches), accepting dispatches by cycle: \(cycleComponents.isEmpty ? "none" : cycleComponents)):")
+    for threshold in 1 ... 5 {
+        guard let outcome = outcomesByThreshold[threshold] else { continue }
+        print("  k=\(threshold): lost_accepts=\(outcome.lostAcceptingDispatches) skipped=\(outcome.skippedDispatches) saved_probes=\(outcome.savedProbes) saved_rejDec=\(outcome.savedDecoderRejects)")
+    }
+}
+
+// MARK: - Relax Barrier Report
+
+/// Relax barrier heights: distribution of failed perturbation materializations before one decoded, split by round outcome. Undecoded rounds are censored observations — the true barrier is at least the shown value — so a "p95 under the budget" reading must account for them.
+private func printRelaxBarrierReport(name: String, results: [SeedResult]) {
+    let allRelaxRounds = results.flatMap { $0.stats?.relaxRoundLog ?? [] }
+    guard allRelaxRounds.isEmpty == false else {
+        return
+    }
+
+    var committedBarriers: [Int: Int] = [:]
+    var rolledBackBarriers: [Int: Int] = [:]
+    var undecodedMaterializations: [Int: Int] = [:]
+    var totalCandidates = 0
+    for round in allRelaxRounds {
+        totalCandidates += round.candidateCount
+        if round.perturbationDecoded == false {
+            undecodedMaterializations[round.materializationsUsed, default: 0] += 1
+        } else if round.committed {
+            committedBarriers[round.materializationsUsed, default: 0] += 1
+        } else {
+            rolledBackBarriers[round.materializationsUsed, default: 0] += 1
+        }
+    }
+    let formatDistribution: ([Int: Int]) -> String = { distribution in
+        distribution.isEmpty
+            ? "none"
+            : distribution.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: " ")
+    }
+    let meanCandidates = String(format: "%.1f", Double(totalCandidates) / Double(allRelaxRounds.count))
+    print("[\(name) ECOOP] relax_barriers (rounds=\(allRelaxRounds.count), mean_candidates=\(meanCandidates); barrier:rounds):")
+    print("  committed \(formatDistribution(committedBarriers)) | rolled_back \(formatDistribution(rolledBackBarriers)) | undecoded (censored) \(formatDistribution(undecodedMaterializations))")
+}
+
+// MARK: - Encoder Breakdown Report
+
+/// each `rejDec` is one materialization that did not reach the property.
+private func printEncoderBreakdownReport(name: String, results: [SeedResult], foundCount: Int) {
+    var totalEmitted: [EncoderName: Int] = [:]
+    var totalAccepted: [EncoderName: Int] = [:]
+    var totalCacheRej: [EncoderName: Int] = [:]
+    var totalDecRej: [EncoderName: Int] = [:]
+    for result in results {
+        for (encoder, count) in result.stats?.encoderProbes ?? [:] {
+            totalEmitted[encoder, default: 0] += count
+        }
+        for (encoder, count) in result.stats?.encoderProbesAccepted ?? [:] {
+            totalAccepted[encoder, default: 0] += count
+        }
+        for (encoder, count) in result.stats?.encoderProbesRejectedByCache ?? [:] {
+            totalCacheRej[encoder, default: 0] += count
+        }
+        for (encoder, count) in result.stats?.encoderProbesRejectedByDecoder ?? [:] {
+            totalDecRej[encoder, default: 0] += count
+        }
+    }
+    let allEncoders = Set(totalEmitted.keys)
+        .union(totalAccepted.keys)
+        .union(totalCacheRej.keys)
+        .union(totalDecRej.keys)
+    guard allEncoders.isEmpty == false else {
+        return
+    }
+    let sortedEncoders = allEncoders.sorted { lhs, rhs in
+        (totalDecRej[lhs] ?? 0) > (totalDecRej[rhs] ?? 0)
+    }
+    print("[\(name) ECOOP] encoder breakdown (summed across \(foundCount) seeds, sorted by rejDec descending):")
+    for encoder in sortedEncoders {
+        let emit = totalEmitted[encoder] ?? 0
+        let acc = totalAccepted[encoder] ?? 0
+        let cacheRej = totalCacheRej[encoder] ?? 0
+        let decRej = totalDecRej[encoder] ?? 0
+        print("  \(encoder.rawValue): emit=\(emit) acc=\(acc) rejCache=\(cacheRej) rejDec=\(decRej)")
+    }
+}
+
+// MARK: - Timing Report
+
+private func printTimingReport(name: String, results: [SeedResult]) {
+    let timingResults = results.compactMap { $0.stats?.stepTimings }
+    guard timingResults.isEmpty == false else {
+        return
+    }
+
+    var totalSrc: UInt64 = 0
+    var totalDisp: UInt64 = 0
+    var totalEnc: UInt64 = 0
+    var totalDec: UInt64 = 0
+    var totalReb: UInt64 = 0
+    var totalCC: UInt64 = 0
+    var totalRlx: UInt64 = 0
+    var totalRel: UInt64 = 0
+    var totalReord: UInt64 = 0
+    for timing in timingResults {
+        totalSrc += timing.buildSources
+        totalDisp += timing.dispatch
+        totalEnc += timing.encode
+        totalDec += timing.decode
+        totalReb += timing.rebuild
+        totalCC += timing.convergenceConfirmation
+        totalRlx += timing.relaxRound
+        totalRel += timing.relationPass
+        totalReord += timing.reorder
+    }
+    var totalRebGraph: UInt64 = 0
+    var totalRebSource: UInt64 = 0
+    for timing in timingResults {
+        totalRebGraph += timing.rebuildGraphNanoseconds
+        totalRebSource += timing.rebuildSourceNanoseconds
+    }
+    let toMs: (UInt64) -> String = { String(format: "%.2f", Double($0) / 1_000_000) }
+    let totalNs = totalSrc + totalDisp + totalEnc + totalDec + totalReb + totalCC + totalRlx + totalRel + totalReord
+    print("[\(name) ECOOP] reducer timing (summed across \(timingResults.count) seeds): total=\(toMs(totalNs))ms src=\(toMs(totalSrc)) disp=\(toMs(totalDisp)) enc=\(toMs(totalEnc)) dec=\(toMs(totalDec)) reb=\(toMs(totalReb))(graph=\(toMs(totalRebGraph))/src=\(toMs(totalRebSource))) cc=\(toMs(totalCC)) rlx=\(toMs(totalRlx)) rel=\(toMs(totalRel)) reord=\(toMs(totalReord))")
+}
+
+// MARK: - Dispatch Aggregation Types
+
+private struct DispatchAggregate {
+    var dispatches = 0
+    var acceptingDispatches = 0
+    var totalProbes = 0
+    var totalLengthDeltaGivenAccept = 0
+    var totalDistanceDeltaGivenAccept: Double = 0
+    var probesGivenReject = 0
+    var acceptsWithPrior = 0
+    var dispatchesWithPrior = 0
+    var acceptsWithoutPrior = 0
+    var dispatchesWithoutPrior = 0
+    var decoderRejectsWithPrior = 0
+    var decoderRejectsWithoutPrior = 0
+}
+
+private struct DemotionOutcome {
+    var lostAcceptingDispatches = 0
+    var skippedDispatches = 0
+    var savedProbes = 0
+    var savedDecoderRejects = 0
 }
 
 // MARK: - Statistics Helpers
@@ -378,4 +681,12 @@ private func f1(_ value: Double) -> String {
 
 private func f2(_ value: Double) -> String {
     String(format: "%.2f", value)
+}
+
+private func formatRate(_ numerator: Int, _ denominator: Int) -> String {
+    denominator == 0 ? "-" : String(format: "%.1f%%", 100.0 * Double(numerator) / Double(denominator))
+}
+
+private func formatMean(_ total: Int, _ count: Int) -> String {
+    count == 0 ? "-" : String(format: "%.1f", Double(total) / Double(count))
 }

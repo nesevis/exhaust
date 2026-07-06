@@ -170,11 +170,14 @@ enum ExchangeScope {
 
     /// Lockstep reduction of same-typed sibling values.
     case tandem(TandemScope)
+
+    /// Joint descent along an inferred rational relation between stall-converged leaf pairs.
+    case relation(RelationScope)
 }
 
 /// Scope for redistribution along type-compatibility edges.
 struct RedistributionScope {
-    /// Source-sink pairs from type-compatibility edges, ordered by Nash-gap regret.
+    /// Source-sink pairs from type-compatibility edges. Unordered at the query level; ``GraphRedistributionEncoder`` orders them by full-delta candidate shortlex.
     let pairs: [RedistributionPair]
 }
 
@@ -191,6 +194,34 @@ struct RedistributionPair {
 
     /// The sink leaf's type tag. Equal to ``sourceTag`` for same-type pairs, different for cross-type (for example float ↔ int) pairs.
     let sinkTag: TypeTag
+}
+
+/// Scope for relation search over stall-converged leaf pairs.
+///
+/// Pairs are selected by ``RelationQuery`` only when both leaves carry a convergence record at their current value above target, the state in which per-leaf search, common-delta lockstep, and sum-conserving redistribution have all already failed. Multiplicative couplings (one value a fixed rational multiple of another) are preserved by none of those moves, so without this scope such pairs stall at their initial values.
+struct RelationScope {
+    /// Stall-converged pairs with an inferred rational relation, ordered by the first leaf's position.
+    let pairs: [RelationPair]
+}
+
+/// A leaf pair whose semantic magnitudes share a rational relation: `first = numerator·scale` and `second = denominator·scale`, where a leaf's magnitude is its bit pattern's distance above the semantic-zero pattern.
+///
+/// Magnitude space rather than raw pattern space because signed integers use an XOR sign-magnitude encoding: the pattern of a small positive value is the sign-bit mask plus the value, so raw-pattern ratios are meaningless for them. The relation is a guess read off the current values, certified only by the oracle. The encoder holds the reduced ratio fixed and searches the shared scale factor downward; a wrong inference costs one direct-shot probe plus a short binary search, all rejected.
+struct RelationPair {
+    /// The shortlex-earlier leaf. Current semantic magnitude equals `numerator * scale`.
+    let first: LeafEntry
+
+    /// The shortlex-later leaf. Current semantic magnitude equals `denominator * scale`.
+    let second: LeafEntry
+
+    /// Reduced ratio component for ``first``. At most ``RelationQuery/ratioCap``.
+    let numerator: UInt64
+
+    /// Reduced ratio component for ``second``. At most ``RelationQuery/ratioCap``.
+    let denominator: UInt64
+
+    /// Greatest common divisor of the two current semantic magnitudes. The encoder searches scale factors in `1 ..< scale`.
+    let scale: UInt64
 }
 
 /// Scope for tandem lockstep reduction.

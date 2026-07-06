@@ -65,6 +65,9 @@ package struct ChoiceGraph {
     /// Written by ``recordConvergence(byNodeID:)`` after encoder passes and transferred across full rebuilds by ``ChoiceGraphScheduler/transferConvergence(_:to:)``. Read by ``MinimizationQuery`` (skip converged leaves), ``ChoiceGraphScheduler/allValuesConverged(in:graph:)`` (termination check), and ``ChoiceGraphScheduler/extractWarmStarts(from:)`` (encoder warm-start input). Cleared per-leaf by ``clearConvergence(_:)`` when staleness probing detects an invalid floor, and in bulk by ``clearConvergence(inPositionRange:)`` for bound subtree regions after reshape.
     package var convergenceStore: [Int: ConvergedOrigin] = [:]
 
+    /// Measured value-coupling dependents. Maps each "changed" node to the set of nodes whose convergence floors shifted when it changed. Populated from floor-motion events in `ReductionMachine.applyPassReport`, only when the maintainer-set `collectDiagnostics` flag is enabled. Diagnostic instrumentation with no scheduling consumer yet; a coupling-aware leaf ordering in ``MinimizationQuery`` was tried and reverted (zero measured effect on the ECOOP suite because coupling data arrives only after the affected leaves have converged).
+    package var couplingDependents: [Int: Set<Int>] = [:]
+
     // MARK: - Non-Caching Computed Properties
 
     /// Type-compatibility edges between antichain members with matching types. Recomputed on each access.
@@ -74,13 +77,43 @@ package struct ChoiceGraph {
 
     /// Writes convergence records from an encoder pass into the store by node ID.
     ///
-    /// - Parameter records: Map from graph node ID to the convergence floor at that node's leaf.
-    mutating func recordConvergence(byNodeID records: [Int: ConvergedOrigin]) {
+    /// When a leaf already has a convergence record, the existing bound is carried forward as ``ConvergedOrigin/priorBound`` on the new entry so that floor motion is observable across cycles. Each new entry is stamped with `rebuildGeneration` so that structural floor motion (a rebuild happened between old and new record) can be distinguished from value floor motion (same generation, floor shifted by partner movement).
+    ///
+    /// - Parameters:
+    ///   - records: Map from graph node ID to the convergence floor at that node's leaf.
+    ///   - rebuildGeneration: The current ``ChoiceGraphStats/fullGraphRebuilds`` count.
+    /// - Returns: Structural and value floor-motion counts, plus the node IDs that experienced value floor motion.
+    @discardableResult
+    mutating func recordConvergence(
+        byNodeID records: [Int: ConvergedOrigin],
+        rebuildGeneration: Int
+    ) -> (structural: Int, value: Int, valueMotionNodeIDs: Set<Int>) {
+        var structuralMotion = 0
+        var valueMotion = 0
+        var valueMotionNodeIDs: Set<Int> = []
         for (nodeID, origin) in records {
             guard nodeID < nodes.count else { continue }
             guard case .chooseBits = nodes[nodeID].kind else { continue }
-            convergenceStore[nodeID] = origin
+            let existing = convergenceStore[nodeID]
+            let tagged = ConvergedOrigin(
+                bound: origin.bound,
+                priorBound: existing?.bound,
+                signal: origin.signal,
+                configuration: origin.configuration,
+                cycle: origin.cycle,
+                rebuildGeneration: rebuildGeneration
+            )
+            convergenceStore[nodeID] = tagged
+            if let prior = existing, prior.bound != origin.bound {
+                if prior.rebuildGeneration != rebuildGeneration {
+                    structuralMotion += 1
+                } else {
+                    valueMotion += 1
+                    valueMotionNodeIDs.insert(nodeID)
+                }
+            }
         }
+        return (structural: structuralMotion, value: valueMotion, valueMotionNodeIDs: valueMotionNodeIDs)
     }
 
     /// Clears the convergence record for a single leaf node.

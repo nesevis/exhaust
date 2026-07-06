@@ -91,6 +91,10 @@ extension CandidateSourceBuilder {
                     }
                     sourceDistance = Int(min(maxDistance, UInt64(Int.max)))
                     estimatedCost = tandemScope.groups.count * 8
+                case let .relation(relationScope):
+                    // Zero magnitude ranks relation search below redistribution and tandem: it is the last-resort joint move for pairs where every cheaper encoder has already stalled.
+                    sourceDistance = 0
+                    estimatedCost = relationScope.pairs.count * 8
             }
 
             results.append(GraphTransformation(

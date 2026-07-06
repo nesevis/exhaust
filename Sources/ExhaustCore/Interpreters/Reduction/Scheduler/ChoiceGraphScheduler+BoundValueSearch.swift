@@ -19,12 +19,14 @@ extension ChoiceGraphScheduler {
     ///   - scope: The dispatched ``EncoderInput``. Used to seed the upstream encoder's one-leaf scope and to provide the parent tree as the lift's fallback.
     ///   - gen: The generator. Captured by the lift closure for materialisation.
     ///   - upstreamBudget: Maximum number of upstream probes the composition will explore. Decayed by ``ChoiceGraphScheduler/runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` based on per-bind stall counts.
+    ///   - totalProbeCap: Maximum probes the composition emits across all lifts, zero meaning uncapped. The machine passes ``SchedulerTuning/composedFirstDispatchProbeCap`` for a bind fingerprint's first dispatch of the run and zero afterwards.
     static func makeBoundValueComposition(
         bindScope: BoundValueScope,
         scope: EncoderInput,
         graph: ChoiceGraph,
         gen: AnyGenerator,
-        upstreamBudget: Int = 15
+        upstreamBudget: Int = 15,
+        totalProbeCap: Int = 0
     ) -> EncoderDispatch {
         // Synthesise the upstream scope: a one-leaf integer minimization on the bind-inner. ``mayReshapeOnAcceptance`` is false here because the composition synthesises the reshape change in ``GraphComposedEncoder/wrap``
         // when wrapping each downstream probe — the upstream encoder produces a pure value-only mutation and the composition flips ``mayReshape`` on its way out.
@@ -71,6 +73,7 @@ extension ChoiceGraphScheduler {
             upstreamScope: upstreamScope,
             downstream: downstreamEncoder,
             upstreamBudget: upstreamBudget,
+            totalProbeCap: totalProbeCap,
             lift: lift
         ))
     }

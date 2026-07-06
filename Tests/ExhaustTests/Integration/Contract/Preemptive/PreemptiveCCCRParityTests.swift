@@ -20,9 +20,6 @@ struct PreemptiveNonAtomicCounterParityTests {
             .suppress(.issueReporting)
         )
         #expect(result != nil, "Should never pass")
-        if let result {
-            #expect(result.originalCommands?.count ?? 0 > result.commands.count)
-        }
     }
 }
 

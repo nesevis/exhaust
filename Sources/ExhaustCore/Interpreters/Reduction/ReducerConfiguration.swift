@@ -48,16 +48,26 @@ package struct SchedulerTuning: Sendable {
     /// Half-width of the bit-pattern window used by bind classification endpoint probing. Unsigned tags probe `0 ... windowRadius`; signed tags probe `simplest ± windowRadius`.
     public var classificationWindowRadius: UInt64
 
+    /// Maximum probes a bound value composition may emit on a bind fingerprint's first dispatch of the run. Zero means uncapped. Workloads where composition earns acceptances do so with one lift and a handful of probes, while a fruitless first dispatch runs to its full covering enumeration before the gate can blacklist the bind — this cap bounds that classification cost without touching post-acceptance dispatches, which run uncapped because acceptance clears the fingerprint's outcome history. The default of 16 is 8× the accepting spend measured across the benchmark suite (~2 probes), where it cut the worst measured waste by 91% with byte-identical counters and counterexamples everywhere else.
+    public var composedFirstDispatchProbeCap: Int
+
+    /// Consecutive fully-rejected migration passes after which migration transformations are skipped for the rest of the run. Zero means never demote. On workloads where migration is productive it accepts on every dispatch, all in the first cycle, so the trigger is unreachable there; on workloads where it never accepts, each fruitless dispatch costs one materialization per pass until demotion fires. An acceptance resets the consecutive count. The default of 3 lost no acceptances anywhere on the benchmark suite: counterexamples and all non-migration counters were byte-identical, with migration spend down roughly 60% on the workloads where it never accepts.
+    public var migrationDemotionThreshold: Int
+
     /// Maximum index distance between source and sink in pairwise operations (type-compatibility edges, lockstep suffix windows). Caps O(n²) pair enumeration to O(n × maxPairLookahead) for large groups.
     public static let maxPairLookahead: Int = 50
 
     package init(
         boundValueBaseBudget: Int = 15,
         relaxMaterializationBudget: Int = 10,
-        classificationWindowRadius: UInt64 = 10000
+        classificationWindowRadius: UInt64 = 10000,
+        composedFirstDispatchProbeCap: Int = 16,
+        migrationDemotionThreshold: Int = 3
     ) {
         self.boundValueBaseBudget = boundValueBaseBudget
         self.relaxMaterializationBudget = relaxMaterializationBudget
         self.classificationWindowRadius = classificationWindowRadius
+        self.composedFirstDispatchProbeCap = composedFirstDispatchProbeCap
+        self.migrationDemotionThreshold = migrationDemotionThreshold
     }
 }

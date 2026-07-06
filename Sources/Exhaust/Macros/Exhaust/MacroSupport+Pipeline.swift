@@ -653,6 +653,8 @@ package extension __ExhaustRuntime {
         )
         failure.replayHint = replayHint
         failure.reductionProducedNoImprovement = true
+        // Reflected inputs (the other no-improvement site) deliberately do not set this: a user-supplied example is often already minimal, and warning "may not be minimal" there would be noise.
+        failure.reductionStalled = report.reductionStalled
         let rendered = failure.render(format: context.logFormat)
         report.renderedFailure = rendered
         report.replaySeed = failure.encodedReplaySeed

@@ -72,7 +72,9 @@ extension GraphRedistributionEncoder {
 
         guard pairs.isEmpty == false else { return }
 
-        // Sort by value-projection shortlex of each pair's full-delta candidate. Pairs whose full-delta probe produces the smallest value shortlex fire first — they make the most progress per probe, which matters when the futility budget is tight. Pre-building candidates is cheap (at most `maxPairsPerScope` sequence copies, each changing exactly two entries). Pairs whose full-delta candidate cannot be built sort last; among those, largest maxDelta sorts first as a fallback.
+        // Sort by value-projection shortlex of each pair's full-delta candidate. Pairs whose full-delta probe produces the smallest value shortlex fire first: they make the most progress per probe, which matters when the futility budget is tight. Pre-building candidates is cheap (at most `maxPairsPerScope` sequence copies, each changing exactly two entries). Pairs whose full-delta candidate cannot be built sort last; among those, largest maxDelta sorts first as a fallback.
+        //
+        // A Nash-gap dependency tier above this sort was tried and reverted: ``ConvergenceSignal/zeroingDependency`` marks leaves that individually reached target despite batch-zero failure, and target-converged leaves are excluded from sources by the `maxDelta > 0` guard, so the tier was uniform. Coupling-aware ordering needs a verdict that marks non-target floors first.
         let fullDeltaCandidates: [ChoiceSequence?] = pairs.map { pair in
             buildRedistributionCandidate(
                 sourceIndex: pair.sourceIndex,

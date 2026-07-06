@@ -50,6 +50,7 @@ enum GraphOperation {
             case .minimize(.laneCollapse): .laneCollapse
             case .exchange(.redistribution): .redistribution
             case .exchange(.tandem): .lockstep
+            case .exchange(.relation): .relationSearch
             case .permute: .siblingSwap
             case .reorder: .numericReorder
         }

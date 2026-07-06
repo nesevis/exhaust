@@ -68,6 +68,7 @@ struct ProbeSession {
     private(set) var anyAccepted: Bool = false
     private(set) var anyRequiresRebuild: Bool = false
     private(set) var latestTreeIsStripped: Bool = false
+    private(set) var acceptedLeafNodeIDs: Set<Int> = []
 
     private(set) var phase: Phase = .encode
 
@@ -174,6 +175,12 @@ struct ProbeSession {
             anyAccepted = true
             acceptCount += 1
 
+            if case let .leafValues(changes) = mutation {
+                for change in changes {
+                    acceptedLeafNodeIDs.insert(change.leafNodeID)
+                }
+            }
+
             state.countMaterialization()
             latestTreeIsStripped = selection.materializePicks == false
 
@@ -227,6 +234,7 @@ struct ProbeSession {
             encoderName: encoder.name,
             transformation: transformation,
             boundValueFingerprint: boundValueFingerprint,
+            composedUpstreamLifts: encoder.composedUpstreamProbesUsed,
             probeCount: probeCount,
             acceptCount: acceptCount,
             cacheHitCount: cacheHitCount,
@@ -235,7 +243,8 @@ struct ProbeSession {
             anyRequiresRebuild: anyRequiresRebuild,
             latestTreeIsStripped: latestTreeIsStripped,
             convergenceRecords: encoder.convergenceRecords,
-            hadReplacementShortlexRejection: encoder.hadReplacementShortlexRejection
+            hadReplacementShortlexRejection: encoder.hadReplacementShortlexRejection,
+            acceptedLeafNodeIDs: acceptedLeafNodeIDs
         )
     }
 
@@ -264,6 +273,9 @@ struct PassReport {
     let transformation: GraphTransformation
     let boundValueFingerprint: UInt64?
 
+    /// Upstream probes that produced a valid lift, for composed passes; nil for every other encoder.
+    let composedUpstreamLifts: Int?
+
     let probeCount: Int
     let acceptCount: Int
     let cacheHitCount: Int
@@ -275,4 +287,7 @@ struct PassReport {
 
     let convergenceRecords: [Int: ConvergedOrigin]
     let hadReplacementShortlexRejection: Bool
+
+    /// Leaf node IDs whose values changed in accepted probes during this pass.
+    let acceptedLeafNodeIDs: Set<Int>
 }

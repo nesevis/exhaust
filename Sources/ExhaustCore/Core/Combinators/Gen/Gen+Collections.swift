@@ -140,11 +140,21 @@ package extension Gen {
     ) -> Generator<[KeyOutput: ValueOutput]> {
         let pairGen = keyArrayGenerator._bound(
             forward: { keys in
-                Gen.contramap(
-                    { (pair: ([KeyOutput], [ValueOutput])) in pair.1 },
-                    Gen.arrayOf(valueGenerator, exactly: UInt64(keys.count))
-                        .map { values in (keys, values) }
-                )
+                // Pairing the bound keys with the generated value array and projecting `pair.1` back out is a framework-authored exact inverse, so it collapses to one `.isomorph` transform node rather than a contramap wrapping a map.
+                Gen.liftF(.transform(
+                    kind: .isomorph(
+                        forward: { anyValues in (keys, anyValues as! [ValueOutput]) },
+                        backward: { anyPair in
+                            guard let pair = anyPair as? ([KeyOutput], [ValueOutput]) else {
+                                throw ReflectionError.contramapWasWrongType
+                            }
+                            return pair.1
+                        },
+                        inputType: [ValueOutput].self,
+                        outputType: ([KeyOutput], [ValueOutput]).self
+                    ),
+                    inner: Gen.arrayOf(valueGenerator, exactly: UInt64(keys.count)).erase()
+                ))
             },
             backward: { (pair: ([KeyOutput], [ValueOutput])) in pair.0 }
         )
