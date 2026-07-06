@@ -28,7 +28,7 @@ struct PointlessRunAndSkipTests {
         var skipped = -1
         var invocations = -1
         withKnownIssue {
-            _ = #exhaust(
+            #exhaust(
                 #gen(.int(in: 0 ... 100)),
                 .budget(.quick),
                 .onReport { report in
@@ -50,7 +50,7 @@ struct PointlessRunAndSkipTests {
     func xctSkipCountsAsSkip() {
         var skipped = -1
         withKnownIssue {
-            _ = #exhaust(
+            #exhaust(
                 #gen(.int(in: 0 ... 100)),
                 .budget(.quick),
                 .onReport { report in
@@ -125,7 +125,7 @@ struct UniqueExhaustionTruncationTests {
     func smallDomainCoverageIsExhaustive() {
         var truncated = true
         var coverage = -1
-        _ = #exhaust(
+        #exhaust(
             #gen(.bool()).unique(),
             .budget(.standard),
             .onReport { report in
@@ -142,7 +142,7 @@ struct UniqueExhaustionTruncationTests {
     @Test("Unique over a large domain does not truncate")
     func largeDomainDoesNotTruncate() {
         var truncated = true
-        _ = #exhaust(
+        #exhaust(
             #gen(.int(in: 0 ... 1_000_000)).unique(),
             .budget(.quick),
             .onReport { report in
