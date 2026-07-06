@@ -154,6 +154,7 @@ private struct SeedResult {
     let couplingEdges: [CouplingEdge: Int]
     let floorMotionPartnerCounts: [Int: Int]
     let dispatchLog: [DispatchRecord]
+    let relaxRoundLog: [RelaxRoundRecord]
 }
 
 // MARK: - Runner
@@ -233,7 +234,8 @@ private func registerECOOPChallenge<Output>(
                 redistributionAcceptanceNodeIDs: reduceResult?.stats.redistributionAcceptanceNodeIDs ?? [],
                 couplingEdges: reduceResult?.stats.couplingEdges ?? [:],
                 floorMotionPartnerCounts: reduceResult?.stats.floorMotionPartnerCounts ?? [:],
-                dispatchLog: reduceResult?.stats.dispatchLog ?? []
+                dispatchLog: reduceResult?.stats.dispatchLog ?? [],
+                relaxRoundLog: reduceResult?.stats.relaxRoundLog ?? []
             ))
         }
 
@@ -331,7 +333,7 @@ private func printECOOPReport(
 
     // Per-encoder probe breakdown (summed across all seeds).
     // Per-encoder rejection breakdown:
-    // Per-dispatch aggregation: the reservation-value table (R17) and the indexability signal (R14). A dispatch is one completed encoder pass; "prior accept" means an earlier pass in the same cycle of the same seed accepted at least one probe.
+    // Per-dispatch aggregation: the reservation-value table and the indexability signal. A dispatch is one completed encoder pass; "prior accept" means an earlier pass in the same cycle of the same seed accepted at least one probe.
     let allDispatchLogs = results.map(\.dispatchLog).filter { $0.isEmpty == false }
     if allDispatchLogs.isEmpty == false {
         struct DispatchAggregate {
@@ -452,7 +454,7 @@ private func printECOOPReport(
             print("  seeds_with_composed=\(seedsWithComposed) distinct_binds_per_seed=\(mean(distinctBindsPerSeedTotal, seedsWithComposed)) distinct_binds_total=\(allComposedFingerprints.count) redispatch_per_bind (dispatches:seed-bind pairs): \(redispatchComponents) verdicts: \(verdictComponents)")
         }
 
-        // Migration-demotion sizing (handover Item 4): replay each seed's log against the rule "after k consecutive fully-rejected migration dispatches, skip migration for the rest of the run". Rejected dispatches cannot change the destination (R16 lemma), so the replay is faithful for lost acceptances; saved probe counts are approximate because skipped rejects also stop feeding the reject cache.
+        // Migration-demotion sizing: replay each seed's log against the rule "after k consecutive fully-rejected migration dispatches, skip migration for the rest of the run". Rejected dispatches cannot change the destination, so the replay is faithful for lost acceptances; saved probe counts are approximate because skipped rejects also stop feeding the reject cache.
         struct DemotionOutcome {
             var lostAcceptingDispatches = 0
             var skippedDispatches = 0
@@ -503,6 +505,33 @@ private func printECOOPReport(
                 print("  k=\(threshold): lost_accepts=\(outcome.lostAcceptingDispatches) skipped=\(outcome.skippedDispatches) saved_probes=\(outcome.savedProbes) saved_rejDec=\(outcome.savedDecoderRejects)")
             }
         }
+    }
+
+    // Relax barrier heights: distribution of failed perturbation materializations before one decoded, split by round outcome. Undecoded rounds are censored observations — the true barrier is at least the shown value — so a "p95 under the budget" reading must account for them.
+    let allRelaxRounds = results.flatMap(\.relaxRoundLog)
+    if allRelaxRounds.isEmpty == false {
+        var committedBarriers: [Int: Int] = [:]
+        var rolledBackBarriers: [Int: Int] = [:]
+        var undecodedMaterializations: [Int: Int] = [:]
+        var totalCandidates = 0
+        for round in allRelaxRounds {
+            totalCandidates += round.candidateCount
+            if round.perturbationDecoded == false {
+                undecodedMaterializations[round.materializationsUsed, default: 0] += 1
+            } else if round.committed {
+                committedBarriers[round.materializationsUsed, default: 0] += 1
+            } else {
+                rolledBackBarriers[round.materializationsUsed, default: 0] += 1
+            }
+        }
+        let formatDistribution: ([Int: Int]) -> String = { distribution in
+            distribution.isEmpty
+                ? "none"
+                : distribution.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: " ")
+        }
+        let meanCandidates = String(format: "%.1f", Double(totalCandidates) / Double(allRelaxRounds.count))
+        print("[\(name) ECOOP] relax_barriers (rounds=\(allRelaxRounds.count), mean_candidates=\(meanCandidates); barrier:rounds):")
+        print("  committed \(formatDistribution(committedBarriers)) | rolled_back \(formatDistribution(rolledBackBarriers)) | undecoded (censored) \(formatDistribution(undecodedMaterializations))")
     }
 
     // each `rejDec` is one materialization that did not reach the property.

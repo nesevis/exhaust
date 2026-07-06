@@ -79,6 +79,14 @@ extension ReductionMachine {
         }
 
         guard perturbationAccepted else {
+            if collectDiagnostics {
+                stats.relaxRoundLog.append(RelaxRoundRecord(
+                    candidateCount: candidates.count,
+                    materializationsUsed: materializationsUsed,
+                    perturbationDecoded: false,
+                    committed: false
+                ))
+            }
             ChoiceGraphScheduler.logReducer("relax_round_no_perturbation", isInstrumented: isInstrumented, metadata: [:])
             return false
         }
@@ -143,7 +151,17 @@ extension ReductionMachine {
         }
         rejectCache = savedRejectCache
 
-        if sequence.shortLexPrecedes(checkpointSequence) {
+        let excursionCommitted = sequence.shortLexPrecedes(checkpointSequence)
+        if collectDiagnostics {
+            stats.relaxRoundLog.append(RelaxRoundRecord(
+                candidateCount: candidates.count,
+                materializationsUsed: materializationsUsed,
+                perturbationDecoded: true,
+                committed: excursionCommitted
+            ))
+        }
+
+        if excursionCommitted {
             ChoiceGraphScheduler.logReducer("relax_round_committed", isInstrumented: isInstrumented, metadata: [
                 "old_seq_len": "\(checkpointSequence.count)", "new_seq_len": "\(sequence.count)",
             ])

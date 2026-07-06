@@ -23,7 +23,7 @@ public struct ReductionStats: Sendable {
     /// Floor-motion events where a graph rebuild happened between the old and new convergence record. The floor shifted because the sequence structure changed (deletion, bind reshape), not because a partner coordinate's value moved. Populated only when `ReductionMachine`'s maintainer-set `collectDiagnostics` flag is enabled.
     package var structuralFloorMotionEvents: Int
 
-    /// Floor-motion events within the same rebuild generation. The floor shifted because a partner coordinate's value movement changed the property boundary for this leaf. This is the observable signal for inter-coordinate value coupling (R8). Populated only when `ReductionMachine`'s maintainer-set `collectDiagnostics` flag is enabled.
+    /// Floor-motion events within the same rebuild generation. The floor shifted because a partner coordinate's value movement changed the property boundary for this leaf. This is the observable signal for inter-coordinate value coupling. Populated only when `ReductionMachine`'s maintainer-set `collectDiagnostics` flag is enabled.
     package var valueFloorMotionEvents: Int
 
     // MARK: - Coupling Diagnostics
@@ -47,6 +47,11 @@ public struct ReductionStats: Sendable {
 
     /// True when the reduction phase was terminated early by the wall-clock deadline.
     package var reductionWasCapped: Bool = false
+
+    // MARK: - Relax Rounds
+
+    /// One record per relax round that had perturbation candidates, in run order. Populated only when ``ReductionMachine``'s maintainer-set `collectDiagnostics` flag is enabled. Answers whether the flat relax materialization budget matches the barrier heights committed excursions actually cross.
+    package var relaxRoundLog: [RelaxRoundRecord] = []
 
     // MARK: - Stall Diagnostic
 
@@ -116,6 +121,7 @@ public struct ReductionStats: Sendable {
         stalledLeafCount += other.stalledLeafCount
         stalledLeafResidualDistance += other.stalledLeafResidualDistance
         anyAcceptanceEverOccurred = anyAcceptanceEverOccurred || other.anyAcceptanceEverOccurred
+        relaxRoundLog.append(contentsOf: other.relaxRoundLog)
         for (key, value) in other.filterObservations {
             filterObservations[key, default: FilterObservation()].merge(value)
         }
@@ -124,11 +130,30 @@ public struct ReductionStats: Sendable {
     }
 }
 
+// MARK: - Relax Round Record
+
+/// One relax round's barrier observation, for calibrating the relax materialization budget. Most rounds never start an excursion — no perturbation decodes — which is why this is a round record, not an excursion record.
+///
+/// The observed barrier is the number of failed perturbation materializations before one decoded. Rounds where no perturbation decoded are censored observations — the true barrier is at least `materializationsUsed`, and if many rounds exhaust the budget this way, a "p95 under the cap" conclusion drawn from decoded rounds alone would be biased.
+package struct RelaxRoundRecord: Sendable {
+    /// Perturbation candidates available to the round.
+    package let candidateCount: Int
+
+    /// Failed perturbation materializations before one decoded, or before the round gave up.
+    package let materializationsUsed: Int
+
+    /// True when a perturbation decoded and the exploitation loop ran.
+    package let perturbationDecoded: Bool
+
+    /// True when the excursion beat the checkpoint and was committed.
+    package let committed: Bool
+}
+
 // MARK: - Dispatch Record
 
 /// One completed encoder pass, as seen by the scheduler.
 ///
-/// This is the raw material for the scheduling-cluster analyses: reservation values need the per-encoder distribution of improvement given acceptance against probes spent (R17), the indexability check conditions an encoder's acceptance rate on whether an earlier pass in the same cycle accepted (R14), and the potential-shaping pre-filter needs whole trajectories (R16). Relax-round exploitation passes and the post-loop reorder pass are included; a rolled-back relax round's records describe the discarded excursion trajectory.
+/// This is the raw material for the scheduling analyses: reservation values need the per-encoder distribution of improvement given acceptance against probes spent, the indexability check conditions an encoder's acceptance rate on whether an earlier pass in the same cycle accepted, and potential-shaping pre-filters need whole trajectories. Relax-round exploitation passes and the post-loop reorder pass are included; a rolled-back relax round's records describe the discarded excursion trajectory.
 package struct DispatchRecord: Sendable {
     /// The reduction cycle this pass ran in.
     package let cycle: Int
