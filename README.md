@@ -1,10 +1,11 @@
 # Exhaust
 
 [![Tests](https://github.com/nesevis/exhaust/actions/workflows/test.yml/badge.svg)](https://github.com/nesevis/exhaust/actions/workflows/test.yml)
-[![Swift 6.2+](https://img.shields.io/badge/Swift-6.2%2B-orange)](https://swift.org)
+[![Tests (Linux)](https://github.com/nesevis/exhaust/actions/workflows/test-linux.yml/badge.svg)](https://github.com/nesevis/exhaust/actions/workflows/test-linux.yml)
+[![Swift 6.3+](https://img.shields.io/badge/Swift-6.3%2B-orange)](https://swift.org)
 [![SPM](https://img.shields.io/badge/Swift%20Package%20Manager-compatible-brightgreen)](https://swift.org/package-manager/)
 
-[![Platforms](https://img.shields.io/badge/Platforms-macOS%2010.15%2B%20%7C%20iOS%2013%2B%20%7C%20tvOS%2013%2B%20%7C%20watchOS%206%2B%20%7C%20visionOS%201%2B-blue)](https://developer.apple.com)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%2010.15%2B%20%7C%20iOS%2013%2B%20%7C%20tvOS%2013%2B%20%7C%20watchOS%206%2B%20%7C%20visionOS%201%2B%20%7C%20Linux-blue)](https://swift.org/platform-support/)
 
 # Find the bugs you didn't think of.
 
@@ -118,8 +119,8 @@ Then add it as a dependency of your test target:
 
 ## Requirements
 
-- Swift 6.2+ (Xcode 26+)
-- macOS 10.15+, iOS 13+, Mac Catalyst 13+, tvOS 13+, watchOS 6+, visionOS 1+
+- Swift 6.3+ (Xcode 26+)
+- macOS 10.15+, iOS 13+, Mac Catalyst 13+, tvOS 13+, watchOS 6+, visionOS 1+, Linux
 - Cooperative concurrent contract testing (`@Contract(.tasks)`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+
 - Sequential and preemptive contract testing (`@Contract(.sequential)`, `@Contract(.threads)`) have no additional availability requirements
 
