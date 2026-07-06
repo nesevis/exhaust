@@ -48,16 +48,21 @@ package struct SchedulerTuning: Sendable {
     /// Half-width of the bit-pattern window used by bind classification endpoint probing. Unsigned tags probe `0 ... windowRadius`; signed tags probe `simplest ± windowRadius`.
     public var classificationWindowRadius: UInt64
 
+    /// Maximum probes a bound value composition may emit on a bind fingerprint's first dispatch of the run. Zero means uncapped. Workloads where composition earns acceptances do so with one lift and a handful of probes, while a fruitless first dispatch runs to its full covering enumeration before the gate can blacklist the bind — this cap bounds that classification cost without touching post-acceptance dispatches, which run uncapped because acceptance clears the fingerprint's outcome history. The default of 16 is 8× the accepting spend measured across the ECOOP suite (~2 probes) and cut BinaryHeap's composed waste from 93 to 8.4 probes per seed with byte-identical counters and counterexamples everywhere else (A/B gate, 2026-07-06).
+    public var composedFirstDispatchProbeCap: Int
+
     /// Maximum index distance between source and sink in pairwise operations (type-compatibility edges, lockstep suffix windows). Caps O(n²) pair enumeration to O(n × maxPairLookahead) for large groups.
     public static let maxPairLookahead: Int = 50
 
     package init(
         boundValueBaseBudget: Int = 15,
         relaxMaterializationBudget: Int = 10,
-        classificationWindowRadius: UInt64 = 10000
+        classificationWindowRadius: UInt64 = 10000,
+        composedFirstDispatchProbeCap: Int = 16
     ) {
         self.boundValueBaseBudget = boundValueBaseBudget
         self.relaxMaterializationBudget = relaxMaterializationBudget
         self.classificationWindowRadius = classificationWindowRadius
+        self.composedFirstDispatchProbeCap = composedFirstDispatchProbeCap
     }
 }

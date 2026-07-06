@@ -76,6 +76,38 @@ struct GraphComposedEncoderTests {
         #expect(limitedProbes > 0, "Budget=1 should still emit at least one probe")
     }
 
+    // MARK: - Total Probe Cap
+
+    @Test("Total probe cap stops emission at exactly the cap; zero means unlimited")
+    func totalProbeCapBinds() {
+        let tree = ChoiceTree.group([
+            .choice(ChoiceValue(50 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
+        ])
+        let graph = ChoiceGraph.build(from: tree)
+        let sequence = ChoiceSequence.flatten(tree)
+
+        guard let scope = minimizationScope(tree: tree, graph: graph, sequence: sequence) else {
+            Issue.record("No minimization scope")
+            return
+        }
+
+        let cap = 3
+        let uncappedProbes = drainProbes(
+            scope: scope,
+            sequence: sequence,
+            upstreamBudget: 100
+        )
+        #expect(uncappedProbes > cap, "The uncapped composition must emit more than the cap for the capped comparison to be meaningful")
+
+        let cappedProbes = drainProbes(
+            scope: scope,
+            sequence: sequence,
+            upstreamBudget: 100,
+            totalProbeCap: cap
+        )
+        #expect(cappedProbes == cap, "A capped composition should emit exactly the cap when the uncapped run exceeds it")
+    }
+
     // MARK: - Lift Failure
 
     @Test("Failed lifts are skipped without counting against budget")
@@ -261,7 +293,8 @@ struct GraphComposedEncoderTests {
 private func drainProbes(
     scope: EncoderInput,
     sequence: ChoiceSequence,
-    upstreamBudget: Int
+    upstreamBudget: Int,
+    totalProbeCap: Int = 0
 ) -> Int {
     var composed = GraphComposedEncoder(
         name: .composed,
@@ -269,6 +302,7 @@ private func drainProbes(
         upstreamScope: scope,
         downstream: .binarySearch(GraphBinarySearchEncoder()),
         upstreamBudget: upstreamBudget,
+        totalProbeCap: totalProbeCap,
         lift: { candidate, _, parent in
             EncoderInput(
                 transformation: parent.transformation,

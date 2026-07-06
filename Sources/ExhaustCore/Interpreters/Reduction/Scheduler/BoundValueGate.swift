@@ -63,6 +63,11 @@ struct BoundValueGate {
         fruitless.insert(fingerprint)
     }
 
+    /// True when no dispatch outcome has ever been recorded for the fingerprint in this run. First dispatches are the classification-cost population: they probe a bind whose productivity is unknown, so the scheduler may cap their spend without touching post-acceptance dispatches (an acceptance records an outcome, making later dispatches non-first).
+    func isFirstDispatch(fingerprint: UInt64) -> Bool {
+        stallCount[fingerprint] == nil
+    }
+
     func decayedBudget(fingerprint: UInt64) -> Int {
         let stalls = stallCount[fingerprint, default: 0]
         return max(1, baseBudget >> stalls)

@@ -125,7 +125,10 @@ extension ReductionMachine {
                 scope: scope,
                 graph: graph,
                 gen: gen,
-                upstreamBudget: convergence.gate.decayedBudget(fingerprint: fingerprint)
+                upstreamBudget: convergence.gate.decayedBudget(fingerprint: fingerprint),
+                totalProbeCap: convergence.gate.isFirstDispatch(fingerprint: fingerprint)
+                    ? tuning.composedFirstDispatchProbeCap
+                    : 0
             )
             convergence.gate.markDispatched(fingerprint)
         } else {
@@ -134,6 +137,7 @@ extension ReductionMachine {
 
         encoder.start(scope: scope)
 
+        captureDispatchBaseline()
         activeSession = ProbeSession(
             encoder: encoder,
             transformation: transformation,
@@ -200,36 +204,32 @@ extension ReductionMachine {
                 byNodeID: report.convergenceRecords,
                 rebuildGeneration: stats.graphStats.fullGraphRebuilds
             )
-            for motionNodeID in motion.valueMotionNodeIDs {
-                let sincePass = lastConvergencePass[motionNodeID] ?? 0
-                var partnerNodes: Set<Int> = []
-                for entry in valueChangeLog where entry.passIndex > sincePass {
-                    for changedNodeID in entry.nodeIDs where changedNodeID != motionNodeID {
-                        partnerNodes.insert(changedNodeID)
-                        graph.couplingDependents[changedNodeID, default: []].insert(motionNodeID)
-                        if collectStats {
+            if collectDiagnostics {
+                for motionNodeID in motion.valueMotionNodeIDs {
+                    let sincePass = lastConvergencePass[motionNodeID] ?? 0
+                    var partnerNodes: Set<Int> = []
+                    for entry in valueChangeLog where entry.passIndex > sincePass {
+                        for changedNodeID in entry.nodeIDs where changedNodeID != motionNodeID {
+                            partnerNodes.insert(changedNodeID)
+                            graph.couplingDependents[changedNodeID, default: []].insert(motionNodeID)
                             let edge = CouplingEdge(motionNodeID: motionNodeID, changedNodeID: changedNodeID)
                             stats.couplingEdges[edge, default: 0] += 1
                         }
                     }
-                }
-                if collectStats {
                     stats.floorMotionPartnerCounts[partnerNodes.count, default: 0] += 1
                 }
-            }
 
-            if collectStats {
                 stats.structuralFloorMotionEvents += motion.structural
                 stats.valueFloorMotionEvents += motion.value
                 stats.valueFloorMotionNodeIDs.formUnion(motion.valueMotionNodeIDs)
-            }
 
-            for nodeID in report.convergenceRecords.keys {
-                lastConvergencePass[nodeID] = passCounter
+                for nodeID in report.convergenceRecords.keys {
+                    lastConvergencePass[nodeID] = passCounter
+                }
             }
         }
 
-        if report.acceptedLeafNodeIDs.isEmpty == false {
+        if collectDiagnostics, report.acceptedLeafNodeIDs.isEmpty == false {
             valueChangeLog.append((passIndex: passCounter, nodeIDs: report.acceptedLeafNodeIDs))
         }
 
@@ -248,6 +248,24 @@ extension ReductionMachine {
             stats.encoderProbesAccepted[report.encoderName, default: 0] += report.acceptCount
             stats.encoderProbesRejectedByCache[report.encoderName, default: 0] += report.cacheHitCount
             stats.encoderProbesRejectedByDecoder[report.encoderName, default: 0] += report.decoderRejectCount
+        }
+
+        if collectDiagnostics {
+            let distanceDelta = dispatchBaselineTargetDistance - sequenceTargetDistance()
+            stats.dispatchLog.append(DispatchRecord(
+                cycle: cycles,
+                passIndex: passCounter,
+                encoderName: report.encoderName,
+                probeCount: report.probeCount,
+                acceptCount: report.acceptCount,
+                cacheHitCount: report.cacheHitCount,
+                decoderRejectCount: report.decoderRejectCount,
+                sequenceLengthDelta: dispatchBaselineLength - sequence.count,
+                targetDistanceDelta: distanceDelta,
+                boundValueFingerprint: report.boundValueFingerprint,
+                composedUpstreamLifts: report.composedUpstreamLifts,
+                bindClassification: report.boundValueFingerprint.flatMap { graph.bindClassifications[$0] }
+            ))
 
             if report.anyAccepted,
                case .exchange(.redistribution) = report.transformation.operation
