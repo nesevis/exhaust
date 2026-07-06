@@ -193,6 +193,12 @@ extension EncoderDispatch: GraphEncoder {
         return false
     }
 
+    /// Upstream probes that produced a valid lift in the current pass, for the ``GraphComposedEncoder`` case; nil for every other encoder.
+    var composedUpstreamProbesUsed: Int? {
+        if case let .composed(encoder) = self { return encoder.upstreamProbesUsed }
+        return nil
+    }
+
     /// Re-derives cached scope state from the live graph after a structural mutation. No-op for non-stateful encoders.
     mutating func refreshState(graph: ChoiceGraph, sequence: ChoiceSequence) {
         guard case var .composed(encoder) = self else { return }

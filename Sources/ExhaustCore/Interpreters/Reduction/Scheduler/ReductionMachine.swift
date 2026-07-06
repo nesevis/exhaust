@@ -168,6 +168,17 @@ package struct ReductionMachine: ProbeSessionState {
     /// Monotonic pass counter incremented on each `applyPassReport` call.
     var passCounter: Int = 0
 
+    // MARK: - Research Diagnostics
+
+    /// Enables the research diagnostics: floor-motion counters, coupling attribution (`couplingDependents`, coupling edges, partner counts), redistribution acceptance sets, and the per-dispatch log that feeds the `dispatch_stats` and `indexability` benchmark reports. Deliberately a maintainer-set literal rather than configuration surface: `collectStats` is always on in normal use, so these per-pass costs (attribution scans, two O(*n*) distance sums, record appends) must not ride it. Flip to true for a diagnostics session over the benchmark suite; the benchmark report blocks appear only when this was set.
+    var collectDiagnostics = false
+
+    /// Sequence length at the start of the pass currently in flight. Captured by ``captureDispatchBaseline()`` so ``applyPassReport(_:)`` can record the pass's ``DispatchRecord/sequenceLengthDelta``.
+    var dispatchBaselineLength: Int = 0
+
+    /// Total distance-to-reduction-target at the start of the pass currently in flight.
+    var dispatchBaselineTargetDistance: Double = 0
+
     // MARK: - Active Probe Session
 
     var activeSession: ProbeSession?
@@ -439,6 +450,7 @@ package struct ReductionMachine: ProbeSessionState {
         let savedRejectCache = rejectCache
         rejectCache = []
 
+        captureDispatchBaseline()
         var session = ProbeSession(
             encoder: encoder,
             transformation: reorderTransformation,
@@ -456,6 +468,30 @@ package struct ReductionMachine: ProbeSessionState {
             ExhaustLog.notice(category: .reducer, event: "graph_human_order_accepted")
         }
         return report.anyAccepted
+    }
+
+    /// Snapshots the sequence's length and total target distance ahead of a probe session, so the completed pass's dispatch record can carry improvement deltas. No-op unless diagnostics are enabled.
+    mutating func captureDispatchBaseline() {
+        guard collectDiagnostics else {
+            return
+        }
+        dispatchBaselineLength = sequence.count
+        dispatchBaselineTargetDistance = sequenceTargetDistance()
+    }
+
+    /// Sums each value entry's absolute pattern-space distance to its reduction target. Distance to target rather than raw pattern keeps the scalar meaningful for signed encodings and range-constrained values. Floating point because full-range leaves contribute distances near 2^63 and integer sums would overflow.
+    func sequenceTargetDistance() -> Double {
+        var total: Double = 0
+        for entry in sequence {
+            guard let value = entry.value else {
+                continue
+            }
+            let bitPattern = value.choice.bitPattern64
+            let target = value.choice.reductionTarget(in: value.validRange)
+            let distance = bitPattern > target ? bitPattern - target : target - bitPattern
+            total += Double(distance)
+        }
+        return total
     }
 
     /// Runs the relation encoder over stall-converged leaf pairs, returning true when any probe was accepted.
@@ -488,6 +524,7 @@ package struct ReductionMachine: ProbeSessionState {
             if case .bind = entry { return true }
             return false
         }
+        captureDispatchBaseline()
         var session = ProbeSession(
             encoder: encoder,
             transformation: transformation,

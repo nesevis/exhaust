@@ -121,6 +121,7 @@ extension ReductionMachine {
             var exploitEncoder = ChoiceGraphScheduler.selectEncoder(for: exploitTransformation.operation)
             exploitEncoder.start(scope: exploitScope)
 
+            captureDispatchBaseline()
             var session = ProbeSession(
                 encoder: exploitEncoder,
                 transformation: exploitTransformation,

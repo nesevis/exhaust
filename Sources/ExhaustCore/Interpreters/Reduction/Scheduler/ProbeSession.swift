@@ -234,6 +234,7 @@ struct ProbeSession {
             encoderName: encoder.name,
             transformation: transformation,
             boundValueFingerprint: boundValueFingerprint,
+            composedUpstreamLifts: encoder.composedUpstreamProbesUsed,
             probeCount: probeCount,
             acceptCount: acceptCount,
             cacheHitCount: cacheHitCount,
@@ -271,6 +272,9 @@ struct PassReport {
     let encoderName: EncoderName
     let transformation: GraphTransformation
     let boundValueFingerprint: UInt64?
+
+    /// Upstream probes that produced a valid lift, for composed passes; nil for every other encoder.
+    let composedUpstreamLifts: Int?
 
     let probeCount: Int
     let acceptCount: Int

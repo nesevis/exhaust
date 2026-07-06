@@ -105,6 +105,8 @@ func registerECOOPBenchmarks() {
 }
 
 /// Registers a benchmark for a single challenge using the graph-based reducer.
+///
+/// One registration per `withStrategies` variant, all sharing the same base seed so per-seed results pair exactly. The first variant (the committed baseline) keeps the plain challenge name so its report blocks stay comparable across sessions; session variants are suffixed with the strategy name.
 func registerECOOPPair<Output>(
     name: String,
     gen: Generator<Output>,
@@ -115,16 +117,18 @@ func registerECOOPPair<Output>(
     maxGenerationRuns: UInt64 = 10000,
     sizeMetric: ((Output) -> Int)? = nil
 ) {
-    registerECOOPChallenge(
-        name: name,
-        gen: gen,
-        property: property,
-        config: config,
-        seedCount: seedCount,
-        baseSeed: baseSeed,
-        maxGenerationRuns: maxGenerationRuns,
-        sizeMetric: sizeMetric
-    )
+    for (strategyIndex, strategy) in withStrategies(config).enumerated() {
+        registerECOOPChallenge(
+            name: strategyIndex == 0 ? name : "\(name) [\(strategy.name)]",
+            gen: gen,
+            property: property,
+            config: strategy.config,
+            seedCount: seedCount,
+            baseSeed: baseSeed,
+            maxGenerationRuns: maxGenerationRuns,
+            sizeMetric: sizeMetric
+        )
+    }
 }
 
 // MARK: - Per-Seed Result
@@ -149,6 +153,7 @@ private struct SeedResult {
     let redistributionAcceptanceNodeIDs: Set<Int>
     let couplingEdges: [CouplingEdge: Int]
     let floorMotionPartnerCounts: [Int: Int]
+    let dispatchLog: [DispatchRecord]
 }
 
 // MARK: - Runner
@@ -227,7 +232,8 @@ private func registerECOOPChallenge<Output>(
                 valueFloorMotionNodeIDs: reduceResult?.stats.valueFloorMotionNodeIDs ?? [],
                 redistributionAcceptanceNodeIDs: reduceResult?.stats.redistributionAcceptanceNodeIDs ?? [],
                 couplingEdges: reduceResult?.stats.couplingEdges ?? [:],
-                floorMotionPartnerCounts: reduceResult?.stats.floorMotionPartnerCounts ?? [:]
+                floorMotionPartnerCounts: reduceResult?.stats.floorMotionPartnerCounts ?? [:],
+                dispatchLog: reduceResult?.stats.dispatchLog ?? []
             ))
         }
 
@@ -325,6 +331,128 @@ private func printECOOPReport(
 
     // Per-encoder probe breakdown (summed across all seeds).
     // Per-encoder rejection breakdown:
+    // Per-dispatch aggregation: the reservation-value table (R17) and the indexability signal (R14). A dispatch is one completed encoder pass; "prior accept" means an earlier pass in the same cycle of the same seed accepted at least one probe.
+    let allDispatchLogs = results.map(\.dispatchLog).filter { $0.isEmpty == false }
+    if allDispatchLogs.isEmpty == false {
+        struct DispatchAggregate {
+            var dispatches = 0
+            var acceptingDispatches = 0
+            var totalProbes = 0
+            var totalLengthDeltaGivenAccept = 0
+            var totalDistanceDeltaGivenAccept: Double = 0
+            var probesGivenReject = 0
+            var acceptsWithPrior = 0
+            var dispatchesWithPrior = 0
+            var acceptsWithoutPrior = 0
+            var dispatchesWithoutPrior = 0
+            var decoderRejectsWithPrior = 0
+            var decoderRejectsWithoutPrior = 0
+        }
+        var aggregates: [EncoderName: DispatchAggregate] = [:]
+        for log in allDispatchLogs {
+            var cyclesWithAccept: Set<Int> = []
+            for record in log {
+                var aggregate = aggregates[record.encoderName, default: DispatchAggregate()]
+                aggregate.dispatches += 1
+                aggregate.totalProbes += record.probeCount
+                let accepted = record.acceptCount > 0
+                if accepted {
+                    aggregate.acceptingDispatches += 1
+                    aggregate.totalLengthDeltaGivenAccept += record.sequenceLengthDelta
+                    aggregate.totalDistanceDeltaGivenAccept += record.targetDistanceDelta
+                } else {
+                    aggregate.probesGivenReject += record.probeCount
+                }
+                if cyclesWithAccept.contains(record.cycle) {
+                    aggregate.dispatchesWithPrior += 1
+                    aggregate.decoderRejectsWithPrior += record.decoderRejectCount
+                    if accepted {
+                        aggregate.acceptsWithPrior += 1
+                    }
+                } else {
+                    aggregate.dispatchesWithoutPrior += 1
+                    aggregate.decoderRejectsWithoutPrior += record.decoderRejectCount
+                    if accepted {
+                        aggregate.acceptsWithoutPrior += 1
+                    }
+                }
+                aggregates[record.encoderName] = aggregate
+                if accepted {
+                    cyclesWithAccept.insert(record.cycle)
+                }
+            }
+        }
+        let rate: (Int, Int) -> String = { numerator, denominator in
+            denominator == 0 ? "-" : String(format: "%.1f%%", 100.0 * Double(numerator) / Double(denominator))
+        }
+        let mean: (Int, Int) -> String = { total, count in
+            count == 0 ? "-" : String(format: "%.1f", Double(total) / Double(count))
+        }
+        print("[\(name) ECOOP] dispatch_stats (per encoder: dispatches, accept rate, mean probes; given accept: mean len/dist improvement; given reject: mean probes):")
+        for encoder in aggregates.keys.sorted(by: { (aggregates[$0]?.dispatches ?? 0) > (aggregates[$1]?.dispatches ?? 0) }) {
+            guard let aggregate = aggregates[encoder] else {
+                continue
+            }
+            let meanDistance = aggregate.acceptingDispatches == 0
+                ? "-"
+                : String(format: "%.4g", aggregate.totalDistanceDeltaGivenAccept / Double(aggregate.acceptingDispatches))
+            let rejectingDispatches = aggregate.dispatches - aggregate.acceptingDispatches
+            print("  \(encoder.rawValue): n=\(aggregate.dispatches) acc_rate=\(rate(aggregate.acceptingDispatches, aggregate.dispatches)) probes=\(mean(aggregate.totalProbes, aggregate.dispatches)) | acc_len=\(mean(aggregate.totalLengthDeltaGivenAccept, aggregate.acceptingDispatches)) acc_dist=\(meanDistance) | rej_probes=\(mean(aggregate.probesGivenReject, rejectingDispatches))")
+        }
+        print("[\(name) ECOOP] indexability (accept rate and decoder rejects with vs without a prior accept in the same cycle):")
+        for encoder in aggregates.keys.sorted(by: { (aggregates[$0]?.dispatches ?? 0) > (aggregates[$1]?.dispatches ?? 0) }) {
+            guard let aggregate = aggregates[encoder] else {
+                continue
+            }
+            print("  \(encoder.rawValue): prior=\(rate(aggregate.acceptsWithPrior, aggregate.dispatchesWithPrior)) (n=\(aggregate.dispatchesWithPrior), rejDec=\(aggregate.decoderRejectsWithPrior)) none=\(rate(aggregate.acceptsWithoutPrior, aggregate.dispatchesWithoutPrior)) (n=\(aggregate.dispatchesWithoutPrior), rejDec=\(aggregate.decoderRejectsWithoutPrior))")
+        }
+
+        // Composed-spend attribution: whether the composed encoder's probes are many distinct binds each paying once (classification cost) or few binds re-paying within a seed (a gate defect). Groups composed dispatches by bind fingerprint within each seed; the redispatch distribution's key is dispatches per (seed, bind) pair.
+        var composedDispatches = 0
+        var composedAcceptingDispatches = 0
+        var composedUpstreamLifts = 0
+        var composedProbes = 0
+        var composedCacheHits = 0
+        var composedDecoderRejects = 0
+        var seedsWithComposed = 0
+        var distinctBindsPerSeedTotal = 0
+        var allComposedFingerprints: Set<UInt64> = []
+        var redispatchDistribution: [Int: Int] = [:]
+        var verdictCounts: [String: Int] = [:]
+        for log in allDispatchLogs {
+            var dispatchesPerFingerprint: [UInt64: Int] = [:]
+            for record in log where record.encoderName == .composed {
+                composedDispatches += 1
+                composedProbes += record.probeCount
+                composedCacheHits += record.cacheHitCount
+                composedDecoderRejects += record.decoderRejectCount
+                composedUpstreamLifts += record.composedUpstreamLifts ?? 0
+                if record.acceptCount > 0 {
+                    composedAcceptingDispatches += 1
+                }
+                let verdict = record.bindClassification.map { "\($0.topology)/\($0.liftability)" } ?? "-"
+                verdictCounts[verdict, default: 0] += 1
+                if let fingerprint = record.boundValueFingerprint {
+                    dispatchesPerFingerprint[fingerprint, default: 0] += 1
+                    allComposedFingerprints.insert(fingerprint)
+                }
+            }
+            if dispatchesPerFingerprint.isEmpty == false {
+                seedsWithComposed += 1
+                distinctBindsPerSeedTotal += dispatchesPerFingerprint.count
+                for (_, dispatchCount) in dispatchesPerFingerprint {
+                    redispatchDistribution[dispatchCount, default: 0] += 1
+                }
+            }
+        }
+        if composedDispatches > 0 {
+            let redispatchComponents = redispatchDistribution.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: " ")
+            let verdictComponents = verdictCounts.sorted { $0.value > $1.value }.map { "\($0.key):\($0.value)" }.joined(separator: " ")
+            print("[\(name) ECOOP] composed_spend (n=\(composedDispatches) accepting=\(composedAcceptingDispatches) lifts=\(composedUpstreamLifts) probes=\(composedProbes) cacheHits=\(composedCacheHits) rejDec=\(composedDecoderRejects)):")
+            print("  seeds_with_composed=\(seedsWithComposed) distinct_binds_per_seed=\(mean(distinctBindsPerSeedTotal, seedsWithComposed)) distinct_binds_total=\(allComposedFingerprints.count) redispatch_per_bind (dispatches:seed-bind pairs): \(redispatchComponents) verdicts: \(verdictComponents)")
+        }
+    }
+
     // each `rejDec` is one materialization that did not reach the property.
     var totalEmitted: [EncoderName: Int] = [:]
     var totalAccepted: [EncoderName: Int] = [:]

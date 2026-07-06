@@ -92,6 +92,24 @@ public struct ExhaustReport: Sendable {
     /// Total reduction cycles completed.
     public var cycles: Int = 0
 
+    /// Floor-motion events caused by structural changes (graph rebuild between old and new record).
+    public var structuralFloorMotionEvents: Int = 0
+
+    /// Floor-motion events caused by value coupling (same rebuild generation, partner coordinate shifted the boundary).
+    public var valueFloorMotionEvents: Int = 0
+
+    /// Node IDs that experienced value floor motion during this run.
+    public var valueFloorMotionNodeIDs: Set<Int> = []
+
+    /// Node IDs that were part of a redistribution scope when redistribution accepted during this run.
+    public var redistributionAcceptanceNodeIDs: Set<Int> = []
+
+    /// Measured coupling edges from this run. Each edge records that one node's floor shifted after another node's value changed.
+    public var couplingEdges: [CouplingEdge: Int] = [:]
+
+    /// Distribution of partner counts per value floor-motion event.
+    public var floorMotionPartnerCounts: [Int: Int] = [:]
+
     /// Per-fingerprint filter predicate observations accumulated during reduction.
     public var filterObservations: [UInt64: FilterObservation] = [:]
 
@@ -152,6 +170,12 @@ public struct ExhaustReport: Sendable {
         encoderProbesRejectedByDecoder = stats.encoderProbesRejectedByDecoder
         totalMaterializations = stats.totalMaterializations
         cycles = stats.cycles
+        structuralFloorMotionEvents = stats.structuralFloorMotionEvents
+        valueFloorMotionEvents = stats.valueFloorMotionEvents
+        valueFloorMotionNodeIDs = stats.valueFloorMotionNodeIDs
+        redistributionAcceptanceNodeIDs = stats.redistributionAcceptanceNodeIDs
+        couplingEdges = stats.couplingEdges
+        floorMotionPartnerCounts = stats.floorMotionPartnerCounts
         filterObservations = stats.filterObservations
         graphStats = stats.graphStats
         stepTimings = stats.stepTimings

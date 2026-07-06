@@ -55,7 +55,7 @@ extension ChoiceGraphScheduler {
 
     /// Transfers convergence records from an old graph to matching leaves in the new graph. Matches by ``ChoicePath`` + type tag + current bit pattern (when the record carries one). Records whose path does not appear in the new graph, or whose path now addresses a leaf with a different value, are dropped.
     ///
-    /// The bit-pattern guard prevents positional aliasing: without it, a record for a deleted-or-shifted element transfers onto whichever element inherited its sibling index, seeding that leaf with another element's floor. Two elements holding identical values at the same shifted path remain indistinguishable — such records still transfer, an accepted residual because no per-element identity survives sibling mutation.
+    /// The bit-pattern guard prevents positional aliasing: without it, a record for a deleted-or-shifted element transfers onto whichever element inherited its sibling index, seeding that leaf with another element's floor. Two elements holding identical values at the same shifted path remain indistinguishable, so such records still transfer. That residual is accepted because no per-element identity survives sibling mutation.
     static func transferConvergence(
         _ records: [ChoicePath: (origin: ConvergedOrigin, typeTag: TypeTag, bitPattern: UInt64?)],
         to graph: inout ChoiceGraph

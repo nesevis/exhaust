@@ -36,7 +36,7 @@ struct ConvergenceTransferTests {
         #expect(newGraph.convergenceStore[newLeaves[1]] == nil)
     }
 
-    @Test("Equal-value alias still transfers — the accepted residual")
+    @Test("Equal-value alias still transfers as the accepted residual")
     func equalValueAliasTransfers() throws {
         var oldGraph = sequenceGraph(values: [10, 10, 30])
         let oldLeaves = orderedLeafNodeIDs(in: oldGraph)
@@ -54,7 +54,7 @@ struct ConvergenceTransferTests {
         let aliasedRecord = try #require(newGraph.convergenceStore[newLeaves[0]])
         #expect(aliasedRecord.bound == 1)
 
-        // The shifted 30 finds the second 10's record at its path — value mismatch, dropped.
+        // The shifted 30 finds the second 10's record at its path. Value mismatch, dropped.
         #expect(newGraph.convergenceStore[newLeaves[1]] == nil)
     }
 
