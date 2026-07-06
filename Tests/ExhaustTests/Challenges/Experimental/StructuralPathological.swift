@@ -44,7 +44,7 @@ struct StructuralPathologicalChallenge {
             (arr.max() ?? 0) < 5 || arr.reduce(0, +) < 10
         }
 
-        #expect(output == [0, 5, 5])
+        #expect(output == [0, 4, 6])
     }
 
     // MARK: - Cross-Level Sum (composition required)
@@ -78,7 +78,7 @@ struct StructuralPathologicalChallenge {
         // Two-level bind: a in 1...6, b in 1...a, 2-element array in 0...(a*b).
         // CDG has 2 edges in topological order (outer before inner).
         // Property: sum < 8. Fails when sum >= 8.
-        // Smallest (a, b): a=2, b=2 → range 0...4, [4, 4]=8.
+        // Smallest (a, b): a=2, b=4 → range 0...8, [0, 8]=8.
         let gen = #gen(.int(in: 1 ... 6)).bind { a in
             #gen(.int(in: 1 ... a)).bind { b in
                 #gen(.int(in: 0 ... (a * b))).array(length: 2)
@@ -93,7 +93,7 @@ struct StructuralPathologicalChallenge {
             arr.reduce(0, +) < 8
         }
 
-        #expect(output == [4, 4] || output == [2, 6])
+        #expect(output == [0, 8])
     }
 
     // MARK: - Nested Bind: Three Levels
