@@ -42,6 +42,11 @@ enum Preemptive {
 ///
 /// The wait is bounded by the spin budget: a lane whose siblings never arrive proceeds alone, degrading to the unsynchronized behavior instead of stalling the probe when a sibling's thread is starved (the constrained-runner case the ``LaneGate`` documentation describes). The wait polls rather than blocks on purpose, because a blocking primitive would reintroduce the very wakeup skew the barrier exists to remove. After ``pureSpinNanoseconds`` each poll yields the thread, so a waiting lane does not monopolize the core a starved sibling needs in order to arrive.
 final class LaneRendezvous: @unchecked Sendable {
+    enum DepartureReason {
+        case allLanesArrived
+        case spinBudgetExceeded
+    }
+
     /// Upper bound on the wait for sibling lanes. Sized to cover a GCD worker spawn on a cold pool (hundreds of microseconds) with margin, and kept small because an environment whose lanes cannot run concurrently pays it once per waiting lane per probe.
     static let defaultSpinBudgetNanoseconds: UInt64 = 5_000_000
 
@@ -64,13 +69,14 @@ final class LaneRendezvous: @unchecked Sendable {
     /// Marks the calling lane as ready, then waits until every lane is or the spin budget is exhausted.
     ///
     /// The last lane to arrive returns immediately, so at least one lane always makes progress even if the others' polling is delayed.
-    func arriveAndWait() {
+    @discardableResult
+    func arriveAndWait() -> DepartureReason {
         lock.lock()
         arrivedCount += 1
         let allArrived = arrivedCount >= laneCount
         lock.unlock()
         if allArrived {
-            return
+            return .allLanesArrived
         }
         let start = DispatchTime.now().uptimeNanoseconds
         while true {
@@ -78,11 +84,11 @@ final class LaneRendezvous: @unchecked Sendable {
             let complete = arrivedCount >= laneCount
             lock.unlock()
             if complete {
-                return
+                return .allLanesArrived
             }
             let waited = DispatchTime.now().uptimeNanoseconds - start
             if waited >= spinBudgetNanoseconds {
-                return
+                return .spinBudgetExceeded
             }
             if waited >= Self.pureSpinNanoseconds {
                 sched_yield()

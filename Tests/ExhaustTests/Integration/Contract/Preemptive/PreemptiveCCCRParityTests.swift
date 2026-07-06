@@ -17,7 +17,8 @@ struct PreemptiveNonAtomicCounterParityTests {
     func detectsLostUpdateBugInNonAtomicCounter() async {
         let result = await #execute(
             PreemptiveNonAtomicCounterParitySpec.self,
-            .suppress(.issueReporting)
+            .suppress(.issueReporting),
+            .budget(.extensive)
         )
         #expect(result != nil, "Should never pass")
     }
@@ -57,7 +58,8 @@ struct PreemptiveLeakyBucketParityTests {
     func detectsCheckThenActBugThatRequiresStateBuildup() async {
         let result = await #execute(
             PreemptiveLeakyBucketParitySpec.self,
-            .suppress(.issueReporting)
+            .suppress(.issueReporting),
+            .budget(.extensive)
         )
         #expect(result != nil, "Should never pass")
         if let result {
@@ -141,7 +143,8 @@ struct PreemptiveDetectionBoundaryParityTests {
         let result = try #require(
             await #execute(
                 PreemptiveExposedRaceParitySpec.self,
-                .suppress(.issueReporting)
+                .suppress(.issueReporting),
+                .budget(.extensive)
             )
         )
         #expect(result.commands.count >= 2)
@@ -153,7 +156,8 @@ struct PreemptiveDetectionBoundaryParityTests {
             await #execute(
                 PreemptiveThreeWayRaceParitySpec.self,
                 .parallelize(lanes: .three),
-                .suppress(.issueReporting)
+                .suppress(.issueReporting),
+                .budget(.extensive)
             )
         )
         #expect(result.commands.count >= 2, "Need at least 2 concurrent commands to trigger the race")
