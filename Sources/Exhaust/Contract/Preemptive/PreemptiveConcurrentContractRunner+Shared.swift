@@ -3,6 +3,14 @@ import ExhaustCore
 import Foundation
 import IssueReporting
 
+#if canImport(Darwin)
+    import Darwin
+#elseif canImport(Glibc)
+    import Glibc
+#elseif canImport(Musl)
+    import Musl
+#endif
+
 /// Groups shared types for the synchronous and async preemptive contract runners.
 enum Preemptive {
     /// Captures the result of one preemptive concurrent execution probe.
@@ -40,18 +48,16 @@ enum Preemptive {
 ///
 /// The lanes are dispatched as independent GCD blocks, and a lane's whole command list often completes in microseconds. On an otherwise idle machine (a small CI VM running `swift test --no-parallel` is the observed case), GCD worker wakeup skew can exceed a lane's entire runtime, so the "concurrent" phase degenerates to back-to-back sequential execution and no probe in the budget can observe a race. Each lane arrives here before its first command and spins until every lane has arrived, so the lanes depart within one polling iteration of each other no matter how staggered their threads woke up.
 ///
-/// The wait is bounded by the spin budget: a lane whose siblings never arrive proceeds alone, degrading to the unsynchronized behavior instead of stalling the probe when a sibling's thread is starved (the constrained-runner case the ``LaneGate`` documentation describes). The wait polls rather than blocks on purpose, because a blocking primitive would reintroduce the very wakeup skew the barrier exists to remove. After ``pureSpinNanoseconds`` each poll yields the thread, so a waiting lane does not monopolize the core a starved sibling needs in order to arrive.
+/// The wait is bounded by the spin budget: a lane whose siblings never arrive proceeds alone, degrading to the unsynchronized behavior instead of stalling the probe when a sibling's thread is starved (the constrained-runner case the ``LaneGate`` documentation describes). The wait polls rather than blocks on purpose, because a blocking primitive would reintroduce the very wakeup skew the barrier exists to remove. After ``pureSpinNanoseconds`` each poll sleeps briefly instead of spinning on. The sleep, not a yield, is load-bearing: a hot unlock-relock loop starves the barrier's own lock on Linux (an unfair futex lets the relock win against a blocked arriver indefinitely, and `sched_yield` does not hand off to a futex waiter), so a yielding waiter kept the releasing arrival from ever registering and departed only by budget expiry. Sleeping leaves the lock quiescent for a full quantum, so an arriving lane acquires it on the first try.
 final class LaneRendezvous: @unchecked Sendable {
-    enum DepartureReason {
-        case allLanesArrived
-        case spinBudgetExceeded
-    }
-
     /// Upper bound on the wait for sibling lanes. Sized to cover a GCD worker spawn on a cold pool (hundreds of microseconds) with margin, and kept small because an environment whose lanes cannot run concurrently pays it once per waiting lane per probe.
     static let defaultSpinBudgetNanoseconds: UInt64 = 5_000_000
 
-    /// How long a waiting lane polls without yielding. Wakeup skew between already-running workers resolves well within this window, and not yielding keeps the departure skew at nanoseconds.
+    /// How long a waiting lane polls without sleeping. Wakeup skew between already-running workers resolves well within this window, and not sleeping keeps the departure skew at nanoseconds.
     static let pureSpinNanoseconds: UInt64 = 100_000
+
+    /// How long each poll sleeps once the pure-spin window is over. Bounds the slow path's release latency (pure-spin window plus one quantum) while keeping the lock free for arriving lanes; see the type documentation for why the waiter must sleep rather than yield.
+    static let slowPathSleepMicroseconds: UInt32 = 50
 
     private let laneCount: Int
     private let spinBudgetNanoseconds: UInt64
@@ -69,14 +75,13 @@ final class LaneRendezvous: @unchecked Sendable {
     /// Marks the calling lane as ready, then waits until every lane is or the spin budget is exhausted.
     ///
     /// The last lane to arrive returns immediately, so at least one lane always makes progress even if the others' polling is delayed.
-    @discardableResult
-    func arriveAndWait() -> DepartureReason {
+    func arriveAndWait() {
         lock.lock()
         arrivedCount += 1
         let allArrived = arrivedCount >= laneCount
         lock.unlock()
         if allArrived {
-            return .allLanesArrived
+            return
         }
         let start = DispatchTime.now().uptimeNanoseconds
         while true {
@@ -84,14 +89,14 @@ final class LaneRendezvous: @unchecked Sendable {
             let complete = arrivedCount >= laneCount
             lock.unlock()
             if complete {
-                return .allLanesArrived
+                return
             }
             let waited = DispatchTime.now().uptimeNanoseconds - start
             if waited >= spinBudgetNanoseconds {
-                return .spinBudgetExceeded
+                return
             }
             if waited >= Self.pureSpinNanoseconds {
-                sched_yield()
+                usleep(Self.slowPathSleepMicroseconds)
             }
         }
     }

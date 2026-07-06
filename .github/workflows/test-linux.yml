@@ -9,10 +9,6 @@ jobs:
   test:
     runs-on: ubuntu-latest
     container: swift:6.3
-    # Observational while the Linux lane is unproven: failures report without blocking.
-    # Flip to blocking (remove continue-on-error) once the lane has been green.
-    continue-on-error: true
-
     # In container jobs the runner's shell probe can fall back to sh, which rejects the
     # bashisms below (set +o pipefail, PIPESTATUS). The Ubuntu-based swift image has bash.
     defaults:
