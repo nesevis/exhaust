@@ -113,6 +113,20 @@ public struct ExhaustReport: Sendable {
     /// Per-fingerprint filter predicate observations accumulated during reduction.
     public var filterObservations: [UInt64: FilterObservation] = [:]
 
+    /// Leaves that ended reduction converged at their current value while short of their reduction target. Nonzero counts are normal for successful reductions; see ``reductionStalled`` for the warning condition.
+    public var stalledLeafCount: Int = 0
+
+    /// Sum of the gaps between each stalled leaf's terminal value and its reduction target, in bit-pattern space.
+    public var stalledLeafResidualDistance: Double = 0
+
+    /// True when the reducer accepted at least one improvement during reduction.
+    public var anyAcceptanceEverOccurred: Bool = false
+
+    /// True when reduction could not improve the counterexample even once while leaves sit short of their reduction targets. The counterexample may be far from minimal — typically the failing values are linked by a relationship (for example `x == 2 * y + 1`) that no single-value change can preserve, so every reduction attempt un-fails the property. Deadline-capped runs are excluded: they report the time limit instead, because their lack of progress is explained by the budget rather than by the landscape.
+    public var reductionStalled: Bool {
+        stalledLeafCount > 0 && anyAcceptanceEverOccurred == false && reductionWasCapped == false
+    }
+
     // MARK: - Graph Reducer
 
     /// Graph structure and lifecycle statistics from the reduction phase. `nil` when the reduction phase did not run.
@@ -177,6 +191,9 @@ public struct ExhaustReport: Sendable {
         couplingEdges = stats.couplingEdges
         floorMotionPartnerCounts = stats.floorMotionPartnerCounts
         filterObservations = stats.filterObservations
+        stalledLeafCount = stats.stalledLeafCount
+        stalledLeafResidualDistance = stats.stalledLeafResidualDistance
+        anyAcceptanceEverOccurred = stats.anyAcceptanceEverOccurred
         graphStats = stats.graphStats
         stepTimings = stats.stepTimings
         reductionWasCapped = stats.reductionWasCapped

@@ -156,6 +156,9 @@ package struct ReductionMachine: ProbeSessionState {
     var anyAccepted: Bool = false
     var hadReplacementShortlexRejection: Bool = false
 
+    /// True once any pass in the run accepted a probe. Unlike ``anyAccepted``, never reset: a run that terminates with this still false could not improve the input even once, which is the silent-stall presentation the stall diagnostic warns about.
+    var anyAcceptanceEverOccurred: Bool = false
+
     /// Consecutive migration passes that rejected every probe, across the whole run. Reset by any migration acceptance. When this reaches ``SchedulerTuning/migrationDemotionThreshold`` (and the threshold is nonzero), dispatch skips migration transformations for the rest of the run.
     var migrationConsecutiveRejects: Int = 0
     var sequenceBeforeCycle: ChoiceSequence = []
@@ -413,8 +416,40 @@ package struct ReductionMachine: ProbeSessionState {
     private mutating func stepReorderPass() throws -> Transition {
         let skipReorder = enabledEncoders.map { $0.contains(.numericReorder) == false } ?? false
         let accepted = skipReorder ? false : try runReorderPass()
+        recordStallDiagnostic()
         phase = .done
         return .reorderCompleted(accepted: accepted)
+    }
+
+    /// Populates the stall-diagnostic fields on ``ReductionStats`` at termination.
+    ///
+    /// A leaf is stalled when it holds a convergence record whose bound equals its current bit pattern while that pattern differs from the reduction target: the encoder proved the leaf cannot move alone, and it did not reach its target. Stalled leaves are normal at the end of a successful reduction (a property demanding nonzero values leaves every surviving leaf short of its target), so the count alone is not a warning signal — the warning condition is a nonzero count on a run where ``anyAcceptanceEverOccurred`` is still false. Control-scope leaves (depth, lane, bind-inner) are machinery, not user values, and are excluded.
+    private mutating func recordStallDiagnostic() {
+        var stalledCount = 0
+        var residualDistance: Double = 0
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            guard case let .chooseBits(metadata) = node.kind else {
+                continue
+            }
+            let annotation = node.scopeAnnotation
+            if annotation.isDepthControl || annotation.isLaneControl || annotation.isBindInner {
+                continue
+            }
+            let bitPattern = metadata.value.bitPattern64
+            let target = metadata.value.reductionTarget(in: metadata.validRange)
+            guard bitPattern != target else {
+                continue
+            }
+            guard let record = graph.convergenceStore[nodeID], record.bound == bitPattern else {
+                continue
+            }
+            stalledCount += 1
+            residualDistance += Double(bitPattern > target ? bitPattern - target : target - bitPattern)
+        }
+        stats.stalledLeafCount = stalledCount
+        stats.stalledLeafResidualDistance = residualDistance
+        stats.anyAcceptanceEverOccurred = anyAcceptanceEverOccurred
     }
 
     // MARK: - Helpers
@@ -501,6 +536,9 @@ package struct ReductionMachine: ProbeSessionState {
     ///
     /// Runs as a post-cycle action rather than a dispatched source because the stall gate depends on convergence records that value search writes mid-cycle: a workload that stalls in its first cycle terminates before any source rebuild could observe them. An acceptance sets `anyAccepted` through ``applyPassReport(_:)``, so the termination check re-enters the cycle loop and value search re-certifies the moved leaves.
     private mutating func runRelationPass() throws -> Bool {
+        if let enabled = enabledEncoders, enabled.contains(.relationSearch) == false {
+            return false
+        }
         guard let relationScope = RelationQuery.build(graph: graph) else {
             return false
         }

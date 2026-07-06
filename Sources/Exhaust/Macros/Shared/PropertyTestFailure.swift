@@ -18,6 +18,8 @@ struct PropertyTestFailure<Output> {
     var transparent: Bool = false
     /// When `true`, reduction was attempted but produced no improvement over the original counterexample.
     var reductionProducedNoImprovement: Bool = false
+    /// When `true`, reduction never accepted an improvement while values sit converged short of their reduction targets. A stronger signal than ``reductionProducedNoImprovement``: the values are likely linked by a relationship the reducer cannot cross, and the counterexample may be far from minimal.
+    var reductionStalled: Bool = false
     /// When `true`, the reduction was cut short by the wall-clock deadline and the counterexample may not be fully reduced.
     var reductionWasCapped: Bool = false
     /// When `true`, includes a structural diff between the original and reduced values. Off by default because the diff is expensive for large values.
@@ -87,7 +89,10 @@ struct PropertyTestFailure<Output> {
             lines.append("Property invoked: \(propertyInvocations) times")
         }
 
-        if reductionProducedNoImprovement {
+        if reductionStalled {
+            lines.append("")
+            lines.append("Note: reduction stalled; the counterexample may not be minimal.")
+        } else if reductionProducedNoImprovement {
             lines.append("")
             lines.append("Note: this result could not be reduced.")
         } else if reductionWasCapped {

@@ -304,6 +304,7 @@ extension ReductionMachine {
 
         if report.anyAccepted {
             anyAccepted = true
+            anyAcceptanceEverOccurred = true
         }
 
         switch acceptanceAction {

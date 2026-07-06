@@ -48,6 +48,17 @@ public struct ReductionStats: Sendable {
     /// True when the reduction phase was terminated early by the wall-clock deadline.
     package var reductionWasCapped: Bool = false
 
+    // MARK: - Stall Diagnostic
+
+    /// Leaves that terminated with a convergence record at their current value while short of their reduction target. Nonzero counts are normal for successful reductions (a property demanding nonzero values leaves surviving leaves short of their targets); the silent-stall signal is a nonzero count with ``anyAcceptanceEverOccurred`` false.
+    package var stalledLeafCount: Int = 0
+
+    /// Sum of the pattern-space gaps between each stalled leaf's terminal value and its reduction target. A magnitude for the stall warning; meaningful only relative to the workload's value ranges.
+    package var stalledLeafResidualDistance: Double = 0
+
+    /// True when any pass in the run accepted at least one probe. False means the reducer could not improve the input even once — combined with a nonzero ``stalledLeafCount``, the counterexample likely sits far from minimal behind a coupling the encoder roster cannot cross.
+    package var anyAcceptanceEverOccurred: Bool = false
+
     // MARK: - Filter Observations
 
     /// Per-fingerprint filter predicate observations accumulated across all materializations.
@@ -102,6 +113,9 @@ public struct ReductionStats: Sendable {
         }
         dispatchLog.append(contentsOf: other.dispatchLog)
         reductionWasCapped = reductionWasCapped || other.reductionWasCapped
+        stalledLeafCount += other.stalledLeafCount
+        stalledLeafResidualDistance += other.stalledLeafResidualDistance
+        anyAcceptanceEverOccurred = anyAcceptanceEverOccurred || other.anyAcceptanceEverOccurred
         for (key, value) in other.filterObservations {
             filterObservations[key, default: FilterObservation()].merge(value)
         }
