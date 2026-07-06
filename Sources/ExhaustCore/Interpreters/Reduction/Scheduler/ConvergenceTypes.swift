@@ -9,7 +9,7 @@
 ///
 /// Carries warm-start data (`bound`), the encoder's observation (`signal`), the configuration that produced it (`configuration`), and the cycle number for staleness detection. Stored in ``ChoiceGraph/convergenceStore`` keyed by node ID and harvested by the scheduler after each probe loop.
 ///
-/// When a leaf's convergence record is overwritten by a later cycle, ``priorBound`` captures the previous floor. A non-nil value where `priorBound != bound` indicates floor motion: the leaf's convergence point shifted, which is the observable signal for inter-coordinate coupling (R8).
+/// When a leaf's convergence record is overwritten by a later cycle, ``priorBound`` captures the previous floor. A non-nil value where `priorBound != bound` indicates floor motion: the leaf's convergence point shifted, which is the observable signal for inter-coordinate coupling.
 package struct ConvergedOrigin: Sendable {
     /// The bit-pattern value at which the search converged. Warm-start data.
     package let bound: UInt64
