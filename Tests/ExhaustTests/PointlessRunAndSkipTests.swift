@@ -10,7 +10,7 @@ struct PointlessRunAndSkipTests {
     func zeroBudgetReportsError() {
         var invocations = -1
         withKnownIssue {
-            _ = #exhaust(
+            #exhaust(
                 #gen(.int(in: 0 ... 100)),
                 .budget(.custom(coverage: 0, sampling: 0)),
                 .onReport { report in
@@ -106,7 +106,7 @@ struct UniqueExhaustionTruncationTests {
         var truncated = false
         var invocations = -1
         withKnownIssue {
-            _ = #exhaust(
+            #exhaust(
                 #gen(.bool()).unique(),
                 .budget(.custom(coverage: 0, sampling: 200)),
                 .onReport { report in
