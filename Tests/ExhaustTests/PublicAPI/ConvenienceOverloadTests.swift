@@ -6,11 +6,14 @@ import Testing
 struct ConvenienceOverloadTests {
     // MARK: - ClosedRange<Double> overloads
 
-    @Test("float16(in:) accepts Double range literal")
-    func float16DoubleRange() throws {
-        let value = try #example(.float16(in: 0.0 ... 1.0))
-        #expect(value >= 0.0 && value <= 1.0)
-    }
+    // Mirrors the factory's condition: the .float16 family exists only where the Float16 type does.
+    #if arch(arm64) || arch(arm64_32)
+        @Test("float16(in:) accepts Double range literal")
+        func float16DoubleRange() throws {
+            let value = try #example(.float16(in: 0.0 ... 1.0))
+            #expect(value >= 0.0 && value <= 1.0)
+        }
+    #endif
 
     // MARK: - ClosedRange<Int> overloads
 
