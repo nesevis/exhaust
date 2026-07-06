@@ -136,7 +136,7 @@ final class PreemptiveAtomicCounterParitySpec {
 
 @Suite("PCCR parity: detection boundary", .serialized, .tags(.contract))
 struct PreemptiveDetectionBoundaryParityTests {
-    @Test("Race with Task.yield() is detected by preemptive runner", .disabled("Race detection depends on scheduling timing"))
+    @Test("Race with Task.yield() is detected by preemptive runner")
     func raceWithTaskyieldIsDetectedByPreemptiveRunner() async throws {
         let result = try #require(
             await #execute(
@@ -147,7 +147,7 @@ struct PreemptiveDetectionBoundaryParityTests {
         #expect(result.commands.count >= 2)
     }
 
-    @Test("Three-way race detected with concurrencyLevel 3", .disabled("Race detection depends on scheduling timing"))
+    @Test("Three-way race detected with concurrencyLevel 3")
     func threeWayRaceDetectedWithConcurrencyLevel3() async throws {
         let result = try #require(
             await #execute(

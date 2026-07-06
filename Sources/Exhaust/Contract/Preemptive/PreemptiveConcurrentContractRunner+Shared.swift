@@ -1,5 +1,6 @@
 // Shared types for the synchronous and async preemptive contract runners.
 import ExhaustCore
+import Foundation
 import IssueReporting
 
 /// Groups shared types for the synchronous and async preemptive contract runners.
@@ -30,6 +31,72 @@ enum Preemptive {
                 default: nil
             }
         }
+    }
+}
+
+// MARK: - Lane Start Rendezvous
+
+/// Aligns the lanes' first commands in real time with a bounded spin barrier.
+///
+/// The lanes are dispatched as independent GCD blocks, and a lane's whole command list often completes in microseconds. On an otherwise idle machine (a small CI VM running `swift test --no-parallel` is the observed case), GCD worker wakeup skew can exceed a lane's entire runtime, so the "concurrent" phase degenerates to back-to-back sequential execution and no probe in the budget can observe a race. Each lane arrives here before its first command and spins until every lane has arrived, so the lanes depart within one polling iteration of each other no matter how staggered their threads woke up.
+///
+/// The wait is bounded by the spin budget: a lane whose siblings never arrive proceeds alone, degrading to the unsynchronized behavior instead of stalling the probe when a sibling's thread is starved (the constrained-runner case the ``LaneGate`` documentation describes). The wait polls rather than blocks on purpose, because a blocking primitive would reintroduce the very wakeup skew the barrier exists to remove. After ``pureSpinNanoseconds`` each poll yields the thread, so a waiting lane does not monopolize the core a starved sibling needs in order to arrive.
+final class LaneRendezvous: @unchecked Sendable {
+    /// Upper bound on the wait for sibling lanes. Sized to cover a GCD worker spawn on a cold pool (hundreds of microseconds) with margin, and kept small because an environment whose lanes cannot run concurrently pays it once per waiting lane per probe.
+    static let defaultSpinBudgetNanoseconds: UInt64 = 5_000_000
+
+    /// How long a waiting lane polls without yielding. Wakeup skew between already-running workers resolves well within this window, and not yielding keeps the departure skew at nanoseconds.
+    static let pureSpinNanoseconds: UInt64 = 100_000
+
+    private let laneCount: Int
+    private let spinBudgetNanoseconds: UInt64
+    private let lock = NSLock()
+
+    /// Lanes that have reached the barrier. Guarded by `lock`.
+    private var arrivedCount = 0
+
+    /// Creates a barrier for `laneCount` lanes. Tests pass an explicit `spinBudgetNanoseconds` (tiny to exercise the give-up path, huge to make release-by-arrival unambiguous); the runners use the default.
+    init(laneCount: Int, spinBudgetNanoseconds: UInt64 = LaneRendezvous.defaultSpinBudgetNanoseconds) {
+        self.laneCount = laneCount
+        self.spinBudgetNanoseconds = spinBudgetNanoseconds
+    }
+
+    /// Marks the calling lane as ready, then waits until every lane is or the spin budget is exhausted.
+    ///
+    /// The last lane to arrive returns immediately, so at least one lane always makes progress even if the others' polling is delayed.
+    func arriveAndWait() {
+        lock.lock()
+        arrivedCount += 1
+        let allArrived = arrivedCount >= laneCount
+        lock.unlock()
+        if allArrived {
+            return
+        }
+        let start = DispatchTime.now().uptimeNanoseconds
+        while true {
+            lock.lock()
+            let complete = arrivedCount >= laneCount
+            lock.unlock()
+            if complete {
+                return
+            }
+            let waited = DispatchTime.now().uptimeNanoseconds - start
+            if waited >= spinBudgetNanoseconds {
+                return
+            }
+            if waited >= Self.pureSpinNanoseconds {
+                sched_yield()
+            }
+        }
+    }
+}
+
+// MARK: - Test Introspection
+
+extension LaneRendezvous {
+    /// Lanes that have reached the barrier. For tests that must observe a sibling has arrived before acting.
+    var arrivedLaneCount: Int {
+        lock.withLocking { arrivedCount }
     }
 }
 

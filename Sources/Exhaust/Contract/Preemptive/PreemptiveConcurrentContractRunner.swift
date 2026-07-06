@@ -260,11 +260,13 @@ private struct PreemptiveChecker<Spec: ContractSpec>: PreemptiveBackend {
 
         // Observation stays lane-local on purpose: a shared, locked log on the command path would serialize the lanes between commands and flush caches, which both narrows the interleavings the probe can realize and can mask the memory-visibility bugs this runner exists to catch (Lowe, "Testing for Linearizability", section 7.1). Cross-lane ordering is reconstructed afterwards from the per-command timestamps.
         nonisolated(unsafe) let unsafeConcurrentSpec = concurrentSpec
+        let rendezvous = LaneRendezvous(laneCount: partition.laneIDs.count)
         for (offset, laneID) in partition.laneIDs.enumerated() {
             let laneIndices = partition.laneBuckets[laneID] ?? []
             let responseBox = perLaneResponses[offset]
             group.enter()
             DispatchQueue.global().async {
+                rendezvous.arriveAndWait()
                 var localResponses: [ObservedResponse<Spec.Command>] = []
                 var exception: NSException?
                 let succeeded = exhaust_runCatchingObjCException({
