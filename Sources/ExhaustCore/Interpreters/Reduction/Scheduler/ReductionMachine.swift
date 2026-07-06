@@ -155,6 +155,9 @@ package struct ReductionMachine: ProbeSessionState {
     var scopeRejectionCache: CandidateRejectionCache = .init()
     var anyAccepted: Bool = false
     var hadReplacementShortlexRejection: Bool = false
+
+    /// Consecutive migration passes that rejected every probe, across the whole run. Reset by any migration acceptance. When this reaches ``SchedulerTuning/migrationDemotionThreshold`` (and the threshold is nonzero), dispatch skips migration transformations for the rest of the run.
+    var migrationConsecutiveRejects: Int = 0
     var sequenceBeforeCycle: ChoiceSequence = []
 
     // MARK: - Coupling Attribution

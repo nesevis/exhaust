@@ -37,6 +37,13 @@ extension ReductionMachine {
             return .dispatched(decision: .skipped)
         }
 
+        if transformation.operation.encoderName == .migration,
+           tuning.migrationDemotionThreshold > 0,
+           migrationConsecutiveRejects >= tuning.migrationDemotionThreshold
+        {
+            return .dispatched(decision: .skipped)
+        }
+
         var decision = ChoiceGraphScheduler.evaluateDispatch(
             transformation: transformation,
             graph: graph,
@@ -235,6 +242,10 @@ extension ReductionMachine {
 
         if let fingerprint = report.boundValueFingerprint {
             convergence.gate.recordOutcome(fingerprint: fingerprint, accepted: report.anyAccepted)
+        }
+
+        if report.encoderName == .migration {
+            migrationConsecutiveRejects = report.anyAccepted ? 0 : migrationConsecutiveRejects + 1
         }
 
         if hadReplacementShortlexRejection == false,

@@ -451,6 +451,58 @@ private func printECOOPReport(
             print("[\(name) ECOOP] composed_spend (n=\(composedDispatches) accepting=\(composedAcceptingDispatches) lifts=\(composedUpstreamLifts) probes=\(composedProbes) cacheHits=\(composedCacheHits) rejDec=\(composedDecoderRejects)):")
             print("  seeds_with_composed=\(seedsWithComposed) distinct_binds_per_seed=\(mean(distinctBindsPerSeedTotal, seedsWithComposed)) distinct_binds_total=\(allComposedFingerprints.count) redispatch_per_bind (dispatches:seed-bind pairs): \(redispatchComponents) verdicts: \(verdictComponents)")
         }
+
+        // Migration-demotion sizing (handover Item 4): replay each seed's log against the rule "after k consecutive fully-rejected migration dispatches, skip migration for the rest of the run". Rejected dispatches cannot change the destination (R16 lemma), so the replay is faithful for lost acceptances; saved probe counts are approximate because skipped rejects also stop feeding the reject cache.
+        struct DemotionOutcome {
+            var lostAcceptingDispatches = 0
+            var skippedDispatches = 0
+            var savedProbes = 0
+            var savedDecoderRejects = 0
+        }
+        var migrationDispatches = 0
+        var migrationAcceptingByCycle: [Int: Int] = [:]
+        var outcomesByThreshold: [Int: DemotionOutcome] = [:]
+        for log in allDispatchLogs {
+            for record in log where record.encoderName == .migration {
+                migrationDispatches += 1
+                if record.acceptCount > 0 {
+                    migrationAcceptingByCycle[record.cycle, default: 0] += 1
+                }
+            }
+            for threshold in 1 ... 5 {
+                var consecutiveRejected = 0
+                var demoted = false
+                var outcome = outcomesByThreshold[threshold, default: DemotionOutcome()]
+                for record in log where record.encoderName == .migration {
+                    if demoted {
+                        outcome.skippedDispatches += 1
+                        outcome.savedProbes += record.probeCount
+                        outcome.savedDecoderRejects += record.decoderRejectCount
+                        if record.acceptCount > 0 {
+                            outcome.lostAcceptingDispatches += 1
+                        }
+                        continue
+                    }
+                    if record.acceptCount > 0 {
+                        consecutiveRejected = 0
+                    } else {
+                        consecutiveRejected += 1
+                        if consecutiveRejected >= threshold {
+                            demoted = true
+                        }
+                    }
+                }
+                outcomesByThreshold[threshold] = outcome
+            }
+        }
+        if migrationDispatches > 0 {
+            let cycleComponents = migrationAcceptingByCycle.sorted { $0.key < $1.key }.map { "\($0.key):\($0.value)" }.joined(separator: " ")
+            print("[\(name) ECOOP] migration_demotion (n=\(migrationDispatches), accepting dispatches by cycle: \(cycleComponents.isEmpty ? "none" : cycleComponents)):")
+            for threshold in 1 ... 5 {
+                guard let outcome = outcomesByThreshold[threshold] else { continue }
+                print("  k=\(threshold): lost_accepts=\(outcome.lostAcceptingDispatches) skipped=\(outcome.skippedDispatches) saved_probes=\(outcome.savedProbes) saved_rejDec=\(outcome.savedDecoderRejects)")
+            }
+        }
     }
 
     // each `rejDec` is one materialization that did not reach the property.
