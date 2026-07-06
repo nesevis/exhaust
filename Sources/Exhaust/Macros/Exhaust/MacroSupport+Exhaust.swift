@@ -43,21 +43,19 @@ public extension __ExhaustRuntime {
         return unwrapped
     }
 
-    /// Runs a property test with the given generator, settings, and property.
-    /// This is the runtime target of the `#exhaust` macro expansion.
+    /// Runs a property test with a non-throwing predicate. This is the base case (the throwing variant wraps its closure and delegates here) and the runtime target of the `#exhaust` macro expansion.
     ///
     /// - Parameters:
-    ///   - gen: The generator to produce test values from.
+    ///   - refGen: The generator to produce test values from.
     ///   - settings: An array of `PropertySettings` controlling test behavior.
-    ///   - settings: An array of `PropertySettings` controlling test behavior.
+    ///   - reflecting: A known failing value to reduce directly, or `nil` to run the full coverage and sampling pipeline.
     ///   - fileID: The file ID of the call site (injected by macro expansion).
     ///   - filePath: The file path of the call site (injected by macro expansion).
     ///   - line: The line number of the call site (injected by macro expansion).
     ///   - column: The column number of the call site (injected by macro expansion).
     ///   - function: The enclosing function name (injected by macro expansion).
-    ///   - property: The property to test — returns `true` for passing values.
+    ///   - property: The property to test. Returns `true` for passing values.
     /// - Returns: The reduced counterexample if the property failed, or `nil` if all iterations passed.
-    /// Runs a property test with a non-throwing predicate. This is the base case — the throwing variant wraps its closure and delegates here.
     @discardableResult
     static func __exhaust<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -102,14 +100,16 @@ public extension __ExhaustRuntime {
         property: @Sendable (Output) throws -> Bool
     ) -> Output? {
         let gen = refGen.gen
+        let skipCounter = SkipCounter()
         return withoutActuallyEscaping(property) { property in
             let property: @Sendable (Output) -> Bool = { value in
                 do {
                     return try property(value)
                 } catch {
-                    #if canImport(XCTest)
-                        if error is XCTSkip { return true }
-                    #endif
+                    if isSkipError(error) {
+                        skipCounter.increment()
+                        return true
+                    }
                     return false
                 }
             }
@@ -117,6 +117,7 @@ public extension __ExhaustRuntime {
                 gen: gen,
                 settings: settings,
                 reflecting: reflecting,
+                skipCounter: skipCounter,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -132,6 +133,7 @@ public extension __ExhaustRuntime {
         gen: Generator<Output>,
         settings: [PropertySettings],
         reflecting: Output?,
+        skipCounter: SkipCounter? = nil,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -366,6 +368,16 @@ public extension __ExhaustRuntime {
                         report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
                         report.totalMilliseconds = report.coverageMilliseconds
                         report.setInvocations(coverage: iterations, randomSampling: 0, reduction: 0)
+                        reportSkipsAndPointlessRun(
+                            totalPropertyCalls: iterations,
+                            skipCounter: skipCounter,
+                            suppressIssueReporting: suppressIssueReporting,
+                            fileID: fileID,
+                            filePath: filePath,
+                            line: line,
+                            column: column,
+                            report: &report
+                        )
                         return (nil, nil)
                     case let .proceed(iterations):
                         coverageIterations = iterations
@@ -401,6 +413,20 @@ public extension __ExhaustRuntime {
                     event: "property_passed",
                     metadata: passMetadata
                 )
+                if replayIteration == nil {
+                    reportSkipsAndPointlessRun(
+                        totalPropertyCalls: totalPropertyCalls,
+                        skipCounter: skipCounter,
+                        suppressIssueReporting: suppressIssueReporting,
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column,
+                        report: &report
+                    )
+                }
+            } else {
+                report.skippedInvocations = skipCounter?.count ?? 0
             }
 
             ExhaustLog.notice(
@@ -415,6 +441,73 @@ public extension __ExhaustRuntime {
             )
 
             return (samplingResult, report.replaySeed)
+        }
+    }
+
+    // MARK: - Lane Accounting
+
+    /// Extracts the `.parallelize` lane count from the settings, for sizing the ``LaneGate`` reservation before the GCD hop.
+    private static func parallelLaneCount(in settings: [PropertySettings]) -> Int {
+        for setting in settings {
+            if case let .parallelize(lanes) = setting {
+                return lanes.rawValue
+            }
+        }
+        return 0
+    }
+
+    // MARK: - Skip and Pointless-Run Accounting
+
+    /// Records skip accounting for a passing run and fails runs that asserted nothing.
+    ///
+    /// A passing run that never effectively invoked the property proves nothing, so it reports an error: either the combined budget was zero, or every invocation was skipped. A run that skipped nearly every invocation reports a warning, using the filter-validity thresholds (at least 20 skips, above 98% skipped).
+    ///
+    /// The pointless-run error is deliberately not gated on `.suppress(.issueReporting)`: it signals a malfunctioning test, not the property failure suppression targets. It stays silent only when a generation error was already reported for the same root cause.
+    private static func reportSkipsAndPointlessRun(
+        totalPropertyCalls: Int,
+        skipCounter: SkipCounter?,
+        suppressIssueReporting: Bool,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt,
+        report: inout ExhaustReport
+    ) {
+        let skipped = skipCounter?.count ?? 0
+        report.skippedInvocations = skipped
+
+        guard report.generationErrorOccurred == false else { return }
+
+        if totalPropertyCalls == 0 {
+            report.pointlessRunFailure = "The property was never invoked: the coverage and sampling budgets are both zero, so this test asserts nothing."
+        } else if skipped >= totalPropertyCalls {
+            report.pointlessRunFailure = "All \(totalPropertyCalls) property invocations were skipped, so this test asserts nothing."
+        }
+        if let pointlessRunFailure = report.pointlessRunFailure {
+            reportError(
+                pointlessRunFailure,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+            return
+        }
+
+        if skipped >= 20 {
+            let skipRate = Double(skipped) / Double(totalPropertyCalls)
+            if skipRate > 0.98 {
+                report.skipRateWarning = "Property skip rate \(String(format: "%.1f", skipRate * 100))% over \(totalPropertyCalls) invocations. Most of the budget asserted nothing."
+            }
+        }
+        if suppressIssueReporting == false, let skipRateWarning = report.skipRateWarning {
+            reportWarning(
+                skipRateWarning,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
         }
     }
 
@@ -511,13 +604,12 @@ public extension __ExhaustRuntime {
 
         return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: .keyValue)) {
             withoutActuallyEscaping(detection) { detection in
-                let boolProperty = wrapDetectionProperty(detection)
+                let skipCounter = SkipCounter()
+                let boolProperty = wrapDetectionProperty(detection, countingSkipsInto: skipCounter)
 
                 // Suppress assertion issues during coverage/sampling/reduction.
                 // The final re-run (outside this scope) produces the user-facing assertion output.
-                nonisolated(unsafe) var pipelineResult: Output?
-                nonisolated(unsafe) var capturedReplaySeed: String?
-                nonisolated(unsafe) var capturedRenderedFailure: String?
+                let diagnostics = CapturedDiagnostics<Output>()
                 withExpectedIssue(isIntermittent: true) {
                     #if canImport(Testing)
                         if let regression = replayRegressionSeeds(
@@ -530,35 +622,30 @@ public extension __ExhaustRuntime {
                             function: function,
                             property: boolProperty
                         ) {
-                            pipelineResult = regression.counterexample
-                            capturedReplaySeed = regression.replaySeed
+                            diagnostics.pipelineResult = regression.counterexample
+                            diagnostics.replaySeed = regression.replaySeed
                             return
                         }
                     #endif
 
                     // Capture seed and rendered failure from the Bool pipeline.
                     var augmentedSettings = settings + [.suppress(.issueReporting)]
-                    augmentedSettings.append(.onReport { report in
-                        capturedReplaySeed = report.replaySeed
-                        capturedRenderedFailure = report.renderedFailure
-                    })
+                    augmentedSettings.append(.onReport { diagnostics.capture(from: $0) })
 
                     // Delegate to the Bool pipeline with suppressed issue reporting.
-                    pipelineResult = __exhaust(
-                        refGen,
+                    diagnostics.pipelineResult = __exhaustBody(
+                        gen: gen,
                         settings: augmentedSettings,
                         reflecting: reflecting,
-
+                        skipCounter: skipCounter,
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
                         column: column,
-                        function: function,
+                        testName: "\(function)",
                         property: boolProperty
-                    )
+                    ).0
                 }
-
-                guard let counterexample = pipelineResult else { return nil }
 
                 // When suppress(.issueReporting) is set, the caller is asserting on the return value.
                 // Skip the final re-run and replay message.
@@ -566,8 +653,21 @@ public extension __ExhaustRuntime {
                     if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
                     return false
                 }
+
+                guard let counterexample = diagnostics.pipelineResult else {
+                    // The pipeline's own issues fired inside withExpectedIssue, where they are swallowed as known issues. Re-report them here so a run that asserted nothing fails the test.
+                    diagnostics.reportPassDiagnostics(
+                        suppressIssueReporting: suppressIssueReporting,
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                    return nil
+                }
+
                 if suppressIssueReporting == false {
-                    if let rendered = capturedRenderedFailure {
+                    if let rendered = diagnostics.renderedFailure {
                         reportError(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
                     }
 
@@ -578,7 +678,7 @@ public extension __ExhaustRuntime {
                         // Error propagates to Swift Testing naturally.
                     }
 
-                    if let replaySeed = capturedReplaySeed {
+                    if let replaySeed = diagnostics.replaySeed {
                         print("exhaust:\(function):replay:\(replaySeed)")
                     }
                 }
@@ -606,23 +706,25 @@ public extension __ExhaustRuntime {
         function: StaticString = #function,
         property: @escaping @Sendable (Output) async throws -> Bool
     ) async -> Output? {
-        let syncProperty = bridgeAsyncProperty(property)
+        let skipCounter = SkipCounter()
+        let syncProperty = bridgeAsyncProperty(property, countingSkipsInto: skipCounter)
         #if canImport(Testing)
             let traitConfig = ExhaustTraitConfiguration.current
         #endif
-        return await dispatchToGCD(reserving: LaneReservation.single) {
+        return await dispatchToGCD(reserving: LaneReservation.property(parallelLanes: parallelLaneCount(in: settings))) {
             let run = {
-                __exhaust(
-                    refGen,
+                __exhaustBody(
+                    gen: refGen.gen,
                     settings: settings,
                     reflecting: reflecting,
+                    skipCounter: skipCounter,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
                     column: column,
-                    function: function,
+                    testName: "\(function)",
                     property: syncProperty
-                )
+                ).0
             }
             #if canImport(Testing)
                 return ExhaustTraitConfiguration.$current.withValue(traitConfig, operation: run)
@@ -658,16 +760,15 @@ public extension __ExhaustRuntime {
         }
 
         return await ExhaustLog.withConfiguration(.init(minimumLevel: logLevel, format: .keyValue)) {
-            let syncDetection = bridgeAsyncDetection(detection)
+            let skipCounter = SkipCounter()
+            let syncDetection = bridgeAsyncDetection(detection, countingSkipsInto: skipCounter)
             #if canImport(Testing)
                 let traitConfig = ExhaustTraitConfiguration.current
             #endif
 
-            nonisolated(unsafe) var pipelineResult: Output?
-            nonisolated(unsafe) var capturedReplaySeed: String?
-            nonisolated(unsafe) var capturedRenderedFailure: String?
+            let diagnostics = CapturedDiagnostics<Output>()
 
-            await dispatchToGCD(reserving: LaneReservation.single) {
+            await dispatchToGCD(reserving: LaneReservation.property(parallelLanes: parallelLaneCount(in: settings))) {
                 // withExpectedIssue cannot be used inside dispatchToGCD because Test.current is nil on the GCD thread, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
                 #if canImport(Testing)
                     ExhaustTraitConfiguration.$current.withValue(traitConfig) {
@@ -682,61 +783,66 @@ public extension __ExhaustRuntime {
                                 function: function,
                                 property: syncDetection
                             ) {
-                                pipelineResult = regression.counterexample
-                                capturedReplaySeed = regression.replaySeed
+                                diagnostics.pipelineResult = regression.counterexample
+                                diagnostics.replaySeed = regression.replaySeed
                                 return
                             }
 
                             var augmentedSettings = settings + [.suppress(.issueReporting)]
-                            augmentedSettings.append(.onReport { report in
-                                capturedReplaySeed = report.replaySeed
-                                capturedRenderedFailure = report.renderedFailure
-                            })
+                            augmentedSettings.append(.onReport { diagnostics.capture(from: $0) })
 
-                            pipelineResult = __exhaust(
-                                refGen,
+                            diagnostics.pipelineResult = __exhaustBody(
+                                gen: gen,
                                 settings: augmentedSettings,
                                 reflecting: reflecting,
-
+                                skipCounter: skipCounter,
                                 fileID: fileID,
                                 filePath: filePath,
                                 line: line,
                                 column: column,
-                                function: function,
+                                testName: "\(function)",
                                 property: syncDetection
-                            )
+                            ).0
                         }
                     }
                 #else
                     var augmentedSettings = settings + [.suppress(.issueReporting)]
-                    augmentedSettings.append(.onReport { report in
-                        capturedReplaySeed = report.replaySeed
-                        capturedRenderedFailure = report.renderedFailure
-                    })
+                    augmentedSettings.append(.onReport { diagnostics.capture(from: $0) })
 
-                    pipelineResult = __exhaust(
-                        refGen,
+                    diagnostics.pipelineResult = __exhaustBody(
+                        gen: gen,
                         settings: augmentedSettings,
                         reflecting: reflecting,
-
+                        skipCounter: skipCounter,
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
                         column: column,
-                        function: function,
+                        testName: "\(function)",
                         property: syncDetection
-                    )
+                    ).0
                 #endif
             }
-
-            guard let counterexample = pipelineResult else { return nil }
 
             let suppressIssueReporting = settings.contains { setting in
                 if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
                 return false
             }
+
+            guard let counterexample = diagnostics.pipelineResult else {
+                // The pipeline's own issues fired inside withKnownIssue, where they are swallowed as known issues. Re-report them here so a run that asserted nothing fails the test.
+                diagnostics.reportPassDiagnostics(
+                    suppressIssueReporting: suppressIssueReporting,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                return nil
+            }
+
             if suppressIssueReporting == false {
-                if let rendered = capturedRenderedFailure {
+                if let rendered = diagnostics.renderedFailure {
                     reportError(rendered, fileID: fileID, filePath: filePath, line: line, column: column)
                 }
 
@@ -746,12 +852,63 @@ public extension __ExhaustRuntime {
                     // Error propagates to Swift Testing naturally.
                 }
 
-                if let replaySeed = capturedReplaySeed {
+                if let replaySeed = diagnostics.replaySeed {
                     print("exhaust:\(function):replay:\(replaySeed)")
                 }
             }
 
             return counterexample
+        }
+    }
+}
+
+// MARK: - Captured Diagnostics
+
+extension __ExhaustRuntime {
+    /// Collects the diagnostics an `#expect` wrapper must re-report after its known-issue scope ends.
+    ///
+    /// The wrappers run the Bool pipeline with issue reporting suppressed inside `withExpectedIssue`/`withKnownIssue`, where anything the pipeline records is swallowed. The pipeline's report is captured through an appended `.onReport` closure calling ``capture(from:)``, and ``reportPassDiagnostics(suppressIssueReporting:fileID:filePath:line:column:)`` re-reports outside the scope.
+    ///
+    /// Marked `@unchecked Sendable` for the same reason the `nonisolated(unsafe)` locals it replaces were safe: the pipeline mutates the fields on the GCD worker inside `dispatchToGCD`, and the wrapper reads them only after the hop's continuation resumes, so no access is ever concurrent.
+    final class CapturedDiagnostics<Output>: @unchecked Sendable {
+        /// The pipeline's counterexample, or `nil` when every iteration passed.
+        var pipelineResult: Output?
+        /// The encoded replay seed for a discovered failure.
+        var replaySeed: String?
+        /// The rendered failure message from the Bool pipeline.
+        var renderedFailure: String?
+        /// The pointless-run failure message, re-reported as an error.
+        var pointlessRunFailure: String?
+        /// The high-skip-rate advisory, re-reported as a warning.
+        var skipRateWarning: String?
+        /// The unique-exhaustion truncation advisory, re-reported as a warning.
+        var uniqueExhaustionWarning: String?
+
+        /// Copies the re-reportable fields from the pipeline's report. Install via an appended `.onReport` closure.
+        func capture(from report: ExhaustReport) {
+            replaySeed = report.replaySeed
+            renderedFailure = report.renderedFailure
+            pointlessRunFailure = report.pointlessRunFailure
+            skipRateWarning = report.skipRateWarning
+            uniqueExhaustionWarning = report.uniqueExhaustionWarning
+        }
+
+        /// Re-reports the diagnostics of a run that found no counterexample: the pointless-run failure regardless of suppression, and the advisories only when the caller did not suppress issue reporting.
+        func reportPassDiagnostics(
+            suppressIssueReporting: Bool,
+            fileID: StaticString,
+            filePath: StaticString,
+            line: UInt,
+            column: UInt
+        ) {
+            if let pointlessRunFailure {
+                reportError(pointlessRunFailure, fileID: fileID, filePath: filePath, line: line, column: column)
+            } else if suppressIssueReporting == false, let skipRateWarning {
+                reportWarning(skipRateWarning, fileID: fileID, filePath: filePath, line: line, column: column)
+            }
+            if suppressIssueReporting == false, let uniqueExhaustionWarning {
+                reportWarning(uniqueExhaustionWarning, fileID: fileID, filePath: filePath, line: line, column: column)
+            }
         }
     }
 }

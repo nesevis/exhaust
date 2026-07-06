@@ -40,6 +40,28 @@ public struct ExhaustReport: Sendable {
     /// Property invocations during the reduction phase (counted by the wrapping closure).
     public var reductionInvocations: Int = 0
 
+    /// Property invocations that were skipped by throwing ``PropertySkip`` (or `XCTSkip`).
+    ///
+    /// Skipped invocations count toward ``propertyInvocations`` but assert nothing. A run whose every invocation was skipped fails as pointless.
+    public var skippedInvocations: Int = 0
+
+    /// Whether the sampling phase ended before its budget because a ``ReflectiveGenerator/unique(fileID:line:column:)`` site exhausted its retry budget.
+    ///
+    /// When true, ``randomSamplingInvocations`` is smaller than the configured sampling budget: the deduplicated domain ran dry and the remaining iterations never ran.
+    public var runTruncatedByUniqueExhaustion = false
+
+    /// Advisory message for a unique-exhaustion truncation, stashed so the `#expect` wrappers can re-report it outside their known-issue scope.
+    package var uniqueExhaustionWarning: String?
+
+    /// Whether a phase reported a generation error. Suppresses the pointless-run error, which would otherwise stack a second issue on the same root cause.
+    package var generationErrorOccurred = false
+
+    /// Failure message for a passing run that asserted nothing (a pointless run). Stashed so the `#expect` wrappers can re-report it outside their known-issue scope, where the pipeline's own issue is swallowed.
+    package var pointlessRunFailure: String?
+
+    /// Advisory message for a run that skipped nearly every invocation, stashed so the `#expect` wrappers can re-report it outside their known-issue scope.
+    package var skipRateWarning: String?
+
     /// Sets the per-phase property invocation counts and derives the total.
     public mutating func setInvocations(
         coverage: Int,

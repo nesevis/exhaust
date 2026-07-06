@@ -338,6 +338,10 @@ struct ContractPipeline<Backend: ContractBackend> {
 
         let (result, issues) = run(config: config, smokeSource: mainRunSmokeSource)
         deferredIssues.append(contentsOf: issues)
+        // A passing run that never executed a command sequence asserts nothing. Checked against the shared invocation counter so a regression replay that did execute counts.
+        if result == nil, issues.isEmpty, invocationCounter.value == 0 {
+            deferredIssues.append("The contract was never executed: the coverage and sampling budgets are both zero, so this test asserts nothing.")
+        }
         return (result, deferredIssues)
     }
 }

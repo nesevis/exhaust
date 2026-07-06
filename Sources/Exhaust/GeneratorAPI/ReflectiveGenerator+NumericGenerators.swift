@@ -25,6 +25,9 @@ import ExhaustCore
             in range: ClosedRange<Float16>? = nil,
             scaling: SizeScaling<Float16>? = nil
         ) -> ReflectiveGenerator<Float16> {
+            if let range {
+                precondition(range.lowerBound.isFinite && range.upperBound.isFinite, "Range bounds must be finite")
+            }
             let generator: Generator<Float16> = if let range {
                 if let scaling {
                     Gen.choose(in: range, scaling: scaling)
@@ -49,7 +52,11 @@ import ExhaustCore
             in range: ClosedRange<Double>,
             scaling: SizeScaling<Float16>? = nil
         ) -> ReflectiveGenerator<Float16> {
-            float16(in: Float16(range.lowerBound) ... Float16(range.upperBound), scaling: scaling)
+            let lower = Float16(range.lowerBound)
+            let upper = Float16(range.upperBound)
+            guard lower.isFinite, upper.isFinite
+            else { preconditionFailure("Range bounds must fit inside \(Float16.self)") }
+            return float16(in: lower ... upper, scaling: scaling)
         }
     }
 #endif
@@ -67,6 +74,9 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Double>? = nil,
         scaling: SizeScaling<Double>? = nil
     ) -> ReflectiveGenerator<Double> {
+        if let range {
+            precondition(range.lowerBound.isFinite && range.upperBound.isFinite, "Range bounds must be finite")
+        }
         let generator: Generator<Double> = if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
@@ -98,6 +108,9 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Float>? = nil,
         scaling: SizeScaling<Float>? = nil
     ) -> ReflectiveGenerator<Float> {
+        if let range {
+            precondition(range.lowerBound.isFinite && range.upperBound.isFinite, "Range bounds must be finite")
+        }
         let generator: Generator<Float> = if let range {
             if let scaling {
                 Gen.choose(in: range, scaling: scaling)
@@ -122,7 +135,11 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Double>,
         scaling: SizeScaling<Float>? = nil
     ) -> ReflectiveGenerator<Float> {
-        float(in: Float(range.lowerBound) ... Float(range.upperBound), scaling: scaling)
+        let lower = Float(range.lowerBound)
+        let upper = Float(range.upperBound)
+        guard lower.isFinite, upper.isFinite
+        else { preconditionFailure("Range bounds must fit inside \(Float.self)") }
+        return float(in: lower ... upper, scaling: scaling)
     }
 
     #if canImport(CoreGraphics)

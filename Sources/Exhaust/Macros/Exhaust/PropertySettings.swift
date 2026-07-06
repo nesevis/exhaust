@@ -74,7 +74,7 @@ public enum PropertySettings {
     ///
     /// Has no effect when combined with `.replay`.
     ///
-    /// Uniqueness deduplication (`.unique`) is enforced per-lane, not across lanes.
+    /// The ``ReflectiveGenerator/unique(fileID:line:column:)`` combinator deduplicates per-lane, not across lanes, so a parallel run can repeat a value between lanes.
     ///
     /// ```swift
     /// #exhaust(gen, .budget(.extensive), .parallelize(lanes: .two)) { value in

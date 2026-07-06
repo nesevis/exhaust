@@ -91,7 +91,7 @@ struct ResolvedConcurrentConfig {
                         }
                     } ?? closure
                 case let .idleTimeoutMs(milliseconds):
-                    config.idleTimeoutMilliseconds = max(milliseconds, 1)
+                    config.idleTimeoutMilliseconds = milliseconds
                 case let .log(level):
                     config.logLevel = level
             }

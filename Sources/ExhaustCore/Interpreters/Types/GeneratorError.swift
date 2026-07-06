@@ -21,6 +21,10 @@ public enum GeneratorError: LocalizedError {
     case sequenceLengthExceedsMaximum(length: UInt64, maximum: Int)
     /// A replay seed could not be decoded, or its kind is not supported by the invoking macro.
     case invalidReplaySeed(String)
+    /// `#example` was asked for a negative number of values.
+    case invalidExampleCount(Int)
+    /// Materializing a single value exceeded ``SharedInterpreterHelpers/perValueGenerationBudgetNanoseconds``.
+    case generationDeadlineExceeded(seconds: Double)
 
     public var errorDescription: String? {
         switch self {
@@ -36,6 +40,10 @@ public enum GeneratorError: LocalizedError {
                 "A generated sequence requested \(length) elements, exceeding the maximum of \(maximum)."
             case let .invalidReplaySeed(reason):
                 "Invalid replay seed: \(reason)."
+            case let .invalidExampleCount(count):
+                "#example count must be non-negative; got \(count)."
+            case let .generationDeadlineExceeded(seconds):
+                "Generating a single value exceeded the \(Int(seconds))-second deadline. The generator is intractably large or expensive to run."
         }
     }
 
@@ -53,6 +61,10 @@ public enum GeneratorError: LocalizedError {
                 "Narrow the length range passed to `arrayOf(within:)` (or the sequence's length generator); a sequence this long is not tractable to generate."
             case .invalidReplaySeed:
                 "Copy the seed exactly as printed in the failure report, or pass a raw numeric seed."
+            case .invalidExampleCount:
+                "Pass zero or a positive count."
+            case .generationDeadlineExceeded:
+                "Narrow the sequence length ranges (nested sequences multiply: an array of arrays generates rows times columns elements), or simplify expensive map and filter stages."
         }
     }
 }

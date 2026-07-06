@@ -24,6 +24,8 @@ public extension ReflectiveGenerator {
     ///
     /// The `baseValue` label is deliberate: with a plain `base:` label and an `Any`-typed `Output`, a generator argument can satisfy this overload too, silently capturing the generator itself as the base value. The distinct label makes that mistake unrepresentable.
     ///
+    /// - Note: Each recursive layer adds stack frames during generation, so a deep `depthRange` can exhaust the stack and crash. The practical ceiling depends on the generator's structure and the build configuration: optimized ExhaustCore builds (the precompiled framework on Apple platforms) tolerate deeper ranges than from-source debug builds.
+    ///
     /// - Parameters:
     ///   - baseValue: The ground value used when recursion bottoms out.
     ///   - depthRange: The range of recursive layers to unfold.
@@ -40,6 +42,8 @@ public extension ReflectiveGenerator {
     /// Creates a recursive generator with a generator base case and a reducible depth range.
     ///
     /// The depth is drawn from `depthRange` as a `chooseBits` entry in the choice sequence, making it reducible. The reducer can collapse subtrees by driving the depth toward the range's lower bound.
+    ///
+    /// - Note: Each recursive layer adds stack frames during generation, so a deep `depthRange` can exhaust the stack and crash. The practical ceiling depends on the generator's structure and the build configuration: optimized ExhaustCore builds (the precompiled framework on Apple platforms) tolerate deeper ranges than from-source debug builds.
     ///
     /// ```swift
     /// let exprGen: ReflectiveGenerator<Expr> = .recursive(

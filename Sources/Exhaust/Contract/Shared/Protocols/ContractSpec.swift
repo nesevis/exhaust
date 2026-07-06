@@ -16,7 +16,7 @@
 ///         contents.append(value)
 ///     }
 ///
-///     func failureDescription() -> String {
+///     func failureDescription() -> String? {
 ///         "expected: \(contents), queue: \(queue)"
 ///     }
 /// }

@@ -34,6 +34,21 @@ package enum SharedInterpreterHelpers {
         return Int(length)
     }
 
+    // MARK: - Per-Value Generation Deadline
+
+    /// How long a single value may take to materialize before generation fails: 10 seconds. The per-sequence length cap cannot see composition — nested sequences multiply, so an array of arrays passes the cap at every level while requesting rows times columns elements. The deadline converts that hang (and any other intractably expensive value) into a failure with a diagnosis. Ten seconds is orders of magnitude above any tractable value; a full-cap sequence of scalars materializes in milliseconds.
+    package static let perValueGenerationBudgetNanoseconds: UInt64 = 10_000_000_000
+
+    /// Throws ``GeneratorError/generationDeadlineExceeded(seconds:)`` when the per-value deadline has passed. Checked on a sampled cadence — at sequence entry (element zero) and every 1024th element after — so the clock read stays off the per-element hot path while nested structures, which re-enter their element loops constantly, still hit the entry check. Skipped entirely when `deadlineNanoseconds` is zero (generation that is not deadline-bound, such as reducer replays).
+    @inline(__always)
+    static func checkGenerationDeadline(_ deadlineNanoseconds: UInt64, elementIndex: Int) throws {
+        guard deadlineNanoseconds > 0, elementIndex & 1023 == 0 else { return }
+        guard monotonicNanoseconds() > deadlineNanoseconds else { return }
+        throw GeneratorError.generationDeadlineExceeded(
+            seconds: Double(perValueGenerationBudgetNanoseconds) / 1_000_000_000
+        )
+    }
+
     // MARK: - Parameter-Free Generator Walk
 
     /// Returns whether a generator produces values without any choices (no chooseBits, pick, sequence, zip, or getSize operations). Walks through transparent wrappers (pure, just, contramap, prune, transform).

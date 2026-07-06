@@ -223,7 +223,7 @@ public extension __ExhaustRuntime {
                 )
             }
 
-            return ExploreReport(
+            let exploreReport = ExploreReport(
                 result: result.counterexample,
                 seed: result.seed,
                 directionCoverage: directionCoverage,
@@ -233,6 +233,70 @@ public extension __ExhaustRuntime {
                 warmup: result.warmupSamples.map { WarmupStats(samples: $0) },
                 totalMilliseconds: result.totalMilliseconds,
                 termination: termination
+            )
+            reportExploreCoverageIssues(
+                report: exploreReport,
+                suppressIssueReporting: suppressIssueReporting,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+            return exploreReport
+        }
+    }
+
+    // MARK: - Coverage Issue Reporting
+
+    /// Fails or warns on a passing explore run whose stated goals were not met.
+    ///
+    /// A run that never invoked the property asserts nothing and reports an error regardless of `.suppress(.issueReporting)`, matching the `#exhaust` pointless-run error. A direction the run never reached defeats the point of `#explore`, so it also reports an error; a direction whose tuning failed reports a warning, since that can be a tuning limitation rather than a generator or predicate defect. Both of those respect suppression so a caller asserting on the returned report can opt out.
+    static func reportExploreCoverageIssues(
+        report: ExploreReport<some Any>,
+        suppressIssueReporting: Bool,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
+    ) {
+        guard report.result == nil else { return }
+
+        if report.propertyInvocations == 0 {
+            reportError(
+                "The property was never invoked, so this test asserts nothing. Check the budget: zero hits per direction and zero attempts leave nothing to run.",
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+            return
+        }
+
+        guard suppressIssueReporting == false else { return }
+
+        let uncoveredNames = report.directionCoverage
+            .filter { $0.outcome == .uncovered }
+            .map(\.name)
+        if uncoveredNames.isEmpty == false {
+            reportError(
+                "Exploration never reached \(uncoveredNames.count == 1 ? "direction" : "directions") \(uncoveredNames.map { "\"\($0)\"" }.joined(separator: ", ")) within the attempt budget. The generator cannot produce matching values, or the predicate never holds. Widen the generator, fix the predicate, or raise the budget.",
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+        }
+
+        let tuningFailedNames = report.directionCoverage
+            .filter { if case .tuningFailed = $0.outcome { true } else { false } }
+            .map(\.name)
+        if tuningFailedNames.isEmpty == false {
+            reportWarning(
+                "Tuning failed for \(tuningFailedNames.count == 1 ? "direction" : "directions") \(tuningFailedNames.map { "\"\($0)\"" }.joined(separator: ", ")). Coverage for \(tuningFailedNames.count == 1 ? "this direction" : "these directions") was not achieved.",
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
             )
         }
     }
@@ -285,11 +349,11 @@ public extension __ExhaustRuntime {
                 )
             }
 
+            let suppressIssueReporting = settings.contains { setting in
+                if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
+                return false
+            }
             if let counterexample = report.result {
-                let suppressIssueReporting = settings.contains { setting in
-                    if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
-                    return false
-                }
                 if suppressIssueReporting == false {
                     do {
                         try property(counterexample)
@@ -304,6 +368,16 @@ public extension __ExhaustRuntime {
                         column: column
                     )
                 }
+            } else {
+                // The pipeline ran with issue reporting suppressed inside withExpectedIssue, so its coverage issues never surfaced. Re-report them here with the caller's own suppression setting.
+                reportExploreCoverageIssues(
+                    report: report,
+                    suppressIssueReporting: suppressIssueReporting,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
             }
 
             return report
@@ -414,11 +488,11 @@ public extension __ExhaustRuntime {
                 )
             }
 
+            let suppressIssueReporting = settings.contains { setting in
+                if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
+                return false
+            }
             if let counterexample = report.result {
-                let suppressIssueReporting = settings.contains { setting in
-                    if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
-                    return false
-                }
                 if suppressIssueReporting == false {
                     let valueBox = UnsafeSendableBox(counterexample)
                     __ExhaustRuntime.blockingAwait {
@@ -434,6 +508,16 @@ public extension __ExhaustRuntime {
                         column: column
                     )
                 }
+            } else {
+                // The pipeline ran with issue reporting suppressed inside withKnownIssue, so its coverage issues never surfaced. Re-report them here with the caller's own suppression setting.
+                reportExploreCoverageIssues(
+                    report: report,
+                    suppressIssueReporting: suppressIssueReporting,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
             }
 
             return report

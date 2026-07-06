@@ -110,4 +110,9 @@ enum LaneReservation {
 
     /// The reservation for a run with no lane fan-out: cooperative `.tasks`, the sequential-async contract, and async `#exhaust`/`#explore`, which occupy a single coordinator worker.
     static let single = 1
+
+    /// The reservation for an async property run: the coordinator worker, widened to the `.parallelize` lane count when the sampling phase fans out via `concurrentPerform` (the coordinator doubles as one of the lanes, so no `+1`).
+    static func property(parallelLanes: Int) -> Int {
+        max(single, parallelLanes)
+    }
 }
