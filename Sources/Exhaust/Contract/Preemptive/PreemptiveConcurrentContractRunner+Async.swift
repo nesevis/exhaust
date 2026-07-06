@@ -3,9 +3,12 @@
 // Async variant of the preemptive runner for AsyncContractSpec conformances.
 // Bridges async command execution to GCD threads via Task+semaphore to catch races in synchronous primitives hidden behind async facades.
 import ExhaustCore
-import ExhaustObjCSupport
 import Foundation
 import IssueReporting
+
+#if canImport(ObjectiveC)
+    import ExhaustObjCSupport
+#endif
 
 // MARK: - Async Entry Point
 

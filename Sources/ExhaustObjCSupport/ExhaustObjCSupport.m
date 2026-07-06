@@ -1,3 +1,6 @@
+// See the note in ExhaustObjCSupport.h: this file preprocesses to nothing on non-Apple platforms.
+#if defined(__APPLE__)
+
 #import "ExhaustObjCSupport.h"
 
 BOOL exhaust_runCatchingObjCException(
@@ -18,3 +21,5 @@ BOOL exhaust_runCatchingObjCException(
         return NO;
     }
 }
+
+#endif

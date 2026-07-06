@@ -64,7 +64,10 @@ let package = Package(
             dependencies: [
                 "ExhaustCore",
                 "ExhaustMacros",
-                "ExhaustObjCSupport",
+                .target(
+                    name: "ExhaustObjCSupport",
+                    condition: .when(platforms: [.macOS, .iOS, .macCatalyst, .tvOS, .watchOS, .visionOS])
+                ),
                 .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
                 .product(name: "CustomDump", package: "swift-custom-dump"),
             ],

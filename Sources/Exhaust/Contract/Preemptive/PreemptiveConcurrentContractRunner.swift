@@ -4,9 +4,12 @@
 //
 // The cooperative runner (CooperativeConcurrentContractRunner) implements the PULSE half, a TaskExecutor-based drain loop that makes interleavings deterministic and reducible. This runner targets bugs that require real thread-level preemption: races in locks, dispatch queues, and atomics that are invisible at `await` suspension points.
 import ExhaustCore
-import ExhaustObjCSupport
 import Foundation
 import IssueReporting
+
+#if canImport(ObjectiveC)
+    import ExhaustObjCSupport
+#endif
 
 // MARK: - Runner Entry Point
 
