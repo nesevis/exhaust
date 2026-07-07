@@ -596,9 +596,17 @@ extension Materializer {
         continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
-        calleeFallback: ChoiceTree? = nil,
-        continuationFallback: ChoiceTree? = nil
+        fallbackTree: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
+        // Transparent kinds (map, isomorph, metamorphic) add no callee tree node, so the fallback passes through whole; bind owns a callee node and splits the fallback.
+        let calleeFallback: ChoiceTree?
+        let continuationFallback: ChoiceTree?
+        switch kind {
+            case .bind:
+                (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+            case .map, .isomorph, .metamorphic:
+                (calleeFallback, continuationFallback) = (fallbackTree, nil)
+        }
         switch kind {
             case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
                 guard let (innerValue, innerTree) = try generateRecursive(
@@ -714,6 +722,56 @@ extension Materializer {
                     context: &context, continuationFallback: continuationFallback
                 )
         }
+    }
+
+    // MARK: - filter / classify / unique
+
+    /// Materializes through a filter site, re-checking the predicate against the materialized value and recording the observation.
+    @inline(__always)
+    static func handleFilter(
+        _ gen: AnyGenerator,
+        fingerprint: UInt64,
+        filterType: FilterType,
+        predicate: (Any) -> Bool,
+        sourceLocation: FilterSourceLocation,
+        continuation: (Any) throws -> AnyGenerator,
+        inputValue: Any,
+        context: inout Context,
+        calleeFallback: ChoiceTree?,
+        continuationFallback: ChoiceTree?
+    ) throws -> (Any, ChoiceTree)? {
+        guard let (result, tree) = try generateRecursive(
+            gen, with: inputValue, context: &context, fallbackTree: calleeFallback
+        ) else { return nil }
+        let passed = predicate(result)
+        context.filterObservations[fingerprint, default: FilterObservation(sourceLocation: sourceLocation, filterType: filterType)]
+            .recordAttempt(passed: passed)
+        guard passed else { return nil }
+        return try runContinuation(
+            result: result, calleeChoiceTree: tree,
+            continuation: continuation, inputValue: inputValue,
+            context: &context, continuationFallback: continuationFallback
+        )
+    }
+
+    /// Materializes through a generation-only site (classify, unique) whose payload is irrelevant during materialization; the inner generator's choices are the only choices.
+    @inline(__always)
+    static func handlePassthrough(
+        _ gen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
+        inputValue: Any,
+        context: inout Context,
+        calleeFallback: ChoiceTree?,
+        continuationFallback: ChoiceTree?
+    ) throws -> (Any, ChoiceTree)? {
+        guard let (result, tree) = try generateRecursive(
+            gen, with: inputValue, context: &context, fallbackTree: calleeFallback
+        ) else { return nil }
+        return try runContinuation(
+            result: result, calleeChoiceTree: tree,
+            continuation: continuation, inputValue: inputValue,
+            context: &context, continuationFallback: continuationFallback
+        )
     }
 
     /// Extracts ``ChoiceMetadata`` (valid range and explicitness) from a sequence's length generator without running a full materialization round-trip.
