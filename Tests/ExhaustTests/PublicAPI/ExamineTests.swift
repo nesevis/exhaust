@@ -72,6 +72,7 @@ struct ExamineTests {
         } matching: { issue in
             issue.description.contains("Filter validity rate")
                 || issue.description.contains("retry budget")
+                || issue.description.contains("never invoked")
         }
     }
 

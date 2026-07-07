@@ -9,6 +9,8 @@ import IssueReporting
     import Glibc
 #elseif canImport(Musl)
     import Musl
+#elseif canImport(WinSDK)
+    import WinSDK
 #endif
 
 /// Groups shared types for the synchronous and async preemptive contract runners.
@@ -96,7 +98,11 @@ final class LaneRendezvous: @unchecked Sendable {
                 return
             }
             if waited >= Self.pureSpinNanoseconds {
-                usleep(Self.slowPathSleepMicroseconds)
+                #if canImport(WinSDK)
+                    Sleep(DWORD(Self.slowPathSleepMicroseconds) / 1000 + 1)
+                #else
+                    usleep(Self.slowPathSleepMicroseconds)
+                #endif
             }
         }
     }

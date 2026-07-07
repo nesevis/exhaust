@@ -1,0 +1,90 @@
+name: Tests (Windows)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: compnerd/gha-setup-swift@main
+        with:
+          branch: swift-6.3.2-release
+          tag: 6.3.2-RELEASE
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .build | Out-Null
+          swift test --parallel 2>&1 | Tee-Object -FilePath .build/test-output.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Test report
+        if: always()
+        shell: pwsh
+        run: |
+          $path = ".build/test-output.txt"
+          $summaryPath = $env:GITHUB_STEP_SUMMARY
+
+          if (-not $summaryPath) {
+              Write-Host "GITHUB_STEP_SUMMARY not set, skipping report"
+              exit 0
+          }
+
+          if (-not (Test-Path $path)) {
+              $msg = "Test output file not found: $path"
+              Write-Host $msg
+              Add-Content -Path $summaryPath -Value "### Test report unavailable`n`n$msg`n"
+              exit 0
+          }
+
+          $lines = Get-Content $path
+          if (-not $lines) {
+              $msg = "Test output file is empty: $path"
+              Write-Host $msg
+              Add-Content -Path $summaryPath -Value "### Test report unavailable`n`n$msg`n"
+              exit 0
+          }
+
+          $failures = @()
+          foreach ($line in $lines) {
+              if ($line -match 'Test "(.+?)" failed after .+ with (\d+) issue') {
+                  $failures += @{ Name = $Matches[1]; Count = $Matches[2] }
+              }
+          }
+
+          $total = "?"
+          for ($i = $lines.Count - 1; $i -ge 0; $i--) {
+              if ($lines[$i] -match 'Test run with (\d+) tests? in (\d+) suites? (passed|failed)') {
+                  $total = $Matches[1]
+                  break
+              }
+          }
+
+          $errors = $lines | Where-Object { $_ -match '\berror:' }
+
+          if ($total -eq "?") {
+              $report = "### Test report unavailable`n`nCould not find test summary line in output.`n"
+              if ($errors) {
+                  $report += "`n**Build errors ($($errors.Count)):**`n`````n"
+                  $report += ($errors -join "`n") + "`n`````n"
+              }
+              $report += "`nLast 20 lines of output:`n`````n"
+              $report += ($lines | Select-Object -Last 20) -join "`n"
+              $report += "`n`````n"
+              Add-Content -Path $summaryPath -Value $report
+          } elseif ($failures.Count -eq 0) {
+              Add-Content -Path $summaryPath -Value "### All $total tests passed`n"
+          } else {
+              $report = "### $($failures.Count) of $total tests failed`n`n"
+              $report += "| Test | Issues |`n|------|--------|`n"
+              foreach ($f in $failures) {
+                  $report += "| $($f.Name) | $($f.Count) |`n"
+              }
+              Add-Content -Path $summaryPath -Value $report
+          }
