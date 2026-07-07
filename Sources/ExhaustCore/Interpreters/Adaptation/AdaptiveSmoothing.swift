@@ -7,6 +7,8 @@
     import Glibc
 #elseif canImport(Musl)
     import Musl
+#elseif canImport(WinSDK)
+    import WinSDK
 #endif
 
 /// Namespace for adaptive Laplace smoothing of CGS weight vectors.

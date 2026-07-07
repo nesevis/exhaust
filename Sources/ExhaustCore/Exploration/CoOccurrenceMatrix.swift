@@ -4,6 +4,8 @@
     import Glibc
 #elseif canImport(Musl)
     import Musl
+#elseif canImport(WinSDK)
+    import WinSDK
 #endif
 
 /// Symmetric co-occurrence matrix recording how many samples matched each pair of directions.

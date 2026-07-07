@@ -11,6 +11,8 @@
     import Glibc
 #elseif canImport(Musl)
     import Musl
+#elseif canImport(WinSDK)
+    import WinSDK
 #endif
 
 /// Three-stage offline tuner for pick-heavy generators (BST, AVL, and so on).

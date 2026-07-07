@@ -4,6 +4,8 @@
     import Glibc
 #elseif canImport(Musl)
     import Musl
+#elseif canImport(WinSDK)
+    import WinSDK
 #endif
 
 /// Operations for making choices and generating random values within ranges.
