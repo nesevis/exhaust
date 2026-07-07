@@ -28,13 +28,16 @@ package enum ContainerShape {
         switch self {
             case let .keyed(children):
                 let generators = ContiguousArray(children.map(\.generator))
+                let keyStrings = children.map(\.key)
+                let replayFlags = children.map(\.producesReplayValue)
+                let optionalFlags = children.map(\.isOptional)
                 return (generators, { values in
-                    var fields = [String: ReplayValue](minimumCapacity: children.count)
-                    for (index, child) in children.enumerated() {
-                        // A nested-container child's generator already produces a `ReplayValue` sub-tree; a value child's generator produces the built value, wrapped here as a leaf. A custom init may decode the same key twice; last write wins, which also avoids a duplicate-key trap.
-                        fields[child.key] = child.producesReplayValue ? (values[index] as! ReplayValue) : .leaf(values[index])
-                    }
-                    return .keyed(fields)
+                    .positionalKeyed(
+                        keys: keyStrings,
+                        values: values,
+                        producesReplayValue: replayFlags,
+                        isOptional: optionalFlags
+                    )
                 })
             case let .unkeyed(elements):
                 return (ContiguousArray(elements.map(\.generator)), { values in
@@ -43,10 +46,9 @@ package enum ContainerShape {
                     })
                 })
             case let .homogeneousArray(element):
-                // Reuse the array combinator's length distribution: one generator produces the whole varying-length array, which the rebuild unpacks into unkeyed leaves.
                 let arrayGenerator: AnyGenerator = Gen.arrayOf(element).erase()
                 return (ContiguousArray([arrayGenerator]), { values in
-                    .unkeyed((values[0] as! [Any]).map(ReplayValue.leaf))
+                    .rawUnkeyed(values[0] as! [Any])
                 })
             case let .single(generator):
                 return (ContiguousArray([generator]), { values in
@@ -66,6 +68,8 @@ package struct KeyedChild {
     let generator: AnyGenerator
     /// Whether ``generator`` produces a ``ReplayValue`` directly (a nested container) rather than a value to wrap as a leaf.
     let producesReplayValue: Bool
+    /// Whether this field was decoded via `decodeIfPresent` and may produce `nil`.
+    let isOptional: Bool
 }
 
 /// One positional element of a heterogeneous unkeyed container shape.

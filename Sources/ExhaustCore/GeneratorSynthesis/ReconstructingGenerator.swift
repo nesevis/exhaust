@@ -10,19 +10,10 @@ private func zipMap(
     _ generators: ContiguousArray<AnyGenerator>,
     _ transform: @escaping ([Any]) throws -> Any
 ) -> AnyGenerator {
-    let zipped: AnyGenerator = .impure(
+    .impure(
         operation: .zip(generators),
-        continuation: { .pure($0) }
+        continuation: { try .pure(transform($0 as! [Any])) }
     )
-    return Gen.liftF(.transform(
-        kind: .map(
-            forward: { try transform($0 as! [Any]) },
-            backward: nil,
-            inputType: [Any].self,
-            outputType: Any.self
-        ),
-        inner: zipped
-    ))
 }
 
 /// Builds a generator that reconstructs a value of `type` from a discovered container shape, producing the built value type-erased to `Any`.
