@@ -35,11 +35,26 @@ private func leafIsNil(_ value: Any) -> Bool {
     (value as? OptionalValue)?.isNilValue ?? false
 }
 
-// MARK: - Cursor State
+// MARK: - Keyed Replay State
 
-private final class KeyedCursorState {
+final class KeyedReplayState {
+    let keys: [String]
+    let producesReplayValue: [Bool]
+    let isOptional: [Bool]
+    var values: [Any] = []
     var position: Int = 0
     var fallback: [String: Int]?
+
+    init(keys: [String], producesReplayValue: [Bool], isOptional: [Bool]) {
+        self.keys = keys
+        self.producesReplayValue = producesReplayValue
+        self.isOptional = isOptional
+    }
+
+    func reset(values: [Any]) {
+        self.values = values
+        position = 0
+    }
 }
 
 // MARK: - Replay Decoder
@@ -51,29 +66,49 @@ package final class ReplayDecoder: Decoder {
     package let codingPath: [any CodingKey]
     package let userInfo: [CodingUserInfoKey: Any] = [:]
     private let value: ReplayValue
+    private let replayState: KeyedReplayState?
+    private var cachedKeyedContainer: Any?
 
     package init(_ value: ReplayValue, codingPath: [any CodingKey] = []) {
         self.value = value
+        self.codingPath = codingPath
+        replayState = nil
+    }
+
+    init(reusableState: KeyedReplayState, codingPath: [any CodingKey]) {
+        value = .leaf(())
+        replayState = reusableState
         self.codingPath = codingPath
     }
 
     package func container<Key: CodingKey>(
         keyedBy _: Key.Type
     ) throws -> KeyedDecodingContainer<Key> {
+        if let state = replayState {
+            if let cached = cachedKeyedContainer as? KeyedDecodingContainer<Key> {
+                return cached
+            }
+            let container = KeyedDecodingContainer(
+                ReplayKeyedContainer<Key>(state: state, codingPath: codingPath)
+            )
+            cachedKeyedContainer = container
+            return container
+        }
+
         switch value {
             case let .keyed(fields):
                 return KeyedDecodingContainer(
                     ReplayKeyedContainer<Key>(dictionary: fields, codingPath: codingPath)
                 )
             case let .positionalKeyed(keys, values, producesReplayValue, isOptional):
+                let state = KeyedReplayState(
+                    keys: keys,
+                    producesReplayValue: producesReplayValue,
+                    isOptional: isOptional
+                )
+                state.values = values
                 return KeyedDecodingContainer(
-                    ReplayKeyedContainer<Key>(
-                        positional: keys,
-                        values: values,
-                        producesReplayValue: producesReplayValue,
-                        isOptional: isOptional,
-                        codingPath: codingPath
-                    )
+                    ReplayKeyedContainer<Key>(state: state, codingPath: codingPath)
                 )
             default:
                 throw GenSchemaMiss(codingPath: codingPath)
@@ -100,33 +135,15 @@ package final class ReplayDecoder: Decoder {
 
 private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProtocol {
     private enum Storage {
-        case positional(
-            keys: [String],
-            values: [Any],
-            producesReplayValue: [Bool],
-            isOptional: [Bool],
-            cursor: KeyedCursorState
-        )
+        case positional(KeyedReplayState)
         case dictionary([String: ReplayValue])
     }
 
     private let storage: Storage
     let codingPath: [any CodingKey]
 
-    init(
-        positional keys: [String],
-        values: [Any],
-        producesReplayValue: [Bool],
-        isOptional: [Bool],
-        codingPath: [any CodingKey]
-    ) {
-        storage = .positional(
-            keys: keys,
-            values: values,
-            producesReplayValue: producesReplayValue,
-            isOptional: isOptional,
-            cursor: KeyedCursorState()
-        )
+    init(state: KeyedReplayState, codingPath: [any CodingKey]) {
+        storage = .positional(state)
         self.codingPath = codingPath
     }
 
@@ -137,8 +154,8 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
 
     var allKeys: [Key] {
         switch storage {
-            case let .positional(keys, _, _, _, _):
-                keys.compactMap { Key(stringValue: $0) }
+            case let .positional(state):
+                state.keys.compactMap { Key(stringValue: $0) }
             case let .dictionary(fields):
                 fields.keys.compactMap { Key(stringValue: $0) }
         }
@@ -146,8 +163,8 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
 
     func contains(_ key: Key) -> Bool {
         switch storage {
-            case let .positional(keys, _, _, _, cursor):
-                findIndex(forKey: key, in: keys, cursor: cursor) != nil
+            case let .positional(state):
+                findIndex(forKey: key, in: state) != nil
             case let .dictionary(fields):
                 fields[key.stringValue] != nil
         }
@@ -155,14 +172,14 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
 
     func decodeNil(forKey key: Key) throws -> Bool {
         switch storage {
-            case let .positional(keys, values, _, isOptional, cursor):
-                guard let index = findIndex(forKey: key, in: keys, cursor: cursor) else {
+            case let .positional(state):
+                guard let index = findIndex(forKey: key, in: state) else {
                     return true
                 }
-                if isOptional[index] == false {
+                if state.isOptional[index] == false {
                     return false
                 }
-                return leafIsNil(values[index])
+                return leafIsNil(state.values[index])
             case let .dictionary(fields):
                 switch fields[key.stringValue] {
                     case .none:
@@ -177,14 +194,14 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
 
     func decode<T: Decodable>(_: T.Type, forKey key: Key) throws -> T {
         switch storage {
-            case let .positional(keys, values, producesReplayValue, _, cursor):
-                guard let index = findIndex(forKey: key, in: keys, cursor: cursor),
-                      producesReplayValue[index] == false,
-                      let typed = values[index] as? T
+            case let .positional(state):
+                guard let index = findIndex(forKey: key, in: state),
+                      state.producesReplayValue[index] == false,
+                      let typed = state.values[index] as? T
                 else {
                     throw GenSchemaMiss(codingPath: codingPath + [key])
                 }
-                advanceCursor(cursor, past: index)
+                advanceCursor(state, past: index)
                 return typed
             case let .dictionary(fields):
                 guard case let .leaf(value)? = fields[key.stringValue], let typed = value as? T else {
@@ -264,14 +281,14 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
         forKey key: Key
     ) throws -> KeyedDecodingContainer<NestedKey> {
         switch storage {
-            case let .positional(keys, values, producesReplayValue, _, cursor):
-                guard let index = findIndex(forKey: key, in: keys, cursor: cursor),
-                      producesReplayValue[index],
-                      let nested = values[index] as? ReplayValue
+            case let .positional(state):
+                guard let index = findIndex(forKey: key, in: state),
+                      state.producesReplayValue[index],
+                      let nested = state.values[index] as? ReplayValue
                 else {
                     throw GenSchemaMiss(codingPath: codingPath + [key])
                 }
-                advanceCursor(cursor, past: index)
+                advanceCursor(state, past: index)
                 return try ReplayDecoder(nested, codingPath: codingPath + [key]).container(keyedBy: type)
             case let .dictionary(fields):
                 guard case let .keyed(nested)? = fields[key.stringValue] else {
@@ -285,14 +302,14 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
 
     func nestedUnkeyedContainer(forKey key: Key) throws -> any UnkeyedDecodingContainer {
         switch storage {
-            case let .positional(keys, values, producesReplayValue, _, cursor):
-                guard let index = findIndex(forKey: key, in: keys, cursor: cursor),
-                      producesReplayValue[index],
-                      let nested = values[index] as? ReplayValue
+            case let .positional(state):
+                guard let index = findIndex(forKey: key, in: state),
+                      state.producesReplayValue[index],
+                      let nested = state.values[index] as? ReplayValue
                 else {
                     throw GenSchemaMiss(codingPath: codingPath + [key])
                 }
-                advanceCursor(cursor, past: index)
+                advanceCursor(state, past: index)
                 return try ReplayDecoder(nested, codingPath: codingPath + [key]).unkeyedContainer()
             case let .dictionary(fields):
                 guard case let .unkeyed(elements)? = fields[key.stringValue] else {
@@ -304,11 +321,11 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
 
     func superDecoder() throws -> any Decoder {
         switch storage {
-            case let .positional(keys, values, _, _, cursor):
-                if let index = findIndex(forKeyString: "super", in: keys, cursor: cursor),
-                   let nested = values[index] as? ReplayValue
+            case let .positional(state):
+                if let index = findIndex(forKeyString: "super", in: state),
+                   let nested = state.values[index] as? ReplayValue
                 {
-                    advanceCursor(cursor, past: index)
+                    advanceCursor(state, past: index)
                     return ReplayDecoder(nested, codingPath: codingPath)
                 }
                 return ReplayDecoder(.keyed([:]), codingPath: codingPath)
@@ -319,11 +336,11 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
 
     func superDecoder(forKey key: Key) throws -> any Decoder {
         switch storage {
-            case let .positional(keys, values, _, _, cursor):
-                if let index = findIndex(forKey: key, in: keys, cursor: cursor),
-                   let nested = values[index] as? ReplayValue
+            case let .positional(state):
+                if let index = findIndex(forKey: key, in: state),
+                   let nested = state.values[index] as? ReplayValue
                 {
-                    advanceCursor(cursor, past: index)
+                    advanceCursor(state, past: index)
                     return ReplayDecoder(nested, codingPath: codingPath + [key])
                 }
                 return ReplayDecoder(.keyed([:]), codingPath: codingPath + [key])
@@ -336,51 +353,43 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
 // MARK: - Keyed Container Helpers
 
 extension ReplayKeyedContainer {
-    private func findIndex(
-        forKey key: some CodingKey,
-        in keys: [String],
-        cursor: KeyedCursorState
-    ) -> Int? {
-        findIndex(forKeyString: key.stringValue, in: keys, cursor: cursor)
+    private func findIndex(forKey key: some CodingKey, in state: KeyedReplayState) -> Int? {
+        findIndex(forKeyString: key.stringValue, in: state)
     }
 
-    private func findIndex(
-        forKeyString keyString: String,
-        in keys: [String],
-        cursor: KeyedCursorState
-    ) -> Int? {
-        let position = cursor.position
-        if position < keys.count, keys[position] == keyString {
+    private func findIndex(forKeyString keyString: String, in state: KeyedReplayState) -> Int? {
+        let position = state.position
+        if position < state.keys.count, state.keys[position] == keyString {
             return position
         }
-        if cursor.fallback == nil {
-            var map = [String: Int](minimumCapacity: keys.count)
-            for (index, storedKey) in keys.enumerated() {
+        if state.fallback == nil {
+            var map = [String: Int](minimumCapacity: state.keys.count)
+            for (index, storedKey) in state.keys.enumerated() {
                 map[storedKey] = index
             }
-            cursor.fallback = map
+            state.fallback = map
         }
-        return cursor.fallback![keyString]
+        return state.fallback![keyString]
     }
 
-    private func advanceCursor(_ cursor: KeyedCursorState, past index: Int) {
-        if index == cursor.position {
-            cursor.position = index + 1
+    private func advanceCursor(_ state: KeyedReplayState, past index: Int) {
+        if index == state.position {
+            state.position = index + 1
         }
     }
 
     private func resolveOptionalPrimitive<T>(forKey key: Key) throws -> T? {
         switch storage {
-            case let .positional(keys, values, producesReplayValue, isOptional, cursor):
-                guard let index = findIndex(forKey: key, in: keys, cursor: cursor) else {
+            case let .positional(state):
+                guard let index = findIndex(forKey: key, in: state) else {
                     return nil
                 }
-                advanceCursor(cursor, past: index)
-                if producesReplayValue[index] {
+                advanceCursor(state, past: index)
+                if state.producesReplayValue[index] {
                     throw GenSchemaMiss(codingPath: codingPath + [key])
                 }
-                let value = values[index]
-                if isOptional[index], leafIsNil(value) {
+                let value = state.values[index]
+                if state.isOptional[index], leafIsNil(value) {
                     return nil
                 }
                 guard let typed = value as? T else {
@@ -408,15 +417,15 @@ extension ReplayKeyedContainer {
 
     private func resolveOptional<T>(forKey key: Key) -> T? {
         switch storage {
-            case let .positional(keys, values, producesReplayValue, isOptional, cursor):
-                guard let index = findIndex(forKey: key, in: keys, cursor: cursor),
-                      producesReplayValue[index] == false
+            case let .positional(state):
+                guard let index = findIndex(forKey: key, in: state),
+                      state.producesReplayValue[index] == false
                 else {
                     return nil
                 }
-                advanceCursor(cursor, past: index)
-                let value = values[index]
-                if isOptional[index], leafIsNil(value) {
+                advanceCursor(state, past: index)
+                let value = state.values[index]
+                if state.isOptional[index], leafIsNil(value) {
                     return nil
                 }
                 return value as? T
@@ -474,14 +483,14 @@ private struct ReplayUnkeyedContainer: UnkeyedDecodingContainer {
                     ReplayKeyedContainer<NestedKey>(dictionary: nested, codingPath: codingPath)
                 )
             case let .positionalKeyed(keys, values, producesReplayValue, isOptional):
+                let state = KeyedReplayState(
+                    keys: keys,
+                    producesReplayValue: producesReplayValue,
+                    isOptional: isOptional
+                )
+                state.values = values
                 return KeyedDecodingContainer(
-                    ReplayKeyedContainer<NestedKey>(
-                        positional: keys,
-                        values: values,
-                        producesReplayValue: producesReplayValue,
-                        isOptional: isOptional,
-                        codingPath: codingPath
-                    )
+                    ReplayKeyedContainer<NestedKey>(state: state, codingPath: codingPath)
                 )
             default:
                 throw GenSchemaMiss(codingPath: codingPath)

@@ -30,6 +30,26 @@ func makeReconstructingGenerator<T: Decodable>(
     pin: Any,
     codingPath: [any CodingKey]
 ) -> AnyGenerator {
+    if case let .keyed(children) = shape, children.isEmpty == false {
+        let generators = ContiguousArray(children.map(\.generator))
+        let state = KeyedReplayState(
+            keys: children.map(\.key),
+            producesReplayValue: children.map(\.producesReplayValue),
+            isOptional: children.map(\.isOptional)
+        )
+        let decoder = ReplayDecoder(reusableState: state, codingPath: codingPath)
+
+        return zipMap(generators) { values in
+            state.reset(values: values)
+            do {
+                return try T(from: decoder) as Any
+            } catch let miss as GenSchemaMiss {
+                SynthesisDiagnostics.recordFallback(type: T.self, codingPath: miss.codingPath)
+                return pin
+            }
+        }
+    }
+
     guard let (generators, rebuild) = shape.lowering() else {
         return Gen.just(pin).erase()
     }
