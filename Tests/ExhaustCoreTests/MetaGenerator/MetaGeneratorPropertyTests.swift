@@ -454,11 +454,8 @@ struct MetaGeneratorPropertyTests {
 
     // MARK: 14. Random Recipes with Just/Zip
 
-    /// Debug builds have no tail-call optimization and fat stack frames, so interpreting deep
-    /// recipe-built generators overflows the stack. Depth-1 recipes (the other tests in this
-    /// suite) are safe; any deeper sweep needs a recipe-size budget calibrated to the debug
-    /// stack, not just a maxDepth cap.
-    @Test("Random recipes with just and zip round-trip through reflect and replay", .disabled("Depth-2 recipes overflow the debug-mode stack; see comment above"))
+    /// Depth-2 recipes are blocked by a known defect, independent of the stack budget: reflecting a nested optional whose value is a mid-chain nil throws `chooseBitsCouldNotConvertValue` instead of resolving through the nil branch. Once that is fixed, gate this sweep with `metaRecipeNodeBudget` like the other invariants. (A second blocker, the aliased nested-filter tuning cycle, was fixed 2026-07-07 by the filter expansion-path guard in GenerationContext.)
+    @Test("Random recipes with just and zip round-trip through reflect and replay", .disabled("Depth-2 recipes hit the nested-optional reflection defect; see comment above"))
     func randomJustZipRecipesRoundTrip() throws {
         let recipeGen = recipeGenerator(producing: .int, maxDepth: 2)
         var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 40)
@@ -538,5 +535,5 @@ private func checkPairedValues(
 /// Output types the universal invariants sweep over. Every operation the recipe language can produce for these types gets each invariant automatically.
 let metaRecipeTypes: [RecipeType] = [.int, .bool, .arrayOf(.int)]
 
-/// Node-count ceiling for recipes fed to the invariants. Debug builds allocate all ReflectiveOperation switch cases in each interpreter frame, so total recipe size, not nesting depth alone, is what overflows the stack. This is a fixed constant of the debug test environment, not a knob to scale up.
-let metaRecipeNodeBudget = 24
+/// Node-count ceiling for recipes fed to the invariants. Debug builds give each interpreter recursion level a fat stack frame, so total recipe size, not nesting depth alone, is what overflows the 512 KiB test-thread stack. Calibrated empirically with the ExhaustStackProbe executable (2026-07-07, arm64 debug, interpreter case handlers outlined): deep-chain recipes crash at ~117 nodes for mapped chains and ~81 nodes for nested filter chains, the worst shape because every level stacks a CGS tuning pass. The constant is the worst ceiling with a ~2x margin for platform and toolchain variance. Recalibrate with the probe after changing any interpreter's recursion frames.
+let metaRecipeNodeBudget = 40

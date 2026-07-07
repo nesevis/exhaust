@@ -308,4 +308,60 @@ struct GeneratorTuningTests {
         // With depth scoping, we should see more than 2 records (more than just a single pick site).
         #expect(accumulator.records.count > 2, "Accumulator should have records from multiple depth levels, got \(accumulator.records.count)")
     }
+
+    // MARK: - Tuned-Filter Cache Re-entrancy
+
+    @Test("Nested filters sharing a fingerprint terminate and enforce both predicates")
+    func nestedAliasedFiltersTerminate() throws {
+        var interpreter = ValueInterpreter(nestedAliasedFilterChain(), seed: 42, maxRuns: 20)
+        var produced = 0
+        while let value = try interpreter.next() {
+            let intValue = value as! Int
+            #expect(intValue > 0)
+            #expect(intValue.isMultiple(of: 2))
+            produced += 1
+        }
+        #expect(produced > 0)
+    }
+
+    @Test("VACTI terminates on nested filters sharing a fingerprint")
+    func nestedAliasedFiltersTerminateWithTree() throws {
+        var interpreter = ValueAndChoiceTreeInterpreter<Any>(nestedAliasedFilterChain(), seed: 42, maxRuns: 20)
+        var produced = 0
+        while let (value, _) = try interpreter.next() {
+            let intValue = value as! Int
+            #expect(intValue > 0)
+            #expect(intValue.isMultiple(of: 2))
+            produced += 1
+        }
+        #expect(produced > 0)
+    }
+}
+
+// MARK: - Helpers
+
+/// Two `.auto` filters sharing one fingerprint, the inner nested on the outer's inner spine, mirroring a filter applied in a loop from a single source location. Without the expansion-path guard in the generation interpreters, the tuned-filter cache entry for the shared fingerprint resolves to a chain containing that same fingerprint and generation recurses until the stack overflows.
+private func nestedAliasedFilterChain() -> AnyGenerator {
+    let fingerprint = Gen.sourceFingerprint(fileID: #fileID, line: #line, column: #column)
+    let sourceLocation = FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
+    let inner = AnyGenerator.impure(
+        operation: .filter(
+            gen: Gen.choose(in: -100 ... 100 as ClosedRange<Int>).erase(),
+            fingerprint: fingerprint,
+            filterType: .auto,
+            predicate: { ($0 as! Int) > 0 },
+            sourceLocation: sourceLocation
+        ),
+        continuation: { .pure($0) }
+    )
+    return AnyGenerator.impure(
+        operation: .filter(
+            gen: inner,
+            fingerprint: fingerprint,
+            filterType: .auto,
+            predicate: { ($0 as! Int).isMultiple(of: 2) },
+            sourceLocation: sourceLocation
+        ),
+        continuation: { .pure($0) }
+    )
 }

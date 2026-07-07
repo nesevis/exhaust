@@ -42,6 +42,9 @@ package struct GenerationContext: ~Copyable {
     /// Per-fingerprint filter predicate pass/fail observations.
     package var filterObservations: [UInt64: FilterObservation] = [:]
 
+    /// Fingerprints of the filter sites currently being expanded on this context's generation path. Aliased call sites (a filter applied in a loop, a helper applied twice, a recursive layer body) can make the ``resolveTunedFilter(fingerprint:generator:predicate:type:)`` cache entry contain another filter node with the same fingerprint, and resolving that nested node would expand the cached chain into itself forever. The generation interpreters consult this path and generate a re-entered fingerprint from its embedded inner instead. Contexts created fresh mid-expansion (``jump(seed:)``, unique's sub-interpreter) start with an empty path; that stays sound because each context's own guard breaks the cycle within it.
+    package var filterExpansionPath: ContiguousArray<UInt64> = []
+
     // MARK: - VACTI/CGS tracking
 
     /// Whether to record materialized pick metadata in the choice tree.

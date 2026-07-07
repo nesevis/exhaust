@@ -419,12 +419,24 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         sourceLocation: FilterSourceLocation,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> Any? {
-        let tunedGen = GenerationContext.resolveTunedFilter(
-            fingerprint: fingerprint,
-            generator: filterGen,
-            predicate: predicate,
-            type: filterType
-        )
+        // Rejection-sampling filters never consult the tuned-filter cache, so they skip both the resolve call and the re-entrancy guard. For tuned filters, a fingerprint already being expanded higher on the path must not resolve: the cached chain contains this node and would recurse forever. The embedded inner is the correct local generator in both fallback cases (already tuned when the chain came from a tuning pass).
+        let mustResolve = filterType != .rejectionSampling && context.filterExpansionPath.contains(fingerprint) == false
+        if mustResolve {
+            context.filterExpansionPath.append(fingerprint)
+        }
+        defer {
+            if mustResolve {
+                context.filterExpansionPath.removeLast()
+            }
+        }
+        let tunedGen = mustResolve
+            ? GenerationContext.resolveTunedFilter(
+                fingerprint: fingerprint,
+                generator: filterGen,
+                predicate: predicate,
+                type: filterType
+            )
+            : filterGen
         var attempts = 0 as UInt64
         let observationDefault = FilterObservation(sourceLocation: sourceLocation, filterType: filterType)
         var filterAttempts = 0
