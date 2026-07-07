@@ -158,78 +158,7 @@ extension Interpreters {
                 return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
 
             case let .transform(kind, inner):
-                switch kind {
-                    case let .map(forward, backward, inputType, outputType):
-                        if let backward {
-                            // Bidirectional map (`mapped(forward:backward:)`): apply the user-contract inverse and reflect the inner generator against the recovered input. Forward is applied per candidate because inner reflection can return several candidates (pick branches probed against a shared target), and upstream disambiguation compares each candidate's value to the final output. Collapsing them to one shared value would make every branch look like a match.
-                            let innerValue = try backward(finalOutput)
-                            let reflected = try reflectRecursive(inner, onFinalOutput: innerValue)
-                            return try reflected.map { result in
-                                try (value: forward(result.value), path: result.path)
-                            }
-                        }
-                        if let inputBPC = inputType as? any BitPatternConvertible.Type,
-                           let outputValue = finalOutput as? any BitPatternConvertible
-                        {
-                            let inverted = inputBPC.init(bitPattern64: outputValue.bitPattern64)
-                            do {
-                                let roundTripped = try forward(inverted)
-                                if let roundTrippedBPC = roundTripped as? any BitPatternConvertible,
-                                   roundTrippedBPC.bitPattern64 == outputValue.bitPattern64
-                                {
-                                    let reflected = try reflectRecursive(inner, onFinalOutput: inverted)
-                                    return reflected.map { result in
-                                        (value: roundTripped, path: result.path)
-                                    }
-                                }
-                            } catch {
-                                // Forward application failed — fall through to error
-                            }
-                        }
-                        throw ReflectionError.forwardOnlyMap(
-                            inputType: "\(inputType)",
-                            outputType: "\(outputType)"
-                        )
-                    case let .isomorph(forward, backward, _, _):
-                        // Guaranteed invertible by construction (framework-authored pairs only), so no forward-only error path exists here. Forward is applied per candidate for the same reason as the bidirectional `.map` case above.
-                        let innerValue = try backward(finalOutput)
-                        let reflected = try reflectRecursive(inner, onFinalOutput: innerValue)
-                        return try reflected.map { result in
-                            try (value: forward(result.value), path: result.path)
-                        }
-                    case let .bind(fingerprint, forward, backward, inputType, outputType):
-                        guard let backward else {
-                            throw ReflectionError.forwardOnlyBind(
-                                inputType: "\(inputType)",
-                                outputType: "\(outputType)"
-                            )
-                        }
-                        // Xia et al.'s comap at bind sites: extract the inner value from the final output.
-                        let innerValue = try backward(finalOutput)
-                        // Reconstruct the bound generator from the extracted inner value.
-                        let boundGen = try forward(innerValue)
-                        // Reflect both: inner against the extracted value, bound against the final output.
-                        let innerResults = try reflectRecursive(inner, onFinalOutput: innerValue)
-                        let boundResults = try reflectRecursive(boundGen, onFinalOutput: finalOutput)
-                        // Combine paths: inner choices followed by bound choices.
-                        return innerResults.flatMap { innerResult in
-                            boundResults.map { boundResult in
-                                let innerTree = innerResult.path.count == 1
-                                    ? innerResult.path[0]
-                                    : .group(innerResult.path)
-                                let boundTree = boundResult.path.count == 1
-                                    ? boundResult.path[0]
-                                    : .group(boundResult.path)
-                                return (
-                                    value: boundResult.value,
-                                    path: [.bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)]
-                                )
-                            }
-                        }
-                    case .metamorphic:
-                        // The contramap backward already extracted the original Value from the output tuple. Reflect on inner with that value — the transforms are deterministic and will be re-derived on the forward pass.
-                        return try reflectRecursive(inner, onFinalOutput: finalOutput)
-                }
+                return try reflectTransformOperation(kind: kind, inner: inner, finalOutput: finalOutput)
         }
     }
 
@@ -461,5 +390,84 @@ extension Interpreters {
         finalOutput: Any
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
+    }
+
+    private static func reflectTransformOperation(
+        kind: TransformKind,
+        inner: AnyGenerator,
+        finalOutput: Any
+    ) throws -> [(value: Any, path: [ChoiceTree])] {
+        switch kind {
+            case let .map(forward, backward, inputType, outputType):
+                if let backward {
+                    // Bidirectional map (`mapped(forward:backward:)`): apply the user-contract inverse and reflect the inner generator against the recovered input. Forward is applied per candidate because inner reflection can return several candidates (pick branches probed against a shared target), and upstream disambiguation compares each candidate's value to the final output. Collapsing them to one shared value would make every branch look like a match.
+                    let innerValue = try backward(finalOutput)
+                    let reflected = try reflectRecursive(inner, onFinalOutput: innerValue)
+                    return try reflected.map { result in
+                        try (value: forward(result.value), path: result.path)
+                    }
+                }
+                if let inputBPC = inputType as? any BitPatternConvertible.Type,
+                   let outputValue = finalOutput as? any BitPatternConvertible
+                {
+                    let inverted = inputBPC.init(bitPattern64: outputValue.bitPattern64)
+                    do {
+                        let roundTripped = try forward(inverted)
+                        if let roundTrippedBPC = roundTripped as? any BitPatternConvertible,
+                           roundTrippedBPC.bitPattern64 == outputValue.bitPattern64
+                        {
+                            let reflected = try reflectRecursive(inner, onFinalOutput: inverted)
+                            return reflected.map { result in
+                                (value: roundTripped, path: result.path)
+                            }
+                        }
+                    } catch {
+                        // Forward application failed — fall through to error
+                    }
+                }
+                throw ReflectionError.forwardOnlyMap(
+                    inputType: "\(inputType)",
+                    outputType: "\(outputType)"
+                )
+            case let .isomorph(forward, backward, _, _):
+                // Guaranteed invertible by construction (framework-authored pairs only), so no forward-only error path exists here. Forward is applied per candidate for the same reason as the bidirectional `.map` case above.
+                let innerValue = try backward(finalOutput)
+                let reflected = try reflectRecursive(inner, onFinalOutput: innerValue)
+                return try reflected.map { result in
+                    try (value: forward(result.value), path: result.path)
+                }
+            case let .bind(fingerprint, forward, backward, inputType, outputType):
+                guard let backward else {
+                    throw ReflectionError.forwardOnlyBind(
+                        inputType: "\(inputType)",
+                        outputType: "\(outputType)"
+                    )
+                }
+                // Xia et al.'s comap at bind sites: extract the inner value from the final output.
+                let innerValue = try backward(finalOutput)
+                // Reconstruct the bound generator from the extracted inner value.
+                let boundGen = try forward(innerValue)
+                // Reflect both: inner against the extracted value, bound against the final output.
+                let innerResults = try reflectRecursive(inner, onFinalOutput: innerValue)
+                let boundResults = try reflectRecursive(boundGen, onFinalOutput: finalOutput)
+                // Combine paths: inner choices followed by bound choices.
+                return innerResults.flatMap { innerResult in
+                    boundResults.map { boundResult in
+                        let innerTree = innerResult.path.count == 1
+                            ? innerResult.path[0]
+                            : .group(innerResult.path)
+                        let boundTree = boundResult.path.count == 1
+                            ? boundResult.path[0]
+                            : .group(boundResult.path)
+                        return (
+                            value: boundResult.value,
+                            path: [.bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)]
+                        )
+                    }
+                }
+            case .metamorphic:
+                // The contramap backward already extracted the original Value from the output tuple. Reflect on inner with that value — the transforms are deterministic and will be re-derived on the forward pass.
+                return try reflectRecursive(inner, onFinalOutput: finalOutput)
+        }
     }
 }

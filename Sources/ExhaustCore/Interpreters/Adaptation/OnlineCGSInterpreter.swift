@@ -258,52 +258,21 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - Contramap
 
                     case let .contramap(_, nextGen):
-                        guard let result = try generateRecursive(
-                            nextGen,
-                            with: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
-                        ) else { return nil }
-                        return try runContinuation(
-                            result: result,
-                            continuation: continuation,
-                            inputValue: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
+                        return try handleContramap(
+                            nextGen: nextGen, continuation: continuation,
+                            inputValue: inputValue, context: &context,
+                            predicate: predicate, sampleCount: sampleCount,
+                            cgsState: &cgsState, derivativeContext: derivativeContext
                         )
 
             // MARK: - Prune
 
                     case let .prune(nextGen):
-                        guard let wrappedValue =
-                            InterpreterWrapperHandlers.unwrapPruneInput(inputValue)
-                        else {
-                            return nil
-                        }
-                        guard let result = try generateRecursive(
-                            nextGen,
-                            with: wrappedValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
-                        ) else { return nil }
-                        return try runContinuation(
-                            result: result,
-                            continuation: continuation,
-                            inputValue: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
+                        return try handlePrune(
+                            nextGen: nextGen, continuation: continuation,
+                            inputValue: inputValue, context: &context,
+                            predicate: predicate, sampleCount: sampleCount,
+                            cgsState: &cgsState, derivativeContext: derivativeContext
                         )
 
             // MARK: - Pick (CGS Core)
@@ -323,115 +292,24 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - ChooseBits
 
                     case let .chooseBits(min, max, tag, isRangeExplicit, scaling, _):
-                        // Warmup-only subdivision (never baked). A large-range chooseBits that the pre-pass `subdivideForCGS` left raw — a standalone scalar; the pre-pass only subdivides sequence lengths, plus element gens on the relaxed path — is split into a pick here so derivative sampling and vocabulary elimination can bias it toward predicate-satisfying subranges over the warmup. That biasing raises the valid-sample rate, which is what gives the surrounding bakeable picks a usable fitness signal for sparse filters.
-                        //
-                        // These synthesized picks are intentionally never baked: `bakeWeights` walks the original generator (default thresholds, to keep the choice-tree structure that replay and reduction depend on) or the pre-pass subdivided generator (relaxed), and neither contains this on-the-fly pick. A chooseBits cannot carry CGS weights in the final generator without becoming a pick, which would break replay structural compatibility — so a standalone scalar's own tuning is warmup-only by design, and `.rejectionSampling` is the right strategy for such filters. This is not dead code.
-                        //
-                        // The fingerprint is per-site, folded from the range and tag rather than a constant, so distinct chooseBits sites at the same derivative depth do not share fitness keys and corrupt each other's vocabulary elimination. A per-process value suffices because these records never leave the warmup.
-                        if derivativeContext.depth < cgsState.subdivisionThresholds.maximumDerivativeDepth,
-                           max >= min,
-                           (min ... max).saturatingCount >= cgsState.subdivisionThresholds.minimumRangeSize,
-                           let choices = SharedInterpreterHelpers.subdivideChooseBits(
-                               lower: min, upper: max, tag: tag,
-                               isRangeExplicit: isRangeExplicit, scaling: scaling,
-                               makeFingerprint: {
-                                   var fingerprint = Xoshiro256.fold(min, mixing: max)
-                                   fingerprint = Xoshiro256.fold(fingerprint, mixing: UInt64(bitPattern: Int64(tag.hashValue)))
-                                   return fingerprint
-                               }
-                           )
-                        {
-                            let synthesisedPick: Generator<Output> = .impure(
-                                operation: .pick(choices: choices, totalWeight: choices.reduce(0) { $0 &+ $1.weight }),
-                                continuation: continuation
-                            )
-
-                            return try generateRecursive(
-                                synthesisedPick,
-                                with: inputValue,
-                                context: &context,
-                                predicate: predicate,
-                                sampleCount: sampleCount,
-                                cgsState: &cgsState,
-                                derivativeContext: derivativeContext
-                            )
-                        }
-                        let effectiveRange: ClosedRange<UInt64>
-                        if let scaling {
-                            let size = SharedInterpreterHelpers.consumeSize(&context)
-                            effectiveRange = Gen.applyScaling(
-                                min: min, max: max, tag: tag, scaling: scaling, size: size
-                            )
-                        } else {
-                            effectiveRange = min ... max
-                        }
-                        let randomBits = context.prng.next(in: effectiveRange)
-                        return try runContinuation(
-                            result: randomBits,
+                        return try handleChooseBits(
+                            min: min, max: max, tag: tag,
+                            isRangeExplicit: isRangeExplicit, scaling: scaling,
                             continuation: continuation,
-                            inputValue: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
+                            inputValue: inputValue, context: &context,
+                            predicate: predicate, sampleCount: sampleCount,
+                            cgsState: &cgsState, derivativeContext: derivativeContext
                         )
 
             // MARK: - Sequence
 
                     case let .sequence(lengthGen, elementGen):
-                        // Length generator: skip derivative evaluation — the length produces UInt64, not FinalOutput, so derivatives can't compose through. Depth >= 4 triggers handlePick's fast path.
-                        var lengthDerivativeContext = DerivativeContext()
-                        for _ in 0 ..< Self.maxDerivativeDepth {
-                            lengthDerivativeContext.push(.bind(continuation: { .pure($0) }))
-                        }
-                        guard let length = try generateRecursive(
-                            lengthGen,
-                            with: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: lengthDerivativeContext
-                        ) else {
-                            return nil
-                        }
-
-                        let elementCount = Int(length)
-                        var results: [Any] = []
-                        results.reserveCapacity(elementCount)
-                        for _ in 0 ..< length {
-                            var elementContext = derivativeContext
-                            elementContext.push(.sequenceElement(
-                                index: results.count,
-                                completed: results,
-                                totalCount: elementCount,
-                                elementGen: elementGen,
-                                continuation: { try continuation($0).erase() }
-                            ))
-
-                            guard let result = try generateRecursive(
-                                elementGen,
-                                with: inputValue,
-                                context: &context,
-                                predicate: predicate,
-                                sampleCount: sampleCount,
-                                cgsState: &cgsState,
-                                derivativeContext: elementContext
-                            ) else {
-                                return nil
-                            }
-                            results.append(result)
-                        }
-                        return try runContinuation(
-                            result: results,
+                        return try handleSequence(
+                            lengthGen: lengthGen, elementGen: elementGen,
                             continuation: continuation,
-                            inputValue: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
+                            inputValue: inputValue, context: &context,
+                            predicate: predicate, sampleCount: sampleCount,
+                            cgsState: &cgsState, derivativeContext: derivativeContext
                         )
 
             // MARK: - Zip
@@ -480,226 +358,546 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             // MARK: - Resize
 
                     case let .resize(newSize, gen):
-                        context.sizeOverride = newSize
-                        defer { context.sizeOverride = nil }
-                        guard let result = try generateRecursive(
-                            gen,
-                            with: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
-                        ) else { return nil }
-                        return try runContinuation(
-                            result: result,
+                        return try handleResize(
+                            newSize: newSize, gen: gen,
                             continuation: continuation,
-                            inputValue: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
+                            inputValue: inputValue, context: &context,
+                            predicate: predicate, sampleCount: sampleCount,
+                            cgsState: &cgsState, derivativeContext: derivativeContext
                         )
 
             // MARK: - Filter
 
                     case let .filter(gen, _, _, filterPredicate, sourceLocation):
-                        // Warmup uses the untuned base so the fitness it collects — and the tuning it produces — depend only on the seed, not on prior cache state.
-                        let tunedGen = gen
-
-                        var attempts = 0 as UInt64
-                        while attempts < GenerationContext.maxFilterRuns {
-                            guard let result = try generateRecursive(
-                                tunedGen,
-                                with: inputValue,
-                                context: &context,
-                                predicate: predicate,
-                                sampleCount: sampleCount,
-                                cgsState: &cgsState,
-                                derivativeContext: derivativeContext
-                            ) else { return nil }
-
-                            if filterPredicate(result) {
-                                return try runContinuation(
-                                    result: result,
-                                    continuation: continuation,
-                                    inputValue: inputValue,
-                                    context: &context,
-                                    predicate: predicate,
-                                    sampleCount: sampleCount,
-                                    cgsState: &cgsState,
-                                    derivativeContext: derivativeContext
-                                )
-                            }
-                            attempts += 1
-                        }
-                        sourceLocation.onBudgetExhausted?()
-                        throw GeneratorError.sparseValidityCondition
+                        return try handleFilter(
+                            gen: gen, filterPredicate: filterPredicate,
+                            sourceLocation: sourceLocation,
+                            continuation: continuation,
+                            inputValue: inputValue, context: &context,
+                            predicate: predicate, sampleCount: sampleCount,
+                            cgsState: &cgsState, derivativeContext: derivativeContext
+                        )
 
             // MARK: - Classify
 
                     case let .classify(gen, fingerprint, classifiers):
-                        guard let result = try generateRecursive(
-                            gen,
-                            with: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
-                        ) else { return nil }
-                        for (label, classifier) in classifiers where classifier(result) {
-                            var byLabel = context.classifications[fingerprint, default: [:]]
-                            byLabel[label, default: []].insert(context.runs)
-                            context.classifications[fingerprint] = byLabel
-                        }
-                        return try runContinuation(
-                            result: result,
+                        return try handleClassify(
+                            gen: gen, fingerprint: fingerprint, classifiers: classifiers,
                             continuation: continuation,
-                            inputValue: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
+                            inputValue: inputValue, context: &context,
+                            predicate: predicate, sampleCount: sampleCount,
+                            cgsState: &cgsState, derivativeContext: derivativeContext
                         )
 
             // MARK: - Transform
 
                     case let .transform(kind, inner):
-                        let result: Any
-                        switch kind {
-                            case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
-                                // Push the forward transform as a frame so derivative rollouts inside `inner` apply it. Without this, a rollout crossing the transform boundary hands the untransformed inner value (for example `[Character]` instead of `String`) to outer frames, which trap on their continuation casts.
-                                var innerContext = derivativeContext
-                                innerContext.push(.transform(continuation: { innerValue in
-                                    try continuation(forward(innerValue)).erase()
-                                }))
-                                guard let innerValue = try generateRecursive(
-                                    inner,
-                                    with: inputValue,
-                                    context: &context,
-                                    predicate: predicate,
-                                    sampleCount: sampleCount,
-                                    cgsState: &cgsState,
-                                    derivativeContext: innerContext
-                                ) else { return nil }
-                                result = try forward(innerValue)
-                            case let .bind(_, forward, _, _, _):
-                                var innerContext = derivativeContext
-                                innerContext.push(.bind(continuation: { innerValue in
-                                    let boundGen = try forward(innerValue)
-                                    return try boundGen.bind { boundValue in
-                                        try continuation(boundValue).erase()
-                                    }
-                                }))
-                                guard let innerValue = try generateRecursive(
-                                    inner,
-                                    with: inputValue,
-                                    context: &context,
-                                    predicate: predicate,
-                                    sampleCount: sampleCount,
-                                    cgsState: &cgsState,
-                                    derivativeContext: innerContext
-                                ) else { return nil }
-                                let boundGen = try forward(innerValue)
-                                guard let boundValue = try generateRecursive(
-                                    boundGen,
-                                    with: inputValue,
-                                    context: &context,
-                                    predicate: predicate,
-                                    sampleCount: sampleCount,
-                                    cgsState: &cgsState,
-                                    derivativeContext: derivativeContext
-                                ) else { return nil }
-                                result = boundValue
-                            case let .metamorphic(transforms, _):
-                                let savedState = (context.prng.seed, context.prng.currentState)
-                                guard let original = try generateRecursive(
-                                    inner,
-                                    with: inputValue,
-                                    context: &context,
-                                    predicate: predicate,
-                                    sampleCount: sampleCount,
-                                    cgsState: &cgsState,
-                                    derivativeContext: derivativeContext
-                                ) else { return nil }
-                                var results: [Any] = [original]
-                                results.reserveCapacity(transforms.count + 1)
-                                for transform in transforms {
-                                    context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
-                                    guard let copy = try generateRecursive(
-                                        inner,
-                                        with: inputValue,
-                                        context: &context,
-                                        predicate: predicate,
-                                        sampleCount: sampleCount,
-                                        cgsState: &cgsState,
-                                        derivativeContext: derivativeContext
-                                    ) else { return nil }
-                                    try results.append(transform(copy))
-                                }
-                                result = results
-                        }
-                        return try runContinuation(
-                            result: result,
+                        return try handleTransform(
+                            kind: kind, inner: inner,
                             continuation: continuation,
-                            inputValue: inputValue,
-                            context: &context,
-                            predicate: predicate,
-                            sampleCount: sampleCount,
-                            cgsState: &cgsState,
-                            derivativeContext: derivativeContext
+                            inputValue: inputValue, context: &context,
+                            predicate: predicate, sampleCount: sampleCount,
+                            cgsState: &cgsState, derivativeContext: derivativeContext
                         )
 
             // MARK: - Unique
 
                     case let .unique(gen, fingerprint, keyExtractor):
-                        var attempts = 0 as UInt64
-                        while attempts < GenerationContext.maxFilterRuns {
-                            guard let result = try generateRecursive(
-                                gen,
-                                with: inputValue,
-                                context: &context,
-                                predicate: predicate,
-                                sampleCount: sampleCount,
-                                cgsState: &cgsState,
-                                derivativeContext: derivativeContext
-                            ) else { return nil }
-
-                            let isDuplicate: Bool
-                            if let keyExtractor {
-                                let key = keyExtractor(result)
-                                isDuplicate = context.uniqueSeenKeys[
-                                    fingerprint, default: []
-                                ].insert(key).inserted == false
-                            } else if let key = result as? AnyHashable {
-                                isDuplicate = context.uniqueSeenKeys[
-                                    fingerprint, default: []
-                                ].insert(key).inserted == false
-                            } else {
-                                // Non-Hashable types cannot be deduplicated in CGS mode (no choice-sequence tracking). All samples are treated as unique.
-                                isDuplicate = false
-                            }
-
-                            if isDuplicate == false {
-                                return try runContinuation(
-                                    result: result,
-                                    continuation: continuation,
-                                    inputValue: inputValue,
-                                    context: &context,
-                                    predicate: predicate,
-                                    sampleCount: sampleCount,
-                                    cgsState: &cgsState,
-                                    derivativeContext: derivativeContext
-                                )
-                            }
-                            attempts += 1
-                        }
-                        throw GeneratorError.uniqueBudgetExhausted
+                        return try handleUnique(
+                            gen: gen, fingerprint: fingerprint, keyExtractor: keyExtractor,
+                            continuation: continuation,
+                            inputValue: inputValue, context: &context,
+                            predicate: predicate, sampleCount: sampleCount,
+                            cgsState: &cgsState, derivativeContext: derivativeContext
+                        )
                 }
         }
+    }
+
+    // MARK: - Case Handlers
+
+    //
+    // Every non-trivial case body lives in an `@inline(__always)` handler rather than inline in the switch. See the Case Handlers note in ValueInterpreter for the debug stack-frame rationale; this interpreter runs during filter tuning, where nested filters stack one tuning interpretation per nesting level, so its frame size multiplies twice over.
+
+    @inline(__always)
+    private static func handleContramap<Output>(
+        nextGen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
+        inputValue: some Any,
+        context: inout GenerationContext,
+        predicate: @escaping (FinalOutput) -> Bool,
+        sampleCount: UInt64,
+        cgsState: inout CGSState,
+        derivativeContext: DerivativeContext
+    ) throws -> Output? {
+        guard let result = try generateRecursive(
+            nextGen,
+            with: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        ) else { return nil }
+        return try runContinuation(
+            result: result,
+            continuation: continuation,
+            inputValue: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        )
+    }
+
+    @inline(__always)
+    private static func handlePrune<Output>(
+        nextGen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
+        inputValue: some Any,
+        context: inout GenerationContext,
+        predicate: @escaping (FinalOutput) -> Bool,
+        sampleCount: UInt64,
+        cgsState: inout CGSState,
+        derivativeContext: DerivativeContext
+    ) throws -> Output? {
+        guard let wrappedValue =
+            InterpreterWrapperHandlers.unwrapPruneInput(inputValue)
+        else {
+            return nil
+        }
+        guard let result = try generateRecursive(
+            nextGen,
+            with: wrappedValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        ) else { return nil }
+        return try runContinuation(
+            result: result,
+            continuation: continuation,
+            inputValue: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        )
+    }
+
+    @inline(__always)
+    private static func handleChooseBits<Output>(
+        min: UInt64,
+        max: UInt64,
+        tag: TypeTag,
+        isRangeExplicit: Bool,
+        scaling: ChooseBitsScaling?,
+        continuation: @escaping (Any) throws -> AnyGenerator,
+        inputValue: some Any,
+        context: inout GenerationContext,
+        predicate: @escaping (FinalOutput) -> Bool,
+        sampleCount: UInt64,
+        cgsState: inout CGSState,
+        derivativeContext: DerivativeContext
+    ) throws -> Output? {
+        // Warmup-only subdivision (never baked). A large-range chooseBits that the pre-pass `subdivideForCGS` left raw — a standalone scalar; the pre-pass only subdivides sequence lengths, plus element gens on the relaxed path — is split into a pick here so derivative sampling and vocabulary elimination can bias it toward predicate-satisfying subranges over the warmup. That biasing raises the valid-sample rate, which is what gives the surrounding bakeable picks a usable fitness signal for sparse filters.
+        //
+        // These synthesized picks are intentionally never baked: `bakeWeights` walks the original generator (default thresholds, to keep the choice-tree structure that replay and reduction depend on) or the pre-pass subdivided generator (relaxed), and neither contains this on-the-fly pick. A chooseBits cannot carry CGS weights in the final generator without becoming a pick, which would break replay structural compatibility — so a standalone scalar's own tuning is warmup-only by design, and `.rejectionSampling` is the right strategy for such filters. This is not dead code.
+        //
+        // The fingerprint is per-site, folded from the range and tag rather than a constant, so distinct chooseBits sites at the same derivative depth do not share fitness keys and corrupt each other's vocabulary elimination. A per-process value suffices because these records never leave the warmup.
+        if derivativeContext.depth < cgsState.subdivisionThresholds.maximumDerivativeDepth,
+           max >= min,
+           (min ... max).saturatingCount >= cgsState.subdivisionThresholds.minimumRangeSize,
+           let choices = SharedInterpreterHelpers.subdivideChooseBits(
+               lower: min, upper: max, tag: tag,
+               isRangeExplicit: isRangeExplicit, scaling: scaling,
+               makeFingerprint: {
+                   var fingerprint = Xoshiro256.fold(min, mixing: max)
+                   fingerprint = Xoshiro256.fold(fingerprint, mixing: UInt64(bitPattern: Int64(tag.hashValue)))
+                   return fingerprint
+               }
+           )
+        {
+            let synthesisedPick: Generator<Output> = .impure(
+                operation: .pick(choices: choices, totalWeight: choices.reduce(0) { $0 &+ $1.weight }),
+                continuation: continuation
+            )
+
+            return try generateRecursive(
+                synthesisedPick,
+                with: inputValue,
+                context: &context,
+                predicate: predicate,
+                sampleCount: sampleCount,
+                cgsState: &cgsState,
+                derivativeContext: derivativeContext
+            )
+        }
+        let effectiveRange: ClosedRange<UInt64>
+        if let scaling {
+            let size = SharedInterpreterHelpers.consumeSize(&context)
+            effectiveRange = Gen.applyScaling(
+                min: min, max: max, tag: tag, scaling: scaling, size: size
+            )
+        } else {
+            effectiveRange = min ... max
+        }
+        let randomBits = context.prng.next(in: effectiveRange)
+        return try runContinuation(
+            result: randomBits,
+            continuation: continuation,
+            inputValue: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        )
+    }
+
+    @inline(__always)
+    private static func handleSequence<Output>(
+        lengthGen: Generator<UInt64>,
+        elementGen: AnyGenerator,
+        continuation: @escaping (Any) throws -> AnyGenerator,
+        inputValue: some Any,
+        context: inout GenerationContext,
+        predicate: @escaping (FinalOutput) -> Bool,
+        sampleCount: UInt64,
+        cgsState: inout CGSState,
+        derivativeContext: DerivativeContext
+    ) throws -> Output? {
+        // Length generator: skip derivative evaluation — the length produces UInt64, not FinalOutput, so derivatives can't compose through. Depth >= 4 triggers handlePick's fast path.
+        var lengthDerivativeContext = DerivativeContext()
+        for _ in 0 ..< Self.maxDerivativeDepth {
+            lengthDerivativeContext.push(.bind(continuation: { .pure($0) }))
+        }
+        guard let length = try generateRecursive(
+            lengthGen,
+            with: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: lengthDerivativeContext
+        ) else {
+            return nil
+        }
+
+        let elementCount = Int(length)
+        var results: [Any] = []
+        results.reserveCapacity(elementCount)
+        for _ in 0 ..< length {
+            var elementContext = derivativeContext
+            elementContext.push(.sequenceElement(
+                index: results.count,
+                completed: results,
+                totalCount: elementCount,
+                elementGen: elementGen,
+                continuation: { try continuation($0).erase() }
+            ))
+
+            guard let result = try generateRecursive(
+                elementGen,
+                with: inputValue,
+                context: &context,
+                predicate: predicate,
+                sampleCount: sampleCount,
+                cgsState: &cgsState,
+                derivativeContext: elementContext
+            ) else {
+                return nil
+            }
+            results.append(result)
+        }
+        return try runContinuation(
+            result: results,
+            continuation: continuation,
+            inputValue: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        )
+    }
+
+    @inline(__always)
+    private static func handleResize<Output>(
+        newSize: UInt64,
+        gen: AnyGenerator,
+        continuation: (Any) throws -> AnyGenerator,
+        inputValue: some Any,
+        context: inout GenerationContext,
+        predicate: @escaping (FinalOutput) -> Bool,
+        sampleCount: UInt64,
+        cgsState: inout CGSState,
+        derivativeContext: DerivativeContext
+    ) throws -> Output? {
+        context.sizeOverride = newSize
+        defer { context.sizeOverride = nil }
+        guard let result = try generateRecursive(
+            gen,
+            with: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        ) else { return nil }
+        return try runContinuation(
+            result: result,
+            continuation: continuation,
+            inputValue: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        )
+    }
+
+    @inline(__always)
+    private static func handleFilter<Output>(
+        gen: AnyGenerator,
+        filterPredicate: (Any) -> Bool,
+        sourceLocation: FilterSourceLocation,
+        continuation: (Any) throws -> AnyGenerator,
+        inputValue: some Any,
+        context: inout GenerationContext,
+        predicate: @escaping (FinalOutput) -> Bool,
+        sampleCount: UInt64,
+        cgsState: inout CGSState,
+        derivativeContext: DerivativeContext
+    ) throws -> Output? {
+        // Warmup uses the untuned base so the fitness it collects — and the tuning it produces — depend only on the seed, not on prior cache state.
+        let tunedGen = gen
+
+        var attempts = 0 as UInt64
+        while attempts < GenerationContext.maxFilterRuns {
+            guard let result = try generateRecursive(
+                tunedGen,
+                with: inputValue,
+                context: &context,
+                predicate: predicate,
+                sampleCount: sampleCount,
+                cgsState: &cgsState,
+                derivativeContext: derivativeContext
+            ) else { return nil }
+
+            if filterPredicate(result) {
+                return try runContinuation(
+                    result: result,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    derivativeContext: derivativeContext
+                )
+            }
+            attempts += 1
+        }
+        sourceLocation.onBudgetExhausted?()
+        throw GeneratorError.sparseValidityCondition
+    }
+
+    @inline(__always)
+    private static func handleClassify<Output>(
+        gen: AnyGenerator,
+        fingerprint: UInt64,
+        classifiers: [(label: String, predicate: (Any) -> Bool)],
+        continuation: (Any) throws -> AnyGenerator,
+        inputValue: some Any,
+        context: inout GenerationContext,
+        predicate: @escaping (FinalOutput) -> Bool,
+        sampleCount: UInt64,
+        cgsState: inout CGSState,
+        derivativeContext: DerivativeContext
+    ) throws -> Output? {
+        guard let result = try generateRecursive(
+            gen,
+            with: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        ) else { return nil }
+        for (label, classifier) in classifiers where classifier(result) {
+            var byLabel = context.classifications[fingerprint, default: [:]]
+            byLabel[label, default: []].insert(context.runs)
+            context.classifications[fingerprint] = byLabel
+        }
+        return try runContinuation(
+            result: result,
+            continuation: continuation,
+            inputValue: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        )
+    }
+
+    @inline(__always)
+    private static func handleTransform<Output>(
+        kind: TransformKind,
+        inner: AnyGenerator,
+        continuation: @escaping (Any) throws -> AnyGenerator,
+        inputValue: some Any,
+        context: inout GenerationContext,
+        predicate: @escaping (FinalOutput) -> Bool,
+        sampleCount: UInt64,
+        cgsState: inout CGSState,
+        derivativeContext: DerivativeContext
+    ) throws -> Output? {
+        let result: Any
+        switch kind {
+            case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
+                // Push the forward transform as a frame so derivative rollouts inside `inner` apply it. Without this, a rollout crossing the transform boundary hands the untransformed inner value (for example `[Character]` instead of `String`) to outer frames, which trap on their continuation casts.
+                var innerContext = derivativeContext
+                innerContext.push(.transform(continuation: { innerValue in
+                    try continuation(forward(innerValue)).erase()
+                }))
+                guard let innerValue = try generateRecursive(
+                    inner,
+                    with: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    derivativeContext: innerContext
+                ) else { return nil }
+                result = try forward(innerValue)
+            case let .bind(_, forward, _, _, _):
+                var innerContext = derivativeContext
+                innerContext.push(.bind(continuation: { innerValue in
+                    let boundGen = try forward(innerValue)
+                    return try boundGen.bind { boundValue in
+                        try continuation(boundValue).erase()
+                    }
+                }))
+                guard let innerValue = try generateRecursive(
+                    inner,
+                    with: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    derivativeContext: innerContext
+                ) else { return nil }
+                let boundGen = try forward(innerValue)
+                guard let boundValue = try generateRecursive(
+                    boundGen,
+                    with: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    derivativeContext: derivativeContext
+                ) else { return nil }
+                result = boundValue
+            case let .metamorphic(transforms, _):
+                let savedState = (context.prng.seed, context.prng.currentState)
+                guard let original = try generateRecursive(
+                    inner,
+                    with: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    derivativeContext: derivativeContext
+                ) else { return nil }
+                var results: [Any] = [original]
+                results.reserveCapacity(transforms.count + 1)
+                for transform in transforms {
+                    context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
+                    guard let copy = try generateRecursive(
+                        inner,
+                        with: inputValue,
+                        context: &context,
+                        predicate: predicate,
+                        sampleCount: sampleCount,
+                        cgsState: &cgsState,
+                        derivativeContext: derivativeContext
+                    ) else { return nil }
+                    try results.append(transform(copy))
+                }
+                result = results
+        }
+        return try runContinuation(
+            result: result,
+            continuation: continuation,
+            inputValue: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        )
+    }
+
+    @inline(__always)
+    private static func handleUnique<Output>(
+        gen: AnyGenerator,
+        fingerprint: UInt64,
+        keyExtractor: ((Any) -> AnyHashable)?,
+        continuation: (Any) throws -> AnyGenerator,
+        inputValue: some Any,
+        context: inout GenerationContext,
+        predicate: @escaping (FinalOutput) -> Bool,
+        sampleCount: UInt64,
+        cgsState: inout CGSState,
+        derivativeContext: DerivativeContext
+    ) throws -> Output? {
+        var attempts = 0 as UInt64
+        while attempts < GenerationContext.maxFilterRuns {
+            guard let result = try generateRecursive(
+                gen,
+                with: inputValue,
+                context: &context,
+                predicate: predicate,
+                sampleCount: sampleCount,
+                cgsState: &cgsState,
+                derivativeContext: derivativeContext
+            ) else { return nil }
+
+            let isDuplicate: Bool
+            if let keyExtractor {
+                let key = keyExtractor(result)
+                isDuplicate = context.uniqueSeenKeys[
+                    fingerprint, default: []
+                ].insert(key).inserted == false
+            } else if let key = result as? AnyHashable {
+                isDuplicate = context.uniqueSeenKeys[
+                    fingerprint, default: []
+                ].insert(key).inserted == false
+            } else {
+                // Non-Hashable types cannot be deduplicated in CGS mode (no choice-sequence tracking). All samples are treated as unique.
+                isDuplicate = false
+            }
+
+            if isDuplicate == false {
+                return try runContinuation(
+                    result: result,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    derivativeContext: derivativeContext
+                )
+            }
+            attempts += 1
+        }
+        throw GeneratorError.uniqueBudgetExhausted
     }
 
     // MARK: - Run Continuation
