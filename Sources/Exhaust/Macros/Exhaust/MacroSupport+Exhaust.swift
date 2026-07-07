@@ -7,12 +7,16 @@ import ExhaustCore
 import Foundation
 import IssueReporting
 
-#if canImport(XCTest)
+#if canImport(XCTest) && canImport(ObjectiveC)
     @preconcurrency @_weakLinked import XCTest
+#elseif canImport(XCTest)
+    @preconcurrency import XCTest
 #endif
 
-#if canImport(Testing)
+#if canImport(Testing) && canImport(ObjectiveC)
     @_weakLinked import Testing
+#elseif canImport(Testing)
+    import Testing
 #endif
 
 public extension __ExhaustRuntime {

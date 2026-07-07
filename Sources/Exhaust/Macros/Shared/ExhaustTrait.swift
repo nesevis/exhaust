@@ -1,6 +1,10 @@
 #if canImport(Testing)
     import ExhaustCore
-    @_weakLinked import Testing
+    #if canImport(ObjectiveC)
+        @_weakLinked import Testing
+    #else
+        import Testing // swiftlint:disable:this duplicate_imports
+    #endif
 
     /// Carries configuration for the `.exhaust(...)` trait attached to a test function.
     public struct ExhaustTraitConfiguration: Sendable {

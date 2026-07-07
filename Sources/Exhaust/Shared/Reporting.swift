@@ -1,7 +1,9 @@
 import IssueReporting
 
-#if canImport(Testing)
+#if canImport(Testing) && canImport(ObjectiveC)
     @_weakLinked import Testing
+#elseif canImport(Testing)
+    import Testing
 #endif
 
 // MARK: - Platform-Routed Issue Reporting

@@ -5,7 +5,11 @@ import Foundation
 import IssueReporting
 
 #if canImport(Testing)
-    @_weakLinked import Testing
+    #if canImport(ObjectiveC)
+        @_weakLinked import Testing
+    #else
+        import Testing // swiftlint:disable:this duplicate_imports
+    #endif
 #endif
 
 public extension __ExhaustRuntime {

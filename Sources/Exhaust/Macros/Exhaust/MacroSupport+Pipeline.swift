@@ -5,8 +5,10 @@ import ExhaustCore
 import Foundation
 import IssueReporting
 
-#if canImport(XCTest)
+#if canImport(XCTest) && canImport(ObjectiveC)
     @preconcurrency @_weakLinked import XCTest
+#elseif canImport(XCTest)
+    @preconcurrency import XCTest
 #endif
 
 package extension __ExhaustRuntime {
