@@ -73,6 +73,8 @@ You can also throw errors directly. Any thrown error counts as a failure:
 }
 ```
 
+One error type is special. Throwing `PropertySkip` skips the current invocation: it counts as neither pass nor failure. Use it when a generated value cannot meaningfully exercise the property, for example because an environmental resource is unavailable. Prefer encoding the condition in the generator or a `.filter` when you can, because a skip discards the iteration after its budget was spent. Skips are tallied in the run's `ExhaustReport`; a run that skips nearly every invocation reports a warning, and a run whose every invocation was skipped fails, because a test that asserts nothing is not testing anything. (`XCTSkip` behaves identically on platforms where XCTest is available.)
+
 > [!Tip]
 > The property closure may be called thousands of times during coverage, sampling, and reduction. Keep it as fast as possible: avoid disk I/O, network calls, and expensive setup.
 

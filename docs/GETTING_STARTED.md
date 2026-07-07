@@ -357,7 +357,7 @@ A seed is a coordinate in the search, so this extracts the same input only while
 
 By default, `#exhaust` and `#explore` record failures as Swift Testing issues via `Issue.record`, so they surface in the test runner alongside any `#expect` failures. If you need to assert on the result of the run yourself — checking that a property fails in a particular way, say — there's a way to suppress that reporting and inspect the return value directly.
 
-Exhaust runs single-threaded by default, but the `.parallelize(lanes:)` setting splits random sampling across GCD lanes within a single test. Property closures are required to be `@Sendable` to support this.
+Exhaust runs single-threaded by default, but the `.parallelize(lanes:)` setting splits random sampling across GCD lanes within a single test. Property closures are always `@Sendable`, which is what makes this safe: they cannot capture mutable local state.
 
 Property closures can be async, throwing or return a simple boolean.
 
@@ -489,6 +489,8 @@ final class MyContract {
 
     @Invariant
     func holds() -> Bool { /* check sut */ }
+
+    func failureDescription() -> String? { "\(sut)" }
 }
 ```
 

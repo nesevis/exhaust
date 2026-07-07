@@ -34,7 +34,7 @@ import ExhaustCore
 ///         contents.append(value)
 ///     }
 ///
-///     func failureDescription() -> String {
+///     func failureDescription() -> String? {
 ///         "expected: \(contents), queue: \(queue)"
 ///     }
 /// }
@@ -58,7 +58,7 @@ import ExhaustCore
 ///         counter.value == other.value
 ///     }
 ///
-///     func failureDescription() -> String {
+///     func failureDescription() -> String? {
 ///         "counter: \(counter)"
 ///     }
 /// }

@@ -7,6 +7,7 @@ If you're new to Exhaust, start with [Getting Started](GETTING_STARTED.md). This
 - [Three modes](#three-modes)
 - [Primitives](#primitives)
 - [Collections](#collections)
+- [Optionals](#optionals)
 - [Ranges](#ranges)
 - [Choice](#choice)
 - [Composing generators](#composing-generators)
@@ -49,6 +50,15 @@ let sets = #gen(.int().set(count: 1...5))
 let lookup = #gen(.dictionary(.asciiString(), .int(), count: 1...5))
 ```
 
+## Optionals
+
+`.optional()` wraps a generator so it sometimes produces `nil`. The weights control the ratio; the defaults produce `nil` roughly 20% of the time:
+
+```swift
+let maybe = #gen(.int(in: 0...10).optional())
+let nilHeavy = #gen(.int(in: 0...10).optional(someWeight: 1, noneWeight: 3))
+```
+
 ## Ranges
 
 `.closedRange` and `.range` draw two bounds from an element generator and sort them, so every produced range is well-formed by construction. Both work with any `Comparable` bound (integers, doubles, dates) and are fully reflectable: the backward pass extracts the bounds.
@@ -60,8 +70,12 @@ let windows = #gen(.range(.double(in: 0...1)))       // Range<Double>, empty whe
 
 ## Choice
 
+`.oneOf` selects between alternative generators, evenly or by weight. `.element(from:)` picks from a fixed collection, which is the idiomatic way to cover a `CaseIterable` enum:
+
 ```swift
 let direction = #gen(.oneOf(.just("north"), .just("south"), .just("east"), .just("west")))
+let pet = #gen(.oneOf(weighted: (3, catGen), (1, dogGen)))
+let suit = #gen(.element(from: Suit.allCases))
 ```
 
 ## Composing generators

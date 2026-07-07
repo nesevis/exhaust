@@ -33,6 +33,8 @@ Exploration starts with an untuned warm-up phase that samples without bias. This
 
 `#exhaust` asks "does the property hold across the generator's structural edges?" `#explore` asks "have the specific regions I declared actually been visited?" Use `#exhaust` to cover the generator's structural edges, `#explore` to cover the semantic regions you name, or both when you want both guarantees.
 
+A direction that receives no matching samples within its attempt budget fails the test, naming the unreachable direction. Either the generator cannot produce matching values, the predicate never holds, or the budget is too small; the failure tells you to widen the generator, fix the predicate, or raise the budget. An unreachable region never passes silently.
+
 ## ExploreReport
 
 `#explore` returns an `ExploreReport` containing:
@@ -51,6 +53,9 @@ Exploration starts with an untuned warm-up phase that samples without bias. This
 | `.budget(.extensive)` | — | 300 hits per direction, 3,000 max attempts per direction. |
 | `.budget(.custom(...))` | — | Explicit values for hit target and attempt budget. |
 | `.replay(seed)` | — | Deterministic reproduction. |
+| `.parallelize` | off | Tunes and samples each direction on its own GCD lane. Skips the warm-up pass. Has no effect with `.replay`. |
+| `.suppress(.issueReporting)` | — | Silences issue reporting. Use when asserting on the returned `ExploreReport` directly. `.suppress(.logs)` and `.suppress(.all)` also available. |
+| `.log(.debug)` | `.error` | Sets the minimum log level for this test run. |
 
 > [!Note]
 > `#explore` is more expensive than `#exhaust`. The total attempt budget is the per-direction budget multiplied by the number of declared directions. Five directions at `.standard` means 1,500 total attempts, plus CGS tuning overhead per direction. Start with `.standard` and increase the budget only for directions that need stronger coverage.

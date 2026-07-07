@@ -22,7 +22,7 @@ The rest of this guide walks through each case.
 
 ## The shape of a contract
 
-A contract has three required parts: a system under test, commands that operate on it, and invariants that must always hold. Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two.
+A contract has four required parts: a system under test, commands that operate on it, invariants that must always hold, and a `failureDescription()` method that supplies diagnostic state for failure reports. Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two.
 
 ```swift
 @Test func stackBehavesCorrectly() async {
@@ -54,7 +54,7 @@ final class StackContract {
         try check(modelValue == sutValue, "pop values should match")
     }
 
-    func failureDescription() -> String {
+    func failureDescription() -> String? {
         "expected: \(expected), stack: \(stack)"
     }
 }
@@ -72,10 +72,10 @@ You don't have to use a model. Contracts that only need structural invariants (c
 
 ### Failure descriptions
 
-When a contract fails, Exhaust calls `failureDescription()` to include diagnostic state in the failure report. The macro synthesizes a default that dumps the SUT via string interpolation. Override it to include model state, computed diagnostics, or both:
+When a contract fails, Exhaust calls `failureDescription()` to include diagnostic state in the failure report. Every spec must declare it, and the return type must be the optional `String?` (a non-optional `String` does not satisfy the requirement). Include model state, computed diagnostics, or both; return `nil` to omit diagnostic state from the report:
 
 ```swift
-func failureDescription() -> String {
+func failureDescription() -> String? {
     "expected: \(expected), queue: \(queue)"
 }
 ```
@@ -135,6 +135,10 @@ final class DatabaseContract {
         guard userIDs.isEmpty == false else { throw skip() }
         let id = userIDs.remove(at: index % userIDs.count)
         db.deleteUser(id: id)
+    }
+
+    func failureDescription() -> String? {
+        "live users: \(userIDs)"
     }
 }
 ```
@@ -203,6 +207,10 @@ final class AsyncCounterContract {
         expected -= 1
         await counter.decrement()
     }
+
+    func failureDescription() -> String? {
+        "expected: \(expected), counter: \(counter)"
+    }
 }
 ```
 
@@ -238,6 +246,9 @@ The `.sequential` contracts shown above run each command one at a time. Some bug
 ```
 
 The same seed always produces the same interleaving, and the reducer reduces both the command sequence and the lane assignments, discovering the minimal concurrency needed to trigger the bug.
+
+> [!Note]
+> Mark test suites that run `.tasks` contracts as `.serialized`. The cooperative drain loop occupies threads while it runs, and several such suites running in parallel can starve the shared thread pool.
 
 A typical failure report:
 
@@ -318,6 +329,10 @@ final class RacyCounterContract {
     func decrement() throws {
         guard counter.value > 0 else { throw skip() }
         counter.decrement()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
     }
 }
 ```
@@ -404,6 +419,10 @@ final class AsyncRacyCounterContract {
     func increment() async throws {
         await counter.increment()
     }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
 }
 ```
 
@@ -476,6 +495,10 @@ final class QueueContract {
         let expected = fake.dequeue()
         let actual = queue.dequeue()
         try check(expected == actual, "dequeue must return same value")
+    }
+
+    func failureDescription() -> String? {
+        "fake: \(fake.elements), queue: \(queue.elements)"
     }
 }
 ```

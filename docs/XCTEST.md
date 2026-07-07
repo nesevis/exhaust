@@ -66,7 +66,7 @@ func testMinimalCounterexample() {
 
 ### XCTSkip
 
-Throwing `XCTSkip` inside a property closure is treated as a pass for that input, not as a failure. The pipeline skips the value and continues sampling. This matches Swift Testing's handling of skipped tests.
+Throwing `XCTSkip` inside a property closure skips that input: it counts as neither pass nor failure, and the pipeline continues sampling. Skips are tallied in the run's `ExhaustReport`; a run that skips nearly every invocation reports a warning, and a run whose every invocation was skipped fails, because it asserted nothing. `PropertySkip` behaves identically and works under both frameworks.
 
 ### OpenPBTStats attachments
 

@@ -2,10 +2,11 @@
 
 [![Tests](https://github.com/nesevis/exhaust/actions/workflows/test.yml/badge.svg)](https://github.com/nesevis/exhaust/actions/workflows/test.yml)
 [![Tests (Linux)](https://github.com/nesevis/exhaust/actions/workflows/test-linux.yml/badge.svg)](https://github.com/nesevis/exhaust/actions/workflows/test-linux.yml)
+[![Tests (Windows)](https://github.com/nesevis/exhaust/actions/workflows/test-windows.yml/badge.svg)](https://github.com/nesevis/exhaust/actions/workflows/test-windows.yml)
 [![Swift 6.3+](https://img.shields.io/badge/Swift-6.3%2B-orange)](https://swift.org)
 [![SPM](https://img.shields.io/badge/Swift%20Package%20Manager-compatible-brightgreen)](https://swift.org/package-manager/)
 
-[![Platforms](https://img.shields.io/badge/Platforms-macOS%2010.15%2B%20%7C%20iOS%2013%2B%20%7C%20tvOS%2013%2B%20%7C%20watchOS%206%2B%20%7C%20visionOS%201%2B%20%7C%20Linux-blue)](https://swift.org/platform-support/)
+[![Platforms](https://img.shields.io/badge/Platforms-macOS%2010.15%2B%20%7C%20iOS%2013%2B%20%7C%20tvOS%2013%2B%20%7C%20watchOS%206%2B%20%7C%20visionOS%201%2B%20%7C%20Linux%20%7C%20Windows-blue)](https://swift.org/platform-support/)
 
 # Find the bugs you didn't think of.
 
@@ -95,7 +96,7 @@ Exhaust's entry points are six macros. `#gen` builds generators; the rest consum
 | [`#exhaust(gen) {…}`](docs/EXHAUST-property-testing.md) | Test a property and report a minimal counterexample on failure. |
 | [`#explore(gen, directions:) {…}`](docs/EXPLORE-directed-exploration.md) | Test a property with per-direction coverage guarantees. |
 | [`#execute(MyContract.self, …)`](docs/EXECUTE-contract-testing.md) | Run a contract test against a stateful system. |
-| [`try #example(gen)`](docs/GEN-building-generators.md#example) | Generate test data from your generators. |
+| [`try #example(gen)`](docs/GEN-building-generators.md#generating-test-data-with-example) | Generate test data from your generators. |
 | [`#examine(gen) {…}`](docs/EXAMINE-generator-testing.md) | Test your generators: correctness, coverage, and distribution quality. |
 
 ## Installation
@@ -120,8 +121,8 @@ Then add it as a dependency of your test target:
 ## Requirements
 
 - Swift 6.3+ (Xcode 26+)
-- macOS 10.15+, iOS 13+, Mac Catalyst 13+, tvOS 13+, watchOS 6+, visionOS 1+, Linux
-- Cooperative concurrent contract testing (`@Contract(.tasks)`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+
+- macOS 10.15+, iOS 13+, Mac Catalyst 13+, tvOS 13+, watchOS 6+, visionOS 1+, Linux, Windows
+- Cooperative concurrent contract testing (`@Contract(.tasks)`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+ (no version requirement on Linux and Windows)
 - Sequential and preemptive contract testing (`@Contract(.sequential)`, `@Contract(.threads)`) have no additional availability requirements
 
 > [!NOTE]
