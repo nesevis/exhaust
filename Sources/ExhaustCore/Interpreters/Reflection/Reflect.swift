@@ -191,6 +191,7 @@ extension Interpreters {
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         let branchCount = UInt64(choices.count)
         let fingerprint = choices[0].fingerprint
+        var deferredBranchError: ReflectionError?
         let results = try choices.flatMap { choice -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
             do {
                 let reflectionPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput)
@@ -205,8 +206,8 @@ extension Interpreters {
                     isPicked = choice.generator.associatedRange?
                         .contains(convertible.bitPattern64) ?? false
                 } else {
-                    isPicked = reflectionPaths.isEmpty == false
-                        && structurallyEqual(value as Any, finalOutput)
+                    // Compare the first candidate's value directly rather than through `value` (an `Any?`): re-boxing that optional channel as `Any` wraps a nil candidate in an artifact `.some` layer, which makes the nil branch spuriously match `.some(nil)` outputs and vice versa.
+                    isPicked = reflectionPaths.first.map { structurallyEqual($0.value, finalOutput) } ?? false
                 }
 
                 var results: [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] = []
@@ -223,9 +224,16 @@ extension Interpreters {
                     case .reflectedNil, .inputWasOutOfGeneratorRange, .contramapWasWrongType:
                         return []
                     default:
-                        throw error
+                        // Any other reflection failure inside a branch probe also means this branch cannot produce the value (for example a forward-only map on the untaken branch of a nested optional). Remember the first one so an all-branches failure below still surfaces a diagnosis instead of silently reflecting an empty pick.
+                        if deferredBranchError == nil {
+                            deferredBranchError = error
+                        }
+                        return []
                 }
             }
+        }
+        if results.isEmpty, let deferredBranchError {
+            throw deferredBranchError
         }
 
         // Only mark the first matching branch as `.selected` — a pick site should have exactly one selected branch, matching VACTI's output.

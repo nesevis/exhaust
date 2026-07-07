@@ -41,6 +41,12 @@ extension Optional: _OptionalProtocol {
     }
 }
 
+/// Returns whether the value is a boxed `Optional` in its `.none` case.
+private func isNilOptional(_ value: Any) -> Bool {
+    guard let optional = value as? _OptionalProtocol else { return false }
+    return optional._unwrapped == nil
+}
+
 /// Unwraps an `Any` value that may contain a boxed `Optional`, returning the inner value or the original if it is not optional.
 private func unwrapOptional(_ value: Any) -> Any {
     guard let optional = value as? _OptionalProtocol,
@@ -53,15 +59,24 @@ private func unwrapOptional(_ value: Any) -> Any {
 
 /// Recursive structural equality for values that may not conform to `Equatable` (for example, tuples). Uses `Equatable/isEqualToAny(_:)` at leaf nodes and `Mirror` to decompose compound values like tuples. Returns `true` when both values are structurally identical down to their `Equatable` leaves.
 package func structurallyEqual(_ lhs: Any, _ rhs: Any) -> Bool {
-    let lhsUnwrapped = unwrapOptional(lhs)
-    let rhsUnwrapped = unwrapOptional(rhs)
-
-    if let equatable = lhsUnwrapped as? any Equatable {
-        return equatable.isEqualToAny(rhsUnwrapped)
+    // Two nils are equal by value regardless of their wrapped types; a nil against anything else, including `.some(nil)`, is not. Decided before unwrapping because unwrapping first collapses `nil` and `.some(nil)` into the same shape, and because nils carry no Mirror children, so the childless-values guard at the bottom would otherwise reject the equal pair.
+    let lhsIsNil = isNilOptional(lhs)
+    let rhsIsNil = isNilOptional(rhs)
+    if lhsIsNil || rhsIsNil {
+        return lhsIsNil == rhsIsNil
     }
 
-    let lhsMirror = Mirror(reflecting: lhsUnwrapped)
-    let rhsMirror = Mirror(reflecting: rhsUnwrapped)
+    // Peel one `.some` layer and re-enter so the nil check above applies at every nesting level; without re-entry, `.some(nil)` on both sides falls through to the childless-values guard and compares unequal. Peeling one side alone keeps the existing tolerance for incidental one-sided `Any` boxing.
+    if lhs is _OptionalProtocol || rhs is _OptionalProtocol {
+        return structurallyEqual(unwrapOptional(lhs), unwrapOptional(rhs))
+    }
+
+    if let equatable = lhs as? any Equatable {
+        return equatable.isEqualToAny(rhs)
+    }
+
+    let lhsMirror = Mirror(reflecting: lhs)
+    let rhsMirror = Mirror(reflecting: rhs)
 
     guard lhsMirror.displayStyle == rhsMirror.displayStyle,
           lhsMirror.children.count == rhsMirror.children.count

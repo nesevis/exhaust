@@ -61,11 +61,15 @@ extension Interpreters {
                 return value
 
             case let .impure(operation, continuation):
-                return try replayWithChoicesOperation(
+                // Unwrap before casting: `Any? as? Output` re-boxes a replayed nil value into an extra `.some` layer per recursion level when `Output == Any`.
+                guard let operationResult = try replayWithChoicesOperation(
                     operation,
                     continuation: continuation,
                     choices: &choices
-                ) as? Output
+                ) else {
+                    return nil
+                }
+                return operationResult as? Output
         }
     }
 
@@ -124,8 +128,11 @@ extension Interpreters {
                 }
                 return inner as? Output
             case let .classify(gen, _, _), let .unique(gen, _, _):
-                // Invariant: .classify and .unique are transparent annotations whose continuation is always .pure($0). Their choices are entirely determined by the inner generator.
-                return try replayWithChoicesHelper(gen, choices: &choices) as? Output
+                // Invariant: .classify and .unique are transparent annotations whose continuation is always .pure($0). Their choices are entirely determined by the inner generator. Unwrap before casting: `Any? as? Output` re-boxes a replayed nil value when `Output == Any`.
+                guard let inner = try replayWithChoicesHelper(gen, choices: &choices) else {
+                    return nil
+                }
+                return inner as? Output
             case let .transform(kind, inner):
                 let result: Any
                 switch kind {
@@ -422,12 +429,16 @@ extension Interpreters {
                     return try self.replayRecursive(nextGen, with: script)
                 }
 
-                return try replayRecursiveOperation(
+                // Unwrap before casting: `Any? as? Output` re-boxes a replayed nil value into an extra `.some` layer per recursion level when `Output == Any`.
+                guard let operationResult = try replayRecursiveOperation(
                     operation,
                     script: script,
                     continuation: continuation,
                     runContinuation: runContinuation
-                ) as? Output
+                ) else {
+                    return nil
+                }
+                return operationResult as? Output
         }
     }
 
@@ -476,14 +487,18 @@ extension Interpreters {
                     continuation: continuation
                 )
             case let .prune(subGenerator):
-                return try replayRecursive(subGenerator, with: script) as? Output
+                // Unwrap before casting: `Any? as? Output` re-boxes a replayed nil value when `Output == Any`.
+                guard let inner = try replayRecursive(subGenerator, with: script) else { return nil }
+                return inner as? Output
             case let .filter(gen, _, _, predicate, _):
                 guard let inner = try replayRecursive(gen, with: script),
                       predicate(inner)
                 else { return nil }
                 return inner as? Output
             case let .classify(gen, _, _), let .unique(gen, _, _):
-                return try replayRecursive(gen, with: script) as? Output
+                // Unwrap before casting: `Any? as? Output` re-boxes a replayed nil value when `Output == Any`.
+                guard let inner = try replayRecursive(gen, with: script) else { return nil }
+                return inner as? Output
             case let .transform(kind, inner):
                 let result: Any
                 switch kind {
