@@ -17,11 +17,11 @@ package func monotonicNanoseconds() -> UInt64 {
         clock_gettime(CLOCK_MONOTONIC, &ts)
         return UInt64(ts.tv_sec) &* 1_000_000_000 &+ UInt64(ts.tv_nsec)
     #elseif canImport(WinSDK)
-        var counter: Int64 = 0
-        var frequency: Int64 = 0
+        var counter = LARGE_INTEGER()
+        var frequency = LARGE_INTEGER()
         QueryPerformanceCounter(&counter)
         QueryPerformanceFrequency(&frequency)
-        return UInt64(counter) &* 1_000_000_000 / UInt64(frequency)
+        return UInt64(counter.QuadPart) &* 1_000_000_000 / UInt64(frequency.QuadPart)
     #else
         0
     #endif
