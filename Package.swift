@@ -116,6 +116,12 @@ let package = Package(
                 .product(name: "MacroTesting", package: "swift-macro-testing"),
             ]
         ),
+        // Calibration probe for the meta-test node budget; see MetaGeneratorPropertyTests.metaRecipeNodeBudget.
+        .executableTarget(
+            name: "ExhaustStackProbe",
+            dependencies: ["ExhaustCore"],
+            swiftSettings: strictConcurrencySettings
+        ),
         .executableTarget(
             name: "ExhaustBenchmarks",
             dependencies: [
