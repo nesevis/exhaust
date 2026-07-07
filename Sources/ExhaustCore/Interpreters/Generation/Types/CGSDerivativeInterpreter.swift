@@ -37,87 +37,84 @@ package enum CGSDerivativeInterpreter {
             case let .pure(value):
                 return value
 
-            case let .impure(operation, continuation):
-                switch operation {
-                    case let .contramap(_, nextGen):
-                        return try handleContramap(
-                            nextGen: nextGen, continuation: continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case let .impure(operation: .contramap(_, nextGen), continuation):
+                return try handleContramap(
+                    nextGen: nextGen, continuation: continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case let .prune(nextGen):
-                        return try handlePrune(
-                            nextGen: nextGen, continuation: continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case let .impure(operation: .prune(nextGen), continuation):
+                return try handlePrune(
+                    nextGen: nextGen, continuation: continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case let .pick(choices, totalWeight):
-                        return try handlePick(
-                            choices: choices, totalWeight: totalWeight, continuation: continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case let .impure(operation: .pick(choices, totalWeight), continuation):
+                return try handlePick(
+                    choices: choices, totalWeight: totalWeight, continuation: continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case let .chooseBits(min, max, tag, _, scaling, _):
-                        return try handleChooseBits(
-                            min: min, max: max, tag: tag, scaling: scaling, continuation: continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case let .impure(operation: .chooseBits(min, max, tag, _, scaling, _), continuation):
+                return try handleChooseBits(
+                    min: min, max: max, tag: tag, scaling: scaling, continuation: continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case let .sequence(lengthGen, elementGen):
-                        return try handleSequence(
-                            lengthGen: lengthGen, elementGen: elementGen, continuation: continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
+                return try handleSequence(
+                    lengthGen: lengthGen, elementGen: elementGen, continuation: continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case let .zip(generators, _):
-                        return try handleZip(
-                            generators: generators, continuation: continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case let .impure(operation: .zip(generators, _), continuation):
+                return try handleZip(
+                    generators: generators, continuation: continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case let .just(value):
-                        return try runContinuation(
-                            value, continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case let .impure(operation: .just(value), continuation):
+                return try runContinuation(
+                    value, continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case .getSize:
-                        return try runContinuation(
-                            size, continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case .impure(operation: .getSize, let continuation):
+                return try runContinuation(
+                    size, continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case let .resize(newSize, nextGen):
-                        return try handleResize(
-                            newSize: newSize, nextGen: nextGen, continuation: continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case let .impure(operation: .resize(newSize, nextGen), continuation):
+                return try handleResize(
+                    newSize: newSize, nextGen: nextGen, continuation: continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case let .filter(gen, _, _, predicate, sourceLocation):
-                        return try handleFilter(
-                            gen: gen, predicate: predicate, sourceLocation: sourceLocation,
-                            continuation: continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case let .impure(operation: .filter(gen, _, _, predicate, sourceLocation), continuation):
+                return try handleFilter(
+                    gen: gen, predicate: predicate, sourceLocation: sourceLocation,
+                    continuation: continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case let .classify(gen, _, _):
-                        return try handleClassify(
-                            gen: gen, continuation: continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case let .impure(operation: .classify(gen, _, _), continuation):
+                return try handleClassify(
+                    gen: gen, continuation: continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case let .transform(kind, inner):
-                        return try handleTransform(
-                            kind: kind, inner: inner, continuation: continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
+            case let .impure(operation: .transform(kind, inner), continuation):
+                return try handleTransform(
+                    kind: kind, inner: inner, continuation: continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
 
-                    case let .unique(gen, _, keyExtractor):
-                        return try handleUnique(
-                            gen: gen, keyExtractor: keyExtractor, continuation: continuation,
-                            inputValue: inputValue, rng: &rng, size: size
-                        )
-                }
+            case let .impure(operation: .unique(gen, _, keyExtractor), continuation):
+                return try handleUnique(
+                    gen: gen, keyExtractor: keyExtractor, continuation: continuation,
+                    inputValue: inputValue, rng: &rng, size: size
+                )
         }
     }
 

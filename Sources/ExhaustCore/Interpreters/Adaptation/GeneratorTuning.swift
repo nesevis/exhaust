@@ -154,168 +154,161 @@ package enum GeneratorTuning {
             case .pure:
                 return gen
 
-            case let .impure(op, continuation):
-                switch op {
-                    // Tunable sites: operations that consume randomness and can be probed directly.
-                    case let .pick(choices, _):
-                        return try measureAndTunePick(
-                            choices: choices,
+            case let .impure(operation: .pick(choices, _), continuation):
+                return try measureAndTunePick(
+                    choices: choices,
+                    continuation: continuation,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    predicate: predicate
+                )
+
+            case let .impure(operation: .chooseBits(lower, upper, tag, isRangeExplicit, scaling, _), continuation):
+                if insideSubdividedChooseBits {
+                    return gen
+                }
+                return try tuneChooseBits(
+                    lower: lower,
+                    upper: upper,
+                    tag: tag,
+                    isRangeExplicit: isRangeExplicit,
+                    scaling: scaling,
+                    continuation: continuation,
+                    context: context,
+                    predicate: predicate
+                )
+
+            case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
+                return try tuneSequence(
+                    lengthGen: lengthGen,
+                    elementGen: elementGen,
+                    continuation: continuation,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    predicate: predicate
+                )
+
+            case .impure(operation: .getSize, let continuation):
+                return try tuneGetSize(
+                    continuation: continuation,
+                    context: context,
+                    predicate: predicate
+                )
+
+            case let .impure(operation: .zip(generators, _), continuation):
+                return try tuneZip(
+                    generators: generators,
+                    continuation: continuation,
+                    context: context,
+                    predicate: predicate
+                )
+
+            case let .impure(operation: .filter(subGen, fingerprint, filterType, filterPredicate, sourceLocation), continuation):
+                return try tuneFilter(
+                    subGen: subGen,
+                    fingerprint: fingerprint,
+                    filterType: filterType,
+                    filterPredicate: filterPredicate,
+                    sourceLocation: sourceLocation,
+                    continuation: continuation,
+                    context: context
+                )
+
+            case let .impure(operation: .contramap(transform, next), continuation):
+                return try tuneContramap(
+                    transform: transform,
+                    next: next,
+                    continuation: continuation,
+                    context: context,
+                    predicate: predicate
+                )
+
+            case let .impure(operation: .resize(newSize, next), continuation):
+                return try tuneResize(
+                    newSize: newSize,
+                    next: next,
+                    continuation: continuation,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    predicate: predicate
+                )
+
+            case let .impure(operation: .prune(next), continuation):
+                return try tunePrune(
+                    next: next,
+                    continuation: continuation,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    predicate: predicate
+                )
+
+            case let .impure(operation: .classify(subGen, fingerprint, classifiers), continuation):
+                return try tuneClassify(
+                    subGen: subGen,
+                    fingerprint: fingerprint,
+                    classifiers: classifiers,
+                    continuation: continuation,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    predicate: predicate
+                )
+
+            case let .impure(operation: .unique(subGen, fingerprint, keyExtractor), continuation):
+                let tunedInner = try measureAndTune(
+                    subGen,
+                    context: context,
+                    insideSubdividedChooseBits: insideSubdividedChooseBits,
+                    predicate: { _ in true }
+                )
+                return .impure(
+                    operation: .unique(
+                        gen: tunedInner,
+                        fingerprint: fingerprint,
+                        keyExtractor: keyExtractor
+                    ),
+                    continuation: continuation
+                )
+
+            case let .impure(operation: .transform(kind, inner), continuation):
+                switch kind {
+                    case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
+                        // The forward function is known, so the outer predicate composes through it the same way the contramap handler composes through the continuation: transform the inner value, then evaluate downstream. A forward that throws marks the inner value invalid.
+                        let composed = SharedInterpreterHelpers.composedPredicate(
                             continuation: continuation,
                             context: context,
-                            insideSubdividedChooseBits: insideSubdividedChooseBits,
                             predicate: predicate
                         )
-
-                    case let .chooseBits(lower, upper, tag, isRangeExplicit, scaling, _):
-                        if insideSubdividedChooseBits {
-                            return gen
+                        let innerPredicate: (Any) -> Bool = { innerValue in
+                            guard let transformed = try? forward(innerValue) else { return false }
+                            return composed(transformed)
                         }
-                        return try tuneChooseBits(
-                            lower: lower,
-                            upper: upper,
-                            tag: tag,
-                            isRangeExplicit: isRangeExplicit,
-                            scaling: scaling,
-                            continuation: continuation,
-                            context: context,
-                            predicate: predicate
-                        )
-
-                    case let .sequence(lengthGen, elementGen):
-                        return try tuneSequence(
-                            lengthGen: lengthGen,
-                            elementGen: elementGen,
-                            continuation: continuation,
-                            context: context,
-                            insideSubdividedChooseBits: insideSubdividedChooseBits,
-                            predicate: predicate
-                        )
-
-                    case .getSize:
-                        return try tuneGetSize(
-                            continuation: continuation,
-                            context: context,
-                            predicate: predicate
-                        )
-
-                    case let .zip(generators, _):
-                        return try tuneZip(
-                            generators: generators,
-                            continuation: continuation,
-                            context: context,
-                            predicate: predicate
-                        )
-
-                    case let .filter(subGen, fingerprint, filterType, filterPredicate, sourceLocation):
-                        return try tuneFilter(
-                            subGen: subGen,
-                            fingerprint: fingerprint,
-                            filterType: filterType,
-                            filterPredicate: filterPredicate,
-                            sourceLocation: sourceLocation,
-                            continuation: continuation,
-                            context: context
-                        )
-
-                    // Value-transparent wrappers: the inner value passes through unchanged to the continuation, so the outer predicate can be bridged by composing through the continuation.
-                    case let .contramap(transform, next):
-                        return try tuneContramap(
-                            transform: transform,
-                            next: next,
-                            continuation: continuation,
-                            context: context,
-                            predicate: predicate
-                        )
-
-                    case let .resize(newSize, next):
-                        return try tuneResize(
-                            newSize: newSize,
-                            next: next,
-                            continuation: continuation,
-                            context: context,
-                            insideSubdividedChooseBits: insideSubdividedChooseBits,
-                            predicate: predicate
-                        )
-
-                    case let .prune(next):
-                        return try tunePrune(
-                            next: next,
-                            continuation: continuation,
-                            context: context,
-                            insideSubdividedChooseBits: insideSubdividedChooseBits,
-                            predicate: predicate
-                        )
-
-                    case let .classify(subGen, fingerprint, classifiers):
-                        return try tuneClassify(
-                            subGen: subGen,
-                            fingerprint: fingerprint,
-                            classifiers: classifiers,
-                            continuation: continuation,
-                            context: context,
-                            insideSubdividedChooseBits: insideSubdividedChooseBits,
-                            predicate: predicate
-                        )
-
-                    // Transforming wrappers: the inner value is altered by an arbitrary function before reaching the continuation, so the outer predicate cannot apply to the inner type. Recurse with a trivial predicate.
-                    case let .unique(subGen, fingerprint, keyExtractor):
                         let tunedInner = try measureAndTune(
-                            subGen,
+                            inner,
+                            context: context,
+                            insideSubdividedChooseBits: insideSubdividedChooseBits,
+                            predicate: innerPredicate
+                        )
+                        return .impure(
+                            operation: .transform(kind: kind, inner: tunedInner),
+                            continuation: continuation
+                        )
+
+                    case .bind, .metamorphic:
+                        // The inner value determines a second generator (bind) or is copied through independent re-generation (metamorphic), so the outer predicate cannot be evaluated from the inner value alone. Recurse with a trivial predicate.
+                        let tunedInner = try measureAndTune(
+                            inner,
                             context: context,
                             insideSubdividedChooseBits: insideSubdividedChooseBits,
                             predicate: { _ in true }
                         )
                         return .impure(
-                            operation: .unique(
-                                gen: tunedInner,
-                                fingerprint: fingerprint,
-                                keyExtractor: keyExtractor
-                            ),
+                            operation: .transform(kind: kind, inner: tunedInner),
                             continuation: continuation
                         )
-
-                    case let .transform(kind, inner):
-                        switch kind {
-                            case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
-                                // The forward function is known, so the outer predicate composes through it the same way the contramap handler composes through the continuation: transform the inner value, then evaluate downstream. A forward that throws marks the inner value invalid.
-                                let composed = SharedInterpreterHelpers.composedPredicate(
-                                    continuation: continuation,
-                                    context: context,
-                                    predicate: predicate
-                                )
-                                let innerPredicate: (Any) -> Bool = { innerValue in
-                                    guard let transformed = try? forward(innerValue) else { return false }
-                                    return composed(transformed)
-                                }
-                                let tunedInner = try measureAndTune(
-                                    inner,
-                                    context: context,
-                                    insideSubdividedChooseBits: insideSubdividedChooseBits,
-                                    predicate: innerPredicate
-                                )
-                                return .impure(
-                                    operation: .transform(kind: kind, inner: tunedInner),
-                                    continuation: continuation
-                                )
-
-                            case .bind, .metamorphic:
-                                // The inner value determines a second generator (bind) or is copied through independent re-generation (metamorphic), so the outer predicate cannot be evaluated from the inner value alone. Recurse with a trivial predicate.
-                                let tunedInner = try measureAndTune(
-                                    inner,
-                                    context: context,
-                                    insideSubdividedChooseBits: insideSubdividedChooseBits,
-                                    predicate: { _ in true }
-                                )
-                                return .impure(
-                                    operation: .transform(kind: kind, inner: tunedInner),
-                                    continuation: continuation
-                                )
-                        }
-
-                    // Leaf: no sub-generators to recurse into.
-                    case .just:
-                        return gen
                 }
+
+            case .impure(operation: .just, _):
+                return gen
         }
     }
 

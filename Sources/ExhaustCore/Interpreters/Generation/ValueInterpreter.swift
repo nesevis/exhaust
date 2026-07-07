@@ -290,7 +290,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     }
 
     @inline(__always)
-    static func handleSequence(
+    private static func handleSequence(
         lengthGen: Generator<UInt64>,
         elementGen: AnyGenerator,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
