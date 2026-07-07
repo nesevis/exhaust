@@ -446,23 +446,27 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 }
             } else {
                 var branchContext = context.jump(seed: jumpSeed)
-                if let result = try generateRecursiveAny(
-                    choice.generator, context: &branchContext
-                ),
-                    let final = try runContinuation(
-                        result: result.0,
-                        calleeChoiceTree: result.1,
-                        continuation: continuation, context: &branchContext
-                    )
-                {
-                    value = final.0
-                    branch = ChoiceTree.branch(
-                        fingerprint: fingerprint,
-                        weight: choice.weight,
-                        id: choice.id,
-                        branchCount: branchCount,
-                        choice: final.1
-                    )
+                do {
+                    if let result = try generateRecursiveAny(
+                        choice.generator, context: &branchContext
+                    ),
+                        let final = try runContinuation(
+                            result: result.0,
+                            calleeChoiceTree: result.1,
+                            continuation: continuation, context: &branchContext
+                        )
+                    {
+                        value = final.0
+                        branch = ChoiceTree.branch(
+                            fingerprint: fingerprint,
+                            weight: choice.weight,
+                            id: choice.id,
+                            branchCount: branchCount,
+                            choice: final.1
+                        )
+                    }
+                } catch GeneratorError.sparseValidityCondition, GeneratorError.uniqueBudgetExhausted {
+                    // Unselected-branch materialization is best-effort: a branch whose filter cannot be satisfied or whose unique budget is exhausted is skipped, exactly like a branch that produces nil. Only the selected branch's failures abort the run; without this catch, an unsatisfiable filter on an untaken branch kills runs that the value-only interpreter completes, breaking VI/VACTI parity.
                 }
             }
 

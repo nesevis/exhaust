@@ -10,7 +10,7 @@ struct MetaGeneratorPropertyTests {
 
     @Test("Generated generators round-trip through reflect and replay", arguments: metaRecipeTypes)
     func reflectionRoundTrip(type: RecipeType) throws {
-        let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 1), maxIterations: 50) { recipe in
+        let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
             guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
             let gen = buildGenerator(from: recipe)
             return checkAllValues(gen, maxRuns: 10) { value in
@@ -26,7 +26,7 @@ struct MetaGeneratorPropertyTests {
 
     @Test("Replaying the same ChoiceTree produces identical values", arguments: metaRecipeTypes)
     func replayDeterminism(type: RecipeType) throws {
-        let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 1), maxIterations: 50) { recipe in
+        let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
             guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
             let gen = buildGenerator(from: recipe)
             return checkAllTrees(gen, maxRuns: 10) { tree in
@@ -42,7 +42,7 @@ struct MetaGeneratorPropertyTests {
 
     @Test("Materialize with flattened tree agrees with replay", arguments: metaRecipeTypes)
     func materializeAgreement(type: RecipeType) throws {
-        let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 1), maxIterations: 50) { recipe in
+        let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
             guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
             let gen = buildGenerator(from: recipe)
             return checkAllValues(gen, maxRuns: 10) { value in
@@ -60,7 +60,7 @@ struct MetaGeneratorPropertyTests {
 
     @Test("VI and VACTI consume the PRNG identically for random recipes", arguments: metaRecipeTypes)
     func interpreterParity(type: RecipeType) throws {
-        var recipeIter = ValueInterpreter(recipeGenerator(producing: type, maxDepth: 1), seed: 42, maxRuns: 30)
+        var recipeIter = ValueInterpreter(recipeGenerator(producing: type, maxDepth: 2), seed: 42, maxRuns: 30)
         var checkedRecipes = 0
         while let recipe = try recipeIter.next() {
             guard recipe.nodeCount <= metaRecipeNodeBudget else { continue }
@@ -162,16 +162,16 @@ struct MetaGeneratorPropertyTests {
 
     // MARK: 8. Reduction Preserves Failure (manual — circular if dogfooded)
 
-    @Test("Reduced values still fail the original property")
-    func reductionPreservesFailure() throws {
-        let intLeafGen = recipeGenerator(producing: .int, maxDepth: 0)
-        var recipeIter = ValueInterpreter(intLeafGen, seed: 42, maxRuns: 20)
+    @Test("Reduced values still fail the original property", arguments: metaRecipeTypes)
+    func reductionPreservesFailure(type: RecipeType) throws {
+        let recipeGen = recipeGenerator(producing: type, maxDepth: 1)
+        var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 20)
+        let property = failingProperty(for: type)
         while let recipe = try recipeIter.next() {
-            let gen = buildGenerator(from: recipe)
-            let property: (Any) -> Bool = { value in
-                guard let intVal = value as? Int else { return true }
-                return intVal < 10
+            guard recipe.nodeCount <= metaRecipeNodeBudget else {
+                continue
             }
+            let gen = buildGenerator(from: recipe)
 
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
             while let (value, tree) = try valueIter.next() {
@@ -443,6 +443,35 @@ struct MetaGeneratorPropertyTests {
         }
     }
 
+    @Test("Nested optional generators round-trip through reflect and replay, including mid-chain nils")
+    func nestedOptionalReflectionRoundTrip() throws {
+        let nestedRecipes: [GenRecipe] = [
+            .combinator(.optional(.combinator(.optional(.leaf(.int(-10 ... 10)))))),
+            .combinator(.optional(.combinator(.optional(.combinator(.optional(.leaf(.justInt(7)))))))),
+        ]
+
+        for recipe in nestedRecipes {
+            let gen = buildGenerator(from: recipe)
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 60)
+            var sawNilBearing = false
+            while let (value, _) = try valueIter.next() {
+                if containsNil(value) {
+                    sawNilBearing = true
+                }
+                let tree = try Interpreters.reflect(gen, with: value)
+                let replayed = try tree.flatMap { try Interpreters.replay(gen, using: $0) }
+                #expect(replayed != nil, "Reflect or replay produced nil for \(value) with recipe: \(recipe)")
+                if let replayed {
+                    #expect(
+                        anyEquals(value, replayed),
+                        "Nested optional round-trip failed for \(value) with recipe: \(recipe)"
+                    )
+                }
+            }
+            #expect(sawNilBearing, "The sweep never exercised a nil-bearing value for recipe: \(recipe)")
+        }
+    }
+
     @Test("anyEquals correctly compares optional values")
     func optionalEquality() {
         #expect(anyEquals(Any?.none as Any, Any?.none as Any))
@@ -454,12 +483,15 @@ struct MetaGeneratorPropertyTests {
 
     // MARK: 14. Random Recipes with Just/Zip
 
-    /// Depth-2 recipes are blocked by a known defect, independent of the stack budget: reflecting a nested optional whose value is a mid-chain nil throws `chooseBitsCouldNotConvertValue` instead of resolving through the nil branch. Once that is fixed, gate this sweep with `metaRecipeNodeBudget` like the other invariants. (A second blocker, the aliased nested-filter tuning cycle, was fixed 2026-07-07 by the filter expansion-path guard in GenerationContext.)
-    @Test("Random recipes with just and zip round-trip through reflect and replay", .disabled("Depth-2 recipes hit the nested-optional reflection defect; see comment above"))
+    /// Depth-2 recipes were blocked by three constraints, all resolved 2026-07-07: the debug stack budget (interpreter case handlers outlined, budget recalibrated), the aliased nested-filter tuning cycle (filter expansion-path guard in GenerationContext), and nested-optional reflection (liftToOptional-style backward in the recipe fixture plus branch-probe error containment in reflectPickOperation).
+    @Test("Random recipes with just and zip round-trip through reflect and replay")
     func randomJustZipRecipesRoundTrip() throws {
         let recipeGen = recipeGenerator(producing: .int, maxDepth: 2)
         var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 40)
         while let recipe = try recipeIter.next() {
+            guard recipe.nodeCount <= metaRecipeNodeBudget else {
+                continue
+            }
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 5)
             while let (value, _) = try valueIter.next() {
@@ -530,10 +562,34 @@ private func checkPairedValues(
     return true
 }
 
+/// A property with a satisfiable failure condition for each recipe output type, so reduction has counterexamples to preserve. Values of unexpected types pass vacuously, matching the original int-only formulation.
+private func failingProperty(for type: RecipeType) -> (Any) -> Bool {
+    switch type {
+        case .int:
+            { value in (value as? Int).map { $0 < 10 } ?? true }
+        case .bool:
+            { value in (value as? Bool).map { $0 == false } ?? true }
+        case .arrayOf:
+            { value in (value as? [Any]).map { $0.count < 2 } ?? true }
+    }
+}
+
+/// Returns whether the value is nil at any level of optional nesting.
+private func containsNil(_ value: Any) -> Bool {
+    let mirror = Mirror(reflecting: value)
+    guard mirror.displayStyle == .optional else {
+        return false
+    }
+    guard let child = mirror.children.first else {
+        return true
+    }
+    return containsNil(child.value)
+}
+
 // MARK: - Matrix Configuration
 
 /// Output types the universal invariants sweep over. Every operation the recipe language can produce for these types gets each invariant automatically.
 let metaRecipeTypes: [RecipeType] = [.int, .bool, .arrayOf(.int)]
 
-/// Node-count ceiling for recipes fed to the invariants. Debug builds give each interpreter recursion level a fat stack frame, so total recipe size, not nesting depth alone, is what overflows the 512 KiB test-thread stack. Calibrated empirically with the ExhaustStackProbe executable (2026-07-07, arm64 debug, interpreter case handlers outlined): deep-chain recipes crash at ~117 nodes for mapped chains and ~81 nodes for nested filter chains, the worst shape because every level stacks a CGS tuning pass. The constant is the worst ceiling with a ~2x margin for platform and toolchain variance. Recalibrate with the probe after changing any interpreter's recursion frames.
+/// Node-count ceiling for recipes fed to the invariants. Debug builds give each interpreter recursion level a fat stack frame, so total recipe size, not nesting depth alone, is what overflows the 512 KiB test-thread stack. Calibrated empirically with the ExhaustStackProbe executable (2026-07-07, arm64 debug, interpreter case handlers outlined): nested filter chains are the worst shape because every level stacks a CGS tuning pass, crashing between 80 and 96 nodes; mapped, optional, unique, and classified chains all clear 112. The constant is the worst ceiling with a ~2x margin for platform and toolchain variance. Recalibrate with the probe after changing any interpreter's recursion frames or adding a recipe kind with a new nesting shape.
 let metaRecipeNodeBudget = 40

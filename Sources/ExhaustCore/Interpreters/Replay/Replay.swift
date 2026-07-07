@@ -488,7 +488,9 @@ extension Interpreters {
                 )
             case let .prune(subGenerator):
                 // Unwrap before casting: `Any? as? Output` re-boxes a replayed nil value when `Output == Any`.
-                guard let inner = try replayRecursive(subGenerator, with: script) else { return nil }
+                guard let inner = try replayRecursive(subGenerator, with: script) else {
+                    return nil
+                }
                 return inner as? Output
             case let .filter(gen, _, _, predicate, _):
                 guard let inner = try replayRecursive(gen, with: script),
@@ -497,7 +499,9 @@ extension Interpreters {
                 return inner as? Output
             case let .classify(gen, _, _), let .unique(gen, _, _):
                 // Unwrap before casting: `Any? as? Output` re-boxes a replayed nil value when `Output == Any`.
-                guard let inner = try replayRecursive(gen, with: script) else { return nil }
+                guard let inner = try replayRecursive(gen, with: script) else {
+                    return nil
+                }
                 return inner as? Output
             case let .transform(kind, inner):
                 let result: Any

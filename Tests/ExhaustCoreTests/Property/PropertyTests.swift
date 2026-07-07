@@ -19,28 +19,12 @@ import Testing
 
 @Suite("Generate-Reflect-Replay Roundtrip")
 struct RoundtripPropertyTests {
-    @Test("Primitive generators round-trip through reflect and replay")
+    @Test("Leaf types outside the recipe language round-trip through reflect and replay")
     func primitiveRoundtrip() throws {
-        let intGen: Generator<Int> = Gen.choose(in: -1000 ... 1000)
-        try exhaustCheck(intGen) { value in
-            guard let tree = try? Interpreters.reflect(intGen, with: value),
-                  let replayed = try? Interpreters.replay(intGen, using: tree)
-            else { return false }
-            return replayed == value
-        }
-
         let doubleGen: Generator<Double> = Gen.choose(in: -1000.0 ... 1000.0)
         try exhaustCheck(doubleGen) { value in
             guard let tree = try? Interpreters.reflect(doubleGen, with: value),
                   let replayed = try? Interpreters.replay(doubleGen, using: tree)
-            else { return false }
-            return replayed == value
-        }
-
-        let boolGen = Gen.choose(from: [true, false])
-        try exhaustCheck(boolGen, maxIterations: 50) { value in
-            guard let tree = try? Interpreters.reflect(boolGen, with: value),
-                  let replayed = try? Interpreters.replay(boolGen, using: tree)
             else { return false }
             return replayed == value
         }
@@ -57,55 +41,6 @@ struct RoundtripPropertyTests {
         try exhaustCheck(charGen) { value in
             guard let tree = try? Interpreters.reflect(charGen, with: value),
                   let replayed = try? Interpreters.replay(charGen, using: tree)
-            else { return false }
-            return replayed == value
-        }
-    }
-
-    @Test("Composed generators round-trip through reflect and replay")
-    func composedRoundtrip() throws {
-        // Array
-        let arrayGen = Gen.arrayOf(Gen.choose(in: 0 ... 100) as Generator<Int>, within: 1 ... 5)
-        try exhaustCheck(arrayGen) { value in
-            guard let tree = try? Interpreters.reflect(arrayGen, with: value),
-                  let replayed = try? Interpreters.replay(arrayGen, using: tree)
-            else { return false }
-            return replayed == value
-        }
-
-        // Optional — .optional() is Exhaust-only, using Gen.pick equivalent
-        let innerIntGen: Generator<Int> = Gen.choose(in: 0 ... 100)
-        let optionalGen: Generator<Int?> = Gen.pick(choices: [
-            (1, Gen.just(Int?.none)),
-            (5, innerIntGen.liftToOptional()),
-        ])
-        try exhaustCheck(optionalGen) { value in
-            guard let tree = try? Interpreters.reflect(optionalGen, with: value),
-                  let replayed = try? Interpreters.replay(optionalGen, using: tree)
-            else { return false }
-            return replayed == value
-        }
-
-        // Zip (tuple)
-        let zipGen = Gen.zip(
-            Gen.choose(in: 0 ... 100) as Generator<Int>,
-            Gen.choose(in: 0 ... 100) as Generator<Int>
-        )
-        try exhaustCheck(zipGen) { value in
-            guard let tree = try? Interpreters.reflect(zipGen, with: value),
-                  let replayed = try? Interpreters.replay(zipGen, using: tree)
-            else { return false }
-            return replayed == value
-        }
-
-        // oneOf → Gen.pick
-        let oneOfGen: Generator<Int> = Gen.pick(choices: [
-            (1, Gen.choose(in: 0 ... 50)),
-            (1, Gen.choose(in: 100 ... 200)),
-        ])
-        try exhaustCheck(oneOfGen) { value in
-            guard let tree = try? Interpreters.reflect(oneOfGen, with: value),
-                  let replayed = try? Interpreters.replay(oneOfGen, using: tree)
             else { return false }
             return replayed == value
         }
@@ -230,24 +165,6 @@ struct FloatShortlexPropertyTests {
     }
 }
 
-// MARK: - Replay Idempotence
-
-@Suite("Replay Idempotence")
-struct ReplayIdempotencePropertyTests {
-    @Test("Replaying the same tree always produces the same value")
-    func replayIdempotence() throws {
-        let gen: Generator<Int> = Gen.choose(in: -10000 ... 10000)
-        try exhaustCheck(gen) { value in
-            guard let tree = try? Interpreters.reflect(gen, with: value),
-                  let replay1 = try? Interpreters.replay(gen, using: tree),
-                  let replay2 = try? Interpreters.replay(gen, using: tree),
-                  let replay3 = try? Interpreters.replay(gen, using: tree)
-            else { return false }
-            return replay1 == replay2 && replay2 == replay3
-        }
-    }
-}
-
 // MARK: - Replay vs Materializer Equivalence
 
 @Suite("Replay-Materializer Equivalence")
@@ -353,24 +270,10 @@ struct ShortlexKeyPropertyTests {
     }
 }
 
-// MARK: - Materialize / Replay Agreement
+// MARK: - Reflect Stabilization
 
 @Suite("Interpreter Agreement")
 struct InterpreterAgreementPropertyTests {
-    @Test("Materialize with flattened tree agrees with replay")
-    func materializeAgreesWithReplay() throws {
-        let gen: Generator<Int> = Gen.choose(in: -1000 ... 1000)
-        try exhaustCheck(gen) { value in
-            guard let tree = try? Interpreters.reflect(gen, with: value),
-                  let replayed = try? Interpreters.replay(gen, using: tree)
-            else { return false }
-            let sequence = ChoiceSequence.flatten(tree)
-            guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree)
-            else { return false }
-            return materialized == replayed
-        }
-    }
-
     @Test("Reflect stabilizes after one round")
     func reflectIdempotence() throws {
         let gen: Generator<Int> = Gen.choose(in: -1000 ... 1000)

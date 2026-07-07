@@ -43,7 +43,9 @@ extension Optional: _OptionalProtocol {
 
 /// Returns whether the value is a boxed `Optional` in its `.none` case.
 private func isNilOptional(_ value: Any) -> Bool {
-    guard let optional = value as? _OptionalProtocol else { return false }
+    guard let optional = value as? _OptionalProtocol else {
+        return false
+    }
     return optional._unwrapped == nil
 }
 
