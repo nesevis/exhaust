@@ -15,30 +15,6 @@ import ExhaustTestSupport
 import Foundation
 import Testing
 
-// MARK: - Roundtrip Properties
-
-@Suite("Generate-Reflect-Replay Roundtrip")
-struct RoundtripPropertyTests {
-    @Test("Leaf types outside the recipe language round-trip through reflect and replay")
-    func primitiveRoundtrip() throws {
-        let asciiGen = asciiStringGen(length: 1 ... 10)
-        try exhaustCheck(asciiGen) { value in
-            guard let tree = try? Interpreters.reflect(asciiGen, with: value),
-                  let replayed = try? Interpreters.replay(asciiGen, using: tree)
-            else { return false }
-            return replayed == value
-        }
-
-        let charGen = charGen(from: .decimalDigits)
-        try exhaustCheck(charGen) { value in
-            guard let tree = try? Interpreters.reflect(charGen, with: value),
-                  let replayed = try? Interpreters.replay(charGen, using: tree)
-            else { return false }
-            return replayed == value
-        }
-    }
-}
-
 // MARK: - Size Scaling Properties
 
 @Suite("Size Scaling")

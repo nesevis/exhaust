@@ -116,6 +116,8 @@ func failingProperty(for type: RecipeType) -> (Any) -> Bool {
             { value in (value as? Double).map { $0 < 10 } ?? true }
         case .string:
             { value in (value as? String).map { $0.count < 2 } ?? true }
+        case .character:
+            { value in (value as? Character).map { $0 == "0" } ?? true }
         case .arrayOf:
             { value in (value as? [Any]).map { $0.count < 2 } ?? true }
     }
@@ -137,6 +139,7 @@ func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorK
              let .scaledArray(inner, _, _),
              let .classified(inner),
              let .metamorphed(inner, _),
+             let .isomorphed(inner, _),
              let .unique(inner):
             return recipeContains(inner, where: predicate)
         case let .boundArray(element, _):
@@ -149,7 +152,7 @@ func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorK
             return branches.contains { recipeContains($0.recipe, where: predicate) }
         case let .zipped(first, second):
             return recipeContains(first, where: predicate) || recipeContains(second, where: predicate)
-        case .unfolded:
+        case .unfolded, .getSized:
             return false
     }
 }
@@ -205,7 +208,7 @@ func containsNil(_ value: Any) -> Bool {
 // MARK: - Matrix Configuration
 
 /// Output types the universal invariants sweep over. Every operation the recipe language can produce for these types gets each invariant automatically.
-let metaRecipeTypes: [RecipeType] = [.int, .bool, .double, .string, .arrayOf(.int)]
+let metaRecipeTypes: [RecipeType] = [.int, .bool, .double, .string, .character, .arrayOf(.int)]
 
 /// A named recipe exercising a single combinator, for the per-combinator reflection-coverage sweep.
 struct CombinatorFixture: Sendable, CustomStringConvertible {
@@ -236,6 +239,8 @@ let reflectableCombinatorFixtures: [CombinatorFixture] = [
     .init(name: "unique", recipe: .combinator(.unique(.leaf(.int(0 ... 1000))))),
     .init(name: "classified", recipe: .combinator(.classified(.leaf(.int(0 ... 10))))),
     .init(name: "boundArray", recipe: .combinator(.boundArray(element: .leaf(.int(0 ... 5)), maxLength: 3))),
+    .init(name: "getSized", recipe: .combinator(.getSized)),
+    .init(name: "isomorphed", recipe: .combinator(.isomorphed(.leaf(.int(0 ... 10)), .increment))),
 ]
 
 /// Node-count ceiling for recipes fed to the invariants. Debug builds give each interpreter recursion level a fat stack frame, so total recipe size, not nesting depth alone, is what overflows the 512 KiB test-thread stack. Calibrated empirically with the ExhaustStackProbe executable (2026-07-07, arm64 debug, interpreter case handlers outlined): nested filter chains are the worst shape because every level stacks a CGS tuning pass, crashing between 80 and 96 nodes; mapped, optional, unique, and classified chains all clear 112. The constant is the worst ceiling with a ~2x margin for platform and toolchain variance. Recalibrate with the probe after changing any interpreter's recursion frames or adding a recipe kind with a new nesting shape.
