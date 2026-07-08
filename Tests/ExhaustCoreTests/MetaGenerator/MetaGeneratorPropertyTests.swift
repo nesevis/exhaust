@@ -289,8 +289,8 @@ struct MetaGeneratorPropertyTests {
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 3)
             while let (value, _) = try valueIter.next() {
-                guard let tree = try? Interpreters.reflect(gen, with: value) else { continue }
-                guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
+                let tree = try #require(try Interpreters.reflect(gen, with: value), "Just must reflect for recipe: \(recipe)")
+                let replayed = try #require(try Interpreters.replay(gen, using: tree), "Just must replay for recipe: \(recipe)")
                 #expect(
                     anyEquals(value, replayed),
                     "Just round-trip failed for recipe: \(recipe)"
@@ -313,8 +313,8 @@ struct MetaGeneratorPropertyTests {
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 10)
             while let (value, _) = try valueIter.next() {
-                guard let tree = try? Interpreters.reflect(gen, with: value) else { continue }
-                guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
+                let tree = try #require(try Interpreters.reflect(gen, with: value), "Zip must reflect for recipe: \(recipe)")
+                let replayed = try #require(try Interpreters.replay(gen, using: tree), "Zip must replay for recipe: \(recipe)")
                 #expect(
                     anyEquals(value, replayed),
                     "Zip round-trip failed for recipe: \(recipe)"
@@ -335,9 +335,8 @@ struct MetaGeneratorPropertyTests {
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 10)
             while let (_, tree) = try valueIter.next() {
-                let r1 = try? Interpreters.replay(gen, using: tree)
-                let r2 = try? Interpreters.replay(gen, using: tree)
-                guard let r1, let r2 else { continue }
+                let r1 = try #require(try Interpreters.replay(gen, using: tree), "Zip must replay for recipe: \(recipe)")
+                let r2 = try #require(try Interpreters.replay(gen, using: tree), "Zip must replay for recipe: \(recipe)")
                 #expect(
                     anyEquals(r1, r2),
                     "Zip replay not deterministic for recipe: \(recipe)"
@@ -357,10 +356,13 @@ struct MetaGeneratorPropertyTests {
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 10)
             while let (value, _) = try valueIter.next() {
-                guard let reflectedTree = try? Interpreters.reflect(gen, with: value) else { continue }
-                guard let replayed = try? Interpreters.replay(gen, using: reflectedTree) else { continue }
+                let reflectedTree = try #require(try Interpreters.reflect(gen, with: value), "Zip must reflect for recipe: \(recipe)")
+                let replayed = try #require(try Interpreters.replay(gen, using: reflectedTree), "Zip must replay for recipe: \(recipe)")
                 let sequence = ChoiceSequence.flatten(reflectedTree)
-                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else { continue }
+                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else {
+                    Issue.record("Zip must materialize for recipe: \(recipe)")
+                    continue
+                }
                 #expect(
                     anyEquals(materialized, replayed),
                     "Zip materialize disagrees with replay for recipe: \(recipe)"
@@ -409,9 +411,8 @@ struct MetaGeneratorPropertyTests {
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 15)
             while let (_, tree) = try valueIter.next() {
-                let r1 = try? Interpreters.replay(gen, using: tree)
-                let r2 = try? Interpreters.replay(gen, using: tree)
-                guard let r1, let r2 else { continue }
+                let r1 = try #require(try Interpreters.replay(gen, using: tree), "Optional must replay for recipe: \(recipe)")
+                let r2 = try #require(try Interpreters.replay(gen, using: tree), "Optional must replay for recipe: \(recipe)")
                 #expect(
                     anyEquals(r1, r2),
                     "Optional replay not deterministic for recipe: \(recipe)"
@@ -431,10 +432,13 @@ struct MetaGeneratorPropertyTests {
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 15)
             while let (value, _) = try valueIter.next() {
-                guard let reflectedTree = try? Interpreters.reflect(gen, with: value) else { continue }
-                guard let replayed = try? Interpreters.replay(gen, using: reflectedTree) else { continue }
+                let reflectedTree = try #require(try Interpreters.reflect(gen, with: value), "Optional must reflect for recipe: \(recipe)")
+                let replayed = try #require(try Interpreters.replay(gen, using: reflectedTree), "Optional must replay for recipe: \(recipe)")
                 let sequence = ChoiceSequence.flatten(reflectedTree)
-                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else { continue }
+                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else {
+                    Issue.record("Optional must materialize for recipe: \(recipe)")
+                    continue
+                }
                 #expect(
                     anyEquals(materialized, replayed),
                     "Optional materialize disagrees with replay for recipe: \(recipe)"
@@ -503,6 +507,25 @@ struct MetaGeneratorPropertyTests {
                 )
             }
         }
+    }
+
+    // MARK: 15. Per-Combinator Reflection Coverage
+
+    /// Asserts every reflectable combinator actually reflects and round-trips at least one of its own generated values.
+    ///
+    /// The round-trip sweeps skip any value whose generator fails to reflect (`catch { return true }` in `checkAllValues`, `else { continue }` in the fixture tests), so a combinator that silently stopped reflecting would leave those tests green. Zip did exactly this for months: a projecting `.map` made its output unreflectable and every zip assertion was skipped unseen. Each fixture here uses `#require`, so any regression that breaks a reflectable combinator fails loudly rather than passing vacuously. `boundRange` and `unfolded` are excluded because their bind/unfold construction is forward-only — nil reflection is expected for them, not a defect.
+    @Test("Every reflectable combinator reflects and round-trips", arguments: reflectableCombinatorFixtures)
+    func everyReflectableCombinatorRoundTrips(fixture: CombinatorFixture) throws {
+        let gen = buildGenerator(from: fixture.recipe)
+        var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 12)
+        var roundTripped = 0
+        while let (value, _) = try valueIter.next() {
+            let tree = try #require(try Interpreters.reflect(gen, with: value), "\(fixture.name) must reflect its own value")
+            let replayed = try #require(try Interpreters.replay(gen, using: tree), "\(fixture.name) must replay")
+            #expect(anyEquals(value, replayed), "\(fixture.name) round-trip mismatch")
+            roundTripped += 1
+        }
+        #expect(roundTripped > 0, "\(fixture.name) produced no values to check")
     }
 }
 
@@ -590,6 +613,37 @@ private func containsNil(_ value: Any) -> Bool {
 
 /// Output types the universal invariants sweep over. Every operation the recipe language can produce for these types gets each invariant automatically.
 let metaRecipeTypes: [RecipeType] = [.int, .bool, .arrayOf(.int)]
+
+/// A named recipe exercising a single combinator, for the per-combinator reflection-coverage sweep.
+struct CombinatorFixture: Sendable, CustomStringConvertible {
+    let name: String
+    let recipe: GenRecipe
+
+    var description: String {
+        name
+    }
+}
+
+/// One fixture per combinator whose output is reflectable, so the coverage sweep can assert each reflects rather than skipping it. `boundRange` and `unfolded` are omitted deliberately: both build on a backward-less `.bind`/unfold, so their outputs are not reflectable by construction and a nil reflection is expected rather than a regression.
+let reflectableCombinatorFixtures: [CombinatorFixture] = [
+    .init(name: "mapped", recipe: .combinator(.mapped(.leaf(.int(0 ... 10)), .increment))),
+    .init(name: "array", recipe: .combinator(.array(.leaf(.int(0 ... 5)), lengthRange: 1 ... 3))),
+    .init(name: "oneOf", recipe: .combinator(.oneOf([.leaf(.int(0 ... 5)), .leaf(.int(6 ... 10))]))),
+    .init(name: "weightedOneOf", recipe: .combinator(.weightedOneOf([
+        .init(weight: 1, recipe: .leaf(.int(0 ... 5))),
+        .init(weight: 2, recipe: .leaf(.int(6 ... 10))),
+    ]))),
+    .init(name: "filtered", recipe: .combinator(.filtered(.leaf(.int(-20 ... 20)), .isEven))),
+    .init(name: "resized", recipe: .combinator(.resized(.leaf(.int(0 ... 100)), size: 10))),
+    .init(name: "optional", recipe: .combinator(.optional(.leaf(.int(-10 ... 10))))),
+    .init(name: "recursive", recipe: .combinator(.recursive(base: .leaf(.int(0 ... 5)), maxDepth: 2))),
+    .init(name: "scaledArray", recipe: .combinator(.scaledArray(.leaf(.int(0 ... 5)), lengthRange: 0 ... 3, scaling: .linear))),
+    .init(name: "metamorphed", recipe: .combinator(.metamorphed(.leaf(.int(0 ... 5)), .increment))),
+    .init(name: "zipped", recipe: .combinator(.zipped(.leaf(.int(-10 ... 10)), .leaf(.int(0 ... 100))))),
+    .init(name: "unique", recipe: .combinator(.unique(.leaf(.int(0 ... 1000))))),
+    .init(name: "classified", recipe: .combinator(.classified(.leaf(.int(0 ... 10))))),
+    .init(name: "boundArray", recipe: .combinator(.boundArray(element: .leaf(.int(0 ... 5)), maxLength: 3))),
+]
 
 /// Node-count ceiling for recipes fed to the invariants. Debug builds give each interpreter recursion level a fat stack frame, so total recipe size, not nesting depth alone, is what overflows the 512 KiB test-thread stack. Calibrated empirically with the ExhaustStackProbe executable (2026-07-07, arm64 debug, interpreter case handlers outlined): nested filter chains are the worst shape because every level stacks a CGS tuning pass, crashing between 80 and 96 nodes; mapped, optional, unique, and classified chains all clear 112. The constant is the worst ceiling with a ~2x margin for platform and toolchain variance. Recalibrate with the probe after changing any interpreter's recursion frames or adding a recipe kind with a new nesting shape.
 let metaRecipeNodeBudget = 40
