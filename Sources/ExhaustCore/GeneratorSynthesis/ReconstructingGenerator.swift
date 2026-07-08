@@ -10,19 +10,10 @@ private func zipMap(
     _ generators: ContiguousArray<AnyGenerator>,
     _ transform: @escaping ([Any]) throws -> Any
 ) -> AnyGenerator {
-    let zipped: AnyGenerator = .impure(
+    .impure(
         operation: .zip(generators),
-        continuation: { .pure($0) }
+        continuation: { try .pure(transform($0 as! [Any])) }
     )
-    return Gen.liftF(.transform(
-        kind: .map(
-            forward: { try transform($0 as! [Any]) },
-            backward: nil,
-            inputType: [Any].self,
-            outputType: Any.self
-        ),
-        inner: zipped
-    ))
 }
 
 /// Builds a generator that reconstructs a value of `type` from a discovered container shape, producing the built value type-erased to `Any`.
@@ -39,6 +30,26 @@ func makeReconstructingGenerator<T: Decodable>(
     pin: Any,
     codingPath: [any CodingKey]
 ) -> AnyGenerator {
+    if case let .keyed(children) = shape, children.isEmpty == false {
+        let generators = ContiguousArray(children.map(\.generator))
+        let state = KeyedReplayState(
+            keys: children.map(\.key),
+            producesReplayValue: children.map(\.producesReplayValue),
+            isOptional: children.map(\.isOptional)
+        )
+        let decoder = ReplayDecoder(reusableState: state, codingPath: codingPath)
+
+        return zipMap(generators) { values in
+            state.reset(values: values)
+            do {
+                return try T(from: decoder) as Any
+            } catch let miss as GenSchemaMiss {
+                SynthesisDiagnostics.recordFallback(type: T.self, codingPath: miss.codingPath)
+                return pin
+            }
+        }
+    }
+
     guard let (generators, rebuild) = shape.lowering() else {
         return Gen.just(pin).erase()
     }

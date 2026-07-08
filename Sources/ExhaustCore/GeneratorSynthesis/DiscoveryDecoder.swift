@@ -7,7 +7,7 @@ package final class DiscoveryDecoder: Decoder {
     private let jsonValue: Any
 
     // The keyed/unkeyed/single fields are populated by whichever container kind the decoded type requested; `nestedDecoders` holds the sub-decoders spawned for inline `nestedContainer(forKey:)` calls on a keyed container. The `shape` getter resolves them into a `ContainerShape`.
-    private var keyedChildren: [(key: String, generator: AnyGenerator)] = []
+    private var keyedChildren: [(key: String, generator: AnyGenerator, isOptional: Bool)] = []
     private var unkeyedEntries: [UnkeyedEntry] = []
     private var singleChild: AnyGenerator?
     private var nestedDecoders: [(key: String, decoder: DiscoveryDecoder)] = []
@@ -26,13 +26,14 @@ package final class DiscoveryDecoder: Decoder {
         }
         if keyedChildren.isEmpty == false || nestedDecoders.isEmpty == false {
             var children = keyedChildren.map {
-                KeyedChild(key: $0.key, generator: $0.generator, producesReplayValue: false)
+                KeyedChild(key: $0.key, generator: $0.generator, producesReplayValue: false, isOptional: $0.isOptional)
             }
             for (key, nestedDecoder) in nestedDecoders {
                 children.append(KeyedChild(
                     key: key,
                     generator: nestedReplayValueGenerator(for: nestedDecoder.shape),
-                    producesReplayValue: true
+                    producesReplayValue: true,
+                    isOptional: false
                 ))
             }
             return .keyed(children)
@@ -98,8 +99,8 @@ package final class DiscoveryDecoder: Decoder {
         )
     }
 
-    func recordKeyed(_ key: String, _ generator: AnyGenerator) {
-        keyedChildren.append((key, generator))
+    func recordKeyed(_ key: String, _ generator: AnyGenerator, isOptional: Bool) {
+        keyedChildren.append((key, generator, isOptional))
     }
 
     func recordUnkeyed(elementType: Any.Type, _ generator: AnyGenerator) {
@@ -268,7 +269,7 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
             )
         }
 
-        decoder.recordKeyed(key.stringValue, asOptional ? wrapOptional(generator) : generator)
+        decoder.recordKeyed(key.stringValue, asOptional ? wrapOptional(generator) : generator, isOptional: asOptional)
     }
 
     private func decodeValue<T: Decodable>(_ type: T.Type, from jsonValue: Any, key: Key) throws -> T {
