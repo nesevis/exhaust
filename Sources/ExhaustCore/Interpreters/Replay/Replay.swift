@@ -42,18 +42,18 @@ extension Interpreters {
 
     // MARK: - Private Recursive Replay Engine
 
-    /// Replays `gen` against a flat array of ``ChoiceTree`` choices, consuming them left-to-right and returning the produced value, or `nil` if the sequence is exhausted.
+    /// Replays `gen` against a slice of ``ChoiceTree`` choices, consuming them left-to-right and returning the produced value, or `nil` if the sequence is exhausted.
     private static func replayWithChoices<Output>(
         _ gen: Generator<Output>,
         choices: [ChoiceTree]
     ) throws -> Output? {
-        var remainingChoices = choices
+        var remainingChoices = choices[...]
         return try replayWithChoicesHelper(gen, choices: &remainingChoices)
     }
 
     private static func replayWithChoicesHelper<Output>(
         _ gen: Generator<Output>,
-        choices: inout [ChoiceTree]
+        choices: inout ArraySlice<ChoiceTree>
     ) throws -> Output? {
         switch gen {
             case let .pure(value):
@@ -76,7 +76,7 @@ extension Interpreters {
     private static func replayWithChoicesOperation<Output>(
         _ operation: ReflectiveOperation,
         continuation: @escaping (Any) throws -> Generator<Output>,
-        choices: inout [ChoiceTree]
+        choices: inout ArraySlice<ChoiceTree>
     ) throws -> Output? {
         switch operation {
             case .chooseBits:
@@ -149,7 +149,7 @@ extension Interpreters {
                         // Scope inner replay to innerTree so its zip doesn't consume boundTree's choices.
                         if case let .bind(_, innerTree, boundTree) = choices.first {
                             choices.removeFirst()
-                            var scopedChoices = [innerTree]
+                            var scopedChoices: ArraySlice<ChoiceTree> = [innerTree]
                             guard let innerValue = try replayWithChoicesHelper(
                                 inner,
                                 choices: &scopedChoices
@@ -157,7 +157,7 @@ extension Interpreters {
                                 return nil
                             }
                             let boundGen = try forward(innerValue)
-                            var boundChoices = [boundTree]
+                            var boundChoices: ArraySlice<ChoiceTree> = [boundTree]
                             guard let boundValue = try replayWithChoicesHelper(
                                 boundGen,
                                 choices: &boundChoices
@@ -210,7 +210,7 @@ extension Interpreters {
     @inline(__always)
     private static func replayWithChoicesChooseBits<Output>(
         continuation: @escaping (Any) throws -> Generator<Output>,
-        choices: inout [ChoiceTree]
+        choices: inout ArraySlice<ChoiceTree>
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -227,7 +227,7 @@ extension Interpreters {
     private static func replayWithChoicesPick<Output>(
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
         continuation: @escaping (Any) throws -> Generator<Output>,
-        choices: inout [ChoiceTree]
+        choices: inout ArraySlice<ChoiceTree>
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -261,7 +261,7 @@ extension Interpreters {
     private static func replayWithChoicesSequence<Output>(
         elementGenerator: AnyGenerator,
         continuation: @escaping (Any) throws -> Generator<Output>,
-        choices: inout [ChoiceTree]
+        choices: inout ArraySlice<ChoiceTree>
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -290,14 +290,14 @@ extension Interpreters {
     private static func replayWithChoicesZip<Output>(
         generators: ContiguousArray<AnyGenerator>,
         continuation: @escaping (Any) throws -> Generator<Output>,
-        choices: inout [ChoiceTree]
+        choices: inout ArraySlice<ChoiceTree>
     ) throws -> Output? {
         // Unwrap a single non-branch group wrapper that encloses per-lane subtrees (produced by reflect's reflectZipOperation).
         if choices.count == 1,
-           case let .group(children, _) = choices[0],
+           case let .group(children, _) = choices[choices.startIndex],
            children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
         {
-            choices = children
+            choices = children[...]
         }
 
         // Each generator consumes its lane. If the next choice is a non-branch group, it's a per-lane subtree — unwrap it so the generator consumes from within. Otherwise consume directly.
@@ -305,11 +305,11 @@ extension Interpreters {
         for gen in generators {
             guard choices.isEmpty == false else { return nil }
 
-            if case let .group(laneChoices, _) = choices[0],
+            if case let .group(laneChoices, _) = choices[choices.startIndex],
                laneChoices.allSatisfy({ !$0.isBranch && !$0.isSelected })
             {
                 choices.removeFirst()
-                var laneChoicesMut = laneChoices
+                var laneChoicesMut = laneChoices[...]
                 guard let result = try replayWithChoicesHelper(gen, choices: &laneChoicesMut) else {
                     return nil
                 }
@@ -329,7 +329,7 @@ extension Interpreters {
     private static func replayWithChoicesWrapped<Output>(
         subGenerator: AnyGenerator,
         continuation: @escaping (Any) throws -> Generator<Output>,
-        choices: inout [ChoiceTree]
+        choices: inout ArraySlice<ChoiceTree>
     ) throws -> Output? {
         try InterpreterWrapperHandlers.continueAfterSubgenerator(
             runSubgenerator: { try replayWithChoicesHelper(subGenerator, choices: &choices) },
@@ -344,7 +344,7 @@ extension Interpreters {
     private static func replayWithChoicesJust<Output>(
         value: Any,
         continuation: @escaping (Any) throws -> Generator<Output>,
-        choices: inout [ChoiceTree]
+        choices: inout ArraySlice<ChoiceTree>
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -361,7 +361,7 @@ extension Interpreters {
     @inline(__always)
     private static func replayWithChoicesGetSize<Output>(
         continuation: @escaping (Any) throws -> Generator<Output>,
-        choices: inout [ChoiceTree]
+        choices: inout ArraySlice<ChoiceTree>
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -379,7 +379,7 @@ extension Interpreters {
     private static func replayWithChoicesResize<Output>(
         subGenerator: AnyGenerator,
         continuation: @escaping (Any) throws -> Generator<Output>,
-        choices: inout [ChoiceTree]
+        choices: inout ArraySlice<ChoiceTree>
     ) throws -> Output? {
         guard choices.isEmpty == false else {
             return nil
@@ -389,7 +389,7 @@ extension Interpreters {
             return nil
         }
 
-        var subChoicesCopy = subChoices
+        var subChoicesCopy = subChoices[...]
         guard let subResult = try replayWithChoicesHelper(
             subGenerator,
             choices: &subChoicesCopy
@@ -697,7 +697,7 @@ extension Interpreters {
         }
 
         // Flat sequential consumption (reflected trees where children count differs from generators count).
-        var remaining = children
+        var remaining = children[...]
         var subResults = [Any]()
         for gen in generators {
             guard let result = try replayWithChoicesHelper(gen, choices: &remaining) else {
