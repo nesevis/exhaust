@@ -127,7 +127,6 @@ private func printEtnaTaskReport(name: String, seedCount: Int, results: [EtnaRes
     let reductionInvocs = solved.map(\.reductionInvocations)
     let hasReduction = reductionInvocs.contains { $0 > 0 }
 
-    let meanTotal = Double(solved.map(\.totalInvocations).reduce(0, +)) / Double(solvedCount)
     let unsolvableAttempts = results.filter { $0.solved == false }.map(\.totalInvocations)
     let meanUnsolvedAttempts = unsolvableAttempts.isEmpty ? 0 : Double(unsolvableAttempts.reduce(0, +)) / Double(unsolvableAttempts.count)
 
