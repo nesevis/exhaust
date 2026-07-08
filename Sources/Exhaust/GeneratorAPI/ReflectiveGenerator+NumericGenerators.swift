@@ -187,18 +187,7 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<UInt8>? = nil,
         scaling: SizeScaling<UInt8>? = nil
     ) -> ReflectiveGenerator<UInt8> {
-        let generator: Generator<UInt8> = if let range {
-            if let scaling {
-                Gen.choose(in: range, scaling: scaling)
-            } else if range == UInt8.min ... UInt8.max {
-                Gen.choose(in: range, scaling: UInt8.defaultScaling)
-            } else {
-                Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(in: UInt8.min ... UInt8.max, scaling: scaling ?? UInt8.defaultScaling)
-        }
-        return generator.wrapped
+        fixedWidthInteger(in: range, scaling: scaling)
     }
 
     /// Generates arbitrary `UInt8` values within the given range.
@@ -228,18 +217,7 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<UInt16>? = nil,
         scaling: SizeScaling<UInt16>? = nil
     ) -> ReflectiveGenerator<UInt16> {
-        let generator: Generator<UInt16> = if let range {
-            if let scaling {
-                Gen.choose(in: range, scaling: scaling)
-            } else if range == UInt16.min ... UInt16.max {
-                Gen.choose(in: range, scaling: UInt16.defaultScaling)
-            } else {
-                Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(in: UInt16.min ... UInt16.max, scaling: scaling ?? UInt16.defaultScaling)
-        }
-        return generator.wrapped
+        fixedWidthInteger(in: range, scaling: scaling)
     }
 
     /// Generates arbitrary `UInt16` values within the given range.
@@ -269,18 +247,7 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<UInt32>? = nil,
         scaling: SizeScaling<UInt32>? = nil
     ) -> ReflectiveGenerator<UInt32> {
-        let generator: Generator<UInt32> = if let range {
-            if let scaling {
-                Gen.choose(in: range, scaling: scaling)
-            } else if range == UInt32.min ... UInt32.max {
-                Gen.choose(in: range, scaling: UInt32.defaultScaling)
-            } else {
-                Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(in: UInt32.min ... UInt32.max, scaling: scaling ?? UInt32.defaultScaling)
-        }
-        return generator.wrapped
+        fixedWidthInteger(in: range, scaling: scaling)
     }
 
     /// Generates arbitrary `UInt32` values within the given range.
@@ -310,18 +277,7 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<UInt64>? = nil,
         scaling: SizeScaling<UInt64>? = nil
     ) -> ReflectiveGenerator<UInt64> {
-        let generator: Generator<UInt64> = if let range {
-            if let scaling {
-                Gen.choose(in: range, scaling: scaling)
-            } else if range == UInt64.min ... UInt64.max {
-                Gen.choose(in: range, scaling: UInt64.defaultScaling)
-            } else {
-                Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(in: UInt64.min ... UInt64.max, scaling: scaling ?? UInt64.defaultScaling)
-        }
-        return generator.wrapped
+        fixedWidthInteger(in: range, scaling: scaling)
     }
 
     /// Generates arbitrary `UInt64` values within the given range.
@@ -351,18 +307,7 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<UInt>? = nil,
         scaling: SizeScaling<UInt>? = nil
     ) -> ReflectiveGenerator<UInt> {
-        let generator: Generator<UInt> = if let range {
-            if let scaling {
-                Gen.choose(in: range, scaling: scaling)
-            } else if range == UInt.min ... UInt.max {
-                Gen.choose(in: range, scaling: UInt.defaultScaling)
-            } else {
-                Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(in: UInt.min ... UInt.max, scaling: scaling ?? UInt.defaultScaling)
-        }
-        return generator.wrapped
+        fixedWidthInteger(in: range, scaling: scaling)
     }
 
     /// Generates arbitrary `UInt` values within the given range.
@@ -396,18 +341,7 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Int8>? = nil,
         scaling: SizeScaling<Int8>? = nil
     ) -> ReflectiveGenerator<Int8> {
-        let generator: Generator<Int8> = if let range {
-            if let scaling {
-                Gen.choose(in: range, scaling: scaling)
-            } else if range == Int8.min ... Int8.max {
-                Gen.choose(in: range, scaling: Int8.defaultScaling)
-            } else {
-                Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(in: Int8.min ... Int8.max, scaling: scaling ?? Int8.defaultScaling)
-        }
-        return generator.wrapped
+        fixedWidthInteger(in: range, scaling: scaling)
     }
 
     /// Generates arbitrary `Int8` values within the given range.
@@ -433,18 +367,7 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Int16>? = nil,
         scaling: SizeScaling<Int16>? = nil
     ) -> ReflectiveGenerator<Int16> {
-        let generator: Generator<Int16> = if let range {
-            if let scaling {
-                Gen.choose(in: range, scaling: scaling)
-            } else if range == Int16.min ... Int16.max {
-                Gen.choose(in: range, scaling: Int16.defaultScaling)
-            } else {
-                Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(in: Int16.min ... Int16.max, scaling: scaling ?? Int16.defaultScaling)
-        }
-        return generator.wrapped
+        fixedWidthInteger(in: range, scaling: scaling)
     }
 
     /// Generates arbitrary `Int16` values within the given range.
@@ -470,18 +393,7 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Int32>? = nil,
         scaling: SizeScaling<Int32>? = nil
     ) -> ReflectiveGenerator<Int32> {
-        let generator: Generator<Int32> = if let range {
-            if let scaling {
-                Gen.choose(in: range, scaling: scaling)
-            } else if range == Int32.min ... Int32.max {
-                Gen.choose(in: range, scaling: Int32.defaultScaling)
-            } else {
-                Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(in: Int32.min ... Int32.max, scaling: scaling ?? Int32.defaultScaling)
-        }
-        return generator.wrapped
+        fixedWidthInteger(in: range, scaling: scaling)
     }
 
     /// Generates arbitrary `Int32` values within the given range.
@@ -507,18 +419,7 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Int64>? = nil,
         scaling: SizeScaling<Int64>? = nil
     ) -> ReflectiveGenerator<Int64> {
-        let generator: Generator<Int64> = if let range {
-            if let scaling {
-                Gen.choose(in: range, scaling: scaling)
-            } else if range == Int64.min ... Int64.max {
-                Gen.choose(in: range, scaling: Int64.defaultScaling)
-            } else {
-                Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(in: Int64.min ... Int64.max, scaling: scaling ?? Int64.defaultScaling)
-        }
-        return generator.wrapped
+        fixedWidthInteger(in: range, scaling: scaling)
     }
 
     /// Generates arbitrary `Int64` values within the given range.
@@ -541,16 +442,29 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Int>? = nil,
         scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<Int> {
-        let generator: Generator<Int> = if let range {
-            if let scaling {
+        fixedWidthInteger(in: range, scaling: scaling)
+    }
+}
+
+// MARK: - Fixed-width integer core
+
+private extension ReflectiveGenerator {
+    /// Resolves the shared range-and-scaling policy behind every fixed-width integer factory (`int8` … `uint`).
+    ///
+    /// The per-type factories differ only in `Value`. A `nil` range means the full domain with size scaling. An explicit range that equals the full domain still receives the type's default scaling; a narrower explicit range is sampled without scaling unless the caller passes one.
+    static func fixedWidthInteger<Value: FixedWidthInteger & BitPatternConvertible>(
+        in range: ClosedRange<Value>?,
+        scaling: SizeScaling<Value>?
+    ) -> ReflectiveGenerator<Value> {
+        let generator: Generator<Value> = switch (range, scaling) {
+            case let (range?, scaling?):
                 Gen.choose(in: range, scaling: scaling)
-            } else if range == Int.min ... Int.max {
-                Gen.choose(in: range, scaling: Int.defaultScaling)
-            } else {
+            case let (range?, nil) where range == Value.min ... Value.max:
+                Gen.choose(in: range, scaling: Value.defaultScaling)
+            case let (range?, nil):
                 Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(in: Int.min ... Int.max, scaling: scaling ?? Int.defaultScaling)
+            case (nil, _):
+                Gen.choose(in: Value.min ... Value.max, scaling: scaling ?? Value.defaultScaling)
         }
         return generator.wrapped
     }
