@@ -34,7 +34,6 @@ Exhaust shamelessly adopts three insights from Hypothesis and this paper:
 - Float shortlex ordering and reduction
 - Adaptive, "findInteger"-style search
 - Unit tests to verify edge cases
-- The notion of a `Bundle` for stateful contract testing
 
 Links:
 
