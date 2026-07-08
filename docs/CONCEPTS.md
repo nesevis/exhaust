@@ -114,7 +114,7 @@ The execution mode (`.sequential`, `.tasks`, or `.threads`) tells Exhaust how to
 
 An oracle is not always within reach. Sometimes you cannot compute the right answer cheaply enough to check against it, or at all. Metamorphic testing is a way to test without one.
 
-Rather than checking a single output against an expected value, you check a **metamorphic relation**: how the output should change when you transform the input in a known way. You never need to know what the output is, only how two related outputs must relate. Sorting twice gives the same result as sorting once. A broader search returns at least what the narrower one did. Adding background noise to audio leaves the transcription unchanged.
+Rather than checking a single output against an expected value, you check a **metamorphic relation**: how the output should change when you transform the input in a known way. You never need to know what the output is, only how two related outputs must relate. A bug can show up as a broken relation even when neither output looks wrong on its own. Sorting twice gives the same result as sorting once. A broader search returns at least what the narrower one did. Adding background noise to audio leaves the transcription unchanged.
 
 The `.metamorph` generator combinator builds the relation into the generator, pairing the original input with transformed copies so the property reads as a plain assertion over them. When a failure is found, the original reduces and the copies follow.
 

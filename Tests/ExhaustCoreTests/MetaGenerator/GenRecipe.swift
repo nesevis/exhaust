@@ -8,6 +8,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Recipe Type (output type tracking)
@@ -15,12 +16,18 @@ import Testing
 indirect enum RecipeType: Equatable, Hashable, Sendable, CustomStringConvertible {
     case int
     case bool
+    case double
+    case string
+    case character
     case arrayOf(RecipeType)
 
     var description: String {
         switch self {
             case .int: "Int"
             case .bool: "Bool"
+            case .double: "Double"
+            case .string: "String"
+            case .character: "Character"
             case let .arrayOf(element): "[\(element)]"
         }
     }
@@ -28,7 +35,7 @@ indirect enum RecipeType: Equatable, Hashable, Sendable, CustomStringConvertible
 
 // MARK: - Invertible Transform
 
-enum InvertibleTransform: String, Equatable, Hashable, CaseIterable {
+enum InvertibleTransform: String, Equatable, Hashable, CaseIterable, Sendable {
     case identity
     case negate
     case increment
@@ -69,7 +76,7 @@ enum InvertibleTransform: String, Equatable, Hashable, CaseIterable {
 
 // MARK: - Known Predicate
 
-enum KnownPredicate: String, Equatable, Hashable, CaseIterable {
+enum KnownPredicate: String, Equatable, Hashable, CaseIterable, Sendable {
     case always
     case isPositive
     case isEven
@@ -117,23 +124,31 @@ enum KnownPredicate: String, Equatable, Hashable, CaseIterable {
 ///
 /// Unlike `FreerMonad`, recipes use data (not closures) for continuations, enabling
 /// `Equatable` / `Hashable` conformance for structural comparison.
-indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
+indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable {
     case leaf(LeafKind)
     case combinator(CombinatorKind)
 
-    enum LeafKind: Equatable, Hashable, CustomStringConvertible {
+    enum LeafKind: Equatable, Hashable, CustomStringConvertible, Sendable {
         case int(ClosedRange<Int>)
         case bool
+        case double(ClosedRange<Double>)
+        case string(ClosedRange<UInt64>)
+        case character
         case justInt(Int)
         case justBool(Bool)
+        case justDouble(Double)
         case justIntArray([Int])
 
         var description: String {
             switch self {
                 case let .int(range): "int(\(range))"
                 case .bool: "bool"
+                case let .double(range): "double(\(range))"
+                case let .string(range): "string(len: \(range))"
+                case .character: "char"
                 case let .justInt(v): "just(\(v))"
                 case let .justBool(v): "just(\(v))"
+                case let .justDouble(v): "just(\(v))"
                 case let .justIntArray(v): "just(\(v))"
             }
         }
@@ -142,19 +157,22 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
             switch self {
                 case .int, .justInt: .int
                 case .bool, .justBool: .bool
+                case .double, .justDouble: .double
+                case .string: .string
+                case .character: .character
                 case .justIntArray: .arrayOf(.int)
             }
         }
     }
 
     /// One branch of a weighted pick recipe.
-    struct WeightedBranch: Equatable, Hashable {
+    struct WeightedBranch: Equatable, Hashable, Sendable {
         let weight: UInt64
         let recipe: GenRecipe
     }
 
     /// Defunctionalized `SizeScaling` for scaled sequence recipes.
-    enum RecipeScaling: String, Equatable, Hashable, CaseIterable {
+    enum RecipeScaling: String, Equatable, Hashable, CaseIterable, Sendable {
         case constant
         case linear
         case exponential
@@ -168,7 +186,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
         }
     }
 
-    enum CombinatorKind: Equatable, Hashable, CustomStringConvertible {
+    enum CombinatorKind: Equatable, Hashable, CustomStringConvertible, Sendable {
         case mapped(GenRecipe, InvertibleTransform)
         case array(GenRecipe, lengthRange: ClosedRange<UInt64>)
         case oneOf([GenRecipe])
@@ -185,6 +203,8 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
         case classified(GenRecipe)
         case metamorphed(GenRecipe, InvertibleTransform)
         case unfolded(depthRange: ClosedRange<Int>)
+        case getSized
+        case isomorphed(GenRecipe, InvertibleTransform)
 
         var description: String {
             switch self {
@@ -220,6 +240,10 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
                     "\(inner).metamorph(\(transform))"
                 case let .unfolded(depthRange: depthRange):
                     "unfold(\(depthRange))"
+                case .getSized:
+                    "getSize"
+                case let .isomorphed(inner, transform):
+                    "\(inner).isomorph(\(transform))"
             }
         }
     }
@@ -255,6 +279,8 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
                     case let .metamorphed(inner, _): return 1 + inner.nodeCount
                     // Unfold expands to one interpreter recursion level per drawn depth, so the stack budget must count the worst case, not a single node.
                     case let .unfolded(depthRange: depthRange): return 1 + depthRange.upperBound
+                    case .getSized: return 1
+                    case let .isomorphed(inner, _): return 1 + inner.nodeCount
                 }
         }
     }
@@ -281,7 +307,8 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
                     case let .resized(inner, size: _):
                         return inner.outputType
                     case let .zipped(a, _):
-                        return a.outputType
+                        // The build keeps the raw `.zip` output as `[element, element]`, so the recipe produces an array of the child type, not a scalar.
+                        return .arrayOf(a.outputType)
                     case let .optional(inner):
                         return inner.outputType
                     case let .boundArray(element: element, maxLength: _):
@@ -301,6 +328,10 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible {
                         return .arrayOf(inner.outputType)
                     case .unfolded:
                         return .int
+                    case .getSized:
+                        return .int
+                    case let .isomorphed(inner, transform):
+                        return transform.applicableType ?? inner.outputType
                 }
         }
     }
@@ -325,7 +356,6 @@ func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<Gen
         (1, weightedOneOfGenerator(producing: type, maxDepth: maxDepth)),
         (1, filteredGenerator(producing: type, maxDepth: maxDepth)),
         (1, resizedGenerator(producing: type, maxDepth: maxDepth)),
-        (1, zippedGenerator(producing: type, maxDepth: maxDepth)),
         (1, optionalGenerator(producing: type, maxDepth: maxDepth)),
         (1, recursiveGenerator(producing: type, maxDepth: maxDepth)),
         (1, uniqueGenerator(producing: type, maxDepth: maxDepth)),
@@ -334,11 +364,16 @@ func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<Gen
     if type == .int {
         choices.append((1, boundRangeGenerator(maxDepth: maxDepth)))
         choices.append((1, unfoldedGenerator()))
+        choices.append((1, getSizedGenerator(producing: type)))
+    }
+    if type == .int || type == .bool {
+        choices.append((1, isomorphedGenerator(producing: type)))
     }
     if case .arrayOf = type {
         choices.append((1, boundArrayGenerator(producing: type, maxDepth: maxDepth)))
         choices.append((1, scaledArrayGenerator(producing: type, maxDepth: maxDepth)))
         choices.append((1, metamorphedGenerator(producing: type, maxDepth: maxDepth)))
+        choices.append((1, zippedGenerator(producing: type, maxDepth: maxDepth)))
     }
     return Gen.pick(choices: choices)
 }
@@ -355,6 +390,15 @@ private func leafGenerator(producing type: RecipeType) -> Generator<GenRecipe> {
                 (3, .pure(.leaf(.bool))),
                 (1, Gen.choose(from: [true, false]).map { .leaf(.justBool($0)) }),
             ])
+        case .double:
+            Gen.pick(choices: [
+                (3, doubleRangeLeaf()),
+                (1, justDoubleLeaf()),
+            ])
+        case .string:
+            stringLeaf()
+        case .character:
+            .pure(.leaf(.character))
         case .arrayOf(.int):
             Gen.pick(choices: [
                 (2, arrayGenerator(producing: type, maxDepth: 1)),
@@ -381,6 +425,28 @@ private func justIntLeaf() -> Generator<GenRecipe> {
     Gen.choose(in: -50 ... 50 as ClosedRange<Int>).map { .leaf(.justInt($0)) }
 }
 
+private func doubleRangeLeaf() -> Generator<GenRecipe> {
+    // Generate two bounds and sort them to form a valid range.
+    Gen.choose(in: -100.0 ... 100.0 as ClosedRange<Double>).bind { a in
+        Gen.choose(in: -100.0 ... 100.0 as ClosedRange<Double>).map { b in
+            GenRecipe.leaf(.double(min(a, b) ... max(a, b)))
+        }
+    }
+}
+
+private func justDoubleLeaf() -> Generator<GenRecipe> {
+    Gen.choose(in: -50.0 ... 50.0 as ClosedRange<Double>).map { .leaf(.justDouble($0)) }
+}
+
+private func stringLeaf() -> Generator<GenRecipe> {
+    // Generate a length range for an ASCII string leaf.
+    Gen.choose(in: 0 ... 3 as ClosedRange<UInt64>).bind { lo in
+        Gen.choose(in: lo ... (lo + 5)).map { hi in
+            GenRecipe.leaf(.string(lo ... hi))
+        }
+    }
+}
+
 private func justIntArrayLeaf() -> Generator<GenRecipe> {
     Gen.choose(in: 0 ... 3 as ClosedRange<UInt64>).bind { length in
         Gen.arrayOf(Gen.choose(in: -50 ... 50 as ClosedRange<Int>), exactly: length).map { .leaf(.justIntArray($0)) }
@@ -395,7 +461,11 @@ private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
     return Gen.choose(from: transforms).bind { transform in
         // The inner recipe must produce a type compatible with the transform
         let innerType = transform.applicableType ?? type
-        return recipeGenerator(producing: innerType, maxDepth: maxDepth - 1).map { inner in
+        // A narrowing transform (negate/increment/not) does an unchecked `as! Int`/`as! Bool` on the inner value, which traps if the inner yields an Optional — and the `optional` combinator declares its bare element type while producing `Optional`. Restrict narrowing transforms to leaves, which never wrap their output; `.identity` is total over any value, so it keeps the full recipe.
+        let innerGen = transform == .identity
+            ? recipeGenerator(producing: innerType, maxDepth: maxDepth - 1)
+            : leafGenerator(producing: innerType)
+        return innerGen.map { inner in
             .combinator(.mapped(inner, transform))
         }
     }
@@ -459,8 +529,11 @@ private func resizedGenerator(producing type: RecipeType, maxDepth: Int) -> Gene
 }
 
 private func zippedGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
-    let subA = recipeGenerator(producing: type, maxDepth: maxDepth - 1)
-    let subB = recipeGenerator(producing: type, maxDepth: maxDepth - 1)
+    guard case let .arrayOf(elementType) = type else {
+        return leafGenerator(producing: type)
+    }
+    let subA = recipeGenerator(producing: elementType, maxDepth: maxDepth - 1)
+    let subB = recipeGenerator(producing: elementType, maxDepth: maxDepth - 1)
     return Gen.zip(subA, subB).map { a, b in
         GenRecipe.combinator(.zipped(a, b))
     }
@@ -539,7 +612,11 @@ private func metamorphedGenerator(producing type: RecipeType, maxDepth: Int) -> 
         return leafGenerator(producing: type)
     }
     return Gen.choose(from: transforms).bind { transform in
-        recipeGenerator(producing: elementType, maxDepth: maxDepth - 1).map { inner in
+        // See `mappedGenerator`: a narrowing transform traps on an Optional inner value, so restrict it to leaves; `.identity` keeps the full recipe.
+        let innerGen = transform == .identity
+            ? recipeGenerator(producing: elementType, maxDepth: maxDepth - 1)
+            : leafGenerator(producing: elementType)
+        return innerGen.map { inner in
             .combinator(.metamorphed(inner, transform))
         }
     }
@@ -556,6 +633,27 @@ private func unfoldedGenerator() -> Generator<GenRecipe> {
 private func boundRangeGenerator(maxDepth _: Int) -> Generator<GenRecipe> {
     leafGenerator(producing: .int).map { inner in
         .combinator(.boundRange(inner))
+    }
+}
+
+private func getSizedGenerator(producing type: RecipeType) -> Generator<GenRecipe> {
+    // getSize derives an Int from the generation size; only offered for the .int type.
+    if type == .int {
+        return .pure(.combinator(.getSized))
+    }
+    return leafGenerator(producing: type)
+}
+
+private func isomorphedGenerator(producing type: RecipeType) -> Generator<GenRecipe> {
+    let transforms = InvertibleTransform.applicable(to: type).filter { $0 != .identity }
+    guard transforms.isEmpty == false else {
+        return leafGenerator(producing: type)
+    }
+    return Gen.choose(from: transforms).bind { transform in
+        // Restrict to a leaf so the bijection sees a concrete non-optional value, the same guard mappedGenerator uses for narrowing transforms.
+        leafGenerator(producing: type).map { inner in
+            .combinator(.isomorphed(inner, transform))
+        }
     }
 }
 
@@ -583,9 +681,17 @@ private func buildLeaf(_ kind: GenRecipe.LeafKind) -> AnyGenerator {
             Gen.choose(in: range).erase()
         case .bool:
             Gen.choose(from: [true, false]).erase()
+        case let .double(range):
+            Gen.choose(in: range).erase()
+        case let .string(range):
+            asciiStringGen(length: range).erase()
+        case .character:
+            charGen(from: .decimalDigits).erase()
         case let .justInt(value):
             Gen.just(value).erase()
         case let .justBool(value):
+            Gen.just(value).erase()
+        case let .justDouble(value):
             Gen.just(value).erase()
         case let .justIntArray(value):
             Gen.just(value).erase()
@@ -629,7 +735,11 @@ private func buildCombinator(
             return Gen.resize(size, buildGenerator(from: inner))
 
         case let .zipped(a, b):
-            return Gen.zip(buildGenerator(from: a), buildGenerator(from: b)).map { first, _ in first }
+            // Keep the raw `.zip` output as `[first, second]` rather than projecting to one element. The `.zip` operation reflects structurally by decomposing the array into its children, so the whole pair round-trips; projecting to a single element produced a value the reflector could not decompose, silently voiding every zip round-trip assertion.
+            return AnyGenerator.impure(
+                operation: .zip([buildGenerator(from: a), buildGenerator(from: b)]),
+                continuation: { .pure($0) }
+            )
 
         case let .optional(inner):
             // Mirrors `liftToOptional()` in the type-erased world: the value branch's backward transform unwraps one optional layer and throws `reflectedNil` for nil, which `reflectPickOperation` treats as "this value belongs to the other branch". A plain forward-only `.map` here makes any nil-bearing nested optional unreflectable.
@@ -736,6 +846,28 @@ private func buildCombinator(
                 },
                 finish: { $0 }
             ).erase()
+
+        case .getSized:
+            // Reads the generation size and derives an integer in 0...size. getSize reflects (its bound backward maps the value back to a size), so this round-trips.
+            return Gen.getSize { size in
+                Gen.chooseDerived(in: 0 ... Int(size))
+            }.erase()
+
+        case let .isomorphed(inner, transform):
+            // Unlike `mapped` (a `contramap` wrapping a forward-only `.map`), `isomorph` is bidirectional by construction and must reflect without the contramap crutch. The transform is a genuine bijection; the inner is a leaf of the applicable type.
+            let metatype: Any.Type = transform.applicableType == .bool ? Bool.self : Int.self
+            return AnyGenerator.impure(
+                operation: .transform(
+                    kind: .isomorph(
+                        forward: { transform.forward($0) },
+                        backward: { transform.backward($0) },
+                        inputType: metatype,
+                        outputType: metatype
+                    ),
+                    inner: buildGenerator(from: inner)
+                ),
+                continuation: { .pure($0) }
+            )
     }
 }
 

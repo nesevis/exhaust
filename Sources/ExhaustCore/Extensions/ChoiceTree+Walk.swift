@@ -57,10 +57,10 @@ package extension ChoiceTree {
         switch self {
             case .choice, .just, .getSize:
                 preconditionFailure("Leaf nodes have no children to replace")
-            case let .group(elements, _):
+            case let .group(elements, isOpaque):
                 var copy = elements
                 copy[index] = newChild
-                return .group(copy)
+                return .group(copy, isOpaque: isOpaque)
             case let .bind(fingerprint, inner, bound):
                 precondition(index < 2, "bind has exactly two children")
                 return index == 0
