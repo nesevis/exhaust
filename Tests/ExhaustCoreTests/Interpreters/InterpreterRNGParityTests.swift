@@ -204,6 +204,64 @@ struct InterpreterRNGParityTests {
     func multipleSeedsParity(seed: UInt64) throws {
         try assertParity(stringGen(), seed: seed, runs: 5)
     }
+
+    // MARK: - Unique
+
+    @Test("Choice-sequence unique parity")
+    func choiceSequenceUniqueParity() throws {
+        // The load-bearing case: VI.handleUnique builds an inline VACTI context to dedup by choice sequence, while VACTI.handleUnique flattens its own tree.
+        // These structurally different implementations must nonetheless consume entropy identically.
+        // The inner is high-cardinality and not size-scaled so uniqueness does not exhaust the retry budget within the run.
+        let gen = uniqueGen(Gen.choose(in: UInt64(0) ... UInt64.max))
+        try assertParity(gen, seed: 42, runs: 10)
+    }
+
+    @Test("Key-based unique parity")
+    func keyBasedUniqueParity() throws {
+        let gen = uniqueGen(Gen.choose(in: UInt64(0) ... UInt64.max), by: { AnyHashable($0) })
+        try assertParity(gen, seed: 4242, runs: 10)
+    }
+
+    // MARK: - Filter
+
+    @Test("Rejection-sampling filter parity")
+    func filterParity() throws {
+        let gen = filterGen(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling)) { $0 % 2 == 0 }
+        try assertParity(gen, seed: 1234, runs: 10)
+    }
+
+    // MARK: - Classify
+
+    @Test("Classify parity")
+    func classifyParity() throws {
+        // Classify is a generation-time passthrough in both interpreters; parity confirms the classifier evaluation does not perturb PRNG consumption.
+        let gen = Gen.classify(
+            Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling),
+            ("negative", { $0 < 0 })
+        )
+        try assertParity(gen, seed: 246, runs: 10)
+    }
+
+    // MARK: - Resize
+
+    @Test("Resize parity")
+    func resizeParity() throws {
+        let gen = Gen.resize(
+            50,
+            Gen.arrayOf(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling), within: UInt64(0) ... 8)
+        )
+        try assertParity(gen, seed: 777, runs: 10)
+    }
+
+    // MARK: - Metamorphic
+
+    @Test("Metamorphic parity")
+    func metamorphicParity() throws {
+        // Metamorphic saves PRNG state, generates the original, then restores and re-generates once per transform.
+        // Both interpreters must save and restore the same state, or the copies diverge.
+        let gen = metamorphicGen(Gen.choose(in: Int.min ... Int.max, scaling: Int.defaultScaling))
+        try assertParity(gen, seed: 8080, runs: 10)
+    }
 }
 
 // MARK: - Helpers
@@ -240,4 +298,55 @@ private func assertParity(
     sourceLocation: SourceLocation = #_sourceLocation
 ) throws {
     try assertParity(gen, seed: seed, runs: runs, materializePicks: materializePicks, equals: { $0 == $1 }, sourceLocation: sourceLocation)
+}
+
+// MARK: - Operation Constructors
+
+/// Wraps a generator with a choice-sequence `.unique` operation (no key extractor).
+private func uniqueGen<Value>(_ gen: Generator<Value>) -> Generator<Value> {
+    .impure(
+        operation: .unique(gen: gen.erase(), fingerprint: 0, keyExtractor: nil),
+        continuation: { .pure($0 as! Value) }
+    )
+}
+
+/// Wraps a generator with a key-based `.unique` operation.
+private func uniqueGen<Value>(
+    _ gen: Generator<Value>,
+    by keyExtractor: @escaping (Value) -> AnyHashable
+) -> Generator<Value> {
+    .impure(
+        operation: .unique(gen: gen.erase(), fingerprint: 0, keyExtractor: { keyExtractor($0 as! Value) }),
+        continuation: { .pure($0 as! Value) }
+    )
+}
+
+/// Wraps a generator with a rejection-sampling `.filter` operation.
+private func filterGen<Value>(
+    _ gen: Generator<Value>,
+    predicate: @escaping (Value) -> Bool
+) -> Generator<Value> {
+    Gen.filter(
+        gen,
+        type: .rejectionSampling,
+        predicate: predicate,
+        sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
+    )
+}
+
+/// Wraps an `Int` generator with a `.metamorphic` transform, projecting `(original, +1, ×2)` to `[Int]`.
+private func metamorphicGen(_ gen: Generator<Int>) -> Generator<[Int]> {
+    .impure(
+        operation: .transform(
+            kind: .metamorphic(
+                transforms: [
+                    { (($0 as! Int) + 1) as Any },
+                    { (($0 as! Int) * 2) as Any },
+                ],
+                inputType: Int.self
+            ),
+            inner: gen.erase()
+        ),
+        continuation: { .pure(($0 as! [Any]).map { $0 as! Int }) }
+    )
 }
