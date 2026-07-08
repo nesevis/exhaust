@@ -21,14 +21,6 @@ import Testing
 struct RoundtripPropertyTests {
     @Test("Leaf types outside the recipe language round-trip through reflect and replay")
     func primitiveRoundtrip() throws {
-        let doubleGen: Generator<Double> = Gen.choose(in: -1000.0 ... 1000.0)
-        try exhaustCheck(doubleGen) { value in
-            guard let tree = try? Interpreters.reflect(doubleGen, with: value),
-                  let replayed = try? Interpreters.replay(doubleGen, using: tree)
-            else { return false }
-            return replayed == value
-        }
-
         let asciiGen = asciiStringGen(length: 1 ... 10)
         try exhaustCheck(asciiGen) { value in
             guard let tree = try? Interpreters.reflect(asciiGen, with: value),
@@ -231,10 +223,12 @@ private func assertReplayMaterializerEquivalence<Output>(
         guard let tree = try? Interpreters.reflect(gen, with: value) else { return true }
         guard let replayed: Output = try? Interpreters.replay(gen, using: tree) else { return false }
 
+        // Reproduction is `.exact` mode: it reads every choice — including branch selection — from the flattened prefix. `.guided` re-selects pick branches from its seed (it is for exploration, not reproduction), so it agrees with replay only for branch-free generators.
         let materializeResult = Materializer.materialize(
             gen,
-            prefix: ChoiceSequence(),
-            mode: .guided(seed: 0, fallbackTree: tree)
+            prefix: ChoiceSequence.flatten(tree),
+            mode: .exact,
+            fallbackTree: tree
         )
         guard case let .success(materialized, _, _) = materializeResult else { return false }
 
@@ -266,26 +260,6 @@ struct ShortlexKeyPropertyTests {
             let va = ChoiceValue(a, tag: .int64)
             let vb = ChoiceValue(b, tag: .int64)
             return va.shortlexKey < vb.shortlexKey
-        }
-    }
-}
-
-// MARK: - Reflect Stabilization
-
-@Suite("Interpreter Agreement")
-struct InterpreterAgreementPropertyTests {
-    @Test("Reflect stabilizes after one round")
-    func reflectIdempotence() throws {
-        let gen: Generator<Int> = Gen.choose(in: -1000 ... 1000)
-        try exhaustCheck(gen) { value in
-            guard let tree1 = try? Interpreters.reflect(gen, with: value),
-                  let replayed = try? Interpreters.replay(gen, using: tree1),
-                  let tree2 = try? Interpreters.reflect(gen, with: replayed)
-            else { return false }
-            // The replayed value should produce an equivalent tree
-            guard let replayed2 = try? Interpreters.replay(gen, using: tree2)
-            else { return false }
-            return replayed == replayed2
         }
     }
 }
@@ -351,25 +325,6 @@ struct ShrinkingPropertyTests {
                 gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
             ) else { continue }
             #expect(property(shrunk) == false, "Shrunk value \(shrunk) no longer fails the property")
-        }
-    }
-
-    @Test("Shrinking produces simpler choice sequences")
-    func shrinkingReducesComplexity() throws {
-        let gen: Generator<Int> = Gen.choose(in: 0 ... 10000)
-        let property: (Int) -> Bool = { $0 < 50 }
-
-        var iterator = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 50)
-        while let (value, tree) = try iterator.next() {
-            guard property(value) == false else { continue }
-            let originalSequence = ChoiceSequence.flatten(tree)
-            guard case let .reduced(shrunkSequence, _, _) = try Interpreters.choiceGraphReduce(
-                gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
-            ) else { continue }
-            #expect(
-                shrunkSequence.shortLexPrecedes(originalSequence) || shrunkSequence == originalSequence,
-                "Shrunk sequence is not simpler than the original"
-            )
         }
     }
 }

@@ -8,6 +8,7 @@
 //
 
 import ExhaustCore
+import ExhaustTestSupport
 import Testing
 
 // MARK: - Recipe Type (output type tracking)
@@ -15,12 +16,16 @@ import Testing
 indirect enum RecipeType: Equatable, Hashable, Sendable, CustomStringConvertible {
     case int
     case bool
+    case double
+    case string
     case arrayOf(RecipeType)
 
     var description: String {
         switch self {
             case .int: "Int"
             case .bool: "Bool"
+            case .double: "Double"
+            case .string: "String"
             case let .arrayOf(element): "[\(element)]"
         }
     }
@@ -124,16 +129,22 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable 
     enum LeafKind: Equatable, Hashable, CustomStringConvertible, Sendable {
         case int(ClosedRange<Int>)
         case bool
+        case double(ClosedRange<Double>)
+        case string(ClosedRange<UInt64>)
         case justInt(Int)
         case justBool(Bool)
+        case justDouble(Double)
         case justIntArray([Int])
 
         var description: String {
             switch self {
                 case let .int(range): "int(\(range))"
                 case .bool: "bool"
+                case let .double(range): "double(\(range))"
+                case let .string(range): "string(len: \(range))"
                 case let .justInt(v): "just(\(v))"
                 case let .justBool(v): "just(\(v))"
+                case let .justDouble(v): "just(\(v))"
                 case let .justIntArray(v): "just(\(v))"
             }
         }
@@ -142,6 +153,8 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable 
             switch self {
                 case .int, .justInt: .int
                 case .bool, .justBool: .bool
+                case .double, .justDouble: .double
+                case .string: .string
                 case .justIntArray: .arrayOf(.int)
             }
         }
@@ -356,6 +369,13 @@ private func leafGenerator(producing type: RecipeType) -> Generator<GenRecipe> {
                 (3, .pure(.leaf(.bool))),
                 (1, Gen.choose(from: [true, false]).map { .leaf(.justBool($0)) }),
             ])
+        case .double:
+            Gen.pick(choices: [
+                (3, doubleRangeLeaf()),
+                (1, justDoubleLeaf()),
+            ])
+        case .string:
+            stringLeaf()
         case .arrayOf(.int):
             Gen.pick(choices: [
                 (2, arrayGenerator(producing: type, maxDepth: 1)),
@@ -380,6 +400,28 @@ private func intRangeLeaf() -> Generator<GenRecipe> {
 
 private func justIntLeaf() -> Generator<GenRecipe> {
     Gen.choose(in: -50 ... 50 as ClosedRange<Int>).map { .leaf(.justInt($0)) }
+}
+
+private func doubleRangeLeaf() -> Generator<GenRecipe> {
+    // Generate two bounds and sort them to form a valid range.
+    Gen.choose(in: -100.0 ... 100.0 as ClosedRange<Double>).bind { a in
+        Gen.choose(in: -100.0 ... 100.0 as ClosedRange<Double>).map { b in
+            GenRecipe.leaf(.double(min(a, b) ... max(a, b)))
+        }
+    }
+}
+
+private func justDoubleLeaf() -> Generator<GenRecipe> {
+    Gen.choose(in: -50.0 ... 50.0 as ClosedRange<Double>).map { .leaf(.justDouble($0)) }
+}
+
+private func stringLeaf() -> Generator<GenRecipe> {
+    // Generate a length range for an ASCII string leaf.
+    Gen.choose(in: 0 ... 3 as ClosedRange<UInt64>).bind { lo in
+        Gen.choose(in: lo ... (lo + 5)).map { hi in
+            GenRecipe.leaf(.string(lo ... hi))
+        }
+    }
 }
 
 private func justIntArrayLeaf() -> Generator<GenRecipe> {
@@ -595,9 +637,15 @@ private func buildLeaf(_ kind: GenRecipe.LeafKind) -> AnyGenerator {
             Gen.choose(in: range).erase()
         case .bool:
             Gen.choose(from: [true, false]).erase()
+        case let .double(range):
+            Gen.choose(in: range).erase()
+        case let .string(range):
+            asciiStringGen(length: range).erase()
         case let .justInt(value):
             Gen.just(value).erase()
         case let .justBool(value):
+            Gen.just(value).erase()
+        case let .justDouble(value):
             Gen.just(value).erase()
         case let .justIntArray(value):
             Gen.just(value).erase()
