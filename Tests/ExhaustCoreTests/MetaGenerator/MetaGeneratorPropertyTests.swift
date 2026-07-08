@@ -10,50 +10,56 @@ struct MetaGeneratorPropertyTests {
 
     @Test("Generated generators round-trip through reflect and replay", arguments: metaRecipeTypes)
     func reflectionRoundTrip(type: RecipeType) throws {
+        let tally = Tally()
         let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
             guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
             let gen = buildGenerator(from: recipe)
-            return checkAllValues(gen, maxRuns: 10) { value in
-                guard let tree = try Interpreters.reflect(gen, with: value) else { return true }
-                guard let replayed = try Interpreters.replay(gen, using: tree) else { return true }
+            return checkAllValues(gen, maxRuns: 10, tally: tally) { value in
+                guard let tree = try Interpreters.reflect(gen, with: value) else { return nil }
+                guard let replayed = try Interpreters.replay(gen, using: tree) else { return nil }
                 return anyEquals(value, replayed)
             }
         }
         #expect(badRecipe == nil, "Round-trip failed for minimal recipe: \(badRecipe!)")
+        #expect(tally.evaluated > 0, "Round-trip sweep for \(type) reached no verdict: \(tally.summary)")
     }
 
     // MARK: 2. Replay Determinism
 
     @Test("Replaying the same ChoiceTree produces identical values", arguments: metaRecipeTypes)
     func replayDeterminism(type: RecipeType) throws {
+        let tally = Tally()
         let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
             guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
             let gen = buildGenerator(from: recipe)
-            return checkAllTrees(gen, maxRuns: 10) { tree in
+            return checkAllTrees(gen, maxRuns: 10, tally: tally) { tree in
                 guard let r1 = try Interpreters.replay(gen, using: tree),
-                      let r2 = try Interpreters.replay(gen, using: tree) else { return true }
+                      let r2 = try Interpreters.replay(gen, using: tree) else { return nil }
                 return anyEquals(r1, r2)
             }
         }
         #expect(badRecipe == nil, "Replay not deterministic for minimal recipe: \(badRecipe!)")
+        #expect(tally.evaluated > 0, "Replay-determinism sweep for \(type) reached no verdict: \(tally.summary)")
     }
 
     // MARK: 3. Materialize Agreement
 
     @Test("Materialize with flattened tree agrees with replay", arguments: metaRecipeTypes)
     func materializeAgreement(type: RecipeType) throws {
+        let tally = Tally()
         let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
             guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
             let gen = buildGenerator(from: recipe)
-            return checkAllValues(gen, maxRuns: 10) { value in
-                guard let reflectedTree = try Interpreters.reflect(gen, with: value) else { return true }
-                guard let replayed = try Interpreters.replay(gen, using: reflectedTree) else { return true }
+            return checkAllValues(gen, maxRuns: 10, tally: tally) { value in
+                guard let reflectedTree = try Interpreters.reflect(gen, with: value) else { return nil }
+                guard let replayed = try Interpreters.replay(gen, using: reflectedTree) else { return nil }
                 let sequence = ChoiceSequence.flatten(reflectedTree)
-                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else { return true }
+                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else { return nil }
                 return anyEquals(materialized, replayed)
             }
         }
         #expect(badRecipe == nil, "Materialize disagrees with replay for minimal recipe: \(badRecipe!)")
+        #expect(tally.evaluated > 0, "Materialize sweep for \(type) reached no verdict: \(tally.summary)")
     }
 
     // MARK: 3b. Interpreter Parity
@@ -81,6 +87,54 @@ struct MetaGeneratorPropertyTests {
                         )
                     default:
                         Issue.record("Iteration \(iteration): one interpreter exhausted before the other for recipe: \(recipe)")
+                }
+            }
+        }
+        #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
+    }
+
+    // MARK: 3c. Reflect Stabilization
+
+    @Test("Reflect stabilizes after one round for random recipes", arguments: metaRecipeTypes)
+    func reflectStabilizes(type: RecipeType) throws {
+        let tally = Tally()
+        let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
+            guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
+            let gen = buildGenerator(from: recipe)
+            return checkAllValues(gen, maxRuns: 10, tally: tally) { value in
+                guard let tree1 = try Interpreters.reflect(gen, with: value) else { return nil }
+                guard let replayed = try Interpreters.replay(gen, using: tree1) else { return nil }
+                guard let tree2 = try Interpreters.reflect(gen, with: replayed) else { return nil }
+                guard let replayed2 = try Interpreters.replay(gen, using: tree2) else { return nil }
+                return anyEquals(replayed, replayed2)
+            }
+        }
+        #expect(badRecipe == nil, "Reflect did not stabilize for minimal recipe: \(badRecipe!)")
+        #expect(tally.evaluated > 0, "Reflect-stabilization sweep for \(type) reached no verdict: \(tally.summary)")
+    }
+
+    // MARK: 3e. Fast-Path Parity
+
+    /// `nextValueOnly()` (the tree-free fast path, backed by ValueInterpreter) and `reproduceWithTree()` (the tree-building path) must produce the same value for the same run. This is the contract the sampling pipeline relies on; `reproduceFailureTree()` asserts it at runtime and falls back to `.just` when it breaks. Sweeping it over the recipe space checks it for every generator shape, not just the ones the pipeline happened to hit.
+    ///
+    /// Recipes containing `unique` are exempt. The fast path's ValueInterpreter pass records the drawn choice sequence in the unique dedup set, so `reproduceWithTree()`'s re-run sees its own sequence as a duplicate and retries a different value. Production sidesteps this the same way: `nextValueOnly()` falls back to `next()` once `uniqueSeenSequences` is non-empty, and `reproduceFailureTree()` returns `.just` on the resulting break rather than trusting the reproduction.
+    @Test("Fast-path nextValueOnly agrees with reproduceWithTree for random recipes", arguments: metaRecipeTypes)
+    func fastPathParity(type: RecipeType) throws {
+        var recipeIter = ValueInterpreter(recipeGenerator(producing: type, maxDepth: 2), seed: 42, maxRuns: 30)
+        var checkedRecipes = 0
+        while let recipe = try recipeIter.next() {
+            guard recipe.nodeCount <= metaRecipeNodeBudget, containsUnique(recipe) == false else { continue }
+            checkedRecipes += 1
+            let gen = buildGenerator(from: recipe)
+            var iter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 5)
+            while let valueOnly = try iter.nextValueOnly() {
+                let reproduced = try iter.reproduceWithTree()
+                #expect(reproduced != nil, "reproduceWithTree returned nil after nextValueOnly produced a value, recipe: \(recipe)")
+                if let (reproducedValue, _) = reproduced {
+                    #expect(
+                        anyEquals(valueOnly, reproducedValue),
+                        "Fast-path value \(valueOnly) disagrees with reproduced \(reproducedValue), recipe: \(recipe)"
+                    )
                 }
             }
         }
@@ -185,6 +239,37 @@ struct MetaGeneratorPropertyTests {
                 )
             }
         }
+    }
+
+    // MARK: 8b. Reduction Reduces Complexity
+
+    @Test("Reduced choice sequence shortlex-precedes or equals the original", arguments: metaRecipeTypes)
+    func reductionReducesComplexity(type: RecipeType) throws {
+        let recipeGen = recipeGenerator(producing: type, maxDepth: 1)
+        var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 20)
+        let property = failingProperty(for: type)
+        var checkedRecipes = 0
+        while let recipe = try recipeIter.next() {
+            guard recipe.nodeCount <= metaRecipeNodeBudget else {
+                continue
+            }
+            checkedRecipes += 1
+            let gen = buildGenerator(from: recipe)
+
+            var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
+            while let (value, tree) = try valueIter.next() {
+                guard property(value) == false else { continue }
+                let originalSequence = ChoiceSequence.flatten(tree)
+                guard case let .reduced(shrunkSequence, _, _) = try? Interpreters.choiceGraphReduce(
+                    gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
+                ) else { continue }
+                #expect(
+                    shrunkSequence.shortLexPrecedes(originalSequence) || shrunkSequence == originalSequence,
+                    "Shrunk sequence is not simpler than the original, recipe: \(recipe)"
+                )
+            }
+        }
+        #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
     }
 
     // MARK: 9. Filter Correctness
@@ -527,42 +612,105 @@ struct MetaGeneratorPropertyTests {
         }
         #expect(roundTripped > 0, "\(fixture.name) produced no values to check")
     }
+
+    // MARK: 16. Forward-Only Exemption (pinned)
+
+    /// Pins the combinators the coverage sweep deliberately omits, so their exemption is an assertion rather than silence.
+    ///
+    /// `unfolded` builds a `bindReified` chain with no backward, so reflection throws for every value. `boundRange` uses the invisible `FreerMonad.bind`, whose dependent `choose` reflects only occasionally. Both are excluded from ``reflectableCombinatorFixtures`` because a nil or thrown reflection is expected, not a defect. Asserting that here means that if backward support is ever added — making these reflect — this test fails and prompts promoting the kind into the reflectable set and the round-trip sweeps.
+    @Test("Forward-only combinators stay unreflectable")
+    func forwardOnlyCombinatorsStayUnreflectable() throws {
+        let unfolded: GenRecipe = .combinator(.unfolded(depthRange: 0 ... 3))
+        let unfoldedReflected = try reflectableValueCount(unfolded, seed: 42, maxRuns: 12)
+        #expect(unfoldedReflected == 0, "unfolded reflected \(unfoldedReflected)/12 values — it is now reflectable, so promote it into reflectableCombinatorFixtures and the round-trip sweeps")
+
+        let boundRange: GenRecipe = .combinator(.boundRange(.leaf(.int(0 ... 10))))
+        let boundRangeReflected = try reflectableValueCount(boundRange, seed: 42, maxRuns: 12)
+        #expect(boundRangeReflected < 12, "boundRange reflected all 12 values — it is now fully reflectable, so promote it into reflectableCombinatorFixtures and the round-trip sweeps")
+    }
 }
 
 // MARK: - Helpers
 
-/// Checks a property against all generated values. Returns true if the property holds for all values.
+/// Accumulates how often a swept invariant reached a real verdict versus skipped one.
+///
+/// A cell in the matrix can pass three ways: the check ran and held (`evaluated`), the operation could not reflect so the check returned nil (`vacuous`), or reflection threw and the helper swallowed it (`thrown`). The test report shows only pass or fail, so without this a whole (kind, invariant) cell can be green because it never actually ran. Each swept invariant asserts `evaluated > 0` against its tally so wholesale vacuity fails loudly.
+final class Tally {
+    var evaluated = 0
+    var vacuous = 0
+    var thrown = 0
+
+    var summary: String {
+        "evaluated=\(evaluated), vacuous=\(vacuous), thrown=\(thrown)"
+    }
+}
+
+/// Checks a property against all generated values, recording verdicts into `tally`. Returns true if the property held for every value that produced a verdict.
+///
+/// The `check` returns `nil` to signal a vacuous skip (for example, a forward-only generator that cannot reflect), `true` for a held verdict, and `false` for a violation. A throw from generation or from `check` is counted as `thrown`, not propagated, so a recoverable reflection failure is recorded rather than silently treated as a pass.
 private func checkAllValues(
     _ gen: AnyGenerator,
     maxRuns: UInt64 = 10,
-    check: (Any) throws -> Bool
+    tally: Tally,
+    check: (Any) throws -> Bool?
 ) -> Bool {
-    do {
-        var iter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: maxRuns)
-        while let (value, _) = try iter.next() {
-            if try check(value) == false { return false }
+    var iter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: maxRuns)
+    while true {
+        let element: (value: Any, tree: ChoiceTree)?
+        do {
+            element = try iter.next()
+        } catch {
+            tally.thrown += 1
+            return true
         }
-    } catch {
-        return true
+        guard let (value, _) = element else { return true }
+        do {
+            switch try check(value) {
+                case .none:
+                    tally.vacuous += 1
+                case .some(true):
+                    tally.evaluated += 1
+                case .some(false):
+                    tally.evaluated += 1
+                    return false
+            }
+        } catch {
+            tally.thrown += 1
+        }
     }
-    return true
 }
 
-/// Checks a property against all generated choice trees. Returns true if the property holds for all trees.
+/// Checks a property against all generated choice trees, recording verdicts into `tally`. Returns true if the property held for every tree that produced a verdict. See ``checkAllValues`` for the `nil`/`true`/`false` contract.
 private func checkAllTrees(
     _ gen: AnyGenerator,
     maxRuns: UInt64 = 10,
-    check: (ChoiceTree) throws -> Bool
+    tally: Tally,
+    check: (ChoiceTree) throws -> Bool?
 ) -> Bool {
-    do {
-        var iter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: maxRuns)
-        while let (_, tree) = try iter.next() {
-            if try check(tree) == false { return false }
+    var iter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: maxRuns)
+    while true {
+        let element: (value: Any, tree: ChoiceTree)?
+        do {
+            element = try iter.next()
+        } catch {
+            tally.thrown += 1
+            return true
         }
-    } catch {
-        return true
+        guard let (_, tree) = element else { return true }
+        do {
+            switch try check(tree) {
+                case .none:
+                    tally.vacuous += 1
+                case .some(true):
+                    tally.evaluated += 1
+                case .some(false):
+                    tally.evaluated += 1
+                    return false
+            }
+        } catch {
+            tally.thrown += 1
+        }
     }
-    return true
 }
 
 /// Checks that two generators produce pairwise-equal values from the same seed.
@@ -595,6 +743,62 @@ private func failingProperty(for type: RecipeType) -> (Any) -> Bool {
         case .arrayOf:
             { value in (value as? [Any]).map { $0.count < 2 } ?? true }
     }
+}
+
+/// Returns whether the recipe contains a combinator of the given kind at any depth, matched by `predicate`.
+private func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorKind) -> Bool) -> Bool {
+    guard case let .combinator(kind) = recipe else { return false }
+    if predicate(kind) {
+        return true
+    }
+    switch kind {
+        case let .mapped(inner, _),
+             let .array(inner, _),
+             let .filtered(inner, _),
+             let .resized(inner, _),
+             let .optional(inner),
+             let .boundRange(inner),
+             let .scaledArray(inner, _, _),
+             let .classified(inner),
+             let .metamorphed(inner, _),
+             let .unique(inner):
+            return recipeContains(inner, where: predicate)
+        case let .boundArray(element, _):
+            return recipeContains(element, where: predicate)
+        case let .recursive(base, _):
+            return recipeContains(base, where: predicate)
+        case let .oneOf(recipes):
+            return recipes.contains { recipeContains($0, where: predicate) }
+        case let .weightedOneOf(branches):
+            return branches.contains { recipeContains($0.recipe, where: predicate) }
+        case let .zipped(first, second):
+            return recipeContains(first, where: predicate) || recipeContains(second, where: predicate)
+        case .unfolded:
+            return false
+    }
+}
+
+/// Returns whether the recipe contains a `unique` combinator at any depth.
+private func containsUnique(_ recipe: GenRecipe) -> Bool {
+    recipeContains(recipe) { kind in
+        if case .unique = kind {
+            return true
+        }
+        return false
+    }
+}
+
+/// Counts how many of a recipe's generated values reflect to a non-nil tree. A throw or a nil reflection both count as "did not reflect", since `try?` collapses them.
+private func reflectableValueCount(_ recipe: GenRecipe, seed: UInt64, maxRuns: UInt64) throws -> Int {
+    let gen = buildGenerator(from: recipe)
+    var iter = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: maxRuns)
+    var reflected = 0
+    while let (value, _) = try iter.next() {
+        if (try? Interpreters.reflect(gen, with: value)) != nil {
+            reflected += 1
+        }
+    }
+    return reflected
 }
 
 /// Returns whether the value is nil at any level of optional nesting.
