@@ -10,24 +10,31 @@ extension MetaGeneratorPropertyTests {
         let recipeGen = recipeGenerator(producing: type, maxDepth: 1)
         var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 20)
         let property = failingProperty(for: type)
+        var checkedRecipes = 0
         while let recipe = try recipeIter.next() {
             guard recipe.nodeCount <= metaRecipeNodeBudget else {
                 continue
             }
+            checkedRecipes += 1
             let gen = buildGenerator(from: recipe)
 
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
             while let (value, tree) = try valueIter.next() {
-                guard property(value) == false else { continue }
+                guard property(value) == false else {
+                    continue
+                }
                 guard case let .reduced(_, _, shrunk) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
-                ) else { continue }
+                ) else {
+                    continue
+                }
                 #expect(
                     property(shrunk) == false,
                     "Shrunk value passes property but shouldn't, recipe: \(recipe)"
                 )
             }
         }
+        #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
     }
 
     // MARK: 8b. Reduction Reduces Complexity
@@ -47,11 +54,15 @@ extension MetaGeneratorPropertyTests {
 
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
             while let (value, tree) = try valueIter.next() {
-                guard property(value) == false else { continue }
+                guard property(value) == false else {
+                    continue
+                }
                 let originalSequence = ChoiceSequence.flatten(tree)
                 guard case let .reduced(shrunkSequence, _, _) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
-                ) else { continue }
+                ) else {
+                    continue
+                }
                 #expect(
                     shrunkSequence.shortLexPrecedes(originalSequence) || shrunkSequence == originalSequence,
                     "Shrunk sequence is not simpler than the original, recipe: \(recipe)"
@@ -71,15 +82,21 @@ extension MetaGeneratorPropertyTests {
         let property = failingProperty(for: type)
         var checkedRecipes = 0
         while let recipe = try recipeIter.next() {
-            guard recipe.nodeCount <= metaRecipeNodeBudget else { continue }
+            guard recipe.nodeCount <= metaRecipeNodeBudget else {
+                continue
+            }
             checkedRecipes += 1
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
             while let (value, tree) = try valueIter.next() {
-                guard property(value) == false else { continue }
+                guard property(value) == false else {
+                    continue
+                }
                 guard case let .reduced(sequence, reducedTree, shrunk) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
-                ) else { continue }
+                ) else {
+                    continue
+                }
                 guard case let .success(materialized, _, _) = Materializer.materialize(
                     gen, prefix: sequence, mode: .exact, fallbackTree: reducedTree
                 ) else {
@@ -105,18 +122,26 @@ extension MetaGeneratorPropertyTests {
         let property = failingProperty(for: type)
         var checkedRecipes = 0
         while let recipe = try recipeIter.next() {
-            guard recipe.nodeCount <= metaRecipeNodeBudget else { continue }
+            guard recipe.nodeCount <= metaRecipeNodeBudget else {
+                continue
+            }
             checkedRecipes += 1
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 20)
             while let (value, tree) = try valueIter.next() {
-                guard property(value) == false else { continue }
+                guard property(value) == false else {
+                    continue
+                }
                 guard case let .reduced(firstSequence, firstTree, _) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: tree, config: .init(maxStalls: 2), property: property
-                ) else { continue }
+                ) else {
+                    continue
+                }
                 guard case let .reduced(secondSequence, _, _) = try? Interpreters.choiceGraphReduce(
                     gen: gen, tree: firstTree, config: .init(maxStalls: 2), property: property
-                ) else { continue }
+                ) else {
+                    continue
+                }
                 #expect(
                     firstSequence.shortLexPrecedes(secondSequence) == false,
                     "Re-reduction enlarged the sequence (reduction is not monotone) for recipe: \(recipe)"

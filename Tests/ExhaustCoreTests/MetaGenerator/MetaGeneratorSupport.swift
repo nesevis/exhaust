@@ -35,7 +35,9 @@ func checkAllValues(
             tally.thrown += 1
             return true
         }
-        guard let (value, _) = element else { return true }
+        guard let (value, _) = element else {
+            return true
+        }
         do {
             switch try check(value) {
                 case .none:
@@ -68,7 +70,9 @@ func checkAllTrees(
             tally.thrown += 1
             return true
         }
-        guard let (_, tree) = element else { return true }
+        guard let (_, tree) = element else {
+            return true
+        }
         do {
             switch try check(tree) {
                 case .none:
@@ -97,7 +101,9 @@ func checkPairedValues(
         var iter1 = ValueInterpreter(gen1, seed: seed, maxRuns: maxRuns)
         var iter2 = ValueInterpreter(gen2, seed: seed, maxRuns: maxRuns)
         while let v1 = try iter1.next(), let v2 = try iter2.next() {
-            if check(v1, v2) == false { return false }
+            if check(v1, v2) == false {
+                return false
+            }
         }
     } catch {
         return true
@@ -125,7 +131,9 @@ func failingProperty(for type: RecipeType) -> (Any) -> Bool {
 
 /// Returns whether the recipe contains a combinator of the given kind at any depth, matched by `predicate`.
 func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorKind) -> Bool) -> Bool {
-    guard case let .combinator(kind) = recipe else { return false }
+    guard case let .combinator(kind) = recipe else {
+        return false
+    }
     if predicate(kind) {
         return true
     }
@@ -173,7 +181,9 @@ func meanArrayLength(_ gen: AnyGenerator, size: UInt64, samples: UInt64) throws 
     var total = 0
     var count = 0
     while let (value, _) = try iter.next() {
-        guard let array = value as? [Any] else { continue }
+        guard let array = value as? [Any] else {
+            continue
+        }
         total += array.count
         count += 1
     }

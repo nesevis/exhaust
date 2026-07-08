@@ -10,11 +10,17 @@ struct MetaGeneratorPropertyTests {
     func reflectionRoundTrip(type: RecipeType) throws {
         let tally = Tally()
         let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
-            guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
+            guard recipe.nodeCount <= metaRecipeNodeBudget else {
+                return true
+            }
             let gen = buildGenerator(from: recipe)
             return checkAllValues(gen, maxRuns: 10, tally: tally) { value in
-                guard let tree = try Interpreters.reflect(gen, with: value) else { return nil }
-                guard let replayed = try Interpreters.replay(gen, using: tree) else { return nil }
+                guard let tree = try Interpreters.reflect(gen, with: value) else {
+                    return nil
+                }
+                guard let replayed = try Interpreters.replay(gen, using: tree) else {
+                    return nil
+                }
                 return anyEquals(value, replayed)
             }
         }
@@ -28,11 +34,16 @@ struct MetaGeneratorPropertyTests {
     func replayDeterminism(type: RecipeType) throws {
         let tally = Tally()
         let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
-            guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
+            guard recipe.nodeCount <= metaRecipeNodeBudget else {
+                return true
+            }
             let gen = buildGenerator(from: recipe)
             return checkAllTrees(gen, maxRuns: 10, tally: tally) { tree in
                 guard let r1 = try Interpreters.replay(gen, using: tree),
-                      let r2 = try Interpreters.replay(gen, using: tree) else { return nil }
+                      let r2 = try Interpreters.replay(gen, using: tree)
+                else {
+                    return nil
+                }
                 return anyEquals(r1, r2)
             }
         }
@@ -46,13 +57,21 @@ struct MetaGeneratorPropertyTests {
     func materializeAgreement(type: RecipeType) throws {
         let tally = Tally()
         let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
-            guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
+            guard recipe.nodeCount <= metaRecipeNodeBudget else {
+                return true
+            }
             let gen = buildGenerator(from: recipe)
             return checkAllValues(gen, maxRuns: 10, tally: tally) { value in
-                guard let reflectedTree = try Interpreters.reflect(gen, with: value) else { return nil }
-                guard let replayed = try Interpreters.replay(gen, using: reflectedTree) else { return nil }
+                guard let reflectedTree = try Interpreters.reflect(gen, with: value) else {
+                    return nil
+                }
+                guard let replayed = try Interpreters.replay(gen, using: reflectedTree) else {
+                    return nil
+                }
                 let sequence = ChoiceSequence.flatten(reflectedTree)
-                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else { return nil }
+                guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: reflectedTree) else {
+                    return nil
+                }
                 return anyEquals(materialized, replayed)
             }
         }
@@ -67,7 +86,9 @@ struct MetaGeneratorPropertyTests {
         var recipeIter = ValueInterpreter(recipeGenerator(producing: type, maxDepth: 2), seed: 42, maxRuns: 30)
         var checkedRecipes = 0
         while let recipe = try recipeIter.next() {
-            guard recipe.nodeCount <= metaRecipeNodeBudget else { continue }
+            guard recipe.nodeCount <= metaRecipeNodeBudget else {
+                continue
+            }
             checkedRecipes += 1
             let gen = buildGenerator(from: recipe)
             var vi = ValueInterpreter(gen, seed: 7, maxRuns: 5)
@@ -97,13 +118,23 @@ struct MetaGeneratorPropertyTests {
     func reflectStabilizes(type: RecipeType) throws {
         let tally = Tally()
         let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
-            guard recipe.nodeCount <= metaRecipeNodeBudget else { return true }
+            guard recipe.nodeCount <= metaRecipeNodeBudget else {
+                return true
+            }
             let gen = buildGenerator(from: recipe)
             return checkAllValues(gen, maxRuns: 10, tally: tally) { value in
-                guard let tree1 = try Interpreters.reflect(gen, with: value) else { return nil }
-                guard let replayed = try Interpreters.replay(gen, using: tree1) else { return nil }
-                guard let tree2 = try Interpreters.reflect(gen, with: replayed) else { return nil }
-                guard let replayed2 = try Interpreters.replay(gen, using: tree2) else { return nil }
+                guard let tree1 = try Interpreters.reflect(gen, with: value) else {
+                    return nil
+                }
+                guard let replayed = try Interpreters.replay(gen, using: tree1) else {
+                    return nil
+                }
+                guard let tree2 = try Interpreters.reflect(gen, with: replayed) else {
+                    return nil
+                }
+                guard let replayed2 = try Interpreters.replay(gen, using: tree2) else {
+                    return nil
+                }
                 return anyEquals(replayed, replayed2)
             }
         }
@@ -111,7 +142,7 @@ struct MetaGeneratorPropertyTests {
         #expect(tally.evaluated > 0, "Reflect-stabilization sweep for \(type) reached no verdict: \(tally.summary)")
     }
 
-    // MARK: 3e. Fast-Path Parity
+    // MARK: 3d. Fast-Path Parity
 
     /// `nextValueOnly()` (the tree-free fast path, backed by ValueInterpreter) and `reproduceWithTree()` (the tree-building path) must produce the same value for the same run. This is the contract the sampling pipeline relies on; `reproduceFailureTree()` asserts it at runtime and falls back to `.just` when it breaks. Sweeping it over the recipe space checks it for every generator shape, not just the ones the pipeline happened to hit.
     ///
@@ -121,7 +152,9 @@ struct MetaGeneratorPropertyTests {
         var recipeIter = ValueInterpreter(recipeGenerator(producing: type, maxDepth: 2), seed: 42, maxRuns: 30)
         var checkedRecipes = 0
         while let recipe = try recipeIter.next() {
-            guard recipe.nodeCount <= metaRecipeNodeBudget, containsUnique(recipe) == false else { continue }
+            guard recipe.nodeCount <= metaRecipeNodeBudget, containsUnique(recipe) == false else {
+                continue
+            }
             checkedRecipes += 1
             let gen = buildGenerator(from: recipe)
             var iter = ValueAndChoiceTreeInterpreter(gen, seed: 7, maxRuns: 5)

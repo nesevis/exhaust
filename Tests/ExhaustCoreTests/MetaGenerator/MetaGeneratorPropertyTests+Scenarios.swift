@@ -13,6 +13,7 @@ extension MetaGeneratorPropertyTests {
             .leaf(.justInt(0)),
             .leaf(.justBool(true)),
             .leaf(.justBool(false)),
+            .leaf(.justDouble(3.14)),
             .leaf(.justIntArray([1, 2, 3])),
             .leaf(.justIntArray([])),
         ]
@@ -39,6 +40,7 @@ extension MetaGeneratorPropertyTests {
         let justRecipes: [GenRecipe] = [
             .leaf(.justInt(42)),
             .leaf(.justBool(true)),
+            .leaf(.justDouble(3.14)),
             .leaf(.justIntArray([10, 20])),
             .leaf(.justIntArray([])),
         ]
@@ -151,7 +153,9 @@ extension MetaGeneratorPropertyTests {
                 } else {
                     sawSome = true
                 }
-                if sawNil, sawSome { break }
+                if sawNil, sawSome {
+                    break
+                }
             }
             #expect(sawNil, "Optional recipe \(recipe) never produced nil")
             #expect(sawSome, "Optional recipe \(recipe) never produced a value")
@@ -250,6 +254,7 @@ extension MetaGeneratorPropertyTests {
     func randomJustZipRecipesRoundTrip() throws {
         let recipeGen = recipeGenerator(producing: .int, maxDepth: 2)
         var recipeIter = ValueInterpreter(recipeGen, seed: 42, maxRuns: 40)
+        var roundTripped = 0
         while let recipe = try recipeIter.next() {
             guard recipe.nodeCount <= metaRecipeNodeBudget else {
                 continue
@@ -257,14 +262,20 @@ extension MetaGeneratorPropertyTests {
             let gen = buildGenerator(from: recipe)
             var valueIter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 5)
             while let (value, _) = try valueIter.next() {
-                guard let tree = try? Interpreters.reflect(gen, with: value) else { continue }
-                guard let replayed = try? Interpreters.replay(gen, using: tree) else { continue }
+                guard let tree = try? Interpreters.reflect(gen, with: value) else {
+                    continue
+                }
+                guard let replayed = try? Interpreters.replay(gen, using: tree) else {
+                    continue
+                }
                 #expect(
                     anyEquals(value, replayed),
                     "Round-trip failed for recipe: \(recipe)"
                 )
+                roundTripped += 1
             }
         }
+        #expect(roundTripped > 0, "No depth-2 recipes round-tripped — the sweep may be vacuous")
     }
 
     // MARK: 15. Per-Combinator Reflection Coverage

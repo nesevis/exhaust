@@ -53,7 +53,9 @@ extension MetaGeneratorPropertyTests {
             var rhsIter = ValueInterpreter(rhs, seed: 99, maxRuns: 5)
             do {
                 while let v1 = try lhsIter.next(), let v2 = try rhsIter.next() {
-                    if v1 != v2 { return false }
+                    if v1 != v2 {
+                        return false
+                    }
                 }
             } catch { return true }
             return true
@@ -121,12 +123,16 @@ extension MetaGeneratorPropertyTests {
     func sizeBounds() throws {
         let intRecipeGen = recipeGenerator(producing: .int, maxDepth: 2)
         let badRecipe = try findMinimalCounterexample(intRecipeGen, maxIterations: 50) { recipe in
-            guard case let .leaf(.int(range)) = recipe else { return true }
+            guard case let .leaf(.int(range)) = recipe else {
+                return true
+            }
             let gen = Gen.choose(in: range)
             do {
                 var valueIter = ValueInterpreter(gen, seed: 42, maxRuns: 20)
                 while let value = try valueIter.next() {
-                    if range.contains(value) == false { return false }
+                    if range.contains(value) == false {
+                        return false
+                    }
                 }
             } catch { return true }
             return true

@@ -28,7 +28,9 @@ extension MetaGeneratorPropertyTests {
         var recipeIter = ValueInterpreter(recipeGenerator(producing: type, maxDepth: 1), seed: 42, maxRuns: 20)
         var checkedRecipes = 0
         while let recipe = try recipeIter.next() {
-            guard recipe.nodeCount <= metaRecipeNodeBudget else { continue }
+            guard recipe.nodeCount <= metaRecipeNodeBudget else {
+                continue
+            }
             checkedRecipes += 1
             var plain = ValueInterpreter(buildGenerator(from: recipe), seed: 7, maxRuns: 5)
             var classified = ValueInterpreter(buildGenerator(from: .combinator(.classified(recipe))), seed: 7, maxRuns: 5)
@@ -71,7 +73,9 @@ extension MetaGeneratorPropertyTests {
         var iter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 3000)
         var counts = [0, 0]
         while let (value, _) = try iter.next() {
-            guard let selected = value as? Int, selected == 0 || selected == 1 else { continue }
+            guard let selected = value as? Int, selected == 0 || selected == 1 else {
+                continue
+            }
             counts[selected] += 1
         }
         let total = Double(counts[0] + counts[1])

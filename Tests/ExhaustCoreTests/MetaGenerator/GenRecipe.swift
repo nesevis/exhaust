@@ -95,7 +95,9 @@ enum KnownPredicate: String, Equatable, Hashable, CaseIterable, Sendable {
             case .always: return true
             case .isPositive, .isEven: return type == .int
             case .isNonEmpty:
-                if case .arrayOf = type { return true }
+                if case .arrayOf = type {
+                    return true
+                }
                 return false
         }
     }
@@ -364,7 +366,7 @@ func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<Gen
     if type == .int {
         choices.append((1, boundRangeGenerator(maxDepth: maxDepth)))
         choices.append((1, unfoldedGenerator()))
-        choices.append((1, getSizedGenerator(producing: type)))
+        choices.append((1, getSizedGenerator()))
     }
     if type == .int || type == .bool {
         choices.append((1, isomorphedGenerator(producing: type)))
@@ -453,19 +455,26 @@ private func justIntArrayLeaf() -> Generator<GenRecipe> {
     }
 }
 
+/// A narrowing transform (negate/increment/not) does an unchecked `as! Int`/`as! Bool` on the inner value, which traps if the inner yields an Optional — and the `optional` combinator declares its bare element type while producing `Optional`. Restrict narrowing transforms to leaves, which never wrap their output; `.identity` is total over any value, so it keeps the full recipe.
+private func narrowingSafeInnerGenerator(
+    for transform: InvertibleTransform,
+    producing type: RecipeType,
+    maxDepth: Int
+) -> Generator<GenRecipe> {
+    let innerType = transform.applicableType ?? type
+    if transform == .identity {
+        return recipeGenerator(producing: innerType, maxDepth: maxDepth - 1)
+    }
+    return leafGenerator(producing: innerType)
+}
+
 private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
     let transforms = InvertibleTransform.applicable(to: type)
     guard transforms.isEmpty == false else {
         return leafGenerator(producing: type)
     }
     return Gen.choose(from: transforms).bind { transform in
-        // The inner recipe must produce a type compatible with the transform
-        let innerType = transform.applicableType ?? type
-        // A narrowing transform (negate/increment/not) does an unchecked `as! Int`/`as! Bool` on the inner value, which traps if the inner yields an Optional — and the `optional` combinator declares its bare element type while producing `Optional`. Restrict narrowing transforms to leaves, which never wrap their output; `.identity` is total over any value, so it keeps the full recipe.
-        let innerGen = transform == .identity
-            ? recipeGenerator(producing: innerType, maxDepth: maxDepth - 1)
-            : leafGenerator(producing: innerType)
-        return innerGen.map { inner in
+        narrowingSafeInnerGenerator(for: transform, producing: type, maxDepth: maxDepth).map { inner in
             .combinator(.mapped(inner, transform))
         }
     }
@@ -612,11 +621,7 @@ private func metamorphedGenerator(producing type: RecipeType, maxDepth: Int) -> 
         return leafGenerator(producing: type)
     }
     return Gen.choose(from: transforms).bind { transform in
-        // See `mappedGenerator`: a narrowing transform traps on an Optional inner value, so restrict it to leaves; `.identity` keeps the full recipe.
-        let innerGen = transform == .identity
-            ? recipeGenerator(producing: elementType, maxDepth: maxDepth - 1)
-            : leafGenerator(producing: elementType)
-        return innerGen.map { inner in
+        narrowingSafeInnerGenerator(for: transform, producing: elementType, maxDepth: maxDepth).map { inner in
             .combinator(.metamorphed(inner, transform))
         }
     }
@@ -636,12 +641,8 @@ private func boundRangeGenerator(maxDepth _: Int) -> Generator<GenRecipe> {
     }
 }
 
-private func getSizedGenerator(producing type: RecipeType) -> Generator<GenRecipe> {
-    // getSize derives an Int from the generation size; only offered for the .int type.
-    if type == .int {
-        return .pure(.combinator(.getSized))
-    }
-    return leafGenerator(producing: type)
+private func getSizedGenerator() -> Generator<GenRecipe> {
+    .pure(.combinator(.getSized))
 }
 
 private func isomorphedGenerator(producing type: RecipeType) -> Generator<GenRecipe> {
@@ -650,8 +651,7 @@ private func isomorphedGenerator(producing type: RecipeType) -> Generator<GenRec
         return leafGenerator(producing: type)
     }
     return Gen.choose(from: transforms).bind { transform in
-        // Restrict to a leaf so the bijection sees a concrete non-optional value, the same guard mappedGenerator uses for narrowing transforms.
-        leafGenerator(producing: type).map { inner in
+        narrowingSafeInnerGenerator(for: transform, producing: type, maxDepth: 1).map { inner in
             .combinator(.isomorphed(inner, transform))
         }
     }
@@ -894,8 +894,12 @@ func anyEquals(_ lhs: Any, _ rhs: Any) -> Bool {
     if lhsIsOptional || rhsIsOptional {
         let lhsHasValue = lhsIsOptional ? lhsMirror.children.first != nil : true
         let rhsHasValue = rhsIsOptional ? rhsMirror.children.first != nil : true
-        if lhsHasValue == false && rhsHasValue == false { return true }
-        if lhsHasValue == false || rhsHasValue == false { return false }
+        if lhsHasValue == false && rhsHasValue == false {
+            return true
+        }
+        if lhsHasValue == false || rhsHasValue == false {
+            return false
+        }
         let lhsInner: Any = lhsIsOptional ? lhsMirror.children.first!.value : lhs
         let rhsInner: Any = rhsIsOptional ? rhsMirror.children.first!.value : rhs
         return anyEquals(lhsInner, rhsInner)
@@ -908,7 +912,9 @@ func anyEquals(_ lhs: Any, _ rhs: Any) -> Bool {
 
     // Fall back to element-wise [Any] comparison
     if let lhsArray = lhs as? [Any], let rhsArray = rhs as? [Any] {
-        guard lhsArray.count == rhsArray.count else { return false }
+        guard lhsArray.count == rhsArray.count else {
+            return false
+        }
         return zip(lhsArray, rhsArray).allSatisfy { anyEquals($0, $1) }
     }
 
