@@ -34,22 +34,12 @@ Exhaust shamelessly adopts three insights from Hypothesis and this paper:
 - Float shortlex ordering and reduction
 - Adaptive, "findInteger"-style search
 - Unit tests to verify edge cases
+- The notion of an invariant decorator and precondition skips in state machine testing
 
 Links:
 
 1. [Test Case Reduction via Test Case Generation: Insights from the Hypothesis Reducer](https://www.semanticscholar.org/paper/Test-Case-Reduction-via-Test-Case-Generation%3A-from-MacIver-Donaldson/6d72e1bd7743f12b48e20f7d234407e37b67e009) (2020)
 2. [Improving Binary Search by Guessing](https://notebook.drmaciver.com/posts/2019-04-30-13:03.html)
-
-## Alfredo Sepúlveda-Jiménez
-
-The categorical framework for _optimisation_ laid out in this preprint provides Exhaust with an organisational algebra for test case reduction:
-- Each reduction “strategy” is a self-contained encoder-decoder pair that composes cleanly
-- Composed search extends this through an effectful “lift” step that enables joint search over a controlling value and its dependents
-- The graded morphism structure inspired the yield-priority dispatch model where encoders are ranked by structural benefit, value benefit, source distance, and estimated cost
-
-Links:
-
-1. [Categories of Optimization Reductions](https://www.researchgate.net/publication/399656065_CATEGORIES_OF_OPTIMIZATION_REDUCTIONS) (2026)
 
 ## Other influences
 
@@ -70,6 +60,37 @@ Stevan's writing about the PBT ecosystem and parallel stateful testing has been 
 ### Johannes Link
 
 jqwik maintainer Johannes Link’s [Shrinking Challenge](https://github.com/jlink/shrinking-challenge) repository was a perfect test bed for refining Exhaust’s test case reducer.
+
+### Alfredo Sepúlveda-Jiménez
+
+The categorical framework for _optimisation_ laid out in this preprint provides Exhaust with an organisational algebra for test case reduction:
+- Each reduction "strategy" is a self-contained encoder-decoder pair that composes cleanly
+- Composed search extends this through an effectful "lift" step that enables joint search over a controlling value and its dependents
+- The graded morphism structure inspired the yield-priority dispatch model where encoders are ranked by structural benefit, value benefit, source distance, and estimated cost
+
+Links:
+
+1. [Categories of Optimization Reductions](https://www.researchgate.net/publication/399656065_CATEGORIES_OF_OPTIMIZATION_REDUCTIONS) (2026)
+
+### Koen Claessen, John Hughes, et al
+
+The grandfathers of PBT put out a paper that describes how they used PBT for the purposes of finding race conditions. It has greatly influenced Exhaust's approach to the concurrent aspects of stateful testing, in particular:
+
+- The notion of deterministic scheduling (PULSE in the paper), which influenced Exhaust's `Task`-based concurrency testing using a custom executor
+- The notion of a sequential prefix and parallel suffix in the command sequence
+- The sequentialisation DFS algorithm driving linearizability checking 
+
+Links: 
+
+1. [Finding race conditions in Erlang with QuickCheck and PULSE](https://dl.acm.org/doi/abs/10.1145/1631687.1596574) (2009)
+
+### Maurice P. Herlihy & Jeannette M. Wing
+
+Their paper's description of the notion of linearizability as a correctness condition for concurrent testing (itself referenced by the Claessen & Hughes) is used for `Thread`-based concurrency testing; real-time precedence is used to prune the search space.
+
+Links: 
+
+1. [Linearizability: A Correctness Condition for Concurrent Objects](https://dl.acm.org/doi/10.1145/78969.78972) (1990)
 
 ### Renée Bryce & Charles Colbourn
 
