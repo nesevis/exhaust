@@ -78,7 +78,7 @@ When `.collectOpenPBTStats` is enabled, Exhaust records the data as an `XCTAttac
 
 ## What doesn't work
 
-### `XCTAssert` inside property closures
+### XCTAssert inside property closures
 
 `XCTAssertEqual`, `XCTAssertTrue`, `XCTAssertNil`, and the rest of the `XCTAssert` family are not intercepted by Exhaust. They record XCTest failures directly, bypassing the detection mechanism that makes `#expect` work cleanly inside `#exhaust`.
 
@@ -102,7 +102,7 @@ func testWorks() {
 }
 ```
 
-### `XCTUnwrap` inside property closures
+### XCTUnwrap inside property closures
 
 `XCTUnwrap` works in the sense that its thrown error is caught and treated as a counterexample. But when unwrapping fails, `XCTUnwrap` records an XCTest failure via `XCTFail` before throwing, and that recording is expensive. A single `XCTFail` call costs several hundred milliseconds of XCTest framework overhead. During reduction, the property closure may be invoked hundreds of times with the failing input, and each invocation pays that cost. Exhaust emits a compile-time warning when it detects `XCTUnwrap` in a property closure. Prefer a guard with a thrown error:
 
@@ -124,7 +124,7 @@ func testUnwrap() {
 }
 ```
 
-### `#expect` and `#require` inside closures
+### #expect and #require inside closures
 
 The `#expect`/`#require` interception that works under Swift Testing is not available under XCTest. Without it, a void-returning closure has no way to signal failure to Exhaust. The macro detects this and emits an error: "Closure has no failure mechanism; return a Bool or throw an error to signal failure."
 

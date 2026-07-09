@@ -57,5 +57,5 @@ A direction that receives no matching samples within its attempt budget fails th
 | `.suppress(.issueReporting)` | — | Silences issue reporting. Use when asserting on the returned `ExploreReport` directly. `.suppress(.logs)` and `.suppress(.all)` also available. |
 | `.log(.debug)` | `.error` | Sets the minimum log level for this test run. |
 
-> [!Note]
+> Note:
 > `#explore` is more expensive than `#exhaust`. The total attempt budget is the per-direction budget multiplied by the number of declared directions. Five directions at `.standard` means 1,500 total attempts, plus CGS tuning overhead per direction. Start with `.standard` and increase the budget only for directions that need stronger coverage.

@@ -13,50 +13,75 @@ import ExhaustCore
 /// - `.tasks` runs commands concurrently with deterministic interleaving at `await` boundaries. Checks use `@Invariant`.
 /// - `.threads` dispatches commands to real OS threads via GCD. Checks use `@Oracle`, which compares the concurrent end state against a sequential replay.
 ///
-/// ## `.tasks` StateMachine
+/// ## .tasks StateMachine
+///
+/// Commands must be `async` for `.tasks` to have suspension points to interleave at. Without `await` boundaries, `.tasks` behaves identically to `.sequential`. The SUT below has a deliberate read-yield-write race: two overlapping increments read the same value, suspend, and both write `current + 1`, losing one update.
 ///
 /// ```swift
 /// @StateMachine(.tasks)
-/// final class BoundedQueueSpec {
-///     var contents: [Int] = []
+/// final class NonAtomicCounterSpec {
+///     var expected: Int = 0
 ///     @SystemUnderTest
-///     var queue = BoundedQueue<Int>(capacity: 4)
+///     var counter: NonAtomicCounter = .init()
 ///
 ///     @Invariant
-///     func countMatches() -> Bool {
-///         queue.count == contents.count
+///     func matchesModel() -> Bool {
+///         counter.value == expected
 ///     }
 ///
-///     @Command(weight: 3, .int(in: 0...99))
-///     func enqueue(value: Int) throws {
-///         guard contents.count < 4 else { throw skip() }
-///         queue.enqueue(value)
-///         contents.append(value)
+///     @Command(weight: 3)
+///     func increment() async throws {
+///         expected += 1
+///         await counter.increment()
+///     }
+///
+///     @Command(weight: 2)
+///     func decrement() async throws {
+///         guard expected > 0 else { throw skip() }
+///         expected -= 1
+///         await counter.decrement()
 ///     }
 ///
 ///     func failureDescription() -> String? {
-///         "expected: \(contents), queue: \(queue)"
+///         "\(counter)"
+///     }
+/// }
+///
+/// final class NonAtomicCounter: @unchecked Sendable {
+///     private var _value: Int = 0
+///     var value: Int { _value }
+///
+///     func increment() async {
+///         let current = _value
+///         await Task.yield()
+///         _value = current + 1
+///     }
+///
+///     func decrement() async {
+///         let current = _value
+///         await Task.yield()
+///         _value = current - 1
 ///     }
 /// }
 /// ```
 ///
-/// ## `.threads` StateMachine (Oracle-Based)
+/// ## .threads StateMachine (Oracle-Based)
 ///
 /// ```swift
 /// @StateMachine(.threads)
 /// final class CounterThreadSafetyStateMachine {
 ///     @SystemUnderTest var counter = Counter()
 ///
+///     @Oracle
+///     func equivalent(to other: Counter) -> Bool {
+///         counter.value == other.value
+///     }
+///
 ///     @Command(weight: 3)
 ///     func increment() { counter.increment() }
 ///
 ///     @Command
 ///     func decrement() { counter.decrement() }
-///
-///     @Oracle
-///     func equivalent(to other: Counter) -> Bool {
-///         counter.value == other.value
-///     }
 ///
 ///     func failureDescription() -> String? {
 ///         "counter: \(counter)"

@@ -1,8 +1,8 @@
 # State machine testing with Exhaust
 
-This guide covers testing stateful systems, things with mutable internal state where bugs emerge from sequences of operations rather than single calls. If you've read the [getting started guide](GETTING_STARTED.md), you're familiar with `#exhaust` for pure functions. `@StateMachine` is the equivalent for objects with memory. For pure functions over a generator rather than a stateful system, reach for [`#exhaust`](EXHAUST-property-testing.md) instead.
+This guide covers testing stateful systems, things with mutable internal state where bugs emerge from sequences of operations rather than single calls. If you've read the <doc:GettingStarted>, you're familiar with `#exhaust` for pure functions. `@StateMachine` is the equivalent for objects with memory. For pure functions over a generator rather than a stateful system, reach for <doc:PropertyTesting> instead.
 
-## When to reach for `@StateMachine`
+## When to reach for @StateMachine
 
 A stack, a database connection pool, a bounded queue, an authentication session, an undo stack. These all share a trait: calling `push` alone can't find the bug. The bug lives in `push, push, pop, pop, push, pop`, a specific ordering that leaves the data structure in a state that shouldn't be reachable.
 
@@ -247,7 +247,7 @@ The `.sequential` specs shown above run each command one at a time. Some bugs on
 
 The same seed always produces the same interleaving, and the reducer reduces both the command sequence and the lane assignments, discovering the minimal concurrency needed to trigger the bug.
 
-> [!Note]
+> Note:
 > Mark test suites that run `.tasks` specs as `.serialized`. The cooperative drain loop occupies threads while it runs, and several such suites running in parallel can starve the shared thread pool.
 
 A typical failure report:
@@ -400,7 +400,7 @@ Running the test:
 }
 ```
 
-### Async commands with `.threads`
+### Async commands with .threads
 
 `.threads` also works when command bodies are `async`. Each lane gets a real OS thread, and async execution is bridged via `Task` + semaphore. This catches races in synchronous primitives hidden behind an async facade:
 
@@ -426,7 +426,7 @@ final class AsyncRacyCounterSpec {
 }
 ```
 
-### `.tasks` or `.threads`?
+### .tasks or .threads?
 
 When both could find the bug, prefer `.tasks`. Deterministic interleaving means faster reduction and reproducible seeds. Reach for `.threads` when the race is inside synchronous primitives that the cooperative scheduler cannot see.
 

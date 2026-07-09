@@ -2,7 +2,7 @@
 
 A passing property test gives no signal about whether the generator explored its domain well or clustered in a narrow slice. `#examine` answers both correctness and coverage questions in a single call.
 
-## What `#examine` checks
+## What #examine checks
 
 ```swift
 @Test func profileGeneratorIsHealthy() {
@@ -30,7 +30,7 @@ A passing property test gives no signal about whether the generator explored its
         └── choice(unsigned: 72) 0...120
 ```
 
-> [!Tip]
+> Tip:
 > `10/10 deciles` means the generator spread across its entire range. `3/10` means it clustered and is worth investigating.
 >
 > Clustering usually means the scaling doesn't match the range width. Pass a `scaling:` parameter to adjust. For example, `.int(in: 0...1000)` defaults to no scaling (uniform), but `.int(in: 0...1000, scaling: .linear)` ramps from small values upward. Collection lengths accept the same parameter: `.array(length: 0...100, scaling: .constant)` disables ramping and samples the full length range uniformly from the start.
