@@ -20,18 +20,6 @@ public enum FilterType: Sendable, Equatable, Hashable {
 
     /// Uses online CGS derivative sampling to condition pick weights on upstream choices, then bakes them with fitness sharing to prevent overcommitting to the dominant cluster. Produces the best-quality outputs for recursive generators (for example BSTs, AVL trees) at the cost of a short warmup pass.
     case choiceGradientSampling
-
-    /// CGS with explicit tuning parameters for benchmarking and fine-tuning.
-    ///
-    /// - Parameters:
-    ///   - warmupRuns: Number of warmup passes to collect fitness data.
-    ///   - sampleCount: Number of derivative samples per pick site per warmup run.
-    ///   - subdivisionThresholds: Controls when `chooseBits` sites are subdivided into picks.
-    case customCGS(
-        warmupRuns: UInt64,
-        sampleCount: UInt64,
-        subdivisionThresholds: CGSSubdivisionThresholds
-    )
 }
 
 package extension FilterType {
@@ -42,7 +30,6 @@ package extension FilterType {
             case .rejectionSampling: "rejection"
             case .probeSampling: "probe"
             case .choiceGradientSampling: "CGS"
-            case .customCGS: "CGS (custom)"
         }
     }
 }

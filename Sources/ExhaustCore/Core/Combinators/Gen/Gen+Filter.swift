@@ -69,15 +69,6 @@ package extension Gen {
                 (try? ChoiceGradientTuner<Any>.tune(generator, predicate: predicate, seed: seed)) ?? generator
             case .probeSampling:
                 (try? GeneratorTuning.probeAndTune(generator, seed: seed, predicate: predicate)) ?? generator
-            case let .customCGS(warmupRuns, sampleCount, subdivisionThresholds):
-                (try? ChoiceGradientTuner<Any>.tune(
-                    generator,
-                    predicate: predicate,
-                    warmupRuns: warmupRuns,
-                    sampleCount: sampleCount,
-                    seed: seed,
-                    subdivisionThresholds: subdivisionThresholds
-                )) ?? generator
         }
     }
 }
