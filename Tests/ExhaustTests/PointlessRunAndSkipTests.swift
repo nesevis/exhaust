@@ -88,8 +88,8 @@ struct PointlessRunAndSkipTests {
         #expect(skipped < invocations)
     }
 
-    @Test("Contract run with zero budget reports a pointless-run error")
-    func contractZeroBudgetReportsError() async {
+    @Test("StateMachine run with zero budget reports a pointless-run error")
+    func specZeroBudgetReportsError() async {
         await withKnownIssue {
             _ = await #execute(
                 PointlessRunStackSpec.self,
@@ -307,7 +307,7 @@ private func containsBranchNode(_ tree: ChoiceTree) -> Bool {
 // MARK: - Fixtures
 
 /// Deliberately minimal: a single command is enough for a fixture whose tests only verify run-level reporting, never state transitions.
-@Contract(.sequential)
+@StateMachine(.sequential)
 final class PointlessRunStackSpec {
     var expected: [Int] = []
     @SystemUnderTest var stack: [Int] = []

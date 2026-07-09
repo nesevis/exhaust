@@ -1,4 +1,4 @@
-/// Provides the tuning constants for preemptive concurrent contract testing.
+/// Provides the tuning constants for preemptive concurrent spec testing.
 ///
 /// The two preemptive backends (synchronous and async) differ only in how a single probe runs; the repetition scaling, command limit, and warning thresholds they share are backend-independent and live here.
 package enum PreemptiveReduction {
@@ -30,7 +30,7 @@ package enum PreemptiveReduction {
         max(150, confirmationRepetitions(discoveryIterations: discoveryIterations) * 3)
     }
 
-    /// Default command limit for `.threads` contracts.
+    /// Default command limit for `.threads` specs.
     package static let defaultCommandLimit = 10
 
     /// Worst-case interleaving count above which the runner emits a warning before starting the pipeline. The DFS is exhaustive, so configurations that exceed this threshold can make each linearizability check very slow.

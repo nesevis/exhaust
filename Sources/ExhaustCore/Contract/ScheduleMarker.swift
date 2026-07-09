@@ -1,4 +1,4 @@
-/// Assigns a command to a scheduling lane in a concurrent contract test.
+/// Assigns a command to a scheduling lane in a concurrent spec test.
 ///
 /// During generation, the marker generator produces values in 0...N (where N is the concurrency level). The reducer's value-minimization pass drives markers toward 0 (prefix), naturally discovering which commands must remain concurrent to reproduce the failure. Commands whose markers reach prefix move to the sequential phase, proving they are not part of the minimal concurrent counterexample.
 ///

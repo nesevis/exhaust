@@ -230,13 +230,13 @@ struct AsyncPropertyBridgeTests {
     }
 }
 
-// MARK: - Concurrent Contract Testing (Drain Loop + Foreign Executor)
+// MARK: - Concurrent StateMachine Testing (Drain Loop + Foreign Executor)
 
-@Suite("Concurrency safety — concurrent contract drain loop")
-struct ConcurrentContractDrainLoopTests {
+@Suite("Concurrency safety — concurrent spec drain loop")
+struct ConcurrentStateMachineDrainLoopTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Concurrent contract with Task.yield suspension points")
-    func concurrentContractWithTaskyieldSuspensionPoints() async throws {
+    @Test("Concurrent spec with Task.yield suspension points")
+    func concurrentStateMachineWithTaskyieldSuspensionPoints() async throws {
         let result = try #require(
             await #execute(
                 YieldingCounterSpec.self,
@@ -250,7 +250,7 @@ struct ConcurrentContractDrainLoopTests {
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Massive parallelism does not starve the cooperative thread pool")
-    func multipleConcurrentContractRunsInParallel() async {
+    func multipleConcurrentStateMachineRunsInParallel() async {
         await withTaskGroup(of: Void.self) { group in
             for _ in 0 ..< 5 {
                 group.addTask {
@@ -269,7 +269,7 @@ struct ConcurrentContractDrainLoopTests {
 // MARK: - Specs
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-@Contract(.tasks)
+@StateMachine(.tasks)
 final class YieldingCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: YieldingCounter = .init()
@@ -298,7 +298,7 @@ final class YieldingCounterSpec {
 }
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-@Contract(.sequential)
+@StateMachine(.sequential)
 final class TokenDrawSpec {
     var tokens: [Int] = []
     var model: [Int] = []

@@ -2,11 +2,11 @@ import Foundation
 
 /// A process-global budget over the GCD lanes Exhaust's concurrent runners occupy at once.
 ///
-/// Under `swift test --parallel`, Exhaust's concurrent runs — preemptive `.threads` contracts (each fanning commands across N GCD lanes), cooperative `.tasks` contracts, and async property/explore runs — can all be in flight at once. On a constrained (single-core) CI runner, dozens of concurrent preemptive runs mean their lanes contend for the CPU and never start within the runner's idle window, so every probe times out and the suite crawls. The gate bounds the sum of in-flight lane reservations to ``limit``: a run acquires its lanes, holds them for its whole duration, and releases on the way out, so at most ~``limit``/(N+1) preemptive runs execute at once and their lanes are not starved. Excess runs suspend at the gate as parked continuations holding no thread, rather than piling onto GCD.
+/// Under `swift test --parallel`, Exhaust's concurrent runs — preemptive `.threads` specs (each fanning commands across N GCD lanes), cooperative `.tasks` specs, and async property/explore runs — can all be in flight at once. On a constrained (single-core) CI runner, dozens of concurrent preemptive runs mean their lanes contend for the CPU and never start within the runner's idle window, so every probe times out and the suite crawls. The gate bounds the sum of in-flight lane reservations to ``limit``: a run acquires its lanes, holds them for its whole duration, and releases on the way out, so at most ~``limit``/(N+1) preemptive runs execute at once and their lanes are not starved. Excess runs suspend at the gate as parked continuations holding no thread, rather than piling onto GCD.
 ///
 /// It is a budget, not a provider: GCD still hands out the actual threads. Admission is the whole effect. See `gcd-lane-admission-design.md` for the reservation accounting (`.threads` reserves `N+1`, see ``LaneReservation``) and the call-site trace.
 ///
-/// - Important: The gate is **async-only**: it exposes a suspending ``acquire(_:)`` and never blocks a caller's thread. A blocking acquire was tried and removed — a synchronous `@Test` runs on the cooperative pool, so blocking it starved the pool that admitted runs need to service their `blockingAwait` continuations, deadlocking the suite. Sync `.threads` contracts reach the gate through the same non-blocking `acquire`: their `#execute` dispatch is `async` (`__runContractDispatch` is `async`), so the synchronous machine runs on a GCD worker via `dispatchToGCD` and acquires without ever blocking a cooperative thread.
+/// - Important: The gate is **async-only**: it exposes a suspending ``acquire(_:)`` and never blocks a caller's thread. A blocking acquire was tried and removed — a synchronous `@Test` runs on the cooperative pool, so blocking it starved the pool that admitted runs need to service their `blockingAwait` continuations, deadlocking the suite. Sync `.threads` specs reach the gate through the same non-blocking `acquire`: their `#execute` dispatch is `async` (`__runStateMachineDispatch` is `async`), so the synchronous machine runs on a GCD worker via `dispatchToGCD` and acquires without ever blocking a cooperative thread.
 ///
 /// - Note: This is a `final class` guarded by an `NSLock` rather than an `actor` because ``release(_:)`` is called from synchronous contexts (inside the `dispatchToGCD` GCD closure, a `() -> Result`), which an actor's async-only surface cannot serve. Marked `@unchecked Sendable` because the mutable state, `free` and `waiters`, is read and written from many threads (async acquirers, and releasers on GCD workers); every access is serialized under `lock`, so the state is never touched concurrently.
 final class LaneGate: @unchecked Sendable {
@@ -108,7 +108,7 @@ enum LaneReservation {
         level + 1
     }
 
-    /// The reservation for a run with no lane fan-out: cooperative `.tasks`, the sequential-async contract, and async `#exhaust`/`#explore`, which occupy a single coordinator worker.
+    /// The reservation for a run with no lane fan-out: cooperative `.tasks`, the sequential-async spec, and async `#exhaust`/`#explore`, which occupy a single coordinator worker.
     static let single = 1
 
     /// The reservation for an async property run: the coordinator worker, widened to the `.parallelize` lane count when the sampling phase fans out via `concurrentPerform` (the coordinator doubles as one of the lanes, so no `+1`).

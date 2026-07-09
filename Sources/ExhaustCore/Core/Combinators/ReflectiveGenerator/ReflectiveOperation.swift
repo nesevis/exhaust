@@ -31,7 +31,7 @@
 ///
 /// Each case is interpreted by multiple passes (generation, reflection, replay, adaptation). The interpretation table in the MARK section below lists which source file handles each case in each pass. Per-case doc comments explain design rationale and invariants, not interpreter behavior.
 ///
-/// ## Type Erasure Contract
+/// ## Type Erasure StateMachine
 ///
 /// Associated values use `Any` because Swift enums cannot vary generic parameters across cases. The public API never exposes this: users see only typed generators and typed closures.
 ///

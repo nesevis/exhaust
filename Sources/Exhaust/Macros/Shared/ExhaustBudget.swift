@@ -31,7 +31,7 @@
 public enum ExhaustBudget: Sendable {
     /// Faster than default. Use when iteration speed matters more than coverage depth.
     case quick
-    /// Default for property tests and contract tests. Sufficient for most generators during development.
+    /// Default for property tests and spec tests. Sufficient for most generators during development.
     case standard
     /// Stronger coverage for complex generators.
     case thorough

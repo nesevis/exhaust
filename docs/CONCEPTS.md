@@ -100,15 +100,15 @@ If a direction turns out to be unreachable, because some constraint in the gener
 
 A direction is an active target. Its passive cousin is **classification** (`.classify(…)`), in the QuickCheck tradition, which only reports how often generated values fell into named buckets after the test run has finished.
 
-## Searching over sequences: `@Contract`
+## Searching over sequences: `@StateMachine`
 
 The tools so far test pure functions: one input, one output. Stateful systems fail differently. A stack, a cache, or a connection pool can pass every single-operation test and still break under a particular ordering that leaves it in a state it should not be possible to reach. The fault is not in any one call, but in an exact series of them.
 
-`@Contract` searches over sequences. You declare a **system under test** (the real implementation), a set of **commands** Exhaust may call on it, and **invariants** that must hold after every command. Exhaust generates command sequences, runs them, checks the invariants after each step, and when one breaks it reduces the sequence to the few commands that still reproduce the failure.
+`@StateMachine` searches over sequences. You declare a **system under test** (the real implementation), a set of **commands** Exhaust may call on it, and **invariants** that must hold after every command. Exhaust generates command sequences, runs them, checks the invariants after each step, and when one breaks it reduces the sequence to the few commands that still reproduce the failure.
 
 Invariants get much simpler if you maintain a **model**: a simpler reference implementation that the commands update in lockstep, so an invariant becomes "the system agrees with the model." The model is acting as an **oracle**, the trusted source of what the right answer is. For systems whose races hide in real threads rather than at `await` points, a separate **`@Oracle`** compares the concurrent result against a race-free sequential replay.
 
-The execution mode (`.sequential`, `.tasks`, or `.threads`) tells Exhaust how to run the commands. `.sequential` runs commands one at a time: the right choice for testing logic. `.tasks` runs commands concurrently with deterministic interleaving at every `await`, so the same seed reproduces the same run. `.threads` hands off to real OS threads to reach races inside locks and atomics, trading reproducibility for that reach. [Contract testing](EXECUTE-contract-testing.md) covers all three.
+The execution mode (`.sequential`, `.tasks`, or `.threads`) tells Exhaust how to run the commands. `.sequential` runs commands one at a time: the right choice for testing logic. `.tasks` runs commands concurrently with deterministic interleaving at every `await`, so the same seed reproduces the same run. `.threads` hands off to real OS threads to reach races inside locks and atomics, trading reproducibility for that reach. [State machine testing](EXECUTE-state-machine-testing.md) covers all three.
 
 ## Testing without an oracle: metamorphic testing
 
@@ -166,15 +166,15 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 - **Forward-only**: a generator that generates and reduces but cannot reflect, because it contains a one-way `.map` or `.bind`.
 - **Reflection round-trip**: `#examine`'s check that a generated value reflects back to the choices that made it.
 
-### Contracts
+### State machine specs
 
 - **Command**: one operation Exhaust may invoke on the SUT.
-- **Contract**: a specification of a stateful system that Exhaust checks by generating command sequences and verifying invariants after each step.
+- **State machine spec**: a specification of a stateful system that Exhaust checks by generating command sequences and verifying invariants after each step.
 - **Cooperative / preemptive**: the two concurrent runners. Cooperative interleaves deterministically at `await` points. Preemptive uses real threads to reach races in locks and atomics.
 - **Invariant**: a property checked after every command.
 - **Model**: a simpler reference implementation maintained alongside the SUT, so invariants can compare the two. Not a macro — just a pattern for writing effective invariants.
-- **Oracle**: the trusted source of the right answer a contract checks against. For `.threads` contracts, the `@Oracle` method compares the concurrent end state against a sequential replay.
-- **System under test (SUT)**: the real implementation a contract exercises.
+- **Oracle**: the trusted source of the right answer a spec checks against. For `.threads` specs, the `@Oracle` method compares the concurrent end state against a sequential replay.
+- **System under test (SUT)**: the real implementation a spec exercises.
 
 ### Reproduction
 

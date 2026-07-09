@@ -327,7 +327,7 @@ extension GraphRedistributionEncoder {
 
         // Same-tag integer path.
         //
-        // The gate is on the sink, not the source. The source moves toward its own reduction target — a contraction inside `[min(currentBP, targetBP), max(currentBP, targetBP)]` — so its new bp never leaves the source's own valid range regardless of whether that range is narrow or full-width. The sink is the side that can escape its valid range as it absorbs the opposing delta, so the sink is the side that determines which sub-path we take.
+        // The gate is on the sink, not the source. The source moves toward its own reduction target — a specion inside `[min(currentBP, targetBP), max(currentBP, targetBP)]` — so its new bp never leaves the source's own valid range regardless of whether that range is narrow or full-width. The sink is the side that can escape its valid range as it absorbs the opposing delta, so the sink is the side that determines which sub-path we take.
         //
         // When the sink's declared domain equals the natural type width, we use bit-pattern modular arithmetic with a width-aware mask. This matches the wrapping arithmetic (`&+`/`&-`) the property under test likely uses for the same type and lets redistribution reach boundary counterexamples like `(Int16.min, -1)` that semantic-space arithmetic would reject as overflow.
         //
