@@ -79,25 +79,25 @@ Exhaust is built on [reflective generators](https://dl.acm.org/doi/10.1145/36078
 
 ## Guides
 
-New to property-based testing? **[Getting Started](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/gettingstarted)** walks you from your first `#exhaust` call through generators, properties, and reading failure reports.
+New to property-based testing? **[Getting Started](https://nesevis.github.io/exhaust/documentation/exhaust/gettingstarted)** walks you from your first `#exhaust` call through generators, properties, and reading failure reports.
 
-Want the model rather than a tutorial? **[Conceptual Overview](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/conceptualoverview)** maps Exhaust's vocabulary and how the pieces fit together.
+Want the model rather than a tutorial? **[Conceptual Overview](https://nesevis.github.io/exhaust/documentation/exhaust/conceptualoverview)** maps Exhaust's vocabulary and how the pieces fit together.
 
-Testing a stateful system? **[State Machine Testing](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/statemachinetesting)** covers generating command sequences, model-based oracles, and concurrent interleaving.
+Testing a stateful system? **[State Machine Testing](https://nesevis.github.io/exhaust/documentation/exhaust/statemachinetesting)** covers generating command sequences, model-based oracles, and concurrent interleaving.
 
-Using Swift Testing? **[Swift Testing Integration](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/swifttestingintegration)** covers suite and test traits, how `#expect` and `#require` work inside property closures, and how failures surface in the test runner. Using XCTest? **[XCTest Compatibility](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/xctestcompatibility)** covers what works, what doesn't, and the differences.
+Using Swift Testing? **[Swift Testing Integration](https://nesevis.github.io/exhaust/documentation/exhaust/swifttestingintegration)** covers suite and test traits, how `#expect` and `#require` work inside property closures, and how failures surface in the test runner. Using XCTest? **[XCTest Compatibility](https://nesevis.github.io/exhaust/documentation/exhaust/xctestcompatibility)** covers what works, what doesn't, and the differences.
 
 Exhaust's entry points are six macros. `#gen` builds generators; the rest consume them:
 
 | Macro | Purpose |
 |---|---|
-| [`#gen(…)`](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/buildinggenerators) | Build generators from primitives, structs, enums, and recursive types. |
-| [`#gen(MyType.self, from:)`](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/buildinggenerators#Synthesising-generators-from-Decodable-types) | Synthesise a generator from a `Decodable` type and example JSON or a `Codable` instance. |
-| [`#exhaust(gen) {…}`](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/propertytesting) | Test a property and report a minimal counterexample on failure. |
-| [`#explore(gen, directions:) {…}`](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/directedexploration) | Test a property with per-direction coverage guarantees. |
-| [`#execute(MySpec.self, …)`](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/statemachinetesting) | Run a spec test against a stateful system. |
-| [`try #example(gen)`](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/buildinggenerators#Generating-test-data-with-example) | Generate test data from your generators. |
-| [`#examine(gen) {…}`](https://swiftpackageindex.com/nesevis/exhaust/documentation/exhaust/generatortesting) | Test your generators: correctness, coverage, and distribution quality. |
+| [`#gen(…)`](https://nesevis.github.io/exhaust/documentation/exhaust/buildinggenerators) | Build generators from primitives, structs, enums, and recursive types. |
+| [`#gen(MyType.self, from:)`](https://nesevis.github.io/exhaust/documentation/exhaust/buildinggenerators#Synthesising-generators-from-Decodable-types) | Synthesise a generator from a `Decodable` type and example JSON or a `Codable` instance. |
+| [`#exhaust(gen) {…}`](https://nesevis.github.io/exhaust/documentation/exhaust/propertytesting) | Test a property and report a minimal counterexample on failure. |
+| [`#explore(gen, directions:) {…}`](https://nesevis.github.io/exhaust/documentation/exhaust/directedexploration) | Test a property with per-direction coverage guarantees. |
+| [`#execute(MySpec.self, …)`](https://nesevis.github.io/exhaust/documentation/exhaust/statemachinetesting) | Run a spec test against a stateful system. |
+| [`try #example(gen)`](https://nesevis.github.io/exhaust/documentation/exhaust/buildinggenerators#Generating-test-data-with-example) | Generate test data from your generators. |
+| [`#examine(gen) {…}`](https://nesevis.github.io/exhaust/documentation/exhaust/generatortesting) | Test your generators: correctness, coverage, and distribution quality. |
 
 ## Installation
 
