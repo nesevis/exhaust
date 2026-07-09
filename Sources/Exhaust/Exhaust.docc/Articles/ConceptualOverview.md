@@ -30,7 +30,7 @@ Two dials shape how a generator fills the space. **Size** is a value from 0 to 1
 
 A **filter** (`.filter {…}`) keeps only values that satisfy a predicate. Exhaust tunes the generator toward valid values rather than generating and discarding, so a sparse constraint stays practical.
 
-## The default search: `#exhaust`
+## The default search: #exhaust
 
 `#exhaust` is the workhorse. Give it a generator and a property and it runs the property across hundreds of inputs, in two phases.
 
@@ -67,19 +67,19 @@ Finding a failure is only half the search. The other half is **reduction**. The 
 
 Reduction is automatic, and it works for every generator without a line of custom code. You never write a reduction function. The reducer runs the property against smaller and smaller candidates, keeping a change only if the property still fails, until nothing it tries makes the input simpler.
 
-Because it understands how the parts of an input relate, it can delete an element, collapse nested structures, drive a number toward zero, or move magnitude between coupled values. [How reduction works](REDUCTION.md) walks through a complete example.
+Because it understands how the parts of an input relate, it can delete an element, collapse nested structures, drive a number toward zero, or move magnitude between coupled values. <doc:HowReductionWorks> walks through a complete example.
 
 ## What makes it work: inspectable generators
 
 All of this rests on one design choice: an Exhaust generator is an inspectable data structure, not an opaque closure. Exhaust can look inside it and read its parameters, its branches, and their domains. This capability is **inspection**, and it is what powers everything else. Coverage reads a generator's parameters to find their domain's problematic values. Filter tuning tweaks its branching points. Reduction operates on the recorded choices rather than the output value.
 
-Because the generator is data, Exhaust can run it more than one way. There are three modes. **Generation** runs it forward to produce a value, recording each **choice** (which branch, which integer, which length) as it goes. **Replay** feeds a recorded sequence of choices back in to reproduce a value exactly. And **reflection** runs a generator backward: given a concrete value you already have (from a bug report, say), it recovers the choices that could have produced it, so the reducer can work on them. Reflection is what the `reflecting:` parameter and `#examine`'s round-trip check use. It requires bidirectional transforms (see [Bidirectional transforms](GEN-building-generators.md#bidirectional-transforms)). Generators built with forward-only `.map` or `.bind` still generate, reduce, and replay perfectly well.
+Because the generator is data, Exhaust can run it more than one way. There are three modes. **Generation** runs it forward to produce a value, recording each **choice** (which branch, which integer, which length) as it goes. **Replay** feeds a recorded sequence of choices back in to reproduce a value exactly. And **reflection** runs a generator backward: given a concrete value you already have (from a bug report, say), it recovers the choices that could have produced it, so the reducer can work on them. Reflection is what the `reflecting:` parameter and `#examine`'s round-trip check use. It requires bidirectional transforms (see <doc:BuildingGenerators#Bidirectional-transforms>). Generators built with forward-only `.map` or `.bind` still generate, reduce, and replay perfectly well.
 
 It helps to think of a generator as a *parser of randomness*. Forward, it parses raw randomness into a structured value. The `reflecting:` path un-parses a value back into the random choices that drove it.
 
 This design comes from reflective generators (Goldstein et al., [Reflecting on Random Generation](https://dl.acm.org/doi/10.1145/3607842)). You do not need the theory to use Exhaust, but it is there if you want it.
 
-## Directed search: `#explore`
+## Directed search: #explore
 
 `#exhaust` searches broadly, but it cannot promise it reached any particular region of the input space. A property can pass across hundreds of inputs and still never have generated the case you were worried about. `#explore` aims to close that gap.
 
@@ -100,7 +100,7 @@ If a direction turns out to be unreachable, because some constraint in the gener
 
 A direction is an active target. Its passive cousin is **classification** (`.classify(…)`), in the QuickCheck tradition, which only reports how often generated values fell into named buckets after the test run has finished.
 
-## Searching over sequences: `@StateMachine`
+## Searching over sequences: @StateMachine
 
 The tools so far test pure functions: one input, one output. Stateful systems fail differently. A stack, a cache, or a connection pool can pass every single-operation test and still break under a particular ordering that leaves it in a state it should not be possible to reach. The fault is not in any one call, but in an exact series of them.
 
@@ -108,7 +108,7 @@ The tools so far test pure functions: one input, one output. Stateful systems fa
 
 Invariants get much simpler if you maintain a **model**: a simpler reference implementation that the commands update in lockstep, so an invariant becomes "the system agrees with the model." The model is acting as an **oracle**, the trusted source of what the right answer is. For systems whose races hide in real threads rather than at `await` points, a separate **`@Oracle`** compares the concurrent result against a race-free sequential replay.
 
-The execution mode (`.sequential`, `.tasks`, or `.threads`) tells Exhaust how to run the commands. `.sequential` runs commands one at a time: the right choice for testing logic. `.tasks` runs commands concurrently with deterministic interleaving at every `await`, so the same seed reproduces the same run. `.threads` hands off to real OS threads to reach races inside locks and atomics, trading reproducibility for that reach. [State machine testing](EXECUTE-state-machine-testing.md) covers all three.
+The execution mode (`.sequential`, `.tasks`, or `.threads`) tells Exhaust how to run the commands. `.sequential` runs commands one at a time: the right choice for testing logic. `.tasks` runs commands concurrently with deterministic interleaving at every `await`, so the same seed reproduces the same run. `.threads` hands off to real OS threads to reach races inside locks and atomics, trading reproducibility for that reach. <doc:StateMachineTesting> covers all three.
 
 ## Testing without an oracle: metamorphic testing
 

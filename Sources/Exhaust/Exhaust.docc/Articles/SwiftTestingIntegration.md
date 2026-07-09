@@ -120,7 +120,7 @@ func sortPreservesLength() {
 
 Tagging property tests consistently lets you include or exclude them in Xcode test plans.
 
-## `#expect` and `#require` inside property closures
+## #expect and #require inside property closures
 
 Using Swift Testing assertions directly inside `#exhaust` is the recommended way to write property tests. It keeps assertions consistent with the rest of your test suite:
 
@@ -214,4 +214,4 @@ One implementation detail worth mentioning: on the GCD thread, `Test.current` is
 
 ## XCTest compatibility
 
-Exhaust detects the test framework at runtime and works under both Swift Testing and XCTest. See [XCTest Compatibility](XCTEST.md) for what works, what doesn't, and the differences.
+Exhaust detects the test framework at runtime and works under both Swift Testing and XCTest. See <doc:XCTestCompatibility> for what works, what doesn't, and the differences.

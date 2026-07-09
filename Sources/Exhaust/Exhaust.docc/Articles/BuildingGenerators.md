@@ -2,22 +2,7 @@
 
 Exhaust builds generators with the `#gen` macro. Each generator is an inspectable data structure that Exhaust can run forward to produce values, replay for deterministic reproduction, and, with bidirectional transforms, run backward to reconstruct a known value's choices. Reduction, coverage of problematic values, and filter optimisation all follow from inspection.
 
-If you're new to Exhaust, start with [Getting Started](GETTING_STARTED.md). This page covers the main generator concepts.
-
-- [Three modes](#three-modes)
-- [Primitives](#primitives)
-- [Collections](#collections)
-- [Optionals](#optionals)
-- [Ranges](#ranges)
-- [Choice](#choice)
-- [Composing generators](#composing-generators)
-- [Synthesising generators from Decodable types](#synthesising-generators-from-decodable-types)
-- [Generating test data with `#example`](#generating-test-data-with-example)
-- [Recursive generators](#recursive-generators)
-- [Metamorphic testing](#metamorphic-testing)
-- [Filters and classification](#filters-and-classification)
-- [Bidirectional transforms](#bidirectional-transforms)
-- [Reflecting known values](#reflecting-known-values)
+If you're new to Exhaust, start with <doc:GettingStarted>. This page covers the main generator concepts.
 
 ## Three modes
 
@@ -39,7 +24,7 @@ let strings = #gen(.string(length: 1...50))
 
 Generators without an explicit range use size scaling: Exhaust starts small and ramps up across the test run. An explicit range is sampled uniformly from the first run; pass `scaling:` to ramp within it (`.int(in: 0...1000, scaling: .linear)`).
 
-> [!Note]
+> Note:
 > Additional generators are available for dates, UUIDs, SIMD vectors, decimals, and more.
 
 ## Collections
@@ -151,7 +136,7 @@ Top-level containers work too. A leaf or collection type passed directly — `#g
 
 Some fields fall back to a constant from the example, pinned with `.just(decodedValue)`. This covers non-`CaseIterable` `RawRepresentable` enums, collections whose example is empty (no element to discover from), and values decoded through patterns the synthesiser does not model (manual element-by-element unkeyed decoding, class inheritance via a super decoder). A hand-written `init(from:)` that branches still generates correctly, as long as the example exercises the path it takes; only a generated value that drives it down an unexercised branch is pinned for that one sample, with a deduplicated warning. The generator still works either way — pinned fields just do not vary across iterations.
 
-> [!Tip]
+> Tip:
 > Run `#examine` on a synthesised generator to see which fields are fully generated and which are pinned:
 > ```swift
 > let report = #examine(gen, .budget(50))
@@ -164,7 +149,7 @@ Some fields fall back to a constant from the example, pinned with `.just(decoded
 
 Synthesised generators are forward-only. Reflection is not supported, so `reflecting:` cannot decompose a concrete value backward through a synthesised generator. Reduction still works because the reducer operates on the generator's choices, not output values.
 
-## Generating test data with `#example`
+## Generating test data with #example
 
 `#example` generates values from your generators outside of property tests. This is a fast way to produce test data, prototypes, and snapshot inputs:
 
@@ -295,7 +280,7 @@ let celsius = #gen(.double(in: -273.15...1000.0))
 
 Generators built entirely from `#gen` primitives and `mapped`/`bound` are fully reflectable. Adding a `.map` or `.bind` makes the generator forward-only at that point. Reflection from a concrete value cannot pass backward through the forward-only closure.
 
-> [!Important]
+> Important:
 > Forward-only transforms do not affect generation or reduction. A generator with `.map` still generates values, still gets problematic-value coverage, and still reduces counterexamples to their minimal form. The only capability lost is `reflecting:` — feeding a known value backward through the generator. If you do not need reflection, `.map` and `.bind` work exactly as well as their bidirectional counterparts.
 
 ## Reflecting known values

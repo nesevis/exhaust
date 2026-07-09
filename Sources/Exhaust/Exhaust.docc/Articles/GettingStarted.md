@@ -60,7 +60,7 @@ let gen = try #gen(from: user)
 let users = try #example(gen, count: 100)
 ```
 
-A synthesised generator is slower than a hand-written one (roughly three times per iteration) and has no knowledge of domain constraints — it generates across the full range of each field type. It gets you testing quickly, but when you want control over the values it generates, replace it with a hand-written generator. See [Synthesising generators from Decodable types](GEN-building-generators.md#synthesising-generators-from-decodable-types) for the full picture.
+A synthesised generator is slower than a hand-written one (roughly three times per iteration) and has no knowledge of domain constraints — it generates across the full range of each field type. It gets you testing quickly, but when you want control over the values it generates, replace it with a hand-written generator. See <doc:BuildingGenerators#Synthesising-generators-from-Decodable-types> for the full picture.
 
 ## The smallest useful test you can write
 
@@ -269,7 +269,7 @@ That's the entire shift. You've gone from one example to many: Exhaust now gener
 
 It's worth running this against code you already trust, just to see what happens. You'll find yourself surprised how often a "this can't fail" function fails on an empty array, on an array of all-equal elements, on negative integers, or on an array of length one. These are real bugs, found by a property you would have written in a comment anyway.
 
-## How `#exhaust` searches the input space
+## How #exhaust searches the input space
 
 `#exhaust` does more than random sampling. Every run moves through phases, and each one does a different job.
 
@@ -277,7 +277,7 @@ It's worth running this against code you already trust, just to see what happens
 
 The catalogue encodes the kinds of bugs each type is known for — the sort of thing a seasoned developer has learned to check for by hand over a career of finding them the hard way. These problematic values are drawn in combinations at pairwise coverage by default, so any bug that surfaces when two parameters hit their problematic values simultaneously gets caught without your having to remember to test the combination yourself. 
 
-Generators with very small domains get enumerated exhaustively as a special case. See [Coverage of problematic values](EXHAUST-property-testing.md#coverage-of-problematic-values) for the full detail.
+Generators with very small domains get enumerated exhaustively as a special case. See <doc:PropertyTesting#Coverage-of-problematic-values> for the full detail.
 
 **Random sampling.** Once coverage is done, the sampler turns to the generator's natural distribution, testing the property against varied, ordinary inputs. Coverage and sampling have separate budgets. At the default `.standard` budget you get 200 of each, so a property runs 400 times per invocation in total. Larger budgets (`.thorough`, `.extensive`) scale both numbers in lockstep.
 
@@ -285,7 +285,7 @@ Generators with very small domains get enumerated exhaustively as a special case
 
 Big structural simplifications tend to happen first, because they reduce the counterexample fastest. Value minimisation happens late, once the structure has settled. The result is the minimal input the reducer can find that still triggers the failure — the counterexample format you've seen already in the `myDedupe` example, with a `Reduction diff` showing the path from the first failing input to the minimum.
 
-The first two phases search for bugs. The third strips away everything that doesn't contribute to the failure, making the underlying bug stand out. A property that passes all three means *no failures in the coverage budget, no failures in random sampling, and nothing for reduction to simplify*. A failure in either of the first two triggers the third automatically. [How reduction works](REDUCTION.md) walks through a complete example.
+The first two phases search for bugs. The third strips away everything that doesn't contribute to the failure, making the underlying bug stand out. A property that passes all three means *no failures in the coverage budget, no failures in random sampling, and nothing for reduction to simplify*. A failure in either of the first two triggers the third automatically. <doc:HowReductionWorks> walks through a complete example.
 
 ## Reading a failure report
 
@@ -363,7 +363,7 @@ Property closures can be async, throwing or return a simple boolean.
 
 ## Writing your own generators
 
-Built-in generators (`.int()`, `.array()`, `.string()`, and their siblings) are simple enough. Generators compose together in ways that let you express almost any generator you could care to think of. [Building generators](GEN-building-generators.md) covers the main concepts in more depth.
+Built-in generators (`.int()`, `.array()`, `.string()`, and their siblings) are simple enough. Generators compose together in ways that let you express almost any generator you could care to think of. <doc:BuildingGenerators> covers the main concepts in more depth.
 
 ```swift
 struct Order {
@@ -419,7 +419,7 @@ Exhaust's character and string generators accept a `CharacterSet`, so you can sp
 
 When a property body reaches for `guard` to skip inputs, that's almost always a signal that the generator should be producing better-shaped inputs. The constraint has to live somewhere — the question is whether it lives in the generator (where it shapes what gets tested) or in the property body (where it silently discards inputs after the fact).
 
-## When the generator can't reliably reach what you need: `#explore`
+## When the generator can't reliably reach what you need: #explore
 
 Eventually you'll have a property and a generator and a niggling suspicion: *I think there might be a bug when the order has both a refund and a partial fulfilment.* 
 
@@ -459,7 +459,7 @@ Each direction gets its own tuning pass and its own biased generator.
 
 At the default `.standard` budget, the property runs on 30 examples per direction, and the report tells you which directions got exercised and whether any of them failed. If "refund + partial" turns out to be infeasible under your generator — because some constraint in the generator rules it out — the sampler exhausts its tuning budget without getting close, and `#explore` tells you the direction was unreachable. You find the bug in your generator instead of getting a false silence.
 
-The `#explore` skill is recognising the moment when your worry shifts from "does the property hold?" to "is the property even being tested in the cases I care about?" The first question is `#exhaust`'s job; the second is `#explore`'s. See [Directed exploration](EXPLORE-directed-exploration.md) for the full reference.
+The `#explore` skill is recognising the moment when your worry shifts from "does the property hold?" to "is the property even being tested in the cases I care about?" The first question is `#exhaust`'s job; the second is `#explore`'s. See <doc:DirectedExploration> for the full reference.
 
 A few signs you've crossed into `#explore` territory:
 
@@ -468,7 +468,7 @@ A few signs you've crossed into `#explore` territory:
 - You're writing a comment in the test that says "this also covers the X case" without any way to verify
 - You can articulate the regions of the input space where bugs might live, even if you can't enumerate the bugs themselves
 
-## When the bug is in a sequence of operations: `@StateMachine`
+## When the bug is in a sequence of operations: @StateMachine
 
 Everything above this point has been about pure functions — feed in an input, check the output. A lot of real code isn't shaped like that, though. Some bugs only show up after a particular sequence of operations on a stateful object: you can insert fine, delete fine, lookup fine, but do `insert(x); delete(x); lookup(x)` in order and the object is left in a state that shouldn't be reachable. No single operation is buggy in isolation. The bug lives in the interaction.
 
@@ -504,5 +504,5 @@ Specs on an `actor` use `.sequential` because actor isolation serialises all dis
 }
 ```
 
-State machine testing has its own guide: [State Machine Testing with Exhaust](EXECUTE-state-machine-testing.md). If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@StateMachine` instead — that's what it's there for.
+State machine testing has its own guide: <doc:StateMachineTesting>. If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@StateMachine` instead — that's what it's there for.
 

@@ -12,7 +12,7 @@ This repeats until neither makes progress. When both stall, the reducer searches
 
 ## Worked example: large union list
 
-> [!Note]
+> Note:
 > This example is from the [Shrinking Challenge](https://github.com/jlink/shrinking-challenge/blob/main/pbt-libraries/exhaust/reports/largeUnionList.md), a cross-library benchmark for test case reduction, or "shrinking".
 
 Consider a property about nested lists of integers:
