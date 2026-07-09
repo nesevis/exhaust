@@ -240,10 +240,10 @@ struct ShortlexKeyPropertyTests {
     }
 }
 
-// MARK: - Generator Contract Properties
+// MARK: - Generator StateMachine Properties
 
-@Suite("Generator Contracts")
-struct GeneratorContractPropertyTests {
+@Suite("Generator StateMachines")
+struct GeneratorStateMachinePropertyTests {
     @Test("Gen.choose always produces values within the specified range")
     func chooseRangeContainment() throws {
         try exhaustCheck(Gen.choose(in: -500 ... 500) as Generator<Int>) { value in

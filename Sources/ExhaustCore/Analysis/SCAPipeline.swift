@@ -5,7 +5,7 @@
 /// Result of SCA domain construction — carries everything needed for covering array generation and tree replay.
 ///
 /// Bundles the enumerable domain profile, optional argument mapping, and strength cap so the caller does not need to thread these values separately.
-/// Lane configuration for contract-test SCA coverage.
+/// Lane configuration for spec-test SCA coverage.
 ///
 /// When present, each domain value encodes `branchIndex * laneCount + laneValue`, and the tree builder emits a `.laneControl` chooseBits node alongside the pick selection.
 package struct SCALaneConfig {
@@ -20,7 +20,7 @@ package struct SCADomain {
     public let profile: EnumerableDomainProfile
     /// Argument mapping for decomposing flat domain indices back to branch + argument values. Nil when all branches are parameter-free.
     public let mapping: SCADomainMapping?
-    /// Lane configuration for contract-test coverage. Nil for property-test coverage.
+    /// Lane configuration for spec-test coverage. Nil for property-test coverage.
     public let laneConfig: SCALaneConfig?
     /// Upper bound on interaction strength for covering array generation.
     public let maxStrength: Int
@@ -72,7 +72,7 @@ package struct SCADomain {
     ///   - pickChoices: The command types available at each position.
     ///   - coverageBudget: The covering array row budget, used for threshold computation.
     ///   - strengthCap: Upper bound on interaction strength derived from sequence length.
-    ///   - commandTypeOnly: When `true`, skips argument analysis and treats every branch as parameter-free. The domain per position equals the branch count, covering command-type orderings without argument interactions. Use for contract tests where command-type diversity matters more than argument value coverage.
+    ///   - commandTypeOnly: When `true`, skips argument analysis and treats every branch as parameter-free. The domain per position equals the branch count, covering command-type orderings without argument interactions. Use for spec tests where command-type diversity matters more than argument value coverage.
     public static func build(
         sequenceLength: Int,
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
@@ -108,10 +108,10 @@ package struct SCADomain {
         return SCADomain(profile: profile, mapping: mapping, laneConfig: nil, maxStrength: maxStrength)
     }
 
-    /// Builds an SCA domain for contract tests that covers command-type × lane-assignment combinations.
+    /// Builds an SCA domain for spec tests that covers command-type × lane-assignment combinations.
     ///
     /// Each position's domain is `branchCount × laneCount`, where `laneCount` is `concurrencyLevel + 1` (lane 0 is the sequential prefix). The covering array systematically pairs every command type with every lane assignment at every position, ensuring diverse command-lane combinations appear in early rows.
-    public static func buildForContract(
+    public static func buildForStateMachine(
         sequenceLength: Int,
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
         concurrencyLevel: Int,

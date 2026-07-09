@@ -1,6 +1,6 @@
 /// Builds a minimization scope containing only ``TypeTag/laneControl`` chooseBits leaves.
 ///
-/// Lane-control leaves encode which concurrent lane a command is assigned to in a contract test. Value 0 means sequential prefix (the command runs before any concurrent execution); non-zero values assign to concurrent lanes. The goal is to establish the maximal sequential prefix by moving as many commands as possible from concurrent lanes into the prefix.
+/// Lane-control leaves encode which concurrent lane a command is assigned to in a spec test. Value 0 means sequential prefix (the command runs before any concurrent execution); non-zero values assign to concurrent lanes. The goal is to establish the maximal sequential prefix by moving as many commands as possible from concurrent lanes into the prefix.
 ///
 /// ## Strategy
 ///

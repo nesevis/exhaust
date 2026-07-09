@@ -1,6 +1,6 @@
 /// Concrete drain loops for the cooperative scheduler.
 ///
-/// The loops operate exclusively on non-generic data — ``RunQueue``, `UnownedJob`, ``LaneID``, and flag boxes — so they compile as concrete code under this module's whole-module optimization. The Spec-generic callers in the Exhaust module (the cooperative contract runner, the sequential oracle, and the blocking-await bridge) spawn their lane Tasks first, then hand the per-continuation loop to one of these entry points. The boundary crossing is once per probe.
+/// The loops operate exclusively on non-generic data — ``RunQueue``, `UnownedJob`, ``LaneID``, and flag boxes — so they compile as concrete code under this module's whole-module optimization. The Spec-generic callers in the Exhaust module (the cooperative spec runner, the sequential oracle, and the blocking-await bridge) spawn their lane Tasks first, then hand the per-continuation loop to one of these entry points. The boundary crossing is once per probe.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 package enum ScheduleDrain {
     /// How a drain loop ended: the work completed, or no continuation arrived within the idle timeout.

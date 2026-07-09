@@ -86,7 +86,7 @@ package enum SequenceCoveringArray {
         )
     }
 
-    // MARK: - Lane-Aware API (Contract Tests)
+    // MARK: - Lane-Aware API (StateMachine Tests)
 
     /// Converts a covering array row into a ``ChoiceTree`` encoding both command type and lane assignment per position.
     ///

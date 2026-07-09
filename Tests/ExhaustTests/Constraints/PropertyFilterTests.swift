@@ -9,8 +9,8 @@ import Exhaust
 import Foundation
 import Testing
 
-@Suite("Generator Contracts — Filter")
-struct GeneratorContractFilterTests {
+@Suite("Generator StateMachines — Filter")
+struct GeneratorStateMachineFilterTests {
     @Test("Filtered generator only produces values satisfying the predicate")
     func filterPostCondition() {
         let gen = #gen(.int(in: -1000 ... 1000)).filter { $0 > 0 }

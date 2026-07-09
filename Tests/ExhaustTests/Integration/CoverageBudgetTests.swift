@@ -44,8 +44,8 @@ struct CoverageBudgetTests {
 
     @Test("All discovery methods have descriptions")
     func allDiscoveryMethodsHaveDescriptions() {
-        #expect(ContractDiscoveryMethod.coverage.description == "coverage")
-        #expect(ContractDiscoveryMethod.randomSampling.description == "random sampling")
-        #expect(ContractDiscoveryMethod.replay.description == "replay")
+        #expect(StateMachineDiscoveryMethod.coverage.description == "coverage")
+        #expect(StateMachineDiscoveryMethod.randomSampling.description == "random sampling")
+        #expect(StateMachineDiscoveryMethod.replay.description == "replay")
     }
 }

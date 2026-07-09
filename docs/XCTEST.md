@@ -72,7 +72,7 @@ Throwing `XCTSkip` inside a property closure skips that input: it counts as neit
 
 When `.collectOpenPBTStats` is enabled, Exhaust records the data as an `XCTAttachment`. The attachment appears in Xcode's test report alongside any other test attachments.
 
-### Contract tests
+### State machine tests
 
 `await #execute(Spec.self)` works under XCTest (in an `async` test method) with the same command generation, invariant checking, and reduction pipeline. Failures are reported via `XCTFail`.
 

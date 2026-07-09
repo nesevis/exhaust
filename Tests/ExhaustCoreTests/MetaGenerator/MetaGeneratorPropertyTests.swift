@@ -144,7 +144,7 @@ struct MetaGeneratorPropertyTests {
 
     // MARK: 3d. Fast-Path Parity
 
-    /// `nextValueOnly()` (the tree-free fast path, backed by ValueInterpreter) and `reproduceWithTree()` (the tree-building path) must produce the same value for the same run. This is the contract the sampling pipeline relies on; `reproduceFailureTree()` asserts it at runtime and falls back to `.just` when it breaks. Sweeping it over the recipe space checks it for every generator shape, not just the ones the pipeline happened to hit.
+    /// `nextValueOnly()` (the tree-free fast path, backed by ValueInterpreter) and `reproduceWithTree()` (the tree-building path) must produce the same value for the same run. This is the spec the sampling pipeline relies on; `reproduceFailureTree()` asserts it at runtime and falls back to `.just` when it breaks. Sweeping it over the recipe space checks it for every generator shape, not just the ones the pipeline happened to hit.
     ///
     /// Recipes containing `unique` are exempt. The fast path's ValueInterpreter pass records the drawn choice sequence in the unique dedup set, so `reproduceWithTree()`'s re-run sees its own sequence as a duplicate and retries a different value. Production sidesteps this the same way: `nextValueOnly()` falls back to `next()` once `uniqueSeenSequences` is non-empty, and `reproduceFailureTree()` returns `.just` on the resulting break rather than trusting the reproduction.
     @Test("Fast-path nextValueOnly agrees with reproduceWithTree for random recipes", arguments: metaRecipeTypes)

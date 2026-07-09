@@ -193,7 +193,7 @@ The trap is what happens when you reach for computing instead of checking. Faced
 
 On the surface this looks rigorous — you're checking that your code agrees with another hand-written source of truth. Underneath, though, **the code and the test will change together**. When you fix a bug in `fibonacci` you'll almost certainly update `referenceFibonacci` at the same time, because you'll notice they disagree and your instinct will be to make them agree. 
 
-When you misunderstand the function's contract, you'll misunderstand it the same way in both implementations: if you think Fibonacci starts at `F(0) = 1` when it actually starts at `F(0) = 0`, both functions will reflect that mistake and the test will happily pass. 
+When you misunderstand the function's promise, you'll misunderstand it the same way in both implementations: if you think Fibonacci starts at `F(0) = 1` when it actually starts at `F(0) = 0`, both functions will reflect that mistake and the test will happily pass. 
 
 The two sides of the equality are coupled through a shared mental model, and a test that's coupled to the thing it's testing can't reveal bugs in that thing — it can only tell you when your two copies of the thing have drifted apart, which is only rarely the bug you were looking for.
 
@@ -381,11 +381,11 @@ let generator = #gen(
 }
 ```
 
-The shaping question for a generator is *what values does my code accept?* The production distribution of values is a separate question, and the two often have very different answers. A sort function accepts any `[Int]`. Whether the arrays it happens to see in production are short and positive is beside the point, because the contract says any `[Int]` and the bugs you're trying to find live somewhere in the full domain the function claims to handle. 
+The shaping question for a generator is *what values does my code accept?* The production distribution of values is a separate question, and the two often have very different answers. A sort function accepts any `[Int]`. Whether the arrays it happens to see in production are short and positive is beside the point, because the promise says any `[Int]` and the bugs you're trying to find live somewhere in the full domain the function claims to handle. 
 
 A generator narrowed to "typical production inputs" is really a generator that only tests inputs a bug would already have had to survive to reach production.
 
-What counts as "the contract" is usually right there in the signature — specifically in the *input type*, which is a separate question from whatever validation the function does to the values once it has them. `parse()` takes any `String`, and one of your generators should produce any `String`, including malformed ones, because the parser's rejection behaviour is as much under test as its happy path. A validator on `addUser(name:age:)` should see ages well outside `0...150`, so the property can assert the out-of-range cases are handled the way the function claims to handle them.
+What counts as "the promise" is usually right there in the signature — specifically in the *input type*, which is a separate question from whatever validation the function does to the values once it has them. `parse()` takes any `String`, and one of your generators should produce any `String`, including malformed ones, because the parser's rejection behaviour is as much under test as its happy path. A validator on `addUser(name:age:)` should see ages well outside `0...150`, so the property can assert the out-of-range cases are handled the way the function claims to handle them.
 
 The generator only narrows when the input type itself rules out the invalid values. `myClamp` can't be called with a malformed range because `ClosedRange` won't let you construct one — the type has done the validation already, and the generator has to match what it permits. The bound comes from what the function can structurally *be called with*. Informal notions of "valid" or "sensible" input don't apply — if the signature permits it, the generator should produce it.
 
@@ -468,19 +468,19 @@ A few signs you've crossed into `#explore` territory:
 - You're writing a comment in the test that says "this also covers the X case" without any way to verify
 - You can articulate the regions of the input space where bugs might live, even if you can't enumerate the bugs themselves
 
-## When the bug is in a sequence of operations: `@Contract`
+## When the bug is in a sequence of operations: `@StateMachine`
 
 Everything above this point has been about pure functions — feed in an input, check the output. A lot of real code isn't shaped like that, though. Some bugs only show up after a particular sequence of operations on a stateful object: you can insert fine, delete fine, lookup fine, but do `insert(x); delete(x); lookup(x)` in order and the object is left in a state that shouldn't be reachable. No single operation is buggy in isolation. The bug lives in the interaction.
 
-Exhaust has a separate facility for this kind of testing, built around a `@Contract` macro. You declare a `final class` (or an `actor`) that describes the system under test (`@SystemUnderTest`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two. Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks. The shape looks like this:
+Exhaust has a separate facility for this kind of testing, built around a `@StateMachine` macro. You declare a `final class` (or an `actor`) that describes the system under test (`@SystemUnderTest`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two. Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks. The shape looks like this:
 
 ```swift
-@Test func contractHolds() async {
-    await #execute(MyContract.self)
+@Test func specHolds() async {
+    await #execute(MySpec.self)
 }
 
-@Contract(.sequential)
-final class MyContract {
+@StateMachine(.sequential)
+final class MySpec {
     @SystemUnderTest
     var sut = MyType()
 
@@ -494,15 +494,15 @@ final class MyContract {
 }
 ```
 
-The `@Contract` macro takes an execution mode (`.sequential`, `.tasks`, or `.threads`) that tells Exhaust how to run the commands. `.sequential` runs commands one at a time and checks `@Invariant` after each step. `.tasks` runs commands concurrently across multiple lanes with deterministic interleaving at `await` boundaries, for finding reentrancy and ordering bugs in async code. `.threads` dispatches commands to real OS threads for finding data races in locks, dispatch queues, and atomics, checked by an `@Oracle` that compares concurrent state against a sequential replay.
+The `@StateMachine` macro takes an execution mode (`.sequential`, `.tasks`, or `.threads`) that tells Exhaust how to run the commands. `.sequential` runs commands one at a time and checks `@Invariant` after each step. `.tasks` runs commands concurrently across multiple lanes with deterministic interleaving at `await` boundaries, for finding reentrancy and ordering bugs in async code. `.threads` dispatches commands to real OS threads for finding data races in locks, dispatch queues, and atomics, checked by an `@Oracle` that compares concurrent state against a sequential replay.
 
-Contracts on an `actor` use `.sequential` because actor isolation serialises all dispatch, so concurrent testing has nowhere to interleave. For `final class` contracts with async commands, `.tasks` tests interleaving across N lanes:
+Specs on an `actor` use `.sequential` because actor isolation serialises all dispatch, so concurrent testing has nowhere to interleave. For `final class` specs with async commands, `.tasks` tests interleaving across N lanes:
 
 ```swift
 @Test func sutIsSafeUnderConcurrency() async {
-    await #execute(AsyncContract.self, .parallelize(lanes: .two))
+    await #execute(AsyncSpec.self, .parallelize(lanes: .two))
 }
 ```
 
-Contract testing has its own guide: [Contract Testing with Exhaust](EXECUTE-contract-testing.md). If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@Contract` instead — that's what it's there for.
+State machine testing has its own guide: [State Machine Testing with Exhaust](EXECUTE-state-machine-testing.md). If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@StateMachine` instead — that's what it's there for.
 

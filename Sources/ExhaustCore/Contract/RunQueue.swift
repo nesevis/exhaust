@@ -10,7 +10,7 @@
 // These types are deliberately non-generic — they traffic in UnownedJob and UInt8 lane indices, never in command payloads — so the per-continuation machinery compiles as concrete code under this module's whole-module optimization. Spec-generic orchestration stays in the Exhaust module and calls in here once per probe.
 import Foundation
 
-/// Identifies a logical execution lane in a concurrent contract test.
+/// Identifies a logical execution lane in a concurrent spec test.
 ///
 /// Lane indices are zero-based: lane 0 is "a", lane 1 is "b", and so on up to the concurrency level minus one. The label maps index to a lowercase ASCII letter for trace output.
 package struct LaneID: Hashable, Sendable {
@@ -27,7 +27,7 @@ package struct LaneID: Hashable, Sendable {
 
 /// Tags enqueued jobs with a lane identifier and deposits them into the shared ``RunQueue``.
 ///
-/// Each concurrent contract test creates one LaneExecutor per lane, all sharing the same RunQueue. When a task with `executorPreference` set to this executor suspends and later resumes, the Swift runtime calls ``enqueue(_:)`` to schedule the next continuation. The lane tag lets the drain loop identify which lane produced the job without inspecting the job's content.
+/// Each concurrent spec test creates one LaneExecutor per lane, all sharing the same RunQueue. When a task with `executorPreference` set to this executor suspends and later resumes, the Swift runtime calls ``enqueue(_:)`` to schedule the next continuation. The lane tag lets the drain loop identify which lane produced the job without inspecting the job's content.
 ///
 /// Marked `@unchecked Sendable` because ``enqueue(_:)`` may be called from any thread (when a continuation arrives from a foreign executor). Thread safety is provided by ``RunQueue``'s lock.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

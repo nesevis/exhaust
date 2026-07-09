@@ -42,7 +42,7 @@ func registerPreemptiveLoweHashMapBenchmarks() {
 
 // MARK: - Spec
 
-@Contract(.threads)
+@StateMachine(.threads)
 final class LoweHashMapBenchSpec {
     @SystemUnderTest
     var map: BuggyHashMapBench = .init(capacity: 4)

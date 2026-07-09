@@ -18,7 +18,7 @@
         @TaskLocal public static var current: ExhaustTraitConfiguration?
     }
 
-    /// A Swift Testing trait that configures `#exhaust` property tests and `#execute` contract tests.
+    /// A Swift Testing trait that configures `#exhaust` property tests and `#execute` spec tests.
     ///
     /// ```swift
     /// @Test(.exhaust(.budget(.thorough)))
@@ -123,7 +123,7 @@
     /// (any SuiteTrait) context. Paired with the suite builder being on SuiteTrait, each context sees
     /// exactly one `exhaust` overload, so neither `.exhaust(...)` call is ever ambiguous.
     public extension TestTrait where Self == ExhaustTrait {
-        /// Configures `#exhaust` property tests and `#execute` contract tests with the given options.
+        /// Configures `#exhaust` property tests and `#execute` spec tests with the given options.
         ///
         /// ```swift
         /// @Test(.exhaust(.budget(.thorough)))

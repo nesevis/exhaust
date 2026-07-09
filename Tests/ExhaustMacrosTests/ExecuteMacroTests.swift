@@ -5,20 +5,20 @@
     @testable import ExhaustMacros
 
     @Suite(
-        "#execute sync contract macro expansion tests",
-        .macros(["execute": ExhaustContractMacro.self], record: .failed)
+        "#execute sync spec macro expansion tests",
+        .macros(["execute": ExhaustStateMachineMacro.self], record: .failed)
     )
-    struct ExecuteContractMacroTests {
-        @Test("#execute sync contract expansion with commandLimit")
-        func executeContractWithCommandLimit() {
+    struct ExecuteStateMachineMacroTests {
+        @Test("#execute sync spec expansion with commandLimit")
+        func executeStateMachineWithCommandLimit() {
             assertMacro {
                 """
-                await #execute(BoundedQueueContract.self, .commandLimit(20))
+                await #execute(BoundedQueueSpec.self, .commandLimit(20))
                 """
             } expansion: {
                 """
-                await __ExhaustRuntime.__runContractDispatch(
-                    BoundedQueueContract.self,
+                await __ExhaustRuntime.__runStateMachineDispatch(
+                    BoundedQueueSpec.self,
                     settings: [.commandLimit(20)],
                     fileID: #fileID,
                     filePath: #filePath,
@@ -29,15 +29,15 @@
             }
         }
 
-        @Test("#execute sync contract with multiple settings")
-        func executeContractWithSettings() {
+        @Test("#execute sync spec with multiple settings")
+        func executeStateMachineWithSettings() {
             assertMacro {
                 """
                 await #execute(Spec.self, .commandLimit(20), .budget(.thorough))
                 """
             } expansion: {
                 """
-                await __ExhaustRuntime.__runContractDispatch(
+                await __ExhaustRuntime.__runStateMachineDispatch(
                     Spec.self,
                     settings: [.commandLimit(20), .budget(.thorough)],
                     fileID: #fileID,
@@ -49,15 +49,15 @@
             }
         }
 
-        @Test("#execute sync contract with no settings")
-        func executeContractWithNoSettings() {
+        @Test("#execute sync spec with no settings")
+        func executeStateMachineWithNoSettings() {
             assertMacro {
                 """
                 await #execute(Spec.self)
                 """
             } expansion: {
                 """
-                await __ExhaustRuntime.__runContractDispatch(
+                await __ExhaustRuntime.__runStateMachineDispatch(
                     Spec.self,
                     settings: [],
                     fileID: #fileID,
@@ -86,19 +86,19 @@
     }
 
     @Suite(
-        "#execute async contract macro expansion tests",
-        .macros(["execute": ExhaustAsyncContractMacro.self], record: .failed)
+        "#execute async spec macro expansion tests",
+        .macros(["execute": ExhaustAsyncStateMachineMacro.self], record: .failed)
     )
-    struct ExecuteAsyncContractMacroTests {
-        @Test("#execute async contract expansion with no settings")
-        func executeAsyncContractWithNoSettings() {
+    struct ExecuteAsyncStateMachineMacroTests {
+        @Test("#execute async spec expansion with no settings")
+        func executeAsyncStateMachineWithNoSettings() {
             assertMacro {
                 """
                 await #execute(AsyncSpec.self)
                 """
             } expansion: {
                 """
-                await __ExhaustRuntime.__runContractDispatchAsync(
+                await __ExhaustRuntime.__runStateMachineDispatchAsync(
                     AsyncSpec.self,
                     settings: [],
                     fileID: #fileID,
@@ -110,15 +110,15 @@
             }
         }
 
-        @Test("#execute async contract with settings")
-        func executeAsyncContractWithSettings() {
+        @Test("#execute async spec with settings")
+        func executeAsyncStateMachineWithSettings() {
             assertMacro {
                 """
                 await #execute(AsyncSpec.self, .commandLimit(10), .parallelize(lanes: .three))
                 """
             } expansion: {
                 """
-                await __ExhaustRuntime.__runContractDispatchAsync(
+                await __ExhaustRuntime.__runStateMachineDispatchAsync(
                     AsyncSpec.self,
                     settings: [.commandLimit(10), .parallelize(lanes: .three)],
                     fileID: #fileID,

@@ -1,6 +1,6 @@
 # Running property tests
 
-`#exhaust` tests a property across generated values and reports a minimal counterexample on failure. This page covers closure shapes, settings, and observability. For contract tests over stateful systems, see [Contract testing](EXECUTE-contract-testing.md) and the `#execute` macro.
+`#exhaust` tests a property across generated values and reports a minimal counterexample on failure. This page covers closure shapes, settings, and observability. For state machine tests over stateful systems, see [State machine testing](EXECUTE-state-machine-testing.md) and the `#execute` macro.
 
 ## Closure shapes
 
