@@ -184,7 +184,7 @@ package struct BindMetadata {
     package let boundChildIndex: Int
 
     /// Structural path from the ``ChoiceTree`` root at graph-construction time to this bind. Used by ``ChoiceGraph/extractBoundSubtree(from:matchingPath:)`` to locate the matching bind in a post-mutation freshTree. The root bind has the empty path.
-    package let bindPath: BindPath
+    package let bindPath: ChoicePath
 
     /// Cached classification recorded by ``ChoiceGraph/classifyBind(at:gen:scope:upstreamLeafNodeID:)``. Nil until the bind is classified, or after a reshape clears the prior result. Read by the scheduler before dispatching expensive dependent-node encoders (for example ``GraphComposedEncoder``) so unsuitable sites are skipped immediately.
     package var classification: BindClassification?
@@ -196,7 +196,7 @@ package struct BindMetadata {
         bindDepth: Int,
         innerChildIndex: Int,
         boundChildIndex: Int,
-        bindPath: BindPath,
+        bindPath: ChoicePath,
         classification: BindClassification? = nil
     ) {
         self.fingerprint = fingerprint

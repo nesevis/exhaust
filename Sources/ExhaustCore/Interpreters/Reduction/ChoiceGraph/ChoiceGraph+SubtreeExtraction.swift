@@ -13,7 +13,7 @@ extension ChoiceGraph {
     /// Returns `nil` if the path does not resolve to a non-getSize bind inside `tree`. The caller falls back to a full graph rebuild in that case.
     static func extractBoundSubtree(
         from tree: ChoiceTree,
-        matchingPath path: BindPath
+        matchingPath path: ChoicePath
     ) -> ChoiceTree? {
         walkForPathMatch(tree: tree, remainingPath: path[...])
     }
@@ -23,7 +23,7 @@ extension ChoiceGraph {
     /// Transparent variants (``ChoiceTree/branch``, getSize-inner ``ChoiceTree/bind``) descend without consuming a step. All other structural descents must match the next step in `remainingPath`.
     private static func walkForPathMatch(
         tree: ChoiceTree,
-        remainingPath: ArraySlice<BindPathStep>
+        remainingPath: ArraySlice<ChoicePathStep>
     ) -> ChoiceTree? {
         switch tree {
             case .choice, .just, .getSize:

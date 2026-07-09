@@ -70,7 +70,7 @@ struct ChoiceGraphBuilder {
         offset: Int,
         parent: Int?,
         bindDepth: Int,
-        path: BindPath,
+        path: ChoicePath,
         isActive: Bool = true
     ) -> Int {
         switch tree {
@@ -161,7 +161,7 @@ struct ChoiceGraphBuilder {
         offset: Int,
         parent: Int?,
         bindDepth: Int,
-        path: BindPath,
+        path: ChoicePath,
         isActive: Bool
     ) -> Int {
         let nodeID = emitNode(
@@ -259,7 +259,7 @@ struct ChoiceGraphBuilder {
         offset: Int,
         parent: Int?,
         bindDepth: Int,
-        path: BindPath,
+        path: ChoicePath,
         isActive: Bool
     ) -> Int {
         if let pickResult = detectPickSite(array) {
@@ -330,7 +330,7 @@ struct ChoiceGraphBuilder {
         offset: Int,
         parent: Int?,
         bindDepth: Int,
-        path: BindPath,
+        path: ChoicePath,
         isActive: Bool
     ) -> Int {
         let nodeID = emitNode(
@@ -410,7 +410,7 @@ struct ChoiceGraphBuilder {
         offset: Int,
         parent: Int?,
         bindDepth: Int,
-        path: BindPath,
+        path: ChoicePath,
         isActive: Bool
     ) -> Int {
         if inner.isGetSize {
@@ -502,7 +502,7 @@ struct ChoiceGraphBuilder {
         offset: Int,
         parent: Int?,
         bindDepth: Int,
-        path: BindPath
+        path: ChoicePath
     ) -> Int {
         var consumed = 1 // group open
         for (index, child) in children.enumerated() {

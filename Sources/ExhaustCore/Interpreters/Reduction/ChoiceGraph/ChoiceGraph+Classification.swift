@@ -109,7 +109,7 @@ extension ChoiceGraph {
         gen: AnyGenerator,
         baseSequence: ChoiceSequence,
         fallbackTree: ChoiceTree,
-        bindPath: BindPath
+        bindPath: ChoicePath
     ) -> ChoiceTree? {
         guard upstreamIndex < baseSequence.count else { return nil }
         var candidate = baseSequence
