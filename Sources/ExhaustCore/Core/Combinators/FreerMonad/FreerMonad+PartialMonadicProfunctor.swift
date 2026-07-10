@@ -26,7 +26,7 @@ package typealias AnyGenerator = FreerMonad<ReflectiveOperation, Any>
 package extension Generator where Operation == ReflectiveOperation {
     /// Reifies a monadic bind as a visible `.transform(.bind(...))` operation in the generator tree.
     ///
-    /// Unlike the invisible ``FreerMonad/bind(_:)`` used by internal framework code, this method creates an inspectable node that the reflection interpreter, reducer, and coverage analysis can see and traverse. The backward function (when provided via ``_bound(forward:backward:fileID:line:column:)``) enables reflection to decompose the bound value back into the inner generator's output.
+    /// Unlike the invisible ``FreerMonad/bind(_:)`` used by internal framework code, this method creates an inspectable node that the reflection interpreter, reducer, and screening analysis can see and traverse. The backward function (when provided via ``_bound(forward:backward:fileID:line:column:)``) enables reflection to decompose the bound value back into the inner generator's output.
     ///
     /// This method was renamed from `_bind` to avoid an overload-resolution conflict with ``FreerMonad/bind(_:)``. When both methods had identical externally-visible signatures (one parameter), Swift correctly picked this constrained-extension version over the generic one. Adding defaulted parameters for `#fileID`/`#line`/`#column` changed the resolution preference, silently routing call sites to the unconstrained ``FreerMonad/bind(_:)`` (which chains continuations natively without reifying as `.transform(.bind(...))`). Renaming to `bindReified` eliminates the ambiguity entirely; the source-location defaults can stay because the rename guarantees there is no other `bindReified` to compete with.
     ///

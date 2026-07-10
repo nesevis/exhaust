@@ -5,7 +5,7 @@
 /// Result of SCA domain construction — carries everything needed for covering array generation and tree replay.
 ///
 /// Bundles the enumerable domain profile, optional argument mapping, and strength cap so the caller does not need to thread these values separately.
-/// Lane configuration for spec-test SCA coverage.
+/// Lane configuration for spec-test SCA screening.
 ///
 /// When present, each domain value encodes `branchIndex * laneCount + laneValue`, and the tree builder emits a `.laneControl` chooseBits node alongside the pick selection.
 package struct SCALaneConfig {
@@ -20,7 +20,7 @@ package struct SCADomain {
     public let profile: EnumerableDomainProfile
     /// Argument mapping for decomposing flat domain indices back to branch + argument values. Nil when all branches are parameter-free.
     public let mapping: SCADomainMapping?
-    /// Lane configuration for spec-test coverage. Nil for property-test coverage.
+    /// Lane configuration for spec-test screening. Nil for property-test screening.
     public let laneConfig: SCALaneConfig?
     /// Upper bound on interaction strength for covering array generation.
     public let maxStrength: Int
@@ -62,7 +62,7 @@ package struct SCADomain {
     /// - Parameters:
     ///   - sequenceLength: Number of positions in each test sequence.
     ///   - pickChoices: The command types available at each position.
-    ///   - coverageBudget: The covering array row budget, used for threshold computation.
+    ///   - screeningBudget: The covering array row budget, used for threshold computation.
     ///   - strengthCap: Upper bound on interaction strength derived from sequence length.
     /// - Returns: An ``SCADomain`` ready for covering array construction, or nil if no branches can be analyzed.
     /// Builds an SCA domain from pick choices and sequence metadata.
@@ -70,13 +70,13 @@ package struct SCADomain {
     /// - Parameters:
     ///   - sequenceLength: Number of positions in each test sequence.
     ///   - pickChoices: The command types available at each position.
-    ///   - coverageBudget: The covering array row budget, used for threshold computation.
+    ///   - screeningBudget: The covering array row budget, used for threshold computation.
     ///   - strengthCap: Upper bound on interaction strength derived from sequence length.
     ///   - commandTypeOnly: When `true`, skips argument analysis and treats every branch as parameter-free. The domain per position equals the branch count, covering command-type orderings without argument interactions. Use for spec tests where command-type diversity matters more than argument value coverage.
     public static func build(
         sequenceLength: Int,
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        coverageBudget: UInt64,
+        screeningBudget: UInt64,
         strengthCap: Int,
         commandTypeOnly: Bool = false
     ) -> SCADomain? {
@@ -85,14 +85,14 @@ package struct SCADomain {
             branchProfiles = pickChoices.map { _ in .parameterFree }
         } else {
             let threshold = SequenceCoveringArray.computeThreshold(
-                budget: coverageBudget,
+                budget: screeningBudget,
                 sequenceLength: sequenceLength,
                 branchCount: pickChoices.count
             )
             branchProfiles = SequenceCoveringArray.analyzeBranches(
                 pickChoices,
                 threshold: threshold,
-                coverageBudget: coverageBudget
+                screeningBudget: screeningBudget
             )
         }
         let (profile, mapping) = SequenceCoveringArray.buildProfile(

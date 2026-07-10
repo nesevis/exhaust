@@ -26,7 +26,7 @@ func registerSequenceLengthBenchmarks() {
 //    }
 
     // Each iteration generates one fixed-length collection on the value-only path:
-    // `.replay(1337)` forces a single sample (no coverage phase; the property passes so no reduction).
+    // `.replay(1337)` forces a single sample (no screening phase; the property passes so no reduction).
     let lengths = [Int(UInt16.max)]
 
     for length in lengths {

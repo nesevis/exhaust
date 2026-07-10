@@ -12,7 +12,7 @@ struct OpenPBTStatsTests {
             ChoiceMetadata(validRange: 0 ... 100)
         )
 
-        accumulator.record(representation: "42", passed: true, tree: tree, phase: .coverage)
+        accumulator.record(representation: "42", passed: true, tree: tree, phase: .screening)
         accumulator.record(representation: "99", passed: false, tree: tree, phase: .random)
 
         let lines = accumulator.finalize()
@@ -37,7 +37,7 @@ struct OpenPBTStatsTests {
         }
 
         #expect(lines[0].status == "passed")
-        #expect(lines[0].features.phase == .coverage)
+        #expect(lines[0].features.phase == .screening)
         #expect(lines[1].status == "failed")
         #expect(lines[1].features.phase == .random)
     }
@@ -91,7 +91,7 @@ struct OpenPBTStatsTests {
             representation: "Example(\n  name: \"hello\",\n  value: 42\n)",
             passed: true,
             tree: tree,
-            phase: .coverage
+            phase: .screening
         )
 
         let lines = accumulator.finalize()
@@ -119,7 +119,7 @@ struct OpenPBTStatsTests {
     func consistentRunStart() {
         let accumulator = OpenPBTStatsAccumulator(propertyName: "test()")
         let tree = ChoiceTree.just
-        accumulator.record(representation: "1", passed: true, tree: tree, phase: .coverage)
+        accumulator.record(representation: "1", passed: true, tree: tree, phase: .screening)
         accumulator.record(representation: "2", passed: true, tree: tree, phase: .random)
         accumulator.recordDiscards(count: 1, phase: .random)
 
@@ -134,7 +134,7 @@ struct OpenPBTStatsTests {
     func jsonlStringFormat() throws {
         let accumulator = OpenPBTStatsAccumulator(propertyName: "test()")
         let tree = ChoiceTree.just
-        accumulator.record(representation: "1", passed: true, tree: tree, phase: .coverage)
+        accumulator.record(representation: "1", passed: true, tree: tree, phase: .screening)
         accumulator.record(representation: "2", passed: true, tree: tree, phase: .random)
 
         let jsonl = accumulator.finalize().jsonlString()

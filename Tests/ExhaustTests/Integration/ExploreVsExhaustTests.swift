@@ -12,7 +12,7 @@ struct ExploreMacroIntegrationTests {
                 ("low", { $0 < 50 }),
                 ("high", { $0 >= 50 }),
             ],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { value in
             value >= 0
@@ -32,7 +32,7 @@ struct ExploreMacroIntegrationTests {
             directions: [
                 ("any", { _ in true }),
             ],
-            .budget(.custom(coverage: 30, sampling: 500)),
+            .budget(.custom(screening: 30, sampling: 500)),
             .suppress(.all)
         ) { value in
             value < 50
@@ -53,7 +53,7 @@ struct ExploreMacroIntegrationTests {
                 ("positive", { $0 > 0 }),
                 ("above 30", { $0 > 30 }),
             ],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { _ in
             true
@@ -70,7 +70,7 @@ struct ExploreMacroIntegrationTests {
             directions: [
                 ("low", { $0 < 50 }),
             ],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .replay(42),
             .suppress(.all)
         ) { _ in
@@ -81,7 +81,7 @@ struct ExploreMacroIntegrationTests {
             directions: [
                 ("low", { $0 < 50 }),
             ],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .replay(42),
             .suppress(.all)
         ) { _ in

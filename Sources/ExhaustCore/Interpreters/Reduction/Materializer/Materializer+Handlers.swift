@@ -57,7 +57,7 @@ extension Materializer {
 
     /// Reads a bit pattern from the cursor and converts it to a typed value via the ``TypeTag``.
     ///
-    /// In exact mode the cursor must supply a value in range (or the handler rejects). In guided mode the handler falls through three tiers: cursor value, fallback tree, then PRNG. Bound values and non-explicit ranges are always clamped rather than rejected because their valid range may shift when inner values change. Float NaN and infinity bit patterns bypass clamping so problematic-value coverage counterexamples remain reducible.
+    /// In exact mode the cursor must supply a value in range (or the handler rejects). In guided mode the handler falls through three tiers: cursor value, fallback tree, then PRNG. Bound values and non-explicit ranges are always clamped rather than rejected because their valid range may shift when inner values change. Float NaN and infinity bit patterns bypass clamping so problematic-value screening counterexamples remain reducible.
     @inline(__always)
     static func handleChooseBits(
         min: UInt64,
@@ -89,7 +89,7 @@ extension Materializer {
                     randomBits = tag.clampBits(bp, min: min, max: max)
                 } else {
                     // Explicit-range inner value: reject if out of range.
-                    // Float NaN/infinity: pass through so problematic-value coverage counterexamples are reducible.
+                    // Float NaN/infinity: pass through so problematic-value screening counterexamples are reducible.
                     guard bp >= min, bp <= max || tag.isFloatingPoint else {
                         throw RejectionError()
                     }
@@ -153,7 +153,7 @@ extension Materializer {
 
     /// Selects a branch by reading the branch index from the cursor, then materializes the selected branch's generator.
     ///
-    /// In exact mode the cursor must supply a valid branch index or the handler rejects. In guided mode the handler tries the cursor, then the fallback tree's selected branch, then weighted random selection. When ``Context/materializePicks`` is set, non-selected branches are also materialized in minimize mode to populate the ``ChoiceTree`` with shortlex-simplest content for coverage analysis.
+    /// In exact mode the cursor must supply a valid branch index or the handler rejects. In guided mode the handler tries the cursor, then the fallback tree's selected branch, then weighted random selection. When ``Context/materializePicks`` is set, non-selected branches are also materialized in minimize mode to populate the ``ChoiceTree`` with shortlex-simplest content for screening analysis.
     @inline(__always)
     static func handlePick(
         _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,

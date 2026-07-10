@@ -47,13 +47,13 @@ struct ExampleSeedParityTests {
         #expect(recreated == Array(sampled[4 ..< 14]))
     }
 
-    /// Runs the `#exhaust` sampling phase with a fixed seed and no coverage, recording every value the property saw.
+    /// Runs the `#exhaust` sampling phase with a fixed seed and no screening, recording every value the property saw.
     private static func recordSampledValues() -> [[Int]] {
         let recorder = ValueRecorder<[Int]>()
         #exhaust(
             parityGen,
             .replay(.numeric(parseSeed)),
-            .budget(.custom(coverage: 0, sampling: sampleCount)),
+            .budget(.custom(screening: 0, sampling: sampleCount)),
             .suppress(.all)
         ) { value in
             recorder.append(value)

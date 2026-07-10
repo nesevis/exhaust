@@ -21,7 +21,7 @@ struct PreemptiveHerlihyQueueTests {
             let result = await #execute(
                 HerlihyQueueSpec.self,
                 .parallelize(lanes: .two),
-                .budget(.custom(coverage: 0, sampling: 500_000)),
+                .budget(.custom(screening: 0, sampling: 500_000)),
 //                .log(.debug),
                 .replay(.numeric(seed)),
                 .onReport { report = $0 },

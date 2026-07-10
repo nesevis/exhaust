@@ -33,11 +33,11 @@ private final class PropertyTimer: @unchecked Sendable {
 private struct EtnaResult {
     let seed: UInt64
     let solved: Bool
-    let coverageInvocations: Int
+    let screeningInvocations: Int
     let randomInvocations: Int
     let reductionInvocations: Int
     let totalInvocations: Int
-    let coverageMs: Double
+    let screeningMs: Double
     let generationMs: Double
     let propertyMs: Double
     let reductionMs: Double
@@ -45,7 +45,7 @@ private struct EtnaResult {
     let counterexample: String?
 
     var generationOnlyMs: Double {
-        generationMs + coverageMs - propertyMs
+        generationMs + screeningMs - propertyMs
     }
 }
 
@@ -56,7 +56,7 @@ private func runEtnaSeeds<Input>(
     property: @Sendable @escaping (Input) -> Bool,
     seedCount: Int,
     baseSeed: UInt64,
-    coverageBudget: Int,
+    screeningBudget: Int,
     samplingBudget: Int
 ) -> [EtnaResult] {
     var results: [EtnaResult] = []
@@ -69,7 +69,7 @@ private func runEtnaSeeds<Input>(
         let counterexample = #exhaust(
             refGen,
             .suppress(.all),
-            .budget(.custom(coverage: coverageBudget, sampling: samplingBudget)),
+            .budget(.custom(screening: screeningBudget, sampling: samplingBudget)),
             .replay(ReplaySeed.numeric(seed)),
             .onReport { capturedReport = $0 }
         ) { value in
@@ -83,11 +83,11 @@ private func runEtnaSeeds<Input>(
         results.append(EtnaResult(
             seed: seed,
             solved: counterexample != nil,
-            coverageInvocations: report.coverageInvocations,
+            screeningInvocations: report.screeningInvocations,
             randomInvocations: report.randomSamplingInvocations,
             reductionInvocations: report.reductionInvocations,
             totalInvocations: report.propertyInvocations,
-            coverageMs: report.coverageMilliseconds,
+            screeningMs: report.screeningMilliseconds,
             generationMs: report.generationMilliseconds,
             propertyMs: timer.milliseconds,
             reductionMs: report.reductionMilliseconds,
@@ -110,9 +110,9 @@ private func printEtnaTaskReport(name: String, seedCount: Int, results: [EtnaRes
         return
     }
 
-    let bugFindingInvocations = solved.map { $0.coverageInvocations + $0.randomInvocations }
+    let bugFindingInvocations = solved.map { $0.screeningInvocations + $0.randomInvocations }
     let meanInvoc = Double(bugFindingInvocations.reduce(0, +)) / Double(solvedCount)
-    let meanCov = Double(solved.map(\.coverageInvocations).reduce(0, +)) / Double(solvedCount)
+    let meanScr = Double(solved.map(\.screeningInvocations).reduce(0, +)) / Double(solvedCount)
     let meanRand = Double(solved.map(\.randomInvocations).reduce(0, +)) / Double(solvedCount)
 
     let bucketUnder100 = bugFindingInvocations.count(where: { $0 < 100 })
@@ -123,14 +123,14 @@ private func printEtnaTaskReport(name: String, seedCount: Int, results: [EtnaRes
     let f1 = { (value: Double) in String(format: "%.1f", value) }
     let f2 = { (value: Double) in String(format: "%.2f", value) }
 
-    let meanMs = solved.map { $0.generationMs + $0.coverageMs }.reduce(0, +) / Double(solvedCount)
+    let meanMs = solved.map { $0.generationMs + $0.screeningMs }.reduce(0, +) / Double(solvedCount)
     let reductionInvocs = solved.map(\.reductionInvocations)
     let hasReduction = reductionInvocs.contains { $0 > 0 }
 
     let unsolvableAttempts = results.filter { $0.solved == false }.map(\.totalInvocations)
     let meanUnsolvedAttempts = unsolvableAttempts.isEmpty ? 0 : Double(unsolvableAttempts.reduce(0, +)) / Double(unsolvableAttempts.count)
 
-    var line = "[\(name)] solved=\(solvedCount)/\(seedCount) invoc=\(f1(meanInvoc)) (cov=\(f1(meanCov)) rand=\(f1(meanRand))) \(f2(meanMs))ms (< 100: \(bucketUnder100) | < 1K: \(bucketUnder1K) | < 10K: \(bucketUnder10K) | unsolved: \(unsolved))"
+    var line = "[\(name)] solved=\(solvedCount)/\(seedCount) invoc=\(f1(meanInvoc)) (cov=\(f1(meanScr)) rand=\(f1(meanRand))) \(f2(meanMs))ms (< 100: \(bucketUnder100) | < 1K: \(bucketUnder1K) | < 10K: \(bucketUnder10K) | unsolved: \(unsolved))"
     if unsolved > 0 {
         line += " unsolved_attempts=\(f1(meanUnsolvedAttempts))"
     }
@@ -156,7 +156,7 @@ private func printEtnaSummary(workload: String, taskResults: [(name: String, res
             unsolvedNames.append(task.name)
             continue
         }
-        let meanIter = Double(solved.map { $0.coverageInvocations + $0.randomInvocations }.reduce(0, +)) / Double(solved.count)
+        let meanIter = Double(solved.map { $0.screeningInvocations + $0.randomInvocations }.reduce(0, +)) / Double(solved.count)
         if meanIter < 100 {
             solvedBuckets.under100 += 1
         } else if meanIter < 1000 {
@@ -172,7 +172,7 @@ private func printEtnaSummary(workload: String, taskResults: [(name: String, res
     var totalGenMs = 0.0
     var totalGenOnlyMs = 0.0
     for task in taskResults {
-        let taskGenMs = task.results.map { $0.generationMs + $0.coverageMs }.reduce(0, +) / Double(seedCount)
+        let taskGenMs = task.results.map { $0.generationMs + $0.screeningMs }.reduce(0, +) / Double(seedCount)
         let taskGenOnlyMs = task.results.map(\.generationOnlyMs).reduce(0, +) / Double(seedCount)
         totalGenMs += taskGenMs
         totalGenOnlyMs += taskGenOnlyMs
@@ -195,7 +195,7 @@ private func printEtnaSummary(workload: String, taskResults: [(name: String, res
 private func registerEtnaBSTBenchmark(
     seedCount: Int,
     baseSeed: UInt64,
-    coverageBudget: Int,
+    screeningBudget: Int,
     samplingBudget: Int
 ) {
     typealias InsertFn = @Sendable (Int, Int, EtnaBST) -> EtnaBST
@@ -319,7 +319,7 @@ private func registerEtnaBSTBenchmark(
                      _ allResults: inout [(name: String, results: [EtnaResult])])
     {
         let results = runEtnaSeeds(refGen: gen, property: property, seedCount: seedCount, baseSeed: baseSeed,
-                                   coverageBudget: coverageBudget, samplingBudget: samplingBudget)
+                                   screeningBudget: screeningBudget, samplingBudget: samplingBudget)
         printEtnaTaskReport(name: name, seedCount: seedCount, results: results)
         allResults.append((name, results))
     }
@@ -389,7 +389,7 @@ private func registerEtnaBSTBenchmark(
 private func registerEtnaRBTBenchmark(
     seedCount: Int,
     baseSeed: UInt64,
-    coverageBudget: Int,
+    screeningBudget: Int,
     samplingBudget: Int
 ) {
     typealias InsertFn = @Sendable (Int, Int, EtnaRBT) -> EtnaRBT
@@ -493,7 +493,7 @@ private func registerEtnaRBTBenchmark(
                      _ allResults: inout [(name: String, results: [EtnaResult])])
     {
         let results = runEtnaSeeds(refGen: gen, property: property, seedCount: seedCount, baseSeed: baseSeed,
-                                   coverageBudget: coverageBudget, samplingBudget: samplingBudget)
+                                   screeningBudget: screeningBudget, samplingBudget: samplingBudget)
         printEtnaTaskReport(name: name, seedCount: seedCount, results: results)
         allResults.append((name, results))
     }
@@ -651,7 +651,7 @@ private func registerEtnaRBTBenchmark(
 private func registerEtnaSTLCBenchmark(
     seedCount: Int,
     baseSeed: UInt64,
-    coverageBudget: Int,
+    screeningBudget: Int,
     samplingBudget: Int
 ) {
     let mutants: [(String, STLCConfig)] = [
@@ -680,7 +680,7 @@ private func registerEtnaSTLCBenchmark(
                     return stlcGetType([], stepped) == originalType
                 },
                 seedCount: seedCount, baseSeed: baseSeed,
-                coverageBudget: coverageBudget, samplingBudget: samplingBudget
+                screeningBudget: screeningBudget, samplingBudget: samplingBudget
             )
             let singleName = "\(mutantName) × SinglePreserve"
             printEtnaTaskReport(name: singleName, seedCount: seedCount, results: singleResults)
@@ -695,7 +695,7 @@ private func registerEtnaSTLCBenchmark(
                     return stlcGetType([], result) == originalType
                 },
                 seedCount: seedCount, baseSeed: baseSeed,
-                coverageBudget: coverageBudget, samplingBudget: samplingBudget
+                screeningBudget: screeningBudget, samplingBudget: samplingBudget
             )
             let multiName = "\(mutantName) × MultiPreserve"
             printEtnaTaskReport(name: multiName, seedCount: seedCount, results: multiResults)
@@ -714,19 +714,19 @@ func registerEtnaBenchmarks() {
 
     let seedCount = etnaSeedCount
     let baseSeed: UInt64 = 1337
-    let coverageBudget = etnaCoverageBudget
+    let screeningBudget = etnaScreeningBudget
     let samplingBudget = etnaSamplingBudget
 
     registerEtnaBSTBenchmark(
         seedCount: seedCount, baseSeed: baseSeed,
-        coverageBudget: coverageBudget, samplingBudget: samplingBudget
+        screeningBudget: screeningBudget, samplingBudget: samplingBudget
     )
     registerEtnaRBTBenchmark(
         seedCount: seedCount, baseSeed: baseSeed,
-        coverageBudget: coverageBudget, samplingBudget: samplingBudget
+        screeningBudget: screeningBudget, samplingBudget: samplingBudget
     )
     registerEtnaSTLCBenchmark(
         seedCount: seedCount, baseSeed: baseSeed,
-        coverageBudget: coverageBudget, samplingBudget: samplingBudget
+        screeningBudget: screeningBudget, samplingBudget: samplingBudget
     )
 }

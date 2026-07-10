@@ -20,7 +20,7 @@ func registerPreemptiveLoweHashMapBenchmarks() {
                     LoweHashMapBenchSpec.self,
                     .parallelize(lanes: .two),
                     .replay(.numeric(seed)),
-                    .budget(.custom(coverage: 10000, sampling: 150_000)),
+                    .budget(.custom(screening: 10000, sampling: 150_000)),
                     .suppress(.issueReporting),
                     .onReport { report = $0 }
                 )

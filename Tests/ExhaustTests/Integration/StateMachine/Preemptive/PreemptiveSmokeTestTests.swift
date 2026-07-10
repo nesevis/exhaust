@@ -11,7 +11,7 @@ struct PreemptiveSmokeTestTests {
             SequentiallyBrokenSpec.self,
             .parallelize(lanes: .two),
             .commandLimit(10),
-            .budget(.custom(coverage: 0, sampling: 0)),
+            .budget(.custom(screening: 0, sampling: 0)),
             .suppress(.issueReporting)
         )
         #expect(result?.commands.isEmpty == false)
@@ -24,7 +24,7 @@ struct PreemptiveSmokeTestTests {
                 SequentiallyBrokenSpec.self,
                 .parallelize(lanes: .two),
                 .commandLimit(10),
-                .budget(.custom(coverage: 0, sampling: 0)),
+                .budget(.custom(screening: 0, sampling: 0)),
                 .suppress(.issueReporting)
             )
         )

@@ -32,7 +32,7 @@ Two options are available:
 
 | Option | Effect |
 |---|---|
-| `.budget(.thorough)` | Sets the coverage and sampling budget for all `#exhaust` calls in the test. |
+| `.budget(.thorough)` | Sets the screening and sampling budget for all `#exhaust` calls in the test. |
 | `.regressions("seed1", "seed2")` | Registers seeds to replay before the normal pipeline. |
 
 #### Budget precedence
@@ -56,7 +56,7 @@ func myProperty() {
 
 #### Regression seeds
 
-Regression seeds are Crockford Base32 encoded strings from a previous failure report. When a test has regression seeds, Exhaust replays each one before the normal coverage and sampling pipeline. If a seed still fails, the test reports the failure immediately with the replayed counterexample. If a seed now passes (because the bug was fixed) it sits inert as a silent guard until the property fails on that seed again.
+Regression seeds are Crockford Base32 encoded strings from a previous failure report. When a test has regression seeds, Exhaust replays each one before the normal screening and sampling pipeline. If a seed still fails, the test reports the failure immediately with the replayed counterexample. If a seed now passes (because the bug was fixed) it sits inert as a silent guard until the property fails on that seed again.
 
 Regression seeds are cheap to leave in place: one property invocation each once the bug is fixed. As long as the generator is unchanged, a seed re-runs to the same case and catches that regression the moment it reappears. Keep in mind what a seed pins, though: a position in the search, not a fixed input. Change the generator and the same seed re-runs to a different case, as it would in any property-based testing library. To pin an exact input permanently, commit the literal value and reduce it with `reflecting:` instead.
 
@@ -136,19 +136,19 @@ This works, but the mechanism behind it is unusual enough to be worth understand
 
 ### The problem
 
-`#expect` normally records a Swift Testing issue the moment it fails. Inside `#exhaust`, the property closure runs hundreds of times during coverage and sampling, then potentially thousands more during reduction. If `#expect` recorded an issue on every invocation, a single failing property would flood the test log with hundreds of duplicate failures — one for the initial counterexample, then one for every reduction probe that also fails. The test runner would report hundreds of issues for what is really one bug.
+`#expect` normally records a Swift Testing issue the moment it fails. Inside `#exhaust`, the property closure runs hundreds of times during screening and sampling, then potentially thousands more during reduction. If `#expect` recorded an issue on every invocation, a single failing property would flood the test log with hundreds of duplicate failures — one for the initial counterexample, then one for every reduction probe that also fails. The test runner would report hundreds of issues for what is really one bug.
 
 ### The solution: dual closures
 
 The `#exhaust` macro solves this by expanding a single closure into two:
 
-**The detection closure** is a rewritten copy where every `#expect(condition)` becomes `try __ExhaustRuntime.__detectRequire(condition)`, and every `try #require(optional)` becomes `try __ExhaustRuntime.__detectRequire(optional)`. These replacement functions throw a plain `Error` on failure instead of recording a Swift Testing issue. The pipeline uses this closure for coverage, sampling, and reduction. Hundreds or thousands of invocations, with no test output.
+**The detection closure** is a rewritten copy where every `#expect(condition)` becomes `try __ExhaustRuntime.__detectRequire(condition)`, and every `try #require(optional)` becomes `try __ExhaustRuntime.__detectRequire(optional)`. These replacement functions throw a plain `Error` on failure instead of recording a Swift Testing issue. The pipeline uses this closure for screening, sampling, and reduction. Hundreds or thousands of invocations, with no test output.
 
 **The property closure** is the original, with `#expect` and `#require` calls preserved as-is but with explicit source locations injected. Exhaust runs this closure exactly once, on the final reduced counterexample, outside the issue suppression scope. This single invocation produces the failure message you see in the test runner: the minimal counterexample, at the correct source location.
 
 The dual-closure design means:
 
-- During coverage, sampling, and reduction: failures are detected silently via try/catch. No issues are recorded, no console noise.
+- During screening, sampling, and reduction: failures are detected silently via try/catch. No issues are recorded, no console noise.
 - After reduction: `#expect` runs once with the reduced value and records a single, clean failure pointing at your assertion line.
 
 ### Source locations

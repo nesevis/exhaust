@@ -5,9 +5,9 @@
 
 import Foundation
 
-/// A parameter in the coverage model with synthetic values derived from problematic-value analysis of the underlying generator operation.
-package struct CoverageParameter: @unchecked Sendable {
-    // @unchecked Sendable: stores `CoverageParameterKind`, which in its `.pick` case holds generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
+/// A parameter in the screening model with synthetic values derived from problematic-value analysis of the underlying generator operation.
+package struct ScreeningParameter: @unchecked Sendable {
+    // @unchecked Sendable: stores `ScreeningParameterKind`, which in its `.pick` case holds generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
     /// Zero-based parameter index in the covering array model.
     package let index: Int
@@ -16,16 +16,16 @@ package struct CoverageParameter: @unchecked Sendable {
     /// Number of distinct values in this parameter's synthetic domain.
     package let domainSize: UInt64
     /// The generator operation this parameter was derived from.
-    package let kind: CoverageParameterKind
+    package let kind: ScreeningParameterKind
 
     /// Returns a copy with a replacement problematic value set.
-    package func withValues(_ newValues: [UInt64]) -> CoverageParameter {
-        CoverageParameter(index: index, values: newValues, domainSize: UInt64(newValues.count), kind: kind)
+    package func withValues(_ newValues: [UInt64]) -> ScreeningParameter {
+        ScreeningParameter(index: index, values: newValues, domainSize: UInt64(newValues.count), kind: kind)
     }
 }
 
-/// Classifies the generator operation that produced a coverage parameter, determining which problematic-value strategy (range endpoints, sequence lengths, pick branches, or composite encoding) applies.
-package enum CoverageParameterKind: @unchecked Sendable {
+/// Classifies the generator operation that produced a screening parameter, determining which problematic-value strategy (range endpoints, sequence lengths, pick branches, or composite encoding) applies.
+package enum ScreeningParameterKind: @unchecked Sendable {
     // @unchecked Sendable: the `.pick` case stores `ContiguousArray<ReflectiveOperation.PickTuple>`, which contains generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
     /// A chooseBits with a range too large to enumerate. Values are problematic representatives: {min, min+1, midpoint, max-1, max, 0 if in range}
@@ -48,7 +48,7 @@ package enum CoverageParameterKind: @unchecked Sendable {
     /// The domain enumerates all valid configurations: empty (if allowed), single-element, and optionally two-element problematic combinations. During replay, the composite index is decomposed via ``SequenceLengthSlot`` lookup and mixed-radix arithmetic back into a length and per-element problematic value indices. When `halvedPairs` is true, length-2 slots split each element's problematic values between positions so that position 0 uses the first half and position 1 uses the second half. Length ≤1 slots always use the full problematic set.
     case compositeSequence(
         lengthRange: ClosedRange<UInt64>,
-        elementSlotParams: [[CoverageParameter]],
+        elementSlotParams: [[ScreeningParameter]],
         halvedPairs: Bool,
         lengthSlots: [SequenceLengthSlot]
     )
@@ -68,21 +68,21 @@ package struct SequenceLengthSlot: Sendable {
 
 /// Result of problematic-value analysis — a small synthetic domain suitable for covering array generation.
 package struct LargeDomainProfile: @unchecked Sendable {
-    // @unchecked Sendable: stores `[CoverageParameter]` and `ChoiceTree?`. `ChoiceTree` nodes contain generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
+    // @unchecked Sendable: stores `[ScreeningParameter]` and `ChoiceTree?`. `ChoiceTree` nodes contain generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
-    /// The coverage parameters extracted from the generator's choice tree.
-    package let parameters: [CoverageParameter]
+    /// The screening parameters extracted from the generator's choice tree.
+    package let parameters: [ScreeningParameter]
     /// The original ChoiceTree from VACTI, used as a template for covering array replay. When present, ``LargeDomainCoveringArrayReplay`` walks this tree and substitutes parameter values at matching positions, preserving structural nodes like `.bind`.
     package let originalTree: ChoiceTree?
 
     /// Creates a profile with the given parameters and optional original tree template.
-    package init(parameters: [CoverageParameter], originalTree: ChoiceTree? = nil) {
+    package init(parameters: [ScreeningParameter], originalTree: ChoiceTree? = nil) {
         self.parameters = parameters
         self.originalTree = originalTree
     }
 }
 
-extension LargeDomainProfile: CoverageProfile {
+extension LargeDomainProfile: ScreeningProfile {
     package var domainSizes: [UInt64] {
         parameters.map(\.domainSize)
     }

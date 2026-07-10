@@ -8,7 +8,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50))
+            .budget(.custom(screening: 0, sampling: 50))
         ) { value in
             #expect(value < 50)
         }
@@ -19,7 +19,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50))
+            .budget(.custom(screening: 0, sampling: 50))
         ) { value in
             try #require(value < 50)
         }
@@ -33,7 +33,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 20))
+            .budget(.custom(screening: 0, sampling: 20))
         ) { value in
             #expect(value >= 0)
             #expect(value <= 100)
@@ -45,7 +45,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: -10 ... 10)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50))
+            .budget(.custom(screening: 0, sampling: 50))
         ) { value in
             #expect(value >= 0)
             #expect(value <= 5)
@@ -58,7 +58,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 200))
+            .budget(.custom(screening: 0, sampling: 200))
         ) { value in
             if value >= 50 {
                 throw TestError()
@@ -73,7 +73,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 200))
+            .budget(.custom(screening: 0, sampling: 200))
         ) { value in
             value < 50
         }
@@ -87,7 +87,7 @@ struct SwiftTestingIntegrationTests {
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 200))
+            .budget(.custom(screening: 0, sampling: 200))
         ) { value in
             value < 50
         }
@@ -99,7 +99,7 @@ struct SwiftTestingIntegrationTests {
         let result: Int? = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 200))
+            .budget(.custom(screening: 0, sampling: 200))
         ) { value in
             #expect(value < 50)
         }
@@ -113,7 +113,7 @@ struct SwiftTestingIntegrationTests {
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
             .replay(42),
-            .budget(.custom(coverage: 0, sampling: 200))
+            .budget(.custom(screening: 0, sampling: 200))
         ) { value in
             value < 50
         }
@@ -122,7 +122,7 @@ struct SwiftTestingIntegrationTests {
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
             .replay(42),
-            .budget(.custom(coverage: 0, sampling: 200))
+            .budget(.custom(screening: 0, sampling: 200))
         ) { value in
             value < 50
         }
@@ -172,7 +172,7 @@ struct SwiftTestingIntegrationTests {
     func replaySeedWithoutIterationRunsFullBudget() {
         let generator = #gen(.int(in: 0 ... 100))
         var invocations = 0
-        #exhaust(generator, .replay("19"), .budget(.custom(coverage: 0, sampling: 2)), .onReport { report in
+        #exhaust(generator, .replay("19"), .budget(.custom(screening: 0, sampling: 2)), .onReport { report in
             invocations = report.randomSamplingInvocations
         }) { _ in
             true
@@ -180,23 +180,23 @@ struct SwiftTestingIntegrationTests {
         #expect(invocations == 2)
     }
 
-    @Test("coverage replay seed resolves to row - 1")
-    func coverageReplaySeedResolvesToRow() {
+    @Test("screening replay seed resolves to row - 1")
+    func screeningReplaySeedResolvesToRow() {
         let seed = ReplaySeed.encoded("U6")
         let resolved = seed.resolve()
-        if case let .coverage(row) = resolved {
+        if case let .screening(row) = resolved {
             #expect(row == 5)
         } else {
-            Issue.record("Expected .coverage(row:), got \(String(describing: resolved))")
+            Issue.record("Expected .screening(row:), got \(String(describing: resolved))")
         }
     }
 
-    @Test("coverage replay tests exactly one row")
-    func coverageReplayTestsOneRow() {
+    @Test("screening replay tests exactly one row")
+    func screeningReplayTestsOneRow() {
         let generator = #gen(.int(in: 0 ... 2), .int(in: 0 ... 2))
         var invocations = 0
         #exhaust(generator, .replay("U3"), .suppress(.issueReporting), .onReport { report in
-            invocations = report.coverageInvocations
+            invocations = report.screeningInvocations
         }) { _ in
             true
         }
@@ -218,7 +218,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: Int.min ... Int.max)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 600)),
+            .budget(.custom(screening: 0, sampling: 600)),
             .onReport { report in
                 capturedReport = report
             }
@@ -237,7 +237,7 @@ struct SwiftTestingIntegrationTests {
         let result = #exhaust(
             #gen(.int(in: 0 ... 10)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 5)),
+            .budget(.custom(screening: 0, sampling: 5)),
             .onReport { report in
                 capturedReport = report
             }

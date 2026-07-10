@@ -118,7 +118,7 @@ package enum CoveringArrayReplay {
                 return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
 
             case .sequence:
-                // Sequences produce coverage parameters (sequenceLength/sequenceElement), not enumerable parameters. If we reach here, the sequence is not behind a bind — pass through unchanged as it shouldn't consume enumerable parameters.
+                // Sequences produce screening parameters (sequenceLength/sequenceElement), not enumerable parameters. If we reach here, the sequence is not behind a bind — pass through unchanged as it shouldn't consume enumerable parameters.
                 return tree
 
             case let .branch(b):

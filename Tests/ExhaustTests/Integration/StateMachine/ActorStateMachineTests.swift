@@ -8,7 +8,7 @@ struct ActorStateMachineTests {
         let result = await #execute(
             ActorCounterSpec.self,
             .commandLimit(10),
-            .budget(.custom(coverage: 50, sampling: 50)),
+            .budget(.custom(screening: 50, sampling: 50)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "Actor counter spec should pass")
@@ -19,7 +19,7 @@ struct ActorStateMachineTests {
         let result = await #execute(
             BuggyActorCounterSpec.self,
             .commandLimit(10),
-            .budget(.custom(coverage: 50, sampling: 100)),
+            .budget(.custom(screening: 50, sampling: 100)),
             .suppress(.issueReporting)
         )
         #expect(result != nil, "Buggy actor counter should fail")

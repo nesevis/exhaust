@@ -28,7 +28,7 @@ package protocol BitPatternConvertible: Equatable, Sendable {
     /// The valid range of this type, expressed as an inclusive `ClosedRange` of `UInt64` bit patterns. This is used by ``Gen/choose(in:)`` as the default range if a more specific one is not provided.
     static var bitPatternRange: ClosedRange<UInt64> { get }
 
-    /// Provides the type metadata used by coverage analysis, problematic-value analysis, and the human-readable type formatter.
+    /// Provides the type metadata used by screening analysis, problematic-value analysis, and the human-readable type formatter.
     static var tag: TypeTag { get }
 
     /// Creates an instance of this type from a raw ``UInt64`` bit pattern. This is the core decoding step used by the generator's continuation.

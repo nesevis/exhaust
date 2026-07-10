@@ -7,7 +7,7 @@
 package struct EnumerableParameter: @unchecked Sendable {
     // @unchecked Sendable: the `.pick` case stores `ContiguousArray<ReflectiveOperation.PickTuple>`, which contains generator closures the compiler cannot verify as Sendable. All closures are framework-controlled and do not capture shared mutable state.
 
-    /// Distinguishes the two generator operations that produce enumerable parameters, so the coverage runner can replay values through the correct interpretation path.
+    /// Distinguishes the two generator operations that produce enumerable parameters, so the screening runner can replay values through the correct interpretation path.
     public enum Kind {
         /// Represents a range-bounded bit-pattern choice whose domain is small enough for exhaustive enumeration.
         case chooseBits(range: ClosedRange<UInt64>, tag: TypeTag)
@@ -42,7 +42,7 @@ package struct EnumerableDomainProfile: @unchecked Sendable {
     }
 }
 
-extension EnumerableDomainProfile: CoverageProfile {
+extension EnumerableDomainProfile: ScreeningProfile {
     public var domainSizes: [UInt64] {
         parameters.map(\.domainSize)
     }

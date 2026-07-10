@@ -30,7 +30,7 @@ struct CooperativeSchedulerTests {
                 await #execute(
                     NonAtomicCounterSpec.self,
                     .commandLimit(6),
-                    .budget(.custom(coverage: 0, sampling: 200)),
+                    .budget(.custom(screening: 0, sampling: 200)),
                     .replay(.numeric(12345)),
                     .suppress(.issueReporting)
                 )
@@ -52,7 +52,7 @@ struct CooperativeSchedulerTests {
             await #execute(
                 NonAtomicCounterSpec.self,
                 .commandLimit(8),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
             )
         )
@@ -60,7 +60,7 @@ struct CooperativeSchedulerTests {
             await #execute(
                 NonAtomicCounterSpec.self,
                 .commandLimit(8),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.numeric(result.seed!)),
                 .suppress(.issueReporting)
             )
@@ -75,7 +75,7 @@ struct CooperativeSchedulerTests {
             NonAtomicCounterSpec.self,
             .parallelize(lanes: .one),
             .commandLimit(8),
-            .budget(.custom(coverage: 0, sampling: 200)),
+            .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "With concurrency level 1, all commands run as prefix — no interleaving, no bug found")

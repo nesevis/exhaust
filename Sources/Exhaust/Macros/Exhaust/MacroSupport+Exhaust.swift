@@ -52,7 +52,7 @@ public extension __ExhaustRuntime {
     /// - Parameters:
     ///   - refGen: The generator to produce test values from.
     ///   - settings: An array of `PropertySettings` controlling test behavior.
-    ///   - reflecting: A known failing value to reduce directly, or `nil` to run the full coverage and sampling pipeline.
+    ///   - reflecting: A known failing value to reduce directly, or `nil` to run the full screening and sampling pipeline.
     ///   - fileID: The file ID of the call site (injected by macro expansion).
     ///   - filePath: The file path of the call site (injected by macro expansion).
     ///   - line: The line number of the call site (injected by macro expansion).
@@ -148,7 +148,7 @@ public extension __ExhaustRuntime {
         var budget = ExhaustBudget.standard
         var seed: UInt64?
         var replayIteration: Int?
-        var coverageReplayRow: Int?
+        var screeningReplayRow: Int?
         var invalidReplaySeed: ReplaySeed?
         var suppressIssueReporting = false
         var suppressLogs = false
@@ -173,8 +173,8 @@ public extension __ExhaustRuntime {
                         case let .sampling(resolvedSeed, iteration):
                             seed = resolvedSeed
                             replayIteration = iteration
-                        case let .coverage(row):
-                            coverageReplayRow = row
+                        case let .screening(row):
+                            screeningReplayRow = row
                     }
                 case let .suppress(option):
                     switch option {
@@ -235,10 +235,10 @@ public extension __ExhaustRuntime {
                 )
             }
 
-            let samplingBudget: UInt64 = (replayIteration != nil || coverageReplayRow != nil) ? 1 : UInt64(budget.samplingBudget)
-            let coverageBudget: UInt64 = (replayIteration != nil || coverageReplayRow != nil) ? 0 : UInt64(budget.coverageBudget)
+            let samplingBudget: UInt64 = (replayIteration != nil || screeningReplayRow != nil) ? 1 : UInt64(budget.samplingBudget)
+            let screeningBudget: UInt64 = (replayIteration != nil || screeningReplayRow != nil) ? 0 : UInt64(budget.screeningBudget)
             // Deadline scales with the preset, not the phase budgets — replay collapses those to 1/0 but still reduces one counterexample, so it must keep the full reduction deadline.
-            let reductionDeadlineNanoseconds = UInt64(budget.coverageBudget + budget.samplingBudget) * 5 * 1_000_000
+            let reductionDeadlineNanoseconds = UInt64(budget.screeningBudget + budget.samplingBudget) * 5 * 1_000_000
             let reductionConfig = Interpreters.ReducerConfiguration(
                 maxStalls: 2,
                 wallClockDeadlineNanoseconds: reductionDeadlineNanoseconds
@@ -332,46 +332,46 @@ public extension __ExhaustRuntime {
             }
 
             let phaseTimingStart = monotonicNanoseconds()
-            var coverageIterations = 0
-            if let coverageReplayRow {
-                let outcome: CoverageOutcome<Output> = runCoveragePhase(
+            var screeningIterations = 0
+            if let screeningReplayRow {
+                let outcome: ScreeningOutcome<Output> = runScreeningPhase(
                     context: context,
-                    coverageBudget: UInt64(budget.coverageBudget),
-                    skipToRow: coverageReplayRow,
+                    screeningBudget: UInt64(budget.screeningBudget),
+                    skipToRow: screeningReplayRow,
                     report: &report
                 )
                 switch outcome {
                     case let .counterexample(value):
-                        let coverageEnd = monotonicNanoseconds()
-                        report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
-                        report.totalMilliseconds = report.coverageMilliseconds
+                        let screeningEnd = monotonicNanoseconds()
+                        report.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
+                        report.totalMilliseconds = report.screeningMilliseconds
                         return (value, report.replaySeed)
                     case .exhaustivePass, .proceed:
-                        let coverageEnd = monotonicNanoseconds()
-                        report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
-                        report.totalMilliseconds = report.coverageMilliseconds
-                        report.setInvocations(coverage: 1, randomSampling: 0, reduction: 0)
+                        let screeningEnd = monotonicNanoseconds()
+                        report.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
+                        report.totalMilliseconds = report.screeningMilliseconds
+                        report.setInvocations(screening: 1, randomSampling: 0, reduction: 0)
                         return (nil, nil)
                 }
-            } else if coverageBudget == 0 {
-                ExhaustLog.notice(category: .propertyTest, event: "coverage_skipped", "Coverage phase skipped")
+            } else if screeningBudget == 0 {
+                ExhaustLog.notice(category: .propertyTest, event: "screening_skipped", "Screening phase skipped")
             } else {
-                let outcome: CoverageOutcome<Output> = runCoveragePhase(
+                let outcome: ScreeningOutcome<Output> = runScreeningPhase(
                     context: context,
-                    coverageBudget: coverageBudget,
+                    screeningBudget: screeningBudget,
                     report: &report
                 )
                 switch outcome {
                     case let .counterexample(value):
-                        let coverageEnd = monotonicNanoseconds()
-                        report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
-                        report.totalMilliseconds = report.coverageMilliseconds
+                        let screeningEnd = monotonicNanoseconds()
+                        report.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
+                        report.totalMilliseconds = report.screeningMilliseconds
                         return (value, report.replaySeed)
                     case let .exhaustivePass(iterations):
-                        let coverageEnd = monotonicNanoseconds()
-                        report.coverageMilliseconds = Double(coverageEnd - phaseTimingStart) / 1_000_000
-                        report.totalMilliseconds = report.coverageMilliseconds
-                        report.setInvocations(coverage: iterations, randomSampling: 0, reduction: 0)
+                        let screeningEnd = monotonicNanoseconds()
+                        report.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
+                        report.totalMilliseconds = report.screeningMilliseconds
+                        report.setInvocations(screening: iterations, randomSampling: 0, reduction: 0)
                         reportSkipsAndPointlessRun(
                             totalPropertyCalls: iterations,
                             skipCounter: skipCounter,
@@ -384,32 +384,32 @@ public extension __ExhaustRuntime {
                         )
                         return (nil, nil)
                     case let .proceed(iterations):
-                        coverageIterations = iterations
+                        screeningIterations = iterations
                 }
             }
-            let coveragePhaseEndTime = monotonicNanoseconds()
+            let screeningPhaseEndTime = monotonicNanoseconds()
 
             let samplingResult = runSamplingPhase(
                 context: context,
                 seed: seed,
                 replayIteration: replayIteration,
-                coverageIterations: coverageIterations,
+                screeningIterations: screeningIterations,
                 report: &report
             )
 
             let endTime = monotonicNanoseconds()
-            report.coverageMilliseconds = Double(coveragePhaseEndTime - phaseTimingStart) / 1_000_000
+            report.screeningMilliseconds = Double(screeningPhaseEndTime - phaseTimingStart) / 1_000_000
             report.totalMilliseconds = Double(endTime - phaseTimingStart) / 1_000_000
 
             if samplingResult == nil {
-                report.generationMilliseconds = Double(endTime - coveragePhaseEndTime) / 1_000_000
-                let totalPropertyCalls = coverageIterations + report.randomSamplingInvocations
+                report.generationMilliseconds = Double(endTime - screeningPhaseEndTime) / 1_000_000
+                let totalPropertyCalls = screeningIterations + report.randomSamplingInvocations
                 var passMetadata = [
                     "iterations": "\(samplingBudget)",
                     "property_invocations": "\(totalPropertyCalls)",
                 ]
-                if coverageIterations > 0 {
-                    passMetadata["coverage_invocations"] = "\(coverageIterations)"
+                if screeningIterations > 0 {
+                    passMetadata["screening_invocations"] = "\(screeningIterations)"
                     passMetadata["random_invocations"] = "\(report.randomSamplingInvocations)"
                 }
                 ExhaustLog.notice(
@@ -437,7 +437,7 @@ public extension __ExhaustRuntime {
                 category: .propertyTest,
                 event: "phase_timing",
                 metadata: [
-                    "coverage_ms": String(format: "%.1f", report.coverageMilliseconds),
+                    "screening_ms": String(format: "%.1f", report.screeningMilliseconds),
                     "generation_ms": String(format: "%.1f", report.generationMilliseconds),
                     "reduction_ms": String(format: "%.1f", report.reductionMilliseconds),
                     "total_ms": String(format: "%.1f", report.totalMilliseconds),
@@ -483,7 +483,7 @@ public extension __ExhaustRuntime {
         guard report.generationErrorOccurred == false else { return }
 
         if totalPropertyCalls == 0 {
-            report.pointlessRunFailure = "The property was never invoked: the coverage and sampling budgets are both zero, so this test asserts nothing."
+            report.pointlessRunFailure = "The property was never invoked: the screening and sampling budgets are both zero, so this test asserts nothing."
         } else if skipped >= totalPropertyCalls {
             report.pointlessRunFailure = "All \(totalPropertyCalls) property invocations were skipped, so this test asserts nothing."
         }
@@ -611,7 +611,7 @@ public extension __ExhaustRuntime {
                 let skipCounter = SkipCounter()
                 let boolProperty = wrapDetectionProperty(detection, countingSkipsInto: skipCounter)
 
-                // Suppress assertion issues during coverage/sampling/reduction.
+                // Suppress assertion issues during screening/sampling/reduction.
                 // The final re-run (outside this scope) produces the user-facing assertion output.
                 let diagnostics = CapturedDiagnostics<Output>()
                 withExpectedIssue(isIntermittent: true) {

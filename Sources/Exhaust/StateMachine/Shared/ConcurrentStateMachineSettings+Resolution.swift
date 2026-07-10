@@ -8,7 +8,7 @@ struct ResolvedConcurrentConfig {
     var budget: ExhaustBudget = .standard
     var seed: UInt64?
     var replayIteration: Int?
-    var coverageReplayRow: Int?
+    var screeningReplayRow: Int?
     static let defaultIdleTimeout = 2000
     var idleTimeoutMilliseconds: Int = defaultIdleTimeout
     var suppressIssueReporting: Bool = false
@@ -16,11 +16,11 @@ struct ResolvedConcurrentConfig {
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
 
-    var shouldRunCoverage: Bool {
+    var shouldRunScreening: Bool {
         replayIteration == nil
             && seed == nil
-            && coverageReplayRow == nil
-            && budget.coverageBudget > 0
+            && screeningReplayRow == nil
+            && budget.screeningBudget > 0
     }
 
     /// Normalized idle timeout: `nil` when the configured value is non-positive or sentinel-large (``Int/max``), meaning "wait unbounded". Used by the preemptive checkers to distinguish a real timeout from an intentionally disabled one.
@@ -75,8 +75,8 @@ struct ResolvedConcurrentConfig {
                             case let .sampling(resolvedSeed, iteration):
                                 config.seed = resolvedSeed
                                 config.replayIteration = iteration
-                            case let .coverage(row):
-                                config.coverageReplayRow = row
+                            case let .screening(row):
+                                config.screeningReplayRow = row
                         }
                     } else {
                         invalidSeed = replaySeed

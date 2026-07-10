@@ -2,7 +2,7 @@ import Foundation
 
 /// Builds a ``ReflectiveGenerator`` from a `Decodable` type and an example JSON value.
 ///
-/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, recording a generator for each field. The result is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and coverage analysis treat it identically to a hand-written generator.
+/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, recording a generator for each field. The result is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and screening analysis treat it identically to a hand-written generator.
 ///
 /// The generator is forward-only (no reflection support). Types that cannot be mapped to a built-in generator fall back to `.just(decodedValue)` using the concrete value from the JSON example.
 package enum GeneratorSynthesizer {

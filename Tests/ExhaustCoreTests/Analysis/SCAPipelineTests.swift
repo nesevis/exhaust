@@ -11,7 +11,7 @@ struct SCADomainBuildTests {
         let domain = SCADomain.build(
             sequenceLength: 5,
             pickChoices: pickChoices,
-            coverageBudget: 2000,
+            screeningBudget: 2000,
             strengthCap: 5
         )
         #expect(domain != nil)
@@ -27,7 +27,7 @@ struct SCADomainBuildTests {
         let domain = SCADomain.build(
             sequenceLength: 4,
             pickChoices: pickChoices,
-            coverageBudget: 2000,
+            screeningBudget: 2000,
             strengthCap: 6
         )
         #expect(domain != nil)
@@ -40,8 +40,8 @@ struct SCADomainBuildTests {
     func strengthCapPassthrough() {
         let pickChoices = makeParameterFreeChoices(count: 2)
 
-        let domain2 = SCADomain.build(sequenceLength: 3, pickChoices: pickChoices, coverageBudget: 2000, strengthCap: 2)
-        let domain6 = SCADomain.build(sequenceLength: 3, pickChoices: pickChoices, coverageBudget: 2000, strengthCap: 6)
+        let domain2 = SCADomain.build(sequenceLength: 3, pickChoices: pickChoices, screeningBudget: 2000, strengthCap: 2)
+        let domain6 = SCADomain.build(sequenceLength: 3, pickChoices: pickChoices, screeningBudget: 2000, strengthCap: 6)
         #expect(domain2?.maxStrength == 2)
         #expect(domain6?.maxStrength == 6)
     }
@@ -57,7 +57,7 @@ struct SCADomainBuildTreeTests {
         let domain = SCADomain.build(
             sequenceLength: 3,
             pickChoices: pickChoices,
-            coverageBudget: 2000,
+            screeningBudget: 2000,
             strengthCap: 3
         )!
 
@@ -84,7 +84,7 @@ struct SCADomainBuildTreeTests {
         guard let domain = SCADomain.build(
             sequenceLength: 3,
             pickChoices: pickChoices,
-            coverageBudget: 2000,
+            screeningBudget: 2000,
             strengthCap: 2
         ) else {
             Issue.record("SCADomain.build returned nil")
@@ -113,7 +113,7 @@ struct SCADomainBuildTreeTests {
         let domain = SCADomain.build(
             sequenceLength: 3,
             pickChoices: pickChoices,
-            coverageBudget: 2000,
+            screeningBudget: 2000,
             strengthCap: 3
         )!
 

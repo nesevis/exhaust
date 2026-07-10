@@ -13,7 +13,7 @@ struct NonAtomicCounterConcurrentTests {
             await #execute(
                 NonAtomicCounterSpec.self,
                 .commandLimit(4),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
             )
         )
@@ -36,7 +36,7 @@ struct NonAtomicCounterConcurrentTests {
             await #execute(
                 NonAtomicCounterSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
             )
         )
@@ -44,18 +44,18 @@ struct NonAtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Coverage phase reports discoveryMethod .coverage with no seed")
-    func coveragePhaseReportsDiscoveryMethodCoverageWithNoSeed() async throws {
+    @Test("Screening phase reports discoveryMethod .screening with no seed")
+    func screeningPhaseReportsDiscoveryMethodScreeningWithNoSeed() async throws {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 500, sampling: 0)),
+                .budget(.custom(screening: 500, sampling: 0)),
                 .suppress(.issueReporting)
             )
         )
-        #expect(result.discoveryMethod == .coverage, "Failure found during coverage should report .coverage")
-        #expect(result.seed == nil, "Coverage-discovered failures should not carry a seed")
+        #expect(result.discoveryMethod == .screening, "Failure found during screening should report .screening")
+        #expect(result.seed == nil, "Screening-discovered failures should not carry a seed")
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -65,7 +65,7 @@ struct NonAtomicCounterConcurrentTests {
             await #execute(
                 NonAtomicCounterSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
             )
         )
@@ -80,7 +80,7 @@ struct NonAtomicCounterConcurrentTests {
         _ = await #execute(
             NonAtomicCounterSpec.self,
             .commandLimit(4),
-            .budget(.custom(coverage: 0, sampling: 50)),
+            .budget(.custom(screening: 0, sampling: 50)),
             .replay(.numeric(42)),
             .suppress(.issueReporting),
             .onReport { deliveredReport = $0 }
@@ -104,7 +104,7 @@ struct NonAtomicCounterConcurrentTests {
             await #execute(
                 NonAtomicCounterSpec.self,
                 .commandLimit(10),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.numeric(42)),
                 .suppress(.issueReporting)
             )
@@ -113,7 +113,7 @@ struct NonAtomicCounterConcurrentTests {
             await #execute(
                 NonAtomicCounterSpec.self,
                 .commandLimit(10),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.numeric(42)),
                 .suppress(.issueReporting)
             )
@@ -128,7 +128,7 @@ struct NonAtomicCounterConcurrentTests {
             await #execute(
                 NonAtomicCounterSpec.self,
                 .commandLimit(8),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
             )
         )
@@ -143,7 +143,7 @@ struct NonAtomicCounterConcurrentTests {
             await #execute(
                 NonAtomicCounterSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
             )
         )
@@ -152,18 +152,18 @@ struct NonAtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Concurrent spec coverage failure carries U-prefixed replay seed")
-    func concurrentStateMachineCoverageFailureCarriesUPrefixedReplaySeed() async throws {
+    @Test("Concurrent spec screening failure carries U-prefixed replay seed")
+    func concurrentStateMachineScreeningFailureCarriesUPrefixedReplaySeed() async throws {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 500, sampling: 0)),
+                .budget(.custom(screening: 500, sampling: 0)),
                 .suppress(.issueReporting)
             )
         )
         let replaySeed = try #require(result.replaySeed)
-        #expect(replaySeed.hasPrefix("U"), "Coverage replay seed should have U prefix")
+        #expect(replaySeed.hasPrefix("U"), "Screening replay seed should have U prefix")
     }
 }
 

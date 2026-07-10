@@ -273,19 +273,19 @@ It's worth running this against code you already trust, just to see what happens
 
 `#exhaust` does more than random sampling. Every run moves through phases, and each one does a different job.
 
-**Coverage.** Before random sampling starts, Exhaust systematically exercises the values most likely to cause bugs. What counts as problematic depends on the type: min, max, and the steps either side of them for integers; NaN, the infinities, and values near the edges of representable precision for floats; DST transitions and epoch points for dates; troublesome Unicode scalars for characters; lengths 0, 1, 2, and the range's lower bound for collections. 
+**Screening.** Before random sampling starts, Exhaust systematically exercises the values most likely to cause bugs. What counts as problematic depends on the type: min, max, and the steps either side of them for integers; NaN, the infinities, and values near the edges of representable precision for floats; DST transitions and epoch points for dates; troublesome Unicode scalars for characters; lengths 0, 1, 2, and the range's lower bound for collections. 
 
 The catalogue encodes the kinds of bugs each type is known for — the sort of thing a seasoned developer has learned to check for by hand over a career of finding them the hard way. These problematic values are drawn in combinations at pairwise coverage by default, so any bug that surfaces when two parameters hit their problematic values simultaneously gets caught without your having to remember to test the combination yourself. 
 
-Generators with very small domains get enumerated exhaustively as a special case. See <doc:PropertyTesting#Coverage-of-problematic-values> for the full detail.
+Generators with very small domains get enumerated exhaustively as a special case. See <doc:PropertyTesting#Screening-of-problematic-values> for the full detail.
 
-**Random sampling.** Once coverage is done, the sampler turns to the generator's natural distribution, testing the property against varied, ordinary inputs. Coverage and sampling have separate budgets. At the default `.standard` budget you get 200 of each, so a property runs 400 times per invocation in total. Larger budgets (`.thorough`, `.extensive`) scale both numbers in lockstep.
+**Random sampling.** Once screening is done, the sampler turns to the generator's natural distribution, testing the property against varied, ordinary inputs. Screening and sampling have separate budgets. At the default `.standard` budget you get 200 of each, so a property runs 400 times per invocation in total. Larger budgets (`.thorough`, `.extensive`) scale both numbers in lockstep.
 
 **Reduction.** The moment any phase produces a failing input, `#exhaust` switches from searching for failures to making the failure it found useful to you. Reduction works across every dimension of the input at once: it deletes elements from sequences, collapses recursive structure, swaps between branches, drives numeric values toward their simplest form, redistributes magnitude between coupled parameters, and reorders siblings into a natural reading order. 
 
 Big structural simplifications tend to happen first, because they reduce the counterexample fastest. Value minimisation happens late, once the structure has settled. The result is the minimal input the reducer can find that still triggers the failure — the counterexample format you've seen already in the `myDedupe` example, with a `Reduction diff` showing the path from the first failing input to the minimum.
 
-The first two phases search for bugs. The third strips away everything that doesn't contribute to the failure, making the underlying bug stand out. A property that passes all three means *no failures in the coverage budget, no failures in random sampling, and nothing for reduction to simplify*. A failure in either of the first two triggers the third automatically. <doc:HowReductionWorks> walks through a complete example.
+The first two phases search for bugs. The third strips away everything that doesn't contribute to the failure, making the underlying bug stand out. A property that passes all three means *no failures in the screening budget, no failures in random sampling, and nothing for reduction to simplify*. A failure in either of the first two triggers the third automatically. <doc:HowReductionWorks> walks through a complete example.
 
 ## Reading a failure report
 

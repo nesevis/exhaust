@@ -54,7 +54,7 @@ extension StateMachineSpec {
 
     /// Returns a closure that replays a command sequence on a fresh spec instance and collects the indices of commands that threw ``StateMachineSkip``.
     ///
-    /// The returned closure is used by the SCA coverage phase and skip-pruning pass to identify commands whose preconditions are not met for a given sequence, so those elements can be removed from the choice tree before reduction.
+    /// The returned closure is used by the SCA screening phase and skip-pruning pass to identify commands whose preconditions are not met for a given sequence, so those elements can be removed from the choice tree before reduction.
     static var skipIdentifier: @Sendable ([Command]) -> Set<Int> {
         { commands in
             let spec = Self()

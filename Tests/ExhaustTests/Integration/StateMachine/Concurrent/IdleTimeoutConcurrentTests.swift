@@ -18,7 +18,7 @@ struct IdleTimeoutConcurrentTests {
                 SleepingSpec.self,
                 .commandLimit(2),
                 .idleTimeoutMs(10),
-                .budget(.custom(coverage: 0, sampling: 10))
+                .budget(.custom(screening: 0, sampling: 10))
             )
         }
         #expect(result == nil)
@@ -51,7 +51,7 @@ struct IdleTimeoutConcurrentTests {
                 .parallelize(lanes: .two),
                 .commandLimit(2),
                 .idleTimeoutMs(20),
-                .budget(.custom(coverage: 0, sampling: 10)),
+                .budget(.custom(screening: 0, sampling: 10)),
                 .onReport { report in reportBox.value = report }
             )
         }
@@ -60,7 +60,7 @@ struct IdleTimeoutConcurrentTests {
 
         let report = try #require(reportBox.value)
         #expect(report.reductionInvocations == 0)
-        #expect(report.coverageInvocations == 0)
+        #expect(report.screeningInvocations == 0)
         // One smoke probe plus the full 10-probe sampling budget, all timing out as passes; the sampling loop never short-circuits. The smoke and sampling phases share the `randomSamplingInvocations` bucket.
         #expect(report.randomSamplingInvocations == 11)
     }
@@ -72,7 +72,7 @@ struct IdleTimeoutConcurrentTests {
             .parallelize(lanes: .two),
             .commandLimit(2),
             .idleTimeoutMs(50),
-            .budget(.custom(coverage: 0, sampling: 50)),
+            .budget(.custom(screening: 0, sampling: 50)),
             .suppress(.all)
         )
     }
@@ -88,7 +88,7 @@ struct IdleTimeoutConcurrentTests {
         let (commands, tree) = try #require(try interpreter.next())
 
         var config = ResolvedConcurrentConfig()
-        config.budget = .custom(coverage: 0, sampling: 10)
+        config.budget = .custom(screening: 0, sampling: 10)
         config.suppressIssueReporting = true
 
         let context = StateMachineRunContext<SleepingSpec>(

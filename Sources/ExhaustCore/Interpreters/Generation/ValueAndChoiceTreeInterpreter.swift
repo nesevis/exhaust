@@ -12,7 +12,7 @@
 
 /// Produces both a value and a ``ChoiceTree`` by walking the ``FreerMonad`` spine and recording each choice.
 ///
-/// Builds the ``ChoiceTree`` that coverage analysis, reduction, and replay consume downstream. ``ValueInterpreter`` produces only the value and skips tree construction — use it (via ``nextValueOnly()``) when the tree is not needed.
+/// Builds the ``ChoiceTree`` that screening analysis, reduction, and replay consume downstream. ``ValueInterpreter`` produces only the value and skips tree construction — use it (via ``nextValueOnly()``) when the tree is not needed.
 package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
     public typealias Element = (value: FinalOutput, tree: ChoiceTree)
 

@@ -31,7 +31,7 @@ struct LeakyBucketConcurrentTests {
         _ = await #execute(
             LeakyBucketSpec.self,
             .commandLimit(8),
-            .budget(.custom(coverage: 0, sampling: 500)),
+            .budget(.custom(screening: 0, sampling: 500)),
             .replay(.numeric(42)),
             .suppress(.issueReporting),
             .onReport { deliveredReport = $0 }

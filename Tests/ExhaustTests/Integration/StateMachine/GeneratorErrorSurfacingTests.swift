@@ -8,17 +8,17 @@ struct GeneratorErrorSurfacingTests {
     func sparseFilterReportsIssue() {
         let gen = #gen(.int(in: 0 ... 100)).filter { _ in false }
         withKnownIssue {
-            #exhaust(gen, .budget(.custom(coverage: 0, sampling: 10)), .suppress(.logs)) { _ in
+            #exhaust(gen, .budget(.custom(screening: 0, sampling: 10)), .suppress(.logs)) { _ in
                 true
             }
         }
     }
 
-    @Test("Sparse filter in coverage phase reports validity issue")
-    func sparseFilterInCoverageReportsIssue() {
+    @Test("Sparse filter in screening phase reports validity issue")
+    func sparseFilterInScreeningReportsIssue() {
         let gen = #gen(.int(in: 0 ... 100)).filter { _ in false }
         withKnownIssue {
-            #exhaust(gen, .budget(.custom(coverage: 10, sampling: 0)), .suppress(.logs)) { _ in
+            #exhaust(gen, .budget(.custom(screening: 10, sampling: 0)), .suppress(.logs)) { _ in
                 true
             }
         }

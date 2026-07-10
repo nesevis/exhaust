@@ -3,7 +3,7 @@ import Testing
 
 @Suite("#explore closure shapes")
 struct ExploreClosureShapeTests {
-    private static let budget = ExhaustBudget.custom(coverage: 10, sampling: 200)
+    private static let budget = ExhaustBudget.custom(screening: 10, sampling: 200)
     private static let directions: [(String, @Sendable (Int) -> Bool)] = [
         ("any", { _ in true }),
     ]
@@ -16,7 +16,7 @@ struct ExploreClosureShapeTests {
         let report = #explore(
             gen,
             directions: [("any", { (_: Int) in true })],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { value in
             value >= 0
@@ -31,7 +31,7 @@ struct ExploreClosureShapeTests {
         let report = #explore(
             gen,
             directions: [("any", { (_: Int) in true })],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { value in
             value < 50
@@ -48,7 +48,7 @@ struct ExploreClosureShapeTests {
         let report = #explore(
             gen,
             directions: [("any", { (_: Int) in true })],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { value in
             #expect(value >= 0)
@@ -63,7 +63,7 @@ struct ExploreClosureShapeTests {
         let report = #explore(
             gen,
             directions: [("any", { (_: Int) in true })],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { value in
             #expect(value < 50)
@@ -78,7 +78,7 @@ struct ExploreClosureShapeTests {
         let report = #explore(
             gen,
             directions: [("any", { (_: Int) in true })],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { value in
             if value >= 50 {
@@ -95,7 +95,7 @@ struct ExploreClosureShapeTests {
         let report = #explore(
             gen,
             directions: [("any", { (_: Int) in true })],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { value in
             let doubled = value * 2
@@ -113,7 +113,7 @@ struct ExploreClosureShapeTests {
         let report = await #explore(
             gen,
             directions: [("any", { (_: Int) in true })],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { value async in
             value >= 0
@@ -128,7 +128,7 @@ struct ExploreClosureShapeTests {
         let report = await #explore(
             gen,
             directions: [("any", { (_: Int) in true })],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { value async in
             value < 50
@@ -145,7 +145,7 @@ struct ExploreClosureShapeTests {
         let report = await #explore(
             gen,
             directions: [("any", { (_: Int) in true })],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { value async in
             #expect(value >= 0)
@@ -160,7 +160,7 @@ struct ExploreClosureShapeTests {
         let report = await #explore(
             gen,
             directions: [("any", { (_: Int) in true })],
-            .budget(.custom(coverage: 10, sampling: 200)),
+            .budget(.custom(screening: 10, sampling: 200)),
             .suppress(.all)
         ) { value async in
             #expect(value < 50)

@@ -24,7 +24,7 @@ struct Bound5ShrinkingChallenge {
     func bound5Single() {
         let output = #exhaust(
             Bound5Fixture.gen,
-            .budget(.custom(coverage: 0, sampling: 200)),
+            .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.issueReporting),
             .replay(16_799_307_796_119_368_455),
             .log(.debug),
@@ -159,7 +159,7 @@ struct Bound5ShrinkingChallenge {
                 Bound5Fixture.gen,
                 reflecting: bound5,
                 .suppress(.issueReporting),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 property: Bound5Fixture.property
             )
 

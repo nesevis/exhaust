@@ -98,8 +98,8 @@ struct ConcurrentFailureRenderingTests {
         #expect(output.contains("Preemptive scheduling depends on OS thread timing"))
     }
 
-    @Test("renderFailure includes scheduling caveat for preemptive coverage")
-    func renderFailureIncludesSchedulingCaveatForPreemptiveCoverage() {
+    @Test("renderFailure includes scheduling caveat for preemptive screening")
+    func renderFailureIncludesSchedulingCaveatForPreemptiveScreening() {
         guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
             return
         }
@@ -109,7 +109,7 @@ struct ConcurrentFailureRenderingTests {
         var context = __ExhaustRuntime.FailureContext()
         context.specName = "CounterSpec"
         context.isPreemptive = true
-        context.discoveryMethod = .coverage
+        context.discoveryMethod = .screening
         context.iteration = 1
         context.budget = 200
         context.sequencesTested = 10

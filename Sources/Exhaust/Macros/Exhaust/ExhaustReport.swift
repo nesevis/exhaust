@@ -4,7 +4,7 @@ import ExhaustCore
 ///
 /// Delivered via the ``PropertySettings/onReport(_:)`` setting. Contains phase timing, invocation counts, per-encoder probe breakdown, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree.
 public struct ExhaustReport: Sendable {
-    /// The PRNG seed for this run, when one was supplied by the caller via `.replay` or resolved from a regression trait. `nil` for non-replay runs and for coverage-only results.
+    /// The PRNG seed for this run, when one was supplied by the caller via `.replay` or resolved from a regression trait. `nil` for non-replay runs and for screening-only results.
     public var seed: UInt64?
 
     /// The encoded replay string for reproducing this failure (for example, `"1A-7"` or `"U3"`), or `nil` if the test passed.
@@ -13,8 +13,8 @@ public struct ExhaustReport: Sendable {
     /// The rendered failure message from the Bool pipeline, stored for `__exhaustExpect` to emit.
     package var renderedFailure: String?
 
-    /// Time spent in the structured coverage phase, in milliseconds.
-    public var coverageMilliseconds: Double = 0
+    /// Time spent in the screening phase, in milliseconds.
+    public var screeningMilliseconds: Double = 0
 
     /// Time spent in the random generation phase, in milliseconds.
     public var generationMilliseconds: Double = 0
@@ -28,11 +28,11 @@ public struct ExhaustReport: Sendable {
     /// Total wall-clock time, in milliseconds.
     public var totalMilliseconds: Double = 0
 
-    /// Total property invocations across all phases (coverage, random sampling, and reduction).
+    /// Total property invocations across all phases (screening, random sampling, and reduction).
     public var propertyInvocations: Int = 0
 
-    /// Property invocations during the structured coverage phase.
-    public var coverageInvocations: Int = 0
+    /// Property invocations during the screening phase.
+    public var screeningInvocations: Int = 0
 
     /// Property invocations during the random sampling phase.
     public var randomSamplingInvocations: Int = 0
@@ -64,34 +64,34 @@ public struct ExhaustReport: Sendable {
 
     /// Sets the per-phase property invocation counts and derives the total.
     public mutating func setInvocations(
-        coverage: Int,
+        screening: Int,
         randomSampling: Int,
         reduction: Int
     ) {
-        coverageInvocations = coverage
+        screeningInvocations = screening
         randomSamplingInvocations = randomSampling
         reductionInvocations = reduction
-        propertyInvocations = coverage + randomSampling + reduction
+        propertyInvocations = screening + randomSampling + reduction
     }
 
     /// Records the three phase buckets for a concurrent runner whose reduction probes flow through the same shared invocation counter as the phase that discovered the failure.
     ///
-    /// The concurrent runners drive a single property closure across coverage, sampling, and reduction, so every reduction probe lands inside whichever phase bucket was open when reduction ran. Left uncorrected, that probe would be counted twice — once in the enclosing phase and once in reduction. This peels reduction back out of its enclosing bucket so the three buckets stay disjoint and sum to `totalInvocations`.
+    /// The concurrent runners drive a single property closure across screening, sampling, and reduction, so every reduction probe lands inside whichever phase bucket was open when reduction ran. Left uncorrected, that probe would be counted twice — once in the enclosing phase and once in reduction. This peels reduction back out of its enclosing bucket so the three buckets stay disjoint and sum to `totalInvocations`.
     ///
     /// - Parameters:
     ///   - totalInvocations: The shared counter's final value, the sum the three buckets must reproduce.
-    ///   - coverageThroughReduction: The counter value captured at the end of the coverage phase. It already includes coverage-phase reduction when the failure was found during coverage; it equals `totalInvocations` for a runner that returns immediately on a coverage failure.
+    ///   - screeningThroughReduction: The counter value captured at the end of the screening phase. It already includes screening-phase reduction when the failure was found during screening; it equals `totalInvocations` for a runner that returns immediately on a screening failure.
     ///   - reduction: Reduction probe count, measured by snapshotting the shared counter around the reduce call.
-    ///   - discoveredDuringCoverage: Whether the failure (and therefore the reduction) occurred in the coverage phase. Selects which enclosing bucket the reduction is peeled from: coverage when `true`, sampling otherwise.
+    ///   - discoveredDuringScreening: Whether the failure (and therefore the reduction) occurred in the screening phase. Selects which enclosing bucket the reduction is peeled from: screening when `true`, sampling otherwise.
     package mutating func setConcurrentInvocations(
         totalInvocations: Int,
-        coverageThroughReduction: Int,
+        screeningThroughReduction: Int,
         reduction: Int,
-        discoveredDuringCoverage: Bool
+        discoveredDuringScreening: Bool
     ) {
-        let coverage = discoveredDuringCoverage ? coverageThroughReduction - reduction : coverageThroughReduction
-        let sampling = totalInvocations - coverageThroughReduction - (discoveredDuringCoverage ? 0 : reduction)
-        setInvocations(coverage: coverage, randomSampling: sampling, reduction: reduction)
+        let screening = discoveredDuringScreening ? screeningThroughReduction - reduction : screeningThroughReduction
+        let sampling = totalInvocations - screeningThroughReduction - (discoveredDuringScreening ? 0 : reduction)
+        setInvocations(screening: screening, randomSampling: sampling, reduction: reduction)
     }
 
     /// Total materialization attempts (decoder invocations) during the reduction phase.
@@ -195,7 +195,7 @@ public struct ExhaustReport: Sendable {
         } else {
             timingLabel = ""
         }
-        return "cycles=\(cycles) invocations=\(coverageInvocations)cov/\(randomSamplingInvocations)gen/\(reductionInvocations)red materializations=\(totalMaterializations)\(graphLabel)\(encoderLabel)\(timingLabel)"
+        return "cycles=\(cycles) invocations=\(screeningInvocations)scr/\(randomSamplingInvocations)gen/\(reductionInvocations)red materializations=\(totalMaterializations)\(graphLabel)\(encoderLabel)\(timingLabel)"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value. Each call overwrites the previous stats; the reducer runs a single reduction pass per report, so there is nothing to accumulate.

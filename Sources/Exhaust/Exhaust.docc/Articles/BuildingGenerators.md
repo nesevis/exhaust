@@ -1,6 +1,6 @@
 # Building generators
 
-Exhaust builds generators with the `#gen` macro. Each generator is an inspectable data structure that Exhaust can run forward to produce values, replay for deterministic reproduction, and, with bidirectional transforms, run backward to reconstruct a known value's choices. Reduction, coverage of problematic values, and filter optimisation all follow from inspection.
+Exhaust builds generators with the `#gen` macro. Each generator is an inspectable data structure that Exhaust can run forward to produce values, replay for deterministic reproduction, and, with bidirectional transforms, run backward to reconstruct a known value's choices. Reduction, screening of problematic values, and filter optimisation all follow from inspection.
 
 If you're new to Exhaust, start with <doc:GettingStarted>. This page covers the main generator concepts.
 
@@ -102,7 +102,7 @@ let gen = try #gen(Person.self, from: """
     """)
 ```
 
-Exhaust decodes the JSON once to discover the type's field structure, then builds a generator with one sub-generator per field. The JSON values are scaffolding: they make the discovery pass work but do not constrain the generator's output. Once built, the generator is a normal `ReflectiveGenerator` that produces arbitrary values, reduces counterexamples, and gets the same coverage as any hand-written generator.
+Exhaust decodes the JSON once to discover the type's field structure, then builds a generator with one sub-generator per field. The JSON values are scaffolding: they make the discovery pass work but do not constrain the generator's output. Once built, the generator is a normal `ReflectiveGenerator` that produces arbitrary values, reduces counterexamples, and gets the same screening as any hand-written generator.
 
 Three overloads accept different input shapes:
 
@@ -122,7 +122,7 @@ The two JSON overloads require only `Decodable`. The instance overload requires 
 
 ### What gets a full generator
 
-These types produce full generators with size scaling and problematic-value coverage:
+These types produce full generators with size scaling and problematic-value screening:
 
 - **Primitives**: all signed and unsigned integer types, `Bool`, `Float`, `Double`, `String`, and `Character`.
 - **Foundation types**: `Date`, `UUID`, `URL`, `Data`, `Decimal`, and `CGFloat`.
@@ -276,12 +276,12 @@ let celsius = #gen(.double(in: -273.15...1000.0))
 | `#exhaust(..., reflecting: value)` | Yes | No |
 | `#example` | Yes | Yes |
 | `#examine` (domain coverage + round-trip) | Yes | Domain coverage only |
-| Problematic-value coverage | Yes | Yes |
+| Problematic-value screening | Yes | Yes |
 
 Generators built entirely from `#gen` primitives and `mapped`/`bound` are fully reflectable. Adding a `.map` or `.bind` makes the generator forward-only at that point. Reflection from a concrete value cannot pass backward through the forward-only closure.
 
 > Important:
-> Forward-only transforms do not affect generation or reduction. A generator with `.map` still generates values, still gets problematic-value coverage, and still reduces counterexamples to their minimal form. The only capability lost is `reflecting:` — feeding a known value backward through the generator. If you do not need reflection, `.map` and `.bind` work exactly as well as their bidirectional counterparts.
+> Forward-only transforms do not affect generation or reduction. A generator with `.map` still generates values, still gets problematic-value screening, and still reduces counterexamples to their minimal form. The only capability lost is `reflecting:` — feeding a known value backward through the generator. If you do not need reflection, `.map` and `.bind` work exactly as well as their bidirectional counterparts.
 
 ## Reflecting known values
 

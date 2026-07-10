@@ -49,25 +49,25 @@ package struct DecodingReport: Sendable {
     /// Fraction of coordinates resolved from any data source (prefix or fallback tree) rather than blind PRNG.
     ///
     /// Together with ``fidelity``, forms a sufficient statistic for the full tier distribution:
-    /// - Exact fraction: `2 * fidelity - coverage`.
-    /// - Fallback fraction: `2 * (coverage - fidelity)`.
-    /// - PRNG fraction: `1 - coverage`.
+    /// - Exact fraction: `2 * fidelity - convergence`.
+    /// - Fallback fraction: `2 * (convergence - fidelity)`.
+    /// - PRNG fraction: `1 - convergence`.
     ///
     /// Returns 0.0 when no coordinates have been recorded.
-    var coverage: Double {
+    var convergence: Double {
         let total = totalCount
         guard total > 0 else { return 0.0 }
         return Double(exactCarryForwardCount + fallbackTreeCount) / Double(total)
     }
 
-    /// Minimum coverage required for a convergence point to be considered reliable enough to cache.
+    /// Minimum convergence required for a convergence point to be considered reliable enough to cache.
     ///
     /// Below this threshold, too many coordinates were resolved via PRNG for the convergence outcome to be reproducible — a different seed could yield a different result. Empirically, structural-phase probes land at 0.167–0.250 while stable value-phase probes reach 1.0, so 0.9 cleanly separates the two regimes.
-    static let convergenceCacheCoverageThreshold: Double = 0.9
+    static let convergenceCacheThreshold: Double = 0.9
 
-    /// Whether this materialization's coverage is high enough for convergence points to be cached.
+    /// Whether this materialization's convergence is high enough for convergence points to be cached.
     var isReliableForConvergenceCache: Bool {
-        coverage >= Self.convergenceCacheCoverageThreshold
+        convergence >= Self.convergenceCacheThreshold
     }
 
     /// Per-fingerprint filter predicate observations accumulated during this materialization.

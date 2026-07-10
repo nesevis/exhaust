@@ -11,7 +11,7 @@ struct StateMachineReplayTests {
             await #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.all)
             )
         )
@@ -22,7 +22,7 @@ struct StateMachineReplayTests {
             await #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.encoded(replaySeed)),
                 .suppress(.all)
             )
@@ -30,8 +30,8 @@ struct StateMachineReplayTests {
         #expect(replayed.commands.isEmpty == false, "Replay should reproduce the failure")
     }
 
-    @Test("Coverage row replay reproduces an SCA coverage failure")
-    func coverageRowReplayReproducesSCACoverageFailure() async throws {
+    @Test("Screening row replay reproduces an SCA screening failure")
+    func screeningRowReplayReproducesSCAScreeningFailure() async throws {
         let initial = try #require(
             await #execute(
                 BrokenModuloSpec.self,
@@ -39,8 +39,8 @@ struct StateMachineReplayTests {
                 .suppress(.all)
             )
         )
-        guard initial.discoveryMethod == .coverage else {
-            // SCA was skipped or failure came from sampling — not testable for coverage replay
+        guard initial.discoveryMethod == .screening else {
+            // SCA was skipped or failure came from sampling — not testable for screening replay
             return
         }
         let replaySeed = try #require(initial.replaySeed)
@@ -54,9 +54,9 @@ struct StateMachineReplayTests {
                 .suppress(.all)
             )
         )
-        #expect(replayed.commands.isEmpty == false, "Coverage row replay should reproduce the failure")
-        // A replayed coverage failure must stay a coverage result and round-trip to the same `U-N` seed, rather than degrading into a sampling-format seed that no longer targets the row.
-        #expect(replayed.discoveryMethod == .coverage)
+        #expect(replayed.commands.isEmpty == false, "Screening row replay should reproduce the failure")
+        // A replayed screening failure must stay a screening result and round-trip to the same `U-N` seed, rather than degrading into a sampling-format seed that no longer targets the row.
+        #expect(replayed.discoveryMethod == .screening)
         #expect(replayed.replaySeed == replaySeed)
     }
 
@@ -66,7 +66,7 @@ struct StateMachineReplayTests {
             await #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.all)
             )
         )
@@ -76,7 +76,7 @@ struct StateMachineReplayTests {
             await #execute(
                 BrokenModuloSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.numeric(seed)),
                 .suppress(.all)
             )
@@ -114,7 +114,7 @@ struct PreemptiveOracleReplayTests {
             await #execute(
                 AlwaysThrowingPreemptiveSpec.self,
                 .commandLimit(2),
-                .budget(.custom(coverage: 0, sampling: 50)),
+                .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.all)
             )
         )
@@ -132,7 +132,7 @@ struct ConcurrentStateMachineReplayTests {
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 2000)),
+                .budget(.custom(screening: 0, sampling: 2000)),
                 .idleTimeoutMs(5000),
                 .suppress(.all)
             )
@@ -144,7 +144,7 @@ struct ConcurrentStateMachineReplayTests {
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 2000)),
+                .budget(.custom(screening: 0, sampling: 2000)),
                 .replay(.encoded(replaySeed)),
                 .suppress(.all)
             )
@@ -154,13 +154,13 @@ struct ConcurrentStateMachineReplayTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Coverage row replay reproduces a cooperative concurrent SCA failure")
-    func coverageRowReplayReproducesCooperativeConcurrentSCAFailure() async throws {
+    @Test("Screening row replay reproduces a cooperative concurrent SCA failure")
+    func screeningRowReplayReproducesCooperativeConcurrentSCAFailure() async throws {
         let initial = try #require(
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 2000, sampling: 0)),
+                .budget(.custom(screening: 2000, sampling: 0)),
                 .suppress(.all)
             )
         )
@@ -169,14 +169,14 @@ struct ConcurrentStateMachineReplayTests {
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 2000, sampling: 0)),
+                .budget(.custom(screening: 2000, sampling: 0)),
                 .replay(.encoded(replaySeed)),
                 .suppress(.all)
             )
         )
         #expect(replayed.commands.isEmpty == false, "Replay should reproduce the failure")
-        if initial.discoveryMethod == .coverage {
-            #expect(replayed.discoveryMethod == .coverage)
+        if initial.discoveryMethod == .screening {
+            #expect(replayed.discoveryMethod == .screening)
             #expect(replayed.replaySeed == replaySeed)
         }
     }

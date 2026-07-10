@@ -1,9 +1,9 @@
-// Coverage profile protocol for structured coverage dispatch.
+// Screening profile protocol for structured screening dispatch.
 
-/// Unified interface for domain profiles used by the coverage runner.
+/// Unified interface for domain profiles used by the screening runner.
 ///
-/// Both ``EnumerableDomainProfile`` (actual parameter values) and ``LargeDomainProfile`` (problematic-representative values) conform. The coverage runner uses this to pull rows from ``BalancedCoveringArrayGenerator`` and convert each row to a ``ChoiceTree`` for materialization.
-package protocol CoverageProfile {
+/// Both ``EnumerableDomainProfile`` (actual parameter values) and ``LargeDomainProfile`` (problematic-representative values) conform. The screening runner uses this to pull rows from ``BalancedCoveringArrayGenerator`` and convert each row to a ``ChoiceTree`` for materialization.
+package protocol ScreeningProfile {
     /// The number of distinct values for each parameter.
     var domainSizes: [UInt64] { get }
 

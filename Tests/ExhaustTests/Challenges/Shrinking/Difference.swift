@@ -63,7 +63,7 @@ struct DifferenceShrinkingChallenge {
         let output = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 10000)),
+            .budget(.custom(screening: 0, sampling: 10000)),
 //            .reflecting([700, 701]),
             property: property
         )

@@ -191,7 +191,7 @@ package enum SequenceDecoder {
                                 event: "guided_materialization_fidelity",
                                 metadata: [
                                     "fidelity": String(format: "%.3f", report.fidelity),
-                                    "coverage": String(format: "%.3f", report.coverage),
+                                    "convergence": String(format: "%.3f", report.convergence),
                                 ]
                             )
                         }

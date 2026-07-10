@@ -14,7 +14,7 @@ import Testing
                     ThrowingObjCSpec.self,
                     .parallelize(lanes: .two),
                     .commandLimit(4),
-                    .budget(.custom(coverage: 0, sampling: 50)),
+                    .budget(.custom(screening: 0, sampling: 50)),
                     .suppress(.issueReporting)
                 )
             )

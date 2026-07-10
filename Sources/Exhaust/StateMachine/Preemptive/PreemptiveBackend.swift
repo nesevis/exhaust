@@ -2,7 +2,7 @@ import ExhaustCore
 
 /// Defines the per-probe operations that differ between the synchronous and async preemptive runners.
 ///
-/// Conformers are captured into the `@Sendable` property closure handed to the SCA coverage and reduction passes, so they must be `Sendable`. Both current conformers store only an `Int?` timeout, so the requirement is trivially satisfied.
+/// Conformers are captured into the `@Sendable` property closure handed to the SCA screening and reduction passes, so they must be `Sendable`. Both current conformers store only an `Int?` timeout, so the requirement is trivially satisfied.
 protocol PreemptiveBackend<Spec>: Sendable {
     associatedtype Spec: StateMachineSpecBase
 

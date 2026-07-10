@@ -1,5 +1,5 @@
 //
-//  DateLargeDomainCoverageAnalysis.swift
+//  DateLargeDomainCoverageAnalysisTests.swift
 //  Exhaust
 //
 //  Diagnostic: measures which date problematic values actually appear in
@@ -132,7 +132,7 @@ struct DateLargeDomainCoverageAnalysis {
         let paramCount = profile.parameterCount
         let strength = 2
 
-        // Match CoverageRunner: one PBCAG per parameter rotation for balanced coverage
+        // Match ScreeningRunner: one PBCAG per parameter rotation for balanced coverage
         let rotations: [(generator: PullBasedCoveringArrayGenerator, offset: Int)] =
             (0 ..< paramCount).map { offset in
                 let rotated = (0 ..< paramCount).map { domainSizes[($0 + offset) % paramCount] }

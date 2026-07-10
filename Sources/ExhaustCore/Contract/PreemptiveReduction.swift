@@ -10,7 +10,7 @@ package enum PreemptiveReduction {
 
     /// Computes the number of confirmation repetitions per reduction probe, scaled by how quickly the failure was discovered.
     ///
-    /// Failures found within 1,000 total iterations (coverage + sampling) get ``confirmationRepetitionsCeiling`` repetitions. The count scales linearly down to ``confirmationRepetitionsFloor`` by 10,000 iterations, then stays at the floor. Races that reproduce easily (low iteration count) get more attempts per probe, so the reducer can confidently strip commands. Races that took many iterations to surface are inherently harder to reproduce, and additional repetitions beyond the floor yield diminishing returns against the per-probe cost.
+    /// Failures found within 1,000 total iterations (screening + sampling) get ``confirmationRepetitionsCeiling`` repetitions. The count scales linearly down to ``confirmationRepetitionsFloor`` by 10,000 iterations, then stays at the floor. Races that reproduce easily (low iteration count) get more attempts per probe, so the reducer can confidently strip commands. Races that took many iterations to surface are inherently harder to reproduce, and additional repetitions beyond the floor yield diminishing returns against the per-probe cost.
     package static func confirmationRepetitions(discoveryIterations: Int) -> Int {
         if discoveryIterations <= 1000 {
             return confirmationRepetitionsCeiling

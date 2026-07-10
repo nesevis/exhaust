@@ -25,7 +25,7 @@ struct PreemptiveLoweHashMapTests {
                 .parallelize(lanes: .two),
                 .replay(.numeric(seed)),
                 .commandLimit(20),
-                .budget(.custom(coverage: 0, sampling: 150_000)),
+                .budget(.custom(screening: 0, sampling: 150_000)),
                 .suppress(.issueReporting),
                 .onReport { report = $0 }
             )
@@ -44,7 +44,7 @@ struct PreemptiveLoweHashMapTests {
             LoweHashMapSpec.self,
             .parallelize(lanes: .two),
             .commandLimit(20),
-            .budget(.custom(coverage: 100_000, sampling: 100_000)),
+            .budget(.custom(screening: 100_000, sampling: 100_000)),
             .suppress(.all)
         )
         // Accept timeout or fail

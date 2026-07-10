@@ -119,7 +119,7 @@ package enum ReflectiveOperation {
 
     /// Generates a random `UInt64` bit pattern within `min...max`, interpreted as a typed value via ``TypeTag``.
     ///
-    /// Bit-pattern-space generation is the unified primitive for all numeric, boolean, and character types because it reduces every bounded domain to a single contiguous `UInt64` range. This lets interpreters, reducers, and coverage analysis share one code path regardless of the output type. The ``TypeTag`` carries enough information to convert between the bit pattern and the domain value in both directions, which is what makes reflection and problematic-value analysis work without per-type interpreter logic.
+    /// Bit-pattern-space generation is the unified primitive for all numeric, boolean, and character types because it reduces every bounded domain to a single contiguous `UInt64` range. This lets interpreters, reducers, and screening analysis share one code path regardless of the output type. The ``TypeTag`` carries enough information to convert between the bit pattern and the domain value in both directions, which is what makes reflection and problematic-value analysis work without per-type interpreter logic.
     ///
     /// `isRangeExplicit` distinguishes user-declared ranges (for example, `Gen.int(in: 0...100)`) from ranges synthesized by size scaling. The reducer must respect explicit ranges as hard bounds — narrowing them would change the generator's contract — but may freely narrow implicit ranges because they are artifacts of the current size parameter.
     ///
@@ -151,13 +151,13 @@ package enum ReflectiveOperation {
 
     /// Composes a fixed number of independent generators into a single tuple result.
     ///
-    /// Zip is a primitive because fixed-arity parallel composition is structurally distinct from ``sequence``'s variable-length output. The ChoiceTree knows the child count at construction time, so coverage analysis can enumerate parameter combinations without generating a length first. The reducer treats each child as an independent scope, which is not possible when variable-length output forces all elements through a shared element generator.
+    /// Zip is a primitive because fixed-arity parallel composition is structurally distinct from ``sequence``'s variable-length output. The ChoiceTree knows the child count at construction time, so screening analysis can enumerate parameter combinations without generating a length first. The reducer treats each child as an independent scope, which is not possible when variable-length output forces all elements through a shared element generator.
     ///
     /// **Invariant:** All generators are type-erased to `AnyGenerator`. The continuation attached to this operation receives an `[Any]` whose count and element types match the generators array. The interpreter does not validate element types — the combinator that constructed the zip guarantees the correspondence.
     ///
     /// - Parameters:
     ///   - generators: Array of generators to compose in parallel.
-    ///   - isOpaque: When `true`, the resulting ``ChoiceTree/group(_:isOpaque:)`` is marked opaque so coverage analysis skips its subtree.
+    ///   - isOpaque: When `true`, the resulting ``ChoiceTree/group(_:isOpaque:)`` is marked opaque so screening analysis skips its subtree.
     case zip(ContiguousArray<AnyGenerator>, isOpaque: Bool = false)
 
     /// Embeds a constant value into the generator tree. Produces a `.just` marker in the ``ChoiceSequence`` but carries no randomness — the value is fixed for the lifetime of the generator and the reducer cannot minimize through it.
