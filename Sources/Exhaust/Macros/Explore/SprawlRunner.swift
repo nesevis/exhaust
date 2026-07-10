@@ -78,6 +78,7 @@ package struct SprawlRunResult: Sendable {
     package var coveredEdgeCount: Int
     package var instrumentedEdgeCount: Int
     package var termination: SprawlTermination
+    package var startNanoseconds: UInt64
     package var elapsedNanoseconds: UInt64
     package var seed: UInt64
     package var reductionsTimedOut: Bool
@@ -184,6 +185,7 @@ package final class SprawlRunner<Output> {
             coveredEdgeCount: corpus.coveredEdgeCount,
             instrumentedEdgeCount: source.edgeCount,
             termination: finalTermination,
+            startNanoseconds: startNanoseconds,
             elapsedNanoseconds: monotonicNanoseconds() - startNanoseconds,
             seed: configuration.seed,
             reductionsTimedOut: reductionsCompleted == false
