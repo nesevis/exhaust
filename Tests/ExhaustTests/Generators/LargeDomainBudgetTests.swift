@@ -2,7 +2,7 @@
 //  LargeDomainBudgetTests.swift
 //  Exhaust
 //
-//  Exercises the coverage budget with multi-parameter large-domain generators
+//  Exercises the screening budget with multi-parameter large-domain generators
 //  to measure how long problematic-value analysis takes at different scales.
 //
 

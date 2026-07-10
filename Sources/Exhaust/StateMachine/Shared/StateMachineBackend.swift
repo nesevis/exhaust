@@ -44,7 +44,7 @@ protocol StateMachineBackend<Spec> {
 extension StateMachineBackend {
     /// Probes a candidate after charging one property invocation to the run's counter.
     ///
-    /// Every probe must be counted exactly once. Attribution to the coverage and sampling report buckets happens by diffing the counter around each phase, so no per-invocation marking is needed. Funnel probe calls through here rather than incrementing at the call site, so the accounting invariant lives in one place.
+    /// Every probe must be counted exactly once. Attribution to the screening and sampling report buckets happens by diffing the counter around each phase, so no per-invocation marking is needed. Funnel probe calls through here rather than incrementing at the call site, so the accounting invariant lives in one place.
     func countedProbe(
         _ candidate: [(ScheduleMarker, Spec.Command)],
         context: StateMachineRunContext<Spec>

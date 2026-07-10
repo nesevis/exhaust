@@ -96,9 +96,9 @@ struct SpecMachine<Backend: StateMachineBackend> {
         elapsed: Double
     ) {
         switch source.discoveryMethod {
-            case .coverage:
-                context.state.report.coverageInvocations += invocations
-                context.state.report.coverageMilliseconds += elapsed
+            case .screening:
+                context.state.report.screeningInvocations += invocations
+                context.state.report.screeningMilliseconds += elapsed
             case .randomSampling, .smokeTest, .replay:
                 context.state.report.randomSamplingInvocations += invocations
         }
@@ -110,11 +110,11 @@ struct SpecMachine<Backend: StateMachineBackend> {
     }
 
     private mutating func accountCandidate(_ candidate: StateMachineCandidate<Backend.Spec.Command>) {
-        context.state.failureContext.seed = candidate.discoveryMethod == .coverage ? nil : candidate.seed
+        context.state.failureContext.seed = candidate.discoveryMethod == .screening ? nil : candidate.seed
         context.state.failureContext.originalCount = candidate.taggedCommands.count
         context.state.failureContext.iteration = candidate.iteration
-        context.state.failureContext.budget = candidate.discoveryMethod == .coverage
-            ? context.config.budget.coverageBudget
+        context.state.failureContext.budget = candidate.discoveryMethod == .screening
+            ? context.config.budget.screeningBudget
             : context.config.budget.samplingBudget
         context.state.failureContext.sequencesTested = discoveryInvocations
     }
@@ -340,7 +340,7 @@ struct SpecPipeline<Backend: StateMachineBackend> {
         deferredIssues.append(contentsOf: issues)
         // A passing run that never executed a command sequence asserts nothing. Checked against the shared invocation counter so a regression replay that did execute counts.
         if result == nil, issues.isEmpty, invocationCounter.value == 0 {
-            deferredIssues.append("The spec was never executed: the coverage and sampling budgets are both zero, so this test asserts nothing.")
+            deferredIssues.append("The spec was never executed: the screening and sampling budgets are both zero, so this test asserts nothing.")
         }
         return (result, deferredIssues)
     }

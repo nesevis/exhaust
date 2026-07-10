@@ -10,7 +10,7 @@ public extension ReflectiveGenerator {
     /// Generates dates within the given range, spaced by `interval`.
     ///
     /// Dates are quantized to integral multiples of the interval relative to the range's lower bound.
-    /// The `timeZone` is used by problematic-value analysis to include DST transitions for that zone. It defaults to UTC, which has no DST transitions, so the default coverage rows are identical on every machine. Pass an explicit zone to include its DST boundary values.
+    /// The `timeZone` is used by problematic-value analysis to include DST transitions for that zone. It defaults to UTC, which has no DST transitions, so the default screening rows are identical on every machine. Pass an explicit zone to include its DST boundary values.
     ///
     /// Reflection rounds off-grid dates down to the nearest interval step. This means `reflecting:` with a date that does not fall exactly on a grid point will start reduction from the closest earlier grid point rather than rejecting the value.
     ///

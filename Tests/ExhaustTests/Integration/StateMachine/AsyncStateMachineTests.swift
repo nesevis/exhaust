@@ -13,7 +13,7 @@ struct AsyncStateMachineTests {
             AsyncCounterSpec.self,
             .parallelize(lanes: .one),
             .commandLimit(8),
-            .budget(.custom(coverage: 0, sampling: 100)),
+            .budget(.custom(screening: 0, sampling: 100)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "Async counter spec should pass — model and SUT are identical")
@@ -25,7 +25,7 @@ struct AsyncStateMachineTests {
         let result = await #execute(
             BuggyAsyncCounterSpec.self,
             .commandLimit(10),
-            .budget(.custom(coverage: 0, sampling: 200)),
+            .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.issueReporting)
         )
         #expect(result != nil, "Buggy async counter should fail")
@@ -46,7 +46,7 @@ struct AsyncStateMachineTests {
             AsyncSkipSpec.self,
             .parallelize(lanes: .one),
             .commandLimit(8),
-            .budget(.custom(coverage: 0, sampling: 100)),
+            .budget(.custom(screening: 0, sampling: 100)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "Async skip spec should pass")
@@ -59,7 +59,7 @@ struct AsyncStateMachineTests {
             MixedAsyncSpec.self,
             .parallelize(lanes: .one),
             .commandLimit(8),
-            .budget(.custom(coverage: 0, sampling: 100)),
+            .budget(.custom(screening: 0, sampling: 100)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "Mixed async spec should pass")
@@ -89,12 +89,12 @@ struct AsyncStateMachineTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Async spec with SCA coverage finds and shrinks failure")
-    func asyncStateMachineWithSCACoverageFindsAndShrinksFailure() async {
+    @Test("Async spec with SCA screening finds and shrinks failure")
+    func asyncStateMachineWithSCAScreeningFindsAndShrinksFailure() async {
         let result = await #execute(
             BuggyAsyncCounterSpec.self,
             .commandLimit(20),
-            .budget(.custom(coverage: 0, sampling: 200)),
+            .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.issueReporting),
             .log(.debug)
         )

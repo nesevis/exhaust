@@ -592,12 +592,12 @@ struct DateDSTProblematicValueTests {
 
 // MARK: - Opaque Group
 
-@Suite("Opaque Group Coverage Skipping")
+@Suite("Opaque Group Screening Skipping")
 struct OpaqueGroupTests {
-    @Test("Opaque zip hides its parameters from coverage analysis")
+    @Test("Opaque zip hides its parameters from screening analysis")
     func opaqueZipHidesParameters() {
         // An opaque zip of 4 floats paired with a non-opaque int parameter.
-        // Coverage analysis should see only the int, not the 4 floats.
+        // Screening analysis should see only the int, not the 4 floats.
         let opaqueFloats = Gen.zip(
             Gen.choose(in: Float(0) ... Float(1)),
             Gen.choose(in: Float(0) ... Float(1)),
@@ -703,8 +703,8 @@ struct CharacterProblematicIndicesTests {
         }
     }
 
-    @Test("Coverage replay of character chooseBits produces only scalars within the CharacterSet")
-    func coverageReplayProducesOnlyAllowedCharacters() {
+    @Test("Screening replay of character chooseBits produces only scalars within the CharacterSet")
+    func screeningReplayProducesOnlyAllowedCharacters() {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "*-._"))
         let srs = allowed.scalarRangeSet()
         let tag = TypeTag.character
@@ -742,7 +742,7 @@ struct CharacterProblematicIndicesTests {
             return
         }
 
-        let profile: any CoverageProfile = switch analysis {
+        let profile: any ScreeningProfile = switch analysis {
             case let .enumerable(profile): profile
             case let .large(profile): profile
         }
@@ -770,7 +770,7 @@ struct CharacterProblematicIndicesTests {
                     for scalar in char.unicodeScalars {
                         #expect(
                             allowed.contains(scalar),
-                            "Coverage row \(rowsTested) produced U+\(String(scalar.value, radix: 16, uppercase: true)) which is not in the CharacterSet"
+                            "Screening row \(rowsTested) produced U+\(String(scalar.value, radix: 16, uppercase: true)) which is not in the CharacterSet"
                         )
                     }
                 }
@@ -788,7 +788,7 @@ struct CharacterProblematicIndicesTests {
                     for scalar in char.unicodeScalars {
                         #expect(
                             allowed.contains(scalar),
-                            "Coverage row \(i) produced U+\(String(scalar.value, radix: 16, uppercase: true)) which is not in the CharacterSet"
+                            "Screening row \(i) produced U+\(String(scalar.value, radix: 16, uppercase: true)) which is not in the CharacterSet"
                         )
                     }
                 }
@@ -796,7 +796,7 @@ struct CharacterProblematicIndicesTests {
             }
         }
 
-        #expect(rowsTested > 0, "Coverage should produce at least one materializable row (got \(rowsTested))")
+        #expect(rowsTested > 0, "Screening should produce at least one materializable row (got \(rowsTested))")
     }
 }
 

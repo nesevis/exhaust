@@ -241,7 +241,7 @@ struct ConcurrentStateMachineDrainLoopTests {
             await #execute(
                 YieldingCounterSpec.self,
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 100)),
+                .budget(.custom(screening: 0, sampling: 100)),
                 .suppress(.issueReporting)
             )
         )
@@ -257,7 +257,7 @@ struct ConcurrentStateMachineDrainLoopTests {
                     _ = await #execute(
                         YieldingCounterSpec.self,
                         .commandLimit(4),
-                        .budget(.custom(coverage: 0, sampling: 50)),
+                        .budget(.custom(screening: 0, sampling: 50)),
                         .suppress(.all)
                     )
                 }

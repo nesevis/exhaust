@@ -1,42 +1,42 @@
 /// Identifies a specific failing run for deterministic reproduction, accepting either a raw `UInt64` or an encoded string.
 ///
 /// Three wire formats:
-/// - **Bare seed**: Crockford Base32 encoded `UInt64` (for example, `"3RT5GH8KM2"`). Runs the full pipeline (coverage + sampling) with the given PRNG seed.
-/// - **Seed + iteration**: Seed with a `-N` suffix (for example, `"3RT5GH8KM2-7"`). Jumps directly to the Nth 1-based iteration, skipping coverage.
-/// - **Coverage row**: `U-N` prefix (for example, `"U-3"`). Replays the Nth 1-based coverage row (internally 0-indexed).
+/// - **Bare seed**: Crockford Base32 encoded `UInt64` (for example, `"3RT5GH8KM2"`). Runs the full pipeline (screening + sampling) with the given PRNG seed.
+/// - **Seed + iteration**: Seed with a `-N` suffix (for example, `"3RT5GH8KM2-7"`). Jumps directly to the Nth 1-based iteration, skipping screening.
+/// - **Screening row**: `U-N` prefix (for example, `"U-3"`). Replays the Nth 1-based screening row (internally 0-indexed).
 ///
 /// ```swift
 /// .replay(42)                // UInt64 literal — full pipeline, deterministic seed
 /// .replay("3RT5GH8KM2")      // seed only, runs full budget
 /// .replay("3RT5GH8KM2-7")    // seed with iteration (reproduces in one step)
-/// .replay("U-3")              // coverage row replay
+/// .replay("U-3")              // screening row replay
 /// ```
 public enum ReplaySeed: Sendable {
     /// A raw numeric seed.
     case numeric(UInt64)
-    /// An encoded seed string, optionally with an iteration suffix or coverage-row prefix.
+    /// An encoded seed string, optionally with an iteration suffix or screening-row prefix.
     case encoded(String)
 
-    /// Distinguishes sampling replays (seed plus optional iteration) from coverage replays (row index).
+    /// Distinguishes sampling replays (seed plus optional iteration) from screening replays (row index).
     public enum Resolved: Sendable {
         /// Replay a sampling run with the given seed, optionally jumping to a specific iteration.
         case sampling(seed: UInt64, iteration: Int?)
-        /// Replay a coverage row by 0-based index.
-        case coverage(row: Int)
+        /// Replay a screening row by 0-based index.
+        case screening(row: Int)
 
-        /// The PRNG seed for sampling replays, or `nil` for coverage replays.
+        /// The PRNG seed for sampling replays, or `nil` for screening replays.
         public var seed: UInt64? {
             switch self {
                 case let .sampling(seed, _): seed
-                case .coverage: nil
+                case .screening: nil
             }
         }
 
-        /// The iteration for sampling replays, or `nil` when absent or for coverage replays.
+        /// The iteration for sampling replays, or `nil` when absent or for screening replays.
         public var iteration: Int? {
             switch self {
                 case let .sampling(_, iteration): iteration
-                case .coverage: nil
+                case .screening: nil
             }
         }
 
@@ -49,17 +49,17 @@ public enum ReplaySeed: Sendable {
                     } else {
                         ReplaySeed.encodeRawSeed(seed)
                     }
-                case let .coverage(row):
-                    ReplaySeed.encodeCoverageRow(row)
+                case let .screening(row):
+                    ReplaySeed.encodeScreeningRow(row)
             }
         }
 
-        /// Decodes an encoded replay string, probing coverage-row format first, then sampling format.
+        /// Decodes an encoded replay string, probing screening-row format first, then sampling format.
         ///
         /// Returns `nil` when the string matches neither format.
         public static func decode(_ encoded: String) -> Resolved? {
-            if let row = ReplaySeed.decodeCoverageRow(encoded) {
-                return .coverage(row: row)
+            if let row = ReplaySeed.decodeScreeningRow(encoded) {
+                return .screening(row: row)
             }
             if let (seed, iteration) = ReplaySeed.decodeWithIteration(encoded) {
                 return .sampling(seed: seed, iteration: iteration)
@@ -67,9 +67,9 @@ public enum ReplaySeed: Sendable {
             return nil
         }
 
-        /// Encodes a coverage-phase failure from a 1-based iteration count to a 0-based coverage row.
-        public static func encodeCoverageIteration(_ iteration: Int) -> String {
-            Resolved.coverage(row: iteration - 1).encoded
+        /// Encodes a screening-phase failure from a 1-based iteration count to a 0-based screening row.
+        public static func encodeScreeningIteration(_ iteration: Int) -> String {
+            Resolved.screening(row: iteration - 1).encoded
         }
     }
 
@@ -113,17 +113,17 @@ public enum ReplaySeed: Sendable {
         return (seed: seed, iteration: nil)
     }
 
-    /// Encodes a 0-indexed coverage row as a replay string (for example, row 0 becomes `"U-1"`).
+    /// Encodes a 0-indexed screening row as a replay string (for example, row 0 becomes `"U-1"`).
     ///
-    /// The `U` prefix distinguishes coverage replays from sampling replays. `U` is not a valid Crockford Base32 digit and has no typo fallback mapping. The wire format is 1-indexed so `"U-0"` is never emitted.
-    package static func encodeCoverageRow(_ row: Int) -> String {
+    /// The `U` prefix distinguishes screening replays from sampling replays. `U` is not a valid Crockford Base32 digit and has no typo fallback mapping. The wire format is 1-indexed so `"U-0"` is never emitted.
+    package static func encodeScreeningRow(_ row: Int) -> String {
         "U-\(row + 1)"
     }
 
-    /// Decodes a `U`-prefixed coverage replay string into a 0-indexed row index (for example, `"U-1"` becomes 0).
+    /// Decodes a `U`-prefixed screening replay string into a 0-indexed row index (for example, `"U-1"` becomes 0).
     ///
     /// Accepts both `"U-1"` (current format) and `"U1"` (legacy format without dash). Returns `nil` if the string does not start with `U` or the number is not a positive integer.
-    package static func decodeCoverageRow(_ string: String) -> Int? {
+    package static func decodeScreeningRow(_ string: String) -> Int? {
         guard let first = string.first, first == "U" || first == "u" else { return nil }
         var rowPart = String(string.dropFirst())
         if rowPart.hasPrefix("-") { rowPart = String(rowPart.dropFirst()) }

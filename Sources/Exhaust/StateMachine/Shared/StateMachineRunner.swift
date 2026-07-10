@@ -1,6 +1,6 @@
 // Runtime execution engine for spec tests.
 //
-// Generates command sequences, executes them against a fresh spec instance, and detects postcondition / invariant violations. Integrates with the existing coverage + random + reduction pipeline.
+// Generates command sequences, executes them against a fresh spec instance, and detects postcondition / invariant violations. Integrates with the existing screening + random + reduction pipeline.
 import CustomDump
 import ExhaustCore
 import Foundation
@@ -52,7 +52,7 @@ public extension __ExhaustRuntime {
     ///
     /// - Parameters:
     ///   - specType: The `@StateMachine`-annotated spec type.
-    ///   - settings: Configuration options controlling iteration count, coverage, reduction, and command limits.
+    ///   - settings: Configuration options controlling iteration count, screening, reduction, and command limits.
     @discardableResult
     static func __runStateMachine<Spec: StateMachineSpec>(
         _ specType: Spec.Type,
@@ -79,7 +79,7 @@ public extension __ExhaustRuntime {
             let commandGen = Spec.commandGenerator
             let commandLimit = config.commandLimit ?? estimateCommandLimit(
                 commandGen: commandGen.gen,
-                coverageBudget: UInt64(config.budget.coverageBudget)
+                screeningBudget: UInt64(config.budget.screeningBudget)
             )
             let untaggedSeqGen = commandGen.array(length: 0 ... commandLimit, scaling: .constant).gen
             let taggedSeqGen = untaggedSeqGen.map { commands in
@@ -202,7 +202,7 @@ private extension __ExhaustRuntime {
         let commandGen = Spec.commandGenerator
         let commandLimit = config.commandLimit ?? estimateCommandLimit(
             commandGen: commandGen.gen,
-            coverageBudget: UInt64(config.budget.coverageBudget)
+            screeningBudget: UInt64(config.budget.screeningBudget)
         )
         let untaggedSeqGen = commandGen.array(length: 0 ... commandLimit, scaling: .constant).gen
         let taggedSeqGen = untaggedSeqGen.map { commands in
@@ -271,7 +271,7 @@ private extension __ExhaustRuntime {
 extension __ExhaustRuntime {
     /// Replays each regression seed through a caller-supplied machine runner, returning the first failure.
     ///
-    /// Shared by the cooperative and preemptive entry points. Decodes each seed, builds a modified config (expanding the coverage budget for `.coverage(row)` seeds), and delegates to `runMachine`. Returns `nil` result when all seeds pass.
+    /// Shared by the cooperative and preemptive entry points. Decodes each seed, builds a modified config (expanding the screening budget for `.screening(row)` seeds), and delegates to `runMachine`. Returns `nil` result when all seeds pass.
     static func replayRegressionSeeds<Spec: StateMachineSpecBase>(
         config: ResolvedConcurrentConfig,
         regressionSeeds: [String],
@@ -279,7 +279,7 @@ extension __ExhaustRuntime {
     ) -> (result: StateMachineResult<Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
 
-        guard config.coverageReplayRow == nil, config.seed == nil else {
+        guard config.screeningReplayRow == nil, config.seed == nil else {
             return (nil, deferredIssues)
         }
 
@@ -291,12 +291,12 @@ extension __ExhaustRuntime {
 
             var replayConfig = config
             switch decoded {
-                case let .coverage(row):
-                    replayConfig.coverageReplayRow = row
+                case let .screening(row):
+                    replayConfig.screeningReplayRow = row
                     let needed = row + 1
-                    if replayConfig.budget.coverageBudget < needed {
+                    if replayConfig.budget.screeningBudget < needed {
                         replayConfig.budget = .custom(
-                            coverage: needed,
+                            screening: needed,
                             sampling: replayConfig.budget.samplingBudget
                         )
                     }
@@ -305,7 +305,7 @@ extension __ExhaustRuntime {
                     replayConfig.replayIteration = iteration
                     if replayConfig.budget.samplingBudget < iteration + 1 {
                         replayConfig.budget = .custom(
-                            coverage: replayConfig.budget.coverageBudget,
+                            screening: replayConfig.budget.screeningBudget,
                             sampling: iteration + 1
                         )
                     }

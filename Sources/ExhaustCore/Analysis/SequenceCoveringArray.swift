@@ -148,25 +148,25 @@ package enum SequenceCoveringArray {
     ///
     /// For each pick branch:
     /// - Parameter-free branches (no choices in the sub-generator) → `.parameterFree` (1 domain value)
-    /// - Analyzable branches → `.analyzed([CoverageParameter])` with threshold normalization
+    /// - Analyzable branches → `.analyzed([ScreeningParameter])` with threshold normalization
     /// - Unanalyzable branches (uses `getSize`, and so on) → `.unanalyzable` (1 domain value, random at replay)
     ///
     /// Parameters with domain size above `threshold` are converted to problematic-value representatives to keep the per-position domain tractable. Use ``computeThreshold(budget:sequenceLength:branchCount:)`` to derive the threshold from the covering array budget.
     package static func analyzeBranches(
         _ pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
         threshold: UInt64,
-        coverageBudget: UInt64
+        screeningBudget: UInt64
     ) -> [BranchArgProfile] {
         pickChoices.map { choice in
             if isParameterFree(choice.generator) {
                 return .parameterFree
             }
 
-            guard let result = ChoiceTreeAnalysis.analyze(choice.generator, compositeThreshold: coverageBudget) else {
+            guard let result = ChoiceTreeAnalysis.analyze(choice.generator, compositeThreshold: screeningBudget) else {
                 return .unanalyzable
             }
 
-            let normalized = normalizeToCoverageParameters(result, threshold: threshold)
+            let normalized = normalizeToScreeningParameters(result, threshold: threshold)
             if normalized.isEmpty {
                 return .unanalyzable
             }
@@ -310,20 +310,20 @@ package enum SequenceCoveringArray {
         SharedInterpreterHelpers.isParameterFree(gen)
     }
 
-    /// Normalizes an analysis result to `[CoverageParameter]` with a budget-derived threshold.
+    /// Normalizes an analysis result to `[ScreeningParameter]` with a budget-derived threshold.
     ///
-    /// For `.enumerable` results, converts ``EnumerableParameter`` → ``CoverageParameter``. For both result types, parameters with domain size above `threshold` are recomputed as problematic-value representatives.
-    private static func normalizeToCoverageParameters(
+    /// For `.enumerable` results, converts ``EnumerableParameter`` → ``ScreeningParameter``. For both result types, parameters with domain size above `threshold` are recomputed as problematic-value representatives.
+    private static func normalizeToScreeningParameters(
         _ result: ChoiceTreeAnalysis.AnalysisResult,
         threshold: UInt64
-    ) -> [CoverageParameter] {
+    ) -> [ScreeningParameter] {
         switch result {
             case let .enumerable(profile):
                 profile.parameters.enumerated().map { i, param in
                     switch param.kind {
                         case let .chooseBits(range, tag):
                             if param.domainSize <= threshold {
-                                return CoverageParameter(
+                                return ScreeningParameter(
                                     index: i,
                                     values: Array(range.lowerBound ... range.upperBound),
                                     domainSize: param.domainSize,
@@ -333,7 +333,7 @@ package enum SequenceCoveringArray {
                                 let problematicValues = ProblematicValues.computeProblematicValues(
                                     min: range.lowerBound, max: range.upperBound, tag: tag
                                 )
-                                return CoverageParameter(
+                                return ScreeningParameter(
                                     index: i,
                                     values: problematicValues,
                                     domainSize: UInt64(problematicValues.count),
@@ -341,7 +341,7 @@ package enum SequenceCoveringArray {
                                 )
                             }
                         case let .pick(choices):
-                            return CoverageParameter(
+                            return ScreeningParameter(
                                 index: i,
                                 values: Array(0 ..< UInt64(choices.count)),
                                 domainSize: UInt64(choices.count),
@@ -357,14 +357,14 @@ package enum SequenceCoveringArray {
                             let problematicValues = ProblematicValues.computeProblematicValues(
                                 min: range.lowerBound, max: range.upperBound, tag: tag
                             )
-                            return CoverageParameter(
+                            return ScreeningParameter(
                                 index: i,
                                 values: problematicValues,
                                 domainSize: UInt64(problematicValues.count),
                                 kind: .chooseBits(range: range, tag: tag)
                             )
                         default:
-                            return CoverageParameter(
+                            return ScreeningParameter(
                                 index: i,
                                 values: param.values,
                                 domainSize: param.domainSize,
@@ -414,7 +414,7 @@ package enum SequenceCoveringArray {
     /// Decomposes a local index via mixed-radix into per-parameter value indices, then delegates to ``LargeDomainCoveringArrayReplay`` to build the sub-tree.
     private static func buildArgTree(
         localIndex: UInt64,
-        params: [CoverageParameter]
+        params: [ScreeningParameter]
     ) -> ChoiceTree? {
         var valueIndices = [UInt64](repeating: 0, count: params.count)
         var remainder = localIndex
@@ -439,7 +439,7 @@ package enum BranchArgProfile {
     /// Branch generator has no parameters — contributes 1 domain value.
     case parameterFree
     /// Branch generator has analyzable parameters — contributes product-of-domainSizes domain values.
-    case analyzed([CoverageParameter])
+    case analyzed([ScreeningParameter])
     /// Branch generator is not analyzable — contributes 1 domain value (random args at replay).
     case unanalyzable
 }

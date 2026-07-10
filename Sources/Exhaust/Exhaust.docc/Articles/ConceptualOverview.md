@@ -53,11 +53,11 @@ A **filter** (`.filter {…}`) keeps only values that satisfy a predicate. Exhau
     )
 ```
 
-**Coverage** comes first. Before any random sampling, Exhaust tests the **problematic values**: the catalogue of values bugs are known to cluster around. What counts as problematic depends on the type. Range limits and the steps either side of them for integers. NaN, the infinities, and values near the edges of representable precision for floats. Daylight-saving transitions and epoch points for dates. Troublesome Unicode scalars for characters. Lengths 0, 1, 2, and the range's lower bound for collections.
+**Screening** comes first. Before any random sampling, Exhaust tests the **problematic values**: the catalogue of values bugs are known to cluster around. What counts as problematic depends on the type. Range limits and the steps either side of them for integers. NaN, the infinities, and values near the edges of representable precision for floats. Daylight-saving transitions and epoch points for dates. Troublesome Unicode scalars for characters. Lengths 0, 1, 2, and the range's lower bound for collections.
 
 These are drawn in combinations at **pairwise** coverage, so every pair of problematic values from two parameters is tried together at least once, budget allowing. That matters because empirical studies find that around 70% of reported defects are triggered by one or two conditions (Kuhn and Reilly, 2002): an overflow that needs one parameter at its maximum and another above zero surfaces the moment that pair is tried together, and stays hidden while they vary one at a time.
 
-**Random sampling** follows. Once the coverage budget is spent, Exhaust draws from the generator's natural distribution, exercising random, varied inputs. Coverage and sampling have separate budgets. At the default `.standard` budget you get 200 of each.
+**Random sampling** follows. Once the screening budget is spent, Exhaust draws from the generator's natural distribution, exercising random, varied inputs. Screening and sampling have separate budgets. At the default `.standard` budget you get 200 of each.
 
 A run that finds no failure in either phase passes. The moment either phase produces a failure, Exhaust stops searching and starts reducing.
 
@@ -71,7 +71,7 @@ Because it understands how the parts of an input relate, it can delete an elemen
 
 ## What makes it work: inspectable generators
 
-All of this rests on one design choice: an Exhaust generator is an inspectable data structure, not an opaque closure. Exhaust can look inside it and read its parameters, its branches, and their domains. This capability is **inspection**, and it is what powers everything else. Coverage reads a generator's parameters to find their domain's problematic values. Filter tuning tweaks its branching points. Reduction operates on the recorded choices rather than the output value.
+All of this rests on one design choice: an Exhaust generator is an inspectable data structure, not an opaque closure. Exhaust can look inside it and read its parameters, its branches, and their domains. This capability is **inspection**, and it is what powers everything else. Screening reads a generator's parameters to find their domain's problematic values. Filter tuning tweaks its branching points. Reduction operates on the recorded choices rather than the output value.
 
 Because the generator is data, Exhaust can run it more than one way. There are three modes. **Generation** runs it forward to produce a value, recording each **choice** (which branch, which integer, which length) as it goes. **Replay** feeds a recorded sequence of choices back in to reproduce a value exactly. And **reflection** runs a generator backward: given a concrete value you already have (from a bug report, say), it recovers the choices that could have produced it, so the reducer can work on them. Reflection is what the `reflecting:` parameter and `#examine`'s round-trip check use. It requires bidirectional transforms (see <doc:BuildingGenerators#Bidirectional-transforms>). Generators built with forward-only `.map` or `.bind` still generate, reduce, and replay perfectly well.
 
@@ -147,12 +147,12 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 ### The run
 
 - **Counterexample**: an input for which the property fails. After reduction, the minimal counterexample, the simplest input that still fails.
-- **Coverage**: the first phase of an `#exhaust` run, testing problematic values pairwise before random sampling. Coverage of the input space, not code coverage.
 - **Pairwise**: covering every pair of problematic values from different parameters in at least one case.
 - **Problematic value**: a value bugs cluster around, from a fixed per-type catalogue (range limits for integers, NaN and the infinities for floats, daylight-saving transitions for dates, troublesome Unicode scalars for characters, short lengths for collections).
 - **Property**: a claim about your code that should hold for every generated input. What `#exhaust` and `#explore` check.
 - **Random sampling**: the second phase, drawing from the generator's natural distribution.
 - **Reduction**: reducing a failing input to the minimal counterexample, automatically and for every type.
+- **Screening**: the first phase of an `#exhaust` run, testing problematic values pairwise before random sampling. Screening of the input space, not code coverage.
 
 ### Exploration
 
@@ -160,7 +160,7 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 
 ### Inspection
 
-- **Inspection**: the foundation that makes generators inspectable data structures, so Exhaust can read their parameters, branches, and domains. It powers coverage, CGS, and reduction.
+- **Inspection**: the foundation that makes generators inspectable data structures, so Exhaust can read their parameters, branches, and domains. It powers screening, CGS, and reduction.
 - **Reflection**: running a generator backward to recover the choices behind a concrete value. What `reflecting:` and `#examine`'s round-trip check use. Requires bidirectional transforms.
 - **Bidirectional**: a transform that supplies both directions (`mapped`, `bound`). A generator built only from these is reflectable.
 - **Forward-only**: a generator that generates and reduces but cannot reflect, because it contains a one-way `.map` or `.bind`.
@@ -189,5 +189,5 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 
 ### Easily confused
 
-- **"Coverage" has three senses.** Bare coverage is the `#exhaust` phase that tries problematic values. `#examine`'s **domain coverage** is how much of a generator's output space the samples reached. `#explore`'s **direction coverage** is how many samples hit each direction. None of them is code coverage.
+- **"Coverage" now means code coverage.** The `#exhaust` phase that tries problematic values is called **screening**, not coverage. `#examine`'s **domain coverage** is how much of a generator's output space the samples reached. `#explore`'s **direction coverage** is how many samples hit each direction. Bare "coverage" is reserved for branch coverage of the system under test.
 - **"Reflection" is narrower than in most languages.** In Swift and Java, "reflection" typically means examining a value's structure at runtime. In Exhaust, inspection is the word for reading a generator's structure. Reflection means only one thing: running a generator backward to recover the choices behind a concrete value, which is what `reflecting:` and `#examine`'s round-trip check use.

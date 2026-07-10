@@ -1,13 +1,13 @@
-// Encapsulates the coverage phase of a property test.
+// Encapsulates the screening phase of a property test.
 //
 // Analyzes the generator, then pulls rows from BalancedCoveringArrayGenerator one at a time, testing each against the property. Stops on first failure or budget.
 import ExhaustCore
 
-/// Runs the coverage phase of a property test, exhausting the generator's enumerable or large domain before the random phase.
-package enum CoverageRunner {
-    /// The outcome of a coverage run.
+/// Runs the screening phase of a property test, exhausting the generator's enumerable or large domain before the random phase.
+package enum ScreeningRunner {
+    /// The outcome of a screening run.
     package enum Result<Output> {
-        /// Coverage found a counterexample before exhausting the domain.
+        /// Screening found a counterexample before exhausting the domain.
         case failure(
             value: Output, tree: ChoiceTree,
             iteration: Int, strength: Int, rows: Int,
@@ -15,40 +15,40 @@ package enum CoverageRunner {
         )
         /// The entire enumerable domain was tested without finding a counterexample; the random phase can be skipped.
         case exhaustive(iterations: Int)
-        /// Coverage completed its budget without a counterexample; proceed to the random phase.
+        /// Screening completed its budget without a counterexample; proceed to the random phase.
         case partial(
             iterations: Int, strength: Int, rows: Int,
             parameters: Int, totalSpace: UInt64, kind: String
         )
-        /// The generator has no analyzable enumerable or large domain; skip coverage entirely.
+        /// The generator has no analyzable enumerable or large domain; skip screening entirely.
         case notApplicable
     }
 
-    /// Runs coverage analysis and iterates through the covering array, calling `property` for each row.
+    /// Runs screening analysis and iterates through the covering array, calling `property` for each row.
     ///
-    /// - Parameter skipToRow: When set, skips property evaluation for all rows before this index and only tests the target row. Used for O(1) coverage replay.
+    /// - Parameter skipToRow: When set, skips property evaluation for all rows before this index and only tests the target row. Used for O(1) screening replay.
     package static func run<Output>(
         _ gen: Generator<Output>,
-        coverageBudget: UInt64,
+        screeningBudget: UInt64,
         skipToRow: Int? = nil,
         property: (Output) -> Bool,
         onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
     ) -> Result<Output> {
-        guard var analysis = ChoiceTreeAnalysis.analyze(gen, compositeThreshold: coverageBudget) else {
+        guard var analysis = ChoiceTreeAnalysis.analyze(gen, compositeThreshold: screeningBudget) else {
             return .notApplicable
         }
 
         if case let .large(largeProfile) = analysis {
             let sorted = largeProfile.domainSizes.sorted(by: >)
             let largestPairProduct = sorted.prefix(2).reduce(UInt64(1), *)
-            if largestPairProduct > coverageBudget,
-               let smaller = ChoiceTreeAnalysis.analyze(gen, expandSequencePairs: false, compositeThreshold: coverageBudget)
+            if largestPairProduct > screeningBudget,
+               let smaller = ChoiceTreeAnalysis.analyze(gen, expandSequencePairs: false, compositeThreshold: screeningBudget)
             {
                 analysis = smaller
             }
         }
 
-        let profile: any CoverageProfile
+        let profile: any ScreeningProfile
         let kind: String
         let isExhaustiveCandidate: Bool
 
@@ -56,7 +56,7 @@ package enum CoverageRunner {
             case let .enumerable(enumerableProfile):
                 profile = enumerableProfile
                 kind = "enumerable"
-                isExhaustiveCandidate = enumerableProfile.totalSpace <= coverageBudget
+                isExhaustiveCandidate = enumerableProfile.totalSpace <= screeningBudget
                     && enumerableProfile.originalTree?.containsBind == false
 
             case let .large(largeProfile):
@@ -68,11 +68,11 @@ package enum CoverageRunner {
         let domainSizes = profile.domainSizes
         let paramCount = profile.parameterCount
         let totalSpace = profile.totalSpace
-        let budget = Int(min(coverageBudget, UInt64(Int.max)))
+        let budget = Int(min(screeningBudget, UInt64(Int.max)))
 
         guard paramCount >= 1 else { return .notApplicable }
 
-        // Erase once for the whole coverage loop; testRow calls materializeAny directly to avoid per-row erasure.
+        // Erase once for the whole screening loop; testRow calls materializeAny directly to avoid per-row erasure.
         let erasedGen = gen.erase()
         // A passing row's tree is only read by the onExample stats callback; without one, testRow skips tree construction.
         let needsTree = onExample != nil
@@ -168,7 +168,7 @@ package enum CoverageRunner {
         _ erasedGen: AnyGenerator,
         row: CoveringArrayRow,
         rowIndex: Int,
-        profile: any CoverageProfile,
+        profile: any ScreeningProfile,
         needsTree: Bool,
         property: (Output) -> Bool
     ) -> RowResult<Output>? {

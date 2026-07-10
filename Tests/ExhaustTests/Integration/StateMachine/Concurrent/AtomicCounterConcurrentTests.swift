@@ -12,7 +12,7 @@ struct AtomicCounterConcurrentTests {
         let result = await #execute(
             AtomicCounterSpec.self,
             .commandLimit(4),
-            .budget(.custom(coverage: 0, sampling: 200)),
+            .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "Atomic counter should pass under any interleaving")
@@ -24,7 +24,7 @@ struct AtomicCounterConcurrentTests {
         let result = await #execute(
             NarrowRaceCounterSpec.self,
             .commandLimit(6),
-            .budget(.custom(coverage: 0, sampling: 200)),
+            .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "NarrowRaceCounter has a real data race, but CCCR cannot interleave non-suspending methods")

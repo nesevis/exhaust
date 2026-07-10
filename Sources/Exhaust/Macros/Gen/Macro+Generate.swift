@@ -45,7 +45,7 @@ public macro gen<each GeneratedValue>(
 
 /// Synthesizes a generator from a `Decodable` type and example JSON data.
 ///
-/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and coverage analysis treat it identically to a hand-written generator. Use this overload when writing generators for a large number existing types would be impractical.
+/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and screening analysis treat it identically to a hand-written generator. Use this overload when writing generators for a large number existing types would be impractical.
 ///
 /// ## What Gets a Full Generator
 ///
@@ -83,7 +83,7 @@ public macro gen<T: Decodable>(
 
 /// Synthesizes a generator from a `Codable` instance by encoding it to JSON and discovering the decode pattern.
 ///
-/// Encodes the instance with `JSONEncoder`, then runs `T.init(from:)` once against the resulting JSON to discover the type's decode call pattern and build a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and coverage analysis treat it identically to a hand-written generator. Use this when you already have an instance (for example, from a factory method or test fixture) and want a generator without writing out JSON.
+/// Encodes the instance with `JSONEncoder`, then runs `T.init(from:)` once against the resulting JSON to discover the type's decode call pattern and build a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and screening analysis treat it identically to a hand-written generator. Use this when you already have an instance (for example, from a factory method or test fixture) and want a generator without writing out JSON.
 ///
 /// ## What Gets a Full Generator
 ///
@@ -119,7 +119,7 @@ public macro gen<T: Codable>(
 
 /// Synthesizes a generator from a `Decodable` type and an example JSON string.
 ///
-/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and coverage analysis treat it identically to a hand-written generator. Use this overload when writing generators for a large number of existing types would be impractical.
+/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and screening analysis treat it identically to a hand-written generator. Use this overload when writing generators for a large number of existing types would be impractical.
 ///
 /// ## What Gets a Full Generator
 ///

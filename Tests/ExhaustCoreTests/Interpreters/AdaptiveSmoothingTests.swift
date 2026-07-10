@@ -43,7 +43,7 @@ struct AdaptiveSmoothingTests {
 
         #expect(
             containsOpaqueGroup(tree),
-            "The smoothed generator's tree lost the opaque group that shields coverage analysis"
+            "The smoothed generator's tree lost the opaque group that shields screening analysis"
         )
     }
 }

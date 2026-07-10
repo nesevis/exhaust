@@ -80,7 +80,7 @@
 
         let kind: Kind
 
-        /// Sets the iteration budget for coverage, sampling, and reduction.
+        /// Sets the iteration budget for screening, sampling, and reduction.
         ///
         /// Applies to all `#exhaust` and `#execute` calls in the test that do not specify an inline `.budget(...)` setting. Inline settings take precedence.
         public static func budget(_ budget: ExhaustBudget) -> ExhaustTraitOption {

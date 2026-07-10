@@ -22,7 +22,7 @@ public enum SuppressOption: Sendable, Equatable {
 
 /// Controls test behavior for `#exhaust` property tests, passed as variadic arguments.
 public enum PropertySettings {
-    /// Controls iteration budgets for coverage and random sampling. Defaults to `.standard` (200 coverage rows, 200 random samplings).
+    /// Controls iteration budgets for screening and random sampling. Defaults to `.standard` (200 screening rows, 200 random samplings).
     case budget(ExhaustBudget)
 
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).

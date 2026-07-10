@@ -157,12 +157,12 @@ Keep this state on the spec, next to the model. A command's behaviour then depen
 
 `#execute` is always awaited, so the test function must be `async`. This holds for every execution mode, including `.sequential` specs whose commands are all synchronous.
 
-Exhaust first runs a coverage phase that systematically covers command-type orderings (every pairwise combination of command types at each position), then switches to random sampling. If a failure is found in either phase, the reducer reduces the command sequence to a minimal counterexample.
+Exhaust first runs a screening phase that systematically covers command-type orderings (every pairwise combination of command types at each position), then switches to random sampling. If a failure is found in either phase, the reducer reduces the command sequence to a minimal counterexample.
 
 The failure report shows the reduced sequence and the execution trace:
 
 ```
-State machine failure (found via coverage)
+State machine failure (found via screening)
 
 Command sequence (4 steps, reduced from 8):
   1. put(7) [ok]
@@ -177,7 +177,7 @@ Reproduce: .replay("3JK4M2-5")
 
 The replay seed lets you re-run the exact same sequence deterministically for debugging.
 
-`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the coverage budget: the estimate's budget-derived ceiling tops out at 100, with a floor of three appearances per command type. `.tasks` specs cap the estimate at 40; `.threads` specs instead default to a flat 10, because each sequence is re-run many times to reproduce the race. Longer sequences explore deeper states but take longer to test and to reduce. For `.threads` specs, linearizability checking cost explodes with longer sequences because the checker must try all valid orderings. Specs with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every coverage row and every reduction probe.
+`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the screening budget: the estimate's budget-derived ceiling tops out at 100, with a floor of three appearances per command type. `.tasks` specs cap the estimate at 40; `.threads` specs instead default to a flat 10, because each sequence is re-run many times to reproduce the race. Longer sequences explore deeper states but take longer to test and to reduce. For `.threads` specs, linearizability checking cost explodes with longer sequences because the checker must try all valid orderings. Specs with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every screening row and every reduction probe.
 
 ## Your SUT uses async/await
 
@@ -436,9 +436,9 @@ All settings are passed as variadic arguments to `#execute`:
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `.commandLimit(N)` | auto-estimated (`.threads`: 10) | Maximum commands per generated sequence. Estimated from the command domain and coverage budget; `.tasks` caps the estimate at 40, `.threads` defaults to a flat 10. |
+| `.commandLimit(N)` | auto-estimated (`.threads`: 10) | Maximum commands per generated sequence. Estimated from the command domain and screening budget; `.tasks` caps the estimate at 40, `.threads` defaults to a flat 10. |
 | `.parallelize(lanes:)` | 2 | Number of concurrent lanes (1 through 4). |
-| `.budget(.thorough)` | `.standard` | Controls coverage rows and random sampling iterations. |
+| `.budget(.thorough)` | `.standard` | Controls screening rows and random sampling iterations. |
 | `.idleTimeoutMs(ms)` | 2000 | Milliseconds before a stalled run is reported without reduction: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. |
 | `.replay("seed")` | — | Deterministic replay from a failure report seed. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
@@ -455,7 +455,7 @@ A few patterns that tend to produce effective specs:
 
 **Use `skip()` liberally for preconditions.** Don't let commands execute in states they weren't designed for. Skipping invalid operations is cheaper than debugging invariant violations caused by undefined behaviour in precondition-violating calls.
 
-**Weight common operations higher.** If `insert` happens ten times more often than `clear` in production, reflect that in the weights. Exhaust's coverage phase explores all command orderings regardless of weight, but the random sampling phase and the reducer benefit from realistic relative frequencies.
+**Weight common operations higher.** If `insert` happens ten times more often than `clear` in production, reflect that in the weights. Exhaust's screening phase explores all command orderings regardless of weight, but the random sampling phase and the reducer benefit from realistic relative frequencies.
 
 **Test the boundary between "works alone" and "breaks together."** A spec that only has one command rarely finds anything. The bugs live in the interactions: two commands that race for the same resource, three operations whose order matters, a sequence that fills a buffer to capacity and then overflows.
 

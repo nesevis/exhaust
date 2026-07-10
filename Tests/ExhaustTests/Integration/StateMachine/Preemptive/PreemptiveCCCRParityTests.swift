@@ -217,13 +217,13 @@ struct PreemptiveAllSkipParityTests {
         #expect(result == nil, "A spec where every command skips should produce no failure")
     }
 
-    @Test("100% skip rate with coverage phase")
-    func fullSkipRateWithCoveragePhase() async {
+    @Test("100% skip rate with screening phase")
+    func fullSkipRateWithScreeningPhase() async {
         let result = await #execute(
             PreemptiveAlwaysSkipParitySpec.self,
             .suppress(.issueReporting)
         )
-        #expect(result == nil, "Coverage phase should handle 100% skip rate gracefully")
+        #expect(result == nil, "Screening phase should handle 100% skip rate gracefully")
     }
 }
 

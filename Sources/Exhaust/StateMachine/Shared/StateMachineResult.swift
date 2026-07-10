@@ -30,8 +30,8 @@ public struct StateMachineResult<Spec: StateMachineSpecBase> {
 public enum StateMachineDiscoveryMethod: Equatable, Sendable, CustomStringConvertible {
     /// Found during the sequential smoke test that runs before concurrent phases.
     case smokeTest
-    /// Found during sequence covering array coverage.
-    case coverage
+    /// Found during sequence covering array screening.
+    case screening
     /// Found during random sampling.
     case randomSampling
     /// Reproduced from a saved seed.
@@ -40,7 +40,7 @@ public enum StateMachineDiscoveryMethod: Equatable, Sendable, CustomStringConver
     public var description: String {
         switch self {
             case .smokeTest: "smoke test"
-            case .coverage: "coverage"
+            case .screening: "screening"
             case .randomSampling: "random sampling"
             case .replay: "replay"
         }
@@ -48,11 +48,11 @@ public enum StateMachineDiscoveryMethod: Equatable, Sendable, CustomStringConver
 
     /// Encodes a replay seed string for reproducing a failure found by this discovery method.
     ///
-    /// Coverage results encode the row number as `U-{row}` (for example, `U-3` replays the third coverage row). Smoke tests encode a fixed seed. Random sampling and replay produce the standard seed-iteration format, returning `nil` when no seed is available.
+    /// Screening results encode the row number as `U-{row}` (for example, `U-3` replays the third screening row). Smoke tests encode a fixed seed. Random sampling and replay produce the standard seed-iteration format, returning `nil` when no seed is available.
     func encodeReplaySeed(seed: UInt64?, iteration: Int) -> String? {
         switch self {
-            case .coverage:
-                ReplaySeed.Resolved.encodeCoverageIteration(iteration)
+            case .screening:
+                ReplaySeed.Resolved.encodeScreeningIteration(iteration)
             case .smokeTest:
                 ReplaySeed.Resolved.sampling(seed: 0, iteration: 1).encoded
             case .randomSampling, .replay:
@@ -62,10 +62,10 @@ public enum StateMachineDiscoveryMethod: Equatable, Sendable, CustomStringConver
 
     /// Filters synthetic seeds to `nil`, passing through only seeds that enable deterministic replay.
     ///
-    /// Coverage and smoke-test candidates carry synthetic seeds (row numbers or hardcoded zero) that have no PRNG replay value.
+    /// Screening and smoke-test candidates carry synthetic seeds (row numbers or hardcoded zero) that have no PRNG replay value.
     func resultSeed(_ rawSeed: UInt64?) -> UInt64? {
         switch self {
-            case .coverage, .smokeTest: nil
+            case .screening, .smokeTest: nil
             case .randomSampling, .replay: rawSeed
         }
     }

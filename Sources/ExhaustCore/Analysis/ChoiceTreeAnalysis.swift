@@ -19,7 +19,7 @@
 ///
 /// ## Parameter Classification
 ///
-/// Six ``CoverageParameterKind`` cases:
+/// Six ``ScreeningParameterKind`` cases:
 /// - `.enumerableChooseBits`: domain size is 256 or smaller — enumerates all values.
 /// - `.chooseBits`: domain size exceeds 256 — synthesizes problematic values {min, min+1, midpoint, max-1, max, zero if in range}. Floats and dates have type-specific problematic sets.
 /// - `.compositeSequence`: a single parameter encoding all valid `(length, [element problematic values])` configurations for a sequence. The domain enumerates empty (if allowed), single-element, and optionally two-element problematic combinations. Element analysis is capped at two slots.
@@ -30,7 +30,7 @@
 ///
 /// Every generator that contains at least one random choice point (a `chooseBits`, `pick`, or `sequence`) is analyzable. The ``analyze(_:)`` method returns `nil` only when zero parameters are extracted — that is, the generator is purely deterministic (for example `Gen.just(value)`).
 ///
-/// - SeeAlso: ``BalancedCoveringArrayGenerator``, ``CoverageRunner``, ``ProblematicValues``
+/// - SeeAlso: ``BalancedCoveringArrayGenerator``, ``ScreeningRunner``, ``ProblematicValues``
 package enum ChoiceTreeAnalysis {
     /// The outcome of analyzing a generator's choice tree structure.
     public enum AnalysisResult {
@@ -55,15 +55,15 @@ package enum ChoiceTreeAnalysis {
     /// Tries multiple seeds to maximize element coverage for sequences.
     ///
     /// - Parameters:
-    ///   - expandSequencePairs: When `true`, sequence coverage models include `[X, Y][X, Y]` two-element configurations (N^2 domain entries). When `false`, only `[]` and `[X]` are modeled. ``CoverageRunner`` uses this to retry with a smaller domain when the full model exceeds the coverage budget.
-    ///   - compositeThreshold: Composite sequence parameters whose domain exceeds this value after problematic-value conversion are treated as opaque. Defaults to ``enumerableDomainThreshold``. Pass the coverage budget to prevent sequences of multi-parameter elements from inflating the covering array domain beyond what the budget can cover.
+    ///   - expandSequencePairs: When `true`, sequence coverage models include `[X, Y][X, Y]` two-element configurations (N^2 domain entries). When `false`, only `[]` and `[X]` are modeled. ``ScreeningRunner`` uses this to retry with a smaller domain when the full model exceeds the screening budget.
+    ///   - compositeThreshold: Composite sequence parameters whose domain exceeds this value after problematic-value conversion are treated as opaque. Defaults to ``enumerableDomainThreshold``. Pass the screening budget to prevent sequences of multi-parameter elements from inflating the covering array domain beyond what the budget can cover.
     public static func analyze(
         _ gen: Generator<some Any>,
         expandSequencePairs: Bool = true,
         compositeThreshold: UInt64? = nil
     ) -> AnalysisResult? {
         let effectiveCompositeThreshold = compositeThreshold ?? enumerableDomainThreshold
-        var bestParameters: [CoverageParameter]?
+        var bestParameters: [ScreeningParameter]?
         var bestTree: ChoiceTree?
 
         for seed in seeds {
@@ -80,7 +80,7 @@ package enum ChoiceTreeAnalysis {
                 return nil
             }
 
-            var parameters: [CoverageParameter] = []
+            var parameters: [ScreeningParameter] = []
             guard walkTree(tree, expandSequencePairs: expandSequencePairs, compositeThreshold: effectiveCompositeThreshold, parameters: &parameters) else {
                 return nil
             }
@@ -167,7 +167,7 @@ package enum ChoiceTreeAnalysis {
         _ tree: ChoiceTree,
         expandSequencePairs: Bool,
         compositeThreshold: UInt64,
-        parameters: inout [CoverageParameter]
+        parameters: inout [ScreeningParameter]
     ) -> Bool {
         switch tree {
             case let .choice(value, metadata):
@@ -240,7 +240,7 @@ package enum ChoiceTreeAnalysis {
     private static func walkChoice(
         value: ChoiceValue,
         metadata: ChoiceMetadata,
-        parameters: inout [CoverageParameter]
+        parameters: inout [ScreeningParameter]
     ) -> Bool {
         // `isRangeExplicit: false` is accepted because ``analyze(_:)`` runs VACTI with `sizeOverride: 100`, at which point the stored range from a size-scaled `chooseDerived` equals the user-declared range.
         guard let range = metadata.validRange else {
@@ -254,7 +254,7 @@ package enum ChoiceTreeAnalysis {
 
         if isSmall {
             let count = domainSize + 1
-            let param = CoverageParameter(
+            let param = ScreeningParameter(
                 index: parameters.count,
                 values: Array(range.lowerBound ... range.upperBound),
                 domainSize: count,
@@ -265,7 +265,7 @@ package enum ChoiceTreeAnalysis {
             let problematicValues = ProblematicValues.computeProblematicValues(
                 min: range.lowerBound, max: range.upperBound, tag: typeTag, payload: metadata.typeTagPayload
             )
-            let param = CoverageParameter(
+            let param = ScreeningParameter(
                 index: parameters.count,
                 values: problematicValues,
                 domainSize: UInt64(problematicValues.count),
@@ -290,7 +290,7 @@ package enum ChoiceTreeAnalysis {
         _ children: [ChoiceTree],
         expandSequencePairs: Bool,
         compositeThreshold: UInt64,
-        parameters: inout [CoverageParameter]
+        parameters: inout [ScreeningParameter]
     ) -> Bool {
         if isPick(children) {
             return walkPick(children, parameters: &parameters)
@@ -312,7 +312,7 @@ package enum ChoiceTreeAnalysis {
 
     private static func walkPick(
         _ children: [ChoiceTree],
-        parameters: inout [CoverageParameter]
+        parameters: inout [ScreeningParameter]
     ) -> Bool {
         let domainSize = UInt64(children.count)
         guard domainSize <= enumerableDomainThreshold else { return false }
@@ -334,7 +334,7 @@ package enum ChoiceTreeAnalysis {
             ))
         }
 
-        let param = CoverageParameter(
+        let param = ScreeningParameter(
             index: parameters.count,
             values: Array(0 ..< domainSize),
             domainSize: domainSize,
@@ -355,7 +355,7 @@ package enum ChoiceTreeAnalysis {
         metadata: ChoiceMetadata,
         expandSequencePairs: Bool,
         compositeThreshold: UInt64,
-        parameters: inout [CoverageParameter]
+        parameters: inout [ScreeningParameter]
     ) -> Bool {
         guard let lengthRange = metadata.validRange else {
             return false
@@ -363,9 +363,9 @@ package enum ChoiceTreeAnalysis {
 
         let clampedUpperBound = lengthRange.upperBound > UInt64(Int.max) ? Int.max : Int(lengthRange.upperBound)
         let maxElementSlots = min(2, clampedUpperBound, elements.count)
-        var elementSlotParams: [[CoverageParameter]] = []
+        var elementSlotParams: [[ScreeningParameter]] = []
         for elementIndex in 0 ..< maxElementSlots {
-            var slotParams: [CoverageParameter] = []
+            var slotParams: [ScreeningParameter] = []
             guard walkElementTree(
                 elements[elementIndex],
                 elementIndex: elementIndex,
@@ -383,7 +383,7 @@ package enum ChoiceTreeAnalysis {
             .sorted()
 
         func buildSlots(
-            from elementSlotParams: [[CoverageParameter]],
+            from elementSlotParams: [[ScreeningParameter]],
             halvedPairs: Bool
         ) -> (slots: [SequenceLengthSlot], compositeSize: UInt64) {
             var slots: [SequenceLengthSlot] = []
@@ -433,7 +433,7 @@ package enum ChoiceTreeAnalysis {
                         let problematicValues = ProblematicValues.computeProblematicValues(
                             min: range.lowerBound, max: range.upperBound, tag: tag
                         )
-                        elementSlotParams[slotIndex][paramIndex] = CoverageParameter(
+                        elementSlotParams[slotIndex][paramIndex] = ScreeningParameter(
                             index: param.index,
                             values: problematicValues,
                             domainSize: UInt64(problematicValues.count),
@@ -458,7 +458,7 @@ package enum ChoiceTreeAnalysis {
             (slots, compositeSize) = buildSlots(from: elementSlotParams, halvedPairs: true)
         }
 
-        let param = CoverageParameter(
+        let param = ScreeningParameter(
             index: parameters.count,
             values: Array(0 ..< compositeSize),
             domainSize: compositeSize,
@@ -476,7 +476,7 @@ package enum ChoiceTreeAnalysis {
     // MARK: - Element Pair Halving
 
     /// Splits each element slot's problematic values between positions: slot 0 gets the first half, slot 1 gets the second half.
-    static func halveElementSlotParams(_ params: [[CoverageParameter]]) -> [[CoverageParameter]] {
+    static func halveElementSlotParams(_ params: [[ScreeningParameter]]) -> [[ScreeningParameter]] {
         guard params.count >= 2 else { return params }
         var result = params
         let pairCount = min(result[0].count, result[1].count)
@@ -498,7 +498,7 @@ package enum ChoiceTreeAnalysis {
     private static func walkElementTree(
         _ tree: ChoiceTree,
         elementIndex: Int,
-        parameters: inout [CoverageParameter]
+        parameters: inout [ScreeningParameter]
     ) -> Bool {
         switch tree {
             case let .choice(value, metadata):
@@ -559,7 +559,7 @@ package enum ChoiceTreeAnalysis {
         value: ChoiceValue,
         metadata: ChoiceMetadata,
         elementIndex: Int,
-        parameters: inout [CoverageParameter]
+        parameters: inout [ScreeningParameter]
     ) -> Bool {
         // See ``walkChoice(value:metadata:parameters:)`` for why `isRangeExplicit: false` is accepted here.
         guard let range = metadata.validRange else {
@@ -572,7 +572,7 @@ package enum ChoiceTreeAnalysis {
 
         if isSmall {
             let count = domainSize + 1
-            let param = CoverageParameter(
+            let param = ScreeningParameter(
                 index: parameters.count,
                 values: Array(range.lowerBound ... range.upperBound),
                 domainSize: count,
@@ -583,7 +583,7 @@ package enum ChoiceTreeAnalysis {
             let problematicValues = ProblematicValues.computeProblematicValues(
                 min: range.lowerBound, max: range.upperBound, tag: typeTag, payload: metadata.typeTagPayload
             )
-            let param = CoverageParameter(
+            let param = ScreeningParameter(
                 index: parameters.count,
                 values: problematicValues,
                 domainSize: UInt64(problematicValues.count),

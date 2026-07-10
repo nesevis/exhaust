@@ -44,7 +44,7 @@ func testAsyncPropertyWorks() async {
 }
 ```
 
-All closure shapes go through the same coverage, sampling, and reduction pipeline as with Swift Testing.
+All closure shapes go through the same screening, sampling, and reduction pipeline as with Swift Testing.
 
 ### Issue reporting
 

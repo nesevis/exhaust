@@ -59,7 +59,7 @@ struct BuggyCounterTests {
             await #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(10),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
             )
         )
@@ -67,72 +67,72 @@ struct BuggyCounterTests {
         #expect(result.seed != nil, "Sampling failure should carry a PRNG seed")
     }
 
-    @Test("Sequential spec SCA coverage failure carries U-prefixed replay seed")
-    func sequentialStateMachineSCACoverageFailureCarriesUPrefixedReplaySeed() async throws {
-        // A sampling-free budget forces the coverage source, so the U-prefix assertion always runs.
+    @Test("Sequential spec SCA screening failure carries U-prefixed replay seed")
+    func sequentialStateMachineSCAScreeningFailureCarriesUPrefixedReplaySeed() async throws {
+        // A sampling-free budget forces the screening source, so the U-prefix assertion always runs.
         let result = try #require(
             await #execute(
                 BuggyCounterSpec.self,
                 .commandLimit(4),
-                .budget(.custom(coverage: 200, sampling: 0)),
+                .budget(.custom(screening: 200, sampling: 0)),
                 .suppress(.issueReporting)
             )
         )
-        #expect(result.discoveryMethod == .coverage)
+        #expect(result.discoveryMethod == .screening)
         let replaySeed = try #require(result.replaySeed)
-        #expect(replaySeed.hasPrefix("U"), "SCA coverage replay seed should have U prefix")
+        #expect(replaySeed.hasPrefix("U"), "SCA screening replay seed should have U prefix")
     }
 }
 
-@Suite("SCA reduction coverage", .serialized, .tags(.stateMachine))
-struct SCAReductionCoverageTests {
-    @Test("SCA coverage exercises the reduction path")
-    func scaCoverageExercisesReductionPath() async throws {
+@Suite("SCA reduction screening", .serialized, .tags(.stateMachine))
+struct SCAReductionScreeningTests {
+    @Test("SCA screening exercises the reduction path")
+    func scaScreeningExercisesReductionPath() async throws {
         let result = try #require(
             await #execute(
                 PairwiseBugSpec.self,
                 .commandLimit(3),
-                .budget(.custom(coverage: 200, sampling: 0)),
+                .budget(.custom(screening: 200, sampling: 0)),
                 .suppress(.issueReporting)
             )
         )
-        #expect(result.discoveryMethod == .coverage)
+        #expect(result.discoveryMethod == .screening)
         #expect(result.trace.isEmpty == false)
     }
 
-    @Test("SCA coverage report counts reduction property invocations, not materializations")
-    func scaCoverageReportCountsReductionPropertyInvocations() async throws {
+    @Test("SCA screening report counts reduction property invocations, not materializations")
+    func scaScreeningReportCountsReductionPropertyInvocations() async throws {
         var capturedReport: ExhaustReport?
         let result = try #require(
             await #execute(
                 PairwiseBugSpec.self,
                 .commandLimit(3),
-                .budget(.custom(coverage: 200, sampling: 0)),
+                .budget(.custom(screening: 200, sampling: 0)),
                 .suppress(.issueReporting),
                 .onReport { capturedReport = $0 }
             )
         )
-        #expect(result.discoveryMethod == .coverage)
+        #expect(result.discoveryMethod == .screening)
         let report = try #require(capturedReport)
-        #expect(report.coverageInvocations > 0)
+        #expect(report.screeningInvocations > 0)
         #expect(report.randomSamplingInvocations == 0)
         #expect(report.totalMaterializations >= report.reductionInvocations)
-        #expect(report.propertyInvocations == report.coverageInvocations + report.reductionInvocations)
+        #expect(report.propertyInvocations == report.screeningInvocations + report.reductionInvocations)
     }
 
-    @Test("SCA coverage report includes non-zero reduction timing")
-    func scaCoverageReportIncludesReductionTiming() async throws {
+    @Test("SCA screening report includes non-zero reduction timing")
+    func scaScreeningReportIncludesReductionTiming() async throws {
         var capturedReport: ExhaustReport?
         let result = try #require(
             await #execute(
                 PairwiseBugSpec.self,
                 .commandLimit(3),
-                .budget(.custom(coverage: 200, sampling: 0)),
+                .budget(.custom(screening: 200, sampling: 0)),
                 .suppress(.issueReporting),
                 .onReport { capturedReport = $0 }
             )
         )
-        #expect(result.discoveryMethod == .coverage)
+        #expect(result.discoveryMethod == .screening)
         let report = try #require(capturedReport)
         #expect(report.reductionMilliseconds >= 0)
         #expect(report.totalMilliseconds >= report.reductionMilliseconds)

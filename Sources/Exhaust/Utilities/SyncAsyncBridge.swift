@@ -112,7 +112,7 @@ extension __ExhaustRuntime {
 
     /// Acquires `lanes` from the process-global ``LaneGate``, performs the GCD hop, and releases on the way out.
     ///
-    /// The reservation is held for the whole run: the entire discovery pipeline (regression replay, coverage, sampling, reduction) runs synchronously inside `work`, so it never re-enters the gate. Excess runs suspend at the gate as parked continuations holding no thread, bounding aggregate GCD lane demand to ``LaneGate/limit`` regardless of how many test functions Swift Testing runs at once. Use ``LaneReservation`` for the lane count.
+    /// The reservation is held for the whole run: the entire discovery pipeline (regression replay, screening, sampling, reduction) runs synchronously inside `work`, so it never re-enters the gate. Excess runs suspend at the gate as parked continuations holding no thread, bounding aggregate GCD lane demand to ``LaneGate/limit`` regardless of how many test functions Swift Testing runs at once. Use ``LaneReservation`` for the lane count.
     static func dispatchToGCD<Result>(
         reserving lanes: Int,
         _ work: @escaping () -> Result

@@ -21,12 +21,12 @@ struct BindBoundMaterializationProbe {
     /// most interpreters and debug builds allocate all cases in each frame, so depth-100 replay
     /// overflows the stack. Release builds handle it. Disabled rather than withKnownIssue because a
     /// stack overflow kills the test process instead of recording an issue.
-    @Test("Depth 100 with coverage — overflows the debug-mode stack in coverage replay", .disabled("Debug-only stack overflow (fat ReflectiveOperation switch frames); passes in release"))
-    func depth100WithCoverage() {
+    @Test("Depth 100 with screening — overflows the debug-mode stack in screening replay", .disabled("Debug-only stack overflow (fat ReflectiveOperation switch frames); passes in release"))
+    func depth100WithScreening() {
         let gen = #gen(.int(in: 0 ... 100))
             .bind { depth in Self.fullExpAtDepth(depth) }
         // Completion is the assertion: the property always passes, so reaching this line means no overflow.
-        let result = #exhaust(gen, .suppress(.issueReporting), .budget(.custom(coverage: 200, sampling: 1))) { _ in true }
+        let result = #exhaust(gen, .suppress(.issueReporting), .budget(.custom(screening: 200, sampling: 1))) { _ in true }
         #expect(result == nil, "Property always passes, so no counterexample can exist")
     }
 

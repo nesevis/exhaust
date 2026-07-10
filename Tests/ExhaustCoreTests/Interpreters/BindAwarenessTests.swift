@@ -167,10 +167,10 @@ struct BindAwarenessTests {
         #expect(foundBind, "Expected .bind node in VACTI output for bound() generator")
     }
 
-    // MARK: - Coverage analysis treats bound subtree as opaque
+    // MARK: - Screening analysis treats bound subtree as opaque
 
     @Test("ChoiceTreeAnalysis produces fewer parameters for bind-dependent generators")
-    func coverageAnalysisTreatsBoundAsOpaque() {
+    func screeningAnalysisTreatsBoundAsOpaque() {
         // Construct a bind generator: inner picks from 0...3, bound depends on inner
         let gen: Generator<[Int]> = Gen.choose(in: 0 ... 3 as ClosedRange<Int>)._bound(
             forward: { n in

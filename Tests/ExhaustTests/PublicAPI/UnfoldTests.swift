@@ -89,7 +89,7 @@ struct UnfoldTests {
         let result = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 50))
+            .budget(.custom(screening: 0, sampling: 50))
         ) { list in
             list.count <= 5
         }
@@ -112,7 +112,7 @@ struct UnfoldTests {
         let result = #exhaust(
             gen,
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 100))
+            .budget(.custom(screening: 0, sampling: 100))
         ) { list in
             list.count < 3
         }

@@ -106,15 +106,15 @@ public extension __ExhaustRuntime {
             throw GeneratorError.invalidReplaySeed("\(seed)")
         }
         switch resolved {
-            case let .coverage(row):
+            case let .screening(row):
                 reportError(
-                    "Coverage replay seeds (U-prefixed) cannot be replayed by #example, which has no covering array. Use #exhaust(gen, .replay(...)) instead.",
+                    "Screening replay seeds (U-prefixed) cannot be replayed by #example, which has no covering array. Use #exhaust(gen, .replay(...)) instead.",
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
                     column: column
                 )
-                throw GeneratorError.invalidReplaySeed("coverage row \(row) is not replayable by #example")
+                throw GeneratorError.invalidReplaySeed("screening row \(row) is not replayable by #example")
             case let .sampling(numericSeed, iteration):
                 if let iteration, iteration < 1 {
                     reportError("Invalid replay seed iteration: \(iteration)", fileID: fileID, filePath: filePath, line: line, column: column)

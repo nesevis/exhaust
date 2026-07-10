@@ -16,7 +16,7 @@ Describe what your code should do, and Exhaust checks that claim across hundreds
 }
 ```
 
-Exhaust builds generators with the `#gen` macro. Each generator is an inspectable data structure that Exhaust can run forward to produce values, replay for deterministic reproduction, and run backward to reconstruct a known value's choices. Reduction, coverage of problematic values, and filter optimisation all follow from inspection.
+Exhaust builds generators with the `#gen` macro. Each generator is an inspectable data structure that Exhaust can run forward to produce values, replay for deterministic reproduction, and run backward to reconstruct a known value's choices. Reduction, screening of problematic values, and filter optimisation all follow from inspection.
 
 ## Topics
 

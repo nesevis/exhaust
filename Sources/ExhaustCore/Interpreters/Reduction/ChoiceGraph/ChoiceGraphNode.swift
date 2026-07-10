@@ -211,7 +211,7 @@ package struct BindMetadata {
 
 /// Metadata for a ``ChoiceGraphNodeKind/zip(_:)`` parallel composition node.
 package struct ZipMetadata {
-    /// When true, coverage analysis skips this subtree.
+    /// When true, screening analysis skips this subtree.
     package let isOpaque: Bool
 }
 

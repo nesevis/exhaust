@@ -32,7 +32,7 @@ struct ParserShrinkingChallenge {
         let output = try #require(
             #exhaust(
                 ParserFixture.langGen,
-                .budget(.custom(coverage: 0, sampling: 200)), // coverage takes a long time
+                .budget(.custom(screening: 0, sampling: 200)), // screening takes a long time
                 .replay(1337),
                 .log(.debug),
                 .suppress(.issueReporting),

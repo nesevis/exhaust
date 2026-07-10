@@ -5,7 +5,7 @@
 
 /// Converts covering array rows into ``ChoiceTree`` structures for large-domain profile replay.
 package enum LargeDomainCoveringArrayReplay {
-    /// Builds a ``ChoiceTree`` from a covering array row using coverage parameter values.
+    /// Builds a ``ChoiceTree`` from a covering array row using screening parameter values.
     ///
     /// When the profile contains an original tree (from VACTI), walks the tree as a template and substitutes parameter values at matching positions. This preserves structural nodes like `.bind` that the flat parameter list doesn't capture. Falls back to flat construction when no original tree is available.
     public static func buildTree(
@@ -275,7 +275,7 @@ package enum LargeDomainCoveringArrayReplay {
     ///
     /// Looks up the concrete bit pattern at `valueIndex` in the parameter's problematic value table, then wraps it in a `.choice` node with the original range metadata so the materializer can validate it.
     private static func buildChooseBitsTree(
-        param: CoverageParameter,
+        param: ScreeningParameter,
         valueIndex: UInt64,
         range: ClosedRange<UInt64>,
         tag: TypeTag
@@ -288,10 +288,10 @@ package enum LargeDomainCoveringArrayReplay {
     }
 
     private static func buildSequenceTree(
-        lengthParam: CoverageParameter,
+        lengthParam: ScreeningParameter,
         lengthValueIndex: UInt64,
         lengthRange: ClosedRange<UInt64>,
-        remainingParams: [CoverageParameter],
+        remainingParams: [ScreeningParameter],
         remainingValues: [UInt64]
     ) -> (tree: ChoiceTree, consumedParams: Int)? {
         guard Int(lengthValueIndex) < lengthParam.values.count else { return nil }
@@ -330,7 +330,7 @@ package enum LargeDomainCoveringArrayReplay {
     }
 
     private static func buildPickTree(
-        param _: CoverageParameter,
+        param _: ScreeningParameter,
         valueIndex: UInt64,
         choices: ContiguousArray<ReflectiveOperation.PickTuple>
     ) -> ChoiceTree? {
@@ -368,7 +368,7 @@ package enum LargeDomainCoveringArrayReplay {
     /// Decomposes a local index within a length slot into per-parameter value indices via mixed-radix arithmetic.
     private static func decomposeCompositeIndex(
         _ localIndex: UInt64,
-        activeSlotParams: [[CoverageParameter]]
+        activeSlotParams: [[ScreeningParameter]]
     ) -> [UInt64] {
         let flatParams = activeSlotParams.flatMap(\.self)
         guard flatParams.isEmpty == false else { return [] }
@@ -387,9 +387,9 @@ package enum LargeDomainCoveringArrayReplay {
     }
 }
 
-// MARK: - CoverageParameter tag helper
+// MARK: - ScreeningParameter tag helper
 
-extension CoverageParameter {
+extension ScreeningParameter {
     var tag: TypeTag {
         switch kind {
             case let .chooseBits(_, tag), let .enumerableChooseBits(_, tag):

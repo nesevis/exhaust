@@ -76,17 +76,17 @@ You can also throw errors directly. Any thrown error counts as a failure:
 One error type is special. Throwing `PropertySkip` skips the current invocation: it counts as neither pass nor failure. Use it when a generated value cannot meaningfully exercise the property, for example because an environmental resource is unavailable. Prefer encoding the condition in the generator or a `.filter` when you can, because a skip discards the iteration after its budget was spent. Skips are tallied in the run's `ExhaustReport`; a run that skips nearly every invocation reports a warning, and a run whose every invocation was skipped fails, because a test that asserts nothing is not testing anything. (`XCTSkip` behaves identically on platforms where XCTest is available.)
 
 > Tip:
-> The property closure may be called thousands of times during coverage, sampling, and reduction. Keep it as fast as possible: avoid disk I/O, network calls, and expensive setup.
+> The property closure may be called thousands of times during screening, sampling, and reduction. Keep it as fast as possible: avoid disk I/O, network calls, and expensive setup.
 
 ## Settings
 
 | Setting | Default | Effect |
 |---|---|---|
-| `.budget(.quick)` | — | 100 coverage rows, 100 random samples. |
-| `.budget(.standard)` | default | 200 coverage rows, 200 random samples. |
-| `.budget(.thorough)` | — | 600 coverage rows, 600 random samples. |
-| `.budget(.extensive)` | — | 2,000 coverage rows, 2,000 random samples. |
-| `.budget(.custom(...))` | — | Explicit values for coverage and sampling budgets. |
+| `.budget(.quick)` | — | 100 screening rows, 100 random samples. |
+| `.budget(.standard)` | default | 200 screening rows, 200 random samples. |
+| `.budget(.thorough)` | — | 600 screening rows, 600 random samples. |
+| `.budget(.extensive)` | — | 2,000 screening rows, 2,000 random samples. |
+| `.budget(.custom(...))` | — | Explicit values for screening and sampling budgets. |
 | `.budget(.thorough * 3)` | — | Scale any preset with `*` or `/`. |
 | `.replay(seed)` | — | Deterministic reproduction from a failure report seed (for example `.replay("8DZR69-7")`). Also accepts a raw `UInt64`. |
 | `reflecting: value` | `nil` | Skip generation; reflect the given value and reduce it (see <doc:BuildingGenerators#Reflecting-known-values>). Passed as a named parameter, not a setting. |
@@ -98,7 +98,7 @@ One error type is special. Throwing `PropertySkip` skips the current invocation:
 | `.log(.debug)` | `.error` | Sets the minimum log level for this test run. Only messages at or above the level are emitted. |
 | `.parallelize(lanes:)` | off | Splits the random sampling phase across N parallel GCD lanes. Lanes race, and the first failure cancels the others, so which counterexample is reported can vary between runs. Replaying a reported seed runs single-lane and is deterministic. Has no effect with `.replay`. |
 
-## Coverage of problematic values
+## Screening of problematic values
 
 Testing happens in two phases. Before random sampling begins, Exhaust systematically tests problematic values and parameter interactions. Bugs cluster around specific values: off-by-one errors at range edges, sign confusion at zero crossings, special-case handling of NaN and empty collections, timezone transitions that shift timestamps by an hour. Random sampling can take thousands of iterations to reach these values by chance. Exhaust tests them deliberately.
 
@@ -110,13 +110,13 @@ Empirical studies find that around 70% of reported defects are triggered by one 
 
 A function that overflows at `Int.max + 1` fails only when one parameter is at its maximum and the other is at least 1. Neither value alone triggers the bug. The covering array guarantees the pair is tested.
 
-Exhaust defaults to pairwise (t=2) coverage, but will go up to t=4 for smaller domains where the higher-strength arrays fit within the coverage budget. The coverage rows in the budget table control how many of these problematic-value combinations Exhaust tests before moving to random sampling.
+Exhaust defaults to pairwise (t=2) coverage, but will go up to t=4 for smaller domains where the higher-strength arrays fit within the screening budget. The screening rows in the budget table control how many of these problematic-value combinations Exhaust tests before moving to random sampling.
 
-In the rare case where the generator's total domain is small enough to fit within the coverage budget, Exhaust enumerates it exhaustively and skips random sampling entirely.
+In the rare case where the generator's total domain is small enough to fit within the screening budget, Exhaust enumerates it exhaustively and skips random sampling entirely.
 
 ## Run statistics
 
-The `.onReport` setting delivers an `ExhaustReport` with timing and invocation data for each phase of the test run. It includes data like per-phase wall-clock times (coverage, generation, reduction, reflection), and total property invocations. Use it to understand where time is spent and whether coverage or reduction budgets need tuning.
+The `.onReport` setting delivers an `ExhaustReport` with timing and invocation data for each phase of the test run. It includes data like per-phase wall-clock times (screening, generation, reduction, reflection), and total property invocations. Use it to understand where time is spent and whether screening or reduction budgets need tuning.
 
 ```swift
 #exhaust(

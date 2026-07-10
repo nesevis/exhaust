@@ -12,7 +12,7 @@ struct PointlessRunAndSkipTests {
         withKnownIssue {
             #exhaust(
                 #gen(.int(in: 0 ... 100)),
-                .budget(.custom(coverage: 0, sampling: 0)),
+                .budget(.custom(screening: 0, sampling: 0)),
                 .onReport { report in
                     invocations = report.propertyInvocations
                 }
@@ -93,7 +93,7 @@ struct PointlessRunAndSkipTests {
         await withKnownIssue {
             _ = await #execute(
                 PointlessRunStackSpec.self,
-                .budget(.custom(coverage: 0, sampling: 0))
+                .budget(.custom(screening: 0, sampling: 0))
             )
         }
     }
@@ -108,7 +108,7 @@ struct UniqueExhaustionTruncationTests {
         withKnownIssue {
             #exhaust(
                 #gen(.bool()).unique(),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .onReport { report in
                     truncated = report.runTruncatedByUniqueExhaustion
                     invocations = report.propertyInvocations
@@ -121,22 +121,22 @@ struct UniqueExhaustionTruncationTests {
         #expect(invocations < 200)
     }
 
-    @Test("Small domain with coverage enabled passes exhaustively, not by truncation")
-    func smallDomainCoverageIsExhaustive() {
+    @Test("Small domain with screening enabled passes exhaustively, not by truncation")
+    func smallDomainScreeningIsExhaustive() {
         var truncated = true
-        var coverage = -1
+        var screening = -1
         #exhaust(
             #gen(.bool()).unique(),
             .budget(.standard),
             .onReport { report in
                 truncated = report.runTruncatedByUniqueExhaustion
-                coverage = report.coverageInvocations
+                screening = report.screeningInvocations
             }
         ) { _ in
             true
         }
         #expect(truncated == false)
-        #expect(coverage == 2)
+        #expect(screening == 2)
     }
 
     @Test("Unique over a large domain does not truncate")
@@ -238,7 +238,7 @@ struct WeightedOneOfZeroWeightTests {
     func zeroWeightEntriesAreNeverDrawn() {
         let result = #exhaust(
             #gen(.oneOf(weighted: (0, .just(1)), (1, .just(2)), (1, .just(3)))),
-            .budget(.custom(coverage: 0, sampling: 100)),
+            .budget(.custom(screening: 0, sampling: 100)),
             .suppress(.issueReporting)
         ) { value in
             value != 1
@@ -250,7 +250,7 @@ struct WeightedOneOfZeroWeightTests {
     func singleSurvivorIsReturnedDirectly() {
         let result = #exhaust(
             #gen(.oneOf(weighted: (0, .just(1)), (3, .just(2)))),
-            .budget(.custom(coverage: 0, sampling: 50)),
+            .budget(.custom(screening: 0, sampling: 50)),
             .suppress(.issueReporting)
         ) { value in
             value == 2

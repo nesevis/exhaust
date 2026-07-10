@@ -27,7 +27,7 @@ struct MultiInvariantTests {
         let result = await #execute(
             PassingFiveInvariantSpec.self,
             .commandLimit(6),
-            .budget(.custom(coverage: 100, sampling: 50)),
+            .budget(.custom(screening: 100, sampling: 50)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "All five invariants should pass")

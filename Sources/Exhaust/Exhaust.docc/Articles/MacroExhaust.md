@@ -4,7 +4,7 @@ Test a property across generated values and report a minimal counterexample on f
 
 ## Overview
 
-`#exhaust` runs a property closure against hundreds of generated inputs in two phases: coverage of problematic values (pairwise), then random sampling. The first failure is reduced to a minimal counterexample.
+`#exhaust` runs a property closure against hundreds of generated inputs in two phases: screening of problematic values (pairwise), then random sampling. The first failure is reduced to a minimal counterexample.
 
 ```swift
 #exhaust(personGen, .budget(.thorough)) { person in
@@ -17,7 +17,7 @@ The property closure returns `Bool` (true means pass) or `Void` with `#expect`/`
 | Parameter | Description |
 |---|---|
 | `gen` | The generator to draw inputs from. |
-| `reflecting:` | A concrete value to reduce instead of searching. Skips coverage and sampling. |
+| `reflecting:` | A concrete value to reduce instead of searching. Skips screening and sampling. |
 | `settings` | Variadic ``PropertySettings`` values: budget, replay, parallelism, suppression. |
 | `property` | Closure checked against each generated value. |
 

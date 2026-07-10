@@ -9,7 +9,7 @@ struct ExhaustReportTests {
         #exhaust(
             #gen(.int(in: 0 ... 10)),
             .onReport { capturedReport = $0 },
-            .budget(.custom(coverage: 200, sampling: 50))
+            .budget(.custom(screening: 200, sampling: 50))
         ) { value in
             value >= 0
         }
@@ -27,7 +27,7 @@ struct ExhaustReportTests {
             #gen(.int(in: 0 ... 1000)),
             .onReport { capturedReport = $0 },
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 200))
+            .budget(.custom(screening: 0, sampling: 200))
         ) { value in
             value < 50
         }
@@ -59,20 +59,20 @@ struct ExhaustReportTests {
         #expect(report.propertyInvocations > 0)
     }
 
-    @Test("Report property invocations include coverage and random phases")
-    func reportPropertyInvocationsIncludeCoverageAndRandomPhases() throws {
+    @Test("Report property invocations include screening and random phases")
+    func reportPropertyInvocationsIncludeScreeningAndRandomPhases() throws {
         var capturedReport: ExhaustReport?
         #exhaust(
             #gen(.int(in: 0 ... 10)),
             .onReport { capturedReport = $0 },
-            .budget(.custom(coverage: 100, sampling: 50))
+            .budget(.custom(screening: 100, sampling: 50))
         ) { value in
             value >= 0
         }
         let report = try #require(capturedReport)
-        // Coverage phase should run (small finite domain) plus random phase
+        // Screening phase should run (small finite domain) plus random phase
         #expect(report.propertyInvocations > 0)
-        #expect(report.coverageMilliseconds >= 0)
+        #expect(report.screeningMilliseconds >= 0)
         #expect(report.generationMilliseconds >= 0)
     }
 

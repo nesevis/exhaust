@@ -26,12 +26,12 @@ package indirect enum ChoiceTree: Hashable, Equatable, Sendable { // NOTE: The e
     /// A variable-length collection. Flattened as open-marker, then one subtree per element, then close-marker. The length and the element values are independently reducible: structural encoders can delete elements, and value encoders can minimize within them.
     case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
 
-    /// A branching decision. The `fingerprint` identifies the pick site's recursive template: the ``ChoiceGraph`` uses matching fingerprints to build self-similarity edges, enabling substitution of one branch's subtree into another. Inactive (unselected) branches retain full structural metadata so coverage analysis can reason about alternatives without regenerating.
+    /// A branching decision. The `fingerprint` identifies the pick site's recursive template: the ``ChoiceGraph`` uses matching fingerprints to build self-similarity edges, enabling substitution of one branch's subtree into another. Inactive (unselected) branches retain full structural metadata so screening analysis can reason about alternatives without regenerating.
     case branch(BranchData)
 
     /// Represents a nested group of choices that usually represent objects or tuples.
     ///
-    /// When `isOpaque` is `true`, coverage analysis skips the group's subtree entirely. This prevents high-lane compositions (for example SIMD8+) from exploding the parameter count in covering arrays, and isolates `getSize`-dependent scalars so they don't poison the rest of the property's analysis.
+    /// When `isOpaque` is `true`, screening analysis skips the group's subtree entirely. This prevents high-lane compositions (for example SIMD8+) from exploding the parameter count in covering arrays, and isolates `getSize`-dependent scalars so they don't poison the rest of the property's analysis.
     case group([ChoiceTree], isOpaque: Bool = false)
 
     /// Records the generation-time size parameter. Produces no entry in the ``ChoiceSequence``: the value is consumed during replay to restore the correct size context but is invisible to the reducer.

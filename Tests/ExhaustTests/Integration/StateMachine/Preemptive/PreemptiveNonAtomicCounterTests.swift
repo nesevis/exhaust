@@ -13,7 +13,7 @@ struct PreemptiveNonAtomicCounterTests {
                 PreemptiveCounterSpec.self,
                 .parallelize(lanes: .two),
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
             )
         )
@@ -28,7 +28,7 @@ struct PreemptiveNonAtomicCounterTests {
                 PreemptiveCounterSpec.self,
                 .parallelize(lanes: .two),
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
             )
         )
@@ -45,7 +45,7 @@ struct PreemptiveNonAtomicCounterTests {
             PreemptiveCounterSpec.self,
             .parallelize(lanes: .two),
             .commandLimit(6),
-            .budget(.custom(coverage: 0, sampling: 200)),
+            .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.issueReporting),
             .onReport { capturedReport = $0 }
         )

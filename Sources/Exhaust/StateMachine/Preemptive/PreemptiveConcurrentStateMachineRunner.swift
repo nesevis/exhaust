@@ -66,7 +66,7 @@ public extension __ExhaustRuntime {
         }
         warnIfTimeoutFractionHigh(
             timedOutProbes: timedOutProbeCount.value,
-            totalBudget: config.budget.coverageBudget + config.budget.samplingBudget,
+            totalBudget: config.budget.screeningBudget + config.budget.samplingBudget,
             fileID: fileID,
             filePath: filePath,
             line: line,

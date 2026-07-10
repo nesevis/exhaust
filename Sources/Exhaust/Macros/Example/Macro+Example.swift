@@ -4,7 +4,7 @@ import ExhaustCore
 ///
 /// Without a seed, the value is generated at a fixed size of 50 (midway on the 1–100 scale) so that size-dependent generators (arrays, strings, and so on) produce moderately complex output rather than minimal values. A plain numeric seed makes that value deterministic.
 ///
-/// A seed copied from a failure report (for example `"5QF8M2-3"`) reproduces exactly the value the `#exhaust` sampling phase generated at that iteration, including its size. Coverage seeds (`U`-prefixed) are not replayable here and throw.
+/// A seed copied from a failure report (for example `"5QF8M2-3"`) reproduces exactly the value the `#exhaust` sampling phase generated at that iteration, including its size. Screening seeds (`U`-prefixed) are not replayable here and throw.
 ///
 /// ```swift
 /// let person = try #example(personGen)

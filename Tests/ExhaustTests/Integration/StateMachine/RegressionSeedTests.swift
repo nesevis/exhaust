@@ -4,9 +4,9 @@ import Testing
 
 @Suite("Spec regression seed tests", .serialized, .tags(.stateMachine))
 struct RegressionSeedTests {
-    // A zero budget makes the normal coverage/sampling run find nothing, so a non-nil
+    // A zero budget makes the normal screening/sampling run find nothing, so a non-nil
     // result proves the regression seed itself reproduced the failure. The `-N` (sampling)
-    // and `U…` (coverage-row) formats are the exact strings the runner prints; before the
+    // and `U…` (screening-row) formats are the exact strings the runner prints; before the
     // fix the regression decoder rejected both, so these seeds would silently no-op.
 
     @Test(
@@ -17,7 +17,7 @@ struct RegressionSeedTests {
         let result = await #execute(
             RegressionCounterSpec.self,
             .commandLimit(8),
-            .budget(.custom(coverage: 0, sampling: 0)),
+            .budget(.custom(screening: 0, sampling: 0)),
             .suppress(.issueReporting)
         )
         #expect(result != nil, "regression seed should reproduce the failure on its own")
@@ -32,7 +32,7 @@ struct RegressionSeedTests {
             RegressionCounterCooperativeSpec.self,
             .parallelize(lanes: .two),
             .commandLimit(6),
-            .budget(.custom(coverage: 0, sampling: 0)),
+            .budget(.custom(screening: 0, sampling: 0)),
             .suppress(.issueReporting)
         )
         #expect(result != nil, "regression seed should reproduce the failure on its own")
@@ -67,7 +67,7 @@ struct RegressionSeedTests {
             await #execute(
                 RegressionAsyncSequentialSpec.self,
                 .commandLimit(8),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.all)
             )
         )
@@ -79,7 +79,7 @@ struct RegressionSeedTests {
             await #execute(
                 RegressionAsyncSequentialSpec.self,
                 .commandLimit(8),
-                .budget(.custom(coverage: 0, sampling: 1)),
+                .budget(.custom(screening: 0, sampling: 1)),
                 .suppress(.all)
             )
         }

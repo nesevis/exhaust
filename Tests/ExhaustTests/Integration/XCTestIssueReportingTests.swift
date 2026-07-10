@@ -16,7 +16,7 @@ final class XCTestIssueReportingTests: XCTestCase {
             XCTExpectFailure("exhaust should report property failure via XCTFail")
             let result = #exhaust(
                 #gen(.int(in: 0 ... 100)),
-                .budget(.custom(coverage: 0, sampling: 10))
+                .budget(.custom(screening: 0, sampling: 10))
             ) { value in
                 value < 0
             }
@@ -29,7 +29,7 @@ final class XCTestIssueReportingTests: XCTestCase {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.issueReporting),
-            .budget(.custom(coverage: 0, sampling: 10))
+            .budget(.custom(screening: 0, sampling: 10))
         ) { value in
             value < 0
         }
@@ -39,7 +39,7 @@ final class XCTestIssueReportingTests: XCTestCase {
     func testPassingPropertyRecordsNoFailure() {
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
-            .budget(.custom(coverage: 0, sampling: 10))
+            .budget(.custom(screening: 0, sampling: 10))
         ) { value in
             value >= 0
         }

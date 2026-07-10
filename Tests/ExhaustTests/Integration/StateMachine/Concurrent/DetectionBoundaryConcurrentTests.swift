@@ -12,7 +12,7 @@ struct DetectionBoundaryTests {
         let result = await #execute(
             SilentRaceSpec.self,
             .commandLimit(6),
-            .budget(.custom(coverage: 0, sampling: 500)),
+            .budget(.custom(screening: 0, sampling: 500)),
             .suppress(.issueReporting)
         )
         #expect(result == nil, "Race without await/yield between read and write is invisible to cooperative scheduling")
@@ -25,7 +25,7 @@ struct DetectionBoundaryTests {
             await #execute(
                 ExposedRaceSpec.self,
                 .commandLimit(4),
-                .budget(.custom(coverage: 0, sampling: 200)),
+                .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
             )
         )
@@ -44,7 +44,7 @@ struct DetectionBoundaryTests {
                 ThreeWayRaceSpec.self,
                 .parallelize(lanes: .three),
                 .commandLimit(6),
-                .budget(.custom(coverage: 0, sampling: 500)),
+                .budget(.custom(screening: 0, sampling: 500)),
                 .suppress(.issueReporting)
             )
         )
@@ -63,7 +63,7 @@ struct DetectionBoundaryTests {
                 ThreeWayRaceSpec.self,
                 .parallelize(lanes: .four),
                 .commandLimit(8),
-                .budget(.custom(coverage: 0, sampling: 500)),
+                .budget(.custom(screening: 0, sampling: 500)),
                 .suppress(.issueReporting)
             )
         )

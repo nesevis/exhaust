@@ -1,4 +1,4 @@
-// SCA (Sequence Covering Array) coverage phase for spec testing.
+// SCA (Sequence Covering Array) screening phase for spec testing.
 import ExhaustCore
 import Foundation
 
@@ -9,24 +9,24 @@ extension __ExhaustRuntime {
     ///
     /// Each caller handles the ``failure`` case differently. The sequential path prunes skipped commands and reduces directly, while the concurrent source wraps the value in a ``StateMachineCandidate`` for the machine to reduce.
     enum SCARowLoopResult<Value> {
-        /// A counterexample was found at the given coverage iteration.
-        case failure(value: Value, tree: ChoiceTree, coverageInvocations: Int)
+        /// A counterexample was found at the given screening iteration.
+        case failure(value: Value, tree: ChoiceTree, screeningInvocations: Int)
         /// The covering array was exhausted without finding a failure.
-        case completed(coverageInvocations: Int)
+        case completed(screeningInvocations: Int)
         /// SCA was not applicable (generator structure or domain too small).
         case skipped
     }
 
-    /// Core SCA coverage row loop shared by the sequential and concurrent spec runners.
+    /// Core SCA screening row loop shared by the sequential and concurrent spec runners.
     ///
     /// Builds covering arrays at multiple sequence lengths to cover both short and long command sequences. Budget is split across length tiers: 50% at `min(5, commandLimit)`, 25% at `max(5, commandLimit / 2)`, 25% at `commandLimit`, with duplicate lengths collapsed and their budgets merged. Tiers run shortest-first so minimal counterexamples are found early.
     ///
-    /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:coverageInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"sca_coverage"` for sequential, `"concurrent_sca_coverage"` for concurrent.
-    static func runSCACoverageRowLoop<Value>(
+    /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:screeningInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"statemachine_screening"` for a fresh run, `"statemachine_screening_replay"` for row replay.
+    static func runSCAScreeningRowLoop<Value>(
         sequenceGen: Generator<Value>,
         commandGen: Generator<some Any>,
         commandLimit: Int,
-        coverageBudget: UInt64,
+        screeningBudget: UInt64,
         skipToRow: Int?,
         logEventPrefix: String,
         concurrencyLevel: Int? = nil,
@@ -54,7 +54,7 @@ extension __ExhaustRuntime {
             return .skipped
         }
 
-        let tiers = buildCoverageTiers(commandLimit: commandLimit, totalBudget: coverageBudget)
+        let tiers = buildScreeningTiers(commandLimit: commandLimit, totalBudget: screeningBudget)
 
         var totalIterations = 0
 
@@ -71,7 +71,7 @@ extension __ExhaustRuntime {
                 guard let built = SCADomain.build(
                     sequenceLength: tier.length,
                     pickChoices: pickChoices,
-                    coverageBudget: tier.budget,
+                    screeningBudget: tier.budget,
                     strengthCap: 2
                 ) else {
                     continue
@@ -116,10 +116,10 @@ extension __ExhaustRuntime {
                     continue
                 }
                 if property(value) == false {
-                    return .failure(value: value, tree: freshTree, coverageInvocations: totalIterations)
+                    return .failure(value: value, tree: freshTree, screeningInvocations: totalIterations)
                 }
                 if skipToRow != nil {
-                    return .completed(coverageInvocations: totalIterations)
+                    return .completed(screeningInvocations: totalIterations)
                 }
             }
         }
@@ -136,13 +136,13 @@ extension __ExhaustRuntime {
             ]
         )
 
-        return .completed(coverageInvocations: totalIterations)
+        return .completed(screeningInvocations: totalIterations)
     }
 
-    /// Computes coverage tiers with deduplicated lengths and proportional budget allocation.
+    /// Computes screening tiers with deduplicated lengths and proportional budget allocation.
     ///
     /// Raw tiers: 50% at `min(5, commandLimit)`, 25% at `max(5, commandLimit / 2)`, 25% at `commandLimit`. Tiers with duplicate lengths are collapsed and their budgets merged. The minimum sequence length for any tier is 2 (pairwise coverage requires at least 2 parameters).
-    private static func buildCoverageTiers(
+    private static func buildScreeningTiers(
         commandLimit: Int,
         totalBudget: UInt64
     ) -> [(length: Int, budget: UInt64)] {
@@ -477,7 +477,7 @@ extension __ExhaustRuntime {
 extension __ExhaustRuntime {
     /// Builds the prioritized source array for a spec machine run.
     ///
-    /// Source order matches the design document: coverage replay, sampling replay, smoke, coverage, sampling. Each source is independently gated by the config. The smoke source is entry-point-specific (sequential has none, cooperative and preemptive construct different property closures), so it is passed in pre-built.
+    /// Source order matches the design document: screening replay, sampling replay, smoke, screening, sampling. Each source is independently gated by the config. The smoke source is entry-point-specific (sequential has none, cooperative and preemptive construct different property closures), so it is passed in pre-built.
     static func buildStateMachineSources<Command>(
         config: ResolvedConcurrentConfig,
         sequenceGen: Generator<[(ScheduleMarker, Command)]>,
@@ -490,13 +490,13 @@ extension __ExhaustRuntime {
     ) -> [AnyStateMachineCandidateSource<Command>] {
         var sources: [AnyStateMachineCandidateSource<Command>] = []
 
-        if let row = config.coverageReplayRow {
-            sources.append(.coverageReplay(
+        if let row = config.screeningReplayRow {
+            sources.append(.screeningReplay(
                 row: row,
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
-                coverageBudget: max(UInt64(config.budget.coverageBudget), UInt64(row) + 1),
+                screeningBudget: max(UInt64(config.budget.screeningBudget), UInt64(row) + 1),
                 concurrencyLevel: concurrencyLevel,
                 property: property
             ))
@@ -515,19 +515,19 @@ extension __ExhaustRuntime {
             sources.append(smokeSource)
         }
 
-        if config.shouldRunCoverage {
-            sources.append(.coverage(
+        if config.shouldRunScreening {
+            sources.append(.screening(
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
-                coverageBudget: UInt64(config.budget.coverageBudget),
+                screeningBudget: UInt64(config.budget.screeningBudget),
                 concurrencyLevel: concurrencyLevel,
                 sequenceGenForLength: sequenceGenForLength,
                 property: property
             ))
         }
 
-        if config.replayIteration == nil, config.coverageReplayRow == nil {
+        if config.replayIteration == nil, config.screeningReplayRow == nil {
             let seed = config.seed ?? Xoshiro256().seed
             sources.append(.sampling(
                 sequenceGen: sequenceGen,
@@ -556,12 +556,12 @@ extension __ExhaustRuntime {
         return choices
     }
 
-    /// Estimates a default command limit from the command generator's structure and the coverage budget.
+    /// Estimates a default command limit from the command generator's structure and the screening budget.
     ///
     /// Pre-analyzes pick branches to determine the per-position domain size, then computes the sequence length at which SCA rows (at t=2) would exhaust the budget. The result is the larger of this budget ceiling and an exploration floor based on the number of command types, ensuring sequences are long enough for each command to appear several times.
     static func estimateCommandLimit(
         commandGen: Generator<some Any>,
-        coverageBudget: UInt64
+        screeningBudget: UInt64
     ) -> Int {
         guard let pickChoices = extractPickChoices(from: commandGen) else {
             return 10
@@ -572,14 +572,14 @@ extension __ExhaustRuntime {
         // Pre-analyze branch argument domains to estimate the per-position domain size.
         // Use sequenceLength=10 as initial estimate for threshold computation; the threshold is under a sqrt so it is not very sensitive to this value.
         let threshold = SequenceCoveringArray.computeThreshold(
-            budget: coverageBudget,
+            budget: screeningBudget,
             sequenceLength: 10,
             branchCount: branchCount
         )
         let branchProfiles = SequenceCoveringArray.analyzeBranches(
             pickChoices,
             threshold: threshold,
-            coverageBudget: coverageBudget
+            screeningBudget: screeningBudget
         )
         var domainSize: UInt64 = 0
         for profile in branchProfiles {
@@ -601,7 +601,7 @@ extension __ExhaustRuntime {
         // For small domains this is huge (budget is not the bottleneck); for large domains it can be < 2.
         let domainSizeEstimate = Double(min(domainSize, UInt64(Int.max)))
         let domainSizeSquared = max(domainSizeEstimate * domainSizeEstimate, 1.0)
-        let ratio = Double(coverageBudget) / domainSizeSquared
+        let ratio = Double(screeningBudget) / domainSizeSquared
         let budgetCeiling = ratio > 1 ? Int(min(exp(ratio), 100)) : 2
 
         // Exploration floor: enough for each command type to appear several times, ensuring the random phase can reach meaningful state depths.

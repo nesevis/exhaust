@@ -141,9 +141,9 @@ struct DateDSTPropertyTests {
         // (dayDiff=0). This only happens on a fall-back day when target is in the
         // 25th hour (>24h from midnight but still the same calendar day).
         //
-        // Without coverage, hitting this requires BOTH dates to land on the
+        // Without screening, hitting this requires BOTH dates to land on the
         // fall-back day's ~1h window — roughly (1/672)^2 ≈ 0.0002% per sample.
-        let counterExample = #exhaust(gen, .suppress(.issueReporting), .budget(.custom(coverage: 0, sampling: 100))) { now, target in
+        let counterExample = #exhaust(gen, .suppress(.issueReporting), .budget(.custom(screening: 0, sampling: 100))) { now, target in
             var calendar = Calendar(identifier: .gregorian)
             calendar.timeZone = Self.usEastern
 

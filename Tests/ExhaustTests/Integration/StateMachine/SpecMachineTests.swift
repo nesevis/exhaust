@@ -79,7 +79,7 @@ struct SpecMachineTests {
     @Test("Each source's invocations are attributed to its bucket, including a passing source")
     func sourceInvocationsAttributedPerBucket() {
         let context = makeContext()
-        let coverageSource = AnyStateMachineCandidateSource<StubCommand>(discoveryMethod: .coverage) {
+        let screeningSource = AnyStateMachineCandidateSource<StubCommand>(discoveryMethod: .screening) {
             context.invocationCounter.value += 5
             return nil
         }
@@ -87,19 +87,19 @@ struct SpecMachineTests {
             context.invocationCounter.value += 3
             return makeCandidate(commands: [(.prefix, .increment)], discoveryMethod: .randomSampling)
         }
-        var machine = makeMachine(context: context, sources: [coverageSource, samplingSource])
+        var machine = makeMachine(context: context, sources: [screeningSource, samplingSource])
 
         while machine.next() != nil {}
 
-        // The coverage source passed but its 5 probes are still counted; sampling's 3 land in their own bucket; reduction adds the StubBackend's 2.
-        #expect(context.state.report.coverageInvocations == 5)
+        // The screening source passed but its 5 probes are still counted; sampling's 3 land in their own bucket; reduction adds the StubBackend's 2.
+        #expect(context.state.report.screeningInvocations == 5)
         #expect(context.state.report.randomSamplingInvocations == 3)
         #expect(context.state.report.reductionInvocations == 2)
         #expect(context.state.report.propertyInvocations == 10)
     }
 
-    @Test("A sampling-only run attributes no wall time to the coverage phase")
-    func samplingOnlyRunHasNoCoverageTime() {
+    @Test("A sampling-only run attributes no wall time to the screening phase")
+    func samplingOnlyRunHasNoScreeningTime() {
         let context = makeContext()
         let samplingSource = AnyStateMachineCandidateSource<StubCommand>(discoveryMethod: .randomSampling) {
             makeCandidate(commands: [(.prefix, .increment)], discoveryMethod: .randomSampling)
@@ -108,7 +108,7 @@ struct SpecMachineTests {
 
         while machine.next() != nil {}
 
-        #expect(context.state.report.coverageMilliseconds == 0)
+        #expect(context.state.report.screeningMilliseconds == 0)
     }
 
     @Test("Report seed comes from the sampling source even when the run passes")
@@ -178,38 +178,38 @@ struct SpecMachineTests {
     }
 }
 
-// MARK: - Coverage Source Selection
+// MARK: - Screening Source Selection
 
-@Suite("Spec coverage source selection", .tags(.stateMachine))
-struct StateMachineCoverageSourceSelectionTests {
-    /// Whenever coverage runs, no replay target may be set. A replay (sampling seed, coverage row, or iteration) must reproduce its targeted failure, not launch a fresh full coverage sweep that could surface an unrelated failure and mask a stale regression seed.
-    @Test("A replay never also triggers a full coverage sweep")
-    func replayNeverTriggersCoverageSweep() {
+@Suite("Spec screening source selection", .tags(.stateMachine))
+struct ScreeningSourceSelectionTests {
+    /// Whenever screening runs, no replay target may be set. A replay (sampling seed, screening row, or iteration) must reproduce its targeted failure, not launch a fresh full screening sweep that could surface an unrelated failure and mask a stale regression seed.
+    @Test("A replay never also triggers a full screening sweep")
+    func replayNeverTriggersScreeningSweep() {
         let configGen = #gen(
             .int(in: 0 ... 1_000_000).optional(),
             .int(in: 0 ... 100).optional(),
             .int(in: 1 ... 100).optional(),
             .int(in: 0 ... 400)
-        ) { seedSource, coverageReplayRow, replayIteration, coverageBudget in
+        ) { seedSource, screeningReplayRow, replayIteration, screeningBudget in
             var config = ResolvedConcurrentConfig()
             config.seed = seedSource.map { UInt64($0) }
-            config.coverageReplayRow = coverageReplayRow
+            config.screeningReplayRow = screeningReplayRow
             config.replayIteration = replayIteration
-            config.budget = .custom(coverage: coverageBudget, sampling: 200)
+            config.budget = .custom(screening: screeningBudget, sampling: 200)
             return config
         }
         #exhaust(configGen) { config in
-            config.shouldRunCoverage == false
-                || (config.seed == nil && config.coverageReplayRow == nil && config.replayIteration == nil)
+            config.shouldRunScreening == false
+                || (config.seed == nil && config.screeningReplayRow == nil && config.replayIteration == nil)
         }
     }
 
-    /// Pins the other direction so the invariant above is not vacuously satisfied by an implementation that never runs coverage.
-    @Test("A fresh run with budget enables the coverage sweep")
-    func freshRunEnablesCoverage() {
+    /// Pins the other direction so the invariant above is not vacuously satisfied by an implementation that never runs screening.
+    @Test("A fresh run with budget enables the screening sweep")
+    func freshRunEnablesScreening() {
         var config = ResolvedConcurrentConfig()
-        config.budget = .custom(coverage: 200, sampling: 200)
-        #expect(config.shouldRunCoverage)
+        config.budget = .custom(screening: 200, sampling: 200)
+        #expect(config.shouldRunScreening)
     }
 }
 
@@ -340,7 +340,7 @@ private func stubSequenceGen() -> Generator<[(ScheduleMarker, StubCommand)]> {
 
 private func makeCandidate(
     commands: [(ScheduleMarker, StubCommand)],
-    discoveryMethod: StateMachineDiscoveryMethod = .coverage,
+    discoveryMethod: StateMachineDiscoveryMethod = .screening,
     seed: UInt64 = 0
 ) -> StateMachineCandidate<StubCommand> {
     StateMachineCandidate(
@@ -357,7 +357,7 @@ private func makeConfig(
     onReport: ((ExhaustReport) -> Void)? = nil
 ) -> ResolvedConcurrentConfig {
     var config = ResolvedConcurrentConfig()
-    config.budget = .custom(coverage: 0, sampling: 10)
+    config.budget = .custom(screening: 0, sampling: 10)
     config.suppressIssueReporting = true
     config.onReportClosure = onReport
     return config

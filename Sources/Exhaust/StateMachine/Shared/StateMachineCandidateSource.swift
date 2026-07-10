@@ -15,7 +15,7 @@ struct StateMachineCandidate<Command> {
 struct AnyStateMachineCandidateSource<Command> {
     /// Which discovery phase this source represents. The machine attributes the source's invocations and wall time to the matching report bucket whether or not the source yields a candidate, so a phase that runs and passes is still counted.
     let discoveryMethod: StateMachineDiscoveryMethod
-    /// The PRNG seed to surface in ``ExhaustReport/seed``, or `nil` for phases with no replayable seed (coverage, smoke).
+    /// The PRNG seed to surface in ``ExhaustReport/seed``, or `nil` for phases with no replayable seed (screening, smoke).
     let reportedSeed: UInt64?
     let resolvedReplaySeed: ReplaySeed.Resolved?
     private let produceNext: () throws -> StateMachineCandidate<Command>?
@@ -65,38 +65,38 @@ extension AnyStateMachineCandidateSource {
 // MARK: - Source Factories
 
 extension AnyStateMachineCandidateSource {
-    /// Replays a single SCA coverage row from a `U-{N}` seed.
-    static func coverageReplay(
+    /// Replays a single SCA screening row from a `U-{N}` seed.
+    static func screeningReplay(
         row: Int,
         sequenceGen: Generator<[(ScheduleMarker, Command)]>,
         commandGen: Generator<Command>,
         commandLimit: Int,
-        coverageBudget: UInt64,
+        screeningBudget: UInt64,
         concurrencyLevel: Int,
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
     ) -> AnyStateMachineCandidateSource {
-        .once(discoveryMethod: .coverage, resolvedReplaySeed: .coverage(row: row)) {
-            let result = __ExhaustRuntime.runSCACoverageRowLoop(
+        .once(discoveryMethod: .screening, resolvedReplaySeed: .screening(row: row)) {
+            let result = __ExhaustRuntime.runSCAScreeningRowLoop(
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
-                coverageBudget: coverageBudget,
+                screeningBudget: screeningBudget,
                 skipToRow: row,
-                logEventPrefix: "statemachine_coverage_replay",
+                logEventPrefix: "statemachine_screening_replay",
                 concurrencyLevel: concurrencyLevel,
                 property: property
             )
 
             switch result {
-                case let .failure(value, tree, coverageInvocations):
-                    // Match the shape of a fresh coverage candidate so the replayed failure round-trips to the same `U-N` seed and nils its synthetic seed.
+                case let .failure(value, tree, screeningInvocations):
+                    // Match the shape of a fresh screening candidate so the replayed failure round-trips to the same `U-N` seed and nils its synthetic seed.
                     return StateMachineCandidate(
                         taggedCommands: value,
                         tree: tree,
                         sequenceGen: sequenceGen,
-                        seed: UInt64(coverageInvocations),
-                        iteration: coverageInvocations,
-                        discoveryMethod: .coverage
+                        seed: UInt64(screeningInvocations),
+                        iteration: screeningInvocations,
+                        discoveryMethod: .screening
                     )
                 case .completed, .skipped:
                     return nil
@@ -164,38 +164,38 @@ extension AnyStateMachineCandidateSource {
         }
     }
 
-    /// Iterates all SCA coverage tiers until a failure is found or all rows exhaust.
-    static func coverage(
+    /// Iterates all SCA screening tiers until a failure is found or all rows exhaust.
+    static func screening(
         sequenceGen: Generator<[(ScheduleMarker, Command)]>,
         commandGen: Generator<Command>,
         commandLimit: Int,
-        coverageBudget: UInt64,
+        screeningBudget: UInt64,
         concurrencyLevel: Int,
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Command)]>)? = nil,
         property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
     ) -> AnyStateMachineCandidateSource {
-        .once(discoveryMethod: .coverage) {
-            let result = __ExhaustRuntime.runSCACoverageRowLoop(
+        .once(discoveryMethod: .screening) {
+            let result = __ExhaustRuntime.runSCAScreeningRowLoop(
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
-                coverageBudget: coverageBudget,
+                screeningBudget: screeningBudget,
                 skipToRow: nil,
-                logEventPrefix: "statemachine_coverage",
+                logEventPrefix: "statemachine_screening",
                 concurrencyLevel: concurrencyLevel,
                 sequenceGenForLength: sequenceGenForLength,
                 property: property
             )
 
             switch result {
-                case let .failure(value, tree, coverageInvocations):
+                case let .failure(value, tree, screeningInvocations):
                     return StateMachineCandidate(
                         taggedCommands: value,
                         tree: tree,
                         sequenceGen: sequenceGen,
-                        seed: UInt64(coverageInvocations),
-                        iteration: coverageInvocations,
-                        discoveryMethod: .coverage
+                        seed: UInt64(screeningInvocations),
+                        iteration: screeningInvocations,
+                        discoveryMethod: .screening
                     )
                 case .completed, .skipped:
                     return nil
