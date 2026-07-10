@@ -54,7 +54,7 @@ package struct DecodingReport: Sendable {
     /// - PRNG fraction: `1 - convergence`.
     ///
     /// Returns 0.0 when no coordinates have been recorded.
-    var convergence: Double {
+    package var convergence: Double {
         let total = totalCount
         guard total > 0 else { return 0.0 }
         return Double(exactCarryForwardCount + fallbackTreeCount) / Double(total)

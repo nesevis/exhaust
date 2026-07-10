@@ -26,11 +26,14 @@ package enum ScreeningRunner {
 
     /// Runs screening analysis and iterates through the covering array, calling `property` for each row.
     ///
-    /// - Parameter skipToRow: When set, skips property evaluation for all rows before this index and only tests the target row. Used for O(1) screening replay.
+    /// - Parameters:
+    ///   - skipToRow: When set, skips property evaluation for all rows before this index and only tests the target row. Used for O(1) screening replay.
+    ///   - continuePastFailure: When `true`, a failing row is reported through `onExample` and iteration continues instead of returning `.failure`. `#explore(time:)` catalogues every failure; `#exhaust` keeps the default first-failure return. A run that continued past a failure never reports `.exhaustive`, because that case asserts the domain passed.
     package static func run<Output>(
         _ gen: Generator<Output>,
         screeningBudget: UInt64,
         skipToRow: Int? = nil,
+        continuePastFailure: Bool = false,
         property: (Output) -> Bool,
         onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
     ) -> Result<Output> {
@@ -82,6 +85,7 @@ package enum ScreeningRunner {
             let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
             var iterations = 0
             var rowIndex = 0
+            var failureObserved = false
             while rowIndex < budget, let row = generator.next() {
                 if let target = skipToRow, rowIndex < target {
                     rowIndex += 1
@@ -94,11 +98,15 @@ package enum ScreeningRunner {
                 if let rowResult {
                     onExample?(rowResult.value, rowResult.tree, rowResult.passed)
                     if rowResult.passed == false {
-                        return .failure(
-                            value: rowResult.value, tree: rowResult.tree, iteration: rowIndex + 1,
-                            strength: 2, rows: rowIndex + 1,
-                            parameters: paramCount, totalSpace: totalSpace, kind: kind
-                        )
+                        if continuePastFailure {
+                            failureObserved = true
+                        } else {
+                            return .failure(
+                                value: rowResult.value, tree: rowResult.tree, iteration: rowIndex + 1,
+                                strength: 2, rows: rowIndex + 1,
+                                parameters: paramCount, totalSpace: totalSpace, kind: kind
+                            )
+                        }
                     }
                 }
                 if skipToRow != nil { break }
@@ -107,7 +115,7 @@ package enum ScreeningRunner {
             }
 
             // Only report exhaustive when every point in the full Cartesian product was tested, not just all t-tuples.
-            if isExhaustiveCandidate, UInt64(iterations) >= totalSpace {
+            if isExhaustiveCandidate, failureObserved == false, UInt64(iterations) >= totalSpace {
                 return .exhaustive(iterations: iterations)
             }
 
@@ -120,6 +128,7 @@ package enum ScreeningRunner {
         // Single parameter: enumerate all values.
         var iterations = 0
         var rowIndex = skipToRow ?? 0
+        var failureObserved = false
         while rowIndex < budget, UInt64(rowIndex) < domainSizes[0] {
             let row = CoveringArrayRow(values: [UInt64(rowIndex)])
             let rowResult = testRow(
@@ -129,11 +138,15 @@ package enum ScreeningRunner {
             if let rowResult {
                 onExample?(rowResult.value, rowResult.tree, rowResult.passed)
                 if rowResult.passed == false {
-                    return .failure(
-                        value: rowResult.value, tree: rowResult.tree, iteration: rowIndex + 1,
-                        strength: 1, rows: rowIndex + 1,
-                        parameters: paramCount, totalSpace: totalSpace, kind: kind
-                    )
+                    if continuePastFailure {
+                        failureObserved = true
+                    } else {
+                        return .failure(
+                            value: rowResult.value, tree: rowResult.tree, iteration: rowIndex + 1,
+                            strength: 1, rows: rowIndex + 1,
+                            parameters: paramCount, totalSpace: totalSpace, kind: kind
+                        )
+                    }
                 }
             }
             if skipToRow != nil { break }
@@ -141,7 +154,7 @@ package enum ScreeningRunner {
             iterations += 1
         }
 
-        if isExhaustiveCandidate, UInt64(iterations) >= domainSizes[0] {
+        if isExhaustiveCandidate, failureObserved == false, UInt64(iterations) >= domainSizes[0] {
             return .exhaustive(iterations: iterations)
         }
 
