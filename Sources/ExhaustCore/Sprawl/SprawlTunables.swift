@@ -48,6 +48,14 @@ package enum SprawlTunables {
     /// Fraction of the wall-clock budget without a single coverage-novel corpus admission (across all intensity bands including splice) before the run ends early and returns the unused budget.
     package static let sprawlPlateauBudgetFraction = 0.25
 
+    // MARK: - Report-Time Discrimination
+
+    /// Discriminating edges reported per cluster. Beyond a handful, the ranking's tail is noise against small failing samples.
+    package static let discriminatingEdgeLimit = 5
+
+    /// Passing signatures (highest Jaccard similarity to the cluster's necessary edges) compared in the near-miss differential.
+    package static let nearMissComparisonCount = 3
+
     // MARK: - Reduction Backpressure
 
     /// Reduced instances per cluster before further symptom-matched failures are recorded unreduced.

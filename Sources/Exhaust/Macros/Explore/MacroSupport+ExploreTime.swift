@@ -8,6 +8,12 @@ import IssueReporting
     import ExhaustObjCSupport
 #endif
 
+#if canImport(XCTest) && canImport(ObjectiveC)
+    @preconcurrency @_weakLinked import XCTest
+#elseif canImport(XCTest)
+    @preconcurrency import XCTest
+#endif
+
 #if canImport(Testing)
     #if canImport(ObjectiveC)
         @_weakLinked import Testing
@@ -63,6 +69,7 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
+        recordSprawlAttachments(report: report)
         return report
     }
 
@@ -106,6 +113,7 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
+        recordSprawlAttachments(report: report)
         return report
     }
 
@@ -124,7 +132,7 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) async throws -> Bool
     ) async -> SprawlReport {
         let verdictProperty = bridgeAsyncVerdictProperty(property)
-        return await dispatchToGCD(reserving: LaneReservation.single) {
+        let report = await dispatchToGCD(reserving: LaneReservation.single) {
             let report = runExploreTimeCore(
                 gen: refGen.gen,
                 time: time,
@@ -143,6 +151,8 @@ public extension __ExhaustRuntime {
             )
             return report
         }
+        recordSprawlAttachments(report: report)
+        return report
     }
 
     // MARK: - Explore Time (Async Expect)
@@ -162,7 +172,7 @@ public extension __ExhaustRuntime {
     ) async -> SprawlReport {
         _ = property
         let verdictProperty = bridgeAsyncVerdictDetection(detection)
-        return await dispatchToGCD(reserving: LaneReservation.single) {
+        let finalReport = await dispatchToGCD(reserving: LaneReservation.single) {
             nonisolated(unsafe) var pipelineReport: SprawlReport?
             // withExpectedIssue cannot be used on a GCD thread because Test.current is nil, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
             #if canImport(Testing)
@@ -197,6 +207,8 @@ public extension __ExhaustRuntime {
             )
             return report
         }
+        recordSprawlAttachments(report: finalReport)
+        return finalReport
     }
 
     // MARK: - Core
@@ -281,7 +293,7 @@ public extension __ExhaustRuntime {
             }
             return result
         }
-        return SprawlReport(result: result)
+        return SprawlReport(result: result, symbolizeEdges: injectedSource == nil)
     }
 
     // MARK: - Issue Reporting
@@ -333,28 +345,133 @@ public extension __ExhaustRuntime {
         }
     }
 
-    /// The interim fault-inventory rendering. The full terminal report (gap-framed coverage, discriminating edges, late-discovery foregrounding) replaces this with task H5.
+    /// Renders the fault inventory for the terminal: throughput header, gap-framed coverage, early-stop accounting, and the clusters with late discoveries foregrounded.
     package static func renderSprawlSummary(_ report: SprawlReport) -> String {
         var lines: [String] = []
+
         let clusterWord = report.clusters.count == 1 ? "fault cluster" : "fault clusters"
+        let overheadPercent = Int((report.frameworkOverheadFraction * 100).rounded())
         lines.append(
-            "#explore(time:) catalogued \(report.clusters.count) \(clusterWord) in \(report.totalAttempts) attempts (\(Int(report.attemptsPerSecond.rounded()))/s)."
+            "#explore(time:) catalogued \(report.clusters.count) \(clusterWord) in \(report.totalAttempts) attempts (\(Int(report.attemptsPerSecond.rounded()))/s; \(overheadPercent)% framework overhead)."
         )
-        for cluster in report.clusters {
-            let symptoms = cluster.symptoms.joined(separator: ", ")
+
+        // Gap-framed: the uncovered count is the honest number; a percentage against module size would measure the module, not the search.
+        let uncovered = max(0, report.instrumentedEdgeCount - report.coveredEdgeCount)
+        lines.append(
+            "Coverage: \(report.coveredEdgeCount) of \(report.instrumentedEdgeCount) instrumented edges hit; \(uncovered) never hit (module-wide count, includes code the property never calls)."
+        )
+
+        if case let .coveragePlateau(unused) = report.termination {
             lines.append(
-                "Cluster \(cluster.id) [\(cluster.discoveringPhase.rawValue); \(cluster.instanceCount) instances, \(cluster.reducedCount) reduced; symptoms: \(symptoms)]:"
+                "Stopped \(renderDuration(unused)) early: no coverage-novel corpus admission in the plateau window; the unused budget was returned."
             )
-            lines.append(cluster.reducedDescription)
+        }
+
+        // A cluster discovered late with few instances marks a fault region the search frontier had only just reached — the strongest signal to extend the budget. Those lead the inventory.
+        let frontierThreshold = report.elapsed * 3 / 4
+        let isFrontier: (SprawlReport.Cluster) -> Bool = { cluster in
+            cluster.firstSeen >= frontierThreshold
+                && cluster.instanceCount <= SprawlTunables.perClusterReductionCap
+        }
+        let ordered = report.clusters.filter(isFrontier).sorted { $0.firstSeen > $1.firstSeen }
+            + report.clusters.filter { isFrontier($0) == false }
+
+        for cluster in ordered {
+            lines.append("")
+            lines.append(contentsOf: renderCluster(cluster, isFrontier: isFrontier(cluster)))
+        }
+
+        if report.clusters.isEmpty == false {
+            lines.append("")
         }
         for (symptom, count) in report.unreducedFailureCounts.sorted(by: { $0.key < $1.key }) {
-            lines.append("\(count) unreduced failures with symptom \(symptom) matched no cluster.")
+            lines.append("\(count) unreduced failure\(count == 1 ? "" : "s") with symptom \(symptom) matched no cluster.")
         }
         if report.reductionsTimedOut {
             lines.append("Some reductions did not finish before the drain timeout; instance counts include unclassified failures.")
         }
         lines.append("Reproduce: .replay(\(report.seed))")
         return lines.joined(separator: "\n")
+    }
+
+    /// Renders one cluster's inventory block: attribute header, reduced counterexample, and suspect edges.
+    private static func renderCluster(_ cluster: SprawlReport.Cluster, isFrontier: Bool) -> [String] {
+        var attributes = [
+            cluster.discoveringPhase.rawValue,
+            "\(cluster.instanceCount) instance\(cluster.instanceCount == 1 ? "" : "s"), \(cluster.reducedCount) reduced",
+            "symptoms: \(cluster.symptoms.joined(separator: ", "))",
+        ]
+        if isFrontier {
+            attributes.insert("discovered late, at \(renderDuration(cluster.firstSeen)) — the frontier had just reached this region", at: 1)
+        }
+        if cluster.isLikelySplit {
+            attributes.append("multiple coverage signatures — possibly distinct paths to one fault")
+        }
+        var lines = ["Cluster \(cluster.id) [\(attributes.joined(separator: "; "))]:"]
+        lines.append(cluster.reducedDescription)
+        if cluster.discriminatingEdges.isEmpty == false {
+            lines.append("  Necessary path: \(cluster.necessaryEdgeCount) edges. Suspect edges:")
+            for edge in cluster.discriminatingEdges {
+                let failPercent = Int((edge.failureHitFraction * 100).rounded())
+                let passPercent = Int((edge.passingHitFraction * 100).rounded())
+                let location = edge.location.map { " — \($0)" } ?? ""
+                lines.append(
+                    "    edge \(edge.edgeIndex) — hit in \(failPercent)% of this cluster's failures, \(passPercent)% of passing runs\(location)"
+                )
+            }
+        }
+        return lines
+    }
+
+    // MARK: - Checkpoint Attachments
+
+    /// Records the run's checkpoint attachments: one per discovered cluster plus the final summary.
+    ///
+    /// Eager and outcome-independent — a passing soak still attaches its summary, because "what did fifteen minutes buy" is the report's job either way. Must run on the test's own task: Swift Testing's attachment association is task-local, and the XCTest activity hop asserts the main actor, so the async entries call this after `dispatchToGCD` returns, never inside it.
+    package static func recordSprawlAttachments(report: SprawlReport) {
+        guard report.totalAttempts > 0 else {
+            return
+        }
+        for cluster in report.clusters {
+            recordAttachment(
+                renderCluster(cluster, isFrontier: false).joined(separator: "\n"),
+                named: "explore-time-cluster-\(cluster.id).txt"
+            )
+        }
+        recordAttachment(renderSprawlSummary(report), named: "explore-time-summary.txt")
+    }
+
+    /// Records one plain-text attachment through the current test context. The XCTest lifetime is `.keepAlways` — the default `.deleteOnSuccess` silently drops attachments from passing runs, and a passing soak's report is still the product.
+    private static func recordAttachment(_ text: String, named name: String) {
+        switch TestContext.current {
+            #if canImport(Testing)
+                case .swiftTesting:
+                    Attachment.record(text, named: name)
+            #endif
+            #if canImport(XCTest) && canImport(ObjectiveC)
+                case .xcTest:
+                    let attachment = XCTAttachment(data: Data(text.utf8), uniformTypeIdentifier: "public.plain-text")
+                    attachment.name = name
+                    attachment.lifetime = .keepAlways
+                    MainActor.assumeIsolated {
+                        XCTContext.runActivity(named: name) { activity in
+                            activity.add(attachment)
+                        }
+                    }
+            #endif
+            default:
+                break
+        }
+    }
+
+    /// Renders a duration as whole seconds (or minutes and seconds past 90 seconds) for report lines.
+    private static func renderDuration(_ duration: Duration) -> String {
+        let totalSeconds = duration.components.seconds
+        if totalSeconds >= 90 {
+            return "\(totalSeconds / 60)m \(totalSeconds % 60)s"
+        }
+        let fractional = Double(totalSeconds) + Double(duration.components.attoseconds) / 1e18
+        return String(format: "%.1fs", fractional)
     }
 
     /// The hard-failure diagnostic for a build without coverage instrumentation, with the flags ready to copy-paste.

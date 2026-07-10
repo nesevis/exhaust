@@ -78,8 +78,12 @@ package struct SprawlRunResult: Sendable {
     package var coveredEdgeCount: Int
     package var instrumentedEdgeCount: Int
     package var termination: SprawlTermination
+    /// Report-time discrimination results, parallel to `clusters` by position.
+    package var clusterDiscriminations: [ClusterDiscrimination]
     package var startNanoseconds: UInt64
     package var elapsedNanoseconds: UInt64
+    /// Nanoseconds spent inside the property body across all loop attempts; `elapsedNanoseconds` minus this is framework overhead.
+    package var propertyNanoseconds: UInt64
     package var seed: UInt64
     package var reductionsTimedOut: Bool
 
@@ -125,6 +129,9 @@ package final class SprawlRunner<Output> {
     private var sprawlAttempts = 0
     private var discardedAttempts = 0
     private var totalAttempts = 0
+
+    /// Wall-clock nanoseconds spent inside the property body across all loop attempts; the report derives the framework-overhead fraction from it. Reduction-side evaluations run on other threads and are deliberately excluded.
+    private var propertyNanoseconds: UInt64 = 0
 
     package init(
         gen: Generator<Output>,
@@ -173,6 +180,17 @@ package final class SprawlRunner<Output> {
         let clusters = __ExhaustRuntime.blockingAwait { await inventory.snapshot() }
         let unmatched = __ExhaustRuntime.blockingAwait { await inventory.unmatchedUnreducedCounts }
 
+        // Report-time statistics: the live loop stored only BitSets; the ranking runs once, here.
+        let passingSignatures = corpus.passingSignatures
+        let discriminations = clusters.map { cluster in
+            CoverageDiscrimination.discriminate(
+                clusterID: cluster.id,
+                failingSignatures: cluster.signatures,
+                passingSignatures: passingSignatures,
+                edgeCount: source.edgeCount
+            )
+        }
+
         return SprawlRunResult(
             clusters: clusters,
             unmatchedUnreducedCounts: unmatched,
@@ -185,8 +203,10 @@ package final class SprawlRunner<Output> {
             coveredEdgeCount: corpus.coveredEdgeCount,
             instrumentedEdgeCount: source.edgeCount,
             termination: finalTermination,
+            clusterDiscriminations: discriminations,
             startNanoseconds: startNanoseconds,
             elapsedNanoseconds: monotonicNanoseconds() - startNanoseconds,
+            propertyNanoseconds: propertyNanoseconds,
             seed: configuration.seed,
             reductionsTimedOut: reductionsCompleted == false
         )
@@ -205,7 +225,9 @@ package final class SprawlRunner<Output> {
             if source.wantsValues {
                 source.noteValue(value)
             }
+            let propertyStart = monotonicNanoseconds()
             let verdict = property(value)
+            propertyNanoseconds += monotonicNanoseconds() - propertyStart
             var hits: [(edge: Int, hitCount: UInt8)] = []
             source.forEachHitEdge { edge, hitCount in
                 hits.append((edge, hitCount))
@@ -234,7 +256,8 @@ package final class SprawlRunner<Output> {
                     convergence: 1.0,
                     generation: 0,
                     phase: .screening,
-                    isBoundaryDerived: true
+                    isBoundaryDerived: true,
+                    propertyFailed: passed == false
                 )
                 if case .admitted = admission {
                     lastAdmissionNanoseconds = monotonicNanoseconds()
@@ -295,7 +318,9 @@ package final class SprawlRunner<Output> {
             if source.wantsValues {
                 source.noteValue(value)
             }
+            let propertyStart = monotonicNanoseconds()
             let verdict = property(value)
+            propertyNanoseconds += monotonicNanoseconds() - propertyStart
             var hits: [(edge: Int, hitCount: UInt8)] = []
             source.forEachHitEdge { edge, hitCount in
                 hits.append((edge, hitCount))
@@ -312,7 +337,8 @@ package final class SprawlRunner<Output> {
                 hits: hits,
                 convergence: 1.0,
                 generation: 0,
-                phase: .sampling
+                phase: .sampling,
+                propertyFailed: verdict.isFailure
             )
             if case .admitted = admission {
                 samplesSinceNovelty = 0
@@ -411,7 +437,9 @@ package final class SprawlRunner<Output> {
         if source.wantsValues {
             source.noteValue(value)
         }
+        let propertyStart = monotonicNanoseconds()
         let verdict = property(value)
+        propertyNanoseconds += monotonicNanoseconds() - propertyStart
         var hits: [(edge: Int, hitCount: UInt8)] = []
         source.forEachHitEdge { edge, hitCount in
             hits.append((edge, hitCount))
@@ -428,7 +456,8 @@ package final class SprawlRunner<Output> {
             hits: hits,
             convergence: decodingReport?.convergence ?? 0,
             generation: parent.generation + 1,
-            phase: .sprawl
+            phase: .sprawl,
+            propertyFailed: verdict.isFailure
         )
         if case .admitted = admission {
             lastAdmissionNanoseconds = monotonicNanoseconds()
@@ -465,7 +494,9 @@ package final class SprawlRunner<Output> {
         if source.wantsValues {
             source.noteValue(value)
         }
+        let propertyStart = monotonicNanoseconds()
         let verdict = property(value)
+        propertyNanoseconds += monotonicNanoseconds() - propertyStart
         var hits: [(edge: Int, hitCount: UInt8)] = []
         source.forEachHitEdge { edge, hitCount in
             hits.append((edge, hitCount))
@@ -482,7 +513,8 @@ package final class SprawlRunner<Output> {
             hits: hits,
             convergence: 1.0,
             generation: 0,
-            phase: .sprawl
+            phase: .sprawl,
+            propertyFailed: verdict.isFailure
         )
         if case .admitted = admission {
             lastAdmissionNanoseconds = monotonicNanoseconds()

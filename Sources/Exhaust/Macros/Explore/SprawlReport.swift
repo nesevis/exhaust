@@ -37,6 +37,32 @@ public struct SprawlReport: Sendable {
 
         /// Elapsed run time at the most recent failure attributed to this cluster.
         public let lastSeen: Duration
+
+        /// Edges ranked by discriminative power against passing runs, strongest first. The top entry is the best single lead on the fault's location.
+        public let discriminatingEdges: [DiscriminatingEdge]
+
+        /// The number of edges present in every reduced counterexample of this cluster — the length of the path the SUT must traverse to reach the fault.
+        public let necessaryEdgeCount: Int
+
+        /// Necessary edges absent from the passing runs most similar to this cluster: the branches that push the SUT from "almost fails" to "fails". Empty when no passing runs exist to compare against.
+        public let nearMissEdgeIndices: [Int]
+    }
+
+    /// One edge that separates a cluster's failures from passing runs.
+    ///
+    /// Read it as "hit in \(failureHitFraction) of this cluster's failures, \(passingHitFraction) of passing runs". An edge hit in most failures but few passes is a suspect; the causal read still needs judgment — an error-handling path triggered *by* the bug discriminates just as strongly as the bug itself.
+    public struct DiscriminatingEdge: Sendable {
+        /// The global instrumented-edge index, stable within one build only.
+        public let edgeIndex: Int
+
+        /// The fraction of this cluster's reduced counterexamples that hit the edge.
+        public let failureHitFraction: Double
+
+        /// The fraction of passing corpus entries that hit the edge.
+        public let passingHitFraction: Double
+
+        /// The symbolised source location, like `parseHeader(_:) + 48 (Parser.swift:142)`. Nil when the build lacks a PC table or the platform cannot resolve it.
+        public let location: String?
     }
 
     /// The phase of the run that produced a finding.
@@ -114,6 +140,11 @@ public struct SprawlReport: Sendable {
         screeningAttempts + samplingAttempts + sprawlAttempts
     }
 
+    /// The fraction of the run's wall-clock time spent outside the property body: generation, mutation, materialisation, coverage snapshots, and corpus bookkeeping.
+    ///
+    /// Throughput is the currency of `time:` mode, and every microsecond of per-attempt framework overhead is subtracted directly from search power. A rising fraction against a baseline means the pipeline, not the property, is eating the budget. For sub-microsecond properties a high fraction is expected — there is little property time to dominate.
+    public let frameworkOverheadFraction: Double
+
     /// Attempts per second over the whole run. A falling number against a baseline means framework or property overhead is eating the budget.
     public var attemptsPerSecond: Double {
         let seconds = Double(elapsed.components.seconds)
@@ -130,10 +161,33 @@ public struct SprawlReport: Sendable {
 @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
 package extension SprawlReport {
     /// Builds the public report from the runner's raw result. Cluster timestamps are converted from monotonic clock readings to run-relative durations.
-    init(result: SprawlRunResult) {
+    ///
+    /// - Parameter symbolizeEdges: Whether to resolve discriminating edges to source locations through the live PC table. True only for sancov-backed runs — a synthetic source's edge indices do not address real program counters.
+    init(result: SprawlRunResult, symbolizeEdges: Bool = false) {
         let runStartNanoseconds = result.startNanoseconds
+        let discriminations = Dictionary(
+            uniqueKeysWithValues: result.clusterDiscriminations.map { ($0.clusterID, $0) }
+        )
+        let locations: [Int: String]
+        if symbolizeEdges {
+            let allEdges = result.clusterDiscriminations.flatMap { discrimination in
+                discrimination.rankedEdges.map(\.edge) + discrimination.nearMissDistinguishingEdges.indices
+            }
+            locations = SancovSymbolizer.symbolize(edges: Array(Set(allEdges)))
+        } else {
+            locations = [:]
+        }
         clusters = result.clusters.map { cluster in
-            Cluster(
+            let discrimination = discriminations[cluster.id]
+            let rankedEdges = (discrimination?.rankedEdges ?? []).map { statistic in
+                DiscriminatingEdge(
+                    edgeIndex: statistic.edge,
+                    failureHitFraction: statistic.failureHitFraction,
+                    passingHitFraction: statistic.passingHitFraction,
+                    location: locations[statistic.edge]
+                )
+            }
+            return Cluster(
                 id: cluster.id,
                 reducedDescription: cluster.reducedDescription,
                 symptoms: cluster.symptoms.map(\.kind).sorted(),
@@ -142,7 +196,10 @@ package extension SprawlReport {
                 isLikelySplit: cluster.signatures.count > 1,
                 discoveringPhase: Phase(phase: cluster.discoveringPhase),
                 firstSeen: .nanoseconds(cluster.firstSeenNanoseconds &- runStartNanoseconds),
-                lastSeen: .nanoseconds(cluster.lastSeenNanoseconds &- runStartNanoseconds)
+                lastSeen: .nanoseconds(cluster.lastSeenNanoseconds &- runStartNanoseconds),
+                discriminatingEdges: rankedEdges,
+                necessaryEdgeCount: discrimination?.necessaryEdges.count ?? 0,
+                nearMissEdgeIndices: discrimination?.nearMissDistinguishingEdges.indices ?? []
             )
         }
         unreducedFailureCounts = Dictionary(
@@ -157,6 +214,9 @@ package extension SprawlReport {
         instrumentedEdgeCount = result.instrumentedEdgeCount
         termination = Termination(termination: result.termination)
         elapsed = .nanoseconds(result.elapsedNanoseconds)
+        frameworkOverheadFraction = result.elapsedNanoseconds > 0
+            ? 1.0 - min(1.0, Double(result.propertyNanoseconds) / Double(result.elapsedNanoseconds))
+            : 0
         seed = result.seed
         reductionsTimedOut = result.reductionsTimedOut
     }
@@ -176,7 +236,8 @@ package extension SprawlReport {
             termination: termination,
             elapsed: .zero,
             seed: seed,
-            reductionsTimedOut: false
+            reductionsTimedOut: false,
+            frameworkOverheadFraction: 0
         )
     }
 }

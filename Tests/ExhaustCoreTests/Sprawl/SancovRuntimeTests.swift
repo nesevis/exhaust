@@ -1,6 +1,10 @@
 import ExhaustCore
 import Testing
 
+#if canImport(Darwin)
+    import Darwin
+#endif
+
 /// The registry is process-global, so these tests serialize and reset it around each use. The test binary itself is uninstrumented; no real sancov regions ever register here.
 @Suite("SancovRuntime region registry tests", .serialized)
 struct SancovRuntimeTests {
@@ -145,6 +149,31 @@ struct SancovRuntimeTests {
         #expect(SancovRuntime.pcTableEntry(forEdge: 4) == nil)
         #expect(SancovRuntime.pcTableEntry(forEdge: -1) == nil)
     }
+
+    #if canImport(Darwin)
+        @Test("Symbolisation resolves a PC-table entry pointing at a known symbol")
+        func symbolization() throws {
+            SancovRuntime.resetForTesting()
+            defer { SancovRuntime.resetForTesting() }
+
+            // RTLD_DEFAULT: search every loaded image for a symbol whose address dladdr can then resolve back.
+            let handle = UnsafeMutableRawPointer(bitPattern: -2)
+            let strlenAddress = try #require(dlsym(handle, "strlen"))
+
+            let table: [UInt] = [UInt(bitPattern: strlenAddress), 1]
+            try table.withUnsafeBufferPointer { buffer in
+                let base = try #require(buffer.baseAddress)
+                SancovRuntime.registerPCTable(
+                    start: UnsafeRawPointer(base),
+                    end: UnsafeRawPointer(base + 2)
+                )
+                let descriptions = SancovSymbolizer.symbolize(edges: [0])
+                #expect(descriptions[0]?.contains("strlen") == true)
+                // An edge with no PC-table entry is omitted, not fabricated.
+                #expect(descriptions[7] == nil)
+            }
+        }
+    #endif
 }
 
 @Suite("Hit count bucketing tests")

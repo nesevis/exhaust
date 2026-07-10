@@ -20,6 +20,9 @@ package struct CorpusEntry {
     /// The phase that produced this entry.
     package let phase: SprawlPhase
 
+    /// Whether the property failed on this entry. Report-time discrimination splits the corpus on this flag: passing entries form the P(hit | pass) denominator.
+    package let propertyFailed: Bool
+
     /// Zobrist hash of `sequence`, the corpus-wide dedup key.
     package let hash: UInt64
 
@@ -90,6 +93,11 @@ package final class SprawlCorpus {
         coveringEntries = Array(repeating: [], count: edgeCount)
     }
 
+    /// Signatures of entries whose property evaluation passed — the P(hit | pass) sample for report-time discrimination.
+    package var passingSignatures: [BitSet] {
+        entries.filter { $0.propertyFailed == false }.map(\.signature)
+    }
+
     /// The number of edges any corpus entry has covered.
     package var coveredEdgeCount: Int {
         var total = 0
@@ -111,6 +119,7 @@ package final class SprawlCorpus {
     ///   - generation: Mutation distance from a phase-1/2 root.
     ///   - phase: The phase offering the candidate.
     ///   - isBoundaryDerived: Whether the candidate came from the covering array's boundary catalogues. Grants admission even without coverage novelty (phases 1 and 2 only; sprawl never sets this).
+    ///   - propertyFailed: Whether the property failed on this candidate, recorded for report-time discrimination.
     /// - Returns: The admission verdict. On admission, seen-bucket masks and rarity counts are already updated.
     package func offer(
         sequence: ChoiceSequence,
@@ -119,7 +128,8 @@ package final class SprawlCorpus {
         convergence: Double,
         generation: Int,
         phase: SprawlPhase,
-        isBoundaryDerived: Bool = false
+        isBoundaryDerived: Bool = false,
+        propertyFailed: Bool = false
     ) -> CorpusAdmission {
         let hash = ZobristHash.hash(of: sequence)
         guard seenHashes.contains(hash) == false else {
@@ -162,6 +172,7 @@ package final class SprawlCorpus {
             convergence: convergence,
             generation: generation,
             phase: phase,
+            propertyFailed: propertyFailed,
             hash: hash,
             introducedEdges: introducedEdges
         )

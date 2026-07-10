@@ -82,13 +82,51 @@ struct ExploreTimeRuntimeTests {
         #expect(report.coveredEdgeCount > 0)
         #expect(report.instrumentedEdgeCount == 32)
         #expect(report.clusters.count == 1)
+        #expect(report.frameworkOverheadFraction >= 0)
+        #expect(report.frameworkOverheadFraction <= 1)
         if let cluster = report.clusters.first {
             #expect(cluster.reducedDescription == "42")
             #expect(cluster.symptoms == ["returnedFalse"])
             #expect(cluster.instanceCount >= cluster.reducedCount)
             #expect(cluster.reducedCount >= 1)
             #expect(cluster.firstSeen <= cluster.lastSeen)
+            // The reduced form 42 hits only edge 2 (42 % 10); passing values also land there, but far below 100%.
+            #expect(cluster.necessaryEdgeCount == 1)
+            #expect(cluster.discriminatingEdges.first?.edgeIndex == 2)
+            #expect(cluster.discriminatingEdges.first?.failureHitFraction == 1.0)
+            // Synthetic edge indices address no real program counters, so no location resolves.
+            #expect(cluster.discriminatingEdges.allSatisfy { $0.location == nil })
         }
+    }
+
+    @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
+    @Test("Reports are deterministic under a pinned seed, modulo task-completion timing")
+    func reportDeterminism() {
+        func run() -> SprawlReport {
+            __ExhaustRuntime.runExploreTimeCore(
+                gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
+                time: .seconds(60),
+                settings: [.replay(11), .suppress(.all)],
+                source: passthroughSource(),
+                configure: { configuration in
+                    configuration.attemptLimit = 800
+                },
+                property: { value in
+                    value == 42 ? .fail(.returnedFalse) : .pass
+                }
+            )
+        }
+        let first = run()
+        let second = run()
+        #expect(first.termination == second.termination)
+        #expect(first.clusters.map(\.reducedDescription) == second.clusters.map(\.reducedDescription))
+        #expect(
+            first.clusters.map { $0.discriminatingEdges.map(\.edgeIndex) }
+                == second.clusters.map { $0.discriminatingEdges.map(\.edgeIndex) }
+        )
+        #expect(first.clusters.map(\.necessaryEdgeCount) == second.clusters.map(\.necessaryEdgeCount))
+        #expect(first.corpusEntryCount == second.corpusEntryCount)
+        #expect(first.coveredEdgeCount == second.coveredEdgeCount)
     }
 
     @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
