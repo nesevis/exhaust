@@ -128,7 +128,7 @@
                 """
                 #explore(messageGen, time: .minutes(5), directions: [("north", { $0 > 0 })]) { message in
                                                                     ┬──────────────────────
-                                                                    ╰─ 🛑 #explore cannot combine 'time:' and 'directions:'; the modes are mutually exclusive. Use 'time:' for a coverage-guided soak or 'directions:' for goal-bounded exploration
+                                                                    ╰─ 🛑 #explore cannot combine 'time:' and 'directions:'; the modes are mutually exclusive. Use 'time:' for a coverage-guided fuzz run or 'directions:' for goal-bounded exploration
                     message.isValid
                 }
                 """

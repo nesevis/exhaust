@@ -12,7 +12,7 @@ import Testing
 @Suite("Explore crash recovery", .serialized)
 struct ExploreTrapTests {
     #if os(macOS)
-        @Test("A Swift trap in a soak leaves a breadcrumb, a progress log, and the trapping input on disk", .timeLimit(.minutes(2)))
+        @Test("A Swift trap in a fuzz run leaves a breadcrumb, a progress log, and the trapping input on disk", .timeLimit(.minutes(2)))
         func trapLeavesRecoverableState() throws {
             let stateDirectory = scratchDirectory()
             defer {
@@ -89,7 +89,7 @@ struct ExploreTrapTests {
         }
     #endif
 
-    @Test("A soak records throughput and framework overhead", .timeLimit(.minutes(2)))
+    @Test("A fuzz run records throughput and framework overhead", .timeLimit(.minutes(2)))
     func throughputRecorded() {
         let report = #explore(
             Fixture.messageGenerator,

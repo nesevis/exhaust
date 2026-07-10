@@ -4,15 +4,15 @@ import ExploreFixture
 import Foundation
 import Testing
 
-/// The instrumented end-to-end validation: a real `#explore(time:)` soak against the coverage-instrumented
+/// The instrumented end-to-end validation: a real `#explore(time:)` fuzz run against the coverage-instrumented
 /// fixture, asserting the clustered fault inventory separates and merges what it should.
 ///
 /// Assertions are deliberately tolerant of reduction quality. Reduction is not guaranteed canonical on a real SUT, so a fault can leave a near-minimal residual alongside its minimal form (a masked-bit gate that reduces to `flags: 76` in one instance and `flags: 12` in another). The harness validates that the mode finds and separates the faults and surfaces each canonical minimal form — not that reduction is optimal.
-@Suite("Explore soak validation", .serialized)
-struct ExploreSoakTests {
-    @Test("A soak finds every catchable fault, separates the slippage pair, and never over-splits one value", .timeLimit(.minutes(2)))
-    func soakInventory() {
-        let report = soak()
+@Suite("Explore fuzz validation", .serialized)
+struct ExploreFuzzTests {
+    @Test("A fuzz run finds every catchable fault, separates the slippage pair, and never over-splits one value", .timeLimit(.minutes(2)))
+    func fuzzInventory() {
+        let report = fuzz()
 
         // Every planted fault's canonical minimal form appears among the clusters.
         #expect(clusterMatching(report, .faultA) != nil, "expected fault A (data / region 5 / [0, 0])")
@@ -42,14 +42,14 @@ struct ExploreSoakTests {
 
     @Test("The clustered inventory separates the slippage pair that symptom deduplication cannot", .timeLimit(.minutes(2)))
     func slippageDifferential() {
-        let report = soak()
+        let report = fuzz()
 
         // The distinctive signal is separation, not depth: the two faults A and B throw the same error type from the same site, so a symptom-deduplicating view — everything a blind sampler can offer — collapses them to one entry. The blind sampler here confirms it sees at most one IntegrityError symptom, with no way to tell the two faults apart.
         let blindSymptoms = blindSampleFaultTypes(attempts: report.totalAttempts, seed: 20_260_710)
         let blindIntegritySymptoms = blindSymptoms.filter { $0 == "IntegrityError" }
         #expect(blindIntegritySymptoms.count <= 1, "symptom deduplication cannot distinguish A from B")
 
-        // The soak splits the same shared symptom into two clusters with distinct reduced forms. This is the mode's contribution over stack-trace or symptom dedup, and it does not depend on how deep the gates are.
+        // The fuzz run splits the same shared symptom into two clusters with distinct reduced forms. This is the mode's contribution over stack-trace or symptom dedup, and it does not depend on how deep the gates are.
         let integrityClusters = report.clusters.filter { $0.symptoms.contains("IntegrityError") }
         let distinctForms = Set(integrityClusters.map(\.reducedDescription))
         #expect(distinctForms.count >= 2, "the inventory should separate A and B into distinct reduced forms")
@@ -57,9 +57,9 @@ struct ExploreSoakTests {
         #expect(clusterMatching(report, .faultB) != nil)
     }
 
-    // MARK: - Shared Soak
+    // MARK: - Shared Fuzz Run
 
-    private func soak() -> SprawlReport {
+    private func fuzz() -> SprawlReport {
         // A throwing single-expression property, so each distinct fault type flows through as its own symptom rather than collapsing to a bare returnedFalse.
         #explore(
             Fixture.messageGenerator,

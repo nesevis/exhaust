@@ -44,7 +44,7 @@ let package = Package(
                 .product(name: "ExhaustCore", package: "Exhaust"),
             ]
         ),
-        // Spawned as a child process by the trap test: runs a soak that traps, so the parent can inspect the breadcrumb and progress log the dead process left behind.
+        // Spawned as a child process by the trap test: runs a fuzz run that traps, so the parent can inspect the breadcrumb and progress log the dead process left behind.
         .executableTarget(
             name: "ExploreTrapProbe",
             dependencies: [

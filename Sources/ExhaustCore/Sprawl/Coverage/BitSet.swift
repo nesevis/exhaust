@@ -2,7 +2,7 @@
 
 /// A set of edge indices backed by packed `UInt64` words.
 ///
-/// Coverage signatures are compared, unioned, and intersected millions of times per soak run, so the representation is a flat word array rather than `Set<Int>`: a 1,000-edge module needs 16 words (~128 bytes), and set algebra is word-parallel. Capacity is fixed at init to the instrumented edge count; all signatures in a run share the same capacity, which keeps binary operations index-aligned without bounds negotiation.
+/// Coverage signatures are compared, unioned, and intersected millions of times per fuzz run, so the representation is a flat word array rather than `Set<Int>`: a 1,000-edge module needs 16 words (~128 bytes), and set algebra is word-parallel. Capacity is fixed at init to the instrumented edge count; all signatures in a run share the same capacity, which keeps binary operations index-aligned without bounds negotiation.
 ///
 /// Hashable so cluster identity can key on (reduced form, signature) pairs.
 package struct BitSet: Hashable, Sendable {

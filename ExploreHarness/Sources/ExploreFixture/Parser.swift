@@ -27,7 +27,7 @@ public struct Decoded: Sendable, Equatable {
 
 /// The fixture parser.
 public enum Parser {
-    /// Decodes a message, surfacing the catchable planted faults A, B, C, and D. Contains no trap, so the main soak can run it safely.
+    /// Decodes a message, surfacing the catchable planted faults A, B, C, and D. Contains no trap, so the main fuzz run can run it safely.
     ///
     /// - Throws: ``ChecksumError`` (fault D), ``IntegrityError`` (the slippage pair A and B), or ``WindowError`` (fault C).
     public static func decode(_ message: Message) throws -> Decoded {
@@ -44,7 +44,7 @@ public enum Parser {
         }
     }
 
-    /// Decodes a message including the fatal trap E. Called only by the trap probe: the trap kills the process, so the in-suite soak must not reach it.
+    /// Decodes a message including the fatal trap E. Called only by the trap probe: the trap kills the process, so the in-suite fuzz run must not reach it.
     public static func decodeUnsafe(_ message: Message) throws -> Decoded {
         checkTrap(message)
         return try decode(message)
@@ -131,7 +131,7 @@ public enum Parser {
 
     // MARK: - Fatal Fault (E)
 
-    /// Fault E: a trap behind control mode, a flag bit, region 7, and a non-empty payload — roughly 1-in-75 by blind sampling. Only `decodeUnsafe` reaches it, so it never threatens the main soak (which runs `decode`); the probe traps within milliseconds, which is what the crash-recovery test needs. Its shallowness measures nothing about search quality — that is the deep A and B chains' job.
+    /// Fault E: a trap behind control mode, a flag bit, region 7, and a non-empty payload — roughly 1-in-75 by blind sampling. Only `decodeUnsafe` reaches it, so it never threatens the main fuzz run (which runs `decode`); the probe traps within milliseconds, which is what the crash-recovery test needs. Its shallowness measures nothing about search quality — that is the deep A and B chains' job.
     private static func checkTrap(_ message: Message) {
         if message.mode == .control {
             if message.flags & 0b0001_0000 != 0 {

@@ -1,4 +1,4 @@
-// A child process that soaks the fixture's trap-bearing parser until it dies, so the parent test can
+// A child process that fuzzes the fixture's trap-bearing parser until it dies, so the parent test can
 // inspect the breadcrumb and progress log the dead process left behind.
 //
 // The parent sets `TMPDIR` to a directory it controls, so the runtime's `$TMPDIR/exhaust/...` state

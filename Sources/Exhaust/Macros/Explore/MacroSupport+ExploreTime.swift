@@ -1,4 +1,4 @@
-// Explore time: mode — coverage-guided soak runtime entry points.
+// Explore time: mode — coverage-guided fuzzing runtime entry points.
 
 import ExhaustCore
 import Foundation
@@ -40,7 +40,7 @@ package enum SprawlInstrumentationCheck {
 public extension __ExhaustRuntime {
     // MARK: - Explore Time (Bool)
 
-    /// Runs a coverage-guided `time:` soak with a Bool-returning property. Runtime target of `#explore(time:)`.
+    /// Runs a coverage-guided `time:` fuzz run with a Bool-returning property. Runtime target of `#explore(time:)`.
     @discardableResult
     static func __exploreTime<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -83,9 +83,9 @@ public extension __ExhaustRuntime {
 
     // MARK: - Explore Time (Expect)
 
-    /// Runs a coverage-guided `time:` soak with a Void/#expect/#require closure.
+    /// Runs a coverage-guided `time:` fuzz run with a Void/#expect/#require closure.
     ///
-    /// The detection closure (the property with `#expect` rewritten to `#require`) records an issue on every failing attempt, and a soak deliberately keeps failing past the first failure, so the whole run executes inside `withExpectedIssue(isIntermittent:)`. The fault inventory is reported afterwards, outside that scope, so it surfaces as a real failure.
+    /// The detection closure (the property with `#expect` rewritten to `#require`) records an issue on every failing attempt, and a fuzz run deliberately keeps failing past the first failure, so the whole run executes inside `withExpectedIssue(isIntermittent:)`. The fault inventory is reported afterwards, outside that scope, so it surfaces as a real failure.
     @discardableResult
     static func __exploreTimeExpect<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -136,7 +136,7 @@ public extension __ExhaustRuntime {
 
     // MARK: - Explore Time (Async)
 
-    /// Runs a coverage-guided `time:` soak with an async Bool-returning property.
+    /// Runs a coverage-guided `time:` fuzz run with an async Bool-returning property.
     @discardableResult
     static func __exploreTimeAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -183,7 +183,7 @@ public extension __ExhaustRuntime {
 
     // MARK: - Explore Time (Async Expect)
 
-    /// Runs a coverage-guided `time:` soak with an async Void/#expect/#require closure.
+    /// Runs a coverage-guided `time:` fuzz run with an async Void/#expect/#require closure.
     @discardableResult
     static func __exploreTimeExpectAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -267,7 +267,7 @@ public extension __ExhaustRuntime {
         for setting in settings {
             switch setting {
                 case let .replay(replaySeed):
-                    // A screening-row replay resolves without a PRNG seed; a soak replays the whole search from its root seed, so only seed-carrying replays apply here.
+                    // A screening-row replay resolves without a PRNG seed; a fuzz run replays the whole search from its root seed, so only seed-carrying replays apply here.
                     guard let resolved = replaySeed.resolve(), let resolvedSeed = resolved.seed else {
                         return .empty(
                             termination: .invalidConfiguration("Invalid replay seed for #explore(time:): \(replaySeed). Pass the run seed from a prior report."),
@@ -528,7 +528,7 @@ public extension __ExhaustRuntime {
 
     /// Records the run's checkpoint attachments: one per discovered cluster plus the final summary.
     ///
-    /// Eager and outcome-independent — a passing soak still attaches its summary, because "what did fifteen minutes buy" is the report's job either way. Must run on the test's own task: Swift Testing's attachment association is task-local, and the XCTest activity hop asserts the main actor, so the async entries call this after `dispatchToGCD` returns, never inside it.
+    /// Eager and outcome-independent — a passing fuzz run still attaches its summary, because "what did fifteen minutes buy" is the report's job either way. Must run on the test's own task: Swift Testing's attachment association is task-local, and the XCTest activity hop asserts the main actor, so the async entries call this after `dispatchToGCD` returns, never inside it.
     package static func recordSprawlAttachments(report: SprawlReport) {
         guard report.totalAttempts > 0 else {
             return
@@ -542,7 +542,7 @@ public extension __ExhaustRuntime {
         recordAttachment(renderSprawlSummary(report), named: "explore-time-summary.txt")
     }
 
-    /// Records one plain-text attachment through the current test context. The XCTest lifetime is `.keepAlways` — the default `.deleteOnSuccess` silently drops attachments from passing runs, and a passing soak's report is still the product.
+    /// Records one plain-text attachment through the current test context. The XCTest lifetime is `.keepAlways` — the default `.deleteOnSuccess` silently drops attachments from passing runs, and a passing fuzz run's report is still the product.
     private static func recordAttachment(_ text: String, named name: String) {
         switch TestContext.current {
             #if canImport(Testing)

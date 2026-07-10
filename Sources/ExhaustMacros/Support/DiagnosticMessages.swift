@@ -14,7 +14,7 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case exploreMissingGenerator = "#explore requires a generator as its first argument"
     case exploreMissingDirections = "#explore requires a 'directions:' argument"
     case exploreTimeMissingTime = "#explore(time:) requires a 'time:' argument"
-    case exploreTimeWithDirections = "#explore cannot combine 'time:' and 'directions:'; the modes are mutually exclusive. Use 'time:' for a coverage-guided soak or 'directions:' for goal-bounded exploration"
+    case exploreTimeWithDirections = "#explore cannot combine 'time:' and 'directions:'; the modes are mutually exclusive. Use 'time:' for a coverage-guided fuzz run or 'directions:' for goal-bounded exploration"
     case exampleMissingGenerator = "#example requires a generator as its first argument"
     case examineMissingGenerator = "#examine requires a generator as its first argument"
     case exhaustStateMachineMissingSpec = "#execute requires a spec type argument"

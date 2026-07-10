@@ -10,7 +10,7 @@ import ExhaustCore
 
 /// Controls test behavior for `#explore(time:)` coverage-guided runs, passed as variadic arguments.
 ///
-/// The `time:` mode takes a distinct settings type from ``ExploreSettings`` because most of its knobs (replay of a whole soak, budget-relative stopping) have no meaning under `directions:` mode, and the two modes are mutually exclusive at the type level.
+/// The `time:` mode takes a distinct settings type from ``ExploreSettings`` because most of its knobs (replay of a whole fuzz run, budget-relative stopping) have no meaning under `directions:` mode, and the two modes are mutually exclusive at the type level.
 public enum SprawlSettings: Sendable {
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
     ///
