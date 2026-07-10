@@ -209,6 +209,7 @@ private func document(consumedNanoseconds: UInt64, clusterCount: Int) -> SprawlP
                 restoredID: index,
                 reducedSequence: sequence,
                 reducedDescription: "\(index)",
+                reducedKey: "\(index)",
                 signatures: [],
                 symptoms: [.returnedFalse],
                 instanceCount: 1,

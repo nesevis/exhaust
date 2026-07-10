@@ -64,6 +64,7 @@ package struct SprawlProgressDocument: Codable, Sendable {
         package var id: Int
         package var reducedSequence: String
         package var reducedDescription: String
+        package var reducedKey: String
         package var symptoms: [String]
         package var instanceCount: Int
         package var reducedCount: Int
@@ -78,6 +79,7 @@ package struct SprawlProgressDocument: Codable, Sendable {
             id = cluster.id
             reducedSequence = ChoiceSequenceCodec.encode(cluster.reducedSequence)
             reducedDescription = cluster.reducedDescription
+            reducedKey = cluster.reducedKey
             symptoms = cluster.symptoms.map(\.kind).sorted()
             instanceCount = cluster.instanceCount
             reducedCount = cluster.reducedCount

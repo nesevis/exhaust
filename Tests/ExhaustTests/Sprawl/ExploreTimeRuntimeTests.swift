@@ -6,7 +6,6 @@ import Testing
 
 @Suite("#explore(time:) runtime entry", .serialized)
 struct ExploreTimeRuntimeTests {
-    @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
     @Test("Missing instrumentation fails immediately, before any budget is consumed")
     func missingInstrumentation() {
         SprawlInstrumentationCheck.overrideForTesting.withValue { $0 = false }
@@ -24,7 +23,6 @@ struct ExploreTimeRuntimeTests {
         #expect(report?.elapsed == .zero)
     }
 
-    @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
     @Test("An unresolvable replay seed is a configuration error, not a run")
     func invalidReplaySeed() {
         let report = __ExhaustRuntime.runExploreTimeCore(
@@ -42,7 +40,6 @@ struct ExploreTimeRuntimeTests {
         #expect(report.totalAttempts == 0)
     }
 
-    @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
     @Test("A nonpositive time budget is a configuration error, not a run")
     func nonpositiveBudget() {
         let report = __ExhaustRuntime.runExploreTimeCore(
@@ -60,7 +57,6 @@ struct ExploreTimeRuntimeTests {
         #expect(report.totalAttempts == 0)
     }
 
-    @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
     @Test("An attempt-limited run wraps the runner result into the public report")
     func reportWrapping() {
         let report = __ExhaustRuntime.runExploreTimeCore(
@@ -99,7 +95,6 @@ struct ExploreTimeRuntimeTests {
         }
     }
 
-    @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
     @Test("Reports are deterministic under a pinned seed, modulo task-completion timing")
     func reportDeterminism() {
         func run() -> SprawlReport {
@@ -129,7 +124,6 @@ struct ExploreTimeRuntimeTests {
         #expect(first.coveredEdgeCount == second.coveredEdgeCount)
     }
 
-    @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
     @Test("The fault inventory is reported as an issue unless suppressed")
     func inventoryReporting() {
         let report = __ExhaustRuntime.runExploreTimeCore(
@@ -174,7 +168,6 @@ struct ExploreTimeRuntimeTests {
         #expect(summary.contains(".replay(7)"))
     }
 
-    @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
     @Test("A run whose property never ran reports the pointless-run error even when suppressed")
     func pointlessRun() {
         let report = __ExhaustRuntime.runExploreTimeCore(
@@ -200,7 +193,6 @@ struct ExploreTimeRuntimeTests {
         }
     }
 
-    @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
     @Test("Verdict wrapping distinguishes false, thrown, and skip")
     func verdictWrapping() {
         let boolProperty = __ExhaustRuntime.wrapVerdictProperty { (value: Int) -> Bool in
@@ -234,7 +226,6 @@ struct ExploreTimeRuntimeTests {
     }
 
     #if canImport(ObjectiveC)
-        @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
         @Test("An NSException raised by the property is caught in-process and treated as an ordinary failure")
         func nsExceptionCaught() {
             let property = __ExhaustRuntime.wrapVerdictProperty { (value: Int) -> Bool in

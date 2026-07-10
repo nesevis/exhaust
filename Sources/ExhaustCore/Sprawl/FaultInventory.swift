@@ -23,7 +23,7 @@ package struct FailureSymptom: Hashable, Sendable {
 
 /// One fault class: a unique reduced form with its post-hoc coverage signatures and membership counts.
 ///
-/// Cluster identity is the reduced choice sequence — shortlex determinism makes it a strong equality. Signatures collect *within* a cluster: a second distinct signature on the same reduced form is the "likely same cluster" taxonomy tier (same surface bug, possibly different code paths reaching the fault), while a different reduced form is always a different cluster.
+/// Cluster identity is the reduced counterexample's *value*, rendered to a canonical key. The reduced choice sequence is not a reliable identity: two counterexamples that reduce to the same value through a bind or a length-coupled sequence carry different structural bookkeeping (`.sequence` valid ranges, `.branch` fingerprints, differing marker counts) and would over-split into separate clusters. The rendered value is deterministic and collapses those to one. Signatures collect *within* a cluster: a second distinct signature on the same reduced form is the "likely same cluster" taxonomy tier (same surface bug, possibly different code paths reaching the fault), while a different reduced form is always a different cluster.
 package struct FaultCluster: Sendable {
     /// Stable identifier in discovery order.
     package let id: Int
@@ -33,6 +33,9 @@ package struct FaultCluster: Sendable {
 
     /// A rendered description of the reduced counterexample, for the report.
     package let reducedDescription: String
+
+    /// The full-fidelity rendering of the reduced value that serves as cluster identity. Distinct from ``reducedDescription``, which is depth-truncated for display.
+    package let reducedKey: String
 
     /// The distinct post-hoc coverage signatures observed for this reduced form. More than one means "likely same cluster" members exist.
     package private(set) var signatures: [BitSet]
@@ -57,6 +60,7 @@ package struct FaultCluster: Sendable {
         id: Int,
         reducedSequence: ChoiceSequence,
         reducedDescription: String,
+        reducedKey: String,
         signature: BitSet?,
         symptom: FailureSymptom,
         phase: SprawlPhase,
@@ -65,6 +69,7 @@ package struct FaultCluster: Sendable {
         self.id = id
         self.reducedSequence = reducedSequence
         self.reducedDescription = reducedDescription
+        self.reducedKey = reducedKey
         signatures = signature.map { [$0] } ?? []
         symptoms = [symptom]
         instanceCount = 1
@@ -79,6 +84,7 @@ package struct FaultCluster: Sendable {
         restoredID: Int,
         reducedSequence: ChoiceSequence,
         reducedDescription: String,
+        reducedKey: String,
         signatures: [BitSet],
         symptoms: Set<FailureSymptom>,
         instanceCount: Int,
@@ -90,6 +96,7 @@ package struct FaultCluster: Sendable {
         id = restoredID
         self.reducedSequence = reducedSequence
         self.reducedDescription = reducedDescription
+        self.reducedKey = reducedKey
         self.signatures = signatures
         self.symptoms = symptoms
         self.instanceCount = instanceCount
@@ -146,21 +153,23 @@ package actor FaultInventory {
     /// Records a completed reduction, joining an existing cluster when the reduced form is already known and creating a new cluster otherwise.
     ///
     /// - Parameters:
-    ///   - reducedSequence: The reduced counterexample's choice sequence — the cluster key.
-    ///   - reducedDescription: A rendered description of the reduced value, kept from the first member.
+    ///   - reducedSequence: The reduced counterexample's choice sequence, kept from the first member.
+    ///   - reducedKey: The canonical cluster identity — a metadata-stripped structural key over the reduced sequence (see ``Swift/Collection/clusterKey``).
+    ///   - renderDescription: Produces the human-readable counterexample description, called only when a new cluster is created so its cost (reflection on the value) is paid once per fault, not once per reduction.
     ///   - signature: The post-hoc coverage signature from the attributed re-run, or nil when attribution was unavailable.
     ///   - symptom: The failure's cheap symptom.
     ///   - phase: The phase that discovered the failing input.
     ///   - timestampNanoseconds: Monotonic time of the discovery, supplied by the caller so tests stay deterministic.
     package func recordReduced(
         reducedSequence: ChoiceSequence,
-        reducedDescription: String,
+        reducedKey: String,
+        renderDescription: @Sendable () -> String,
         signature: BitSet?,
         symptom: FailureSymptom,
         phase: SprawlPhase,
         timestampNanoseconds: UInt64
     ) -> ClusterClassification {
-        if let index = clusters.firstIndex(where: { $0.reducedSequence == reducedSequence }) {
+        if let index = clusters.firstIndex(where: { $0.reducedKey == reducedKey }) {
             clusters[index].absorb(
                 signature: signature,
                 symptom: symptom,
@@ -176,7 +185,8 @@ package actor FaultInventory {
         let cluster = FaultCluster(
             id: clusters.count,
             reducedSequence: reducedSequence,
-            reducedDescription: reducedDescription,
+            reducedDescription: renderDescription(),
+            reducedKey: reducedKey,
             signature: signature,
             symptom: symptom,
             phase: phase,

@@ -6,7 +6,6 @@ import Testing
 
 @Suite("#explore(time:) crash resume")
 struct ExploreTimeResumeTests {
-    @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
     @Test("A crashed predecessor restores: corpus and inventory carry over, phases skip to sprawl, the trap reports, and completion removes the log")
     func resumeEndToEnd() throws {
         let directory = scratchDirectory()
@@ -41,6 +40,7 @@ struct ExploreTimeResumeTests {
                 restoredID: 0,
                 reducedSequence: sequences[0],
                 reducedDescription: "planted-restored-cluster",
+                reducedKey: "planted-restored-cluster",
                 signatures: [],
                 symptoms: [.returnedFalse],
                 instanceCount: 3,
@@ -112,7 +112,6 @@ struct ExploreTimeResumeTests {
         #expect(FileManager.default.fileExists(atPath: store.progressFileURL.path) == false)
     }
 
-    @available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
     @Test("Resume opt-out ignores predecessor state")
     func resumeOptOut() throws {
         let directory = scratchDirectory()

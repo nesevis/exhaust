@@ -1,0 +1,57 @@
+// swift-tools-version: 6.3
+// Validation harness for `#explore(time:)`. A separate package so the coverage `.unsafeFlags` live in a consumer's manifest — exactly the integration path a real user follows — and never touch Exhaust's own manifest, where they would disqualify it as a tagged dependency.
+
+import PackageDescription
+
+/// Coverage instrumentation for the fixture only, debug-only.
+///
+/// `-sanitize=undefined` is the lightest base sanitiser the frontend requires before it accepts `-sanitize-coverage`; `edge,inline-8bit-counters,pc-table` is libFuzzer's default and what the live loop plus the report both read. Debug-only keeps release builds clean.
+let coverageFlags: [SwiftSetting] = [
+    .unsafeFlags(
+        [
+            "-sanitize=undefined",
+            "-sanitize-coverage=edge,inline-8bit-counters,pc-table",
+        ],
+        .when(configuration: .debug)
+    ),
+]
+
+let package = Package(
+    name: "ExploreHarness",
+    platforms: [
+        .macOS(.v13),
+        .iOS(.v16),
+    ],
+    dependencies: [
+        .package(path: ".."),
+    ],
+    targets: [
+        // The deliberately buggy SUT and the only instrumented target. Depends on Exhaust only for the
+        // generator factory; the parser itself is plain Swift.
+        .target(
+            name: "ExploreFixture",
+            dependencies: [
+                .product(name: "Exhaust", package: "Exhaust"),
+            ],
+            swiftSettings: coverageFlags
+        ),
+        // Uninstrumented: the test module measures the fixture's coverage, not its own.
+        .testTarget(
+            name: "ExploreTests",
+            dependencies: [
+                "ExploreFixture",
+                .product(name: "Exhaust", package: "Exhaust"),
+                .product(name: "ExhaustCore", package: "Exhaust"),
+            ]
+        ),
+        // Spawned as a child process by the trap test: runs a soak that traps, so the parent can inspect the breadcrumb and progress log the dead process left behind.
+        .executableTarget(
+            name: "ExploreTrapProbe",
+            dependencies: [
+                "ExploreFixture",
+                .product(name: "Exhaust", package: "Exhaust"),
+                .product(name: "ExhaustCore", package: "Exhaust"),
+            ]
+        ),
+    ]
+)

@@ -69,12 +69,11 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
 ///
 /// - Returns: A ``SprawlReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
-@available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
 @freestanding(expression)
 @discardableResult
 public macro explore<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
-    time: Duration,
+    time: SprawlDuration,
     _ settings: SprawlSettings...,
     property: @Sendable (GeneratedValue) throws -> PropertyResult
 ) -> SprawlReport = #externalMacro(module: "ExhaustMacros", type: "ExploreTimeMacro")
@@ -94,12 +93,11 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
 ///
 /// - Returns: A ``SprawlReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
-@available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
 @freestanding(expression)
 @discardableResult
 public macro explore<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
-    time: Duration,
+    time: SprawlDuration,
     _ settings: SprawlSettings...,
     property: @Sendable (GeneratedValue) async throws -> PropertyResult
 ) -> SprawlReport = #externalMacro(module: "ExhaustMacros", type: "ExploreTimeAsyncMacro")

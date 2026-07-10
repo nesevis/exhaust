@@ -37,7 +37,6 @@ package enum SprawlInstrumentationCheck {
     }
 }
 
-@available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
 public extension __ExhaustRuntime {
     // MARK: - Explore Time (Bool)
 
@@ -45,7 +44,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exploreTime<Output>(
         _ refGen: ReflectiveGenerator<Output>,
-        time: Duration,
+        time: SprawlDuration,
         settings: [SprawlSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -90,7 +89,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exploreTimeExpect<Output>(
         _ refGen: ReflectiveGenerator<Output>,
-        time: Duration,
+        time: SprawlDuration,
         settings: [SprawlSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -141,7 +140,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exploreTimeAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
-        time: Duration,
+        time: SprawlDuration,
         settings: [SprawlSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -188,7 +187,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exploreTimeExpectAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
-        time: Duration,
+        time: SprawlDuration,
         settings: [SprawlSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -255,7 +254,7 @@ public extension __ExhaustRuntime {
     /// The `source` and `configure` parameters are test seams: in-package tests inject a synthetic coverage source (skipping the instrumentation check) and tighten the runner configuration (attempt limits, phase skips) for deterministic termination.
     package static func runExploreTimeCore<Output>(
         gen: Generator<Output>,
-        time: Duration,
+        time: SprawlDuration,
         settings: [SprawlSettings],
         source injectedSource: (any CoverageSource)?,
         configure: ((inout SprawlRunnerConfiguration) -> Void)?,
@@ -285,9 +284,10 @@ public extension __ExhaustRuntime {
             }
         }
 
-        guard let budgetNanoseconds = wholeNanoseconds(of: time), budgetNanoseconds > 0 else {
+        let budgetNanoseconds = time.nanoseconds
+        guard budgetNanoseconds > 0 else {
             return .empty(
-                termination: .invalidConfiguration("#explore(time:) requires a positive time budget; got \(time)."),
+                termination: .invalidConfiguration("#explore(time:) requires a positive time budget; got \(time.seconds)s."),
                 seed: seed
             )
         }
@@ -346,19 +346,22 @@ public extension __ExhaustRuntime {
 
     // MARK: - Crash Recovery
 
-    /// Builds the crash-recovery context for one `#explore(time:)` call site: `$TMPDIR/exhaust/<module>/<file>-L<line>/`, which is stable across runs of the same test. Construction is read-only; the runner creates files only once the run actually starts.
+    /// Builds the crash-recovery context for one `#explore(time:)` call site: `<base>/exhaust/<module>/<file>-L<line>/`, which is stable across runs of the same test. Construction is read-only; the runner creates files only once the run actually starts.
     ///
-    /// `EXHAUST_RESUME=0` opts out of recovery: predecessor state is ignored and overwritten.
+    /// The base directory is the system temporary directory, or `EXHAUST_STATE_DIR` when set — a relocation seam for CI and for the trap probe, which needs the parent process to know where the crashed child's state landed. `EXHAUST_RESUME=0` opts out of recovery: predecessor state is ignored and overwritten.
     package static func makeSprawlPersistenceContext(
         fileID: StaticString,
         line: UInt,
-        baseDirectory: URL = FileManager.default.temporaryDirectory
+        baseDirectory: URL? = nil
     ) -> SprawlPersistenceContext {
+        let base = baseDirectory
+            ?? ProcessInfo.processInfo.environment["EXHAUST_STATE_DIR"].map { URL(fileURLWithPath: $0) }
+            ?? FileManager.default.temporaryDirectory
         let fileIDText = "\(fileID)"
         let module = fileIDText.split(separator: "/").first.map(String.init) ?? "UnknownModule"
         let file = fileIDText.split(separator: "/").last.map(String.init) ?? "UnknownFile"
         let store = SprawlProgressStore(
-            baseDirectory: baseDirectory,
+            baseDirectory: base,
             module: module,
             testIdentifier: "\(file)-L\(line)"
         )
@@ -563,13 +566,12 @@ public extension __ExhaustRuntime {
     }
 
     /// Renders a duration as whole seconds (or minutes and seconds past 90 seconds) for report lines.
-    private static func renderDuration(_ duration: Duration) -> String {
-        let totalSeconds = duration.components.seconds
+    private static func renderDuration(_ duration: SprawlDuration) -> String {
+        let totalSeconds = duration.nanoseconds / 1_000_000_000
         if totalSeconds >= 90 {
             return "\(totalSeconds / 60)m \(totalSeconds % 60)s"
         }
-        let fractional = Double(totalSeconds) + Double(duration.components.attoseconds) / 1e18
-        return String(format: "%.1fs", fractional)
+        return String(format: "%.1fs", duration.seconds)
     }
 
     /// The hard-failure diagnostic for a build without coverage instrumentation, with the flags ready to copy-paste.
@@ -681,20 +683,5 @@ public extension __ExhaustRuntime {
             _ = caught
             return "NSException"
         #endif
-    }
-
-    /// Converts a duration to whole nanoseconds, or nil when it is negative. Saturates at `UInt64.max` (585 years) rather than trapping on absurd budgets.
-    private static func wholeNanoseconds(of time: Duration) -> UInt64? {
-        let components = time.components
-        guard components.seconds >= 0, components.attoseconds >= 0 else {
-            return nil
-        }
-        let secondsPart = components.seconds.multipliedReportingOverflow(by: 1_000_000_000)
-        guard secondsPart.overflow == false else {
-            return UInt64.max
-        }
-        let nanoseconds = UInt64(secondsPart.partialValue)
-            .addingReportingOverflow(UInt64(components.attoseconds / 1_000_000_000))
-        return nanoseconds.overflow ? UInt64.max : nanoseconds.partialValue
     }
 }

@@ -611,13 +611,16 @@ package final class SprawlRunner<Output> {
             )
 
             let reducedSequence: ChoiceSequence
+            let reducedTree: ChoiceTree
             let reducedValue: Output
             switch outcome {
-                case let .reduced(sequence, _, output), let .unreduced(sequence, _, output):
+                case let .reduced(sequence, tree, output), let .unreduced(sequence, tree, output):
                     reducedSequence = sequence
+                    reducedTree = tree
                     reducedValue = output
                 case .failure, nil:
                     reducedSequence = ChoiceSequence.flatten(capturedTree)
+                    reducedTree = capturedTree
                     reducedValue = capturedValue
             }
 
@@ -629,12 +632,17 @@ package final class SprawlRunner<Output> {
                 attributionToken: attributionToken
             )
 
-            var description = ""
-            customDump(reducedValue, to: &description, maxDepth: 3)
-
+            // Cluster identity is a cheap structural key over the reduced tree flattened with bind-inners skipped; the reflective description render is deferred to recordReduced and runs only when a new cluster is created.
+            let reducedKey = ChoiceSequence.flatten(reducedTree, skipBindInners: true).clusterKey
+            nonisolated(unsafe) let capturedReducedValue = reducedValue
             let classification = await inventory.recordReduced(
                 reducedSequence: reducedSequence,
-                reducedDescription: description,
+                reducedKey: reducedKey,
+                renderDescription: {
+                    var description = ""
+                    customDump(capturedReducedValue, to: &description, maxDepth: 3)
+                    return description
+                },
                 signature: signature,
                 symptom: symptom,
                 phase: phase,
@@ -725,6 +733,9 @@ package final class SprawlRunner<Output> {
                 corpus.quarantine(sequenceHash: survivor.parentHash)
             }
         }
+
+        // Write one checkpoint synchronously before the first evaluation, so even a crash in the opening milliseconds leaves a parseable log on disk rather than nothing.
+        try? persistence.store.write(makeCheckpointDocument(now: startNanoseconds))
     }
 
     /// Flushes outstanding checkpoints and removes the recovery state. Reaching this method at all means the run terminated normally — a surviving log is the crash signal, so a completed run must not leave one.
@@ -749,25 +760,27 @@ package final class SprawlRunner<Output> {
         forceCheckpoint = false
         lastCheckpointNanoseconds = now
 
+        let document = makeCheckpointDocument(now: now)
+        writer.submit { document }
+    }
+
+    /// Snapshots corpus and inventory into a progress document. Called synchronously at startup and once per due checkpoint; the returned document is `Sendable`, so the async writer serialises and writes it off the loop.
+    private func makeCheckpointDocument(now: UInt64) -> SprawlProgressDocument {
         let inventory = inventory
         let clusters = __ExhaustRuntime.blockingAwait { await inventory.snapshot() }
-        let entries = corpus.entries
         let epoch = reportEpochNanoseconds
-        let metadata = SprawlProgressDocument.Metadata(
-            seed: configuration.seed,
-            budgetNanoseconds: priorConsumedNanoseconds + configuration.budgetNanoseconds,
-            consumedNanoseconds: priorConsumedNanoseconds + (now - startNanoseconds),
-            lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
-            pcTableHash: pcTableHashAtStart,
-            edgeCount: source.edgeCount
+        return SprawlProgressDocument(
+            metadata: SprawlProgressDocument.Metadata(
+                seed: configuration.seed,
+                budgetNanoseconds: priorConsumedNanoseconds + configuration.budgetNanoseconds,
+                consumedNanoseconds: priorConsumedNanoseconds + (now - startNanoseconds),
+                lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
+                pcTableHash: pcTableHashAtStart,
+                edgeCount: source.edgeCount
+            ),
+            clusters: clusters.map { SprawlProgressDocument.ClusterRecord(cluster: $0, epochNanoseconds: epoch) },
+            snapshot: corpus.entries.map(SprawlProgressDocument.CorpusEntryRecord.init(entry:))
         )
-        writer.submit {
-            SprawlProgressDocument(
-                metadata: metadata,
-                clusters: clusters.map { SprawlProgressDocument.ClusterRecord(cluster: $0, epochNanoseconds: epoch) },
-                snapshot: entries.map(SprawlProgressDocument.CorpusEntryRecord.init(entry:))
-            )
-        }
     }
 
     /// Rebuilds the corpus and inventory from a predecessor's document.
@@ -797,6 +810,7 @@ package final class SprawlRunner<Output> {
                 restoredID: restoredClusters.count,
                 reducedSequence: sequence,
                 reducedDescription: record.reducedDescription,
+                reducedKey: record.reducedKey,
                 signatures: signatures,
                 symptoms: Set(record.symptoms.map(FailureSymptom.init(kind:))),
                 instanceCount: record.instanceCount,

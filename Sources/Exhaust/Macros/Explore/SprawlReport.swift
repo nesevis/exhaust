@@ -5,7 +5,6 @@ import ExhaustCore
 /// The outcome of a `#explore(time:)` coverage-guided run: a clustered fault inventory plus throughput and coverage statistics.
 ///
 /// A `time:` run catalogues failures instead of stopping at the first one, so the report carries every distinct fault cluster the run discovered. Assert on ``clusters`` when a run is expected to find bugs (combine with `.suppress(.issueReporting)`), or on ``termination`` and the attempt counts when validating search behavior.
-@available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
 public struct SprawlReport: Sendable {
     /// One distinct fault the run discovered: a unique reduced counterexample with its membership counts.
     ///
@@ -33,10 +32,10 @@ public struct SprawlReport: Sendable {
         public let discoveringPhase: Phase
 
         /// Elapsed run time at the first failure attributed to this cluster.
-        public let firstSeen: Duration
+        public let firstSeen: SprawlDuration
 
         /// Elapsed run time at the most recent failure attributed to this cluster.
-        public let lastSeen: Duration
+        public let lastSeen: SprawlDuration
 
         /// Edges ranked by discriminative power against passing runs, strongest first. The top entry is the best single lead on the fault's location.
         public let discriminatingEdges: [DiscriminatingEdge]
@@ -81,7 +80,7 @@ public struct SprawlReport: Sendable {
         case budgetExhausted
 
         /// Sprawl stopped learning — no coverage-novel corpus admission for a sustained window — so the run ended early and returned the unused budget rather than burning it. A plateau is not evidence the fault space is exhausted; failures on already-covered paths remain possible.
-        case coveragePlateau(unused: Duration)
+        case coveragePlateau(unused: SprawlDuration)
 
         /// The build lacks coverage instrumentation, so the run failed loudly before consuming any budget. The recorded issue carries the compiler flags to add.
         case instrumentationMissing
@@ -127,7 +126,7 @@ public struct SprawlReport: Sendable {
     public let termination: Termination
 
     /// Wall-clock time the run consumed.
-    public let elapsed: Duration
+    public let elapsed: SprawlDuration
 
     /// The root seed. Pass to `.replay(_:)` to re-run the search deterministically.
     public let seed: UInt64
@@ -147,8 +146,7 @@ public struct SprawlReport: Sendable {
 
     /// Attempts per second over the whole run. A falling number against a baseline means framework or property overhead is eating the budget.
     public var attemptsPerSecond: Double {
-        let seconds = Double(elapsed.components.seconds)
-            + Double(elapsed.components.attoseconds) / 1e18
+        let seconds = elapsed.seconds
         guard seconds > 0 else {
             return 0
         }
@@ -158,7 +156,6 @@ public struct SprawlReport: Sendable {
 
 // MARK: - Wrapping the package-level result
 
-@available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
 package extension SprawlReport {
     /// Builds the public report from the runner's raw result. Cluster timestamps are converted from monotonic clock readings to run-relative durations.
     ///
@@ -195,8 +192,8 @@ package extension SprawlReport {
                 reducedCount: cluster.reducedCount,
                 isLikelySplit: cluster.signatures.count > 1,
                 discoveringPhase: Phase(phase: cluster.discoveringPhase),
-                firstSeen: .nanoseconds(cluster.firstSeenNanoseconds &- runStartNanoseconds),
-                lastSeen: .nanoseconds(cluster.lastSeenNanoseconds &- runStartNanoseconds),
+                firstSeen: SprawlDuration(nanoseconds: cluster.firstSeenNanoseconds &- runStartNanoseconds),
+                lastSeen: SprawlDuration(nanoseconds: cluster.lastSeenNanoseconds &- runStartNanoseconds),
                 discriminatingEdges: rankedEdges,
                 necessaryEdgeCount: discrimination?.necessaryEdges.count ?? 0,
                 nearMissEdgeIndices: discrimination?.nearMissDistinguishingEdges.indices ?? []
@@ -213,7 +210,7 @@ package extension SprawlReport {
         coveredEdgeCount = result.coveredEdgeCount
         instrumentedEdgeCount = result.instrumentedEdgeCount
         termination = Termination(termination: result.termination)
-        elapsed = .nanoseconds(result.elapsedNanoseconds)
+        elapsed = SprawlDuration(nanoseconds: result.elapsedNanoseconds)
         frameworkOverheadFraction = result.elapsedNanoseconds > 0
             ? 1.0 - min(1.0, Double(result.propertyNanoseconds) / Double(result.elapsedNanoseconds))
             : 0
@@ -242,7 +239,6 @@ package extension SprawlReport {
     }
 }
 
-@available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
 package extension SprawlReport.Phase {
     init(phase: SprawlPhase) {
         self = switch phase {
@@ -253,14 +249,13 @@ package extension SprawlReport.Phase {
     }
 }
 
-@available(macOS 13.0, iOS 16.0, macCatalyst 16.0, tvOS 16.0, watchOS 9.0, *)
 package extension SprawlReport.Termination {
     init(termination: SprawlTermination) {
         self = switch termination {
             case .budgetExhausted:
                 .budgetExhausted
             case let .plateau(unusedNanoseconds):
-                .coveragePlateau(unused: .nanoseconds(unusedNanoseconds))
+                .coveragePlateau(unused: SprawlDuration(nanoseconds: unusedNanoseconds))
             case .attemptLimitReached:
                 .attemptLimitReached
             case let .generationError(message):

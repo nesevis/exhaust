@@ -8,7 +8,8 @@ struct FaultInventoryTests {
         let inventory = FaultInventory()
         let first = await inventory.recordReduced(
             reducedSequence: sequence(length: 1),
-            reducedDescription: "A",
+            reducedKey: "A",
+            renderDescription: { "A" },
             signature: signature(edges: [1]),
             symptom: FailureSymptom(kind: "ParserError"),
             phase: .sprawl,
@@ -16,7 +17,8 @@ struct FaultInventoryTests {
         )
         let second = await inventory.recordReduced(
             reducedSequence: sequence(length: 2),
-            reducedDescription: "B",
+            reducedKey: "B",
+            renderDescription: { "B" },
             signature: signature(edges: [1]),
             symptom: FailureSymptom(kind: "ParserError"),
             phase: .sprawl,
@@ -34,7 +36,8 @@ struct FaultInventoryTests {
         let inventory = FaultInventory()
         _ = await inventory.recordReduced(
             reducedSequence: sequence(length: 1),
-            reducedDescription: "A",
+            reducedKey: "A",
+            renderDescription: { "A" },
             signature: signature(edges: [1, 2]),
             symptom: .returnedFalse,
             phase: .sampling,
@@ -42,7 +45,8 @@ struct FaultInventoryTests {
         )
         let second = await inventory.recordReduced(
             reducedSequence: sequence(length: 1),
-            reducedDescription: "A",
+            reducedKey: "A",
+            renderDescription: { "A" },
             signature: signature(edges: [1, 3]),
             symptom: .returnedFalse,
             phase: .sprawl,
@@ -64,7 +68,8 @@ struct FaultInventoryTests {
         for timestamp in [10, 20, 30] as [UInt64] {
             _ = await inventory.recordReduced(
                 reducedSequence: sequence(length: 1),
-                reducedDescription: "A",
+                reducedKey: "A",
+                renderDescription: { "A" },
                 signature: signature(edges: [1, 2]),
                 symptom: .returnedFalse,
                 phase: .sprawl,
@@ -85,7 +90,8 @@ struct FaultInventoryTests {
         for index in 0 ..< SprawlTunables.perClusterReductionCap {
             lastClassification = await inventory.recordReduced(
                 reducedSequence: sequence(length: 1),
-                reducedDescription: "A",
+                reducedKey: "A",
+                renderDescription: { "A" },
                 signature: nil,
                 symptom: .returnedFalse,
                 phase: .sprawl,
@@ -100,7 +106,8 @@ struct FaultInventoryTests {
         let inventory = FaultInventory()
         _ = await inventory.recordReduced(
             reducedSequence: sequence(length: 1),
-            reducedDescription: "A",
+            reducedKey: "A",
+            renderDescription: { "A" },
             signature: nil,
             symptom: FailureSymptom(kind: "ParserError"),
             phase: .sprawl,

@@ -30,16 +30,18 @@ package extension ChoiceSequence {
     /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/reduction purposes.
     ///
     /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites (not just the selected branch). Used for complexity comparison in reduction passes.
-    static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false) -> ChoiceSequence {
+    /// - Parameter skipBindInners: When `true`, a bind's inner subtree is omitted from the flattened output, leaving `.bind(true) <bound> .bind(false)`. Used only to compute a canonical cluster identity: the inner is redundant length-or-selector bookkeeping that varies across reduction paths reaching the same value. Never use for materialisation or reduction, which need the inner.
+    static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false, skipBindInners: Bool = false) -> ChoiceSequence {
         var result = ChoiceSequence()
         result.reserveCapacity(64)
-        flatten(tree, includingAllBranches: includingAllBranches, into: &result)
+        flatten(tree, includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &result)
         return result
     }
 
     private static func flatten(
         _ tree: ChoiceTree,
         includingAllBranches: Bool,
+        skipBindInners: Bool = false,
         into output: inout ChoiceSequence
     ) {
         switch tree {
@@ -58,12 +60,12 @@ package extension ChoiceSequence {
                 // while-loop: avoiding IteratorProtocol overhead in debug builds.
                 var eIdx = 0
                 while eIdx < elements.count {
-                    flatten(elements[eIdx], includingAllBranches: includingAllBranches, into: &output)
+                    flatten(elements[eIdx], includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
                     eIdx += 1
                 }
                 output.append(.sequence(false))
             case let .branch(b):
-                flatten(b.choice, includingAllBranches: includingAllBranches, into: &output)
+                flatten(b.choice, includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
             case let .group(array, _):
                 var i = 0
                 var selectedBranchTree: ChoiceTree?
@@ -84,7 +86,7 @@ package extension ChoiceSequence {
                     while cIdx < children.count {
                         flatten(
                             children[cIdx],
-                            includingAllBranches: includingAllBranches,
+                            includingAllBranches: includingAllBranches, skipBindInners: skipBindInners,
                             into: &output
                         )
                         cIdx += 1
@@ -95,7 +97,7 @@ package extension ChoiceSequence {
                     // while-loop: avoiding IteratorProtocol overhead in debug builds.
                     var aIdx = 0
                     while aIdx < array.count {
-                        flatten(array[aIdx], includingAllBranches: includingAllBranches, into: &output)
+                        flatten(array[aIdx], includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
                         aIdx += 1
                     }
                     output.append(.group(false))
@@ -104,13 +106,15 @@ package extension ChoiceSequence {
                 if inner.isGetSize {
                     // getSize-bound: structurally stable (size is fixed during reduction), so emit .group markers to let deletion encoders work through them.
                     output.append(.group(true))
-                    flatten(inner, includingAllBranches: includingAllBranches, into: &output)
-                    flatten(bound, includingAllBranches: includingAllBranches, into: &output)
+                    flatten(inner, includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
+                    flatten(bound, includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
                     output.append(.group(false))
                 } else {
                     output.append(.bind(true))
-                    flatten(inner, includingAllBranches: includingAllBranches, into: &output)
-                    flatten(bound, includingAllBranches: includingAllBranches, into: &output)
+                    if skipBindInners == false {
+                        flatten(inner, includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
+                    }
+                    flatten(bound, includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
                     output.append(.bind(false))
                 }
             case let .resize(_, choices):
@@ -118,7 +122,7 @@ package extension ChoiceSequence {
                 // while-loop: avoiding IteratorProtocol overhead in debug builds.
                 var rIdx = 0
                 while rIdx < choices.count {
-                    flatten(choices[rIdx], includingAllBranches: includingAllBranches, into: &output)
+                    flatten(choices[rIdx], includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
                     rIdx += 1
                 }
                 output.append(.group(false))
