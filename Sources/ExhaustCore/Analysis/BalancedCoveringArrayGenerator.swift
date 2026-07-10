@@ -35,6 +35,8 @@ package final class BalancedCoveringArrayGenerator {
     private let spreadStrides: [Int]
     private var slices: [PairwiseSlice]
     private let slicesByParam: [[Int]]
+    /// Scratch buffer for per-value gains during greedy fill, sized to the largest domain. Reused across rows to avoid per-row allocation.
+    private let gainScratch: UnsafeMutablePointer<Double>
     /// Total number of uncovered pairwise tuples across all slices. Always positive on the fast path.
     private(set) var totalRemaining: Int
     private var rowCount: Int
@@ -65,11 +67,15 @@ package final class BalancedCoveringArrayGenerator {
             }
             slices = []
             slicesByParam = []
+            gainScratch = .allocate(capacity: 1)
+            gainScratch.initialize(to: 0)
             totalRemaining = 1
             rowCount = 0
             return
         }
         spreadStrides = []
+        gainScratch = .allocate(capacity: max(maxDomain, 1))
+        gainScratch.initialize(repeating: 0, count: max(maxDomain, 1))
 
         var allSlices: [PairwiseSlice] = []
         allSlices.reserveCapacity(self.domainSizes.count * (self.domainSizes.count - 1) / 2)
@@ -86,8 +92,8 @@ package final class BalancedCoveringArrayGenerator {
                     domainA: sizeA,
                     domainB: sizeB,
                     bits: BalancedBitVector(bitCount: tupleCount),
-                    rowUncovered: [Int](repeating: sizeB, count: sizeA),
-                    columnUncovered: [Int](repeating: sizeA, count: sizeB),
+                    rowUncovered: UncoveredCounts(count: sizeA, initialValue: sizeB),
+                    columnUncovered: UncoveredCounts(count: sizeB, initialValue: sizeA),
                     remaining: tupleCount
                 ))
                 total += tupleCount
@@ -119,7 +125,10 @@ package final class BalancedCoveringArrayGenerator {
     deinit {
         for index in 0 ..< slices.count {
             slices[index].bits.deallocate()
+            slices[index].rowUncovered.deallocate()
+            slices[index].columnUncovered.deallocate()
         }
+        gainScratch.deallocate()
     }
 
     // MARK: - Greedy Fill
@@ -128,34 +137,42 @@ package final class BalancedCoveringArrayGenerator {
         var row = [UInt64](repeating: 0, count: paramCount)
         var filled = [Bool](repeating: false, count: paramCount)
         let startParam = rowCount % paramCount
+        // Each slice contributes at most 1 to a candidate's gain, so no candidate can exceed the number of slices its parameter participates in. Ties never replace an earlier best, so scanning can stop as soon as a candidate reaches this ceiling — the selected (parameter, value) is identical to a full scan.
+        let maxPossibleGain = Double(paramCount - 1)
 
-        for _ in 0 ..< paramCount {
-            var bestParam = -1
-            var bestValue = 0
-            var bestGain = -1.0
+        slices.withUnsafeBufferPointer { sliceBuffer in
+            for _ in 0 ..< paramCount {
+                var bestParam = -1
+                var bestValue = 0
+                var bestGain = -1.0
 
-            for offset in 0 ..< paramCount {
-                let param = (startParam &+ offset) % paramCount
-                guard filled[param] == false else { continue }
+                search: for offset in 0 ..< paramCount {
+                    let param = (startParam &+ offset) % paramCount
+                    guard filled[param] == false else { continue }
+                    let domain = domainSizes[param]
 
-                for value in 0 ..< domainSizes[param] {
-                    let gain = computeGain(
-                        param: param,
-                        value: value,
-                        row: row,
-                        filled: filled
+                    fillGains(
+                        param: param, domain: domain, row: row, filled: filled,
+                        sliceBuffer: sliceBuffer
                     )
-                    if gain > bestGain {
-                        bestGain = gain
-                        bestParam = param
-                        bestValue = value
+
+                    var value = 0
+                    while value < domain {
+                        let gain = gainScratch[value]
+                        if gain > bestGain {
+                            bestGain = gain
+                            bestParam = param
+                            bestValue = value
+                            if gain >= maxPossibleGain { break search }
+                        }
+                        value &+= 1
                     }
                 }
-            }
 
-            guard bestParam >= 0 else { break }
-            row[bestParam] = UInt64(bestValue)
-            filled[bestParam] = true
+                guard bestParam >= 0 else { break }
+                row[bestParam] = UInt64(bestValue)
+                filled[bestParam] = true
+            }
         }
 
         markCoverage(row)
@@ -187,42 +204,73 @@ package final class BalancedCoveringArrayGenerator {
 
     // MARK: - Gain Computation
 
-    /// Computes the coverage gain for assigning `value` to `param`, given the partially filled row.
+    /// Fills ``gainScratch`` with the coverage gain of every candidate value for `param`, given the partially filled row.
     ///
-    /// For each pairwise slice involving `param`: if the other parameter is already filled, the gain is exact (1 if the pair is uncovered, 0 otherwise). If the other parameter is unfilled, the gain is the precomputed marginal uncovered count divided by the other parameter's domain size — matching Bryce and Colbourn's unrestricted density weighting without iterating the domain.
-    private func computeGain(
+    /// For each pairwise slice involving `param`: if the other parameter is already filled, the gain is exact (1 per uncovered pair). If the other parameter is unfilled, the gain is the precomputed marginal uncovered count times the reciprocal of the other parameter's domain size — matching Bryce and Colbourn's unrestricted density weighting without iterating the domain.
+    ///
+    /// Computing the whole domain per slice keeps the inner loops tight: slice metadata and the filled/unfilled branch are resolved once per slice instead of once per (value, slice) pair. Contributions accumulate in slice order for every value, so the floating-point sums match a per-value traversal exactly.
+    private func fillGains(
         param: Int,
-        value: Int,
+        domain: Int,
         row: [UInt64],
-        filled: [Bool]
-    ) -> Double {
-        var gain = 0.0
+        filled: [Bool],
+        sliceBuffer: UnsafeBufferPointer<PairwiseSlice>
+    ) {
+        var value = 0
+        while value < domain {
+            gainScratch[value] = 0
+            value &+= 1
+        }
 
         for sliceIndex in slicesByParam[param] {
-            let slice = slices[sliceIndex]
+            let slice = sliceBuffer[sliceIndex]
+            // A fully covered slice contributes zero on both the exact and marginal branches.
+            if slice.remaining == 0 { continue }
 
             if slice.paramA == param {
                 if filled[slice.paramB] {
-                    let index = UInt32(value &* slice.domainB &+ Int(row[slice.paramB]))
-                    if slice.bits.isSet(index) == false {
-                        gain += 1
+                    // Strided bit tests: pair index for candidate v is v * domainB + rowB.
+                    var index = Int(row[slice.paramB])
+                    var candidate = 0
+                    while candidate < domain {
+                        if slice.bits.isSet(UInt32(index)) == false {
+                            gainScratch[candidate] += 1
+                        }
+                        index &+= slice.domainB
+                        candidate &+= 1
                     }
                 } else {
-                    gain += Double(slice.rowUncovered[value]) / Double(slice.domainB)
+                    let inverseDomain = slice.inverseDomainB
+                    let uncovered = slice.rowUncovered
+                    var candidate = 0
+                    while candidate < domain {
+                        gainScratch[candidate] += Double(uncovered[candidate]) * inverseDomain
+                        candidate &+= 1
+                    }
                 }
             } else {
                 if filled[slice.paramA] {
-                    let index = UInt32(Int(row[slice.paramA]) &* slice.domainB &+ value)
-                    if slice.bits.isSet(index) == false {
-                        gain += 1
+                    // Contiguous bit tests: pair index for candidate v is rowA * domainB + v.
+                    var index = Int(row[slice.paramA]) &* slice.domainB
+                    var candidate = 0
+                    while candidate < domain {
+                        if slice.bits.isSet(UInt32(index)) == false {
+                            gainScratch[candidate] += 1
+                        }
+                        index &+= 1
+                        candidate &+= 1
                     }
                 } else {
-                    gain += Double(slice.columnUncovered[value]) / Double(slice.domainA)
+                    let inverseDomain = slice.inverseDomainA
+                    let uncovered = slice.columnUncovered
+                    var candidate = 0
+                    while candidate < domain {
+                        gainScratch[candidate] += Double(uncovered[candidate]) * inverseDomain
+                        candidate &+= 1
+                    }
                 }
             }
         }
-
-        return gain
     }
 
     // MARK: - Coverage Marking
@@ -283,9 +331,35 @@ private struct BalancedBitVector {
     }
 }
 
+// MARK: - Uncovered Counts
+
+/// Marginal uncovered-tuple counters with unsafe pointer storage.
+///
+/// Plain-data storage keeps ``PairwiseSlice`` free of reference-counted fields, so reading a slice in the greedy fill's inner loop is a trivial copy with no retain/release traffic. Callers must invoke ``deallocate()`` before the counts are discarded.
+private struct UncoveredCounts {
+    private let storage: UnsafeMutablePointer<Int>
+
+    init(count: Int, initialValue: Int) {
+        storage = .allocate(capacity: max(count, 1))
+        storage.initialize(repeating: initialValue, count: max(count, 1))
+    }
+
+    @inline(__always)
+    subscript(index: Int) -> Int {
+        get { storage[index] }
+        nonmutating set { storage[index] = newValue }
+    }
+
+    func deallocate() {
+        storage.deallocate()
+    }
+}
+
 // MARK: - Pairwise Slice
 
 /// Tracks pairwise coverage for one (paramA, paramB) combination.
+///
+/// All fields are plain data (no reference-counted storage) so the greedy fill can read slices by value without ARC overhead.
 private struct PairwiseSlice {
     let paramA: Int
     let paramB: Int
@@ -296,10 +370,36 @@ private struct PairwiseSlice {
     var bits: BalancedBitVector
 
     /// `rowUncovered[a]` is the number of uncovered tuples in row `a` (how many values of paramB have not been paired with `a`).
-    var rowUncovered: [Int]
+    var rowUncovered: UncoveredCounts
 
     /// `columnUncovered[b]` is the number of uncovered tuples in column `b` (how many values of paramA have not been paired with `b`).
-    var columnUncovered: [Int]
+    var columnUncovered: UncoveredCounts
 
     var remaining: Int
+
+    /// Reciprocals of the domain sizes, precomputed so the density weighting in the greedy fill multiplies instead of divides.
+    let inverseDomainA: Double
+    let inverseDomainB: Double
+
+    init(
+        paramA: Int,
+        paramB: Int,
+        domainA: Int,
+        domainB: Int,
+        bits: BalancedBitVector,
+        rowUncovered: UncoveredCounts,
+        columnUncovered: UncoveredCounts,
+        remaining: Int
+    ) {
+        self.paramA = paramA
+        self.paramB = paramB
+        self.domainA = domainA
+        self.domainB = domainB
+        self.bits = bits
+        self.rowUncovered = rowUncovered
+        self.columnUncovered = columnUncovered
+        self.remaining = remaining
+        inverseDomainA = 1.0 / Double(domainA)
+        inverseDomainB = 1.0 / Double(domainB)
+    }
 }
