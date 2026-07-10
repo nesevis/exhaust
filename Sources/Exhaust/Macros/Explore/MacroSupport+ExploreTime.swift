@@ -446,7 +446,7 @@ public extension __ExhaustRuntime {
         }
     }
 
-    /// Renders the fault inventory for the terminal: throughput header, gap-framed coverage, early-stop accounting, and the clusters with late discoveries foregrounded.
+    /// Renders the fault inventory for the terminal: throughput header, gap-framed coverage, early-stop accounting, and one compact block per cluster with late discoveries foregrounded. The terminal's job is orientation; full per-cluster detail ships in the checkpoint attachments.
     package static func renderSprawlSummary(_ report: SprawlReport) -> String {
         var lines: [String] = []
 
@@ -477,9 +477,21 @@ public extension __ExhaustRuntime {
         let ordered = report.clusters.filter(isFrontier).sorted { $0.firstSeen > $1.firstSeen }
             + report.clusters.filter { isFrontier($0) == false }
 
-        for cluster in ordered {
+        let symptomColumnWidth = ordered.map { $0.symptoms.joined(separator: ", ").count }.max() ?? 0
+        if ordered.isEmpty == false {
             lines.append("")
-            lines.append(contentsOf: renderCluster(cluster, isFrontier: isFrontier(cluster)))
+        }
+        for cluster in ordered {
+            lines.append(
+                contentsOf: renderClusterBrief(
+                    cluster,
+                    isFrontier: isFrontier(cluster),
+                    symptomColumnWidth: symptomColumnWidth
+                )
+            )
+        }
+        if ordered.contains(where: \.isLikelySplit) {
+            lines.append("~paths: one reduced form reached through multiple coverage signatures — possibly distinct paths to one fault.")
         }
 
         if report.clusters.isEmpty == false {
@@ -491,11 +503,159 @@ public extension __ExhaustRuntime {
         if report.reductionsTimedOut {
             lines.append("Some reductions did not finish before the drain timeout; instance counts include unclassified failures.")
         }
+        if report.clusters.isEmpty == false {
+            lines.append("Full per-cluster detail is in the explore-time-cluster attachments.")
+        }
         lines.append("Reproduce: .replay(\(report.seed))")
         return lines.joined(separator: "\n")
     }
 
-    /// Renders one cluster's inventory block: attribute header, reduced counterexample, and suspect edges.
+    /// Renders one cluster's terminal block: an attribute line, the reduced counterexample (collapsed onto one line when it stays readable), and the single strongest user-code suspect. The full ranked edge list lives in the cluster's attachment.
+    private static func renderClusterBrief(
+        _ cluster: SprawlReport.Cluster,
+        isFrontier: Bool,
+        symptomColumnWidth: Int
+    ) -> [String] {
+        let symptoms = cluster.symptoms.joined(separator: ", ")
+        let paddedSymptoms = symptoms.padding(
+            toLength: max(symptomColumnWidth, symptoms.count),
+            withPad: " ",
+            startingAt: 0
+        )
+        var phaseTag = cluster.discoveringPhase.rawValue
+        if isFrontier {
+            phaseTag += "; discovered late, at \(renderDuration(cluster.firstSeen))"
+        }
+        let splitMarker = cluster.isLikelySplit ? "  ~paths" : ""
+        let instanceWord = cluster.instanceCount == 1 ? "instance" : "instances"
+        var lines = [
+            "Cluster \(cluster.id)  \(paddedSymptoms)  \(cluster.instanceCount) \(instanceWord), \(cluster.reducedCount) reduced  [\(phaseTag)]\(splitMarker)",
+        ]
+        lines.append(contentsOf: collapsedCounterexample(cluster.reducedDescription).map { "  \($0)" })
+        let suspects = terminalSuspects(for: cluster)
+        if suspects.isEmpty == false {
+            lines.append("  suspect\(suspects.count == 1 ? "" : "s"): \(suspects.joined(separator: ", "))")
+        }
+        return lines
+    }
+
+    /// Collapses a multi-line customDump rendering onto one line when the result stays readable, dropping the per-index labels customDump writes inside collections. Larger values keep their block form — a deep counterexample is the finding, not noise.
+    private static func collapsedCounterexample(_ description: String) -> [String] {
+        let blockLines = description.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        guard blockLines.count > 1 else {
+            return blockLines
+        }
+        var collapsed = blockLines.map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: " ")
+        for (fragment, replacement) in [("( ", "("), (" )", ")"), ("[ ", "["), (" ]", "]")] {
+            collapsed = collapsed.replacingOccurrences(of: fragment, with: replacement)
+        }
+        if let indexLabel = try? NSRegularExpression(pattern: #"\[[0-9]+\]: "#) {
+            collapsed = indexLabel.stringByReplacingMatches(
+                in: collapsed,
+                range: NSRange(collapsed.startIndex..., in: collapsed),
+                withTemplate: ""
+            )
+        }
+        let singleLineLimit = 120
+        guard collapsed.count <= singleLineLimit else {
+            return blockLines
+        }
+        return [collapsed]
+    }
+
+    /// Picks up to three discriminating edges worth a terminal line, from the edges that symbolised into user code. Locations with a resolved line number lead (function-entry edges name a specific location; interior `:0` edges collapse to the enclosing function's name and read generic), symbols that restate the symptom's own error type trail, and duplicate rendered names collapse. Empty when nothing symbolised usefully.
+    private static func terminalSuspects(for cluster: SprawlReport.Cluster) -> [String] {
+        let candidates: [SuspectLocation] = cluster.discriminatingEdges.compactMap { edge in
+            guard let location = edge.location, location.contains("/<compiler-generated>") == false else {
+                return nil
+            }
+            return SuspectLocation(parsing: location)
+        }
+        let namesSymptom: (SuspectLocation) -> Bool = { candidate in
+            cluster.symptoms.contains { symptom in candidate.symbol.contains(symptom) }
+        }
+        let hasLine: (SuspectLocation) -> Bool = { ($0.line ?? 0) > 0 }
+        let ordered = candidates.filter { namesSymptom($0) == false && hasLine($0) }
+            + candidates.filter { namesSymptom($0) == false && hasLine($0) == false }
+            + candidates.filter(namesSymptom)
+        var seen = Set<String>()
+        var rendered: [String] = []
+        for candidate in ordered where seen.insert(candidate.rendered).inserted {
+            rendered.append(candidate.rendered)
+            if rendered.count == 3 {
+                break
+            }
+        }
+        return rendered
+    }
+
+    /// One suspect edge's location, split back out of the symbolizer's composed string for compact terminal rendering.
+    private struct SuspectLocation {
+        let symbol: String
+        let file: String?
+        let line: Int?
+
+        /// Splits `demangled symbol + offset (File.swift:line)` into its parts and shortens the symbol to its readable core. Every stage degrades gracefully — an unrecognised shape renders as-is.
+        init(parsing location: String) {
+            var working = location
+            var parsedFile: String?
+            var parsedLine: Int?
+            if working.hasSuffix(")"), let openRange = working.range(of: " (", options: .backwards) {
+                let inside = String(working[openRange.upperBound...].dropLast())
+                if let colonIndex = inside.lastIndex(of: ":"), let number = Int(inside[inside.index(after: colonIndex)...]) {
+                    parsedFile = String(inside[..<colonIndex])
+                    parsedLine = number
+                    working = String(working[..<openRange.lowerBound])
+                }
+            }
+            if let plusRange = working.range(of: " + ", options: .backwards),
+               working[plusRange.upperBound...].allSatisfy(\.isNumber)
+            {
+                working = String(working[..<plusRange.lowerBound])
+            }
+            symbol = Self.shortSymbolName(working)
+            file = parsedFile
+            line = parsedLine
+        }
+
+        /// The compact terminal form: `integrityCheck (Parser.swift:121)`, dropping the line when atos resolved none.
+        var rendered: String {
+            guard let file else {
+                return symbol
+            }
+            if let line, line > 0 {
+                return "\(symbol) (\(file):\(line))"
+            }
+            return "\(symbol) (\(file))"
+        }
+
+        /// Shortens a demangled symbol to its readable core: the bare name for private symbols (which demangle as `(name in _Discriminator)`), the last two dotted components otherwise.
+        private static func shortSymbolName(_ demangled: String) -> String {
+            if let discriminatorRange = demangled.range(of: " in _"),
+               let openIndex = demangled[..<discriminatorRange.lowerBound].lastIndex(of: "(")
+            {
+                let name = demangled[demangled.index(after: openIndex) ..< discriminatorRange.lowerBound]
+                if name.isEmpty == false {
+                    return String(name)
+                }
+            }
+            var namePath = demangled
+            if let parameterIndex = namePath.firstIndex(of: "(") {
+                namePath = String(namePath[..<parameterIndex])
+            }
+            namePath = namePath.trimmingCharacters(in: .whitespaces)
+            if namePath.hasPrefix("static ") {
+                namePath = String(namePath.dropFirst("static ".count))
+            }
+            let components = namePath.split(separator: ".").suffix(2)
+            guard components.isEmpty == false else {
+                return demangled
+            }
+            return components.joined(separator: ".")
+        }
+    }
+
+    /// Renders one cluster's full inventory block for its checkpoint attachment: attribute header, reduced counterexample, and the complete ranked suspect-edge list. The terminal summary renders the compact form instead.
     private static func renderCluster(_ cluster: SprawlReport.Cluster, isFrontier: Bool) -> [String] {
         var attributes = [
             cluster.discoveringPhase.rawValue,

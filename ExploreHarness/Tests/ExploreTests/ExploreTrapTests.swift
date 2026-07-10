@@ -93,12 +93,13 @@ struct ExploreTrapTests {
     func throughputRecorded() {
         let report = #explore(
             Fixture.messageGenerator,
-            time: .seconds(2),
-            .replay(1),
-            .suppress(.issueReporting)
+            time: .seconds(10),
+            .replay(1)
+//            .suppress(.issueReporting)
         ) { message in
             try Parser.decode(message).byteCount >= 0
         }
+        print()
         #expect(report.totalAttempts > 0)
         #expect(report.attemptsPerSecond > 0)
         #expect(report.frameworkOverheadFraction >= 0 && report.frameworkOverheadFraction <= 1)
