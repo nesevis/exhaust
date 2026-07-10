@@ -47,6 +47,8 @@ package struct SprawlRunnerConfiguration {
     package var skipSampling: Bool
     /// Hard cap on total attempts across all phases, for deterministic tests. Nil means time-bounded only.
     package var attemptLimit: Int?
+    /// Crash-recovery configuration: where checkpoints go and what a crashed predecessor left. Nil disables persistence entirely.
+    package var persistence: SprawlPersistenceContext?
 
     package init(
         budgetNanoseconds: UInt64,
@@ -54,7 +56,8 @@ package struct SprawlRunnerConfiguration {
         screeningBudget: UInt64 = 10000,
         skipScreening: Bool = false,
         skipSampling: Bool = false,
-        attemptLimit: Int? = nil
+        attemptLimit: Int? = nil,
+        persistence: SprawlPersistenceContext? = nil
     ) {
         self.budgetNanoseconds = budgetNanoseconds
         self.seed = seed
@@ -62,6 +65,7 @@ package struct SprawlRunnerConfiguration {
         self.skipScreening = skipScreening
         self.skipSampling = skipSampling
         self.attemptLimit = attemptLimit
+        self.persistence = persistence
     }
 }
 
@@ -133,6 +137,22 @@ package final class SprawlRunner<Output> {
     /// Wall-clock nanoseconds spent inside the property body across all loop attempts; the report derives the framework-overhead fraction from it. Reduction-side evaluations run on other threads and are deliberately excluded.
     private var propertyNanoseconds: UInt64 = 0
 
+    // MARK: - Crash-Recovery State
+
+    private var progressWriter: SprawlProgressWriter?
+    private var breadcrumb: SprawlBreadcrumb?
+    private var lastCheckpointNanoseconds: UInt64 = 0
+    /// Set when a new cluster classifies so the next checkpoint fires immediately — discovered clusters must reach disk without waiting out the interval.
+    private var forceCheckpoint = false
+    /// Run time consumed by crashed predecessors, so checkpoint accounting and report timestamps continue one logical timeline across resumes.
+    private var priorConsumedNanoseconds: UInt64 = 0
+    private var pcTableHashAtStart: UInt64 = 0
+
+    /// The monotonic origin of the logical run: `startNanoseconds` backdated by predecessor time, so cluster timestamps from before and after a resume land on one timeline.
+    private var reportEpochNanoseconds: UInt64 {
+        startNanoseconds >= priorConsumedNanoseconds ? startNanoseconds - priorConsumedNanoseconds : 0
+    }
+
     package init(
         gen: Generator<Output>,
         property: @escaping @Sendable (Output) -> SprawlVerdict,
@@ -159,6 +179,7 @@ package final class SprawlRunner<Output> {
     package func run() -> SprawlRunResult {
         startNanoseconds = monotonicNanoseconds()
         lastAdmissionNanoseconds = startNanoseconds
+        setUpPersistence()
 
         // Sampling hands over to sprawl by returning nil (plateau or time backstop); a non-nil value is a hard stop that skips sprawl.
         var termination: SprawlTermination?
@@ -191,6 +212,8 @@ package final class SprawlRunner<Output> {
             )
         }
 
+        finishPersistence()
+
         return SprawlRunResult(
             clusters: clusters,
             unmatchedUnreducedCounts: unmatched,
@@ -204,7 +227,7 @@ package final class SprawlRunner<Output> {
             instrumentedEdgeCount: source.edgeCount,
             termination: finalTermination,
             clusterDiscriminations: discriminations,
-            startNanoseconds: startNanoseconds,
+            startNanoseconds: reportEpochNanoseconds,
             elapsedNanoseconds: monotonicNanoseconds() - startNanoseconds,
             propertyNanoseconds: propertyNanoseconds,
             seed: configuration.seed,
@@ -221,6 +244,8 @@ package final class SprawlRunner<Output> {
 
         let wrappedProperty: (Output) -> Bool = { [self] value in
             attributionToken.lock()
+            // Screening evaluates before its tree reaches onExample, so the candidate cannot be identified pre-evaluation; a cleared slot beats misattributing a trap to the previous attempt.
+            breadcrumb?.clear()
             source.beginAttempt()
             if source.wantsValues {
                 source.noteValue(value)
@@ -315,6 +340,8 @@ package final class SprawlRunner<Output> {
                 attributionToken.unlock()
                 return nil
             }
+            let sequence = ChoiceSequence.flatten(tree)
+            breadcrumb?.record(candidateHash: ZobristHash.hash(of: sequence), parentHash: 0)
             if source.wantsValues {
                 source.noteValue(value)
             }
@@ -330,7 +357,6 @@ package final class SprawlRunner<Output> {
             samplingAttempts += 1
             totalAttempts += 1
 
-            let sequence = ChoiceSequence.flatten(tree)
             let admission = corpus.offer(
                 sequence: sequence,
                 tree: tree,
@@ -434,6 +460,8 @@ package final class SprawlRunner<Output> {
         }
         // swiftlint:disable:next force_cast
         let value = anyValue as! Output
+        let sequence = ChoiceSequence.flatten(freshTree)
+        breadcrumb?.record(candidateHash: ZobristHash.hash(of: sequence), parentHash: parent.hash)
         if source.wantsValues {
             source.noteValue(value)
         }
@@ -449,7 +477,6 @@ package final class SprawlRunner<Output> {
         sprawlAttempts += 1
         totalAttempts += 1
 
-        let sequence = ChoiceSequence.flatten(freshTree)
         let admission = corpus.offer(
             sequence: sequence,
             tree: freshTree,
@@ -491,6 +518,8 @@ package final class SprawlRunner<Output> {
             discardedAttempts += 1
             return nil
         }
+        let sequence = ChoiceSequence.flatten(tree)
+        breadcrumb?.record(candidateHash: ZobristHash.hash(of: sequence), parentHash: 0)
         if source.wantsValues {
             source.noteValue(value)
         }
@@ -506,7 +535,6 @@ package final class SprawlRunner<Output> {
         sprawlAttempts += 1
         totalAttempts += 1
 
-        let sequence = ChoiceSequence.flatten(tree)
         let admission = corpus.offer(
             sequence: sequence,
             tree: tree,
@@ -641,7 +669,7 @@ package final class SprawlRunner<Output> {
         return signature
     }
 
-    /// Applies completed classifications' failure-weight upgrades on the loop thread — the corpus is single-threaded by design, so reduction tasks post here instead of calling in.
+    /// Applies completed classifications' failure-weight upgrades on the loop thread — the corpus is single-threaded by design, so reduction tasks post here instead of calling in. Doubles as the checkpoint pulse: it runs once per loop iteration in every phase, which is exactly the cadence ``checkpointIfDue()`` needs.
     private func drainClassifications() {
         let completed = pendingClassifications.withValue { pending -> [(parentIndex: Int?, classification: ClusterClassification)] in
             let drained = pending
@@ -649,6 +677,9 @@ package final class SprawlRunner<Output> {
             return drained
         }
         for (parentIndex, classification) in completed {
+            if classification.isNewCluster {
+                forceCheckpoint = true
+            }
             guard let parentIndex else {
                 continue
             }
@@ -657,6 +688,165 @@ package final class SprawlRunner<Output> {
                 isNewCluster: classification.isNewCluster,
                 clusterInstanceCount: classification.instanceCount,
                 clusterCapReached: classification.capReached
+            )
+        }
+        checkpointIfDue()
+    }
+
+    // MARK: - Crash Recovery
+
+    /// Creates the writer and live breadcrumb, restores predecessor state, and quarantines the crash region. First write activity of the run — a run that never starts leaves no files.
+    private func setUpPersistence() {
+        guard let persistence = configuration.persistence else {
+            return
+        }
+        progressWriter = SprawlProgressWriter(store: persistence.store)
+        breadcrumb = SprawlBreadcrumb(fileURL: persistence.store.breadcrumbFileURL)
+        pcTableHashAtStart = SancovRuntime.pcTableHash()
+        lastCheckpointNanoseconds = startNanoseconds
+
+        if let document = persistence.resumeDocument {
+            priorConsumedNanoseconds = document.metadata.consumedNanoseconds
+            restore(from: document)
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "explore_time_resumed",
+                metadata: [
+                    "consumed_seconds": "\(document.metadata.consumedNanoseconds / 1_000_000_000)",
+                    "restored_entries": "\(corpus.entries.count)",
+                    "restored_clusters": "\(document.clusters.count)",
+                ]
+            )
+        }
+        breadcrumb?.clear()
+        if let survivor = persistence.survivor {
+            corpus.quarantine(sequenceHash: survivor.candidateHash)
+            if survivor.parentHash != 0 {
+                corpus.quarantine(sequenceHash: survivor.parentHash)
+            }
+        }
+    }
+
+    /// Flushes outstanding checkpoints and removes the recovery state. Reaching this method at all means the run terminated normally — a surviving log is the crash signal, so a completed run must not leave one.
+    private func finishPersistence() {
+        guard let persistence = configuration.persistence else {
+            return
+        }
+        progressWriter?.flush()
+        breadcrumb?.clear()
+        persistence.store.removeAll()
+    }
+
+    /// Hands one checkpoint to the async writer when the interval elapsed or a new cluster forced one. The loop's cost is copying value-type state; encoding and I/O happen on the writer's queue.
+    private func checkpointIfDue() {
+        guard let writer = progressWriter else {
+            return
+        }
+        let now = monotonicNanoseconds()
+        guard forceCheckpoint || now - lastCheckpointNanoseconds >= SprawlTunables.checkpointIntervalNanoseconds else {
+            return
+        }
+        forceCheckpoint = false
+        lastCheckpointNanoseconds = now
+
+        let inventory = inventory
+        let clusters = __ExhaustRuntime.blockingAwait { await inventory.snapshot() }
+        let entries = corpus.entries
+        let epoch = reportEpochNanoseconds
+        let metadata = SprawlProgressDocument.Metadata(
+            seed: configuration.seed,
+            budgetNanoseconds: priorConsumedNanoseconds + configuration.budgetNanoseconds,
+            consumedNanoseconds: priorConsumedNanoseconds + (now - startNanoseconds),
+            lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
+            pcTableHash: pcTableHashAtStart,
+            edgeCount: source.edgeCount
+        )
+        writer.submit {
+            SprawlProgressDocument(
+                metadata: metadata,
+                clusters: clusters.map { SprawlProgressDocument.ClusterRecord(cluster: $0, epochNanoseconds: epoch) },
+                snapshot: entries.map(SprawlProgressDocument.CorpusEntryRecord.init(entry:))
+            )
+        }
+    }
+
+    /// Rebuilds the corpus and inventory from a predecessor's document.
+    ///
+    /// Every entry is re-materialised in `.exact` mode — the tree is not persisted and mutations need it as the guided fallback. When the PC-table hash and edge count match the predecessor's, cached hits are trusted; otherwise each entry is re-attributed with one instrumented evaluation against the new edge ordering, and cluster signatures (stale edge indices) are dropped. Entries the current generator can no longer materialise are silently pruned — exactly the right pruning after a code change.
+    private func restore(from document: SprawlProgressDocument) {
+        let signaturesValid = document.metadata.pcTableHash == pcTableHashAtStart
+            && document.metadata.edgeCount == source.edgeCount
+
+        var restoredClusters: [FaultCluster] = []
+        for record in document.clusters {
+            guard let sequence = ChoiceSequenceCodec.decode(record.reducedSequence),
+                  let phase = SprawlPhase(rawValue: record.discoveringPhase)
+            else {
+                continue
+            }
+            let signatures: [BitSet] = signaturesValid
+                ? record.signatureIndices.map { indices in
+                    var signature = BitSet(capacity: source.edgeCount)
+                    for index in indices where index >= 0 && index < source.edgeCount {
+                        signature.insert(index)
+                    }
+                    return signature
+                }
+                : []
+            restoredClusters.append(FaultCluster(
+                restoredID: restoredClusters.count,
+                reducedSequence: sequence,
+                reducedDescription: record.reducedDescription,
+                signatures: signatures,
+                symptoms: Set(record.symptoms.map(FailureSymptom.init(kind:))),
+                instanceCount: record.instanceCount,
+                reducedCount: record.reducedCount,
+                firstSeenNanoseconds: reportEpochNanoseconds + record.firstSeenNanoseconds,
+                lastSeenNanoseconds: reportEpochNanoseconds + record.lastSeenNanoseconds,
+                discoveringPhase: phase
+            ))
+        }
+        let inventory = inventory
+        let clustersToRestore = restoredClusters
+        __ExhaustRuntime.blockingAwait { await inventory.restore(clusters: clustersToRestore) }
+
+        for record in document.snapshot {
+            guard let sequence = ChoiceSequenceCodec.decode(record.sequence),
+                  let phase = SprawlPhase(rawValue: record.phase)
+            else {
+                continue
+            }
+            let result = Materializer.materializeAny(erasedGen, prefix: sequence, mode: .exact)
+            guard case let .success(anyValue, tree, _) = result, let value = anyValue as? Output else {
+                continue
+            }
+            let hits: [(edge: Int, hitCount: UInt8)]
+            if signaturesValid {
+                hits = zip(record.hitEdges, record.hitCounts).map { (edge: $0.0, hitCount: $0.1) }
+            } else {
+                attributionToken.lock()
+                source.beginAttempt()
+                if source.wantsValues {
+                    source.noteValue(value)
+                }
+                // Attribution only — a failing entry's cluster was already restored, so no failure dispatch here.
+                _ = property(value)
+                var reattributed: [(edge: Int, hitCount: UInt8)] = []
+                source.forEachHitEdge { edge, hitCount in
+                    reattributed.append((edge, hitCount))
+                }
+                attributionToken.unlock()
+                hits = reattributed
+            }
+            _ = corpus.offer(
+                sequence: sequence,
+                tree: tree,
+                hits: hits,
+                convergence: record.convergence,
+                generation: record.generation,
+                phase: phase,
+                isBoundaryDerived: record.isBoundaryDerived,
+                propertyFailed: record.propertyFailed
             )
         }
     }

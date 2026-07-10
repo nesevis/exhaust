@@ -74,6 +74,31 @@ package struct FaultCluster: Sendable {
         discoveringPhase = phase
     }
 
+    /// Reconstructs a cluster from a progress-log record at resume. Restored counts and timestamps carry over verbatim; the phase and identity are those of the original discovery.
+    package init(
+        restoredID: Int,
+        reducedSequence: ChoiceSequence,
+        reducedDescription: String,
+        signatures: [BitSet],
+        symptoms: Set<FailureSymptom>,
+        instanceCount: Int,
+        reducedCount: Int,
+        firstSeenNanoseconds: UInt64,
+        lastSeenNanoseconds: UInt64,
+        discoveringPhase: SprawlPhase
+    ) {
+        id = restoredID
+        self.reducedSequence = reducedSequence
+        self.reducedDescription = reducedDescription
+        self.signatures = signatures
+        self.symptoms = symptoms
+        self.instanceCount = instanceCount
+        self.reducedCount = reducedCount
+        self.firstSeenNanoseconds = firstSeenNanoseconds
+        self.lastSeenNanoseconds = lastSeenNanoseconds
+        self.discoveringPhase = discoveringPhase
+    }
+
     fileprivate mutating func absorb(
         signature: BitSet?,
         symptom: FailureSymptom,
@@ -181,5 +206,13 @@ package actor FaultInventory {
     /// A point-in-time copy for checkpointing and the final report.
     package func snapshot() -> [FaultCluster] {
         clusters
+    }
+
+    /// Restores the inventory from progress-log records at resume. Must run before any new recording so restored cluster identifiers keep their original, contiguous values — `recordReduced` allocates the next identifier from the cluster count.
+    package func restore(clusters restored: [FaultCluster]) {
+        guard clusters.isEmpty else {
+            return
+        }
+        clusters = restored.sorted { $0.id < $1.id }
     }
 }

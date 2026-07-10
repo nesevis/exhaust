@@ -119,6 +119,38 @@ package enum SancovRuntime {
         return pcTableRegions
     }
 
+    /// A build-identity hash of the PC table, stable across process launches of the same binary.
+    ///
+    /// Program counters are hashed relative to each region's first entry rather than as absolute addresses — ASLR slides every image per launch, and an absolute-address hash would spuriously invalidate cached coverage signatures on every run. FNV-1a rather than `Hasher` because `Hasher` is randomly seeded per process. Returns 0 when no PC table registered.
+    package static func pcTableHash() -> UInt64 {
+        let regions = currentPCTableRegions()
+        guard regions.isEmpty == false else {
+            return 0
+        }
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        func mix(_ value: UInt64) {
+            var remaining = value
+            for _ in 0 ..< 8 {
+                hash = (hash ^ (remaining & 0xFF)) &* 0x0000_0100_0000_01B3
+                remaining >>= 8
+            }
+        }
+        for region in regions {
+            let entryCount = region.count
+            mix(UInt64(entryCount))
+            guard entryCount > 0 else {
+                continue
+            }
+            let base = region.entry(at: 0).programCounter
+            for index in 0 ..< region.count {
+                let entry = region.entry(at: index)
+                mix(UInt64(entry.programCounter &- base))
+                mix(UInt64(entry.flags))
+            }
+        }
+        return hash
+    }
+
     /// Resolves a global edge index to its PC-table entry, or nil when the build omitted `pc-table` or the index is out of range.
     package static func pcTableEntry(forEdge globalIndex: Int) -> PCTableEntry? {
         let regions = currentPCTableRegions()

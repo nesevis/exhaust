@@ -48,6 +48,14 @@ package enum SprawlTunables {
     /// Fraction of the wall-clock budget without a single coverage-novel corpus admission (across all intensity bands including splice) before the run ends early and returns the unused budget.
     package static let sprawlPlateauBudgetFraction = 0.25
 
+    // MARK: - Crash Recovery
+
+    /// Interval between progress-log checkpoints. A crash loses at most this window of corpus growth; discovered clusters additionally force a checkpoint on classification.
+    package static let checkpointIntervalNanoseconds: UInt64 = 30_000_000_000
+
+    /// Progress logs older than this are ignored at resume: long enough to survive overnight runs, short enough not to surprise a user a week later.
+    package static let progressLogStalenessSeconds: Double = 86400
+
     // MARK: - Report-Time Discrimination
 
     /// Discriminating edges reported per cluster. Beyond a handful, the ranking's tail is noise against small failing samples.

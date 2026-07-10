@@ -1,7 +1,7 @@
 // The corpus of coverage-interesting inputs driving parent selection during sprawl.
 
 /// One accepted input: its choice sequence, coverage signature, and parent-selection state.
-package struct CorpusEntry {
+package struct CorpusEntry: Sendable {
     /// The flattened choice sequence — the mutation substrate.
     package let sequence: ChoiceSequence
 
@@ -10,6 +10,12 @@ package struct CorpusEntry {
 
     /// The edges hit during this entry's property evaluation.
     package let signature: BitSet
+
+    /// The raw (edge, saturating count) pairs behind `signature`, retained so a progress-log restore can re-offer the entry with its original bucket information.
+    package let hits: [(edge: Int, hitCount: UInt8)]
+
+    /// Whether the entry was admitted on boundary-derived credit rather than coverage novelty. Retained for faithful re-offer on restore.
+    package let isBoundaryDerived: Bool
 
     /// The materialiser's convergence ratio for this entry; decides tier membership.
     package let convergence: Double
@@ -169,6 +175,8 @@ package final class SprawlCorpus {
             sequence: sequence,
             tree: tree,
             signature: signature,
+            hits: hits,
+            isBoundaryDerived: isBoundaryDerived,
             convergence: convergence,
             generation: generation,
             phase: phase,
@@ -192,11 +200,23 @@ package final class SprawlCorpus {
         let tier: CorpusTier = convergence >= SprawlTunables.mutableTierConvergenceThreshold
             ? .mutable
             : .discovery
-        if tier == .mutable {
+        if tier == .mutable, quarantinedHashes.contains(hash) == false {
             mutableTierIndices.append(index)
         }
         return .admitted(index: index, tier: tier)
     }
+
+    // MARK: - Quarantine
+
+    /// Removes the entry with the given sequence hash from parent selection. A run resumed after a trap quarantines the crash region — densification would otherwise steer sprawl straight back into the trap, crash-looping the suite.
+    ///
+    /// The entry keeps its coverage credit and rarity contributions; only its eligibility as a mutation root is revoked. A hash with no corpus entry (the trapping candidate itself, which died before admission) is remembered so a later identical admission is barred too.
+    package func quarantine(sequenceHash: UInt64) {
+        quarantinedHashes.insert(sequenceHash)
+        mutableTierIndices.removeAll { entries[$0].hash == sequenceHash }
+    }
+
+    private var quarantinedHashes: Set<UInt64> = []
 
     // MARK: - Failure Weights
 

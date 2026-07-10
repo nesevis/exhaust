@@ -53,12 +53,21 @@ public extension __ExhaustRuntime {
         column: UInt = #column,
         property: @escaping @Sendable (Output) throws -> Bool
     ) -> SprawlReport {
+        let persistence = makeSprawlPersistenceContext(fileID: fileID, line: line)
+        reportSprawlResumeFindings(
+            context: persistence,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
         let report = runExploreTimeCore(
             gen: refGen.gen,
             time: time,
             settings: settings,
             source: nil,
             configure: nil,
+            persistence: persistence,
             property: wrapVerdictProperty(property)
         )
         reportSprawlIssues(
@@ -93,6 +102,14 @@ public extension __ExhaustRuntime {
         // The source-located property closure is part of the macro contract but unused until the report can re-materialise reduced counterexamples and replay them for source-anchored issues.
         _ = property
         let verdictProperty = wrapVerdictDetection(detection)
+        let persistence = makeSprawlPersistenceContext(fileID: fileID, line: line)
+        reportSprawlResumeFindings(
+            context: persistence,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
         nonisolated(unsafe) var pipelineReport: SprawlReport?
         withExpectedIssue(isIntermittent: true) {
             pipelineReport = runExploreTimeCore(
@@ -101,6 +118,7 @@ public extension __ExhaustRuntime {
                 settings: settings,
                 source: nil,
                 configure: nil,
+                persistence: persistence,
                 property: verdictProperty
             )
         }
@@ -133,12 +151,21 @@ public extension __ExhaustRuntime {
     ) async -> SprawlReport {
         let verdictProperty = bridgeAsyncVerdictProperty(property)
         let report = await dispatchToGCD(reserving: LaneReservation.single) {
+            let persistence = makeSprawlPersistenceContext(fileID: fileID, line: line)
+            reportSprawlResumeFindings(
+                context: persistence,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
             let report = runExploreTimeCore(
                 gen: refGen.gen,
                 time: time,
                 settings: settings,
                 source: nil,
                 configure: nil,
+                persistence: persistence,
                 property: verdictProperty
             )
             reportSprawlIssues(
@@ -173,6 +200,14 @@ public extension __ExhaustRuntime {
         _ = property
         let verdictProperty = bridgeAsyncVerdictDetection(detection)
         let finalReport = await dispatchToGCD(reserving: LaneReservation.single) {
+            let persistence = makeSprawlPersistenceContext(fileID: fileID, line: line)
+            reportSprawlResumeFindings(
+                context: persistence,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
             nonisolated(unsafe) var pipelineReport: SprawlReport?
             // withExpectedIssue cannot be used on a GCD thread because Test.current is nil, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
             #if canImport(Testing)
@@ -183,6 +218,7 @@ public extension __ExhaustRuntime {
                         settings: settings,
                         source: nil,
                         configure: nil,
+                        persistence: persistence,
                         property: verdictProperty
                     )
                 }
@@ -193,6 +229,7 @@ public extension __ExhaustRuntime {
                     settings: settings,
                     source: nil,
                     configure: nil,
+                    persistence: persistence,
                     property: verdictProperty
                 )
             #endif
@@ -222,6 +259,7 @@ public extension __ExhaustRuntime {
         settings: [SprawlSettings],
         source injectedSource: (any CoverageSource)?,
         configure: ((inout SprawlRunnerConfiguration) -> Void)?,
+        persistence: SprawlPersistenceContext? = nil,
         property: @escaping @Sendable (Output) -> SprawlVerdict
     ) -> SprawlReport {
         var seed = UInt64.random(in: UInt64.min ... UInt64.max)
@@ -265,6 +303,16 @@ public extension __ExhaustRuntime {
         }
 
         var configuration = SprawlRunnerConfiguration(budgetNanoseconds: budgetNanoseconds, seed: seed)
+        if let persistence {
+            configuration.persistence = persistence
+            if let document = persistence.resumeDocument {
+                // A resumed run continues the logical run: the remaining slice of the declared budget, straight into sprawl — the restored corpus already carries the screening and sampling phases' work.
+                let consumed = document.metadata.consumedNanoseconds
+                configuration.budgetNanoseconds = budgetNanoseconds > consumed ? budgetNanoseconds - consumed : 0
+                configuration.skipScreening = true
+                configuration.skipSampling = true
+            }
+        }
         configure?(&configuration)
 
         let logConfiguration = ExhaustLog.Configuration(
@@ -294,6 +342,56 @@ public extension __ExhaustRuntime {
             return result
         }
         return SprawlReport(result: result, symbolizeEdges: injectedSource == nil)
+    }
+
+    // MARK: - Crash Recovery
+
+    /// Builds the crash-recovery context for one `#explore(time:)` call site: `$TMPDIR/exhaust/<module>/<file>-L<line>/`, which is stable across runs of the same test. Construction is read-only; the runner creates files only once the run actually starts.
+    ///
+    /// `EXHAUST_RESUME=0` opts out of recovery: predecessor state is ignored and overwritten.
+    package static func makeSprawlPersistenceContext(
+        fileID: StaticString,
+        line: UInt,
+        baseDirectory: URL = FileManager.default.temporaryDirectory
+    ) -> SprawlPersistenceContext {
+        let fileIDText = "\(fileID)"
+        let module = fileIDText.split(separator: "/").first.map(String.init) ?? "UnknownModule"
+        let file = fileIDText.split(separator: "/").last.map(String.init) ?? "UnknownFile"
+        let store = SprawlProgressStore(
+            baseDirectory: baseDirectory,
+            module: module,
+            testIdentifier: "\(file)-L\(line)"
+        )
+        let resumeEnabled = ProcessInfo.processInfo.environment["EXHAUST_RESUME"] != "0"
+        return SprawlPersistenceContext(store: store, resumeEnabled: resumeEnabled)
+    }
+
+    /// Records the crash finding from a resumed run — never silent, never suppressed. The trapping candidate itself usually died before corpus admission, so the report names its mutation parent from the snapshot when one exists.
+    package static func reportSprawlResumeFindings(
+        context: SprawlPersistenceContext,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
+    ) {
+        guard context.resumeDocument != nil, let survivor = context.survivor else {
+            return
+        }
+        let parentText: String
+        if let parentSequence = context.survivorParentSequence() {
+            parentText = "a mutation of corpus parent \(parentSequence.shortString) (hash 0x\(String(survivor.parentHash, radix: 16)))"
+        } else if survivor.parentHash == 0 {
+            parentText = "a fresh sample with no corpus parent"
+        } else {
+            parentText = "a mutation of a parent not present in the last checkpoint"
+        }
+        reportError(
+            "A previous run of this test was killed by a Swift trap while evaluating candidate 0x\(String(survivor.candidateHash, radix: 16)) — \(parentText). The run resumes for the remaining budget with the crash region quarantined; fix the trap before extending the budget.",
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
     }
 
     // MARK: - Issue Reporting
