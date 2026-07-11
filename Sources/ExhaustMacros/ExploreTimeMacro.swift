@@ -54,6 +54,12 @@ private func expandExploreTimeCall(
 ) throws -> ExprSyntax {
     let args = node.arguments.map(\.self)
 
+    // Emitted on every expansion until the mode stabilizes: SwiftPM suppresses dependency warnings, so a library-side #warning would never reach a consumer, while a macro diagnostic lands in the user's own build at the call site.
+    context.diagnose(Diagnostic(
+        node: Syntax(node),
+        message: ExhaustMacroDiagnostic.exploreTimeExperimental
+    ))
+
     guard let trailingClosure = node.trailingClosure else {
         return try expandExploreTimeFunctionReference(
             of: node, args: args, in: context, runtimeFunction: plainFunction

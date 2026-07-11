@@ -16,6 +16,13 @@
                     message.isValid
                 }
                 """
+            } diagnostics: {
+                """
+                #explore(messageGen, time: .minutes(15)) { message in
+                ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
+                    message.isValid
+                }
+                """
             } expansion: {
                 """
                 __ExhaustRuntime.__exploreTime(
@@ -42,6 +49,13 @@
                     message.isValid
                 }
                 """
+            } diagnostics: {
+                """
+                #explore(messageGen, time: .seconds(30), .replay(42), .suppress(.all)) { message in
+                ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
+                    message.isValid
+                }
+                """
             } expansion: {
                 """
                 __ExhaustRuntime.__exploreTime(
@@ -65,6 +79,14 @@
             assertMacro {
                 """
                 #explore(messageGen, time: .minutes(2)) { message in
+                    let decoded = try Decoder.decode(message)
+                    #expect(decoded.isValid)
+                }
+                """
+            } diagnostics: {
+                """
+                #explore(messageGen, time: .minutes(2)) { message in
+                ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                     let decoded = try Decoder.decode(message)
                     #expect(decoded.isValid)
                 }
@@ -98,6 +120,12 @@
                 """
                 #explore(messageGen, time: .minutes(5), property: checkMessage)
                 """
+            } diagnostics: {
+                """
+                #explore(messageGen, time: .minutes(5), property: checkMessage)
+                ┬──────────────────────────────────────────────────────────────
+                ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
+                """
             } expansion: {
                 """
                 __ExhaustRuntime.__exploreTime(
@@ -126,7 +154,8 @@
                 """
                 #explore(messageGen, time: .minutes(5), directions: [("north", { $0 > 0 })]) { message in
                                                                     ┬──────────────────────
-                                                                    ╰─ 🛑 #explore cannot combine 'time:' and 'directions:'; the modes are mutually exclusive. Use 'time:' for a coverage-guided fuzz run or 'directions:' for goal-bounded exploration
+                │                                                   ╰─ 🛑 #explore cannot combine 'time:' and 'directions:'; the modes are mutually exclusive. Use 'time:' for a coverage-guided fuzz run or 'directions:' for goal-bounded exploration
+                ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                     message.isValid
                 }
                 """
@@ -144,6 +173,7 @@
             } diagnostics: {
                 """
                 #explore(messageGen) { message in
+                ├─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                 ╰─ 🛑 #explore(time:) requires a 'time:' argument
                     message.isValid
                 }
@@ -162,6 +192,13 @@
             assertMacro {
                 """
                 #explore(messageGen, time: .minutes(15)) { message in
+                    await server.accepts(message)
+                }
+                """
+            } diagnostics: {
+                """
+                #explore(messageGen, time: .minutes(15)) { message in
+                ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                     await server.accepts(message)
                 }
                 """
@@ -188,6 +225,14 @@
             assertMacro {
                 """
                 #explore(messageGen, time: .minutes(2)) { message in
+                    let response = try await server.roundTrip(message)
+                    #expect(response.isAcknowledgement)
+                }
+                """
+            } diagnostics: {
+                """
+                #explore(messageGen, time: .minutes(2)) { message in
+                ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                     let response = try await server.roundTrip(message)
                     #expect(response.isAcknowledgement)
                 }

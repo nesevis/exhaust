@@ -68,6 +68,8 @@ public macro explore<GeneratedValue, PropertyResult>(
 ///
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
 ///
+/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
+///
 /// - Returns: A ``SprawlReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
 @freestanding(expression)
 @discardableResult
@@ -91,6 +93,8 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. Settings are variadic ``SprawlSettings`` values controlling deterministic replay, output suppression, and log verbosity.
 ///
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
+///
+/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 ///
 /// - Returns: A ``SprawlReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
 @freestanding(expression)

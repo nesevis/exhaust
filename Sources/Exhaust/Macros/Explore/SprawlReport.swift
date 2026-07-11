@@ -5,6 +5,8 @@ import ExhaustCore
 /// The outcome of a `#explore(time:)` coverage-guided run: a clustered fault inventory plus throughput and coverage statistics.
 ///
 /// A `time:` run catalogues failures instead of stopping at the first one, so the report carries every distinct fault cluster the run discovered. Assert on ``clusters`` when a run is expected to find bugs (combine with `.suppress(.issueReporting)`), or on ``termination`` and the attempt counts when validating search behavior.
+///
+/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 public struct SprawlReport: Sendable {
     /// One distinct fault the run discovered: a unique reduced counterexample with its membership counts.
     ///
