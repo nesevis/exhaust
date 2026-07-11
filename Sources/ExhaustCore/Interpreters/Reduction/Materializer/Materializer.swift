@@ -101,7 +101,7 @@ package enum Materializer {
         switch mode {
             case .exact:
                 seed = precomputedSeed ?? ZobristHash.hash(of: prefix)
-                // Exact mode never reads the fallback tree at value sites (all values come from the prefix), but handleZip still consults it: per-child fallback threading, and secondary scope limits when the prefix does not parse at a zip site. Scope rejection of structurally misaligned candidates before the property runs is load-bearing — dropping scoping nearly doubles materializations on batch cross-sequence removal (Bound25). The primary scope source is the prefix's own subtree spans (see handleZip).
+                // Exact mode never reads the fallback tree at value sites (all values come from the prefix), but handleZip still consults it for per-child fallback threading and for secondary scope limits when the prefix does not parse at a zip site. Scope rejection of structurally misaligned candidates before the property runs is load-bearing: dropping scoping nearly doubles materializations on batch cross-sequence removal (Bound25).
                 resolvedFallbackTree = fallbackTree
                 maximizeBoundRegionIndices = nil
             case let .guided(s, fb, indices):
@@ -264,7 +264,7 @@ extension Materializer {
                 )
 
             case let .impure(.zip(generators, _), continuation):
-                // Zip: callee is a group with known child count. Group nodes are untagged, so for a two-generator zip the shape group[g₂, x] reads two ways: a wrapper [zipCalleeGroup, continuationTree] from monadic composition, or the zip's own children group whose first child happens to be a two-child group (a monadic bind, a two-branch pick — both flatten as two-child groups). Zips are fixed-arity, so the prefix arbitrates: the reading whose per-child entry counts land on the prefix's self-delimiting subtree boundaries is the honest one. Ties (including an unparseable prefix) keep the wrapper reading, preserving prior behavior for mutated candidates that match neither.
+                // Zip: callee is a group with known child count. For a two-generator zip the untagged fallback shape group[g₂, x] reads two ways — a monadic wrapper [zipCalleeGroup, continuationTree], or the zip's own children group whose first child is itself a two-child group. The prefix arbitrates: the reading whose child boundaries land on the prefix's parsed subtree spans wins, and ties (including an unparseable prefix) keep the wrapper reading. See Cursor.zipChildSubtreeEnds(count:) for why the prefix is authoritative.
                 let prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
                 let (calleeFallback, continuationFallback): (ChoiceTree?, ChoiceTree?)
                 if let fallbackTree,

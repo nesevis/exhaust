@@ -1,8 +1,8 @@
 //
 //  MetaFuzzFreeze.swift
-//  ExhaustTestSupport
+//  ExhaustMetaFuzz
 //
-//  The capture-and-freeze mechanism for self-fuzzing findings: a finding is frozen as a versioned JSON record, committed alongside the fix, and replayed deterministically as a regression gate. See ExhaustDocs/coverage-guided-self-fuzzing.md.
+//  The capture-and-freeze mechanism for self-fuzzing findings: a finding is frozen as a versioned JSON record, committed alongside the fix, and replayed deterministically as a regression gate.
 //
 
 import ExhaustCore
@@ -122,12 +122,11 @@ public extension MetaFuzz {
 
 // MARK: - Stable Hash
 
-/// FNV-1a over UTF-8, used for finding filenames. `Hasher` is per-process randomized, and a finding's filename must be stable across runs so repeats overwrite.
+/// The finding's filename hash, rendered in radix 36. Folded with ``Xoshiro256/fold(_:mixing:)`` (the same stable byte fold behind ``Gen/sourceFingerprint(fileID:line:column:)``) because `Hasher` is per-process randomized and a finding's filename must be stable across runs so repeats overwrite.
 private func stableHash(of string: String) -> String {
-    var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+    var hash: UInt64 = 0
     for byte in string.utf8 {
-        hash ^= UInt64(byte)
-        hash = hash &* 0x0000_0100_0000_01B3
+        hash = Xoshiro256.fold(hash, mixing: UInt64(byte))
     }
     return String(hash, radix: 36)
 }

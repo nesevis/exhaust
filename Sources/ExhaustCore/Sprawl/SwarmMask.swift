@@ -1,19 +1,8 @@
 // Swarm generation for the sprawl phase: per-epoch branch masking.
 //
-// A uniform branch mix statistically suppresses value shapes that need a run of one kind — the
-// canonical case is a stack that never fills while `pop` and `clear` stay in the mix (Groce et
-// al., "Swarm Testing", ISSTA 2012). Sprawl therefore runs in swarm epochs: within one epoch a
-// deterministic mask disallows a random subset of each pick site's branches, and mutated
-// children have their disallowed branch selections pivoted to allowed ones before
-// materialization. Diversity comes from the epoch schedule, not any single mask.
+// A uniform branch mix statistically suppresses value shapes that need a run of one kind — the canonical case is a stack that never fills while `pop` and `clear` stay in the mix (Groce et al., "Swarm Testing", ISSTA 2012). Sprawl therefore runs in swarm epochs: within one epoch a deterministic mask disallows a random subset of each pick site's branches, and mutated children have their disallowed branch selections pivoted to allowed ones before materialization. Diversity comes from the epoch schedule, not any single mask.
 //
-// Seam decision (signed off 2026-07-11): the mask lives beside the choice sequence, derived
-// from the root seed, never inside it. Whole-run replay reproduces the epoch schedule for free,
-// and `.exact` re-materialization of any individual entry reads its branch selections from the
-// sequence itself, so reproducers never need the mask. The mask is applied as a sequence
-// rewrite in the mutation layer — the guided materializer then follows the pivoted branch and
-// PRNG-fills its content, exactly as it does for the existing branch-pivot operator — so no
-// interpreter or materializer code paths change.
+// The mask lives beside the choice sequence, derived from the root seed, never inside it. Whole-run replay reproduces the epoch schedule for free, and `.exact` re-materialization of any individual entry reads its branch selections from the sequence itself, so reproducers never need the mask. The mask is applied as a sequence rewrite in the mutation layer — the guided materializer then follows the pivoted branch and PRNG-fills its content, exactly as it does for the existing branch-pivot operator — so no interpreter or materializer code paths change.
 
 /// One epoch's branch mask, derived entirely from the epoch seed. See the file header for the seam decision.
 package struct SwarmMask: Sendable {

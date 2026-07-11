@@ -275,7 +275,7 @@ package final class SprawlCorpus {
                 championCounts[index] += 1
                 return
             }
-            guard shortlexIsLess(sequence, entries[incumbentIndex].sequence) else {
+            guard championOrderPrecedes(sequence, entries[incumbentIndex].sequence) else {
                 return
             }
             edgeChampions[edge] = index
@@ -288,8 +288,10 @@ package final class SprawlCorpus {
         }
     }
 
-    /// Shortlex order over flattened sequences: shorter first, ties broken by the first differing element (kind rank, then per-kind payload). Reflexive ties are not-less, so an incumbent keeps its cell against an equal challenger.
-    private func shortlexIsLess(_ lhs: ChoiceSequence, _ rhs: ChoiceSequence) -> Bool {
+    /// The champion archive's shortlex order: shorter first, ties broken by the first differing element (kind rank, then per-kind payload). Reflexive ties are not-less, so an incumbent keeps its cell against an equal challenger.
+    ///
+    /// Deliberately not ``ChoiceSequence/shortLexPrecedes(_:)``, the reducer's order: champion comparison runs on every hit edge of every admission and needs one cheap total pass, while the reducer's order adds value-projection tiebreakers the archive does not need.
+    private func championOrderPrecedes(_ lhs: ChoiceSequence, _ rhs: ChoiceSequence) -> Bool {
         if lhs.count != rhs.count {
             return lhs.count < rhs.count
         }

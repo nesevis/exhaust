@@ -52,14 +52,7 @@ public extension __ExhaustRuntime {
         column: UInt = #column,
         property: @escaping @Sendable (Output) throws -> Bool
     ) -> SprawlReport {
-        let persistence = makeSprawlPersistenceContext(fileID: fileID, line: line)
-        reportSprawlResumeFindings(
-            context: persistence,
-            fileID: fileID,
-            filePath: filePath,
-            line: line,
-            column: column
-        )
+        let persistence = prepareSprawlPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
         let report = runExploreTimeCore(
             gen: refGen.gen,
             time: time,
@@ -101,14 +94,7 @@ public extension __ExhaustRuntime {
         // The source-located property closure is part of the macro contract but unused until the report can re-materialise reduced counterexamples and replay them for source-anchored issues.
         _ = property
         let verdictProperty = wrapVerdictDetection(detection)
-        let persistence = makeSprawlPersistenceContext(fileID: fileID, line: line)
-        reportSprawlResumeFindings(
-            context: persistence,
-            fileID: fileID,
-            filePath: filePath,
-            line: line,
-            column: column
-        )
+        let persistence = prepareSprawlPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
         nonisolated(unsafe) var pipelineReport: SprawlReport?
         withExpectedIssue(isIntermittent: true) {
             pipelineReport = runExploreTimeCore(
@@ -150,14 +136,7 @@ public extension __ExhaustRuntime {
     ) async -> SprawlReport {
         let verdictProperty = bridgeAsyncVerdictProperty(property)
         let report = await dispatchToGCD(reserving: LaneReservation.single) {
-            let persistence = makeSprawlPersistenceContext(fileID: fileID, line: line)
-            reportSprawlResumeFindings(
-                context: persistence,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
+            let persistence = prepareSprawlPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
             let report = runExploreTimeCore(
                 gen: refGen.gen,
                 time: time,
@@ -199,14 +178,7 @@ public extension __ExhaustRuntime {
         _ = property
         let verdictProperty = bridgeAsyncVerdictDetection(detection)
         let finalReport = await dispatchToGCD(reserving: LaneReservation.single) {
-            let persistence = makeSprawlPersistenceContext(fileID: fileID, line: line)
-            reportSprawlResumeFindings(
-                context: persistence,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
+            let persistence = prepareSprawlPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
             nonisolated(unsafe) var pipelineReport: SprawlReport?
             // withExpectedIssue cannot be used on a GCD thread because Test.current is nil, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
             #if canImport(Testing)
@@ -355,6 +327,24 @@ public extension __ExhaustRuntime {
     }
 
     // MARK: - Crash Recovery
+
+    /// The shared prologue of every `time:` entry point: builds the call site's crash-recovery context and reports any predecessor crash finding before the run starts.
+    private static func prepareSprawlPersistence(
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
+    ) -> SprawlPersistenceContext {
+        let persistence = makeSprawlPersistenceContext(fileID: fileID, line: line)
+        reportSprawlResumeFindings(
+            context: persistence,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+        return persistence
+    }
 
     /// Builds the crash-recovery context for one `#explore(time:)` call site: `<base>/exhaust/<module>/<file>-L<line>/`, which is stable across runs of the same test. Construction is read-only; the runner creates files only once the run actually starts.
     ///

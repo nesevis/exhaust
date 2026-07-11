@@ -2,7 +2,7 @@
 //  ZipScopeRegressionTests.swift
 //  Exhaust
 //
-//  Pins the zip fallback-decomposition fix. ChoiceTree group nodes are untagged, so a two-generator zip whose first child flattens as a two-child group (a monadic bind, a two-branch pick) was misread as a monadic wrapper [zipCallee, continuation]: exact-mode replay of the tree's own flattening rejected, and guided mode silently dropped values to PRNG. The fix arbitrates by the prefix's self-delimiting subtree spans (zips are fixed-arity) and scopes zip children from those spans. Found by the self-fuzzing harness (ExhaustDocs/coverage-guided-self-fuzzing.md).
+//  Pins the zip fallback-decomposition fix. ChoiceTree group nodes are untagged, so a two-generator zip whose first child flattens as a two-child group (a monadic bind, a two-branch pick) was misread as a monadic wrapper [zipCallee, continuation]: exact-mode replay of the tree's own flattening rejected, and guided mode silently dropped values to PRNG. The fix arbitrates by the prefix's self-delimiting subtree spans (zips are fixed-arity) and scopes zip children from those spans. Found by the self-fuzzing harness.
 //
 
 import ExhaustCore
@@ -88,8 +88,8 @@ struct ZipScopeRegressionTests {
 
 /// A monadic bind whose bound range depends on the inner draw — flattens as a two-child group, the shape that collided with the wrapper reading.
 private func boundRangeGen() -> Generator<Int> {
-    Gen.choose(in: -50 ... -14).bind { lo in
-        Gen.choose(in: lo ... (lo + 50))
+    Gen.choose(in: -50 ... -14).bind { lowerBound in
+        Gen.choose(in: lowerBound ... (lowerBound + 50))
     }
 }
 

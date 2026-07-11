@@ -1,15 +1,15 @@
 //
 //  MetaFuzzOracles.swift
-//  ExhaustTestSupport
+//  ExhaustMetaFuzz
 //
-//  The oracle roster for self-fuzzing runs. Each oracle is a claim about the ExhaustCore pipeline that must hold for every recipe; each violation is a distinct error type because the fault inventory's FailureSymptom keys on the dynamic error type name, giving every oracle its own reduction-gate cap. See ExhaustDocs/coverage-guided-self-fuzzing.md for the roster's rationale.
+//  The oracle roster for self-fuzzing runs. Each oracle is a claim about the ExhaustCore pipeline that must hold for every recipe; each violation is a distinct error type because the fault inventory's FailureSymptom keys on the dynamic error type name, giving every oracle its own reduction-gate cap.
 //
 
 import ExhaustCore
 
 // MARK: - Violations
 
-/// O1 violation: `.exact` materialisation of a tree's own flattening failed to reproduce the value or the sequence.
+/// `.exact` materialisation of a tree's own flattening failed to reproduce the value or the sequence.
 public struct ExactRoundTripViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -18,7 +18,7 @@ public struct ExactRoundTripViolation: Error, CustomStringConvertible {
     }
 }
 
-/// O2 violation: guided materialisation of a mutated sequence reported an out-of-range convergence.
+/// Guided materialisation of a mutated sequence reported an out-of-range convergence.
 public struct GuidedTotalityViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -27,7 +27,7 @@ public struct GuidedTotalityViolation: Error, CustomStringConvertible {
     }
 }
 
-/// O2 violation: guided materialisation of the same sequence, seed, and fallback produced different outcomes.
+/// Guided materialisation of the same sequence, seed, and fallback produced different outcomes.
 public struct GuidedDeterminismViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -36,7 +36,7 @@ public struct GuidedDeterminismViolation: Error, CustomStringConvertible {
     }
 }
 
-/// O3 violation: a flattened sequence's structural markers do not balance.
+/// A flattened sequence's structural markers do not balance.
 public struct FlattenBalanceViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -45,7 +45,7 @@ public struct FlattenBalanceViolation: Error, CustomStringConvertible {
     }
 }
 
-/// O4 violation: the same recipe and seed produced different value streams on two runs.
+/// The same recipe and seed produced different value streams on two runs.
 public struct DeterminismViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -54,7 +54,7 @@ public struct DeterminismViolation: Error, CustomStringConvertible {
     }
 }
 
-/// O5 violation: a reduced value passed the property its original failed.
+/// A reduced value passed the property its original failed.
 public struct ReductionPreservationViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -63,7 +63,7 @@ public struct ReductionPreservationViolation: Error, CustomStringConvertible {
     }
 }
 
-/// O5 violation: a reduced sequence shortlex-exceeds the original.
+/// A reduced sequence shortlex-exceeds the original.
 public struct ReductionShortlexViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -72,7 +72,7 @@ public struct ReductionShortlexViolation: Error, CustomStringConvertible {
     }
 }
 
-/// O5 violation: the reducer's reported sequence does not materialize to its reported value.
+/// The reducer's reported sequence does not materialize to its reported value.
 public struct ReductionClosedLoopViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -81,7 +81,7 @@ public struct ReductionClosedLoopViolation: Error, CustomStringConvertible {
     }
 }
 
-/// O5 violation: re-reducing an already-reduced tree enlarged the sequence.
+/// Re-reducing an already-reduced tree enlarged the sequence.
 public struct ReductionMonotonicityViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -90,7 +90,7 @@ public struct ReductionMonotonicityViolation: Error, CustomStringConvertible {
     }
 }
 
-/// O6 violation: two materialisations of the same sequence produced different cluster keys.
+/// Two materialisations of the same sequence produced different cluster keys.
 public struct ClusterKeyStabilityViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -99,7 +99,7 @@ public struct ClusterKeyStabilityViolation: Error, CustomStringConvertible {
     }
 }
 
-/// O7 violation: a choice sequence did not survive the persistence codec round trip.
+/// A choice sequence did not survive the persistence codec round trip.
 public struct CodecRoundTripViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -108,7 +108,7 @@ public struct CodecRoundTripViolation: Error, CustomStringConvertible {
     }
 }
 
-/// O8 violation: mapping through the identity transform changed the value stream.
+/// Mapping through the identity transform changed the value stream.
 public struct FunctorIdentityViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -168,7 +168,7 @@ public extension MetaFuzz {
 // MARK: - Individual Oracles
 
 extension MetaFuzz {
-    /// O4: the same recipe and seed must produce the same value stream twice.
+    /// Determinism: the same recipe and seed must produce the same value stream twice.
     private static func checkDeterminism(_ fuzzCase: MetaFuzzCase) throws {
         let held = checkPairedValues(
             buildGenerator(from: fuzzCase.recipe),
@@ -182,7 +182,7 @@ extension MetaFuzz {
         }
     }
 
-    /// O8: mapping through the identity transform must not change the value stream.
+    /// Functor identity: mapping through the identity transform must not change the value stream.
     private static func checkFunctorIdentity(_ fuzzCase: MetaFuzzCase) throws {
         let mappedRecipe = GenRecipe.combinator(.mapped(fuzzCase.recipe, .identity))
         let held = checkPairedValues(
@@ -197,7 +197,7 @@ extension MetaFuzz {
         }
     }
 
-    /// O3: opening and closing structural markers must balance. A partial stand-in for full field-by-field flatten faithfulness, which needs a second flattening authority; the O1 sequence-equality check covers field fidelity on the round trip.
+    /// Flatten faithfulness: opening and closing structural markers must balance. A partial stand-in for full field-by-field verification, which needs a second flattening authority; the exact-round-trip sequence equality covers field fidelity.
     private static func checkMarkerBalance(_ sequence: ChoiceSequence, _ fuzzCase: MetaFuzzCase) throws {
         var depth = 0
         for entry in sequence {
@@ -218,7 +218,7 @@ extension MetaFuzz {
         }
     }
 
-    /// O1: `.exact` materialisation of a tree's own flattening must reproduce the value, and the fresh tree must re-flatten to the same sequence, field for field. The sequence half is the consuming check for every entry field at once — a dropped or wrong field (the flatten-fingerprint class) surfaces here even when no downstream reader exists yet.
+    /// Exact round trip: `.exact` materialisation of a tree's own flattening must reproduce the value, and the fresh tree must re-flatten to the same sequence, field for field. The sequence half is the consuming check for every entry field at once — a dropped or wrong field (the flatten-fingerprint class) surfaces here even when no downstream reader exists yet.
     private static func checkExactRoundTrip(
         _ gen: AnyGenerator,
         sequence: ChoiceSequence,
@@ -240,7 +240,7 @@ extension MetaFuzz {
         }
     }
 
-    /// O7: the persistence codec must round-trip every sequence it is given.
+    /// Codec round trip: the persistence codec must round-trip every sequence it is given.
     private static func checkCodecRoundTrip(_ sequence: ChoiceSequence, _ fuzzCase: MetaFuzzCase) throws {
         let decoded = ChoiceSequenceCodec.decode(ChoiceSequenceCodec.encode(sequence))
         guard let decoded, decoded == sequence else {
@@ -248,7 +248,7 @@ extension MetaFuzz {
         }
     }
 
-    /// O2 and O6: guided materialisation of an arbitrary mutation must complete cleanly with a sane convergence, and repeating it with the same seed and fallback must produce the same outcome and cluster key.
+    /// Guided totality and cluster-key stability: guided materialisation of an arbitrary mutation must complete cleanly with a sane convergence, and repeating it with the same seed and fallback must produce the same outcome and cluster key.
     private static func checkGuidedTotality(
         _ gen: AnyGenerator,
         mutated: ChoiceSequence,
@@ -279,7 +279,7 @@ extension MetaFuzz {
         }
     }
 
-    /// O5: property-preserving reduction, shortlex direction, closed loop, and monotonicity — the four claims ported from the in-tree reduction oracles, run on the first failing value of a case.
+    /// Reduction soundness: property-preserving reduction, shortlex direction, closed loop, and monotonicity — the four claims ported from the in-tree reduction oracles, run on the first failing value of a case.
     private static func checkReduction(
         _ gen: AnyGenerator,
         tree: ChoiceTree,

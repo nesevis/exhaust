@@ -1,8 +1,8 @@
 //
 //  MetaFuzzCase.swift
-//  ExhaustTestSupport
+//  ExhaustMetaFuzz
 //
-//  The generated value for self-fuzzing runs: a generator recipe plus the seeds that make one pipeline evaluation deterministic. See ExhaustDocs/coverage-guided-self-fuzzing.md.
+//  The generated value for self-fuzzing runs: a generator recipe plus the seeds that make one pipeline evaluation deterministic.
 //
 
 import ExhaustCore

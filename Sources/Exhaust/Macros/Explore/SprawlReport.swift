@@ -8,7 +8,7 @@ import ExhaustCore
 public struct SprawlReport: Sendable {
     /// One distinct fault the run discovered: a unique reduced counterexample with its membership counts.
     ///
-    /// Cluster identity is the reduced counterexample's choice sequence. Two failures that reduce to the same minimal form are the same cluster even when their surface symptoms differ; distinct reduced forms are distinct clusters even when their symptoms match. ``isLikelySplit`` marks the middle taxonomy tier — one reduced form observed through more than one coverage signature.
+    /// Cluster identity is a canonical structural key over the reduced counterexample, so two failures that reduce to the same minimal form are the same cluster even when their surface symptoms differ, and distinct reduced forms are distinct clusters even when their symptoms match. ``isLikelySplit`` marks the middle taxonomy tier — one reduced form observed through more than one coverage signature.
     public struct Cluster: Sendable {
         /// Stable identifier in discovery order, starting at 0.
         public let id: Int

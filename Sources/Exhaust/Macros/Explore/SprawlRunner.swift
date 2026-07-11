@@ -8,7 +8,7 @@ import Foundation
 ///
 /// The exploration loop is single-threaded: the corpus, gate, and PRNG are touched only by `run()`, which executes on one GCD lane. Reductions are dispatched to the bounded ``ReductionPool`` and complete in parallel; their classifications come back through a locked mailbox the loop drains between attempts, and the attribution token serialises every instrumented evaluation (per-attempt brackets here, classification re-runs there) so in-flight reductions never pollute a snapshot.
 package final class SprawlRunner<Output> {
-    // Members without an access modifier are internal so ``SprawlRunner+Recovery`` (a same-module extension file) can reach them; nothing outside the module sees them.
+    // Members without an access modifier are internal so the same-module extension files (SprawlRunner+Recovery, SprawlRunner+Mutation) can reach them; nothing outside the module sees them.
     private let gen: Generator<Output>
     let erasedGen: AnyGenerator
     let property: @Sendable (Output) -> SprawlVerdict
@@ -20,10 +20,10 @@ package final class SprawlRunner<Output> {
     let inventory = FaultInventory()
     private let pool = ReductionPool()
     private var gate: ReductionGate
-    private var prng: Xoshiro256
-    private var bandit = MutationBandit()
+    var prng: Xoshiro256
+    var bandit = MutationBandit()
 
-    /// G4: at most one thread at a time runs an instrumented evaluation bracket.
+    /// At most one thread at a time runs an instrumented evaluation bracket.
     let attributionToken = NSLock()
 
     /// Completed classifications waiting for the loop to apply their failure-weight upgrades and escape-interval feedback.
@@ -36,7 +36,7 @@ package final class SprawlRunner<Output> {
     private var lastAdmissionNanoseconds: UInt64 = 0
     private var screeningAttempts = 0
     private var samplingAttempts = 0
-    private var sprawlAttempts = 0
+    var sprawlAttempts = 0
     private var discardedAttempts = 0
     private var totalAttempts = 0
 
@@ -276,88 +276,6 @@ package final class SprawlRunner<Output> {
                 evaluateSprawlCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: armsMask)
             }
         }
-    }
-
-    /// Produces one mutated candidate from `parent` plus the bitmask of ``MutationArm``s that shaped it (for bandit credit on admission). Two orthogonal knobs, applied in sequence: the mutation strategy (legacy single-operator or composed experiment stack), then the swarm rewrite of the result's disallowed branch selections.
-    private func nextCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt8) {
-        let experiments = configuration.experiments
-        var (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands
-            ? composedCandidate(from: parent)
-            : legacyCandidate(from: parent)
-        if experiments.swarm {
-            let epoch = SwarmMask.forEpoch(
-                index: sprawlAttempts / SprawlTunables.swarmEpochAttempts,
-                rootSeed: configuration.seed
-            )
-            candidate = epoch.apply(to: candidate, prng: &prng)
-        }
-        return (candidate, armsMask)
-    }
-
-    /// The original single-operator mutation path, kept verbatim so knob-off runs replay identically under a pinned seed: usually an intensity-band mutation, occasionally a bind-boundary splice with a random donor.
-    private func legacyCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt8) {
-        if randomUnit() < SprawlTunables.spliceProbability, corpus.entries.count > 1 {
-            let donorIndex = Int(prng.next(upperBound: UInt64(corpus.entries.count)))
-            let donor = corpus.entries[donorIndex]
-            if donor.hash != parent.hash,
-               let spliced = SprawlMutator.splice(recipient: parent.sequence, donor: donor.sequence, prng: &prng)
-            {
-                return (spliced, 1 << UInt8(MutationArm.splice.rawValue))
-            }
-        }
-        let intensityDraw = prng.next(upperBound: UInt64(SprawlIntensity.allCases.count))
-        let intensity = SprawlIntensity.allCases[Int(intensityDraw)]
-        return (
-            SprawlMutator.mutate(parent.sequence, intensity: intensity, prng: &prng),
-            1 << UInt8(intensityDraw)
-        )
-    }
-
-    /// The experiment mutation path: one child composed from `stackedMutation`'s operator stack with each operator drawn from the bandit's distribution (or the legacy fixed one when only stacking is on).
-    ///
-    /// The stack draw is 2^0...2^2 ({1, 2, 4} operators), not AFL's 2^1...2^7: Exhaust's band operators are each already multi-perturbation (a low-band step moves up to three values, a high-band step corrupts a quarter of the sequence), and the AFL-depth stacks measured on `DeepParser` destroyed parent structure outright (deep-fault discovery 4/20 versus 20/20, throughput −42%).
-    private func composedCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt8) {
-        let experiments = configuration.experiments
-        let mutation = 1 << Int(prng.next(upperBound: 3))
-        let stackCount = experiments.stackedMutation ? mutation : 1
-        var candidate = parent.sequence
-        var armsMask: UInt8 = 0
-        for _ in 0 ..< stackCount {
-            let arm = experiments.banditBands ? bandit.pick(random: randomUnit()) : fixedDistributionArm()
-            armsMask |= 1 << UInt8(arm.rawValue)
-            switch arm {
-                case .low:
-                    candidate = SprawlMutator.mutate(candidate, intensity: .low, prng: &prng)
-                case .medium:
-                    candidate = SprawlMutator.mutate(candidate, intensity: .medium, prng: &prng)
-                case .high:
-                    candidate = SprawlMutator.mutate(candidate, intensity: .high, prng: &prng)
-                case .splice:
-                    guard corpus.entries.count > 1 else {
-                        continue
-                    }
-                    let donorIndex = Int(prng.next(upperBound: UInt64(corpus.entries.count)))
-                    let donor = corpus.entries[donorIndex]
-                    if let spliced = SprawlMutator.splice(recipient: candidate, donor: donor.sequence, prng: &prng) {
-                        candidate = spliced
-                    }
-            }
-        }
-        if candidate == parent.sequence {
-            // Every stacked arm was a splice that found nothing to recombine (a single-entry corpus, or donors without a usable bind region), leaving the parent unmutated — an attempt the corpus would reject as a duplicate. Fall back to one band mutation so the attempt always explores.
-            let intensityDraw = prng.next(upperBound: UInt64(SprawlIntensity.allCases.count))
-            armsMask |= 1 << UInt8(intensityDraw)
-            candidate = SprawlMutator.mutate(candidate, intensity: SprawlIntensity.allCases[Int(intensityDraw)], prng: &prng)
-        }
-        return (candidate, armsMask)
-    }
-
-    /// The legacy operator distribution (splice at its fixed probability, otherwise a uniform band) expressed as one draw, for the stacked-without-bandit arm.
-    private func fixedDistributionArm() -> MutationArm {
-        if randomUnit() < SprawlTunables.spliceProbability {
-            return .splice
-        }
-        return MutationArm(rawValue: Int(prng.next(upperBound: 3))) ?? .low
     }
 
     private func evaluateSprawlCandidate(
@@ -736,7 +654,8 @@ package final class SprawlRunner<Output> {
         return UInt64(max(0, limit - totalAttempts))
     }
 
-    private func randomUnit() -> Double {
+    /// One uniform draw in [0, 1) from the run PRNG (the top 53 bits of one 64-bit draw), so probability-space decisions replay deterministically under a pinned seed.
+    func randomUnit() -> Double {
         Double(prng.next() >> 11) / Double(1 << 53)
     }
 }

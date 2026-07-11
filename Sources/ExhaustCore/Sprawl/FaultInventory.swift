@@ -25,7 +25,7 @@ package struct FailureSymptom: Hashable, Sendable {
 
 /// One fault class: a unique reduced form with its post-hoc coverage signatures and membership counts.
 ///
-/// Cluster identity is the reduced counterexample's *value*, rendered to a canonical key. The reduced choice sequence is not a reliable identity: two counterexamples that reduce to the same value through a bind or a length-coupled sequence carry different structural bookkeeping (`.sequence` valid ranges, `.branch` fingerprints, differing marker counts) and would over-split into separate clusters. The rendered value is deterministic and collapses those to one. Signatures collect *within* a cluster: a second distinct signature on the same reduced form is the "likely same cluster" taxonomy tier (same surface bug, possibly different code paths reaching the fault), while a different reduced form is always a different cluster.
+/// Cluster identity is the canonical structural key over the reduced sequence flattened with bind inners skipped (see ``Swift/Collection/clusterKey``). Raw sequence equality is not a reliable identity: two counterexamples that reduce to the same value through a bind or a length-coupled sequence carry different structural bookkeeping (`.sequence` valid ranges, `.branch` fingerprints, redundant bind-inner content) and would over-split into separate clusters; the key drops exactly that bookkeeping. Signatures collect *within* a cluster: a second distinct signature on the same reduced form is the "likely same cluster" taxonomy tier (same surface bug, possibly different code paths reaching the fault), while a different reduced form is always a different cluster.
 package struct FaultCluster: Sendable {
     /// Stable identifier in discovery order.
     package let id: Int
@@ -36,7 +36,7 @@ package struct FaultCluster: Sendable {
     /// A rendered description of the reduced counterexample, for the report.
     package let reducedDescription: String
 
-    /// The full-fidelity rendering of the reduced value that serves as cluster identity. Distinct from ``reducedDescription``, which is depth-truncated for display.
+    /// The cluster's identity: the canonical structural key over the bind-inner-skipped flattening of the reduced sequence (see ``Swift/Collection/clusterKey``). Distinct from ``reducedDescription``, which is a depth-truncated rendering of the value for display.
     package let reducedKey: String
 
     /// The distinct post-hoc coverage signatures observed for this reduced form. More than one means "likely same cluster" members exist.
@@ -273,7 +273,7 @@ package final class FaultInventory: @unchecked Sendable {
     package func containsKey(_ reducedKey: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        return clusters.contains { $0.reducedKey == reducedKey }
+        return clusterIndexByKey[reducedKey] != nil
     }
 
     /// A point-in-time copy for checkpointing and the final report.

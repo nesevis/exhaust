@@ -71,7 +71,7 @@ extension __ExhaustRuntime {
         return lines.joined(separator: "\n")
     }
 
-    /// Renders the STADS estimator lines: the Good-Turing price of one more edge and the Chao1 completeness fraction against the run's own reachable set. Gap-framed per the Marick guardrails — the reachable-set scoping is stated inline so the fraction cannot be read as module coverage.
+    /// Renders the estimator lines: the Good-Turing price of one more edge and the Chao1 completeness fraction against the run's own reachable set. The reachable-set scoping is stated inline so the fraction cannot be read as module coverage.
     private static func renderEstimatorLines(_ report: SprawlReport) -> [String] {
         guard report.totalAttempts > 0, report.coveredEdgeCount > 0 else {
             return []

@@ -82,7 +82,8 @@ private func expandExploreTimeCall(
         args: args,
         trailingClosure: trailingClosure,
         in: context,
-        runtimeFunction: isVoid ? expectFunction : plainFunction
+        runtimeFunction: isVoid ? expectFunction : plainFunction,
+        isExpectExpansion: isVoid
     )
 }
 
@@ -91,9 +92,10 @@ private func expandExploreTime(
     args: [LabeledExprListSyntax.Element],
     trailingClosure: ClosureExprSyntax,
     in context: some MacroExpansionContext,
-    runtimeFunction: String
+    runtimeFunction: String,
+    isExpectExpansion: Bool
 ) throws -> ExprSyntax {
-    guard !args.isEmpty else {
+    guard args.isEmpty == false else {
         context.diagnose(Diagnostic(
             node: Syntax(node),
             message: ExhaustMacroDiagnostic.exploreMissingGenerator
@@ -113,17 +115,17 @@ private func expandExploreTime(
 
     let settingsArray = settingsExprs.isEmpty ? "[]" : "[\(settingsExprs.joined(separator: ", "))]"
 
-    if runtimeFunction == "__exploreTimeExpect" || runtimeFunction == "__exploreTimeExpectAsync" {
+    if isExpectExpansion {
         let sourceLocationRewriter = SourceLocationRewriter(context: context, viewMode: .sourceAccurate)
         let propertyWithLocations = sourceLocationRewriter.rewrite(trailingClosure).cast(ClosureExprSyntax.self)
 
         var detectionClosure = rewriteExpectToRequire(trailingClosure)
-        if let sig = detectionClosure.signature,
-           let effects = sig.effectSpecifiers,
+        if let signature = detectionClosure.signature,
+           let effects = signature.effectSpecifiers,
            effects.asyncSpecifier != nil
         {
             let strippedEffects = effects.with(\.asyncSpecifier, nil)
-            detectionClosure = detectionClosure.with(\.signature, sig.with(\.effectSpecifiers, strippedEffects))
+            detectionClosure = detectionClosure.with(\.signature, signature.with(\.effectSpecifiers, strippedEffects))
         }
         let detectionText = detectionClosure.description
 

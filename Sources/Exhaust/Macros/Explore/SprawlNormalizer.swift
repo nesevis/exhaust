@@ -53,8 +53,7 @@ package enum SprawlNormalizer {
         cache: ExhaustCore.SendableBox<[UInt64: ExhaustCore.ChoiceSequence?]>
     ) -> NormalizedForm<Output>? {
         let sequenceHash = ZobristHash.hash(of: reducedSequence)
-        var cached: ChoiceSequence??
-        cached = cache.withValue { $0[sequenceHash] }
+        let cached = cache.withValue { $0[sequenceHash] }
         if let cached {
             guard let normalizedSequence = cached else {
                 return nil

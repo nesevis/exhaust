@@ -482,7 +482,7 @@ extension Materializer {
 
     /// Materializes each component of a zip in declaration order, collecting results into an array for the continuation.
     ///
-    /// When a fallback tree is available, each child is scoped to its flattened entry count so guided-mode cursor reads cannot bleed into sibling components. Scope limits are computed arithmetically from the cursor's position at the zip's group-open marker to avoid drift from transparent group markers consumed by ``Cursor/skipGroups()``.
+    /// Each child is scoped so cursor reads cannot bleed into sibling components. The primary scope source is the prefix's own parsed subtree spans (`prefixChildEnds`); when the prefix does not parse at this site, per-child entry counts from the fallback tree stand in. See ``Cursor/zipChildSubtreeEnds(count:)`` for why the prefix is authoritative.
     @inline(__always)
     static func handleZip(
         _ generators: ContiguousArray<AnyGenerator>,
@@ -509,7 +509,7 @@ extension Materializer {
 
         let canScope = prefixChildEnds != nil || fallbackChildren != nil
 
-        // Scope limits come from the prefix itself when it parses (`prefixChildEnds`, absolute end positions): zips are fixed-arity, so the candidate's own markers delimit each child, and they stay correct even when a structural mutation moved content within a child. The fallback tree's per-child entry counts are the secondary source, used when the prefix does not parse at this site (a mutated candidate that broke the zip's marker balance, or a cursor already past the zip's group-open). Those arithmetic limits start at basePosition + 1 (past the group-open) plus the cumulative flattenedEntryCount of preceding children, avoiding the cursor-position-based calculation that drifted when skipGroups() consumed a child's leading group(true) markers.
+        // Scope limits come from the prefix's parsed spans (`prefixChildEnds`, absolute end positions; see Cursor.zipChildSubtreeEnds(count:)). When the prefix does not parse at this site, the fallback tree's per-child entry counts stand in: cumulative flattenedEntryCount from basePosition + 1, which avoids the cursor-position drift skipGroups() used to cause.
         var childScopeStart = context.cursor.position + 1 // past the zip group open
 
         // Advance the cursor past transparent markers so it is ready for the first child's consume calls (tryConsumeBranch / tryConsumeValue).
@@ -520,7 +520,8 @@ extension Materializer {
         while zipIndex < generators.count {
             let gen = generators[zipIndex]
             let fb: ChoiceTree? = fallbackChildren?[zipIndex]
-            let entryCount = fb?.flattenedEntryCount
+            // flattenedEntryCount is an uncached tree walk; skip it entirely when the prefix supplies the spans — the arithmetic fallback is never consulted at this site once prefixChildEnds is non-nil.
+            let entryCount = prefixChildEnds == nil ? fb?.flattenedEntryCount : nil
             let scopeLimit: Int? = prefixChildEnds?[zipIndex] ?? entryCount.map { childScopeStart + $0 }
             if let scopeLimit {
                 context.cursor.pushScope(limit: scopeLimit)

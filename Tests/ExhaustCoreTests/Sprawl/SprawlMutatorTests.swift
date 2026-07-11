@@ -154,18 +154,18 @@ struct SprawlMutatorTests {
 
         // [.bind(true), value, value, .bind(false)] — inner subtree is one element.
         let flatBind: ChoiceSequence = [.bind(true), value, value, .bind(false)]
-        #expect(SprawlMutator.subtreeEnd(in: flatBind, startingAt: 1) == 2)
+        #expect(flatBind.subtreeEnd(startingAt: 1) == 2)
 
         // Inner subtree is a group: runs to its balanced closer.
         let groupedInner: ChoiceSequence = [.bind(true), .group(true), value, .group(false), value, .bind(false)]
-        #expect(SprawlMutator.subtreeEnd(in: groupedInner, startingAt: 1) == 4)
+        #expect(groupedInner.subtreeEnd(startingAt: 1) == 4)
 
         // Unbalanced: opener with no closer.
         let unbalanced: ChoiceSequence = [.group(true), value]
-        #expect(SprawlMutator.subtreeEnd(in: unbalanced, startingAt: 0) == nil)
+        #expect(unbalanced.subtreeEnd(startingAt: 0) == nil)
 
         // Out of range.
-        #expect(SprawlMutator.subtreeEnd(in: flatBind, startingAt: 4) == nil)
+        #expect(flatBind.subtreeEnd(startingAt: 4) == nil)
     }
 }
 

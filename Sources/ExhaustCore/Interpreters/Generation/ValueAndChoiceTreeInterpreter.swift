@@ -642,7 +642,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 let seenAfterOriginal = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 var results: [Any] = [original]
                 results.reserveCapacity(transforms.count + 1)
-                // Copies must replay the original's generation verbatim, so they run against the dedup state the original saw and their own insertions are discarded: with a unique inside, the original's accepted sequence is already in the seen-set, and deduping the copy against it forces a fresh draw — a metamorphic pair whose halves differ under the identity transform, and a tree that no longer determines the value. Resetting to the pre-original snapshot also replays the original's own dedup retries identically, so the copy lands on the accepted value, not the first attempt.
+                // Copies replay against the original's starting dedup state; see ReflectiveOperation.metamorphic.
                 for transform in transforms {
                     context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
                     (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenSnapshot

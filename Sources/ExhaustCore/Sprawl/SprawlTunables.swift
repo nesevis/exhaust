@@ -1,8 +1,6 @@
 // Central home for the sprawl search's tunable constants.
 //
-// Every value here is an eyeballed default pending empirical tuning against the ExploreHarness
-// fixture (see the design document's Open Questions). Keeping them in one namespace makes the
-// tuning surface visible and keeps magic numbers out of the search loop.
+// Every value here is an eyeballed default pending empirical tuning against the ExploreHarness fixtures. Keeping them in one namespace makes the tuning surface visible and keeps magic numbers out of the search loop.
 
 import Foundation
 
@@ -108,10 +106,10 @@ package enum SprawlTunables {
 ///
 /// Every new search-side mechanism ships behind one of these knobs, default-off, and flips on only when its measured gate passes (the knob-gate-default pattern). In-package tests reach them through the `configure:` seam on `runExploreTimeCore`; cross-package benchmark arms ride the `EXHAUST_SPRAWL_EXPERIMENT` environment variable, which debug builds parse once at run start via ``parse(environmentValue:)``.
 package struct SprawlExperiments: Sendable, Equatable {
-    /// Post-reduction cluster normalization: re-drive each value of a would-be-new cluster's reduced form toward its minimal still-failing bit pattern before minting the cluster. Default-on since its gate passed (2026-07-11: 4/4 true clusters in 20/20 seeds versus 9/20 without, throughput −0.6%); the knob stays one release for A/B.
+    /// Post-reduction cluster normalization: re-drive each value of a would-be-new cluster's reduced form toward its minimal still-failing bit pattern before minting the cluster. Default-on; the knob stays one release for A/B.
     package var normalization = true
 
-    /// Adaptive reduction-gate escape interval: coverage-novel failures escape immediately; periodic escapes that land in an existing cluster widen the interval geometrically, and new-cluster escapes reset it. Default-on since its gate passed (2026-07-11: 19× fewer reductions on saturated clusters, fault B still found 20/20 with attempts-to-discovery improved in 14/20 seeds); the knob stays one release for A/B.
+    /// Adaptive reduction-gate escape interval: coverage-novel failures escape immediately; periodic escapes that land in an existing cluster widen the interval geometrically, and new-cluster escapes reset it. Default-on; the knob stays one release for A/B.
     package var escapeBackoff = true
 
     /// Stacked mutation: one sprawl child may compose several mutation operators instead of exactly one.
@@ -123,7 +121,7 @@ package struct SprawlExperiments: Sendable, Equatable {
     /// AFLFast-style power schedule for the number of children drawn per picked parent.
     package var powerSchedule = false
 
-    /// Per-edge shortlex champion archive as the parent-selection domain. Default-on since its gate passed (2026-07-11: parser throughput +7.8%, attempts-to-discovery significantly better on two faults and worse on none, archive size stable at 60 s); the knob stays one release for A/B.
+    /// Per-edge shortlex champion archive as the parent-selection domain. Default-on; the knob stays one release for A/B.
     package var championArchive = true
 
     /// Swarm generation: per-epoch deterministic branch masks pivot mutated children's disallowed branch selections, reaching command mixes the uniform distribution statistically suppresses.

@@ -236,11 +236,6 @@ package enum SprawlMutator {
         return regions[Int(prng.next(upperBound: UInt64(regions.count)))]
     }
 
-    /// Returns the index one past the single flattened subtree starting at `start`, or nil when markers are unbalanced. Forwards to ``ChoiceSequence/subtreeEnd(startingAt:)``, which moved to the flattening authority when the materializer's zip scoping became a second consumer.
-    package static func subtreeEnd(in sequence: ChoiceSequence, startingAt start: Int) -> Int? {
-        sequence.subtreeEnd(startingAt: start)
-    }
-
     /// Finds the `.bind(false)` matching the `.bind(true)` at `openIndex`, balancing all marker kinds.
     private static func matchingBindClose(in sequence: ChoiceSequence, openIndex: Int) -> Int? {
         var depth = 0
