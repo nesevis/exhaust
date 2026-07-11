@@ -36,7 +36,7 @@ package struct SwarmMask: Sendable {
         guard fingerprint != 0, branchCount > 1 else {
             return nil
         }
-        var siteState = splitMix64(epochSeed ^ fingerprint)
+        var siteState = Self.splitMix64(epochSeed ^ fingerprint)
         // Site masked at all this epoch?
         guard siteState & 1 == 1 else {
             return nil
@@ -44,14 +44,14 @@ package struct SwarmMask: Sendable {
         var allowed: [UInt64] = []
         allowed.reserveCapacity(Int(branchCount))
         for branch in 0 ..< branchCount {
-            siteState = splitMix64(siteState)
+            siteState = Self.splitMix64(siteState)
             if siteState & 1 == 1 {
                 allowed.append(branch)
             }
         }
         if allowed.isEmpty {
             // Every branch masked: keep one, chosen by the same deterministic stream.
-            allowed.append(splitMix64(siteState) % branchCount)
+            allowed.append(Self.splitMix64(siteState) % branchCount)
         }
         if allowed.count == Int(branchCount) {
             return nil
@@ -87,9 +87,5 @@ package struct SwarmMask: Sendable {
         z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
         z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
         return z ^ (z >> 31)
-    }
-
-    private func splitMix64(_ state: UInt64) -> UInt64 {
-        Self.splitMix64(state)
     }
 }

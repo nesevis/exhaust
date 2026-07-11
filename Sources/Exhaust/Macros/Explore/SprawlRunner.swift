@@ -4,132 +4,27 @@ import CustomDump
 import ExhaustCore
 import Foundation
 
-/// The outcome of one property evaluation inside a `time:` run.
-///
-/// Distinguishes the failure's cheap symptom at evaluation time because the backpressure gate needs it synchronously, before any reduction runs.
-package enum SprawlVerdict: Sendable {
-    case pass
-    case fail(FailureSymptom)
-
-    var isFailure: Bool {
-        switch self {
-            case .pass:
-                false
-            case .fail:
-                true
-        }
-    }
-}
-
-/// Why a `time:` run stopped.
-package enum SprawlTermination: Equatable, Sendable {
-    /// The wall-clock budget elapsed.
-    case budgetExhausted
-    /// No coverage-novel corpus admission for the plateau window; the unused budget is returned rather than burned.
-    case plateau(unusedNanoseconds: UInt64)
-    /// The package-visible attempt limit was reached (testing control; no time-based termination fired).
-    case attemptLimitReached
-    /// Generation failed irrecoverably.
-    case generationError(String)
-}
-
-/// Configuration for one `time:` run. Package-visible controls beyond the public settings exist for the validation harness (phase skipping, attempt limits).
-package struct SprawlRunnerConfiguration {
-    /// The wall-clock budget in nanoseconds.
-    package var budgetNanoseconds: UInt64
-    /// Root seed for all PRNG-driven decisions.
-    package var seed: UInt64
-    /// Covering-array budget for Phase 1.
-    package var screeningBudget: UInt64
-    /// Skips Phase 1 so sprawl tests are not hostage to screening heuristics.
-    package var skipScreening: Bool
-    /// Skips Phase 2 (with `skipScreening`, the run starts directly in sprawl).
-    package var skipSampling: Bool
-    /// Hard cap on total attempts across all phases, for deterministic tests. Nil means time-bounded only.
-    package var attemptLimit: Int?
-    /// Crash-recovery configuration: where checkpoints go and what a crashed predecessor left. Nil disables persistence entirely.
-    package var persistence: SprawlPersistenceContext?
-    /// Knobs for benchmark-gated mechanisms; see ``SprawlExperiments`` for the seam precedence.
-    package var experiments: SprawlExperiments
-
-    package init(
-        budgetNanoseconds: UInt64,
-        seed: UInt64,
-        screeningBudget: UInt64 = 10000,
-        skipScreening: Bool = false,
-        skipSampling: Bool = false,
-        attemptLimit: Int? = nil,
-        persistence: SprawlPersistenceContext? = nil,
-        experiments: SprawlExperiments = SprawlExperiments()
-    ) {
-        self.budgetNanoseconds = budgetNanoseconds
-        self.seed = seed
-        self.screeningBudget = screeningBudget
-        self.skipScreening = skipScreening
-        self.skipSampling = skipSampling
-        self.attemptLimit = attemptLimit
-        self.persistence = persistence
-        self.experiments = experiments
-    }
-}
-
-/// The raw result of a `time:` run, wrapped into the public report by the macro runtime.
-package struct SprawlRunResult: Sendable {
-    package var clusters: [FaultCluster]
-    package var unmatchedUnreducedCounts: [FailureSymptom: Int]
-    package var screeningAttempts: Int
-    package var samplingAttempts: Int
-    package var sprawlAttempts: Int
-    package var discardedAttempts: Int
-    package var corpusEntryCount: Int
-    package var mutableTierCount: Int
-    package var coveredEdgeCount: Int
-    package var instrumentedEdgeCount: Int
-    /// Edges hit by exactly one attempt (f₁) and exactly two (f₂), for the STADS estimators.
-    package var edgeSingletonCount: Int
-    package var edgeDoubletonCount: Int
-    package var termination: SprawlTermination
-    /// Report-time discrimination results, parallel to `clusters` by position.
-    package var clusterDiscriminations: [ClusterDiscrimination]
-    package var startNanoseconds: UInt64
-    package var elapsedNanoseconds: UInt64
-    /// Nanoseconds spent inside the property body across all loop attempts; `elapsedNanoseconds` minus this is framework overhead.
-    package var propertyNanoseconds: UInt64
-    package var seed: UInt64
-    package var reductionsTimedOut: Bool
-
-    package var totalAttempts: Int {
-        screeningAttempts + samplingAttempts + sprawlAttempts
-    }
-
-    package var attemptsPerSecond: Double {
-        guard elapsedNanoseconds > 0 else {
-            return 0
-        }
-        return Double(totalAttempts) / (Double(elapsedNanoseconds) / 1_000_000_000)
-    }
-}
-
 /// Runs the covering-array, random-sampling, and sprawl phases against one property, accumulating a corpus and a clustered fault inventory.
 ///
 /// The exploration loop is single-threaded: the corpus, gate, and PRNG are touched only by `run()`, which executes on one GCD lane. Reductions are dispatched to the bounded ``ReductionPool`` and complete in parallel; their classifications come back through a locked mailbox the loop drains between attempts, and the attribution token serialises every instrumented evaluation (per-attempt brackets here, classification re-runs there) so in-flight reductions never pollute a snapshot.
 package final class SprawlRunner<Output> {
+    // Members without an access modifier are internal so ``SprawlRunner+Recovery`` (a same-module extension file) can reach them; nothing outside the module sees them.
     private let gen: Generator<Output>
-    private let erasedGen: AnyGenerator
-    private let property: @Sendable (Output) -> SprawlVerdict
-    private let source: any CoverageSource
-    private let configuration: SprawlRunnerConfiguration
+    let erasedGen: AnyGenerator
+    let property: @Sendable (Output) -> SprawlVerdict
+    let source: any CoverageSource
+    let configuration: SprawlRunnerConfiguration
     private let reducerConfiguration: Interpreters.ReducerConfiguration
 
-    private let corpus: SprawlCorpus
-    private let inventory = FaultInventory()
+    let corpus: SprawlCorpus
+    let inventory = FaultInventory()
     private let pool = ReductionPool()
     private var gate: ReductionGate
     private var prng: Xoshiro256
     private var bandit = MutationBandit()
 
     /// G4: at most one thread at a time runs an instrumented evaluation bracket.
-    private let attributionToken = NSLock()
+    let attributionToken = NSLock()
 
     /// Completed classifications waiting for the loop to apply their failure-weight upgrades and escape-interval feedback.
     private let pendingClassifications = SendableBox<[(parentIndex: Int?, symptom: FailureSymptom, wasEscape: Bool, classification: ClusterClassification)]>([])
@@ -137,7 +32,7 @@ package final class SprawlRunner<Output> {
     /// Zobrist-keyed normalization results shared across reduction tasks; see ``SprawlNormalizer/normalize(reducedSequence:erasedGen:symptom:property:cache:)``.
     private let normalizationCache = SendableBox<[UInt64: ChoiceSequence?]>([:])
 
-    private var startNanoseconds: UInt64 = 0
+    var startNanoseconds: UInt64 = 0
     private var lastAdmissionNanoseconds: UInt64 = 0
     private var screeningAttempts = 0
     private var samplingAttempts = 0
@@ -150,17 +45,19 @@ package final class SprawlRunner<Output> {
 
     // MARK: - Crash-Recovery State
 
-    private var progressWriter: SprawlProgressWriter?
-    private var breadcrumb: SprawlBreadcrumb?
-    private var lastCheckpointNanoseconds: UInt64 = 0
+    // Owned by the recovery extension (see SprawlRunner+Recovery.swift); declared here because stored properties cannot live in an extension.
+
+    var progressWriter: SprawlProgressWriter?
+    var breadcrumb: SprawlBreadcrumb?
+    var lastCheckpointNanoseconds: UInt64 = 0
     /// Set when a new cluster classifies so the next checkpoint fires immediately — discovered clusters must reach disk without waiting out the interval.
-    private var forceCheckpoint = false
+    var forceCheckpoint = false
     /// Run time consumed by crashed predecessors, so checkpoint accounting and report timestamps continue one logical timeline across resumes.
-    private var priorConsumedNanoseconds: UInt64 = 0
-    private var pcTableHashAtStart: UInt64 = 0
+    var priorConsumedNanoseconds: UInt64 = 0
+    var pcTableHashAtStart: UInt64 = 0
 
     /// The monotonic origin of the logical run: `startNanoseconds` backdated by predecessor time, so cluster timestamps from before and after a resume land on one timeline.
-    private var reportEpochNanoseconds: UInt64 {
+    var reportEpochNanoseconds: UInt64 {
         startNanoseconds >= priorConsumedNanoseconds ? startNanoseconds - priorConsumedNanoseconds : 0
     }
 
@@ -209,9 +106,8 @@ package final class SprawlRunner<Output> {
         let reductionsCompleted = pool.drain(timeoutNanoseconds: 10_000_000_000)
         drainClassifications()
 
-        let inventory = inventory
-        let clusters = __ExhaustRuntime.blockingAwait { await inventory.snapshot() }
-        let unmatched = __ExhaustRuntime.blockingAwait { await inventory.unmatchedUnreducedCounts }
+        let clusters = inventory.snapshot()
+        let unmatched = inventory.unmatchedUnreducedCounts
 
         // Report-time statistics: the live loop stored only BitSets; the ranking runs once, here.
         let passingSignatures = corpus.passingSignatures
@@ -261,16 +157,7 @@ package final class SprawlRunner<Output> {
             // Screening evaluates before its tree reaches onExample, so the candidate cannot be identified pre-evaluation; a cleared slot beats misattributing a trap to the previous attempt.
             breadcrumb?.clear()
             source.beginAttempt()
-            if source.wantsValues {
-                source.noteValue(value)
-            }
-            let propertyStart = monotonicNanoseconds()
-            let verdict = property(value)
-            propertyNanoseconds += monotonicNanoseconds() - propertyStart
-            var hits: [(edge: Int, hitCount: UInt8)] = []
-            source.forEachHitEdge { edge, hitCount in
-                hits.append((edge, hitCount))
-            }
+            let (verdict, hits) = evaluateInBracket(value, recordingBreadcrumb: nil)
             attributionToken.unlock()
             lastVerdict = verdict
             lastHits = hits
@@ -282,40 +169,20 @@ package final class SprawlRunner<Output> {
             screeningBudget: min(configuration.screeningBudget, remainingAttemptBudget()),
             continuePastFailure: true,
             property: wrappedProperty,
-            onExample: { [self] value, tree, passed in
-                screeningAttempts += 1
-                totalAttempts += 1
+            onExample: { [self] value, tree, _ in
                 drainClassifications()
-                let sequence = ChoiceSequence.flatten(tree)
                 // Every covering-array row is boundary-derived; convergence is 1 because the tree came straight from materialisation.
-                let admission = corpus.offer(
-                    sequence: sequence,
+                recordAttempt(
+                    value: value,
                     tree: tree,
+                    sequence: ChoiceSequence.flatten(tree),
+                    verdict: lastVerdict,
                     hits: lastHits,
                     convergence: 1.0,
                     generation: 0,
                     phase: .screening,
-                    isBoundaryDerived: true,
-                    propertyFailed: passed == false
+                    isBoundaryDerived: true
                 )
-                if case .admitted = admission {
-                    lastAdmissionNanoseconds = monotonicNanoseconds()
-                }
-                if passed == false, case let .fail(symptom) = lastVerdict {
-                    var coverageNovel = false
-                    if case .admitted = admission {
-                        coverageNovel = true
-                    }
-                    handleFailure(
-                        value: value,
-                        tree: tree,
-                        sequence: sequence,
-                        symptom: symptom,
-                        parentIndex: nil,
-                        phase: .screening,
-                        coverageNovel: coverageNovel
-                    )
-                }
             }
         )
     }
@@ -346,66 +213,17 @@ package final class SprawlRunner<Output> {
             }
             drainClassifications()
 
-            attributionToken.lock()
-            source.beginAttempt()
-            let generated: (Output, ChoiceTree)?
-            do {
-                generated = try interpreter.next()
-            } catch {
-                attributionToken.unlock()
-                return .generationError(String(describing: error))
-            }
-            guard let (value, tree) = generated else {
-                attributionToken.unlock()
-                return nil
-            }
-            let sequence = ChoiceSequence.flatten(tree)
-            breadcrumb?.record(candidateHash: ZobristHash.hash(of: sequence), parentHash: 0)
-            if source.wantsValues {
-                source.noteValue(value)
-            }
-            let propertyStart = monotonicNanoseconds()
-            let verdict = property(value)
-            propertyNanoseconds += monotonicNanoseconds() - propertyStart
-            var hits: [(edge: Int, hitCount: UInt8)] = []
-            source.forEachHitEdge { edge, hitCount in
-                hits.append((edge, hitCount))
-            }
-            attributionToken.unlock()
-
-            samplingAttempts += 1
-            totalAttempts += 1
-
-            let admission = corpus.offer(
-                sequence: sequence,
-                tree: tree,
-                hits: hits,
-                convergence: 1.0,
-                generation: 0,
-                phase: .sampling,
-                propertyFailed: verdict.isFailure
-            )
-            if case .admitted = admission {
-                samplesSinceNovelty = 0
-                lastAdmissionNanoseconds = monotonicNanoseconds()
-            } else {
-                samplesSinceNovelty += 1
-            }
-
-            if case let .fail(symptom) = verdict {
-                var coverageNovel = false
-                if case .admitted = admission {
-                    coverageNovel = true
-                }
-                handleFailure(
-                    value: value,
-                    tree: tree,
-                    sequence: sequence,
-                    symptom: symptom,
-                    parentIndex: nil,
-                    phase: .sampling,
-                    coverageNovel: coverageNovel
-                )
+            switch freshSample(interpreter: &interpreter, phase: .sampling) {
+                case let .evaluated(admission):
+                    if admission.isAdmitted {
+                        samplesSinceNovelty = 0
+                    } else {
+                        samplesSinceNovelty += 1
+                    }
+                case .exhausted:
+                    return nil
+                case let .generationError(message):
+                    return .generationError(message)
             }
         }
     }
@@ -437,8 +255,13 @@ package final class SprawlRunner<Output> {
 
             guard let (parentIndex, parent) = corpus.pickParent(random: randomUnit()) else {
                 // Empty mutable tier: fall back to fresh sampling until something is mutable.
-                if let termination = fallbackSample(interpreter: &fallbackInterpreter) {
-                    return termination
+                switch freshSample(interpreter: &fallbackInterpreter, phase: .sprawl) {
+                    case .evaluated:
+                        break
+                    case .exhausted:
+                        discardedAttempts += 1
+                    case let .generationError(message):
+                        return .generationError(message)
                 }
                 continue
             }
@@ -556,59 +379,45 @@ package final class SprawlRunner<Output> {
         // swiftlint:disable:next force_cast
         let value = anyValue as! Output
         let sequence = ChoiceSequence.flatten(freshTree)
-        breadcrumb?.record(candidateHash: ZobristHash.hash(of: sequence), parentHash: parent.hash)
-        if source.wantsValues {
-            source.noteValue(value)
-        }
-        let propertyStart = monotonicNanoseconds()
-        let verdict = property(value)
-        propertyNanoseconds += monotonicNanoseconds() - propertyStart
-        var hits: [(edge: Int, hitCount: UInt8)] = []
-        source.forEachHitEdge { edge, hitCount in
-            hits.append((edge, hitCount))
-        }
+        let (verdict, hits) = evaluateInBracket(
+            value,
+            recordingBreadcrumb: (candidateHash: ZobristHash.hash(of: sequence), parentHash: parent.hash)
+        )
         attributionToken.unlock()
 
-        sprawlAttempts += 1
-        totalAttempts += 1
-
-        let admission = corpus.offer(
-            sequence: sequence,
+        let admission = recordAttempt(
+            value: value,
             tree: freshTree,
+            sequence: sequence,
+            verdict: verdict,
             hits: hits,
             convergence: decodingReport?.convergence ?? 0,
             generation: parent.generation + 1,
             phase: .sprawl,
-            propertyFailed: verdict.isFailure
+            parentIndex: parentIndex
         )
-        if case .admitted = admission {
-            lastAdmissionNanoseconds = monotonicNanoseconds()
-            if configuration.experiments.banditBands {
-                for arm in MutationArm.allCases where armsMask & (1 << UInt8(arm.rawValue)) != 0 {
-                    bandit.reward(arm)
-                }
+        if admission.isAdmitted, configuration.experiments.banditBands {
+            for arm in MutationArm.allCases where armsMask & (1 << UInt8(arm.rawValue)) != 0 {
+                bandit.reward(arm)
             }
-        }
-
-        if case let .fail(symptom) = verdict {
-            var coverageNovel = false
-            if case .admitted = admission {
-                coverageNovel = true
-            }
-            handleFailure(
-                value: value,
-                tree: freshTree,
-                sequence: sequence,
-                symptom: symptom,
-                parentIndex: parentIndex,
-                phase: .sprawl,
-                coverageNovel: coverageNovel
-            )
         }
     }
 
-    /// One fresh-sampling attempt used when the mutable tier is empty. Returns a termination only on generation error.
-    private func fallbackSample(interpreter: inout ValueAndChoiceTreeInterpreter<Output>) -> SprawlTermination? {
+    // MARK: - Shared Attempt Plumbing
+
+    /// The outcome of one fresh interpreter sample, shared by Phase 2 and sprawl's empty-tier fallback.
+    private enum FreshSampleOutcome {
+        case evaluated(CorpusAdmission)
+        /// The interpreter returned nil; its stream is exhausted.
+        case exhausted
+        case generationError(String)
+    }
+
+    /// Draws one fresh sample from `interpreter`, evaluates it under the attribution bracket, and records the attempt under `phase`.
+    private func freshSample(
+        interpreter: inout ValueAndChoiceTreeInterpreter<Output>,
+        phase: SprawlPhase
+    ) -> FreshSampleOutcome {
         attributionToken.lock()
         source.beginAttempt()
         let generated: (Output, ChoiceTree)?
@@ -620,11 +429,38 @@ package final class SprawlRunner<Output> {
         }
         guard let (value, tree) = generated else {
             attributionToken.unlock()
-            discardedAttempts += 1
-            return nil
+            return .exhausted
         }
         let sequence = ChoiceSequence.flatten(tree)
-        breadcrumb?.record(candidateHash: ZobristHash.hash(of: sequence), parentHash: 0)
+        let (verdict, hits) = evaluateInBracket(
+            value,
+            recordingBreadcrumb: (candidateHash: ZobristHash.hash(of: sequence), parentHash: 0)
+        )
+        attributionToken.unlock()
+
+        let admission = recordAttempt(
+            value: value,
+            tree: tree,
+            sequence: sequence,
+            verdict: verdict,
+            hits: hits,
+            convergence: 1.0,
+            generation: 0,
+            phase: phase
+        )
+        return .evaluated(admission)
+    }
+
+    /// The instrumented tail of one evaluation bracket: records the breadcrumb slot, notes the value, times the property, and collects the attempt's hits.
+    ///
+    /// Must run inside the attribution token, after `source.beginAttempt()` and after candidate production — generation and materialisation can execute user code, and its coverage belongs to the attempt whose bracket is open.
+    private func evaluateInBracket(
+        _ value: Output,
+        recordingBreadcrumb slot: (candidateHash: UInt64, parentHash: UInt64)?
+    ) -> (verdict: SprawlVerdict, hits: [(edge: Int, hitCount: UInt8)]) {
+        if let slot {
+            breadcrumb?.record(candidateHash: slot.candidateHash, parentHash: slot.parentHash)
+        }
         if source.wantsValues {
             source.noteValue(value)
         }
@@ -635,39 +471,58 @@ package final class SprawlRunner<Output> {
         source.forEachHitEdge { edge, hitCount in
             hits.append((edge, hitCount))
         }
-        attributionToken.unlock()
+        return (verdict, hits)
+    }
 
-        sprawlAttempts += 1
+    /// The shared post-evaluation epilogue: counts the attempt, offers the candidate to the corpus, tracks admission recency, and dispatches failure handling with the admission's coverage-novelty signal.
+    @discardableResult
+    private func recordAttempt(
+        value: Output,
+        tree: ChoiceTree,
+        sequence: ChoiceSequence,
+        verdict: SprawlVerdict,
+        hits: [(edge: Int, hitCount: UInt8)],
+        convergence: Double,
+        generation: Int,
+        phase: SprawlPhase,
+        isBoundaryDerived: Bool = false,
+        parentIndex: Int? = nil
+    ) -> CorpusAdmission {
+        switch phase {
+            case .screening:
+                screeningAttempts += 1
+            case .sampling:
+                samplingAttempts += 1
+            case .sprawl:
+                sprawlAttempts += 1
+        }
         totalAttempts += 1
 
         let admission = corpus.offer(
             sequence: sequence,
             tree: tree,
             hits: hits,
-            convergence: 1.0,
-            generation: 0,
-            phase: .sprawl,
+            convergence: convergence,
+            generation: generation,
+            phase: phase,
+            isBoundaryDerived: isBoundaryDerived,
             propertyFailed: verdict.isFailure
         )
-        if case .admitted = admission {
+        if admission.isAdmitted {
             lastAdmissionNanoseconds = monotonicNanoseconds()
         }
         if case let .fail(symptom) = verdict {
-            var coverageNovel = false
-            if case .admitted = admission {
-                coverageNovel = true
-            }
             handleFailure(
                 value: value,
                 tree: tree,
                 sequence: sequence,
                 symptom: symptom,
-                parentIndex: nil,
-                phase: .sprawl,
-                coverageNovel: coverageNovel
+                parentIndex: parentIndex,
+                phase: phase,
+                coverageNovel: admission.isAdmitted
             )
         }
-        return nil
+        return admission
     }
 
     // MARK: - Failure Handling
@@ -690,15 +545,11 @@ package final class SprawlRunner<Output> {
             case .duplicate:
                 return
             case .recordUnreduced:
-                let timestamp = monotonicNanoseconds()
-                let inventory = inventory
-                Task {
-                    await inventory.recordUnreduced(
-                        symptom: symptom,
-                        timestampNanoseconds: timestamp,
-                        attemptIndex: attemptIndex
-                    )
-                }
+                inventory.recordUnreduced(
+                    symptom: symptom,
+                    timestampNanoseconds: monotonicNanoseconds(),
+                    attemptIndex: attemptIndex
+                )
             case let .reduce(isEscape):
                 dispatchReduction(
                     value: value,
@@ -764,7 +615,7 @@ package final class SprawlRunner<Output> {
             var unnormalizedResidual = false
             if normalizationEnabled {
                 let rawKey = ChoiceSequence.flatten(reducedTree, skipBindInners: true).clusterKey
-                if await inventory.containsKey(rawKey) == false,
+                if inventory.containsKey(rawKey) == false,
                    let normalized: SprawlNormalizer.NormalizedForm<Output> = SprawlNormalizer.normalize(
                        reducedSequence: reducedSequence,
                        erasedGen: capturedErasedGen,
@@ -791,7 +642,7 @@ package final class SprawlRunner<Output> {
             // Cluster identity is a cheap structural key over the reduced tree flattened with bind-inners skipped; the reflective description render is deferred to recordReduced and runs only when a new cluster is created.
             let reducedKey = ChoiceSequence.flatten(reducedTree, skipBindInners: true).clusterKey
             nonisolated(unsafe) let capturedReducedValue = reducedValue
-            let classification = await inventory.recordReduced(
+            let classification = inventory.recordReduced(
                 reducedSequence: reducedSequence,
                 reducedKey: reducedKey,
                 renderDescription: {
@@ -860,172 +711,6 @@ package final class SprawlRunner<Output> {
             )
         }
         checkpointIfDue()
-    }
-
-    // MARK: - Crash Recovery
-
-    /// Creates the writer and live breadcrumb, restores predecessor state, and quarantines the crash region. First write activity of the run — a run that never starts leaves no files.
-    private func setUpPersistence() {
-        guard let persistence = configuration.persistence else {
-            return
-        }
-        progressWriter = SprawlProgressWriter(store: persistence.store)
-        breadcrumb = SprawlBreadcrumb(fileURL: persistence.store.breadcrumbFileURL)
-        pcTableHashAtStart = SancovRuntime.pcTableHash()
-        lastCheckpointNanoseconds = startNanoseconds
-
-        if let document = persistence.resumeDocument {
-            priorConsumedNanoseconds = document.metadata.consumedNanoseconds
-            restore(from: document)
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "explore_time_resumed",
-                metadata: [
-                    "consumed_seconds": "\(document.metadata.consumedNanoseconds / 1_000_000_000)",
-                    "restored_entries": "\(corpus.entries.count)",
-                    "restored_clusters": "\(document.clusters.count)",
-                ]
-            )
-        }
-        breadcrumb?.clear()
-        if let survivor = persistence.survivor {
-            corpus.quarantine(sequenceHash: survivor.candidateHash)
-            if survivor.parentHash != 0 {
-                corpus.quarantine(sequenceHash: survivor.parentHash)
-            }
-        }
-
-        // Write one checkpoint synchronously before the first evaluation, so even a crash in the opening milliseconds leaves a parseable log on disk rather than nothing.
-        try? persistence.store.write(makeCheckpointDocument(now: startNanoseconds))
-    }
-
-    /// Flushes outstanding checkpoints and removes the recovery state. Reaching this method at all means the run terminated normally — a surviving log is the crash signal, so a completed run must not leave one.
-    private func finishPersistence() {
-        guard let persistence = configuration.persistence else {
-            return
-        }
-        progressWriter?.flush()
-        breadcrumb?.clear()
-        persistence.store.removeAll()
-    }
-
-    /// Hands one checkpoint to the async writer when the interval elapsed or a new cluster forced one. The loop's cost is copying value-type state; encoding and I/O happen on the writer's queue.
-    private func checkpointIfDue() {
-        guard let writer = progressWriter else {
-            return
-        }
-        let now = monotonicNanoseconds()
-        guard forceCheckpoint || now - lastCheckpointNanoseconds >= SprawlTunables.checkpointIntervalNanoseconds else {
-            return
-        }
-        forceCheckpoint = false
-        lastCheckpointNanoseconds = now
-
-        let document = makeCheckpointDocument(now: now)
-        writer.submit { document }
-    }
-
-    /// Snapshots corpus and inventory into a progress document. Called synchronously at startup and once per due checkpoint; the returned document is `Sendable`, so the async writer serialises and writes it off the loop.
-    private func makeCheckpointDocument(now: UInt64) -> SprawlProgressDocument {
-        let inventory = inventory
-        let clusters = __ExhaustRuntime.blockingAwait { await inventory.snapshot() }
-        let epoch = reportEpochNanoseconds
-        return SprawlProgressDocument(
-            metadata: SprawlProgressDocument.Metadata(
-                seed: configuration.seed,
-                budgetNanoseconds: priorConsumedNanoseconds + configuration.budgetNanoseconds,
-                consumedNanoseconds: priorConsumedNanoseconds + (now - startNanoseconds),
-                lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
-                pcTableHash: pcTableHashAtStart,
-                edgeCount: source.edgeCount
-            ),
-            clusters: clusters.map { SprawlProgressDocument.ClusterRecord(cluster: $0, epochNanoseconds: epoch) },
-            snapshot: corpus.entries.map(SprawlProgressDocument.CorpusEntryRecord.init(entry:))
-        )
-    }
-
-    /// Rebuilds the corpus and inventory from a predecessor's document.
-    ///
-    /// Every entry is re-materialised in `.exact` mode — the tree is not persisted and mutations need it as the guided fallback. When the PC-table hash and edge count match the predecessor's, cached hits are trusted; otherwise each entry is re-attributed with one instrumented evaluation against the new edge ordering, and cluster signatures (stale edge indices) are dropped. Entries the current generator can no longer materialise are silently pruned — exactly the right pruning after a code change.
-    private func restore(from document: SprawlProgressDocument) {
-        let signaturesValid = document.metadata.pcTableHash == pcTableHashAtStart
-            && document.metadata.edgeCount == source.edgeCount
-
-        var restoredClusters: [FaultCluster] = []
-        for record in document.clusters {
-            guard let sequence = ChoiceSequenceCodec.decode(record.reducedSequence),
-                  let phase = SprawlPhase(rawValue: record.discoveringPhase)
-            else {
-                continue
-            }
-            let signatures: [BitSet] = signaturesValid
-                ? record.signatureIndices.map { indices in
-                    var signature = BitSet(capacity: source.edgeCount)
-                    for index in indices where index >= 0 && index < source.edgeCount {
-                        signature.insert(index)
-                    }
-                    return signature
-                }
-                : []
-            restoredClusters.append(FaultCluster(
-                restoredID: restoredClusters.count,
-                reducedSequence: sequence,
-                reducedDescription: record.reducedDescription,
-                reducedKey: record.reducedKey,
-                signatures: signatures,
-                symptoms: Set(record.symptoms.map(FailureSymptom.init(kind:))),
-                instanceCount: record.instanceCount,
-                reducedCount: record.reducedCount,
-                firstSeenNanoseconds: reportEpochNanoseconds + record.firstSeenNanoseconds,
-                lastSeenNanoseconds: reportEpochNanoseconds + record.lastSeenNanoseconds,
-                firstSeenAttempt: record.firstSeenAttempt ?? 0,
-                unnormalizedMemberCount: record.unnormalizedMemberCount ?? 0,
-                discoveringPhase: phase
-            ))
-        }
-        let inventory = inventory
-        let clustersToRestore = restoredClusters
-        __ExhaustRuntime.blockingAwait { await inventory.restore(clusters: clustersToRestore) }
-
-        for record in document.snapshot {
-            guard let sequence = ChoiceSequenceCodec.decode(record.sequence),
-                  let phase = SprawlPhase(rawValue: record.phase)
-            else {
-                continue
-            }
-            let result = Materializer.materializeAny(erasedGen, prefix: sequence, mode: .exact)
-            guard case let .success(anyValue, tree, _) = result, let value = anyValue as? Output else {
-                continue
-            }
-            let hits: [(edge: Int, hitCount: UInt8)]
-            if signaturesValid {
-                hits = zip(record.hitEdges, record.hitCounts).map { (edge: $0.0, hitCount: $0.1) }
-            } else {
-                attributionToken.lock()
-                source.beginAttempt()
-                if source.wantsValues {
-                    source.noteValue(value)
-                }
-                // Attribution only — a failing entry's cluster was already restored, so no failure dispatch here.
-                _ = property(value)
-                var reattributed: [(edge: Int, hitCount: UInt8)] = []
-                source.forEachHitEdge { edge, hitCount in
-                    reattributed.append((edge, hitCount))
-                }
-                attributionToken.unlock()
-                hits = reattributed
-            }
-            _ = corpus.offer(
-                sequence: sequence,
-                tree: tree,
-                hits: hits,
-                convergence: record.convergence,
-                generation: record.generation,
-                phase: phase,
-                isBoundaryDerived: record.isBoundaryDerived,
-                propertyFailed: record.propertyFailed
-            )
-        }
     }
 
     // MARK: - Termination Checks

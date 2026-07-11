@@ -75,7 +75,6 @@
                     messageGen,
                     time: .minutes(2),
                     settings: [],
-
                     fileID: #fileID,
                     filePath: #filePath,
                     line: #line,
@@ -105,7 +104,6 @@
                     messageGen,
                     time: .minutes(5),
                     settings: [],
-
                     fileID: #fileID,
                     filePath: #filePath,
                     line: #line,
@@ -200,7 +198,6 @@
                     messageGen,
                     time: .minutes(2),
                     settings: [],
-
                     fileID: #fileID,
                     filePath: #filePath,
                     line: #line,

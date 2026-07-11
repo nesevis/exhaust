@@ -19,37 +19,12 @@ public struct ExploreTimeMacro: ExpressionMacro {
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
-        let args = node.arguments.map(\.self)
-
-        if let trailingClosure = node.trailingClosure {
-            let isVoid = closureIsVoidReturning(trailingClosure)
-            if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
-                let diagnostic: ExhaustMacroDiagnostic = enclosingFunctionHasTestAttribute(context)
-                    ? .closureCannotFail
-                    : .closureCannotFailXCTest
-                context.diagnose(Diagnostic(
-                    node: Syntax(trailingClosure),
-                    message: diagnostic
-                ))
-            }
-            for site in xcTestCallSites(trailingClosure) {
-                let diagnostic: ExhaustMacroDiagnostic = switch site.kind {
-                    case .unwrap: .xcTestUnwrapInPropertyClosure
-                    case .assert: .xcTestAssertInPropertyClosure
-                }
-                context.diagnose(Diagnostic(node: site.node, message: diagnostic))
-            }
-            let runtimeFunction = isVoid ? "__exploreTimeExpect" : "__exploreTime"
-            return try expandExploreTime(
-                of: node,
-                args: args,
-                trailingClosure: trailingClosure,
-                in: context,
-                runtimeFunction: runtimeFunction
-            )
-        } else {
-            return try expandExploreTimeFunctionReference(of: node, args: args, in: context)
-        }
+        try expandExploreTimeCall(
+            of: node,
+            in: context,
+            plainFunction: "__exploreTime",
+            expectFunction: "__exploreTimeExpect"
+        )
     }
 }
 
@@ -59,43 +34,57 @@ public struct ExploreTimeAsyncMacro: ExpressionMacro {
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
-        let args = node.arguments.map(\.self)
-
-        if let trailingClosure = node.trailingClosure {
-            let isVoid = closureIsVoidReturning(trailingClosure)
-            if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
-                let diagnostic: ExhaustMacroDiagnostic = enclosingFunctionHasTestAttribute(context)
-                    ? .closureCannotFail
-                    : .closureCannotFailXCTest
-                context.diagnose(Diagnostic(
-                    node: Syntax(trailingClosure),
-                    message: diagnostic
-                ))
-            }
-            for site in xcTestCallSites(trailingClosure) {
-                let diagnostic: ExhaustMacroDiagnostic = switch site.kind {
-                    case .unwrap: .xcTestUnwrapInPropertyClosure
-                    case .assert: .xcTestAssertInPropertyClosure
-                }
-                context.diagnose(Diagnostic(node: site.node, message: diagnostic))
-            }
-            let runtimeFunction = isVoid ? "__exploreTimeExpectAsync" : "__exploreTimeAsync"
-            return try expandExploreTime(
-                of: node,
-                args: args,
-                trailingClosure: trailingClosure,
-                in: context,
-                runtimeFunction: runtimeFunction
-            )
-        } else {
-            return try expandExploreTimeFunctionReference(
-                of: node, args: args, in: context, runtimeFunction: "__exploreTimeAsync"
-            )
-        }
+        try expandExploreTimeCall(
+            of: node,
+            in: context,
+            plainFunction: "__exploreTimeAsync",
+            expectFunction: "__exploreTimeExpectAsync"
+        )
     }
 }
 
 // MARK: - Shared Expansion Logic
+
+/// The shared body of the sync and async `time:` macros: diagnoses the closure, picks the plain or expect runtime function, and expands. The two macros differ only in the runtime function names.
+private func expandExploreTimeCall(
+    of node: some FreestandingMacroExpansionSyntax,
+    in context: some MacroExpansionContext,
+    plainFunction: String,
+    expectFunction: String
+) throws -> ExprSyntax {
+    let args = node.arguments.map(\.self)
+
+    guard let trailingClosure = node.trailingClosure else {
+        return try expandExploreTimeFunctionReference(
+            of: node, args: args, in: context, runtimeFunction: plainFunction
+        )
+    }
+
+    let isVoid = closureIsVoidReturning(trailingClosure)
+    if isVoid, voidClosureLacksFailureMechanism(trailingClosure) {
+        let diagnostic: ExhaustMacroDiagnostic = enclosingFunctionHasTestAttribute(context)
+            ? .closureCannotFail
+            : .closureCannotFailXCTest
+        context.diagnose(Diagnostic(
+            node: Syntax(trailingClosure),
+            message: diagnostic
+        ))
+    }
+    for site in xcTestCallSites(trailingClosure) {
+        let diagnostic: ExhaustMacroDiagnostic = switch site.kind {
+            case .unwrap: .xcTestUnwrapInPropertyClosure
+            case .assert: .xcTestAssertInPropertyClosure
+        }
+        context.diagnose(Diagnostic(node: site.node, message: diagnostic))
+    }
+    return try expandExploreTime(
+        of: node,
+        args: args,
+        trailingClosure: trailingClosure,
+        in: context,
+        runtimeFunction: isVoid ? expectFunction : plainFunction
+    )
+}
 
 private func expandExploreTime(
     of node: some FreestandingMacroExpansionSyntax,
@@ -143,7 +132,6 @@ private func expandExploreTime(
             \(raw: generatorExpr),
             time: \(raw: timeExpr),
             settings: \(raw: settingsArray),
-
             fileID: #fileID,
             filePath: #filePath,
             line: #line,
@@ -209,7 +197,6 @@ private func expandExploreTimeFunctionReference(
         \(raw: generatorExpr),
         time: \(raw: timeExpr),
         settings: \(raw: settingsArray),
-
         fileID: #fileID,
         filePath: #filePath,
         line: #line,

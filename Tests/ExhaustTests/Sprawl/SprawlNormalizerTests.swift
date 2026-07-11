@@ -99,9 +99,9 @@ struct SprawlNormalizerTests {
     }
 
     @Test("Unnormalized members are counted on the cluster they normalize into")
-    func unnormalizedMemberRecording() async {
+    func unnormalizedMemberRecording() {
         let inventory = FaultInventory()
-        _ = await inventory.recordReduced(
+        _ = inventory.recordReduced(
             reducedSequence: singleValueSequence(3),
             reducedKey: "canonical",
             renderDescription: { "3" },
@@ -111,7 +111,7 @@ struct SprawlNormalizerTests {
             timestampNanoseconds: 10,
             attemptIndex: 1
         )
-        let residual = await inventory.recordReduced(
+        let residual = inventory.recordReduced(
             reducedSequence: singleValueSequence(3),
             reducedKey: "canonical",
             renderDescription: { "3" },
@@ -123,7 +123,7 @@ struct SprawlNormalizerTests {
             unnormalizedResidual: true
         )
         #expect(residual.isNewCluster == false)
-        let clusters = await inventory.snapshot()
+        let clusters = inventory.snapshot()
         #expect(clusters.count == 1)
         #expect(clusters[0].instanceCount == 2)
         #expect(clusters[0].unnormalizedMemberCount == 1)

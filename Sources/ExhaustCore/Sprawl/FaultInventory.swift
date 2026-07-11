@@ -1,5 +1,7 @@
 // The clustered fault inventory: reduction as a discrimination signal, not just a report.
 
+import Foundation
+
 /// The cheap synchronous identity of a failure, used for backpressure before reduction runs.
 ///
 /// Symptom matching is deliberately the weak signal the inventory distrusts — two distinct bugs can share a symptom (slippage), which is why clustering keys on reduced forms instead. The symptom's only jobs are the per-cluster reduction cap and attributing unreduced failures to a plausible cluster.
@@ -166,14 +168,21 @@ package struct ClusterClassification: Sendable {
 
 /// Accumulates fault clusters as dispatched reductions complete.
 ///
-/// Actor-isolated because reduction Tasks write concurrently while the exploration loop reads for failure-weight upgrades. Writes are infrequent (failures are rare relative to attempts) and reads take the last completed state, so the eventual-consistency window is bounded by the slowest in-flight reduction.
-package actor FaultInventory {
-    package private(set) var clusters: [FaultCluster] = []
-
-    /// Failures recorded unreduced whose symptom matched no cluster at record time; merged by symptom into the report.
-    package private(set) var unmatchedUnreducedCounts: [FailureSymptom: Int] = [:]
+/// Lock-guarded rather than actor-isolated so the synchronous exploration loop can record, snapshot, and checkpoint without suspending or spawning Tasks whose completion nothing awaits. Reduction Tasks write concurrently from async contexts; every method takes the lock for a short, non-suspending critical section, so calling from either side is safe.
+package final class FaultInventory: @unchecked Sendable {
+    // @unchecked: all mutable state is guarded by `lock`, and no method suspends while holding it.
+    private let lock = NSLock()
+    private var clusters: [FaultCluster] = []
+    private var unmatchedBySymptom: [FailureSymptom: Int] = [:]
 
     package init() {}
+
+    /// Failures recorded unreduced whose symptom matched no cluster at record time; merged by symptom into the report.
+    package var unmatchedUnreducedCounts: [FailureSymptom: Int] {
+        lock.lock()
+        defer { lock.unlock() }
+        return unmatchedBySymptom
+    }
 
     /// Records a completed reduction, joining an existing cluster when the reduced form is already known and creating a new cluster otherwise.
     ///
@@ -190,7 +199,7 @@ package actor FaultInventory {
     package func recordReduced(
         reducedSequence: ChoiceSequence,
         reducedKey: String,
-        renderDescription: @Sendable () -> String,
+        renderDescription: () -> String,
         signature: BitSet?,
         symptom: FailureSymptom,
         phase: SprawlPhase,
@@ -198,6 +207,8 @@ package actor FaultInventory {
         attemptIndex: Int,
         unnormalizedResidual: Bool = false
     ) -> ClusterClassification {
+        lock.lock()
+        defer { lock.unlock() }
         if let index = clusters.firstIndex(where: { $0.reducedKey == reducedKey }) {
             clusters[index].absorb(
                 signature: signature,
@@ -236,6 +247,8 @@ package actor FaultInventory {
 
     /// Records a failure the backpressure gate declined to reduce, attributing it by symptom to the most recently seen matching cluster, or holding it unmatched.
     package func recordUnreduced(symptom: FailureSymptom, timestampNanoseconds: UInt64, attemptIndex: Int) {
+        lock.lock()
+        defer { lock.unlock() }
         let matching = clusters.indices
             .filter { clusters[$0].symptoms.contains(symptom) }
             .max { clusters[$0].lastSeenNanoseconds < clusters[$1].lastSeenNanoseconds }
@@ -246,7 +259,7 @@ package actor FaultInventory {
                 attemptIndex: attemptIndex
             )
         } else {
-            unmatchedUnreducedCounts[symptom, default: 0] += 1
+            unmatchedBySymptom[symptom, default: 0] += 1
         }
     }
 
@@ -254,16 +267,22 @@ package actor FaultInventory {
     ///
     /// Two concurrent reductions of one genuinely new fault can both see `false` and both normalize; the second `recordReduced` then merges by key, so the race costs duplicated probing, never a duplicated cluster.
     package func containsKey(_ reducedKey: String) -> Bool {
-        clusters.contains { $0.reducedKey == reducedKey }
+        lock.lock()
+        defer { lock.unlock() }
+        return clusters.contains { $0.reducedKey == reducedKey }
     }
 
     /// A point-in-time copy for checkpointing and the final report.
     package func snapshot() -> [FaultCluster] {
-        clusters
+        lock.lock()
+        defer { lock.unlock() }
+        return clusters
     }
 
     /// Restores the inventory from progress-log records at resume. Must run before any new recording so restored cluster identifiers keep their original, contiguous values — `recordReduced` allocates the next identifier from the cluster count.
     package func restore(clusters restored: [FaultCluster]) {
+        lock.lock()
+        defer { lock.unlock() }
         guard clusters.isEmpty else {
             return
         }

@@ -63,6 +63,14 @@ package enum CorpusAdmission: Equatable {
     case rejectedDuplicate
     /// The candidate covers nothing the corpus has not already seen (no new edge, no new hit-count bucket) and carries no boundary-derived credit.
     case rejectedNotNovel
+
+    /// Whether the candidate was accepted, in either tier. Admission is the loop's coverage-novelty signal: it resets plateau windows and marks failures as coverage-novel for the reduction gate.
+    package var isAdmitted: Bool {
+        if case .admitted = self {
+            return true
+        }
+        return false
+    }
 }
 
 /// Accumulates coverage-interesting inputs and answers "which parent should sprawl mutate next?"
