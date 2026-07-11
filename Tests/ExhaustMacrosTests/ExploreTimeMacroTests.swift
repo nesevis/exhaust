@@ -5,7 +5,7 @@
 
     @Suite(
         "#explore(time:) macro expansion tests",
-        .macros(["explore": ExploreTimeMacro.self], record: .missing)
+        .macros(["explore": ExploreTimeMacro.self], record: .failed)
     )
     struct ExploreTimeMacroTests {
         @Test("Bool trailing closure expands to __exploreTime")
@@ -82,7 +82,7 @@
                     column: #column,
                     property: { message in
                     let decoded = try Decoder.decode(message)
-                    #expect(decoded.isValid)
+                    #expect(decoded.isValid, sourceLocation: Testing.SourceLocation(fileID: "TestModule/Test.swift", filePath: "Test.swift", line: 3, column: 5))
                     },
                     detection: { message in
                     let decoded = try Decoder.decode(message)
@@ -156,7 +156,7 @@
 
     @Suite(
         "#explore(time:) async macro expansion tests",
-        .macros(["explore": ExploreTimeAsyncMacro.self], record: .missing)
+        .macros(["explore": ExploreTimeAsyncMacro.self], record: .failed)
     )
     struct ExploreTimeAsyncMacroTests {
         @Test("Async Bool trailing closure expands to __exploreTimeAsync")
@@ -207,7 +207,7 @@
                     column: #column,
                     property: { message in
                     let response = try await server.roundTrip(message)
-                    #expect(response.isAcknowledgement)
+                    #expect(response.isAcknowledgement, sourceLocation: Testing.SourceLocation(fileID: "TestModule/Test.swift", filePath: "Test.swift", line: 3, column: 5))
                     },
                     detection: { message in
                     let response = try await server.roundTrip(message)
