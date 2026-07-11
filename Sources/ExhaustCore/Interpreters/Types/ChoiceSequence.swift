@@ -79,7 +79,8 @@ package extension ChoiceSequence {
                 }
                 if case let .branch(b) = selectedBranchTree, b.isSelected {
                     output.append(.group(true))
-                    output.append(.branch(.init(id: b.id, branchCount: b.branchCount)))
+                    // The fingerprint must survive flattening: swarm masks key per-site masks on it, and dropping it here silently disabled masking for every pick site (the tree node always carries the source fingerprint; see Gen.pick).
+                    output.append(.branch(.init(id: b.id, branchCount: b.branchCount, fingerprint: b.fingerprint)))
                     let children = includingAllBranches ? array : [b.choice]
                     // while-loop: avoiding IteratorProtocol overhead in debug builds.
                     var cIdx = 0
