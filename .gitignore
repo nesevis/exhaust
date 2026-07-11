@@ -1,7 +1,6 @@
 .DS_Store
 Package.resolved
-/.build
-/ExploreHarness/.build
+.build/
 /Packages
 xcuserdata/
 DerivedData/

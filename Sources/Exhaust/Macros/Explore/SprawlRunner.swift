@@ -75,10 +75,9 @@ package final class SprawlRunner<Output> {
         corpus = SprawlCorpus(edgeCount: source.edgeCount, experiments: configuration.experiments)
         gate = ReductionGate(experiments: configuration.experiments)
         prng = Xoshiro256(seed: configuration.seed)
-        // Reduction deadline mirrors #exhaust's scaling but is bounded: sprawl reductions run concurrently with exploration and must not outlive the drain timeout.
         reducerConfiguration = Interpreters.ReducerConfiguration(
             maxStalls: 2,
-            wallClockDeadlineNanoseconds: 5_000_000_000
+            wallClockDeadlineNanoseconds: SprawlTunables.reductionDeadlineNanoseconds
         )
     }
 
@@ -103,7 +102,7 @@ package final class SprawlRunner<Output> {
         }
 
         let finalTermination = termination ?? terminationDue() ?? .budgetExhausted
-        let reductionsCompleted = pool.drain(timeoutNanoseconds: 10_000_000_000)
+        let reductionsCompleted = pool.drain(timeoutNanoseconds: SprawlTunables.reductionDrainTimeoutNanoseconds)
         drainClassifications()
 
         let clusters = inventory.snapshot()
@@ -279,23 +278,20 @@ package final class SprawlRunner<Output> {
         }
     }
 
-    /// Produces one mutated candidate from `parent` plus the bitmask of ``MutationArm``s that shaped it (for bandit credit on admission), routing between the legacy single-operator path, the composed experiment path, and the swarm rewrite.
+    /// Produces one mutated candidate from `parent` plus the bitmask of ``MutationArm``s that shaped it (for bandit credit on admission). Two orthogonal knobs, applied in sequence: the mutation strategy (legacy single-operator or composed experiment stack), then the swarm rewrite of the result's disallowed branch selections.
     private func nextCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt8) {
         let experiments = configuration.experiments
+        var (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands
+            ? composedCandidate(from: parent)
+            : legacyCandidate(from: parent)
         if experiments.swarm {
-            let (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands
-                ? composedCandidate(from: parent)
-                : legacyCandidate(from: parent)
             let epoch = SwarmMask.forEpoch(
                 index: sprawlAttempts / SprawlTunables.swarmEpochAttempts,
                 rootSeed: configuration.seed
             )
-            return (epoch.apply(to: candidate, prng: &prng), armsMask)
+            candidate = epoch.apply(to: candidate, prng: &prng)
         }
-        if experiments.stackedMutation || experiments.banditBands {
-            return composedCandidate(from: parent)
-        }
-        return legacyCandidate(from: parent)
+        return (candidate, armsMask)
     }
 
     /// The original single-operator mutation path, kept verbatim so knob-off runs replay identically under a pinned seed: usually an intensity-band mutation, occasionally a bind-boundary splice with a random donor.
@@ -346,6 +342,12 @@ package final class SprawlRunner<Output> {
                         candidate = spliced
                     }
             }
+        }
+        if candidate == parent.sequence {
+            // Every stacked arm was a splice that found nothing to recombine (a single-entry corpus, or donors without a usable bind region), leaving the parent unmutated — an attempt the corpus would reject as a duplicate. Fall back to one band mutation so the attempt always explores.
+            let intensityDraw = prng.next(upperBound: UInt64(SprawlIntensity.allCases.count))
+            armsMask |= 1 << UInt8(intensityDraw)
+            candidate = SprawlMutator.mutate(candidate, intensity: SprawlIntensity.allCases[Int(intensityDraw)], prng: &prng)
         }
         return (candidate, armsMask)
     }

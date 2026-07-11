@@ -1,0 +1,350 @@
+//
+//  MetaFuzzOracles.swift
+//  ExhaustTestSupport
+//
+//  The oracle roster for self-fuzzing runs. Each oracle is a claim about the ExhaustCore pipeline that must hold for every recipe; each violation is a distinct error type because the fault inventory's FailureSymptom keys on the dynamic error type name, giving every oracle its own reduction-gate cap. See ExhaustDocs/coverage-guided-self-fuzzing.md for the roster's rationale.
+//
+
+import ExhaustCore
+
+// MARK: - Violations
+
+/// O1 violation: `.exact` materialisation of a tree's own flattening failed to reproduce the value or the sequence.
+public struct ExactRoundTripViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// O2 violation: guided materialisation of a mutated sequence reported an out-of-range convergence.
+public struct GuidedTotalityViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// O2 violation: guided materialisation of the same sequence, seed, and fallback produced different outcomes.
+public struct GuidedDeterminismViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// O3 violation: a flattened sequence's structural markers do not balance.
+public struct FlattenBalanceViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// O4 violation: the same recipe and seed produced different value streams on two runs.
+public struct DeterminismViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// O5 violation: a reduced value passed the property its original failed.
+public struct ReductionPreservationViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// O5 violation: a reduced sequence shortlex-exceeds the original.
+public struct ReductionShortlexViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// O5 violation: the reducer's reported sequence does not materialize to its reported value.
+public struct ReductionClosedLoopViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// O5 violation: re-reducing an already-reduced tree enlarged the sequence.
+public struct ReductionMonotonicityViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// O6 violation: two materialisations of the same sequence produced different cluster keys.
+public struct ClusterKeyStabilityViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// O7 violation: a choice sequence did not survive the persistence codec round trip.
+public struct CodecRoundTripViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// O8 violation: mapping through the identity transform changed the value stream.
+public struct FunctorIdentityViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+// MARK: - Check
+
+public extension MetaFuzz {
+    /// Values evaluated per case in the main oracle walk. Small deliberately: the whole walk is one fuzz attempt, and throughput is the mode's currency.
+    package static let valuesPerCase: UInt64 = 5
+
+    /// Runs the oracle roster against one fuzz case, throwing the first violation.
+    ///
+    /// A throw from generation itself is treated as a vacuous pass: legitimate rejection paths (filter exhaustion, recoverable reflection failures) throw by design, and clustering them would flood the inventory with false positives. Engine defects that manifest as traps are caught by the run machinery, not here.
+    static func check(_ fuzzCase: MetaFuzzCase) throws {
+        let gen = buildGenerator(from: fuzzCase.recipe)
+        let property = failingProperty(for: fuzzCase.recipe.outputType)
+        var prng = Xoshiro256(seed: fuzzCase.perturbationSeed)
+
+        try checkDeterminism(fuzzCase)
+        try checkFunctorIdentity(fuzzCase)
+
+        var iterator = ValueAndChoiceTreeInterpreter(gen, seed: fuzzCase.valueSeed, maxRuns: valuesPerCase)
+        var reductionChecked = false
+        while true {
+            let element: (value: Any, tree: ChoiceTree)?
+            do {
+                element = try iterator.next()
+            } catch {
+                return
+            }
+            guard let (value, tree) = element else {
+                return
+            }
+
+            let sequence = ChoiceSequence.flatten(tree)
+            try checkMarkerBalance(sequence, fuzzCase)
+            try checkExactRoundTrip(gen, sequence: sequence, tree: tree, value: value, fuzzCase)
+            try checkCodecRoundTrip(sequence, fuzzCase)
+
+            let intensity = pickIntensity(&prng)
+            let mutated = SprawlMutator.mutate(sequence, intensity: intensity, prng: &prng)
+            try checkCodecRoundTrip(mutated, fuzzCase)
+            try checkGuidedTotality(gen, mutated: mutated, fallbackTree: tree, fuzzCase, prng: &prng)
+
+            if reductionChecked == false, property(value) == false {
+                try checkReduction(gen, tree: tree, value: value, property: property, fuzzCase)
+                reductionChecked = true
+            }
+        }
+    }
+}
+
+// MARK: - Individual Oracles
+
+extension MetaFuzz {
+    /// O4: the same recipe and seed must produce the same value stream twice.
+    private static func checkDeterminism(_ fuzzCase: MetaFuzzCase) throws {
+        let held = checkPairedValues(
+            buildGenerator(from: fuzzCase.recipe),
+            buildGenerator(from: fuzzCase.recipe),
+            seed: fuzzCase.valueSeed,
+            maxRuns: valuesPerCase,
+            check: anyEquals
+        )
+        guard held else {
+            throw DeterminismViolation("same seed produced different values for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+        }
+    }
+
+    /// O8: mapping through the identity transform must not change the value stream.
+    private static func checkFunctorIdentity(_ fuzzCase: MetaFuzzCase) throws {
+        let mappedRecipe = GenRecipe.combinator(.mapped(fuzzCase.recipe, .identity))
+        let held = checkPairedValues(
+            buildGenerator(from: fuzzCase.recipe),
+            buildGenerator(from: mappedRecipe),
+            seed: fuzzCase.valueSeed,
+            maxRuns: valuesPerCase,
+            check: anyEquals
+        )
+        guard held else {
+            throw FunctorIdentityViolation("map(identity) changed the value stream for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+        }
+    }
+
+    /// O3: opening and closing structural markers must balance. A partial stand-in for full field-by-field flatten faithfulness, which needs a second flattening authority; the O1 sequence-equality check covers field fidelity on the round trip.
+    private static func checkMarkerBalance(_ sequence: ChoiceSequence, _ fuzzCase: MetaFuzzCase) throws {
+        var depth = 0
+        for entry in sequence {
+            switch entry {
+                case .group(true), .sequence(true, validRange: _, isLengthExplicit: _), .bind(true):
+                    depth += 1
+                case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .bind(false):
+                    depth -= 1
+                    if depth < 0 {
+                        throw FlattenBalanceViolation("closing marker with no opener in flattening of recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                    }
+                case .branch, .value, .just:
+                    continue
+            }
+        }
+        guard depth == 0 else {
+            throw FlattenBalanceViolation("\(depth) unclosed markers in flattening of recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+        }
+    }
+
+    /// O1: `.exact` materialisation of a tree's own flattening must reproduce the value, and the fresh tree must re-flatten to the same sequence, field for field. The sequence half is the consuming check for every entry field at once — a dropped or wrong field (the flatten-fingerprint class) surfaces here even when no downstream reader exists yet.
+    private static func checkExactRoundTrip(
+        _ gen: AnyGenerator,
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        value: Any,
+        _ fuzzCase: MetaFuzzCase
+    ) throws {
+        switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
+            case let .success(materialized, freshTree, _):
+                guard anyEquals(materialized, value) else {
+                    throw ExactRoundTripViolation("exact materialisation produced \(materialized), not \(value), for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                }
+                let reflattened = ChoiceSequence.flatten(freshTree)
+                guard reflattened == sequence else {
+                    throw ExactRoundTripViolation("re-flattening after exact materialisation changed the sequence for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                }
+            case .rejected, .failed:
+                throw ExactRoundTripViolation("exact materialisation rejected the tree's own flattening for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+        }
+    }
+
+    /// O7: the persistence codec must round-trip every sequence it is given.
+    private static func checkCodecRoundTrip(_ sequence: ChoiceSequence, _ fuzzCase: MetaFuzzCase) throws {
+        let decoded = ChoiceSequenceCodec.decode(ChoiceSequenceCodec.encode(sequence))
+        guard let decoded, decoded == sequence else {
+            throw CodecRoundTripViolation("codec round trip \(decoded == nil ? "failed to decode" : "changed the sequence") for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+        }
+    }
+
+    /// O2 and O6: guided materialisation of an arbitrary mutation must complete cleanly with a sane convergence, and repeating it with the same seed and fallback must produce the same outcome and cluster key.
+    private static func checkGuidedTotality(
+        _ gen: AnyGenerator,
+        mutated: ChoiceSequence,
+        fallbackTree: ChoiceTree,
+        _ fuzzCase: MetaFuzzCase,
+        prng: inout Xoshiro256
+    ) throws {
+        let guidedSeed = prng.next()
+        let mode = Materializer.Mode.guided(seed: guidedSeed, fallbackTree: fallbackTree)
+        switch Materializer.materialize(gen, prefix: mutated, mode: mode) {
+            case let .success(_, freshTree, report):
+                if let convergence = report?.convergence, (0.0 ... 1.0).contains(convergence) == false {
+                    throw GuidedTotalityViolation("convergence \(convergence) outside 0...1 for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                }
+                let key = ChoiceSequence.flatten(freshTree, skipBindInners: true).clusterKey
+                switch Materializer.materialize(gen, prefix: mutated, mode: mode) {
+                    case let .success(_, secondTree, _):
+                        let secondKey = ChoiceSequence.flatten(secondTree, skipBindInners: true).clusterKey
+                        guard key == secondKey else {
+                            throw ClusterKeyStabilityViolation("same guided materialisation produced different cluster keys for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                        }
+                    case .rejected, .failed:
+                        throw GuidedDeterminismViolation("guided materialisation succeeded then failed on identical input for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                }
+            case .rejected, .failed:
+                // A clean discard is inside the guided contract: filters can reject the materialised value.
+                return
+        }
+    }
+
+    /// O5: property-preserving reduction, shortlex direction, closed loop, and monotonicity — the four claims ported from the in-tree reduction oracles, run on the first failing value of a case.
+    private static func checkReduction(
+        _ gen: AnyGenerator,
+        tree: ChoiceTree,
+        value: Any,
+        property: @escaping (Any) -> Bool,
+        _ fuzzCase: MetaFuzzCase
+    ) throws {
+        let originalSequence = ChoiceSequence.flatten(tree)
+        let outcome = try? Interpreters.choiceGraphReduce(
+            gen: gen, tree: tree, output: value, config: .init(maxStalls: 2), property: property
+        )
+        guard case let .reduced(reducedSequence, reducedTree, shrunk) = outcome else {
+            return
+        }
+        guard property(shrunk) == false else {
+            throw ReductionPreservationViolation("reduced value \(shrunk) passes the property its original failed for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+        }
+        guard reducedSequence.shortLexPrecedes(originalSequence) || reducedSequence == originalSequence else {
+            throw ReductionShortlexViolation("reduction enlarged the sequence for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+        }
+        switch Materializer.materialize(gen, prefix: reducedSequence, mode: .exact, fallbackTree: reducedTree) {
+            case let .success(materialized, _, _):
+                guard anyEquals(materialized, shrunk) else {
+                    throw ReductionClosedLoopViolation("reduced sequence materialises to \(materialized), not the reported \(shrunk), for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                }
+            case .rejected, .failed:
+                throw ReductionClosedLoopViolation("reduced sequence failed to materialise for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+        }
+        let secondOutcome = try? Interpreters.choiceGraphReduce(
+            gen: gen, tree: reducedTree, output: shrunk, config: .init(maxStalls: 2), property: property
+        )
+        if case let .reduced(secondSequence, _, _) = secondOutcome {
+            guard reducedSequence.shortLexPrecedes(secondSequence) == false else {
+                throw ReductionMonotonicityViolation("re-reduction enlarged the sequence for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+            }
+        }
+    }
+
+    /// Uniform draw over the mutation intensity bands.
+    private static func pickIntensity(_ prng: inout Xoshiro256) -> SprawlIntensity {
+        let bands = SprawlIntensity.allCases
+        return bands[Int(prng.next(upperBound: UInt64(bands.count)))]
+    }
+}
+
+// MARK: - Paired Values Helper
+
+/// Checks that two generators produce pairwise-equal values from the same seed.
+package func checkPairedValues(
+    _ gen1: AnyGenerator,
+    _ gen2: AnyGenerator,
+    seed: UInt64 = 42,
+    maxRuns: UInt64 = 10,
+    check: (Any, Any) -> Bool
+) -> Bool {
+    do {
+        var iter1 = ValueInterpreter(gen1, seed: seed, maxRuns: maxRuns)
+        var iter2 = ValueInterpreter(gen2, seed: seed, maxRuns: maxRuns)
+        while let v1 = try iter1.next(), let v2 = try iter2.next() {
+            if check(v1, v2) == false {
+                return false
+            }
+        }
+    } catch {
+        return true
+    }
+    return true
+}

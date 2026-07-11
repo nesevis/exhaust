@@ -1,6 +1,6 @@
 //
 //  GenRecipe.swift
-//  ExhaustTests
+//  ExhaustTestSupport
 //
 //  Defunctionalized FreerMonad recipes for meta-testing: generating random
 //  generator *recipes*, interpreting them into real generators, and verifying
@@ -8,12 +8,11 @@
 //
 
 import ExhaustCore
-import ExhaustTestSupport
-import Testing
 
 // MARK: - Recipe Type (output type tracking)
 
-indirect enum RecipeType: Equatable, Hashable, Sendable, CustomStringConvertible {
+/// The output type a recipe produces, tracked so recipe generation stays well-typed.
+package indirect enum RecipeType: Equatable, Hashable, Sendable, Codable, CustomStringConvertible {
     case int
     case bool
     case double
@@ -21,7 +20,7 @@ indirect enum RecipeType: Equatable, Hashable, Sendable, CustomStringConvertible
     case character
     case arrayOf(RecipeType)
 
-    var description: String {
+    package var description: String {
         switch self {
             case .int: "Int"
             case .bool: "Bool"
@@ -35,13 +34,14 @@ indirect enum RecipeType: Equatable, Hashable, Sendable, CustomStringConvertible
 
 // MARK: - Invertible Transform
 
-enum InvertibleTransform: String, Equatable, Hashable, CaseIterable, Sendable {
+/// A named bijection recipes can apply through `map`, `metamorph`, and `isomorph`, kept as data so recipes stay `Hashable` and the backward direction is always available.
+package enum InvertibleTransform: String, Equatable, Hashable, CaseIterable, Sendable, Codable {
     case identity
     case negate
     case increment
     case not
 
-    var applicableType: RecipeType? {
+    package var applicableType: RecipeType? {
         switch self {
             case .identity: nil
             case .negate, .increment: .int
@@ -49,7 +49,7 @@ enum InvertibleTransform: String, Equatable, Hashable, CaseIterable, Sendable {
         }
     }
 
-    func forward(_ value: Any) -> Any {
+    package func forward(_ value: Any) -> Any {
         switch self {
             case .identity: value
             case .negate: -(value as! Int)
@@ -58,7 +58,7 @@ enum InvertibleTransform: String, Equatable, Hashable, CaseIterable, Sendable {
         }
     }
 
-    func backward(_ value: Any) -> Any {
+    package func backward(_ value: Any) -> Any {
         switch self {
             case .identity: value
             case .negate: -(value as! Int)
@@ -67,7 +67,7 @@ enum InvertibleTransform: String, Equatable, Hashable, CaseIterable, Sendable {
         }
     }
 
-    static func applicable(to type: RecipeType) -> [InvertibleTransform] {
+    package static func applicable(to type: RecipeType) -> [InvertibleTransform] {
         allCases.filter { t in
             t.applicableType == nil || t.applicableType == type
         }
@@ -76,13 +76,14 @@ enum InvertibleTransform: String, Equatable, Hashable, CaseIterable, Sendable {
 
 // MARK: - Known Predicate
 
-enum KnownPredicate: String, Equatable, Hashable, CaseIterable, Sendable {
+/// A named filter predicate recipes can apply, kept as data so recipes stay `Hashable`.
+package enum KnownPredicate: String, Equatable, Hashable, CaseIterable, Sendable, Codable {
     case always
     case isPositive
     case isEven
     case isNonEmpty
 
-    var applicableType: RecipeType? {
+    package var applicableType: RecipeType? {
         switch self {
             case .always: nil
             case .isPositive, .isEven: .int
@@ -90,7 +91,7 @@ enum KnownPredicate: String, Equatable, Hashable, CaseIterable, Sendable {
         }
     }
 
-    func isApplicable(to type: RecipeType) -> Bool {
+    package func isApplicable(to type: RecipeType) -> Bool {
         switch self {
             case .always: return true
             case .isPositive, .isEven: return type == .int
@@ -102,7 +103,7 @@ enum KnownPredicate: String, Equatable, Hashable, CaseIterable, Sendable {
         }
     }
 
-    func evaluate(_ value: Any) -> Bool {
+    package func evaluate(_ value: Any) -> Bool {
         switch self {
             case .always: true
             case .isPositive: (value as? Int).map { $0 > 0 } ?? false
@@ -111,7 +112,7 @@ enum KnownPredicate: String, Equatable, Hashable, CaseIterable, Sendable {
         }
     }
 
-    static func applicable(to type: RecipeType) -> [KnownPredicate] {
+    package static func applicable(to type: RecipeType) -> [KnownPredicate] {
         allCases.filter { $0.isApplicable(to: type) }
     }
 }
@@ -126,11 +127,11 @@ enum KnownPredicate: String, Equatable, Hashable, CaseIterable, Sendable {
 ///
 /// Unlike `FreerMonad`, recipes use data (not closures) for continuations, enabling
 /// `Equatable` / `Hashable` conformance for structural comparison.
-indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable {
+package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable, Codable {
     case leaf(LeafKind)
     case combinator(CombinatorKind)
 
-    enum LeafKind: Equatable, Hashable, CustomStringConvertible, Sendable {
+    package enum LeafKind: Equatable, Hashable, CustomStringConvertible, Sendable, Codable {
         case int(ClosedRange<Int>)
         case bool
         case double(ClosedRange<Double>)
@@ -141,7 +142,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable 
         case justDouble(Double)
         case justIntArray([Int])
 
-        var description: String {
+        package var description: String {
             switch self {
                 case let .int(range): "int(\(range))"
                 case .bool: "bool"
@@ -155,7 +156,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable 
             }
         }
 
-        var outputType: RecipeType {
+        package var outputType: RecipeType {
             switch self {
                 case .int, .justInt: .int
                 case .bool, .justBool: .bool
@@ -168,18 +169,23 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable 
     }
 
     /// One branch of a weighted pick recipe.
-    struct WeightedBranch: Equatable, Hashable, Sendable {
-        let weight: UInt64
-        let recipe: GenRecipe
+    package struct WeightedBranch: Equatable, Hashable, Sendable, Codable {
+        package let weight: UInt64
+        package let recipe: GenRecipe
+
+        package init(weight: UInt64, recipe: GenRecipe) {
+            self.weight = weight
+            self.recipe = recipe
+        }
     }
 
     /// Defunctionalized `SizeScaling` for scaled sequence recipes.
-    enum RecipeScaling: String, Equatable, Hashable, CaseIterable, Sendable {
+    package enum RecipeScaling: String, Equatable, Hashable, CaseIterable, Sendable, Codable {
         case constant
         case linear
         case exponential
 
-        var sizeScaling: SizeScaling<UInt64> {
+        package var sizeScaling: SizeScaling<UInt64> {
             switch self {
                 case .constant: .constant
                 case .linear: .linear
@@ -188,7 +194,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable 
         }
     }
 
-    enum CombinatorKind: Equatable, Hashable, CustomStringConvertible, Sendable {
+    package enum CombinatorKind: Equatable, Hashable, CustomStringConvertible, Sendable, Codable {
         case mapped(GenRecipe, InvertibleTransform)
         case array(GenRecipe, lengthRange: ClosedRange<UInt64>)
         case oneOf([GenRecipe])
@@ -208,7 +214,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable 
         case getSized
         case isomorphed(GenRecipe, InvertibleTransform)
 
-        var description: String {
+        package var description: String {
             switch self {
                 case let .mapped(inner, transform):
                     "\(inner).map(\(transform))"
@@ -250,7 +256,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable 
         }
     }
 
-    var description: String {
+    package var description: String {
         switch self {
             case let .leaf(kind): kind.description
             case let .combinator(kind): kind.description
@@ -258,7 +264,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable 
     }
 
     /// Total number of recipe nodes. Interpreting a recipe recurses through fat ReflectiveOperation switch frames, and debug builds allocate all cases per frame, so the invariant harness budgets by node count rather than nesting depth alone.
-    var nodeCount: Int {
+    package var nodeCount: Int {
         switch self {
             case .leaf:
                 return 1
@@ -287,7 +293,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable 
         }
     }
 
-    var outputType: RecipeType {
+    package var outputType: RecipeType {
         switch self {
             case let .leaf(kind):
                 return kind.outputType
@@ -345,7 +351,7 @@ indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, Sendable 
 ///
 /// Type-directed: only produces recipes whose output matches `type`.
 /// Depth-bounded: at depth 0, only leaf generators are produced.
-func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
+package func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
     if maxDepth <= 0 {
         return leafGenerator(producing: type)
     }
@@ -428,10 +434,12 @@ private func justIntLeaf() -> Generator<GenRecipe> {
 }
 
 private func doubleRangeLeaf() -> Generator<GenRecipe> {
-    // Generate two bounds and sort them to form a valid range.
+    // Generate two bounds and sort them to form a valid range. Guided materialisation deliberately lets float NaN and infinity bit patterns bypass range clamping (Materializer+Handlers), so a mutated fuzz case can deliver non-finite draws here; fold them to zero so every draw builds a valid recipe instead of trapping in the range constructor. Finite draws are unaffected.
     Gen.choose(in: -100.0 ... 100.0 as ClosedRange<Double>).bind { a in
         Gen.choose(in: -100.0 ... 100.0 as ClosedRange<Double>).map { b in
-            GenRecipe.leaf(.double(min(a, b) ... max(a, b)))
+            let first = a.isFinite ? a : 0
+            let second = b.isFinite ? b : 0
+            return GenRecipe.leaf(.double(min(first, second) ... max(first, second)))
         }
     }
 }
@@ -660,7 +668,7 @@ private func isomorphedGenerator(producing type: RecipeType) -> Generator<GenRec
 // MARK: - Recipe Interpreter
 
 /// Builds a real `AnyGenerator` from a `GenRecipe`.
-func buildGenerator(
+package func buildGenerator(
     from recipe: GenRecipe,
     fileID: StaticString = #fileID,
     filePath: StaticString = #filePath,
@@ -880,13 +888,33 @@ private func recipeFingerprint(structure: String, fileID: StaticString, line: UI
     return fingerprint
 }
 
+// MARK: - Failing Property
+
+/// A property with a satisfiable failure condition for each recipe output type, so reduction has counterexamples to preserve. Values of unexpected types pass vacuously, matching the original int-only formulation.
+package func failingProperty(for type: RecipeType) -> (Any) -> Bool {
+    switch type {
+        case .int:
+            { value in (value as? Int).map { $0 < 10 } ?? true }
+        case .bool:
+            { value in (value as? Bool).map { $0 == false } ?? true }
+        case .double:
+            { value in (value as? Double).map { $0 < 10 } ?? true }
+        case .string:
+            { value in (value as? String).map { $0.count < 2 } ?? true }
+        case .character:
+            { value in (value as? Character).map { $0 == "0" } ?? true }
+        case .arrayOf:
+            { value in (value as? [Any]).map { $0.count < 2 } ?? true }
+    }
+}
+
 // MARK: - Any Equality Helper
 
 /// Compares two `Any` values for equality.
 ///
 /// Uses `isEqualToAny` for `Equatable` types, falls back to element-wise
 /// comparison for `[Any]`.
-func anyEquals(_ lhs: Any, _ rhs: Any) -> Bool {
+package func anyEquals(_ lhs: Any, _ rhs: Any) -> Bool {
     let lhsMirror = Mirror(reflecting: lhs)
     let rhsMirror = Mirror(reflecting: rhs)
     let lhsIsOptional = lhsMirror.displayStyle == .optional
@@ -903,6 +931,11 @@ func anyEquals(_ lhs: Any, _ rhs: Any) -> Bool {
         let lhsInner: Any = lhsIsOptional ? lhsMirror.children.first!.value : lhs
         let rhsInner: Any = rhsIsOptional ? rhsMirror.children.first!.value : rhs
         return anyEquals(lhsInner, rhsInner)
+    }
+
+    // NaN compares unequal to itself under Equatable, but an exact round trip of a NaN bit pattern IS a faithful reproduction — mutated fuzz cases carry NaN through the pipeline (guided mode deliberately exempts non-finite floats from clamping), and the oracles must not report those round trips as violations.
+    if let lhsDouble = lhs as? Double, let rhsDouble = rhs as? Double {
+        return lhsDouble == rhsDouble || (lhsDouble.isNaN && rhsDouble.isNaN)
     }
 
     // Try Equatable comparison

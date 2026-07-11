@@ -1,0 +1,56 @@
+{
+  "kind": "pipelineCase",
+  "note": "Zip fallback-decomposition misparse: a two-generator zip whose first child flattens as a two-child group was misread as a monadic wrapper, so exact replay rejected honest sequences and the reducer's reported sequences failed closed-loop materialisation. Fixed 2026-07-12 by prefix-derived child scoping (zips are fixed-arity); see ZipScopeRegressionTests.",
+  "oracle": "ExactRoundTripViolation",
+  "perturbationSeed": 11183437694490582137,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "zipped": {
+          "_0": {
+            "combinator": {
+              "_0": {
+                "boundRange": {
+                  "_0": {
+                    "leaf": {
+                      "_0": {
+                        "int": {
+                          "_0": [
+                            -50,
+                            -50
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "_1": {
+            "combinator": {
+              "_0": {
+                "unique": {
+                  "_0": {
+                    "leaf": {
+                      "_0": {
+                        "int": {
+                          "_0": [
+                            0,
+                            34
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "valueSeed": 3281759361411116904,
+  "version": 1
+}
