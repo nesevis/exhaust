@@ -24,6 +24,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: ".."),
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
     ],
     targets: [
         // The deliberately buggy SUT and the only instrumented target. Depends on Exhaust only for the
@@ -59,6 +60,7 @@ let package = Package(
             dependencies: [
                 "ExploreFixture",
                 .product(name: "Exhaust", package: "Exhaust"),
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
     ]

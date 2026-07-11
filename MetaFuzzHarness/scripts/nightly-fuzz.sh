@@ -5,17 +5,20 @@
 # a finding, quarantines the crash region, and spends the remaining budget elsewhere.
 #
 # Exit codes: 0 = clean run, no findings; 1 = findings, traps, or relaunch cap exhausted.
-# Expects the probe binary path as $1; all METAFUZZ_*/EXHAUST_* configuration via environment.
+# Expects the probe binary path as $1; remaining arguments are forwarded to the probe on every
+# launch (budget, seed, findings directory — see MetaFuzzProbe --help). EXHAUST_* framework
+# seams stay environment-driven.
 set -u
 
-PROBE="${1:?usage: nightly-fuzz.sh <path-to-MetaFuzzProbe>}"
+PROBE="${1:?usage: nightly-fuzz.sh <path-to-MetaFuzzProbe> [probe flags...]}"
+shift
 RELAUNCH_CAP="${METAFUZZ_MAX_RELAUNCHES:-5}"
 TRAPS=0
 FINDINGS=0
 
 for attempt in $(seq 1 "$RELAUNCH_CAP"); do
   echo "metafuzz: probe launch ${attempt}/${RELAUNCH_CAP}"
-  "$PROBE"
+  "$PROBE" "$@"
   status=$?
   case $status in
     0)

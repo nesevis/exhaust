@@ -14,7 +14,7 @@ on:
         default: "900"
 
 # Self-fuzzing lanes: Exhaust fuzzed with its own #explore(time:) mode, ExhaustCore
-# instrumented whole-graph via -Xswiftc (Option A in ExhaustDocs/coverage-guided-self-fuzzing.md).
+# instrumented whole-graph via -Xswiftc.
 env:
   COVERAGE_FLAGS: -Xswiftc -sanitize=undefined -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table
 
@@ -60,13 +60,13 @@ jobs:
       - name: Nightly fuzz campaign
         if: github.event_name != 'push'
         env:
-          METAFUZZ_BUDGET: ${{ github.event.inputs.budget || '900' }}
-          METAFUZZ_FINDINGS: ${{ runner.temp }}/metafuzz-findings
           EXHAUST_STATE_DIR: ${{ runner.temp }}/metafuzz-state
         run: |
           swift build --package-path MetaFuzzHarness --product MetaFuzzProbe $COVERAGE_FLAGS
           bash MetaFuzzHarness/scripts/nightly-fuzz.sh \
-            "$(swift build --package-path MetaFuzzHarness --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe"
+            "$(swift build --package-path MetaFuzzHarness --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
+            --budget-seconds "${{ github.event.inputs.budget || '900' }}" \
+            --findings-directory "${{ runner.temp }}/metafuzz-findings"
 
       - name: Upload findings
         if: failure()
