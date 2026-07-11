@@ -27,6 +27,35 @@ package extension ChoiceSequence {
         self = Self.flatten(tree)
     }
 
+    /// Returns the index one past the single flattened subtree starting at `start`, or nil when markers are unbalanced.
+    ///
+    /// A flattened subtree is self-delimiting: `.value`, `.just`, and `.branch` are single elements; `.group`, `.sequence`, and `.bind` openers run to their balanced closer.
+    func subtreeEnd(startingAt start: Int) -> Int? {
+        guard start < count else {
+            return nil
+        }
+        var depth = 0
+        var index = start
+        while index < count {
+            switch self[index] {
+                case .group(true), .sequence(true, validRange: _, isLengthExplicit: _), .bind(true):
+                    depth += 1
+                case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .bind(false):
+                    depth -= 1
+                    if depth < 0 {
+                        return nil
+                    }
+                case .value, .just, .branch:
+                    break
+            }
+            index += 1
+            if depth == 0 {
+                return index
+            }
+        }
+        return nil
+    }
+
     /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/reduction purposes.
     ///
     /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites (not just the selected branch). Used for complexity comparison in reduction passes.

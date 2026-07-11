@@ -103,6 +103,34 @@ extension Materializer {
             }
         }
 
+        // MARK: - Zip child spans
+
+        /// Parses the exclusive end positions of a zip's child subtrees from the prefix itself, or nil when the cursor is not at the zip's group-open or the content between the markers is not exactly `count` self-delimiting subtrees.
+        ///
+        /// Zips are fixed-arity: no mutation or reduction changes a zip's child count, so a well-formed prefix carries exactly `count` subtrees between the zip's group markers and the candidate's own markers delimit each child. This makes the prefix the authoritative scope source. The fallback tree cannot serve that role: its untagged group shape is ambiguous for two-generator zips whose first child is itself a two-child group (a monadic bind, a two-branch pick), and scoping from the wrong reading rejected honest sequences in exact mode.
+        func zipChildSubtreeEnds(count: Int) -> [Int]? {
+            guard exhausted == false, position < effectiveEnd else {
+                return nil
+            }
+            guard case .group(true) = entries[position] else {
+                return nil
+            }
+            var ends: [Int] = []
+            ends.reserveCapacity(count)
+            var start = position + 1
+            for _ in 0 ..< count {
+                guard let end = entries.subtreeEnd(startingAt: start) else {
+                    return nil
+                }
+                ends.append(end)
+                start = end
+            }
+            guard start < entries.count, case .group(false) = entries[start] else {
+                return nil
+            }
+            return ends
+        }
+
         // MARK: - Consume entries
 
         /// Reads and returns the next value entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a value. Marks the cursor as exhausted on type mismatch so callers fall through to PRNG generation.

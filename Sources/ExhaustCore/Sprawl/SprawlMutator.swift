@@ -217,7 +217,7 @@ package enum SprawlMutator {
             guard case .bind(true) = element else {
                 continue
             }
-            guard let innerEnd = subtreeEnd(in: sequence, startingAt: index + 1),
+            guard let innerEnd = sequence.subtreeEnd(startingAt: index + 1),
                   let close = matchingBindClose(in: sequence, openIndex: index),
                   innerEnd <= close
             else {
@@ -231,33 +231,9 @@ package enum SprawlMutator {
         return regions[Int(prng.next(upperBound: UInt64(regions.count)))]
     }
 
-    /// Returns the index one past the single flattened subtree starting at `start`, or nil when markers are unbalanced.
-    ///
-    /// A flattened subtree is self-delimiting: `.value`, `.just`, and `.branch` are single elements; `.group`, `.sequence`, and `.bind` openers run to their balanced closer.
+    /// Returns the index one past the single flattened subtree starting at `start`, or nil when markers are unbalanced. Forwards to ``ChoiceSequence/subtreeEnd(startingAt:)``, which moved to the flattening authority when the materializer's zip scoping became a second consumer.
     package static func subtreeEnd(in sequence: ChoiceSequence, startingAt start: Int) -> Int? {
-        guard start < sequence.count else {
-            return nil
-        }
-        var depth = 0
-        var index = start
-        while index < sequence.count {
-            switch sequence[index] {
-                case .group(true), .sequence(true, validRange: _, isLengthExplicit: _), .bind(true):
-                    depth += 1
-                case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .bind(false):
-                    depth -= 1
-                    if depth < 0 {
-                        return nil
-                    }
-                case .value, .just, .branch:
-                    break
-            }
-            index += 1
-            if depth == 0 {
-                return index
-            }
-        }
-        return nil
+        sequence.subtreeEnd(startingAt: start)
     }
 
     /// Finds the `.bind(false)` matching the `.bind(true)` at `openIndex`, balancing all marker kinds.

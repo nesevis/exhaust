@@ -490,7 +490,8 @@ extension Materializer {
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
-        continuationFallback: ChoiceTree? = nil
+        continuationFallback: ChoiceTree? = nil,
+        prefixChildEnds: [Int]? = nil
     ) throws -> (Any, ChoiceTree)? {
         let fallbackChildren: [ChoiceTree]? = calleeFallback.flatMap { fallback -> [ChoiceTree]? in
             guard case let .group(children, _) = fallback,
@@ -506,10 +507,9 @@ extension Materializer {
             choiceTrees.reserveCapacity(generators.count)
         }
 
-        let canScope = fallbackChildren != nil
+        let canScope = prefixChildEnds != nil || fallbackChildren != nil
 
-        // Scope limits are computed arithmetically from the cursor's current position (which sits at the zip's group-open marker). Each child's scope starts at basePosition + 1 (past the group-open) plus the cumulative flattenedEntryCount of preceding children. This avoids the cursor-position-based calculation that drifted when skipGroups()
-        // consumed a child's leading group(true) markers.
+        // Scope limits come from the prefix itself when it parses (`prefixChildEnds`, absolute end positions): zips are fixed-arity, so the candidate's own markers delimit each child, and they stay correct even when a structural mutation moved content within a child. The fallback tree's per-child entry counts are the secondary source, used when the prefix does not parse at this site (a mutated candidate that broke the zip's marker balance, or a cursor already past the zip's group-open). Those arithmetic limits start at basePosition + 1 (past the group-open) plus the cumulative flattenedEntryCount of preceding children, avoiding the cursor-position-based calculation that drifted when skipGroups() consumed a child's leading group(true) markers.
         var childScopeStart = context.cursor.position + 1 // past the zip group open
 
         // Advance the cursor past transparent markers so it is ready for the first child's consume calls (tryConsumeBranch / tryConsumeValue).
@@ -521,18 +521,27 @@ extension Materializer {
             let gen = generators[zipIndex]
             let fb: ChoiceTree? = fallbackChildren?[zipIndex]
             let entryCount = fb?.flattenedEntryCount
-            if canScope, let entryCount {
-                context.cursor.pushScope(limit: childScopeStart + entryCount)
+            let scopeLimit: Int? = prefixChildEnds?[zipIndex] ?? entryCount.map { childScopeStart + $0 }
+            if let scopeLimit {
+                context.cursor.pushScope(limit: scopeLimit)
             }
             guard let (result, tree) = try generateRecursive(
                 gen, with: inputValue, context: &context, fallbackTree: fb
             ) else {
-                if canScope, entryCount != nil { context.cursor.popScope() }
+                if scopeLimit != nil {
+                    context.cursor.popScope()
+                }
                 return nil
             }
-            if canScope, entryCount != nil { context.cursor.popScope() }
-            if canScope { context.cursor.skipGroupCloses() }
-            if let entryCount { childScopeStart += entryCount }
+            if scopeLimit != nil {
+                context.cursor.popScope()
+            }
+            if canScope {
+                context.cursor.skipGroupCloses()
+            }
+            if let entryCount {
+                childScopeStart += entryCount
+            }
             results.append(result)
             if context.skipTree == false {
                 choiceTrees.append(tree)
