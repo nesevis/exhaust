@@ -338,8 +338,12 @@ package extension Gen {
         isRangeExplicit: Bool,
         scaling: ChooseBitsScaling? = nil
     ) -> Generator<Output> {
-        let minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRange.lowerBound
-        let maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRange.upperBound
+        var minBits = range?.lowerBound.bitPattern64 ?? Output.bitPatternRange.lowerBound
+        var maxBits = range?.upperBound.bitPattern64 ?? Output.bitPatternRange.upperBound
+        // The monotonic float encoding orders -0.0 strictly below +0.0 while float comparison calls them equal, so the valid range `0.0 ... -0.0` encodes inverted — the only inversion a valid ClosedRange can produce, since the encoding is strictly monotone everywhere else. Reorder so every downstream `min ... max` construction is well formed; the swapped range spans exactly the two zero bit patterns, both of which decode to zero.
+        if minBits > maxBits {
+            swap(&minBits, &maxBits)
+        }
 
         let operation = ReflectiveOperation.chooseBits(
             min: minBits,
