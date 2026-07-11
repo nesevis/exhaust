@@ -106,6 +106,43 @@ struct SprawlMutatorTests {
         #expect(SprawlMutator.splice(recipient: withBind, donor: flat, prng: &prng) == nil)
     }
 
+    // MARK: - High Intensity
+
+    /// Corruption must respect explicit, narrower-than-full ranges. Without the clamp, a random bit pattern in a bounded double slot rides the guided float clamp bypass (which exists for reflected non-finite values) straight into user closures as NaN or an out-of-range double.
+    @Test("High-intensity corruption keeps explicit-range entries inside their declared range", arguments: [7, 99, 1234] as [UInt64])
+    func corruptionRespectsExplicitRanges(seed: UInt64) throws {
+        let gen = Gen.zip(
+            Gen.choose(in: -100.0 ... 100.0 as ClosedRange<Double>),
+            Gen.choose(in: 0 ... 100 as ClosedRange<Int>)
+        )
+        var interpreter = ValueAndChoiceTreeInterpreter(gen, seed: seed, maxRuns: 1)
+        let (_, tree) = try #require(try interpreter.next())
+        let sequence = ChoiceSequence.flatten(tree)
+
+        var prng = Xoshiro256(seed: seed)
+        var corrupted = 0
+        for _ in 0 ..< 200 {
+            let mutated = SprawlMutator.mutate(sequence, intensity: .high, prng: &prng)
+            for (index, element) in mutated.enumerated() {
+                guard case let .value(entry) = element,
+                      entry.isRangeExplicit,
+                      let range = entry.validRange,
+                      range != entry.choice.tag.bitPatternRange
+                else {
+                    continue
+                }
+                #expect(
+                    range.contains(entry.choice.bitPattern64),
+                    "Corrupted entry at \(index) escaped its declared range, seed \(seed)"
+                )
+                if index < sequence.count, mutated[index] != sequence[index] {
+                    corrupted += 1
+                }
+            }
+        }
+        #expect(corrupted > 0, "The sweep never exercised the corruption path")
+    }
+
     // MARK: - Subtree Parsing
 
     @Test("subtreeEnd delimits single elements and balanced containers")

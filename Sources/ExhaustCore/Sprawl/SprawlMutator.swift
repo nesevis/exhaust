@@ -168,8 +168,13 @@ package enum SprawlMutator {
                     continue
                 }
                 let tag = entry.choice.tag
+                var pattern = prng.next(in: tag.bitPatternRange)
+                // Corruption of an explicit, narrower-than-full range clamps back into the user's declared domain: generation must honor declared ranges, and the guided float clamp bypass (which exists so reflected non-finite values survive replay and reduction) would otherwise let corruption smuggle NaN and out-of-range doubles into closures that never generated them. The raw clamp over the monotonic encoding folds non-finite patterns to a bound legally — NaN encodes above +infinity. Non-explicit and full-range entries corrupt freely; their consumers already tolerate the whole domain.
+                if entry.isRangeExplicit, let range = entry.validRange, range != tag.bitPatternRange {
+                    pattern = Swift.min(Swift.max(pattern, range.lowerBound), range.upperBound)
+                }
                 result[index] = .value(.init(
-                    choice: ChoiceValue(prng.next(in: tag.bitPatternRange), tag: tag),
+                    choice: ChoiceValue(pattern, tag: tag),
                     validRange: entry.validRange,
                     isRangeExplicit: entry.isRangeExplicit
                 ))
