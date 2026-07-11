@@ -282,6 +282,7 @@ package final class SprawlCorpus {
             championCounts[index] += 1
             championCounts[incumbentIndex] -= 1
             if championCounts[incumbentIndex] == 0 {
+                // Linear scan, deliberately: the weighted parent pick maps its random draw through this array's cumulative order, so tier membership must stay an ordered array — a Set's per-process iteration order would break seeded replay. Eviction fires only when an entry loses its last championship, and the scan is cheap at realistic tier sizes; revisit with a measurement, not a Set.
                 mutableTierIndices.removeAll { $0 == incumbentIndex }
             }
         }

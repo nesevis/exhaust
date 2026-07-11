@@ -29,6 +29,12 @@ package enum SprawlTunables {
 
     // MARK: - Sprawl Loop
 
+    /// Wall-clock deadline for one concurrent reduction. Mirrors #exhaust's scaling but is bounded: sprawl reductions run concurrently with exploration and must not outlive the end-of-run drain.
+    package static let reductionDeadlineNanoseconds: UInt64 = 5_000_000_000
+
+    /// End-of-run wait for outstanding reduction tasks: twice ``reductionDeadlineNanoseconds``, so a reduction dispatched at the moment the budget expired can run its full deadline and still drain, with equal slack for classification hand-back. Leftovers are cancelled and reported as unreduced.
+    package static let reductionDrainTimeoutNanoseconds: UInt64 = reductionDeadlineNanoseconds * 2
+
     /// Mutations drawn from a picked parent before the loop re-picks. Amortises the weighted pick without letting one parent dominate.
     package static let childrenPerParent = 4
 

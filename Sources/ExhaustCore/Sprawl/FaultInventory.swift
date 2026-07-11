@@ -173,6 +173,9 @@ package final class FaultInventory: @unchecked Sendable {
     // @unchecked: all mutable state is guarded by `lock`, and no method suspends while holding it.
     private let lock = NSLock()
     private var clusters: [FaultCluster] = []
+
+    /// Cluster position by canonical reduced key, so classification stays O(1) as the inventory grows. `reducedKey` is immutable on a cluster, so entries never go stale; the index is rebuilt wholesale on ``restore(clusters:)``.
+    private var clusterIndexByKey: [String: Int] = [:]
     private var unmatchedBySymptom: [FailureSymptom: Int] = [:]
 
     package init() {}
@@ -209,7 +212,7 @@ package final class FaultInventory: @unchecked Sendable {
     ) -> ClusterClassification {
         lock.lock()
         defer { lock.unlock() }
-        if let index = clusters.firstIndex(where: { $0.reducedKey == reducedKey }) {
+        if let index = clusterIndexByKey[reducedKey] {
             clusters[index].absorb(
                 signature: signature,
                 symptom: symptom,
@@ -236,6 +239,7 @@ package final class FaultInventory: @unchecked Sendable {
             attemptIndex: attemptIndex,
             unnormalizedResidual: unnormalizedResidual
         )
+        clusterIndexByKey[reducedKey] = clusters.count
         clusters.append(cluster)
         return ClusterClassification(
             clusterID: cluster.id,
@@ -287,5 +291,6 @@ package final class FaultInventory: @unchecked Sendable {
             return
         }
         clusters = restored.sorted { $0.id < $1.id }
+        clusterIndexByKey = Dictionary(uniqueKeysWithValues: clusters.enumerated().map { ($1.reducedKey, $0) })
     }
 }
