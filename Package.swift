@@ -52,6 +52,11 @@ let package = Package(
             name: "Exhaust",
             targets: ["Exhaust"]
         ),
+        // Consumed by the MetaFuzzHarness package (the self-fuzzing harness); not part of the supported public API.
+        .library(
+            name: "ExhaustMetaFuzz",
+            targets: ["ExhaustMetaFuzz"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
@@ -96,9 +101,16 @@ let package = Package(
             ],
             swiftSettings: strictConcurrencySettings
         ),
+        // The self-fuzzing support: recipe language, oracle roster, freeze codec, and the shared core generators. Deliberately free of Swift Testing so plain executables (MetaFuzzProbe) can link it; ExhaustTestSupport re-exports it for the in-tree test targets.
+        .target(
+            name: "ExhaustMetaFuzz",
+            dependencies: ["ExhaustCore"],
+            swiftSettings: strictConcurrencySettings,
+            plugins: swiftLintPlugins
+        ),
         .target(
             name: "ExhaustTestSupport",
-            dependencies: ["ExhaustCore"],
+            dependencies: ["ExhaustCore", "ExhaustMetaFuzz"],
             swiftSettings: strictConcurrencySettings,
             plugins: swiftLintPlugins
         ),

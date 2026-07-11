@@ -1,0 +1,108 @@
+name: Meta-Fuzz
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Nightly campaign, 03:17 UTC — offset to avoid the top-of-hour scheduling crunch.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: "Fuzz budget in seconds"
+        required: false
+        default: "900"
+
+# Self-fuzzing lanes: Exhaust fuzzed with its own #explore(time:) mode, ExhaustCore
+# instrumented whole-graph via -Xswiftc (Option A in ExhaustDocs/coverage-guided-self-fuzzing.md).
+env:
+  COVERAGE_FLAGS: -Xswiftc -sanitize=undefined -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table
+
+jobs:
+  # The hard gate: every frozen reproducer replays clean, plus the in-package oracle smoke
+  # coverage. Deterministic, uninstrumented, minutes.
+  replay:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Select Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+
+      - name: Replay frozen regressions
+        run: swift test --package-path MetaFuzzHarness
+
+      - name: Oracle smoke coverage
+        run: swift test --filter MetaFuzzOracleTests
+
+  # The fuzz lane. Push runs are short and seed-pinned; nightly and manual runs go through the
+  # trap-resilient probe wrapper with a longer budget and unpinned seeds.
+  fuzz:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Select Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+
+      - name: Short pinned fuzz (push)
+        if: github.event_name == 'push'
+        env:
+          METAFUZZ_FUZZ: "1"
+          METAFUZZ_BUDGET: "60"
+          METAFUZZ_SEED: "1"
+          METAFUZZ_FINDINGS: ${{ runner.temp }}/metafuzz-findings
+          EXHAUST_RESUME: "0"
+          EXHAUST_STATE_DIR: ${{ runner.temp }}/metafuzz-state
+        run: |
+          swift test --package-path MetaFuzzHarness --filter FuzzEntryTests $COVERAGE_FLAGS
+
+      - name: Nightly fuzz campaign
+        if: github.event_name != 'push'
+        env:
+          METAFUZZ_BUDGET: ${{ github.event.inputs.budget || '900' }}
+          METAFUZZ_FINDINGS: ${{ runner.temp }}/metafuzz-findings
+          EXHAUST_STATE_DIR: ${{ runner.temp }}/metafuzz-state
+        run: |
+          swift build --package-path MetaFuzzHarness --product MetaFuzzProbe $COVERAGE_FLAGS
+          bash MetaFuzzHarness/scripts/nightly-fuzz.sh \
+            "$(swift build --package-path MetaFuzzHarness --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe"
+
+      - name: Upload findings
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metafuzz-findings
+          path: |
+            ${{ runner.temp }}/metafuzz-findings
+            ${{ runner.temp }}/metafuzz-state
+          if-no-files-found: ignore
+
+      - name: Collect crash reports
+        if: failure()
+        run: |
+          REPORT_DIR="$HOME/Library/Logs/DiagnosticReports"
+          if [ -d "$REPORT_DIR" ]; then
+            echo "### Crash reports" >> "$GITHUB_STEP_SUMMARY"
+            for f in "$REPORT_DIR"/*.ips "$REPORT_DIR"/*.crash; do
+              [ -f "$f" ] || continue
+              echo "#### $(basename "$f")" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              head -80 "$f" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi
+
+      - name: Findings summary
+        if: failure()
+        run: |
+          FINDINGS_DIR="${{ runner.temp }}/metafuzz-findings"
+          if [ -d "$FINDINGS_DIR" ] && [ -n "$(ls -A "$FINDINGS_DIR" 2>/dev/null)" ]; then
+            echo "### Freeze candidates (commit to MetaFuzzHarness/Regressions/ with the fix)" >> "$GITHUB_STEP_SUMMARY"
+            for f in "$FINDINGS_DIR"/*.json; do
+              echo "#### $(basename "$f")" >> "$GITHUB_STEP_SUMMARY"
+              echo '```json' >> "$GITHUB_STEP_SUMMARY"
+              cat "$f" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi
