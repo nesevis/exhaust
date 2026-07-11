@@ -1,0 +1,37 @@
+{
+  "kind": "pipelineCase",
+  "note": "Metamorphic copies were deduped against the original's own seen-set entry: the copy re-generation hit unique's dedup and redrew, so identity metamorph pairs had unequal halves and the tree no longer determined the value. Fixed 2026-07-12 (Chris's ruling: copies are exempt from deduping) by snapshotting the unique seen-state around the copy loop in all three generation interpreters; see MetamorphUniqueRegressionTests.",
+  "oracle": "ExactRoundTripViolation",
+  "perturbationSeed": 0,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "metamorphed": {
+          "_0": {
+            "combinator": {
+              "_0": {
+                "unique": {
+                  "_0": {
+                    "leaf": {
+                      "_0": {
+                        "int": {
+                          "_0": [
+                            -1,
+                            0
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "_1": "identity"
+        }
+      }
+    }
+  },
+  "valueSeed": 0,
+  "version": 1
+}

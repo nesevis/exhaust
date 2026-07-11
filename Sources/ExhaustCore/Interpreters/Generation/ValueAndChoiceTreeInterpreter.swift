@@ -633,15 +633,19 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 resultTree = .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)
             case let .metamorphic(transforms, _):
                 let savedState = (context.prng.seed, context.prng.currentState)
+                let seenSnapshot = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 guard let (original, innerTree) = try generateRecursiveAny(
                     inner, context: &context
                 ) else {
                     return nil
                 }
+                let seenAfterOriginal = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 var results: [Any] = [original]
                 results.reserveCapacity(transforms.count + 1)
+                // Copies must replay the original's generation verbatim, so they run against the dedup state the original saw and their own insertions are discarded: with a unique inside, the original's accepted sequence is already in the seen-set, and deduping the copy against it forces a fresh draw — a metamorphic pair whose halves differ under the identity transform, and a tree that no longer determines the value. Resetting to the pre-original snapshot also replays the original's own dedup retries identically, so the copy lands on the accepted value, not the first attempt.
                 for transform in transforms {
                     context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
+                    (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenSnapshot
                     guard let (copy, _) = try generateRecursiveAny(
                         inner, context: &context
                     ) else {
@@ -649,6 +653,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     }
                     try results.append(transform(copy))
                 }
+                (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenAfterOriginal
                 result = results
                 resultTree = innerTree
         }
