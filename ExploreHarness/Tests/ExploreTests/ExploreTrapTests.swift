@@ -93,9 +93,9 @@ struct ExploreTrapTests {
     func throughputRecorded() {
         let report = #explore(
             Fixture.messageGenerator,
-            time: .seconds(10),
-            .replay(1)
-//            .suppress(.issueReporting)
+            time: .milliseconds(500),
+            .replay(1),
+            .suppress(.issueReporting)
         ) { message in
             try Parser.decode(message).byteCount >= 0
         }

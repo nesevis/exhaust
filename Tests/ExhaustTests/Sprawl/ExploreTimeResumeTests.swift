@@ -47,6 +47,8 @@ struct ExploreTimeResumeTests {
                 reducedCount: 1,
                 firstSeenNanoseconds: 1_000_000,
                 lastSeenNanoseconds: 2_000_000,
+                firstSeenAttempt: 1,
+                unnormalizedMemberCount: 0,
                 discoveringPhase: .sprawl
             ),
             epochNanoseconds: 0

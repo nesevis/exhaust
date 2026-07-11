@@ -303,6 +303,16 @@ public extension __ExhaustRuntime {
         }
 
         var configuration = SprawlRunnerConfiguration(budgetNanoseconds: budgetNanoseconds, seed: seed)
+        #if DEBUG
+            // The benchmark arm seam: read once at run start, debug builds only. A malformed or unknown knob is a hard configuration error — a silently ignored typo would invalidate a benchmark arm.
+            if let experimentValue = ProcessInfo.processInfo.environment["EXHAUST_SPRAWL_EXPERIMENT"] {
+                do {
+                    configuration.experiments = try SprawlExperiments.parse(environmentValue: experimentValue)
+                } catch {
+                    return .empty(termination: .invalidConfiguration(String(describing: error)), seed: seed)
+                }
+            }
+        #endif
         if let persistence {
             configuration.persistence = persistence
             if let document = persistence.resumeDocument {
@@ -461,6 +471,7 @@ public extension __ExhaustRuntime {
         lines.append(
             "Coverage: \(report.coveredEdgeCount) of \(report.instrumentedEdgeCount) instrumented edges hit; \(uncovered) never hit (module-wide count, includes code the property never calls)."
         )
+        lines.append(contentsOf: renderEstimatorLines(report))
 
         if case let .coveragePlateau(unused) = report.termination {
             lines.append(
@@ -510,6 +521,31 @@ public extension __ExhaustRuntime {
         return lines.joined(separator: "\n")
     }
 
+    /// Renders the STADS estimator lines: the Good-Turing price of one more edge and the Chao1 completeness fraction against the run's own reachable set. Gap-framed per the Marick guardrails — the reachable-set scoping is stated inline so the fraction cannot be read as module coverage.
+    private static func renderEstimatorLines(_ report: SprawlReport) -> [String] {
+        guard report.totalAttempts > 0, report.coveredEdgeCount > 0 else {
+            return []
+        }
+        var lines: [String] = []
+        let nextEdgeProbability = report.estimatedNextEdgeProbability
+        if nextEdgeProbability > 0 {
+            let attemptsPerEdge = Int((1 / nextEdgeProbability).rounded())
+            lines.append(
+                "Estimated chance the next attempt covers a new edge: \(String(format: "%.1e", nextEdgeProbability)) (about one per \(attemptsPerEdge) attempts)."
+            )
+        } else {
+            lines.append(
+                "No edge was hit by only a single attempt — the estimated chance of a new edge on the next attempt is below 1 in \(report.totalAttempts)."
+            )
+        }
+        let reachable = report.estimatedReachableEdgeCount
+        let remaining = max(0, Int(reachable.rounded()) - report.coveredEdgeCount)
+        lines.append(
+            "Chao1 estimates about \(Int(reachable.rounded())) edges reachable for this generator and property; \(remaining) of those remain uncovered (estimate scoped to this run's search space, not the module)."
+        )
+        return lines
+    }
+
     /// Renders one cluster's terminal block: an attribute line, the reduced counterexample (collapsed onto one line when it stays readable), and the single strongest user-code suspect. The full ranked edge list lives in the cluster's attachment.
     private static func renderClusterBrief(
         _ cluster: SprawlReport.Cluster,
@@ -528,8 +564,11 @@ public extension __ExhaustRuntime {
         }
         let splitMarker = cluster.isLikelySplit ? "  ~paths" : ""
         let instanceWord = cluster.instanceCount == 1 ? "instance" : "instances"
+        let normalizedSuffix = cluster.unnormalizedMemberCount > 0
+            ? " (\(cluster.unnormalizedMemberCount) normalized in)"
+            : ""
         var lines = [
-            "Cluster \(cluster.id)  \(paddedSymptoms)  \(cluster.instanceCount) \(instanceWord), \(cluster.reducedCount) reduced  [\(phaseTag)]\(splitMarker)",
+            "Cluster \(cluster.id)  \(paddedSymptoms)  \(cluster.instanceCount) \(instanceWord), \(cluster.reducedCount) reduced\(normalizedSuffix)  [\(phaseTag)]\(splitMarker)",
         ]
         lines.append(contentsOf: collapsedCounterexample(cluster.reducedDescription).map { "  \($0)" })
         let suspects = terminalSuspects(for: cluster)
@@ -662,6 +701,9 @@ public extension __ExhaustRuntime {
             "\(cluster.instanceCount) instance\(cluster.instanceCount == 1 ? "" : "s"), \(cluster.reducedCount) reduced",
             "symptoms: \(cluster.symptoms.joined(separator: ", "))",
         ]
+        if cluster.unnormalizedMemberCount > 0 {
+            attributes.append("\(cluster.unnormalizedMemberCount) member\(cluster.unnormalizedMemberCount == 1 ? "" : "s") normalized in — reduction stalled short of the canonical form on these")
+        }
         if isFrontier {
             attributes.insert("discovered late, at \(renderDuration(cluster.firstSeen)) — the frontier had just reached this region", at: 1)
         }

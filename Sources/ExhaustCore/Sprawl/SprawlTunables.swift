@@ -76,4 +76,93 @@ package enum SprawlTunables {
     package static var maxConcurrentReductions: Int {
         min(4, max(1, ProcessInfo.processInfo.activeProcessorCount - 1))
     }
+
+    // MARK: - Power Schedule (Experiment: powerSchedule)
+
+    /// Upper bound on the children one parent pick may spawn under the power schedule. AFLFast's energy formula grows exponentially with revisits; the cap keeps a favored parent from monopolizing whole plateau windows.
+    package static let powerScheduleEnergyCap = 16
+
+    /// Bound on the exponent in the power schedule's `2^s` term, so the arithmetic saturates at the cap instead of overflowing on long runs.
+    package static let powerScheduleExponentLimit = 10
+
+    // MARK: - Swarm Generation (Experiment: swarm)
+
+    /// Sprawl attempts per swarm epoch. Attempts-based rather than wall-clock so the epoch schedule replays deterministically under a pinned seed regardless of machine load.
+    package static let swarmEpochAttempts = 2048
+
+    // MARK: - Escape-Hatch Backoff (Experiment: escapeBackoff)
+
+    /// Upper bound on the adaptive escape interval. The interval doubles each time an escape reduction lands in an existing cluster, so without a cap a long run would stop escaping entirely — and the escape hatch exists precisely because symptom matching is a weak signal.
+    package static let reductionEscapeIntervalCap = 3200
+}
+
+// MARK: - Experiment Knobs
+
+/// Per-run switches for mechanisms that land benchmark-gated.
+///
+/// Every new search-side mechanism ships behind one of these knobs, default-off, and flips on only when its measured gate passes (the knob-gate-default pattern). In-package tests reach them through the `configure:` seam on `runExploreTimeCore`; cross-package benchmark arms ride the `EXHAUST_SPRAWL_EXPERIMENT` environment variable, which debug builds parse once at run start via ``parse(environmentValue:)``.
+package struct SprawlExperiments: Sendable, Equatable {
+    /// Post-reduction cluster normalization: re-drive each value of a would-be-new cluster's reduced form toward its minimal still-failing bit pattern before minting the cluster. Default-on since its gate passed (2026-07-11: 4/4 true clusters in 20/20 seeds versus 9/20 without, throughput −0.6%); the knob stays one release for A/B.
+    package var normalization = true
+
+    /// Adaptive reduction-gate escape interval: coverage-novel failures escape immediately; periodic escapes that land in an existing cluster widen the interval geometrically, and new-cluster escapes reset it. Default-on since its gate passed (2026-07-11: 19× fewer reductions on saturated clusters, fault B still found 20/20 with attempts-to-discovery improved in 14/20 seeds); the knob stays one release for A/B.
+    package var escapeBackoff = true
+
+    /// Stacked mutation: one sprawl child may compose several mutation operators instead of exactly one.
+    package var stackedMutation = false
+
+    /// Bandit-tuned mutation band weights over {low, medium, high, splice}, rewarded by corpus admission.
+    package var banditBands = false
+
+    /// AFLFast-style power schedule for the number of children drawn per picked parent.
+    package var powerSchedule = false
+
+    /// Per-edge shortlex champion archive as the parent-selection domain. Default-on since its gate passed (2026-07-11: parser throughput +7.8%, attempts-to-discovery significantly better on two faults and worse on none, archive size stable at 60 s); the knob stays one release for A/B.
+    package var championArchive = true
+
+    /// Swarm generation: per-epoch deterministic branch masks pivot mutated children's disallowed branch selections, reaching command mixes the uniform distribution statistically suppresses.
+    package var swarm = false
+
+    /// Creates the default knob set: gated mechanisms off until their gates pass.
+    package init() {}
+
+    /// A parse failure with the offending fragment, rendered into the run's configuration error. Silent typos would invalidate benchmark arms, so unknown knobs are a hard error rather than a warning.
+    package struct ParseError: Error, CustomStringConvertible {
+        package let description: String
+    }
+
+    /// Parses an `EXHAUST_SPRAWL_EXPERIMENT` value like `stackedMutation=on,banditBands=off` on top of the defaults.
+    ///
+    /// - Throws: ``ParseError`` on an unknown knob name or a value other than `on`/`off`.
+    package static func parse(environmentValue: String) throws -> SprawlExperiments {
+        var experiments = SprawlExperiments()
+        let assignments: [(String, WritableKeyPath<SprawlExperiments, Bool>)] = [
+            ("normalization", \.normalization),
+            ("escapeBackoff", \.escapeBackoff),
+            ("stackedMutation", \.stackedMutation),
+            ("banditBands", \.banditBands),
+            ("powerSchedule", \.powerSchedule),
+            ("championArchive", \.championArchive),
+            ("swarm", \.swarm),
+        ]
+        for fragment in environmentValue.split(separator: ",") {
+            let parts = fragment.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
+            guard parts.count == 2 else {
+                throw ParseError(description: "EXHAUST_SPRAWL_EXPERIMENT fragment '\(fragment)' is not of the form knob=on|off.")
+            }
+            guard let keyPath = assignments.first(where: { $0.0 == parts[0] })?.1 else {
+                let known = assignments.map(\.0).joined(separator: ", ")
+                throw ParseError(description: "EXHAUST_SPRAWL_EXPERIMENT names unknown knob '\(parts[0])'. Known knobs: \(known).")
+            }
+            switch parts[1] {
+                case "on":
+                    experiments[keyPath: keyPath] = true
+                case "off":
+                    experiments[keyPath: keyPath] = false
+                default:
+                    throw ParseError(description: "EXHAUST_SPRAWL_EXPERIMENT knob '\(parts[0])' has value '\(parts[1])'; expected on or off.")
+            }
+        }
+        return experiments
+    }
 }

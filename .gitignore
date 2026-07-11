@@ -10,3 +10,4 @@ DerivedData/
 .netrc
 Frameworks/ExhaustCore.xcframework/
 Frameworks/ExhaustCore.xcframework.zip
+/ExploreHarness/.benchmarks

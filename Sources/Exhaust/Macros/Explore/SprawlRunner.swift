@@ -49,6 +49,8 @@ package struct SprawlRunnerConfiguration {
     package var attemptLimit: Int?
     /// Crash-recovery configuration: where checkpoints go and what a crashed predecessor left. Nil disables persistence entirely.
     package var persistence: SprawlPersistenceContext?
+    /// Knobs for benchmark-gated mechanisms; see ``SprawlExperiments`` for the seam precedence.
+    package var experiments: SprawlExperiments
 
     package init(
         budgetNanoseconds: UInt64,
@@ -57,7 +59,8 @@ package struct SprawlRunnerConfiguration {
         skipScreening: Bool = false,
         skipSampling: Bool = false,
         attemptLimit: Int? = nil,
-        persistence: SprawlPersistenceContext? = nil
+        persistence: SprawlPersistenceContext? = nil,
+        experiments: SprawlExperiments = SprawlExperiments()
     ) {
         self.budgetNanoseconds = budgetNanoseconds
         self.seed = seed
@@ -66,6 +69,7 @@ package struct SprawlRunnerConfiguration {
         self.skipSampling = skipSampling
         self.attemptLimit = attemptLimit
         self.persistence = persistence
+        self.experiments = experiments
     }
 }
 
@@ -81,6 +85,9 @@ package struct SprawlRunResult: Sendable {
     package var mutableTierCount: Int
     package var coveredEdgeCount: Int
     package var instrumentedEdgeCount: Int
+    /// Edges hit by exactly one attempt (f₁) and exactly two (f₂), for the STADS estimators.
+    package var edgeSingletonCount: Int
+    package var edgeDoubletonCount: Int
     package var termination: SprawlTermination
     /// Report-time discrimination results, parallel to `clusters` by position.
     package var clusterDiscriminations: [ClusterDiscrimination]
@@ -117,14 +124,18 @@ package final class SprawlRunner<Output> {
     private let corpus: SprawlCorpus
     private let inventory = FaultInventory()
     private let pool = ReductionPool()
-    private var gate = ReductionGate()
+    private var gate: ReductionGate
     private var prng: Xoshiro256
+    private var bandit = MutationBandit()
 
     /// G4: at most one thread at a time runs an instrumented evaluation bracket.
     private let attributionToken = NSLock()
 
-    /// Completed classifications waiting for the loop to apply their failure-weight upgrades.
-    private let pendingClassifications = SendableBox<[(parentIndex: Int?, classification: ClusterClassification)]>([])
+    /// Completed classifications waiting for the loop to apply their failure-weight upgrades and escape-interval feedback.
+    private let pendingClassifications = SendableBox<[(parentIndex: Int?, symptom: FailureSymptom, wasEscape: Bool, classification: ClusterClassification)]>([])
+
+    /// Zobrist-keyed normalization results shared across reduction tasks; see ``SprawlNormalizer/normalize(reducedSequence:erasedGen:symptom:property:cache:)``.
+    private let normalizationCache = SendableBox<[UInt64: ChoiceSequence?]>([:])
 
     private var startNanoseconds: UInt64 = 0
     private var lastAdmissionNanoseconds: UInt64 = 0
@@ -164,7 +175,8 @@ package final class SprawlRunner<Output> {
         self.property = property
         self.source = source
         self.configuration = configuration
-        corpus = SprawlCorpus(edgeCount: source.edgeCount)
+        corpus = SprawlCorpus(edgeCount: source.edgeCount, experiments: configuration.experiments)
+        gate = ReductionGate(experiments: configuration.experiments)
         prng = Xoshiro256(seed: configuration.seed)
         // Reduction deadline mirrors #exhaust's scaling but is bounded: sprawl reductions run concurrently with exploration and must not outlive the drain timeout.
         reducerConfiguration = Interpreters.ReducerConfiguration(
@@ -225,6 +237,8 @@ package final class SprawlRunner<Output> {
             mutableTierCount: corpus.mutableTierIndices.count,
             coveredEdgeCount: corpus.coveredEdgeCount,
             instrumentedEdgeCount: source.edgeCount,
+            edgeSingletonCount: corpus.edgeSingletonCount,
+            edgeDoubletonCount: corpus.edgeDoubletonCount,
             termination: finalTermination,
             clusterDiscriminations: discriminations,
             startNanoseconds: reportEpochNanoseconds,
@@ -288,13 +302,18 @@ package final class SprawlRunner<Output> {
                     lastAdmissionNanoseconds = monotonicNanoseconds()
                 }
                 if passed == false, case let .fail(symptom) = lastVerdict {
+                    var coverageNovel = false
+                    if case .admitted = admission {
+                        coverageNovel = true
+                    }
                     handleFailure(
                         value: value,
                         tree: tree,
                         sequence: sequence,
                         symptom: symptom,
                         parentIndex: nil,
-                        phase: .screening
+                        phase: .screening,
+                        coverageNovel: coverageNovel
                     )
                 }
             }
@@ -374,13 +393,18 @@ package final class SprawlRunner<Output> {
             }
 
             if case let .fail(symptom) = verdict {
+                var coverageNovel = false
+                if case .admitted = admission {
+                    coverageNovel = true
+                }
                 handleFailure(
                     value: value,
                     tree: tree,
                     sequence: sequence,
                     symptom: symptom,
                     parentIndex: nil,
-                    phase: .sampling
+                    phase: .sampling,
+                    coverageNovel: coverageNovel
                 )
             }
         }
@@ -419,33 +443,104 @@ package final class SprawlRunner<Output> {
                 continue
             }
 
-            for _ in 0 ..< SprawlTunables.childrenPerParent {
+            let childBudget = configuration.experiments.powerSchedule
+                ? corpus.powerScheduleChildren(forParentAt: parentIndex, base: SprawlTunables.childrenPerParent)
+                : SprawlTunables.childrenPerParent
+            for _ in 0 ..< childBudget {
                 if terminationDue() != nil {
                     break
                 }
-                let mutated = nextCandidate(from: parent)
-                evaluateSprawlCandidate(mutated, parent: parent, parentIndex: parentIndex)
+                let (mutated, armsMask) = nextCandidate(from: parent)
+                evaluateSprawlCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: armsMask)
             }
         }
     }
 
-    /// Produces one mutated candidate from `parent`: usually an intensity-band mutation, occasionally a bind-boundary splice with a random donor.
-    private func nextCandidate(from parent: CorpusEntry) -> ChoiceSequence {
+    /// Produces one mutated candidate from `parent` plus the bitmask of ``MutationArm``s that shaped it (for bandit credit on admission), routing between the legacy single-operator path, the composed experiment path, and the swarm rewrite.
+    private func nextCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt8) {
+        let experiments = configuration.experiments
+        if experiments.swarm {
+            let (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands
+                ? composedCandidate(from: parent)
+                : legacyCandidate(from: parent)
+            let epoch = SwarmMask.forEpoch(
+                index: sprawlAttempts / SprawlTunables.swarmEpochAttempts,
+                rootSeed: configuration.seed
+            )
+            return (epoch.apply(to: candidate, prng: &prng), armsMask)
+        }
+        if experiments.stackedMutation || experiments.banditBands {
+            return composedCandidate(from: parent)
+        }
+        return legacyCandidate(from: parent)
+    }
+
+    /// The original single-operator mutation path, kept verbatim so knob-off runs replay identically under a pinned seed: usually an intensity-band mutation, occasionally a bind-boundary splice with a random donor.
+    private func legacyCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt8) {
         if randomUnit() < SprawlTunables.spliceProbability, corpus.entries.count > 1 {
             let donorIndex = Int(prng.next(upperBound: UInt64(corpus.entries.count)))
             let donor = corpus.entries[donorIndex]
             if donor.hash != parent.hash,
                let spliced = SprawlMutator.splice(recipient: parent.sequence, donor: donor.sequence, prng: &prng)
             {
-                return spliced
+                return (spliced, 1 << UInt8(MutationArm.splice.rawValue))
             }
         }
         let intensityDraw = prng.next(upperBound: UInt64(SprawlIntensity.allCases.count))
         let intensity = SprawlIntensity.allCases[Int(intensityDraw)]
-        return SprawlMutator.mutate(parent.sequence, intensity: intensity, prng: &prng)
+        return (
+            SprawlMutator.mutate(parent.sequence, intensity: intensity, prng: &prng),
+            1 << UInt8(intensityDraw)
+        )
     }
 
-    private func evaluateSprawlCandidate(_ candidate: ChoiceSequence, parent: CorpusEntry, parentIndex: Int) {
+    /// The experiment mutation path: one child composed from `stackedMutation`'s operator stack with each operator drawn from the bandit's distribution (or the legacy fixed one when only stacking is on).
+    ///
+    /// The stack draw is 2^0...2^2 ({1, 2, 4} operators), not AFL's 2^1...2^7: Exhaust's band operators are each already multi-perturbation (a low-band step moves up to three values, a high-band step corrupts a quarter of the sequence), and the AFL-depth stacks measured on `DeepParser` destroyed parent structure outright (deep-fault discovery 4/20 versus 20/20, throughput −42%).
+    private func composedCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt8) {
+        let experiments = configuration.experiments
+        let mutation = 1 << Int(prng.next(upperBound: 3))
+        let stackCount = experiments.stackedMutation ? mutation : 1
+        var candidate = parent.sequence
+        var armsMask: UInt8 = 0
+        for _ in 0 ..< stackCount {
+            let arm = experiments.banditBands ? bandit.pick(random: randomUnit()) : fixedDistributionArm()
+            armsMask |= 1 << UInt8(arm.rawValue)
+            switch arm {
+                case .low:
+                    candidate = SprawlMutator.mutate(candidate, intensity: .low, prng: &prng)
+                case .medium:
+                    candidate = SprawlMutator.mutate(candidate, intensity: .medium, prng: &prng)
+                case .high:
+                    candidate = SprawlMutator.mutate(candidate, intensity: .high, prng: &prng)
+                case .splice:
+                    guard corpus.entries.count > 1 else {
+                        continue
+                    }
+                    let donorIndex = Int(prng.next(upperBound: UInt64(corpus.entries.count)))
+                    let donor = corpus.entries[donorIndex]
+                    if let spliced = SprawlMutator.splice(recipient: candidate, donor: donor.sequence, prng: &prng) {
+                        candidate = spliced
+                    }
+            }
+        }
+        return (candidate, armsMask)
+    }
+
+    /// The legacy operator distribution (splice at its fixed probability, otherwise a uniform band) expressed as one draw, for the stacked-without-bandit arm.
+    private func fixedDistributionArm() -> MutationArm {
+        if randomUnit() < SprawlTunables.spliceProbability {
+            return .splice
+        }
+        return MutationArm(rawValue: Int(prng.next(upperBound: 3))) ?? .low
+    }
+
+    private func evaluateSprawlCandidate(
+        _ candidate: ChoiceSequence,
+        parent: CorpusEntry,
+        parentIndex: Int,
+        armsMask: UInt8
+    ) {
         attributionToken.lock()
         source.beginAttempt()
         let result = Materializer.materializeAny(
@@ -488,16 +583,26 @@ package final class SprawlRunner<Output> {
         )
         if case .admitted = admission {
             lastAdmissionNanoseconds = monotonicNanoseconds()
+            if configuration.experiments.banditBands {
+                for arm in MutationArm.allCases where armsMask & (1 << UInt8(arm.rawValue)) != 0 {
+                    bandit.reward(arm)
+                }
+            }
         }
 
         if case let .fail(symptom) = verdict {
+            var coverageNovel = false
+            if case .admitted = admission {
+                coverageNovel = true
+            }
             handleFailure(
                 value: value,
                 tree: freshTree,
                 sequence: sequence,
                 symptom: symptom,
                 parentIndex: parentIndex,
-                phase: .sprawl
+                phase: .sprawl,
+                coverageNovel: coverageNovel
             )
         }
     }
@@ -548,7 +653,19 @@ package final class SprawlRunner<Output> {
             lastAdmissionNanoseconds = monotonicNanoseconds()
         }
         if case let .fail(symptom) = verdict {
-            handleFailure(value: value, tree: tree, sequence: sequence, symptom: symptom, parentIndex: nil, phase: .sprawl)
+            var coverageNovel = false
+            if case .admitted = admission {
+                coverageNovel = true
+            }
+            handleFailure(
+                value: value,
+                tree: tree,
+                sequence: sequence,
+                symptom: symptom,
+                parentIndex: nil,
+                phase: .sprawl,
+                coverageNovel: coverageNovel
+            )
         }
         return nil
     }
@@ -561,23 +678,37 @@ package final class SprawlRunner<Output> {
         sequence: ChoiceSequence,
         symptom: FailureSymptom,
         parentIndex: Int?,
-        phase: SprawlPhase
+        phase: SprawlPhase,
+        coverageNovel: Bool
     ) {
         if let parentIndex {
             corpus.applyProvisionalFailureBoost(toParentAt: parentIndex)
         }
         let hash = ZobristHash.hash(of: sequence)
-        switch gate.admit(sequenceHash: hash, symptom: symptom) {
+        let attemptIndex = totalAttempts
+        switch gate.admit(sequenceHash: hash, symptom: symptom, coverageNovel: coverageNovel) {
             case .duplicate:
                 return
             case .recordUnreduced:
                 let timestamp = monotonicNanoseconds()
                 let inventory = inventory
                 Task {
-                    await inventory.recordUnreduced(symptom: symptom, timestampNanoseconds: timestamp)
+                    await inventory.recordUnreduced(
+                        symptom: symptom,
+                        timestampNanoseconds: timestamp,
+                        attemptIndex: attemptIndex
+                    )
                 }
-            case .reduce:
-                dispatchReduction(value: value, tree: tree, symptom: symptom, parentIndex: parentIndex, phase: phase)
+            case let .reduce(isEscape):
+                dispatchReduction(
+                    value: value,
+                    tree: tree,
+                    symptom: symptom,
+                    parentIndex: parentIndex,
+                    phase: phase,
+                    attemptIndex: attemptIndex,
+                    wasEscape: isEscape
+                )
         }
     }
 
@@ -586,14 +717,19 @@ package final class SprawlRunner<Output> {
         tree: ChoiceTree,
         symptom: FailureSymptom,
         parentIndex: Int?,
-        phase: SprawlPhase
+        phase: SprawlPhase,
+        attemptIndex: Int,
+        wasEscape: Bool
     ) {
         // The generator and property are Sendable by construction (the macro enforces @Sendable; ReflectiveGenerator is @unchecked Sendable); the tree and value are moved into the task and never touched by the loop again.
         nonisolated(unsafe) let capturedGen = gen
+        nonisolated(unsafe) let capturedErasedGen = erasedGen
         nonisolated(unsafe) let capturedTree = tree
         nonisolated(unsafe) let capturedValue = value
         let capturedProperty = property
         let reducerConfiguration = reducerConfiguration
+        let normalizationEnabled = configuration.experiments.normalization
+        let normalizationCache = normalizationCache
         let source = source
         let attributionToken = attributionToken
         let inventory = inventory
@@ -610,9 +746,9 @@ package final class SprawlRunner<Output> {
                 property: boolProperty
             )
 
-            let reducedSequence: ChoiceSequence
-            let reducedTree: ChoiceTree
-            let reducedValue: Output
+            var reducedSequence: ChoiceSequence
+            var reducedTree: ChoiceTree
+            var reducedValue: Output
             switch outcome {
                 case let .reduced(sequence, tree, output), let .unreduced(sequence, tree, output):
                     reducedSequence = sequence
@@ -622,6 +758,26 @@ package final class SprawlRunner<Output> {
                     reducedSequence = ChoiceSequence.flatten(capturedTree)
                     reducedTree = capturedTree
                     reducedValue = capturedValue
+            }
+
+            // Normalization runs only on the would-be-new-cluster event: a reduced form whose key already exists needs no canonicalization, and the containsKey pre-check keeps the probing off the saturated-cluster path entirely.
+            var unnormalizedResidual = false
+            if normalizationEnabled {
+                let rawKey = ChoiceSequence.flatten(reducedTree, skipBindInners: true).clusterKey
+                if await inventory.containsKey(rawKey) == false,
+                   let normalized: SprawlNormalizer.NormalizedForm<Output> = SprawlNormalizer.normalize(
+                       reducedSequence: reducedSequence,
+                       erasedGen: capturedErasedGen,
+                       symptom: symptom,
+                       property: capturedProperty,
+                       cache: normalizationCache
+                   )
+                {
+                    unnormalizedResidual = true
+                    reducedSequence = normalized.sequence
+                    reducedTree = normalized.tree
+                    reducedValue = normalized.value
+                }
             }
 
             // Post-reduction classification: one instrumented evaluation under the attribution token yields the post-hoc signature. Clustering keys on (reduced form, signature).
@@ -646,10 +802,12 @@ package final class SprawlRunner<Output> {
                 signature: signature,
                 symptom: symptom,
                 phase: phase,
-                timestampNanoseconds: monotonicNanoseconds()
+                timestampNanoseconds: monotonicNanoseconds(),
+                attemptIndex: attemptIndex,
+                unnormalizedResidual: unnormalizedResidual
             )
             pendingClassifications.withValue { pending in
-                pending.append((parentIndex: parentIndex, classification: classification))
+                pending.append((parentIndex: parentIndex, symptom: symptom, wasEscape: wasEscape, classification: classification))
             }
         }
     }
@@ -679,14 +837,17 @@ package final class SprawlRunner<Output> {
 
     /// Applies completed classifications' failure-weight upgrades on the loop thread — the corpus is single-threaded by design, so reduction tasks post here instead of calling in. Doubles as the checkpoint pulse: it runs once per loop iteration in every phase, which is exactly the cadence ``checkpointIfDue()`` needs.
     private func drainClassifications() {
-        let completed = pendingClassifications.withValue { pending -> [(parentIndex: Int?, classification: ClusterClassification)] in
+        let completed = pendingClassifications.withValue { pending -> [(parentIndex: Int?, symptom: FailureSymptom, wasEscape: Bool, classification: ClusterClassification)] in
             let drained = pending
             pending.removeAll()
             return drained
         }
-        for (parentIndex, classification) in completed {
+        for (parentIndex, symptom, wasEscape, classification) in completed {
             if classification.isNewCluster {
                 forceCheckpoint = true
+            }
+            if wasEscape {
+                gate.noteEscapeOutcome(symptom: symptom, isNewCluster: classification.isNewCluster)
             }
             guard let parentIndex else {
                 continue
@@ -817,6 +978,8 @@ package final class SprawlRunner<Output> {
                 reducedCount: record.reducedCount,
                 firstSeenNanoseconds: reportEpochNanoseconds + record.firstSeenNanoseconds,
                 lastSeenNanoseconds: reportEpochNanoseconds + record.lastSeenNanoseconds,
+                firstSeenAttempt: record.firstSeenAttempt ?? 0,
+                unnormalizedMemberCount: record.unnormalizedMemberCount ?? 0,
                 discoveringPhase: phase
             ))
         }

@@ -37,6 +37,14 @@ package struct CorpusEntry: Sendable {
 
     /// Multiplier on the entry's parent-selection score from failures among its children. 1 when no child failed; see ``SprawlTunables`` for the provisional and cluster-aware values.
     var failureBoost: Double = 1.0
+
+    // MARK: - Power-Schedule State (Experiment: powerSchedule)
+
+    /// Times this entry has been picked as a mutation parent.
+    var timesPicked: Int = 0
+
+    /// Children spawned from this entry across all picks — the frequency denominator in the energy formula.
+    var childrenSpawned: Int = 0
 }
 
 /// Which tier an admitted entry landed in.
@@ -83,6 +91,9 @@ package final class SprawlCorpus {
     /// Per-edge count of entries whose signature covers the edge; the rarity denominator.
     private var coveringEntryCounts: [Int]
 
+    /// Per-edge attempt-incidence counters saturating at 3, updated inside the offer walk the loop already pays for. Only the singleton and doubleton counts feed the STADS estimators. Duplicate-sequence offers return before the walk and are not counted — a duplicate re-hits an already-counted edge set, and the resulting bias overstates remaining discovery, the conservative direction for a completeness estimate.
+    private var edgeIncidenceCounts: [UInt8]
+
     /// Edge → indices of entries covering it, for O(affected) score invalidation on admission.
     private var coveringEntries: [[Int]]
 
@@ -91,17 +102,43 @@ package final class SprawlCorpus {
 
     private var seenHashes: Set<UInt64> = []
 
+    /// Experiment knobs; the corpus reads `championArchive`.
+    private let experiments: SprawlExperiments
+
+    // MARK: - Champion Archive (Experiment: championArchive)
+
+    // A quality-diversity archive in the MAP-Elites frame: each covered edge is a behavior cell holding the shortlex-minimal mutable-tier entry that hits it, and the parent-selection domain is the entries holding at least one cell. Smaller parents mutate faster and carry less incidental coverage; subsumption pruning was rejected because it is order-dependent and lets one large entry shadow rare-edge champions. Championships are scoped to mutable-tier-eligible entries — a discovery-tier entry keeps its coverage credit but must not be able to empty the mutation pool by holding cells it can never be mutated from.
+
+    /// The entry index holding each edge's cell, or nil while the edge is uncovered (or its champion was quarantined).
+    private var edgeChampions: [Int?]
+
+    /// Cells held per entry, parallel to `entries`; an entry leaves parent selection when its count returns to zero.
+    private var championCounts: [Int] = []
+
     /// Creates an empty corpus for a run with the given instrumented edge count.
-    package init(edgeCount: Int) {
+    package init(edgeCount: Int, experiments: SprawlExperiments = SprawlExperiments()) {
         self.edgeCount = edgeCount
+        self.experiments = experiments
         seenBucketMasks = Array(repeating: 0, count: edgeCount)
         coveringEntryCounts = Array(repeating: 0, count: edgeCount)
         coveringEntries = Array(repeating: [], count: edgeCount)
+        edgeChampions = Array(repeating: nil, count: edgeCount)
+        edgeIncidenceCounts = Array(repeating: 0, count: edgeCount)
     }
 
     /// Signatures of entries whose property evaluation passed — the P(hit | pass) sample for report-time discrimination.
     package var passingSignatures: [BitSet] {
         entries.filter { $0.propertyFailed == false }.map(\.signature)
+    }
+
+    /// Edges hit by exactly one non-duplicate attempt (f₁), for the STADS estimators.
+    package var edgeSingletonCount: Int {
+        edgeIncidenceCounts.count(where: { $0 == 1 })
+    }
+
+    /// Edges hit by exactly two non-duplicate attempts (f₂), for the STADS estimators.
+    package var edgeDoubletonCount: Int {
+        edgeIncidenceCounts.count(where: { $0 == 2 })
     }
 
     /// The number of edges any corpus entry has covered.
@@ -148,6 +185,9 @@ package final class SprawlCorpus {
             guard edge >= 0, edge < edgeCount else {
                 continue
             }
+            if edgeIncidenceCounts[edge] < 3 {
+                edgeIncidenceCounts[edge] += 1
+            }
             let mask = HitCountBucket.bucketMask(for: hitCount)
             if seenBucketMasks[edge] == 0 {
                 introducedEdges.append(edge)
@@ -186,6 +226,7 @@ package final class SprawlCorpus {
         )
         entries.append(entry)
         cachedScores.append(nil)
+        championCounts.append(0)
         seenHashes.insert(hash)
 
         // Bump rarity denominators and dirty every entry whose score depends on a bumped edge.
@@ -201,9 +242,90 @@ package final class SprawlCorpus {
             ? .mutable
             : .discovery
         if tier == .mutable, quarantinedHashes.contains(hash) == false {
-            mutableTierIndices.append(index)
+            if experiments.championArchive {
+                claimChampionships(for: index, signature: signature)
+                if championCounts[index] > 0 {
+                    mutableTierIndices.append(index)
+                }
+            } else {
+                mutableTierIndices.append(index)
+            }
         }
         return .admitted(index: index, tier: tier)
+    }
+
+    // MARK: - Champion Archive
+
+    /// Claims every cell of `signature` the new entry wins by shortlex comparison, evicting dethroned entries whose cell count returns to zero from parent selection.
+    ///
+    /// One comparison per hit edge on admission; admissions are rare, so this never touches the per-attempt path. Eviction is deterministic: only championship arithmetic removes an entry, never insertion order.
+    private func claimChampionships(for index: Int, signature: BitSet) {
+        let sequence = entries[index].sequence
+        signature.forEachIndex { edge in
+            guard let incumbentIndex = edgeChampions[edge] else {
+                edgeChampions[edge] = index
+                championCounts[index] += 1
+                return
+            }
+            guard shortlexIsLess(sequence, entries[incumbentIndex].sequence) else {
+                return
+            }
+            edgeChampions[edge] = index
+            championCounts[index] += 1
+            championCounts[incumbentIndex] -= 1
+            if championCounts[incumbentIndex] == 0 {
+                mutableTierIndices.removeAll { $0 == incumbentIndex }
+            }
+        }
+    }
+
+    /// Shortlex order over flattened sequences: shorter first, ties broken by the first differing element (kind rank, then per-kind payload). Reflexive ties are not-less, so an incumbent keeps its cell against an equal challenger.
+    private func shortlexIsLess(_ lhs: ChoiceSequence, _ rhs: ChoiceSequence) -> Bool {
+        if lhs.count != rhs.count {
+            return lhs.count < rhs.count
+        }
+        for (left, right) in zip(lhs, rhs) {
+            let leftRank = elementRank(left)
+            let rightRank = elementRank(right)
+            if leftRank != rightRank {
+                return leftRank < rightRank
+            }
+            if case let .value(leftValue) = left, case let .value(rightValue) = right,
+               leftValue.choice.bitPattern64 != rightValue.choice.bitPattern64
+            {
+                return leftValue.choice.bitPattern64 < rightValue.choice.bitPattern64
+            }
+            if case let .branch(leftBranch) = left, case let .branch(rightBranch) = right,
+               leftBranch.id != rightBranch.id
+            {
+                return leftBranch.id < rightBranch.id
+            }
+        }
+        return false
+    }
+
+    /// A stable rank per element kind, so structurally different same-length sequences still order totally.
+    private func elementRank(_ element: ChoiceSequenceValue) -> Int {
+        switch element {
+            case .just:
+                0
+            case .value:
+                1
+            case .branch:
+                2
+            case .group(true):
+                3
+            case .group(false):
+                4
+            case .sequence(true, _, _):
+                5
+            case .sequence(false, _, _):
+                6
+            case .bind(true):
+                7
+            case .bind(false):
+                8
+        }
     }
 
     // MARK: - Quarantine
@@ -214,6 +336,19 @@ package final class SprawlCorpus {
     package func quarantine(sequenceHash: UInt64) {
         quarantinedHashes.insert(sequenceHash)
         mutableTierIndices.removeAll { entries[$0].hash == sequenceHash }
+        guard experiments.championArchive else {
+            return
+        }
+        // A quarantined champion releases its cells rather than locking them to an entry that can never be mutated again; later admissions may reclaim them. Championship arithmetic can never re-admit the entry — offer checks the quarantine set before any claiming happens.
+        for index in entries.indices where entries[index].hash == sequenceHash {
+            guard championCounts[index] > 0 else {
+                continue
+            }
+            for edge in edgeChampions.indices where edgeChampions[edge] == index {
+                edgeChampions[edge] = nil
+            }
+            championCounts[index] = 0
+        }
     }
 
     private var quarantinedHashes: Set<UInt64> = []
@@ -255,6 +390,21 @@ package final class SprawlCorpus {
         }
         entries[index].failureBoost = boost
         cachedScores[index] = nil
+    }
+
+    // MARK: - Power Schedule
+
+    /// The number of children to draw from the parent at `index` under the AFLFast-family FAST schedule, mutating the entry's pick counters.
+    ///
+    /// The formula is `base · 2^s / (1 + f)` clamped to `1 ... cap`, where `s` counts prior picks (bounded by ``SprawlTunables/powerScheduleExponentLimit``) and `f` counts children already spawned. AFLFast's `f` is path frequency — how many generated inputs exercised the seed's path — which the corpus does not track per attempt; children spawned is the cheap proxy with the same intent: a neighborhood that has already been fuzzed heavily earns less energy per visit, while a parent the schedule keeps returning to (rare coverage keeps it winning selection) ramps up exponentially until the cap.
+    package func powerScheduleChildren(forParentAt index: Int, base: Int) -> Int {
+        entries[index].timesPicked += 1
+        let exponent = min(entries[index].timesPicked - 1, SprawlTunables.powerScheduleExponentLimit)
+        let frequency = 1 + entries[index].childrenSpawned
+        let energy = base * (1 << exponent) / frequency
+        let clamped = min(max(energy, 1), SprawlTunables.powerScheduleEnergyCap)
+        entries[index].childrenSpawned += clamped
+        return clamped
     }
 
     // MARK: - Parent Selection

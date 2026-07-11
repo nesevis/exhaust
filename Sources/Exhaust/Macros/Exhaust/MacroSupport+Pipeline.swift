@@ -873,9 +873,18 @@ package extension __ExhaustRuntime {
 
     /// Returns whether an error thrown from a property closure is a skip marker rather than a failure.
     static func isSkipError(_ error: any Error) -> Bool {
-        if error is PropertySkip { return true }
-        #if canImport(XCTest)
-            if error is XCTSkip { return true }
+        if error is PropertySkip {
+            return true
+        }
+        #if canImport(XCTest) && canImport(ObjectiveC)
+            // XCTest is weak-linked here: in a plain executable (a fuzz driver, a benchmark loop) its metadata symbols are null, and evaluating `error is XCTSkip` unguarded jumps through the null metadata pointer and kills the process on the first thrown property error.
+            if #_hasSymbol(XCTSkip.self), error is XCTSkip {
+                return true
+            }
+        #elseif canImport(XCTest)
+            if error is XCTSkip {
+                return true
+            }
         #endif
         return false
     }

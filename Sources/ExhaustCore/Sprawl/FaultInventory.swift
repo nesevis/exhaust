@@ -53,6 +53,12 @@ package struct FaultCluster: Sendable {
     package private(set) var firstSeenNanoseconds: UInt64
     package private(set) var lastSeenNanoseconds: UInt64
 
+    /// The 1-based attempt index of the earliest failure attributed to this cluster. Wall-clock timestamps move with machine load, so benchmarks compare this build-independent discovery metric instead; reductions classify out of order, which is why attribution takes the minimum rather than the first arrival.
+    package private(set) var firstSeenAttempt: Int
+
+    /// Members whose own reduced form differed from this cluster's canonical form and joined only through normalization. A nonzero count means reduction stalled on some members (a masked flag bit, an unclamped byte) and the normalization pass re-drove them onto the canonical form instead of minting spurious clusters.
+    package private(set) var unnormalizedMemberCount: Int
+
     /// The phase whose failure first created this cluster.
     package let discoveringPhase: SprawlPhase
 
@@ -64,7 +70,9 @@ package struct FaultCluster: Sendable {
         signature: BitSet?,
         symptom: FailureSymptom,
         phase: SprawlPhase,
-        timestampNanoseconds: UInt64
+        timestampNanoseconds: UInt64,
+        attemptIndex: Int,
+        unnormalizedResidual: Bool
     ) {
         self.id = id
         self.reducedSequence = reducedSequence
@@ -76,6 +84,8 @@ package struct FaultCluster: Sendable {
         reducedCount = 1
         firstSeenNanoseconds = timestampNanoseconds
         lastSeenNanoseconds = timestampNanoseconds
+        firstSeenAttempt = attemptIndex
+        unnormalizedMemberCount = unnormalizedResidual ? 1 : 0
         discoveringPhase = phase
     }
 
@@ -91,6 +101,8 @@ package struct FaultCluster: Sendable {
         reducedCount: Int,
         firstSeenNanoseconds: UInt64,
         lastSeenNanoseconds: UInt64,
+        firstSeenAttempt: Int,
+        unnormalizedMemberCount: Int,
         discoveringPhase: SprawlPhase
     ) {
         id = restoredID
@@ -103,13 +115,17 @@ package struct FaultCluster: Sendable {
         self.reducedCount = reducedCount
         self.firstSeenNanoseconds = firstSeenNanoseconds
         self.lastSeenNanoseconds = lastSeenNanoseconds
+        self.firstSeenAttempt = firstSeenAttempt
+        self.unnormalizedMemberCount = unnormalizedMemberCount
         self.discoveringPhase = discoveringPhase
     }
 
     fileprivate mutating func absorb(
         signature: BitSet?,
         symptom: FailureSymptom,
-        timestampNanoseconds: UInt64
+        timestampNanoseconds: UInt64,
+        attemptIndex: Int,
+        unnormalizedResidual: Bool
     ) {
         if let signature, signatures.contains(signature) == false {
             signatures.append(signature)
@@ -118,12 +134,21 @@ package struct FaultCluster: Sendable {
         instanceCount += 1
         reducedCount += 1
         lastSeenNanoseconds = max(lastSeenNanoseconds, timestampNanoseconds)
+        firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
+        if unnormalizedResidual {
+            unnormalizedMemberCount += 1
+        }
     }
 
-    fileprivate mutating func absorbUnreduced(symptom: FailureSymptom, timestampNanoseconds: UInt64) {
+    fileprivate mutating func absorbUnreduced(
+        symptom: FailureSymptom,
+        timestampNanoseconds: UInt64,
+        attemptIndex: Int
+    ) {
         symptoms.insert(symptom)
         instanceCount += 1
         lastSeenNanoseconds = max(lastSeenNanoseconds, timestampNanoseconds)
+        firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
     }
 }
 
@@ -160,6 +185,8 @@ package actor FaultInventory {
     ///   - symptom: The failure's cheap symptom.
     ///   - phase: The phase that discovered the failing input.
     ///   - timestampNanoseconds: Monotonic time of the discovery, supplied by the caller so tests stay deterministic.
+    ///   - attemptIndex: The 1-based attempt index at which the failing input was observed — the discovery moment, not the classification moment, so out-of-order reduction completion cannot distort attempt-indexed metrics.
+    ///   - unnormalizedResidual: Whether this member's own reduced form differed from `reducedKey` and joined only through the normalization pass.
     package func recordReduced(
         reducedSequence: ChoiceSequence,
         reducedKey: String,
@@ -167,13 +194,17 @@ package actor FaultInventory {
         signature: BitSet?,
         symptom: FailureSymptom,
         phase: SprawlPhase,
-        timestampNanoseconds: UInt64
+        timestampNanoseconds: UInt64,
+        attemptIndex: Int,
+        unnormalizedResidual: Bool = false
     ) -> ClusterClassification {
         if let index = clusters.firstIndex(where: { $0.reducedKey == reducedKey }) {
             clusters[index].absorb(
                 signature: signature,
                 symptom: symptom,
-                timestampNanoseconds: timestampNanoseconds
+                timestampNanoseconds: timestampNanoseconds,
+                attemptIndex: attemptIndex,
+                unnormalizedResidual: unnormalizedResidual
             )
             return ClusterClassification(
                 clusterID: clusters[index].id,
@@ -190,7 +221,9 @@ package actor FaultInventory {
             signature: signature,
             symptom: symptom,
             phase: phase,
-            timestampNanoseconds: timestampNanoseconds
+            timestampNanoseconds: timestampNanoseconds,
+            attemptIndex: attemptIndex,
+            unnormalizedResidual: unnormalizedResidual
         )
         clusters.append(cluster)
         return ClusterClassification(
@@ -202,15 +235,26 @@ package actor FaultInventory {
     }
 
     /// Records a failure the backpressure gate declined to reduce, attributing it by symptom to the most recently seen matching cluster, or holding it unmatched.
-    package func recordUnreduced(symptom: FailureSymptom, timestampNanoseconds: UInt64) {
+    package func recordUnreduced(symptom: FailureSymptom, timestampNanoseconds: UInt64, attemptIndex: Int) {
         let matching = clusters.indices
             .filter { clusters[$0].symptoms.contains(symptom) }
             .max { clusters[$0].lastSeenNanoseconds < clusters[$1].lastSeenNanoseconds }
         if let index = matching {
-            clusters[index].absorbUnreduced(symptom: symptom, timestampNanoseconds: timestampNanoseconds)
+            clusters[index].absorbUnreduced(
+                symptom: symptom,
+                timestampNanoseconds: timestampNanoseconds,
+                attemptIndex: attemptIndex
+            )
         } else {
             unmatchedUnreducedCounts[symptom, default: 0] += 1
         }
+    }
+
+    /// Whether a cluster with the given canonical key already exists — the normalization pass's pre-check, so the (comparatively expensive) probing runs only on the rare would-be-new-cluster event.
+    ///
+    /// Two concurrent reductions of one genuinely new fault can both see `false` and both normalize; the second `recordReduced` then merges by key, so the race costs duplicated probing, never a duplicated cluster.
+    package func containsKey(_ reducedKey: String) -> Bool {
+        clusters.contains { $0.reducedKey == reducedKey }
     }
 
     /// A point-in-time copy for checkpointing and the final report.

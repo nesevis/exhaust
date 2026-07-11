@@ -25,6 +25,9 @@ public struct SprawlReport: Sendable {
         /// Members that went through reduction. Bounded by the per-cluster reduction cap, so a hot fault reads "214 instances, 5 reduced".
         public let reducedCount: Int
 
+        /// Members whose own reduced form stalled short of the canonical one (an uncleared flag bit, an unclamped byte) and joined this cluster through the normalization pass. Without normalization each distinct stall would appear as its own spurious cluster; a high count relative to ``reducedCount`` means reduction stalls often on this fault, not that more faults exist.
+        public let unnormalizedMemberCount: Int
+
         /// True when the reduced form was reached through more than one coverage signature — the same surface bug, possibly via different code paths. Worth a glance; a distinct cluster is worth an investigation.
         public let isLikelySplit: Bool
 
@@ -33,6 +36,11 @@ public struct SprawlReport: Sendable {
 
         /// Elapsed run time at the first failure attributed to this cluster.
         public let firstSeen: SprawlDuration
+
+        /// The attempt index (1-based, counted across all phases) of the first failure attributed to this cluster.
+        ///
+        /// Use this rather than ``firstSeen`` when comparing discovery speed across runs or machines: wall-clock timing moves with machine load, while the attempt index depends only on the search's decisions under its seed. Zero for clusters restored from a progress log written before the index was recorded.
+        public let firstSeenAttempt: Int
 
         /// Elapsed run time at the most recent failure attributed to this cluster.
         public let lastSeen: SprawlDuration
@@ -122,6 +130,34 @@ public struct SprawlReport: Sendable {
     /// Total instrumented edges across all loaded instrumented modules. A denominator for module size, not for exploration progress — the count includes code the property never calls.
     public let instrumentedEdgeCount: Int
 
+    /// Edges hit by exactly one attempt across the whole run. The raw singleton count (f₁) behind the discovery-probability and reachability estimates, exposed so downstream tooling can recompute or extrapolate.
+    public let edgeSingletonCount: Int
+
+    /// Edges hit by exactly two attempts across the whole run — the doubleton count (f₂) behind ``estimatedReachableEdgeCount``.
+    public let edgeDoubletonCount: Int
+
+    /// The Good-Turing estimate of the probability that one more attempt covers a new edge (`f₁/n`).
+    ///
+    /// Use this to decide whether extending the budget buys anything: at 2×10⁻⁶, a new edge costs about 500,000 further attempts. The estimate is scoped to what this generator and property can reach and is proven consistent as attempts grow, unlike time-since-last-discovery, which swings orders of magnitude minute to minute.
+    public var estimatedNextEdgeProbability: Double {
+        CoverageEstimators.goodTuringNextDiscoveryProbability(
+            singletons: edgeSingletonCount,
+            attempts: totalAttempts
+        )
+    }
+
+    /// The Chao1 estimate of how many edges this generator and property can reach in total — the asymptote ``coveredEdgeCount`` approaches.
+    ///
+    /// Unlike ``instrumentedEdgeCount``, which measures the module, this denominator is scoped to the run's own search space, so `coveredEdgeCount / estimatedReachableEdgeCount` is an honest completeness fraction. Treat it as an estimate: adaptive sampling bias did not break consistency in the STADS evaluation, but the guarantee is asymptotic.
+    public var estimatedReachableEdgeCount: Double {
+        CoverageEstimators.chao1ReachableEdges(
+            covered: coveredEdgeCount,
+            singletons: edgeSingletonCount,
+            doubletons: edgeDoubletonCount,
+            attempts: totalAttempts
+        )
+    }
+
     /// Why the run stopped.
     public let termination: Termination
 
@@ -190,9 +226,11 @@ package extension SprawlReport {
                 symptoms: cluster.symptoms.map(\.kind).sorted(),
                 instanceCount: cluster.instanceCount,
                 reducedCount: cluster.reducedCount,
+                unnormalizedMemberCount: cluster.unnormalizedMemberCount,
                 isLikelySplit: cluster.signatures.count > 1,
                 discoveringPhase: Phase(phase: cluster.discoveringPhase),
                 firstSeen: SprawlDuration(nanoseconds: cluster.firstSeenNanoseconds &- runStartNanoseconds),
+                firstSeenAttempt: cluster.firstSeenAttempt,
                 lastSeen: SprawlDuration(nanoseconds: cluster.lastSeenNanoseconds &- runStartNanoseconds),
                 discriminatingEdges: rankedEdges,
                 necessaryEdgeCount: discrimination?.necessaryEdges.count ?? 0,
@@ -209,6 +247,8 @@ package extension SprawlReport {
         corpusEntryCount = result.corpusEntryCount
         coveredEdgeCount = result.coveredEdgeCount
         instrumentedEdgeCount = result.instrumentedEdgeCount
+        edgeSingletonCount = result.edgeSingletonCount
+        edgeDoubletonCount = result.edgeDoubletonCount
         termination = Termination(termination: result.termination)
         elapsed = SprawlDuration(nanoseconds: result.elapsedNanoseconds)
         frameworkOverheadFraction = result.elapsedNanoseconds > 0
@@ -230,6 +270,8 @@ package extension SprawlReport {
             corpusEntryCount: 0,
             coveredEdgeCount: 0,
             instrumentedEdgeCount: 0,
+            edgeSingletonCount: 0,
+            edgeDoubletonCount: 0,
             termination: termination,
             elapsed: .zero,
             seed: seed,

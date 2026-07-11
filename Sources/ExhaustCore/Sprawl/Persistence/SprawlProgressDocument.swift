@@ -72,6 +72,10 @@ package struct SprawlProgressDocument: Codable, Sendable {
         /// Run-relative timestamps (nanoseconds since the logical run's start), not raw monotonic readings — a resumed process has a different monotonic origin.
         package var firstSeenNanoseconds: UInt64
         package var lastSeenNanoseconds: UInt64
+        /// The 1-based attempt index of the cluster's earliest attributed failure. Optional so logs written before the field existed still decode; restore treats a missing value as 0.
+        package var firstSeenAttempt: Int?
+        /// Members that joined this cluster only through normalization. Optional for the same pre-existing-log reason as ``firstSeenAttempt``.
+        package var unnormalizedMemberCount: Int?
         /// Signature edge indices, one array per distinct signature. Dropped on PC-hash mismatch.
         package var signatureIndices: [[Int]]
 
@@ -90,6 +94,8 @@ package struct SprawlProgressDocument: Codable, Sendable {
             lastSeenNanoseconds = cluster.lastSeenNanoseconds >= epochNanoseconds
                 ? cluster.lastSeenNanoseconds - epochNanoseconds
                 : 0
+            firstSeenAttempt = cluster.firstSeenAttempt
+            unnormalizedMemberCount = cluster.unnormalizedMemberCount
             signatureIndices = cluster.signatures.map(\.indices)
         }
     }

@@ -216,6 +216,8 @@ private func document(consumedNanoseconds: UInt64, clusterCount: Int) -> SprawlP
                 reducedCount: 1,
                 firstSeenNanoseconds: 100,
                 lastSeenNanoseconds: 200,
+                firstSeenAttempt: 1,
+                unnormalizedMemberCount: 0,
                 discoveringPhase: .sprawl
             ),
             epochNanoseconds: 0
