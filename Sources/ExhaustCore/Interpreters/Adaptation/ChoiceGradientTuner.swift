@@ -125,8 +125,8 @@ package enum ChoiceGradientTuner<FinalOutput> {
         // Stage 3: Adaptive smoothing — per-site entropy analysis identifies bottleneck sites (where one choice dominates) and applies higher temperature there to prevent chokepoints, while leaving well-distributed sites alone to preserve the tuned distribution.
         let smoothed = AdaptiveSmoothing.smooth(baked, baseTemperature: 2.0, maxTemperature: 8.0)
 
-        // Stage 4: Collapse uniform subdivision picks — if CGS found no signal for a subdivided chooseBits (all subrange weights are near-equal), replace the pick with the original chooseBits to avoid overhead.
-        return collapseUniformSubdivisions(smoothed)
+        // Stage 4: Collapse uniform subdivision picks — if CGS found no signal for a subdivided chooseBits (all subrange weights are near-equal), replace the pick with the original chooseBits to avoid overhead. Restricted to picks Stage 0 created: a user-written oneOf of chooses matches the same structural shape, and collapsing it both breaks structural compatibility with the untuned generator (reduction and replay walk the declared pick) and widens gapped branch ranges into values from neither branch.
+        return collapseUniformSubdivisions(smoothed, subdivisionFingerprints: subdivisionContext.issuedFingerprints)
     }
 
     /// Recursively walks the generator tree, replacing pick weights with accumulated fitness data from the online CGS tuning pass.
@@ -237,12 +237,15 @@ package enum ChoiceGradientTuner<FinalOutput> {
     private final class SubdivisionContext {
         var nextID: UInt64 = .max / 2
         let maxSize: UInt64
+        /// Every fingerprint issued to a subdivision pick's choices, so post-tuning passes can tell tuner-created picks from user-written ones. The counter band alone cannot: user pick fingerprints are source-fingerprint hashes, uniform over UInt64, so about half of them would land in any reserved band.
+        private(set) var issuedFingerprints: Set<UInt64> = []
         init(maxSize: UInt64 = 100) {
             self.maxSize = maxSize
         }
 
         func makeID() -> UInt64 {
             defer { nextID &+= 1 }
+            issuedFingerprints.insert(nextID)
             return nextID
         }
     }
@@ -389,9 +392,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
         }
     }
 
-    /// Collapses subdivision picks where CGS found no signal (all subrange weights are near-equal) back to a single `chooseBits`.
+    /// Collapses subdivision picks where CGS found no signal (all subrange weights are near-equal) back to a single `chooseBits`. Only picks whose choice fingerprints were issued by the ``SubdivisionContext`` are candidates — user-written picks keep their declared structure.
     private static func collapseUniformSubdivisions<Output>(
-        _ gen: Generator<Output>
+        _ gen: Generator<Output>,
+        subdivisionFingerprints: Set<UInt64>
     ) -> Generator<Output> {
         switch gen {
             case .pure:
@@ -400,7 +404,9 @@ package enum ChoiceGradientTuner<FinalOutput> {
             case let .impure(operation, continuation):
                 switch operation {
                     case let .pick(choices, _) where choices.count >= 2:
-                        if let collapsed: Generator<Output> = collapseIfUniform(choices, continuation: continuation) {
+                        if choices.allSatisfy({ subdivisionFingerprints.contains($0.fingerprint) }),
+                           let collapsed: Generator<Output> = collapseIfUniform(choices, continuation: continuation)
+                        {
                             return collapsed
                         }
                         let recursed = ContiguousArray(choices.map { choice in
@@ -408,7 +414,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                                 fingerprint: choice.fingerprint,
                                 id: choice.id,
                                 weight: choice.weight,
-                                generator: collapseUniformSubdivisions(choice.generator)
+                                generator: collapseUniformSubdivisions(choice.generator, subdivisionFingerprints: subdivisionFingerprints)
                             )
                         })
                         return .impure(operation: .pick(choices: recursed, totalWeight: recursed.reduce(0) { $0 &+ $1.weight }), continuation: continuation)
@@ -416,18 +422,18 @@ package enum ChoiceGradientTuner<FinalOutput> {
                     case let .sequence(lengthGen, elementGen):
                         return .impure(
                             operation: .sequence(
-                                length: collapseUniformSubdivisions(lengthGen),
-                                gen: collapseUniformSubdivisions(elementGen)
+                                length: collapseUniformSubdivisions(lengthGen, subdivisionFingerprints: subdivisionFingerprints),
+                                gen: collapseUniformSubdivisions(elementGen, subdivisionFingerprints: subdivisionFingerprints)
                             ),
                             continuation: continuation
                         )
 
                     case let .zip(generators, _):
-                        let recursed = ContiguousArray(generators.map { collapseUniformSubdivisions($0) })
+                        let recursed = ContiguousArray(generators.map { collapseUniformSubdivisions($0, subdivisionFingerprints: subdivisionFingerprints) })
                         return .impure(operation: .zip(recursed), continuation: continuation)
 
                     default:
-                        if let mapped = operation.mapInnerGenerator({ collapseUniformSubdivisions($0) }) {
+                        if let mapped = operation.mapInnerGenerator({ collapseUniformSubdivisions($0, subdivisionFingerprints: subdivisionFingerprints) }) {
                             return .impure(operation: mapped, continuation: continuation)
                         }
                         return gen

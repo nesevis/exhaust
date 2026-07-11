@@ -1,0 +1,51 @@
+{
+  "kind": "pipelineCase",
+  "note": "CGS uniform-collapse misparse: ChoiceGradientTuner Stage 4 collapsed user-written oneOf-of-chooses picks (a shape indistinguishable from Stage 0's chooseBits subdivisions by structure alone), eliding the pick from tuned generation trees so exact replay rejected them, and widening gapped branch ranges into out-of-domain values. Fixed 2026-07-12 by restricting the collapse to fingerprints the SubdivisionContext issued; see UniformCollapseTests.",
+  "oracle": "ExactRoundTripViolation",
+  "perturbationSeed": 1,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "filtered": {
+          "_0": {
+            "combinator": {
+              "_0": {
+                "oneOf": {
+                  "_0": [
+                    {
+                      "leaf": {
+                        "_0": {
+                          "double": {
+                            "_0": [
+                              0,
+                              0
+                            ]
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "leaf": {
+                        "_0": {
+                          "double": {
+                            "_0": [
+                              0,
+                              0
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "_1": "always"
+        }
+      }
+    }
+  },
+  "valueSeed": 0,
+  "version": 1
+}

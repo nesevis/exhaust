@@ -1,0 +1,72 @@
+{
+  "kind": "pipelineCase",
+  "note": "CGS uniform-collapse misparse: ChoiceGradientTuner Stage 4 collapsed user-written oneOf-of-chooses picks (a shape indistinguishable from Stage 0's chooseBits subdivisions by structure alone), eliding the pick from tuned generation trees so exact replay rejected them, and widening gapped branch ranges into out-of-domain values. Fixed 2026-07-12 by restricting the collapse to fingerprints the SubdivisionContext issued; see UniformCollapseTests.",
+  "oracle": "ExactRoundTripViolation",
+  "perturbationSeed": 12425133876731289145,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "filtered": {
+          "_0": {
+            "combinator": {
+              "_0": {
+                "weightedOneOf": {
+                  "_0": [
+                    {
+                      "recipe": {
+                        "leaf": {
+                          "_0": {
+                            "double": {
+                              "_0": [
+                                2.7101991002392113e-214,
+                                2.0640160401827772e-184
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "weight": 4
+                    },
+                    {
+                      "recipe": {
+                        "leaf": {
+                          "_0": {
+                            "double": {
+                              "_0": [
+                                -4.848670085833344e-197,
+                                5.890391022017651e-119
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "weight": 1
+                    },
+                    {
+                      "recipe": {
+                        "leaf": {
+                          "_0": {
+                            "double": {
+                              "_0": [
+                                6.1828560357858066e-251,
+                                4.535675892131908e-117
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "weight": 4
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "_1": "always"
+        }
+      }
+    }
+  },
+  "valueSeed": 4749708198545932342,
+  "version": 1
+}
