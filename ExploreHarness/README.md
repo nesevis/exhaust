@@ -11,7 +11,7 @@ The package carries two deliberately buggy parsers, and they have different jobs
 
 ## Benchmarking
 
-`ExploreBenchmark` loops seeds against one fixture under one experiment arm and emits one JSONL record per run to stdout. Arms are switched through `EXHAUST_SPRAWL_EXPERIMENT` (debug builds only; unknown knobs are a hard error). Always run with resume disabled and a scratch state directory so an interrupted benchmark cannot resume-contaminate the next run:
+`ExploreBenchmark` loops seeds against one fixture under one experiment arm and emits one JSONL record per run to stdout. Arms are switched through `EXHAUST_FUZZ_EXPERIMENT` (debug builds only; unknown knobs are a hard error). Always run with resume disabled and a scratch state directory so an interrupted benchmark cannot resume-contaminate the next run:
 
 ```sh
 mkdir -p .benchmarks
@@ -20,12 +20,12 @@ swift run ExploreBenchmark --seeds 1-20 --budget-seconds 10 --fixture parser --a
   >> .benchmarks/baseline-parser.jsonl
 
 EXHAUST_RESUME=0 EXHAUST_STATE_DIR=$(mktemp -d) \
-EXHAUST_SPRAWL_EXPERIMENT="normalization=on" \
+EXHAUST_FUZZ_EXPERIMENT="normalization=on" \
 swift run ExploreBenchmark --seeds 1-20 --budget-seconds 10 --fixture parser --arm normalization-on \
   >> .benchmarks/normalization-on-parser.jsonl
 
-python3 Benchmarks/analyze.py .benchmarks/baseline-parser.jsonl .benchmarks/normalization-on-parser.jsonl \
+swift run ExploreBenchmark analyze .benchmarks/baseline-parser.jsonl .benchmarks/normalization-on-parser.jsonl \
   --discovery "faultB=.control;region: 2;[0]: 241"
 ```
 
-The analyzer pairs runs by (fixture, seed), prints per-seed deltas first, then medians, IQRs, and a two-sided paired sign-test verdict per metric. `.benchmarks/` is gitignored; benchmark outputs are never committed.
+The `analyze` subcommand pairs runs by (fixture, seed), prints per-seed deltas first, then per-fixture medians, IQRs, and two-sided paired sign-test verdicts per metric (plus a pooled block on multi-fixture files). `swift run ExploreBenchmark calibrate` runs the whole matrix calibration sweep and prints per-fixture window verdicts; it pins the resume environment itself. `.benchmarks/` is gitignored; benchmark outputs are never committed.

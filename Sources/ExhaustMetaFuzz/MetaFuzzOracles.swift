@@ -153,7 +153,7 @@ public extension MetaFuzz {
             try checkCodecRoundTrip(sequence, fuzzCase)
 
             let intensity = pickIntensity(&prng)
-            let mutated = SprawlMutator.mutate(sequence, intensity: intensity, prng: &prng)
+            let mutated = FuzzMutator.mutate(sequence, intensity: intensity, prng: &prng)
             try checkCodecRoundTrip(mutated, fuzzCase)
             try checkGuidedTotality(gen, mutated: mutated, fallbackTree: tree, fuzzCase, prng: &prng)
 
@@ -319,8 +319,8 @@ extension MetaFuzz {
     }
 
     /// Uniform draw over the mutation intensity bands.
-    private static func pickIntensity(_ prng: inout Xoshiro256) -> SprawlIntensity {
-        let bands = SprawlIntensity.allCases
+    private static func pickIntensity(_ prng: inout Xoshiro256) -> MutationIntensity {
+        let bands = MutationIntensity.allCases
         return bands[Int(prng.next(upperBound: UInt64(bands.count)))]
     }
 }

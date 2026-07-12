@@ -7,6 +7,8 @@
 // condition on its own branch (a fresh SUT edge per passed stage); the only masked equalities sit
 // on byte low-bits, where the boundary catalogue cannot enumerate them but a mutation draw can.
 //
+// Shape coordinates (matrix registry, MX3a). Trigger class: staged gate chains (P, Q) and wide alignment (R, swarm-suppressed). Coverage surface: laddered for P and Q (one edge per passed stage), flat for R (no intermediate edges). Vocabulary: one packet generator with a reified `.bind` and a 4-ary command `.oneOf`. Argument domains: bytes and small ints. Length scale: scalar fields plus a 3-byte body (P, Q); a run of 12 pushes in 0...16 commands (R).
+//
 // Ground-truth registry. Per-stage pass probabilities under the uniform generator mix
 // (`DeepFixture.packetGenerator`: channel and window uniform in 0...7, flags uniform over UInt8,
 // body length uniform in 0...6, body bytes uniform over UInt8, commands uniform over the four
@@ -45,6 +47,8 @@
 //
 // P and Q throw one shared error type from one shared site — the slippage pair at depth. Blind
 // symptom deduplication collapses them; the clustered inventory must separate them by reduced form.
+//
+// Pinned baselines (MX2e re-measure, 2026-07-12, seeds 1-20, 10 s, defaults): P 20/20, Q 20/20, R 0/20 (the earlier 2/20 pin predates the phase-2 default flips; R stays the swarm differential either way).
 
 /// The deep slippage pair P and Q: two unrelated eight-stage chains throwing one type from one shared site.
 public struct AlignmentError: Error, Equatable, Sendable {

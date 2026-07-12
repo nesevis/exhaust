@@ -241,9 +241,11 @@ extension __ExhaustRuntime {
 }
 
 extension __ExhaustRuntime {
-    /// Identifies skipped commands and prunes them from the choice tree, returning a shorter value and tree that still fail the property.
+    /// Identifies skipped commands and prunes them from the choice tree, returning a shorter value and tree.
     ///
-    /// Runs the command sequence through the skip identifier (which executes sequentially on a fresh spec) to find commands whose preconditions are not met. If any are found, those elements are removed from the tree, the tree is rematerialized, and the property is re-checked. If the pruned sequence still fails, the pruned value and tree are returned; otherwise the originals are returned unchanged.
+    /// Runs the command sequence through the skip identifier (which executes sequentially on a fresh spec) to find commands whose preconditions are not met. If any are found, those elements are removed from the tree and the tree is rematerialized. When `requireFailurePreserved` is `true`, the rematerialized value is returned only if it still fails the property; otherwise the originals are returned unchanged. When `false`, the rematerialized value is returned whenever materialization succeeds, without re-checking the property.
+    ///
+    /// - Parameter requireFailurePreserved: Whether to re-check that the pruned sequence still fails the property before returning it. The counterexample-reduction callers keep this `true`. The `#execute(time:)` prune hook passes `false` because it normalizes every admitted candidate rather than only counterexamples, and skip pruning is pure element deletion into a fully populated tree, so a failing candidate keeps failing.
     static func pruneSkippedCommands<Value: Collection>(
         value: Value,
         tree: ChoiceTree,
@@ -251,6 +253,7 @@ extension __ExhaustRuntime {
         seed: UInt64,
         property: @Sendable (Value) -> Bool,
         identifySkips: (Value) -> Set<Int>,
+        requireFailurePreserved: Bool = true,
         logEvent: String
     ) -> (value: Value, tree: ChoiceTree) {
         let skippedIndices = identifySkips(value)
@@ -273,10 +276,10 @@ extension __ExhaustRuntime {
         let prunedMode = Materializer.Mode.guided(seed: seed, fallbackTree: prunedTree)
         if case let .success(rematerialized, rematerializedTree, _) = Materializer.materialize(
             generator, prefix: prunedSequence, mode: prunedMode
-        ),
-            property(rematerialized) == false
-        {
-            return (rematerialized, rematerializedTree)
+        ) {
+            if requireFailurePreserved == false || property(rematerialized) == false {
+                return (rematerialized, rematerializedTree)
+            }
         }
         return (value, tree)
     }
@@ -410,7 +413,15 @@ extension __ExhaustRuntime {
     /// Builds a sequential property for the smoke source: runs commands in order, checks invariants after each step.
     ///
     /// Shared by all spec backends. The sync variant handles `StateMachineSpec`; the async variant bridges through `_blockingAwaitSemaphore`. Both are used as the smoke source's property closure and as the sequential backend's probe property.
-    static func syncSequentialProperty<Spec: StateMachineSpec>(_: Spec.Type) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
+    static func syncSequentialProperty<Spec: StateMachineSpec>(_ specType: Spec.Type) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
+        let verdictProperty = syncSequentialVerdictProperty(specType)
+        return { tagged in
+            verdictProperty(tagged).isFailure == false
+        }
+    }
+
+    /// The one sequential executor loop, returning a verdict: preserves the thrown error as the failure symptom, so the `time:` runner's reduction gate can tell invariant violations (`StateMachineCheckFailure`) apart from user-thrown error types instead of collapsing every spec fault into one capped symptom. ``syncSequentialProperty(_:)`` derives the Bool probe from this, so the two can never disagree on what passes.
+    static func syncSequentialVerdictProperty<Spec: StateMachineSpec>(_: Spec.Type) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> FuzzVerdict {
         { tagged in
             let spec = Spec()
             for (_, command) in tagged {
@@ -420,10 +431,10 @@ extension __ExhaustRuntime {
                 } catch is StateMachineSkip {
                     continue
                 } catch {
-                    return false
+                    return .fail(.thrown(error))
                 }
             }
-            return true
+            return .pass
         }
     }
 
@@ -538,6 +549,22 @@ extension __ExhaustRuntime {
         }
 
         return sources
+    }
+}
+
+// MARK: - Sequence Generator Construction
+
+extension __ExhaustRuntime {
+    /// Builds the sequential command-sequence generator: up to `commandLimit` commands at constant scaling, each tagged with `ScheduleMarker.prefix`.
+    ///
+    /// Shared by plain `#execute`'s sequential entry points and the `time:` spec adapter, so the sequence shape (length range, scaling, marker tagging) cannot drift between the modes.
+    static func taggedSequenceGenerator<Command>(
+        commandGen: ReflectiveGenerator<Command>,
+        commandLimit: Int
+    ) -> Generator<[(ScheduleMarker, Command)]> {
+        commandGen.array(length: 0 ... commandLimit, scaling: .constant).gen.map { commands in
+            commands.map { (ScheduleMarker.prefix, $0) }
+        }
     }
 }
 

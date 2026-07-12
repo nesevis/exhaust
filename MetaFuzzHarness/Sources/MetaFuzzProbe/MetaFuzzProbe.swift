@@ -43,7 +43,7 @@ struct MetaFuzzProbe: ParsableCommand {
         let findings = URL(fileURLWithPath: findingsDirectory)
 
         // The property must be a closure literal in each invocation: the macro's Void-closure handling is syntactic, and a function reference expands as if the property returned Bool.
-        let report: SprawlReport
+        let report: FuzzReport
         if let seed {
             report = #explore(
                 MetaFuzz.caseGenerator(maxDepth: depth, nodeBudget: nodeBudget),

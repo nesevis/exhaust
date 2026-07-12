@@ -131,6 +131,83 @@
             }
         }
 
+        @Test("A public spec mirrors public onto every synthesized member")
+        func publicSpecMirrorsAccessLevel() {
+            assertMacro {
+                """
+                @StateMachine(.sequential)
+                public final class SharedSpec {
+                    @SystemUnderTest var counter: MyCounter
+
+                    @Command(weight: 2, .int(in: 0...9))
+                    func add(value: Int) throws {
+                    }
+
+                    @Invariant
+                    func nonNegative() -> Bool {
+                        true
+                    }
+                }
+                """
+            } expansion: {
+                #"""
+                public final class SharedSpec {
+                    var counter: MyCounter
+                    func add(value: Int) throws {
+                    }
+                    func nonNegative() -> Bool {
+                        true
+                    }
+
+                    public enum Command: CustomStringConvertible, Sendable {
+                            case add(value: Int)
+
+                        public var description: String {
+                            switch self {
+                                case let .add(value):
+                                "add(\(value))"
+                            }
+                        }
+                    }
+
+                    public typealias SystemUnderTest = MyCounter
+
+                    public var systemUnderTest: SystemUnderTest {
+                        counter
+                    }
+
+                    public static var commandGenerator: ReflectiveGenerator<Command> {
+                        .oneOf(weighted:
+                                (2, #gen((.int(in: 0 ... 9) as ReflectiveGenerator<Int>)) { value in
+                                    Command.add(value: value)
+                                })
+                        )
+                    }
+
+                    @discardableResult public func run(_ command: Command) throws -> CommandResponse {
+                        switch command {
+                            case let .add(value):
+                                try self.add(value: value)
+                                return CommandResponse(commandDescription: command.description, returnValue: nil)
+                        }
+                    }
+
+                    public func checkInvariants() throws {
+                            try check(nonNegative(), "nonNegative")
+                    }
+
+                    public static let executionModel: ExecutionModel = .sequential
+
+                    public required init() {
+                    }
+                }
+
+                extension SharedSpec: StateMachineSpec {
+                }
+                """#
+            }
+        }
+
         @Test("An explicit Void return clause normalizes to the nil-response path")
         func explicitVoidReturnNormalizesToNilResponse() {
             assertMacro {

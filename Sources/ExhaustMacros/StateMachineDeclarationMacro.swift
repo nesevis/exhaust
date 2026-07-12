@@ -40,6 +40,20 @@ private func extractConcurrencyMode(from node: AttributeSyntax) -> ModeExtractio
     return .nonLiteral
 }
 
+/// The access-control prefix mirrored onto every synthesized member, derived from the spec declaration's own modifiers.
+///
+/// A `public` (or `open`) spec gets `public` members so the spec is usable from other modules — without this, synthesized members default to internal and a spec cannot be shared between a test target and a benchmark executable. `open` maps to `public` because synthesized members are never override points. Unmodified, `internal`, `fileprivate`, and `private` specs keep the historical unprefixed emission: their members default to internal, which is already at least as visible as the type.
+private func accessPrefix(for declaration: some DeclGroupSyntax) -> String {
+    let modifierNames = declaration.modifiers.map(\.name.trimmedDescription)
+    if modifierNames.contains("public") || modifierNames.contains("open") {
+        return "public "
+    }
+    if modifierNames.contains("package") {
+        return "package "
+    }
+    return ""
+}
+
 /// Determines whether the spec needs the `AsyncStateMachineSpec` surface based on its members.
 ///
 /// `.threads` also considers `@Oracle` methods, because the oracle runs inside the async preemptive runner. `.sequential` and `.tasks` only look at commands and invariants.
@@ -251,34 +265,36 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         let effectiveAsync = specHasAsyncMember(mode: mode, commands: commands, invariants: invariants, oracles: oracles)
             || isActorDecl
 
+        let access = accessPrefix(for: declaration)
+
         var decls: [DeclSyntax] = []
 
-        decls.append(synthesizeCommandEnum(commands: commands))
+        decls.append(synthesizeCommandEnum(commands: commands, access: access))
 
         if let sutProp = sutProps.first, let sutType = sutProp.type {
-            decls.append("typealias SystemUnderTest = \(raw: sutType)")
-            decls.append("var systemUnderTest: SystemUnderTest { \(raw: sutProp.name) }")
+            decls.append("\(raw: access)typealias SystemUnderTest = \(raw: sutType)")
+            decls.append("\(raw: access)var systemUnderTest: SystemUnderTest { \(raw: sutProp.name) }")
         } else if sutProps.first != nil {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
                 message: StateMachineDiagnostic.sutTypeNotInferred
             ))
-            decls.append("var systemUnderTest: Never { fatalError(\"SUT type could not be inferred — add an explicit type annotation to the @SystemUnderTest property\") }")
+            decls.append("\(raw: access)var systemUnderTest: Never { fatalError(\"SUT type could not be inferred — add an explicit type annotation to the @SystemUnderTest property\") }")
         }
 
-        decls.append(synthesizeCommandGenerator(commands: commands, context: context))
-        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: effectiveAsync))
-        decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: effectiveAsync))
+        decls.append(synthesizeCommandGenerator(commands: commands, access: access, context: context))
+        decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: effectiveAsync, access: access))
+        decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: effectiveAsync, access: access))
 
         if mode == .threads, let oracle = oracles.first {
-            decls.append(synthesizeOracleCheck(oracle: oracle, hasAnyAsync: effectiveAsync))
+            decls.append(synthesizeOracleCheck(oracle: oracle, hasAnyAsync: effectiveAsync, access: access))
         }
 
-        decls.append("static let executionModel: ExecutionModel = \(raw: mode.executionModelLiteral)")
+        decls.append("\(raw: access)static let executionModel: ExecutionModel = \(raw: mode.executionModelLiteral)")
 
         if isActorDecl {
             decls.append("""
-            func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
+            \(raw: access)func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
                 DiagnosticSnapshot(systemUnderTest: systemUnderTest, failureDescription: failureDescription())
             }
             """)
@@ -291,9 +307,9 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         }
         if isReferenceType, hasUserInit == false {
             if isClassDecl {
-                decls.append("required init() {}")
+                decls.append("\(raw: access)required init() {}")
             } else if isActorDecl {
-                decls.append("init() {}")
+                decls.append("\(raw: access)init() {}")
             }
         }
 
@@ -444,7 +460,7 @@ func findAttribute(_ name: String, on decl: some WithAttributesSyntax) -> Attrib
 
 // MARK: - Synthesis
 
-func synthesizeCommandEnum(commands: [CommandInfo]) -> DeclSyntax {
+func synthesizeCommandEnum(commands: [CommandInfo], access: String) -> DeclSyntax {
     var cases: [String] = []
     var descriptionCases: [String] = []
 
@@ -468,10 +484,10 @@ func synthesizeCommandEnum(commands: [CommandInfo]) -> DeclSyntax {
     let descriptionBlock = descriptionCases.joined(separator: "\n")
 
     return """
-    enum Command: CustomStringConvertible, Sendable {
+    \(raw: access)enum Command: CustomStringConvertible, Sendable {
     \(raw: casesBlock)
 
-        var description: String {
+        \(raw: access)var description: String {
             switch self {
     \(raw: descriptionBlock)
             }
@@ -480,7 +496,7 @@ func synthesizeCommandEnum(commands: [CommandInfo]) -> DeclSyntax {
     """
 }
 
-func synthesizeCommandGenerator(commands: [CommandInfo], context: some MacroExpansionContext) -> DeclSyntax {
+func synthesizeCommandGenerator(commands: [CommandInfo], access: String, context: some MacroExpansionContext) -> DeclSyntax {
     var choices: [String] = []
 
     for cmd in commands {
@@ -526,7 +542,7 @@ func synthesizeCommandGenerator(commands: [CommandInfo], context: some MacroExpa
     let choicesBlock = choices.joined(separator: ",\n")
 
     return """
-    static var commandGenerator: ReflectiveGenerator<Command> {
+    \(raw: access)static var commandGenerator: ReflectiveGenerator<Command> {
         .oneOf(weighted:
     \(raw: choicesBlock)
         )
@@ -534,7 +550,7 @@ func synthesizeCommandGenerator(commands: [CommandInfo], context: some MacroExpa
     """
 }
 
-func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> DeclSyntax {
+func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, access: String) -> DeclSyntax {
     var cases: [String] = []
 
     for cmd in commands {
@@ -583,8 +599,8 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> DeclSynt
 
     let casesBlock = cases.joined(separator: "\n")
     let signature = hasAnyAsync
-        ? "@discardableResult func run(_ command: Command) async throws -> CommandResponse"
-        : "@discardableResult func run(_ command: Command) throws -> CommandResponse"
+        ? "@discardableResult \(access)func run(_ command: Command) async throws -> CommandResponse"
+        : "@discardableResult \(access)func run(_ command: Command) throws -> CommandResponse"
 
     return """
     \(raw: signature) {
@@ -597,11 +613,12 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool) -> DeclSynt
 
 func synthesizeCheckInvariants(
     invariants: [InvariantInfo],
-    hasAnyAsync: Bool
+    hasAnyAsync: Bool,
+    access: String
 ) -> DeclSyntax {
     let signature = hasAnyAsync
-        ? "func checkInvariants() async throws"
-        : "func checkInvariants() throws"
+        ? "\(access)func checkInvariants() async throws"
+        : "\(access)func checkInvariants() throws"
 
     if invariants.isEmpty {
         return """
@@ -683,10 +700,10 @@ func oracleMethodsWithWrongParameterCount(from members: MemberBlockItemListSynta
     }
 }
 
-func synthesizeOracleCheck(oracle: OracleInfo, hasAnyAsync: Bool) -> DeclSyntax {
+func synthesizeOracleCheck(oracle: OracleInfo, hasAnyAsync: Bool, access: String) -> DeclSyntax {
     let signature = hasAnyAsync
-        ? "func oracleCheck(_ sequentialResult: SystemUnderTest) async -> Bool"
-        : "func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool"
+        ? "\(access)func oracleCheck(_ sequentialResult: SystemUnderTest) async -> Bool"
+        : "\(access)func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool"
     let awaitKeyword = oracle.isAsync ? "await " : ""
     let callArgument = oracle.parameterLabel == "_"
         ? "sequentialResult"

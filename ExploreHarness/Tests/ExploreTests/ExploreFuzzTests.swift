@@ -59,7 +59,7 @@ struct ExploreFuzzTests {
 
     // MARK: - Shared Fuzz Run
 
-    private func fuzz() -> SprawlReport {
+    private func fuzz() -> FuzzReport {
         // A throwing single-expression property, so each distinct fault type flows through as its own symptom rather than collapsing to a bare returnedFalse.
         #explore(
             Fixture.messageGenerator,
@@ -92,7 +92,7 @@ private enum PlantedFault {
     }
 }
 
-private func clusterMatching(_ report: SprawlReport, _ fault: PlantedFault) -> SprawlReport.Cluster? {
+private func clusterMatching(_ report: FuzzReport, _ fault: PlantedFault) -> FuzzReport.Cluster? {
     report.clusters.first { cluster in
         fault.markers.allSatisfy { cluster.reducedDescription.contains($0) }
     }
