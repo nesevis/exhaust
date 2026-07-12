@@ -56,7 +56,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 
 /// Runs a coverage-guided property test that continues past where `#exhaust` would stop, mutating from a corpus toward novel SUT coverage until the time budget is consumed.
 ///
-/// The run inherits `#exhaust`'s covering-array and random-sampling phases, then sprawls: mutation-based exploration from corpus parents, guided by branch-coverage feedback from the instrumented target. Failures are catalogued and clustered rather than terminating the run — opting into a time budget is opting into "find everything you can within it".
+/// The run inherits `#exhaust`'s covering-array and random-sampling phases, then spends the remaining budget in the mutation phase: exploration from corpus parents, guided by branch-coverage feedback from the instrumented target. Failures are catalogued and clustered rather than terminating the run — opting into a time budget is opting into "find everything you can within it".
 ///
 /// ```swift
 /// #explore(messageGen, time: .minutes(15)) { message in
@@ -64,25 +64,25 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// }
 /// ```
 ///
-/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. Settings are variadic ``SprawlSettings`` values controlling deterministic replay, output suppression, and log verbosity.
+/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. Settings are variadic ``FuzzSettings`` values controlling deterministic replay, output suppression, and log verbosity.
 ///
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
 ///
 /// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 ///
-/// - Returns: A ``SprawlReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
+/// - Returns: A ``FuzzReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
 @freestanding(expression)
 @discardableResult
 public macro explore<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
-    time: SprawlDuration,
-    _ settings: SprawlSettings...,
+    time: TimeBudget,
+    _ settings: FuzzSettings...,
     property: @Sendable (GeneratedValue) throws -> PropertyResult
-) -> SprawlReport = #externalMacro(module: "ExhaustMacros", type: "ExploreTimeMacro")
+) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExploreTimeMacro")
 
 /// Runs a coverage-guided property test with an async property closure, continuing past where `#exhaust` would stop until the time budget is consumed.
 ///
-/// The run inherits `#exhaust`'s covering-array and random-sampling phases, then sprawls: mutation-based exploration from corpus parents, guided by branch-coverage feedback from the instrumented target. Failures are catalogued and clustered rather than terminating the run. Use this overload when the property needs to `await`. The expanded call is `async`, so call it with `await`.
+/// The run inherits `#exhaust`'s covering-array and random-sampling phases, then spends the remaining budget in the mutation phase: exploration from corpus parents, guided by branch-coverage feedback from the instrumented target. Failures are catalogued and clustered rather than terminating the run. Use this overload when the property needs to `await`. The expanded call is `async`, so call it with `await`.
 ///
 /// ```swift
 /// await #explore(messageGen, time: .minutes(15)) { message in
@@ -90,18 +90,18 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// }
 /// ```
 ///
-/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. Settings are variadic ``SprawlSettings`` values controlling deterministic replay, output suppression, and log verbosity.
+/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. Settings are variadic ``FuzzSettings`` values controlling deterministic replay, output suppression, and log verbosity.
 ///
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
 ///
 /// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 ///
-/// - Returns: A ``SprawlReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
+/// - Returns: A ``FuzzReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
 @freestanding(expression)
 @discardableResult
 public macro explore<GeneratedValue, PropertyResult>(
     _ gen: ReflectiveGenerator<GeneratedValue>,
-    time: SprawlDuration,
-    _ settings: SprawlSettings...,
+    time: TimeBudget,
+    _ settings: FuzzSettings...,
     property: @Sendable (GeneratedValue) async throws -> PropertyResult
-) -> SprawlReport = #externalMacro(module: "ExhaustMacros", type: "ExploreTimeAsyncMacro")
+) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExploreTimeAsyncMacro")

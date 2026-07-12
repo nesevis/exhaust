@@ -90,7 +90,7 @@ let package = Package(
             ],
             swiftSettings: coverageFlags
         ),
-        // Uninstrumented benchmark driver: loops seeds against one fixture under one experiment arm and emits one JSONL record per run to stdout. Arms are configured through the EXHAUST_SPRAWL_EXPERIMENT environment variable set by the invoking command; see README.md.
+        // Uninstrumented benchmark driver: loops seeds against one fixture under one experiment arm and emits one JSONL record per run to stdout. Arms are configured through the EXHAUST_FUZZ_EXPERIMENT environment variable set by the invoking command; see README.md.
         .executableTarget(
             name: "ExploreBenchmark",
             dependencies: [

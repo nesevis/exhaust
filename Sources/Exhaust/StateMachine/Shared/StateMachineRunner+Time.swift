@@ -13,13 +13,13 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __runStateMachineTimeDispatch(
         _ specType: (some StateMachineSpec).Type,
-        time: SprawlDuration,
-        settings: [SprawlSettings],
+        time: TimeBudget,
+        settings: [FuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
-    ) async -> SprawlReport {
+    ) async -> FuzzReport {
         let report = await stateMachineTimeReport(
             specType,
             time: time,
@@ -30,29 +30,29 @@ public extension __ExhaustRuntime {
             column: column
         )
         // Reporting runs here on the test task, after the GCD hop: issue recording and attachment association both resolve the current test from task-locals a GCD worker does not carry.
-        reportSprawlIssues(
+        reportFuzzIssues(
             report: report,
-            suppressIssueReporting: ParsedSprawlSettings(settings).suppressIssueReporting,
+            suppressIssueReporting: ParsedFuzzSettings(settings).suppressIssueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column
         )
-        recordSprawlAttachments(report: report)
+        recordFuzzAttachments(report: report)
         return report
     }
 
     /// Builds the run's report: validates settings, routes on the execution model, and runs the matching adapter. Records no issues — the dispatch reports the returned report's termination and clusters exactly once.
     private static func stateMachineTimeReport<Spec: StateMachineSpec>(
         _ specType: Spec.Type,
-        time: SprawlDuration,
-        settings: [SprawlSettings],
+        time: TimeBudget,
+        settings: [FuzzSettings],
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
         column: UInt
-    ) async -> SprawlReport {
-        let commandLimit = ParsedSprawlSettings(settings).commandLimit
+    ) async -> FuzzReport {
+        let commandLimit = ParsedFuzzSettings(settings).commandLimit
         if let commandLimit, commandLimit < 1 {
             return .empty(
                 termination: .invalidConfiguration(".commandLimit must be at least 1, got \(commandLimit)."),
@@ -96,14 +96,14 @@ public extension __ExhaustRuntime {
     ///
     /// Every execution model routes through here; an arm only has to supply its adapter factory. The factory runs on the worker so the adapter's generator and closures never cross a concurrency boundary.
     private static func runSpecFuzz(
-        makeAdapter: @escaping () -> SpecSprawlAdapter<some Any>,
-        time: SprawlDuration,
-        settings: [SprawlSettings],
+        makeAdapter: @escaping () -> SpecFuzzAdapter<some Any>,
+        time: TimeBudget,
+        settings: [FuzzSettings],
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
         column: UInt
-    ) async -> SprawlReport {
+    ) async -> FuzzReport {
         await dispatchToGCD(reserving: LaneReservation.single) {
             let adapter = makeAdapter()
             return runExploreTimeCore(
@@ -116,7 +116,7 @@ public extension __ExhaustRuntime {
                     configuration.reductionPoolWidth = 1
                 },
                 hooks: adapter.hooks,
-                persistence: prepareSprawlPersistence(
+                persistence: prepareFuzzPersistence(
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -137,14 +137,14 @@ extension __ExhaustRuntime {
     static func buildSequentialSpecAdapter<Spec: StateMachineSpec>(
         _: Spec.Type,
         commandLimit: Int? = nil
-    ) -> SpecSprawlAdapter<[(ScheduleMarker, Spec.Command)]> {
+    ) -> SpecFuzzAdapter<[(ScheduleMarker, Spec.Command)]> {
         let taggedSequenceGen = taggedSequenceGenerator(
             commandGen: Spec.commandGenerator,
-            commandLimit: commandLimit ?? SprawlTunables.specDefaultCommandLimit
+            commandLimit: commandLimit ?? FuzzTunables.specDefaultCommandLimit
         )
 
         // Two views of the one executor loop: the verdict property drives the runner and carries the thrown error as the failure symptom; the Bool probe derived from it serves pruning and reduction, where only pass/fail matters.
-        let verdictProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> SprawlVerdict = syncSequentialVerdictProperty(Spec.self)
+        let verdictProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> FuzzVerdict = syncSequentialVerdictProperty(Spec.self)
         let rawProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = syncSequentialProperty(Spec.self)
 
         let syncSkipIdentifier = Spec.skipIdentifier
@@ -167,19 +167,19 @@ extension __ExhaustRuntime {
         }
 
         // The value path's reduction with the spec deadline: a spec reduction probe replays a whole command sequence against a fresh SUT, so it gets more wall clock per candidate.
-        let reduceStrategy = SprawlRunner.propertyOnlyReduceStrategy(
+        let reduceStrategy = FuzzRunner.propertyOnlyReduceStrategy(
             gen: taggedSequenceGen,
             property: verdictProperty,
             reducerConfiguration: Interpreters.ReducerConfiguration(
                 maxStalls: 2,
-                wallClockDeadlineNanoseconds: SprawlTunables.specReductionDeadlineNanoseconds
+                wallClockDeadlineNanoseconds: FuzzTunables.specReductionDeadlineNanoseconds
             )
         )
 
-        return SpecSprawlAdapter(
+        return SpecFuzzAdapter(
             generator: taggedSequenceGen,
             property: verdictProperty,
-            hooks: SprawlHooks(prune: pruneHook, reduceStrategy: reduceStrategy)
+            hooks: FuzzHooks(prune: pruneHook, reduceStrategy: reduceStrategy)
         )
     }
 }
@@ -187,11 +187,11 @@ extension __ExhaustRuntime {
 // MARK: - Adapter Type
 
 /// Bundles the generator, property, and seam hooks for one spec type under `time:` mode.
-struct SpecSprawlAdapter<Output> {
+struct SpecFuzzAdapter<Output> {
     /// Generates tagged command sequences for the runner.
     let generator: Generator<Output>
     /// Maps a command-sequence outcome to a pass or fail verdict.
-    let property: @Sendable (Output) -> SprawlVerdict
-    /// The spec's skip pruning and reduction, carried into ``SprawlRunner`` as one unit.
-    let hooks: SprawlHooks<Output>
+    let property: @Sendable (Output) -> FuzzVerdict
+    /// The spec's skip pruning and reduction, carried into ``FuzzRunner`` as one unit.
+    let hooks: FuzzHooks<Output>
 }

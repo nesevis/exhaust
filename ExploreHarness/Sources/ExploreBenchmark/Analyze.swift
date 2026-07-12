@@ -78,7 +78,7 @@ extension ExploreBenchmark {
             add("seed", .integer) { Double($0.seed) }
             add("screeningAttempts", .integer) { Double($0.screeningAttempts) }
             add("samplingAttempts", .integer) { Double($0.samplingAttempts) }
-            add("sprawlAttempts", .integer) { Double($0.sprawlAttempts) }
+            add("mutationAttempts", .integer) { Double($0.mutationAttempts) }
             add("totalAttempts", .integer) { Double($0.totalAttempts) }
             add("discardedAttempts", .integer) { Double($0.discardedAttempts) }
             add("coveredEdges", .integer) { Double($0.coveredEdges) }

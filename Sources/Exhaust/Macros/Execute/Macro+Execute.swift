@@ -25,7 +25,7 @@ public macro execute<Spec: StateMachineSpec>(
 
 /// Runs a coverage-guided spec test that mutates command sequences from a corpus toward novel SUT coverage until the time budget is consumed.
 ///
-/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. The run skips the covering-array screening phase and begins with random sampling, then sprawls: mutation-based exploration from corpus parents guided by branch-coverage feedback. Failures are cataloged and clustered rather than terminating the run.
+/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. The run skips the covering-array screening phase and begins with random sampling, then spends the remaining budget in the mutation phase: exploration from corpus parents guided by branch-coverage feedback. Failures are cataloged and clustered rather than terminating the run.
 ///
 /// ```swift
 /// @Test func boundedQueueFuzz() async {
@@ -33,20 +33,20 @@ public macro execute<Spec: StateMachineSpec>(
 /// }
 /// ```
 ///
-/// Settings are variadic ``SprawlSettings`` values controlling deterministic replay, output suppression, log verbosity, and the per-sequence command limit (``SprawlSettings/commandLimit(_:)``).
+/// Settings are variadic ``FuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, and the per-sequence command limit (``FuzzSettings/commandLimit(_:)``).
 ///
 /// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 ///
 /// - Note: A spec's `failureDescription()` is not surfaced in `time:` mode; the reported counterexample is the reduced command sequence.
 ///
-/// - Returns: A ``SprawlReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
+/// - Returns: A ``FuzzReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
 @freestanding(expression)
 @discardableResult
 public macro execute<Spec: StateMachineSpec>(
     _ specType: Spec.Type,
-    time: SprawlDuration,
-    _ settings: SprawlSettings...
-) -> SprawlReport = #externalMacro(module: "ExhaustMacros", type: "ExecuteTimeMacro")
+    time: TimeBudget,
+    _ settings: FuzzSettings...
+) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExecuteTimeMacro")
 
 /// Runs an asynchronous spec test, dispatching to the `.tasks` or `.threads` runner based on the spec's ``ExecutionModel``.
 ///

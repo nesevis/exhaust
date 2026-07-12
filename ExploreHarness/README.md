@@ -11,7 +11,7 @@ The package carries two deliberately buggy parsers, and they have different jobs
 
 ## Benchmarking
 
-`ExploreBenchmark` loops seeds against one fixture under one experiment arm and emits one JSONL record per run to stdout. Arms are switched through `EXHAUST_SPRAWL_EXPERIMENT` (debug builds only; unknown knobs are a hard error). Always run with resume disabled and a scratch state directory so an interrupted benchmark cannot resume-contaminate the next run:
+`ExploreBenchmark` loops seeds against one fixture under one experiment arm and emits one JSONL record per run to stdout. Arms are switched through `EXHAUST_FUZZ_EXPERIMENT` (debug builds only; unknown knobs are a hard error). Always run with resume disabled and a scratch state directory so an interrupted benchmark cannot resume-contaminate the next run:
 
 ```sh
 mkdir -p .benchmarks
@@ -20,7 +20,7 @@ swift run ExploreBenchmark --seeds 1-20 --budget-seconds 10 --fixture parser --a
   >> .benchmarks/baseline-parser.jsonl
 
 EXHAUST_RESUME=0 EXHAUST_STATE_DIR=$(mktemp -d) \
-EXHAUST_SPRAWL_EXPERIMENT="normalization=on" \
+EXHAUST_FUZZ_EXPERIMENT="normalization=on" \
 swift run ExploreBenchmark --seeds 1-20 --budget-seconds 10 --fixture parser --arm normalization-on \
   >> .benchmarks/normalization-on-parser.jsonl
 

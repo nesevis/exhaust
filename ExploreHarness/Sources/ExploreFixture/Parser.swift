@@ -1,6 +1,6 @@
 // The deliberately buggy fixture parser, with ground-truth planted faults.
 //
-// Every fault except D sits behind a chain of narrow-condition gates, each on its own branch so each passed stage lights a fresh SUT edge and gives sprawl a platform for the next stage. No gate is a wide equality over a full domain (except D, which is a boundary value screening enumerates directly): inline-8bit counters carry no comparison-operand gradient, so a wide equality would be findable only by luck and would test nothing.
+// Every fault except D sits behind a chain of narrow-condition gates, each on its own branch so each passed stage lights a fresh SUT edge and gives the mutation phase a platform for the next stage. No gate is a wide equality over a full domain (except D, which is a boundary value screening enumerates directly): inline-8bit counters carry no comparison-operand gradient, so a wide equality would be findable only by luck and would test nothing.
 
 // Distinct error *types*, not cases of one enum. The reduction gate's backpressure caps dispatches per symptom, and a symptom is the thrown error's type name — so distinct types give each fault its own reduction budget. The slippage pair A and B deliberately share one type (`IntegrityError`): that shared symptom is exactly what a symptom-deduplicating tool collapses and what the clustered inventory must separate by reduced form.
 
@@ -52,7 +52,7 @@ public enum Parser {
 
     // MARK: - Shallow Fault (D)
 
-    /// A wide equality, but on the UInt16 boundary value the covering array enumerates directly. Screening finds it before sprawl; blind sampling never would. This is the one gate that is meant to have no gradient.
+    /// A wide equality, but on the UInt16 boundary value the covering array enumerates directly. Screening finds it before the mutation phase; blind sampling never would. This is the one gate that is meant to have no gradient.
     private static func checkChecksum(_ message: Message) throws {
         if message.checksum == UInt16.max {
             throw ChecksumError()

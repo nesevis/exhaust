@@ -1,9 +1,9 @@
-// The benchmark driver for paired-arm sprawl measurements.
+// The benchmark driver for paired-arm fuzz measurements.
 //
-// `run` (the default subcommand) loops the given seeds against one fixture and emits one JSONL record per run to stdout (progress goes to stderr). The experiment arm is whatever EXHAUST_SPRAWL_EXPERIMENT the invoking command set — the driver never sets it itself, so the arm label is pure metadata and cannot silently disagree with the knobs. Invoke with EXHAUST_RESUME=0 and a scratch EXHAUST_STATE_DIR so an interrupted benchmark can never resume-contaminate the next run:
+// `run` (the default subcommand) loops the given seeds against one fixture and emits one JSONL record per run to stdout (progress goes to stderr). The experiment arm is whatever EXHAUST_FUZZ_EXPERIMENT the invoking command set — the driver never sets it itself, so the arm label is pure metadata and cannot silently disagree with the knobs. Invoke with EXHAUST_RESUME=0 and a scratch EXHAUST_STATE_DIR so an interrupted benchmark can never resume-contaminate the next run:
 //
 //   EXHAUST_RESUME=0 EXHAUST_STATE_DIR=$(mktemp -d) \
-//   EXHAUST_SPRAWL_EXPERIMENT="normalization=on" \
+//   EXHAUST_FUZZ_EXPERIMENT="normalization=on" \
 //   swift run -c debug ExploreBenchmark \
 //     --seeds 1-20 --budget-seconds 10 --fixture parser --arm normalization-on \
 //     >> .benchmarks/normalization-on.jsonl
@@ -26,7 +26,7 @@ import MatrixSpecs
 @main
 struct ExploreBenchmark: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
-        abstract: "Benchmark driver for paired-arm sprawl measurements.",
+        abstract: "benchmark driver for paired-arm fuzz measurements.",
         subcommands: [Run.self, Calibrate.self, Analyze.self],
         defaultSubcommand: Run.self
     )
@@ -60,13 +60,13 @@ struct ExploreBenchmark: AsyncParsableCommand {
     static func benchmarkRecord(
         fixture: FixtureChoice,
         seed: UInt64,
-        budget: SprawlDuration,
+        budget: TimeBudget,
         budgetSeconds: Double,
         arm: String
     ) async throws -> BenchmarkRecord {
         // The starvation observable resets per run so each JSONL record carries its own fraction; only the handle fixture emits it.
         _ = HandleTableSkipCounters.snapshotAndReset()
-        let report: SprawlReport
+        let report: FuzzReport
         switch fixture {
             case .parser:
                 report = #explore(
@@ -170,8 +170,8 @@ struct ExploreBenchmark: AsyncParsableCommand {
     private static func specReport(
         _ spec: (some StateMachineSpec).Type,
         seed: UInt64,
-        budget: SprawlDuration
-    ) async -> SprawlReport {
+        budget: TimeBudget
+    ) async -> FuzzReport {
         await #execute(spec, time: budget, .commandLimit(40), .replay(.numeric(seed)), .suppress(.all))
     }
 }
@@ -188,7 +188,7 @@ extension ExploreBenchmark {
         static let configuration = CommandConfiguration(
             commandName: "run",
             abstract: "Runs one benchmark arm: the given seeds against one fixture, one JSONL record per run on stdout.",
-            discussion: "The experiment arm comes from the EXHAUST_SPRAWL_EXPERIMENT environment variable set by the invoking command; --arm is pure metadata and cannot silently disagree with the knobs. Run with EXHAUST_RESUME=0 and a scratch EXHAUST_STATE_DIR so an interrupted benchmark cannot resume-contaminate the next run."
+            discussion: "The experiment arm comes from the EXHAUST_FUZZ_EXPERIMENT environment variable set by the invoking command; --arm is pure metadata and cannot silently disagree with the knobs. Run with EXHAUST_RESUME=0 and a scratch EXHAUST_STATE_DIR so an interrupted benchmark cannot resume-contaminate the next run."
         )
 
         @Option(help: "Seeds as a range like 1-20 or a list like 1,4,9.")
@@ -216,7 +216,7 @@ extension ExploreBenchmark {
         }
 
         func run() async throws {
-            let budget: SprawlDuration
+            let budget: TimeBudget
             let budgetInSeconds: Double
             if let budgetMillis {
                 budget = .milliseconds(budgetMillis)
@@ -321,7 +321,7 @@ extension ExploreBenchmark {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
 
-            let budget = SprawlDuration.seconds(budgetSeconds)
+            let budget = TimeBudget.seconds(budgetSeconds)
             let totalRuns = Self.matrixFixtures.count * seeds.values.count
             var completedRuns = 0
             var summaries: [FixtureSummary] = []
@@ -496,7 +496,7 @@ struct BenchmarkRecord: Codable {
     var budgetSeconds: Double
     var screeningAttempts: Int
     var samplingAttempts: Int
-    var sprawlAttempts: Int
+    var mutationAttempts: Int
     var totalAttempts: Int
     var discardedAttempts: Int
     var elapsedSeconds: Double
@@ -515,6 +515,42 @@ struct BenchmarkRecord: Codable {
     /// The HandleTable starvation observable: precondition-skipped commands over entered commands (a skipped command counts in both), present only on `--fixture handle` records (synthesized Codable omits it elsewhere, so other fixtures' schema is unchanged).
     var handleSkipFraction: Double?
 
+    private enum LegacyCodingKeys: String, CodingKey {
+        case sprawlAttempts
+    }
+
+    /// Custom decode: archived records from before the 2026-07-13 sprawl→fuzz rename store this field under the old key.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        seed = try container.decode(UInt64.self, forKey: .seed)
+        arm = try container.decode(String.self, forKey: .arm)
+        fixture = try container.decode(String.self, forKey: .fixture)
+        budgetSeconds = try container.decode(Double.self, forKey: .budgetSeconds)
+        screeningAttempts = try container.decode(Int.self, forKey: .screeningAttempts)
+        samplingAttempts = try container.decode(Int.self, forKey: .samplingAttempts)
+        if let value = try container.decodeIfPresent(Int.self, forKey: .mutationAttempts) {
+            mutationAttempts = value
+        } else {
+            let legacyContainer = try decoder.container(keyedBy: LegacyCodingKeys.self)
+            mutationAttempts = try legacyContainer.decode(Int.self, forKey: .sprawlAttempts)
+        }
+        totalAttempts = try container.decode(Int.self, forKey: .totalAttempts)
+        discardedAttempts = try container.decode(Int.self, forKey: .discardedAttempts)
+        elapsedSeconds = try container.decode(Double.self, forKey: .elapsedSeconds)
+        attemptsPerSecond = try container.decode(Double.self, forKey: .attemptsPerSecond)
+        overheadFraction = try container.decode(Double.self, forKey: .overheadFraction)
+        coveredEdges = try container.decode(Int.self, forKey: .coveredEdges)
+        instrumentedEdges = try container.decode(Int.self, forKey: .instrumentedEdges)
+        edgeSingletons = try container.decode(Int.self, forKey: .edgeSingletons)
+        edgeDoubletons = try container.decode(Int.self, forKey: .edgeDoubletons)
+        estimatedNextEdgeProbability = try container.decode(Double.self, forKey: .estimatedNextEdgeProbability)
+        estimatedReachableEdges = try container.decode(Double.self, forKey: .estimatedReachableEdges)
+        corpusEntries = try container.decode(Int.self, forKey: .corpusEntries)
+        termination = try container.decode(String.self, forKey: .termination)
+        clusters = try container.decode([ClusterRecord].self, forKey: .clusters)
+        handleSkipFraction = try container.decodeIfPresent(Double.self, forKey: .handleSkipFraction)
+    }
+
     struct ClusterRecord: Codable {
         var id: Int
         var symptoms: [String]
@@ -525,14 +561,14 @@ struct BenchmarkRecord: Codable {
         var phase: String
     }
 
-    init(report: SprawlReport, seed: UInt64, arm: String, fixture: String, budgetSeconds: Double) {
+    init(report: FuzzReport, seed: UInt64, arm: String, fixture: String, budgetSeconds: Double) {
         self.seed = seed
         self.arm = arm
         self.fixture = fixture
         self.budgetSeconds = budgetSeconds
         screeningAttempts = report.screeningAttempts
         samplingAttempts = report.samplingAttempts
-        sprawlAttempts = report.sprawlAttempts
+        mutationAttempts = report.mutationAttempts
         totalAttempts = report.totalAttempts
         discardedAttempts = report.discardedAttempts
         elapsedSeconds = report.elapsed.seconds
