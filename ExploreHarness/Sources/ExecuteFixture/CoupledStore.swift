@@ -50,12 +50,14 @@ public struct CoupledStore: Sendable {
 
     // MARK: - Commands
 
+    /// Stores the key and restarts the distance clock.
     public mutating func setKey(_ key: Int) {
         storedKey = key
         keySetIndex = commandIndex
         commandIndex += 1
     }
 
+    /// Fires fault C when the argument matches the stored key and the matching `setKey` landed far enough back.
     public mutating func probe(_ key: Int) {
         // Fault C: the equality lights no progress-correlated edge — a match either fires here or is younger than the distance gate.
         if key == storedKey, commandIndex - keySetIndex >= requiredDistance {
@@ -64,6 +66,7 @@ public struct CoupledStore: Sendable {
         commandIndex += 1
     }
 
+    /// Records a padding value and advances the distance clock.
     public mutating func pad(_ value: Int) {
         lastPadding = value
         commandIndex += 1

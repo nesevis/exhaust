@@ -262,11 +262,12 @@ extension ExploreBenchmark {
             values.count % 2 == 0 ? fmtFractional(median(values), metric.decimals) : fmt(median(values), metric)
         }
 
-        private static func pad(_ text: String, _ width: Int) -> String {
+        /// Internal, not private: the calibrate subcommand's summary table shares these column helpers.
+        static func pad(_ text: String, _ width: Int) -> String {
             text.count >= width ? text : text + String(repeating: " ", count: width - text.count)
         }
 
-        private static func padLeft(_ text: String, _ width: Int) -> String {
+        static func padLeft(_ text: String, _ width: Int) -> String {
             text.count >= width ? text : String(repeating: " ", count: width - text.count) + text
         }
     }

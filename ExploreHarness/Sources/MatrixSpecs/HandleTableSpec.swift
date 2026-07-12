@@ -7,13 +7,13 @@ import Foundation
 /// Counts every command entry and every precondition skip across all spec instances in the process, including replay, reduction, and skip-pruning re-executions; the intended use is arm-level aggregate comparison, where that inflation applies to every arm equally. The benchmark driver resets before a run and snapshots after.
 public enum HandleTableSkipCounters {
     private static let lock = NSLock()
-    private nonisolated(unsafe) static var executedCount = 0
+    private nonisolated(unsafe) static var enteredCount = 0
     private nonisolated(unsafe) static var skippedCount = 0
 
-    /// Records one command entry.
-    public static func recordExecuted() {
+    /// Records one command entry. Entries that go on to precondition-skip are counted here too — the skip fraction's denominator is entries, not completed executions.
+    public static func recordEntered() {
         lock.lock()
-        executedCount += 1
+        enteredCount += 1
         lock.unlock()
     }
 
@@ -25,14 +25,14 @@ public enum HandleTableSkipCounters {
     }
 
     /// Returns the counts accumulated since the last reset, then zeroes them.
-    public static func snapshotAndReset() -> (executed: Int, skipped: Int) {
+    public static func snapshotAndReset() -> (entered: Int, skipped: Int) {
         lock.lock()
         defer {
-            executedCount = 0
+            enteredCount = 0
             skippedCount = 0
             lock.unlock()
         }
-        return (executed: executedCount, skipped: skippedCount)
+        return (entered: enteredCount, skipped: skippedCount)
     }
 }
 
@@ -46,11 +46,12 @@ public final class HandleTableSpec {
 
     @Command(weight: 1)
     func create() throws {
-        HandleTableSkipCounters.recordExecuted()
+        HandleTableSkipCounters.recordEntered()
         guard table.isFull == false else {
             HandleTableSkipCounters.recordSkipped()
             throw skip()
         }
+        // Unreachable with the current SUT (create returns nil only when full, checked above); kept as defense so a capacity change in the fixture cannot crash the spec.
         guard let handle = table.create() else {
             HandleTableSkipCounters.recordSkipped()
             throw skip()
@@ -60,7 +61,7 @@ public final class HandleTableSpec {
 
     @Command(weight: 1, .int(in: 0 ... 7), .int(in: 0 ... 9))
     func write(slot: Int, value: Int) throws {
-        HandleTableSkipCounters.recordExecuted()
+        HandleTableSkipCounters.recordEntered()
         guard handles.isEmpty == false else {
             HandleTableSkipCounters.recordSkipped()
             throw skip()
@@ -71,7 +72,7 @@ public final class HandleTableSpec {
 
     @Command(weight: 1, .int(in: 0 ... 7))
     func destroy(slot: Int) throws {
-        HandleTableSkipCounters.recordExecuted()
+        HandleTableSkipCounters.recordEntered()
         guard handles.isEmpty == false else {
             HandleTableSkipCounters.recordSkipped()
             throw skip()
@@ -82,7 +83,7 @@ public final class HandleTableSpec {
 
     @Command(weight: 1)
     func compact() throws {
-        HandleTableSkipCounters.recordExecuted()
+        HandleTableSkipCounters.recordEntered()
         table.compact()
     }
 

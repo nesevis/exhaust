@@ -20,15 +20,14 @@
 // a value rewrite that would change structure (a bind input, a coupled length) is rejected by
 // the materializer before the property ever runs — and must fail with the original symptom.
 
-import ExhaustCore
 import Foundation
 
 /// Canonicalizes a reduced counterexample before it can mint a new fault cluster. See the file header for the mechanism and its provenance.
 package enum SprawlNormalizer {
     /// A normalized reduced form: the canonical sequence with the tree and value from its accepting materialization.
     package struct NormalizedForm<Output> {
-        package let sequence: ExhaustCore.ChoiceSequence
-        package let tree: ExhaustCore.ChoiceTree
+        package let sequence: ChoiceSequence
+        package let tree: ChoiceTree
         package let value: Output
     }
 
@@ -46,11 +45,11 @@ package enum SprawlNormalizer {
     ///   - property: The property under test. Probes run unattributed — no coverage bracket.
     ///   - cache: Zobrist-keyed normalization results shared across the run's reduction tasks. The stored value is the normalized sequence, or nil when normalization found nothing better.
     package static func normalize<Output>(
-        reducedSequence: ExhaustCore.ChoiceSequence,
-        erasedGen: ExhaustCore.AnyGenerator,
+        reducedSequence: ChoiceSequence,
+        erasedGen: AnyGenerator,
         symptom: FailureSymptom,
         property: @Sendable (Output) -> SprawlVerdict,
-        cache: ExhaustCore.SendableBox<[UInt64: ExhaustCore.ChoiceSequence?]>
+        cache: SendableBox<[UInt64: ChoiceSequence?]>
     ) -> NormalizedForm<Output>? {
         let sequenceHash = ZobristHash.hash(of: reducedSequence)
         let cached = cache.withValue { $0[sequenceHash] }

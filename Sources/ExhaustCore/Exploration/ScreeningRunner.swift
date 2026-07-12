@@ -1,7 +1,6 @@
 // Encapsulates the screening phase of a property test.
 //
 // Analyzes the generator, then pulls rows from BalancedCoveringArrayGenerator one at a time, testing each against the property. Stops on first failure or budget.
-import ExhaustCore
 
 /// Runs the screening phase of a property test, exhausting the generator's enumerable or large domain before the random phase.
 package enum ScreeningRunner {

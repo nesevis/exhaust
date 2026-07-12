@@ -1,7 +1,5 @@
 // Candidate production for the sprawl loop: mutation strategy selection and the swarm rewrite.
 
-import ExhaustCore
-
 extension SprawlRunner {
     // MARK: - Candidate Production
 

@@ -1,7 +1,5 @@
 // The three-phase coverage-guided exploration loop behind `#explore(time:)`.
 
-import CustomDump
-import ExhaustCore
 import Foundation
 
 /// The spec-path seams carried through `runExploreTimeCore` into ``SprawlRunner`` as one unit.
@@ -11,11 +9,11 @@ package struct SprawlHooks<Output> {
     /// Prunes the value and tree before corpus admission. Runs outside the attribution bracket, only on failures and would-be admissions.
     package let prune: @Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree)
     /// Reduces one failing candidate, returning the reduced sequence, tree, and value.
-    package let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom) -> (sequence: ExhaustCore.ChoiceSequence, tree: ChoiceTree, value: Output)
+    package let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom) -> (sequence: ChoiceSequence, tree: ChoiceTree, value: Output)
 
     package init(
         prune: @escaping @Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree),
-        reduceStrategy: @escaping @Sendable (ChoiceTree, Output, FailureSymptom) -> (sequence: ExhaustCore.ChoiceSequence, tree: ChoiceTree, value: Output)
+        reduceStrategy: @escaping @Sendable (ChoiceTree, Output, FailureSymptom) -> (sequence: ChoiceSequence, tree: ChoiceTree, value: Output)
     ) {
         self.prune = prune
         self.reduceStrategy = reduceStrategy
@@ -37,12 +35,16 @@ package final class SprawlRunner<Output> {
     /// The reduction the failure dispatch runs. The value path's default is ``propertyOnlyReduceStrategy(gen:property:reducerConfiguration:)``; the spec path injects its backend reducer through ``SprawlHooks``.
     private let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom) -> (sequence: ChoiceSequence, tree: ChoiceTree, value: Output)
 
-    let corpus: SprawlCorpus
+    /// Package-visible so tests can assert on corpus contents (tier membership, entry command counts) after a run.
+    package let corpus: SprawlCorpus
     let inventory = FaultInventory()
     private let pool: ReductionPool
     private var gate: ReductionGate
     var prng: Xoshiro256
     var bandit = MutationBandit()
+
+    /// Renders a reduced counterexample for its cluster's report description. Injected because the render runs inside the reduction task — the value never crosses back to a context that could render it later — while the runner's module must stay free of rendering dependencies. The default serves direct package-level construction (tests, harnesses); `runExploreTimeCore` supplies the production renderer.
+    private let renderValue: @Sendable (Any) -> String
 
     /// At most one thread at a time runs an instrumented evaluation bracket.
     let attributionToken = NSLock()
@@ -87,13 +89,15 @@ package final class SprawlRunner<Output> {
         property: @escaping @Sendable (Output) -> SprawlVerdict,
         source: any CoverageSource,
         configuration: SprawlRunnerConfiguration,
-        hooks: SprawlHooks<Output>? = nil
+        hooks: SprawlHooks<Output>? = nil,
+        renderValue: @escaping @Sendable (Any) -> String = { String(describing: $0) }
     ) {
         self.gen = gen
         erasedGen = gen.erase()
         self.property = property
         self.source = source
         self.configuration = configuration
+        self.renderValue = renderValue
         prune = hooks?.prune
         reduceStrategy = hooks?.reduceStrategy ?? Self.propertyOnlyReduceStrategy(
             gen: gen,
@@ -112,7 +116,7 @@ package final class SprawlRunner<Output> {
     /// The default reduce strategy: property-only `choiceGraphReduce`, reducing while the property fails exactly as `#exhaust` does. Reduction attempts are never attributed.
     ///
     /// The sequential spec adapter reuses this with the spec reduction deadline, so the value path and sequential spec path share one reduction implementation and differ only in configuration. On a reducer failure the input comes back unreduced.
-    static func propertyOnlyReduceStrategy(
+    package static func propertyOnlyReduceStrategy(
         gen: Generator<Output>,
         property: @escaping @Sendable (Output) -> SprawlVerdict,
         reducerConfiguration: Interpreters.ReducerConfiguration
@@ -571,6 +575,7 @@ package final class SprawlRunner<Output> {
         let inventory = inventory
         let pendingClassifications = pendingClassifications
         let reduceStrategy = reduceStrategy
+        let renderValue = renderValue
 
         pool.submit {
             var (reducedSequence, reducedTree, reducedValue) = reduceStrategy(capturedTree, capturedValue, symptom)
@@ -610,9 +615,7 @@ package final class SprawlRunner<Output> {
                 reducedSequence: reducedSequence,
                 reducedKey: reducedKey,
                 renderDescription: {
-                    var description = ""
-                    customDump(capturedReducedValue, to: &description, maxDepth: 3)
-                    return description
+                    renderValue(capturedReducedValue)
                 },
                 signature: signature,
                 symptom: symptom,

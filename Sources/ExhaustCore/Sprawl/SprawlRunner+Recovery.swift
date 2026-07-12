@@ -1,6 +1,5 @@
 // Crash recovery for the sprawl loop: checkpoints, the live breadcrumb, and predecessor restore.
 
-import ExhaustCore
 import Foundation
 
 extension SprawlRunner {

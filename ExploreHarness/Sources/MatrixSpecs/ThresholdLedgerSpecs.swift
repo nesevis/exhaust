@@ -1,6 +1,8 @@
 import ExecuteFixture
 import Exhaust
 
+// The three specs below are deliberately identical except for the SUT's init arguments: #execute instantiates through the synthesized required init(), so configuration can only enter through the type, and @StateMachine discovers commands syntactically, ruling out a shared base. Change all three together.
+
 /// The shared spec for the flat `ThresholdLedger` fixture at threshold 40 — the inside-the-command-limit configuration (fault J — registry in `ThresholdLedger.swift`).
 @StateMachine(.sequential)
 public final class ThresholdLedger40Spec {

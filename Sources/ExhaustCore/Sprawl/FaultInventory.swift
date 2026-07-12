@@ -182,9 +182,7 @@ package final class FaultInventory: @unchecked Sendable {
 
     /// Failures recorded unreduced whose symptom matched no cluster at record time; merged by symptom into the report.
     package var unmatchedUnreducedCounts: [FailureSymptom: Int] {
-        lock.lock()
-        defer { lock.unlock() }
-        return unmatchedBySymptom
+        lock.withLocking { unmatchedBySymptom }
     }
 
     /// Records a completed reduction, joining an existing cluster when the reduced form is already known and creating a new cluster otherwise.
@@ -210,60 +208,60 @@ package final class FaultInventory: @unchecked Sendable {
         attemptIndex: Int,
         unnormalizedResidual: Bool = false
     ) -> ClusterClassification {
-        lock.lock()
-        defer { lock.unlock() }
-        if let index = clusterIndexByKey[reducedKey] {
-            clusters[index].absorb(
+        lock.withLocking {
+            if let index = clusterIndexByKey[reducedKey] {
+                clusters[index].absorb(
+                    signature: signature,
+                    symptom: symptom,
+                    timestampNanoseconds: timestampNanoseconds,
+                    attemptIndex: attemptIndex,
+                    unnormalizedResidual: unnormalizedResidual
+                )
+                return ClusterClassification(
+                    clusterID: clusters[index].id,
+                    isNewCluster: false,
+                    instanceCount: clusters[index].instanceCount,
+                    capReached: clusters[index].reducedCount >= SprawlTunables.perClusterReductionCap
+                )
+            }
+            let cluster = FaultCluster(
+                id: clusters.count,
+                reducedSequence: reducedSequence,
+                reducedDescription: renderDescription(),
+                reducedKey: reducedKey,
                 signature: signature,
                 symptom: symptom,
+                phase: phase,
                 timestampNanoseconds: timestampNanoseconds,
                 attemptIndex: attemptIndex,
                 unnormalizedResidual: unnormalizedResidual
             )
+            clusterIndexByKey[reducedKey] = clusters.count
+            clusters.append(cluster)
             return ClusterClassification(
-                clusterID: clusters[index].id,
-                isNewCluster: false,
-                instanceCount: clusters[index].instanceCount,
-                capReached: clusters[index].reducedCount >= SprawlTunables.perClusterReductionCap
+                clusterID: cluster.id,
+                isNewCluster: true,
+                instanceCount: 1,
+                capReached: false
             )
         }
-        let cluster = FaultCluster(
-            id: clusters.count,
-            reducedSequence: reducedSequence,
-            reducedDescription: renderDescription(),
-            reducedKey: reducedKey,
-            signature: signature,
-            symptom: symptom,
-            phase: phase,
-            timestampNanoseconds: timestampNanoseconds,
-            attemptIndex: attemptIndex,
-            unnormalizedResidual: unnormalizedResidual
-        )
-        clusterIndexByKey[reducedKey] = clusters.count
-        clusters.append(cluster)
-        return ClusterClassification(
-            clusterID: cluster.id,
-            isNewCluster: true,
-            instanceCount: 1,
-            capReached: false
-        )
     }
 
     /// Records a failure the backpressure gate declined to reduce, attributing it by symptom to the most recently seen matching cluster, or holding it unmatched.
     package func recordUnreduced(symptom: FailureSymptom, timestampNanoseconds: UInt64, attemptIndex: Int) {
-        lock.lock()
-        defer { lock.unlock() }
-        let matching = clusters.indices
-            .filter { clusters[$0].symptoms.contains(symptom) }
-            .max { clusters[$0].lastSeenNanoseconds < clusters[$1].lastSeenNanoseconds }
-        if let index = matching {
-            clusters[index].absorbUnreduced(
-                symptom: symptom,
-                timestampNanoseconds: timestampNanoseconds,
-                attemptIndex: attemptIndex
-            )
-        } else {
-            unmatchedBySymptom[symptom, default: 0] += 1
+        lock.withLocking {
+            let matching = clusters.indices
+                .filter { clusters[$0].symptoms.contains(symptom) }
+                .max { clusters[$0].lastSeenNanoseconds < clusters[$1].lastSeenNanoseconds }
+            if let index = matching {
+                clusters[index].absorbUnreduced(
+                    symptom: symptom,
+                    timestampNanoseconds: timestampNanoseconds,
+                    attemptIndex: attemptIndex
+                )
+            } else {
+                unmatchedBySymptom[symptom, default: 0] += 1
+            }
         }
     }
 
@@ -271,26 +269,22 @@ package final class FaultInventory: @unchecked Sendable {
     ///
     /// Two concurrent reductions of one genuinely new fault can both see `false` and both normalize; the second `recordReduced` then merges by key, so the race costs duplicated probing, never a duplicated cluster.
     package func containsKey(_ reducedKey: String) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return clusterIndexByKey[reducedKey] != nil
+        lock.withLocking { clusterIndexByKey[reducedKey] != nil }
     }
 
     /// A point-in-time copy for checkpointing and the final report.
     package func snapshot() -> [FaultCluster] {
-        lock.lock()
-        defer { lock.unlock() }
-        return clusters
+        lock.withLocking { clusters }
     }
 
     /// Restores the inventory from progress-log records at resume. Must run before any new recording so restored cluster identifiers keep their original, contiguous values — `recordReduced` allocates the next identifier from the cluster count.
     package func restore(clusters restored: [FaultCluster]) {
-        lock.lock()
-        defer { lock.unlock() }
-        guard clusters.isEmpty else {
-            return
+        lock.withLocking {
+            guard clusters.isEmpty else {
+                return
+            }
+            clusters = restored.sorted { $0.id < $1.id }
+            clusterIndexByKey = Dictionary(uniqueKeysWithValues: clusters.enumerated().map { ($1.reducedKey, $0) })
         }
-        clusters = restored.sorted { $0.id < $1.id }
-        clusterIndexByKey = Dictionary(uniqueKeysWithValues: clusters.enumerated().map { ($1.reducedKey, $0) })
     }
 }

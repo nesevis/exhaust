@@ -68,16 +68,19 @@ public struct PhaseSession: Sendable {
 
     // MARK: - Commands
 
+    /// Opens the session; a no-op when already open or configured.
     public mutating func open() {
         phaseRaw = max(phaseRaw, 1)
     }
 
+    /// Records the setting and moves an open session to configured; a closed session stays closed.
     public mutating func configure(_ setting: Int) {
         lastSetting = setting
         // closed stays closed (0), open and configured both map to configured (2).
         phaseRaw = min(phaseRaw, 1) * 2
     }
 
+    /// Marks the current open period as used, or fires fault O when called while closed after enough completed cycles.
     public mutating func use() {
         if phaseRaw == 0 {
             // Fault O: use while closed, after enough completed cycles. The outer branch is hit from the first stray use; the inner edge lights only when the fault fires, so cycle progress lights nothing.
@@ -89,6 +92,7 @@ public struct PhaseSession: Sendable {
         usedThisCycle = 1
     }
 
+    /// Closes the session, completing a cycle when a `use` landed in the open period.
     public mutating func close() {
         // A cycle completes when a close lands after a use in the same open period. Unconditional arithmetic: no edge correlates with the cycle count in the flat variant.
         completedCycles += usedThisCycle
@@ -99,6 +103,7 @@ public struct PhaseSession: Sendable {
         }
     }
 
+    /// Returns the session to its initial state, zeroing the cycle count.
     public mutating func reset() {
         phaseRaw = 0
         usedThisCycle = 0

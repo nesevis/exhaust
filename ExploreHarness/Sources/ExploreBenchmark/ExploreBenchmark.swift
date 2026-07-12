@@ -87,13 +87,7 @@ struct ExploreBenchmark: AsyncParsableCommand {
                     try DeepParser.decode(packet).byteCount >= 0
                 }
             case .queue:
-                report = await #execute(
-                    BoundedQueueSpec.self,
-                    time: budget,
-                    .commandLimit(40),
-                    .replay(.numeric(seed)),
-                    .suppress(.all)
-                )
+                report = await specReport(BoundedQueueSpec.self, seed: seed, budget: budget)
             case .lengthGate:
                 report = #explore(
                     LengthGateFixture.valuesGenerator,
@@ -132,77 +126,23 @@ struct ExploreBenchmark: AsyncParsableCommand {
                     return true
                 }
             case .phaseFlat:
-                report = await #execute(
-                    PhaseProtocolFlatSpec.self,
-                    time: budget,
-                    .commandLimit(40),
-                    .replay(.numeric(seed)),
-                    .suppress(.all)
-                )
+                report = await specReport(PhaseProtocolFlatSpec.self, seed: seed, budget: budget)
             case .phaseLaddered:
-                report = await #execute(
-                    PhaseProtocolLadderedSpec.self,
-                    time: budget,
-                    .commandLimit(40),
-                    .replay(.numeric(seed)),
-                    .suppress(.all)
-                )
+                report = await specReport(PhaseProtocolLadderedSpec.self, seed: seed, budget: budget)
             case .handle:
-                report = await #execute(
-                    HandleTableSpec.self,
-                    time: budget,
-                    .commandLimit(40),
-                    .replay(.numeric(seed)),
-                    .suppress(.all)
-                )
+                report = await specReport(HandleTableSpec.self, seed: seed, budget: budget)
             case .coupled:
-                report = await #execute(
-                    CoupledValuesSpec.self,
-                    time: budget,
-                    .commandLimit(40),
-                    .replay(.numeric(seed)),
-                    .suppress(.all)
-                )
+                report = await specReport(CoupledValuesSpec.self, seed: seed, budget: budget)
             case .toggle:
-                report = await #execute(
-                    ToggleParitySpec.self,
-                    time: budget,
-                    .commandLimit(40),
-                    .replay(.numeric(seed)),
-                    .suppress(.all)
-                )
+                report = await specReport(ToggleParitySpec.self, seed: seed, budget: budget)
             case .ledger40:
-                report = await #execute(
-                    ThresholdLedger40Spec.self,
-                    time: budget,
-                    .commandLimit(40),
-                    .replay(.numeric(seed)),
-                    .suppress(.all)
-                )
+                report = await specReport(ThresholdLedger40Spec.self, seed: seed, budget: budget)
             case .ledger90:
-                report = await #execute(
-                    ThresholdLedger90Spec.self,
-                    time: budget,
-                    .commandLimit(40),
-                    .replay(.numeric(seed)),
-                    .suppress(.all)
-                )
+                report = await specReport(ThresholdLedger90Spec.self, seed: seed, budget: budget)
             case .ledger90Laddered:
-                report = await #execute(
-                    ThresholdLedger90LadderedSpec.self,
-                    time: budget,
-                    .commandLimit(40),
-                    .replay(.numeric(seed)),
-                    .suppress(.all)
-                )
+                report = await specReport(ThresholdLedger90LadderedSpec.self, seed: seed, budget: budget)
             case .router:
-                report = await #execute(
-                    BranchyRouterSpec.self,
-                    time: budget,
-                    .commandLimit(40),
-                    .replay(.numeric(seed)),
-                    .suppress(.all)
-                )
+                report = await specReport(BranchyRouterSpec.self, seed: seed, budget: budget)
         }
         if case .instrumentationMissing = report.termination {
             throw RunFailure(message: "the fixture build lacks coverage instrumentation; build the package in debug configuration")
@@ -219,11 +159,20 @@ struct ExploreBenchmark: AsyncParsableCommand {
         )
         if fixture == .handle {
             let skipCounts = HandleTableSkipCounters.snapshotAndReset()
-            if skipCounts.executed > 0 {
-                record.handleSkipFraction = Double(skipCounts.skipped) / Double(skipCounts.executed)
+            if skipCounts.entered > 0 {
+                record.handleSkipFraction = Double(skipCounts.skipped) / Double(skipCounts.entered)
             }
         }
         return record
+    }
+
+    /// Runs one spec-path fixture at the pinned matrix protocol: command limit 40, deterministic replay of `seed`, all output suppressed. The single definition site for the protocol's settings — every spec fixture must run the same call shape or paired-arm comparisons are invalid.
+    private static func specReport(
+        _ spec: (some StateMachineSpec).Type,
+        seed: UInt64,
+        budget: SprawlDuration
+    ) async -> SprawlReport {
+        await #execute(spec, time: budget, .commandLimit(40), .replay(.numeric(seed)), .suppress(.all))
     }
 }
 
@@ -409,12 +358,12 @@ extension ExploreBenchmark {
 
         private func printSummary(_ summaries: [FixtureSummary]) {
             print("\n=== calibration summary (seeds with >= 1 cluster) ===")
-            print("\(pad("fixture", 20)) \(pad("found", 7)) \(pad("window", 34)) \(pad("verdict", 7)) extras")
+            print("\(Analyze.pad("fixture", 20)) \(Analyze.pad("found", 7)) \(Analyze.pad("window", 34)) \(Analyze.pad("verdict", 7)) extras")
             var failures = 0
             for summary in summaries {
                 let window = Self.window(for: summary.fixture)
                 let verdict = window.verdict(found: summary.foundCount, runs: summary.runCount)
-                if verdict == "FAIL" {
+                if verdict == .fail {
                     failures += 1
                 }
                 var extras = "maxCoveredEdges=\(summary.maxCoveredEdges)"
@@ -422,7 +371,7 @@ extension ExploreBenchmark {
                     extras += String(format: "  medianSkipFraction=%.3f", skipFraction)
                 }
                 let found = "\(summary.foundCount)/\(summary.runCount)"
-                print("\(pad(summary.fixture.rawValue, 20)) \(pad(found, 7)) \(pad(window.label, 34)) \(pad(verdict, 7)) \(extras)")
+                print("\(Analyze.pad(summary.fixture.rawValue, 20)) \(Analyze.pad(found, 7)) \(Analyze.pad(window.label, 34)) \(Analyze.pad(verdict.label, 7)) \(extras)")
             }
             if failures > 0 {
                 print("\n\(failures) fixture(s) outside their calibration window — retune geometry and re-run (ground rule 2).")
@@ -430,9 +379,21 @@ extension ExploreBenchmark {
                 print("\nall gated fixtures inside their calibration windows.")
             }
         }
+    }
 
-        private func pad(_ text: String, _ width: Int) -> String {
-            text.count >= width ? text : text + String(repeating: " ", count: width - text.count)
+    /// The outcome of checking a fixture's found count against its window.
+    enum Verdict {
+        case pass
+        case fail
+        /// Pinned and recorded fixtures re-measure without gating.
+        case informational
+
+        var label: String {
+            switch self {
+                case .pass: "PASS"
+                case .fail: "FAIL"
+                case .informational: "info"
+            }
         }
     }
 
@@ -456,14 +417,14 @@ extension ExploreBenchmark {
             }
         }
 
-        func verdict(found: Int, runs: Int) -> String {
+        func verdict(found: Int, runs: Int) -> Verdict {
             switch self {
                 case .differential:
-                    found * 10 <= runs ? "PASS" : "FAIL"
+                    found * 10 <= runs ? .pass : .fail
                 case .sentinel:
-                    found * 10 >= runs * 9 ? "PASS" : "FAIL"
+                    found * 10 >= runs * 9 ? .pass : .fail
                 case .pinned, .recorded:
-                    "info"
+                    .informational
             }
         }
     }
@@ -487,12 +448,11 @@ extension ExploreBenchmark {
             }
         }
 
-        /// The lower median, matching the analyzer script's convention.
         var medianSkipFraction: Double? {
             guard skipFractions.isEmpty == false else {
                 return nil
             }
-            return skipFractions.sorted()[skipFractions.count / 2]
+            return Analyze.median(skipFractions)
         }
     }
 }
@@ -552,7 +512,7 @@ struct BenchmarkRecord: Codable {
     var termination: String
     var clusters: [ClusterRecord]
 
-    /// The HandleTable starvation observable: skipped commands over executed commands, present only on `--fixture handle` records (synthesized Codable omits it elsewhere, so other fixtures' schema is unchanged).
+    /// The HandleTable starvation observable: precondition-skipped commands over entered commands (a skipped command counts in both), present only on `--fixture handle` records (synthesized Codable omits it elsewhere, so other fixtures' schema is unchanged).
     var handleSkipFraction: Double?
 
     struct ClusterRecord: Codable {

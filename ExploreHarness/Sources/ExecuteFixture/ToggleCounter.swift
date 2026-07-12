@@ -48,10 +48,12 @@ public struct ToggleCounter: Sendable {
 
     // MARK: - Commands
 
+    /// Increments the toggle count, flipping its parity.
     public mutating func toggle() {
         toggleCount += 1
     }
 
+    /// Observes the counter, firing fault T when the count is odd and at or over the threshold.
     public mutating func checkpoint() {
         // Fault T: threshold presence and odd parity, folded into one integer so the only branch lights when the fault fires.
         let overThreshold = min(max(0, toggleCount - threshold + 1), 1)
@@ -61,6 +63,7 @@ public struct ToggleCounter: Sendable {
         }
     }
 
+    /// Records a padding value; exists so sequences carry fault-irrelevant commands.
     public mutating func pad(_ value: Int) {
         lastPadding = value
     }

@@ -1,7 +1,5 @@
 // The verdict, termination, configuration, and result types of the `time:` exploration loop.
 
-import ExhaustCore
-
 /// The outcome of one property evaluation inside a `time:` run.
 ///
 /// Distinguishes the failure's cheap symptom at evaluation time because the backpressure gate needs it synchronously, before any reduction runs.
@@ -9,7 +7,7 @@ package enum SprawlVerdict: Sendable {
     case pass
     case fail(FailureSymptom)
 
-    var isFailure: Bool {
+    package var isFailure: Bool {
         switch self {
             case .pass:
                 false

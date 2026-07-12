@@ -1,5 +1,6 @@
 // Explore time: mode — coverage-guided fuzzing runtime entry points.
 
+import CustomDump
 import ExhaustCore
 import Foundation
 import IssueReporting
@@ -300,7 +301,12 @@ public extension __ExhaustRuntime {
                 property: property,
                 source: source,
                 configuration: configuration,
-                hooks: hooks
+                hooks: hooks,
+                renderValue: { value in
+                    var description = ""
+                    customDump(value, to: &description, maxDepth: 3)
+                    return description
+                }
             )
             let result = runner.run()
             if result.clusters.isEmpty {

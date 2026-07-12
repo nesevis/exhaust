@@ -53,6 +53,7 @@ public struct ThresholdLedger: Sendable {
 
     // MARK: - Commands
 
+    /// Adds a qualifying value (6...9; lower values add nothing) to the balance, firing fault J at the threshold crossing.
     public mutating func accumulate(_ value: Int) {
         // Qualifying filter as arithmetic: (value / 6) is 1 for 6...9 and 0 for 0...5, so no edge counts qualifying accumulates.
         balance += (value / 6) * value
@@ -65,10 +66,12 @@ public struct ThresholdLedger: Sendable {
         }
     }
 
+    /// Zeroes the balance, restarting the accumulation the fault requires.
     public mutating func spend() {
         balance = 0
     }
 
+    /// Reads the balance without changing it; exists so sequences carry fault-irrelevant commands.
     public mutating func audit() {
         lastAudit = balance
     }

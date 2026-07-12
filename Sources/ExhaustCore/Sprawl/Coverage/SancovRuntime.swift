@@ -63,13 +63,13 @@ package enum SancovRuntime {
         guard count > 0 else {
             return
         }
-        lock.lock()
-        defer { lock.unlock() }
-        guard counterRegions.contains(where: { $0.base == start }) == false else {
-            return
+        lock.withLocking {
+            guard counterRegions.contains(where: { $0.base == start }) == false else {
+                return
+            }
+            let offset = counterRegions.reduce(0) { $0 + $1.count }
+            counterRegions.append(CounterRegion(base: start, count: count, globalOffset: offset))
         }
-        let offset = counterRegions.reduce(0) { $0 + $1.count }
-        counterRegions.append(CounterRegion(base: start, count: count, globalOffset: offset))
     }
 
     /// Registers a PC-table region. Idempotent per base address.
@@ -81,42 +81,34 @@ package enum SancovRuntime {
             return
         }
         let typedBase = start.assumingMemoryBound(to: UInt.self)
-        lock.lock()
-        defer { lock.unlock() }
-        guard pcTableRegions.contains(where: { $0.base == typedBase }) == false else {
-            return
+        lock.withLocking {
+            guard pcTableRegions.contains(where: { $0.base == typedBase }) == false else {
+                return
+            }
+            pcTableRegions.append(PCTableRegion(base: typedBase, count: entryCount))
         }
-        pcTableRegions.append(PCTableRegion(base: typedBase, count: entryCount))
     }
 
     // MARK: - Reading
 
     /// Whether any instrumented image registered a counter region. False means the build lacks `-sanitize-coverage` flags and `#explore(time:)` must fail loudly.
     package static var isInstrumented: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return counterRegions.isEmpty == false
+        lock.withLocking { counterRegions.isEmpty == false }
     }
 
     /// The total number of instrumented edges across all registered regions.
     package static var edgeCount: Int {
-        lock.lock()
-        defer { lock.unlock() }
-        return counterRegions.reduce(0) { $0 + $1.count }
+        lock.withLocking { counterRegions.reduce(0) { $0 + $1.count } }
     }
 
     /// A stable snapshot of the registered counter regions.
     package static func currentCounterRegions() -> [CounterRegion] {
-        lock.lock()
-        defer { lock.unlock() }
-        return counterRegions
+        lock.withLocking { counterRegions }
     }
 
     /// A stable snapshot of the registered PC-table regions.
     package static func currentPCTableRegions() -> [PCTableRegion] {
-        lock.lock()
-        defer { lock.unlock() }
-        return pcTableRegions
+        lock.withLocking { pcTableRegions }
     }
 
     /// A build-identity hash of the PC table, stable across process launches of the same binary.
@@ -164,10 +156,10 @@ package enum SancovRuntime {
 
     /// Removes all registered regions so tests can register synthetic ones without cross-test bleed. Never called on the production path.
     package static func resetForTesting() {
-        lock.lock()
-        defer { lock.unlock() }
-        counterRegions = []
-        pcTableRegions = []
+        lock.withLocking {
+            counterRegions = []
+            pcTableRegions = []
+        }
     }
 }
 
