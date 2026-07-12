@@ -1,5 +1,6 @@
 import ExhaustCore
 import ExhaustTestSupport
+import Foundation
 import Testing
 @testable import Exhaust
 
@@ -218,6 +219,80 @@ struct ExecuteTimeRuntimeTests {
         #expect(maskingEpochExists, "at least one epoch should mask the command generator's pick site")
     }
 
+    @Test("A slow property body overshoots the budget by whole attempts and the run still returns")
+    func slowPropertyOvershootsBudget() {
+        // Characterization, not aspiration (fuzzer-selftest-sut-landscape.md, item 5): the loop checks termination only between attempts, so a slow command overshoots the budget by however long its attempt takes, and a never-returning command hangs the run. This pins the current contract — the run returns and reports once the attempt completes — so any future mid-attempt abort mechanism shows up as this test getting faster.
+        let adapter = __ExhaustRuntime.buildSequentialSpecAdapter(SlowCommandSpec.self, commandLimit: 2)
+        let source = SyntheticCoverageSource<[(ScheduleMarker, SlowCommandSpec.Command)]>(
+            edgeCount: 8,
+            edges: { tagged in
+                [tagged.count % 4]
+            }
+        )
+        let start = ContinuousClock.now
+        let report = __ExhaustRuntime.runExploreTimeCore(
+            gen: adapter.generator,
+            time: .milliseconds(100),
+            settings: [.replay(3)],
+            source: source,
+            configure: { configuration in
+                configuration.skipScreening = true
+                configuration.reductionPoolWidth = 1
+            },
+            prune: adapter.pruneHook,
+            reduceStrategy: adapter.reduceStrategy,
+            property: adapter.property
+        )
+        let elapsed = ContinuousClock.now - start
+        #expect(report.totalAttempts >= 1)
+        #expect(report.clusters.isEmpty, "the slow spec has no fault to find")
+        #expect(elapsed >= .milliseconds(300), "a non-empty attempt sleeps at least 300 ms, past the 100 ms budget — the run cannot interrupt a property body mid-attempt")
+    }
+
+    @Test("specFeatures admits composition-novel entries a flat coverage surface rejects")
+    func specFeaturesAdmitCompositionNovelty() {
+        /// The base source reports one constant edge, so without features the corpus admits exactly the first attempt and nothing else. With the knob on, command-bigram novelty keeps admitting, which is the whole mechanism: composition progress becomes visible to admission on a flat surface.
+        func run(specFeatures: Bool) -> SprawlReport {
+            let adapter = __ExhaustRuntime.buildSequentialSpecAdapter(SkippableCounterSpec.self, commandLimit: 12)
+            let source = SyntheticCoverageSource<[(ScheduleMarker, SkippableCounterSpec.Command)]>(
+                edgeCount: 4,
+                edges: { _ in
+                    [0]
+                }
+            )
+            return __ExhaustRuntime.runExploreTimeCore(
+                gen: adapter.generator,
+                time: .seconds(60),
+                settings: [.replay(9)],
+                source: source,
+                configure: { configuration in
+                    configuration.skipScreening = true
+                    configuration.reductionPoolWidth = 1
+                    configuration.attemptLimit = 300
+                    configuration.experiments.specFeatures = specFeatures
+                },
+                adaptSource: { source, experiments in
+                    guard experiments.specFeatures else {
+                        return source
+                    }
+                    return SpecFeatureSource(
+                        base: source,
+                        alphabet: SprawlTunables.specFeatureAlphabet,
+                        fingerprintCommands: adapter.commandFingerprints
+                    )
+                },
+                prune: adapter.pruneHook,
+                reduceStrategy: adapter.reduceStrategy,
+                property: adapter.property
+            )
+        }
+
+        let withoutFeatures = run(specFeatures: false)
+        let withFeatures = run(specFeatures: true)
+        #expect(withoutFeatures.corpusEntryCount == 1, "a flat surface admits only the first attempt")
+        #expect(withFeatures.corpusEntryCount > withoutFeatures.corpusEntryCount, "bigram novelty admits composition-diverse entries the flat surface rejects")
+    }
+
     @Test("Pruned corpus entries contain no skipped commands")
     func prunedCorpusHasNoSkips() {
         let adapter = __ExhaustRuntime.buildSequentialSpecAdapter(SkippableCounterSpec.self)
@@ -378,6 +453,26 @@ final class TasksCounterSpec {
     @Invariant
     func matches() -> Bool {
         counter.value == expected
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
+}
+
+@StateMachine(.sequential)
+final class SlowCommandSpec {
+    @SystemUnderTest var counter: PassingCounter = .init()
+
+    @Command
+    func slowIncrement() throws {
+        Thread.sleep(forTimeInterval: 0.3)
+        counter.increment()
+    }
+
+    @Invariant
+    func neverNegative() -> Bool {
+        counter.value >= 0
     }
 
     func failureDescription() -> String? {

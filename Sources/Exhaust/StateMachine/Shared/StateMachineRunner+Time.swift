@@ -84,6 +84,16 @@ public extension __ExhaustRuntime {
                             configuration.skipScreening = true
                             configuration.reductionPoolWidth = 1
                         },
+                        adaptSource: { source, experiments in
+                            guard experiments.specFeatures else {
+                                return source
+                            }
+                            return SpecFeatureSource(
+                                base: source,
+                                alphabet: SprawlTunables.specFeatureAlphabet,
+                                fingerprintCommands: adapter.commandFingerprints
+                            )
+                        },
                         prune: adapter.pruneHook,
                         reduceStrategy: adapter.reduceStrategy,
                         persistence: prepareSprawlPersistence(
@@ -176,11 +186,22 @@ extension __ExhaustRuntime {
             }
         }
 
+        // The fingerprint is FNV over the synthesized description, so the feature alphabet is argument-sensitive ("pulse(7)" and "pulse(3)" are distinct bigram participants) and stable across processes, which pinned-seed replay and crash-recovery resume require.
+        let commandFingerprints: @Sendable (Any) -> [UInt64]? = { value in
+            guard let tagged = value as? [(ScheduleMarker, Spec.Command)] else {
+                return nil
+            }
+            return tagged.map { _, command in
+                SpecFeatureSource.fingerprint(of: command.description)
+            }
+        }
+
         return SpecSprawlAdapter(
             generator: taggedSequenceGen,
             property: verdictProperty,
             pruneHook: pruneHook,
-            reduceStrategy: reduceStrategy
+            reduceStrategy: reduceStrategy,
+            commandFingerprints: commandFingerprints
         )
     }
 }
@@ -197,4 +218,6 @@ struct SpecSprawlAdapter<Output> {
     let pruneHook: @Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree)
     /// Reduces a failing command sequence through the spec's backend reducer.
     let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom) -> (tree: ChoiceTree, value: Output)
+    /// Maps a generated value to one stable per-command fingerprint for ``SpecFeatureSource``, or nil when the value is not this spec's command sequence.
+    let commandFingerprints: @Sendable (Any) -> [UInt64]?
 }

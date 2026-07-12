@@ -102,6 +102,9 @@ package enum SprawlTunables {
     /// Wall-clock deadline for one spec reduction. Higher than the value path because a spec reduction probe replays a whole command sequence against a fresh SUT.
     package static let specReductionDeadlineNanoseconds: UInt64 = reductionDeadlineNanoseconds * 4
 
+    /// The command-fingerprint alphabet size for spec composition features (experiment: specFeatures). Feature edges number alphabet squared, appended after the sancov range; fingerprints bucket modulo this size, and collisions are accepted the same way hit-count saturation is.
+    package static let specFeatureAlphabet = 64
+
     // MARK: - Escape-Hatch Backoff (Experiment: escapeBackoff)
 
     /// Upper bound on the adaptive escape interval. The interval doubles each time an escape reduction lands in an existing cluster, so without a cap a long run would stop escaping entirely — and the escape hatch exists precisely because symptom matching is a weak signal.
@@ -135,6 +138,9 @@ package struct SprawlExperiments: Sendable, Equatable {
     /// Swarm generation: per-epoch deterministic branch masks pivot mutated children's disallowed branch selections, reaching command mixes the uniform distribution statistically suppresses.
     package var swarm = false
 
+    /// Spec composition feedback: command-bigram feature edges appended after the sancov range, laddering state-gated faults that light no edges as they progress. Spec (`#execute(time:)`) runs only; the value path never constructs the wrapping source.
+    package var specFeatures = false
+
     /// Creates the default knob set: gated mechanisms off until their gates pass.
     package init() {}
 
@@ -156,6 +162,7 @@ package struct SprawlExperiments: Sendable, Equatable {
             ("powerSchedule", \.powerSchedule),
             ("championArchive", \.championArchive),
             ("swarm", \.swarm),
+            ("specFeatures", \.specFeatures),
         ]
         for fragment in environmentValue.split(separator: ",") {
             let parts = fragment.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }

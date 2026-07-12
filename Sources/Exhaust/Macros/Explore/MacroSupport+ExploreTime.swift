@@ -230,6 +230,7 @@ public extension __ExhaustRuntime {
         settings: [SprawlSettings],
         source injectedSource: (any CoverageSource)?,
         configure: ((inout SprawlRunnerConfiguration) -> Void)?,
+        adaptSource: ((any CoverageSource, SprawlExperiments) -> any CoverageSource)? = nil,
         prune: (@Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree))? = nil,
         reduceStrategy: (@Sendable (ChoiceTree, Output, FailureSymptom) -> (tree: ChoiceTree, value: Output))? = nil,
         persistence: SprawlPersistenceContext? = nil,
@@ -304,6 +305,11 @@ public extension __ExhaustRuntime {
         }
         configure?(&configuration)
 
+        // Source adaptation runs after the configuration is final because the wrapping decision reads experiment knobs; the caller's closure sees the resolved experiments and returns the source unchanged when its knob is off.
+        let effectiveSource = adaptSource.map { adapt in
+            adapt(source, configuration.experiments)
+        } ?? source
+
         let logConfiguration = ExhaustLog.Configuration(
             isEnabled: suppressLogs == false,
             minimumLevel: logLevel,
@@ -313,7 +319,7 @@ public extension __ExhaustRuntime {
             let runner = SprawlRunner(
                 gen: gen,
                 property: property,
-                source: source,
+                source: effectiveSource,
                 configuration: configuration,
                 prune: prune,
                 reduceStrategy: reduceStrategy

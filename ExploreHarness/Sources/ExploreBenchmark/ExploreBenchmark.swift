@@ -26,6 +26,7 @@ struct ExploreBenchmark: AsyncParsableCommand {
         case parser
         case deep
         case queue
+        case latch
     }
 
     @Option(help: "Seeds as a range like 1-20 or a list like 1,4,9.")
@@ -91,6 +92,14 @@ struct ExploreBenchmark: AsyncParsableCommand {
                 case .queue:
                     report = await #execute(
                         BenchmarkQueueSpec.self,
+                        time: budget,
+                        .commandLimit(40),
+                        .replay(.numeric(seed)),
+                        .suppress(.all)
+                    )
+                case .latch:
+                    report = await #execute(
+                        BenchmarkLatchSpec.self,
                         time: budget,
                         .commandLimit(40),
                         .replay(.numeric(seed)),
@@ -233,6 +242,28 @@ struct BenchmarkRecord: Codable {
                 phase: cluster.discoveringPhase.rawValue
             )
         }
+    }
+}
+
+// MARK: - Latch Fixture Spec
+
+/// Twin of ConsecutiveLatchSpec in ExecuteTests/NegativeControlTests.swift: the specFeatures gate must measure the same spec the negative control pins, and the two targets cannot share the class because @StateMachine synthesis is module-internal. Change both or neither.
+@StateMachine(.sequential)
+final class BenchmarkLatchSpec {
+    @SystemUnderTest var latch: ConsecutiveLatch = .init()
+
+    @Invariant
+    func neverTripped() -> Bool {
+        latch.isTripped == false
+    }
+
+    @Command(weight: 1, .int(in: 0 ... 9))
+    func pulse(digit: Int) throws {
+        latch.pulse(digit)
+    }
+
+    func failureDescription() -> String? {
+        "\(latch)"
     }
 }
 
