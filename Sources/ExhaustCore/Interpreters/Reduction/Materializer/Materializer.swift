@@ -156,7 +156,7 @@ extension Materializer {
     struct RejectionError: Error {}
 
     /// Internal mode enum — includes `.generate` for non-selected branch materialization.
-    enum InternalMode {
+    enum InternalMode: Equatable {
         /// Exact: reject out-of-range inner values, clamp bound values, no cursor suspension.
         case exact
         /// Guided: tiered resolution (prefix → fallback → PRNG), cursor suspension at binds.
@@ -264,15 +264,18 @@ extension Materializer {
                 )
 
             case let .impure(.zip(generators, _), continuation):
-                // Zip: callee is a group with known child count. For a two-generator zip the untagged fallback shape group[g₂, x] reads two ways — a monadic wrapper [zipCalleeGroup, continuationTree], or the zip's own children group whose first child is itself a two-child group. The prefix arbitrates: the reading whose child boundaries land on the prefix's parsed subtree spans wins, and ties (including an unparseable prefix) keep the wrapper reading. See Cursor.zipChildSubtreeEnds(count:) for why the prefix is authoritative.
-                let prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
                 let (calleeFallback, continuationFallback): (ChoiceTree?, ChoiceTree?)
+                var prefixChildEnds: [Int]?
                 if let fallbackTree,
                    case let .group(children, _) = fallbackTree, children.count == 2,
                    case let .group(inner, _) = children[0], inner.count == generators.count
                 {
+                    let isAmbiguousShape = generators.count == 2
+                    if context.mode == .guided || isAmbiguousShape {
+                        prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
+                    }
                     var useWrapperReading = true
-                    if generators.count == 2, let prefixChildEnds {
+                    if isAmbiguousShape, let prefixChildEnds {
                         let childrenStart = context.cursor.position + 1
                         let wrapperMatches = zipChildBoundariesMatch(inner, from: childrenStart, ends: prefixChildEnds)
                         let calleeMatches = zipChildBoundariesMatch(children, from: childrenStart, ends: prefixChildEnds)
@@ -284,7 +287,11 @@ extension Materializer {
                         ? (children[0], children[1])
                         : (fallbackTree, nil)
                 } else {
-                    (calleeFallback, continuationFallback) = (fallbackTree, nil)
+                    if context.mode == .guided {
+                        prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
+                    }
+                    calleeFallback = fallbackTree
+                    continuationFallback = nil
                 }
                 return try handleZip(
                     generators, continuation: continuation, inputValue: inputValue,
@@ -424,7 +431,3 @@ extension Materializer {
         var filterObservations: [UInt64: FilterObservation] = [:]
     }
 }
-
-// MARK: - InternalMode Equatable
-
-extension Materializer.InternalMode: Equatable {}

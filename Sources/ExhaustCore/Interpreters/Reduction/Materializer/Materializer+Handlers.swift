@@ -630,14 +630,9 @@ extension Materializer {
                 )
 
             case let .bind(fingerprint, forward, _, _, _):
-                let innerFallback: ChoiceTree?
-                let boundFallback: ChoiceTree?
-                if let calleeFallback, case let .bind(_, iFB, bFB) = calleeFallback {
-                    innerFallback = iFB
-                    boundFallback = bFB
-                } else {
-                    innerFallback = nil
-                    boundFallback = nil
+                let (innerFallback, boundFallback): (ChoiceTree?, ChoiceTree?) = switch calleeFallback {
+                    case let .bind(_, iFB, bFB)?: (iFB, bFB)
+                    default: (nil, nil)
                 }
 
                 guard let (innerValue, innerTree) = try generateRecursive(

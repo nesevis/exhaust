@@ -384,13 +384,10 @@ package final class SprawlCorpus {
         clusterInstanceCount: Int,
         clusterCapReached: Bool
     ) {
-        let boost: Double
-        if isNewCluster {
-            boost = SprawlTunables.newClusterFailureBoost
-        } else if clusterCapReached {
-            boost = 1.0
-        } else {
-            boost = 1.0 + (SprawlTunables.existingClusterFailureBoost - 1.0) / Double(max(1, clusterInstanceCount))
+        let boost = switch (isNewCluster, clusterCapReached) {
+            case (true, _): SprawlTunables.newClusterFailureBoost
+            case (_, true): 1.0
+            default: 1.0 + (SprawlTunables.existingClusterFailureBoost - 1.0) / Double(max(1, clusterInstanceCount))
         }
         setFailureBoost(boost, at: parentIndex)
     }

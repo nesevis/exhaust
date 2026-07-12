@@ -84,11 +84,9 @@ package enum SprawlMutator {
                 let shifted = prng.next(upperBound: 2) == 0
                     ? entry.choice.bitPattern64 &+ delta
                     : entry.choice.bitPattern64 &- delta
-                if entry.allowsModularArithmetic {
-                    newPattern = shifted
-                } else {
-                    newPattern = min(max(shifted, range.lowerBound), range.upperBound)
-                }
+                newPattern = entry.allowsModularArithmetic
+                    ? shifted
+                    : min(max(shifted, range.lowerBound), range.upperBound)
             case 2:
                 // Boundary substitution: the same per-type catalogue the covering array draws from plays the dictionary role during sprawl.
                 let catalogue = ProblematicValues.computeProblematicValues(
@@ -96,11 +94,9 @@ package enum SprawlMutator {
                     max: range.upperBound,
                     tag: tag
                 )
-                if catalogue.isEmpty {
-                    newPattern = prng.next(in: range)
-                } else {
-                    newPattern = catalogue[Int(prng.next(upperBound: UInt64(catalogue.count)))]
-                }
+                newPattern = catalogue.isEmpty
+                    ? prng.next(in: range)
+                    : catalogue[Int(prng.next(upperBound: UInt64(catalogue.count)))]
             default:
                 newPattern = entry.choice.semanticSimplest.bitPattern64
         }

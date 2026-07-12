@@ -424,12 +424,7 @@ package extension __ExhaustRuntime {
     ) -> Output? {
         let generationPhaseStart = monotonicNanoseconds()
 
-        let baseSeed: UInt64
-        if let seed {
-            baseSeed = seed
-        } else {
-            baseSeed = Xoshiro256().seed
-        }
+        let baseSeed = seed ?? Xoshiro256().seed
         report.seed = baseSeed
 
         let laneCount = seed == nil ? max(1, Int(context.parallelLanes)) : 1
