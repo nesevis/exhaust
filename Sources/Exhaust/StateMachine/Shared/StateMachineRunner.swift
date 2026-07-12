@@ -81,10 +81,7 @@ public extension __ExhaustRuntime {
                 commandGen: commandGen.gen,
                 screeningBudget: UInt64(config.budget.screeningBudget)
             )
-            let untaggedSeqGen = commandGen.array(length: 0 ... commandLimit, scaling: .constant).gen
-            let taggedSeqGen = untaggedSeqGen.map { commands in
-                commands.map { (ScheduleMarker.prefix, $0) }
-            }
+            let taggedSeqGen = taggedSequenceGenerator(commandGen: commandGen, commandLimit: commandLimit)
 
             let invocationCounter = UnsafeSendableBox(0)
             let rawProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = syncSequentialProperty(Spec.self)
@@ -204,10 +201,7 @@ private extension __ExhaustRuntime {
             commandGen: commandGen.gen,
             screeningBudget: UInt64(config.budget.screeningBudget)
         )
-        let untaggedSeqGen = commandGen.array(length: 0 ... commandLimit, scaling: .constant).gen
-        let taggedSeqGen = untaggedSeqGen.map { commands in
-            commands.map { (ScheduleMarker.prefix, $0) }
-        }
+        let taggedSeqGen = taggedSequenceGenerator(commandGen: commandGen, commandLimit: commandLimit)
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 

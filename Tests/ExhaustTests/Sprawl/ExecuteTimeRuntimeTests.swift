@@ -113,8 +113,7 @@ struct ExecuteTimeRuntimeTests {
                 configuration.reductionPoolWidth = 1
                 configuration.attemptLimit = 500
             },
-            prune: adapter.pruneHook,
-            reduceStrategy: adapter.reduceStrategy,
+            hooks: adapter.hooks,
             property: adapter.property
         )
         #expect(report.clusters.isEmpty == false)
@@ -143,8 +142,7 @@ struct ExecuteTimeRuntimeTests {
             property: adapter.property,
             source: source,
             configuration: configuration,
-            prune: adapter.pruneHook,
-            reduceStrategy: adapter.reduceStrategy
+            hooks: adapter.hooks
         )
         let result = runner.run()
         #expect(result.corpusEntryCount > 0)
@@ -239,58 +237,13 @@ struct ExecuteTimeRuntimeTests {
                 configuration.skipScreening = true
                 configuration.reductionPoolWidth = 1
             },
-            prune: adapter.pruneHook,
-            reduceStrategy: adapter.reduceStrategy,
+            hooks: adapter.hooks,
             property: adapter.property
         )
         let elapsed = ContinuousClock.now - start
         #expect(report.totalAttempts >= 1)
         #expect(report.clusters.isEmpty, "the slow spec has no fault to find")
         #expect(elapsed >= .milliseconds(300), "a non-empty attempt sleeps at least 300 ms, past the 100 ms budget — the run cannot interrupt a property body mid-attempt")
-    }
-
-    @Test("specFeatures admits composition-novel entries a flat coverage surface rejects")
-    func specFeaturesAdmitCompositionNovelty() {
-        /// The base source reports one constant edge, so without features the corpus admits exactly the first attempt and nothing else. With the knob on, command-bigram novelty keeps admitting, which is the whole mechanism: composition progress becomes visible to admission on a flat surface.
-        func run(specFeatures: Bool) -> SprawlReport {
-            let adapter = __ExhaustRuntime.buildSequentialSpecAdapter(SkippableCounterSpec.self, commandLimit: 12)
-            let source = SyntheticCoverageSource<[(ScheduleMarker, SkippableCounterSpec.Command)]>(
-                edgeCount: 4,
-                edges: { _ in
-                    [0]
-                }
-            )
-            return __ExhaustRuntime.runExploreTimeCore(
-                gen: adapter.generator,
-                time: .seconds(60),
-                settings: [.replay(9)],
-                source: source,
-                configure: { configuration in
-                    configuration.skipScreening = true
-                    configuration.reductionPoolWidth = 1
-                    configuration.attemptLimit = 300
-                    configuration.experiments.specFeatures = specFeatures
-                },
-                adaptSource: { source, experiments in
-                    guard experiments.specFeatures else {
-                        return source
-                    }
-                    return SpecFeatureSource(
-                        base: source,
-                        alphabet: SprawlTunables.specFeatureAlphabet,
-                        fingerprintCommands: adapter.commandFingerprints
-                    )
-                },
-                prune: adapter.pruneHook,
-                reduceStrategy: adapter.reduceStrategy,
-                property: adapter.property
-            )
-        }
-
-        let withoutFeatures = run(specFeatures: false)
-        let withFeatures = run(specFeatures: true)
-        #expect(withoutFeatures.corpusEntryCount == 1, "a flat surface admits only the first attempt")
-        #expect(withFeatures.corpusEntryCount > withoutFeatures.corpusEntryCount, "bigram novelty admits composition-diverse entries the flat surface rejects")
     }
 
     @Test("Pruned corpus entries contain no skipped commands")
@@ -325,8 +278,7 @@ struct ExecuteTimeRuntimeTests {
             property: adapter.property,
             source: source,
             configuration: configuration,
-            prune: adapter.pruneHook,
-            reduceStrategy: adapter.reduceStrategy
+            hooks: adapter.hooks
         )
         let result = runner.run()
         #expect(result.corpusEntryCount > 0)

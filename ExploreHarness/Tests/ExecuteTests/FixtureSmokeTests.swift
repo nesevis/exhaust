@@ -5,6 +5,15 @@ import Testing
 struct FixtureSmokeTests {
     // MARK: - Fault A (accumulation, hwm >= capacity)
 
+    @Test("Fault A fires at the default capacity after 24 enqueues (registry minimal)")
+    func faultAMinimalAtDefaultCapacity() {
+        var queue = BoundedQueue()
+        for i in 0 ..< 24 {
+            _ = queue.enqueue(i)
+        }
+        #expect(queue.elements[0] == -999, "the ground-truth registry's minimal sequence at the default capacity should fire fault A")
+    }
+
     @Test("Fault A fires on 32 enqueues without reset")
     func faultAMinimal() {
         var queue = BoundedQueue(capacity: 32)

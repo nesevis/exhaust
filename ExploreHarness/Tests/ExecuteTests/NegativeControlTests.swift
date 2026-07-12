@@ -56,7 +56,7 @@ struct NegativeControlTests {
 
 // MARK: - Spec
 
-/// Twin of BenchmarkLatchSpec in ExploreBenchmark.swift: the specFeatures gate must measure the same spec this negative control pins, and the two targets cannot share the class because @StateMachine synthesis is module-internal. Change both or neither.
+/// The negative control's spec: one command whose uniform digit argument makes the streak-gated fault blind-improbable. A future feedback channel's differential gate must measure this exact spec shape (one command kind, argument-carried signal) so the gate and the pinned baseline stay comparable.
 @StateMachine(.sequential)
 final class ConsecutiveLatchSpec {
     @SystemUnderTest var latch: ConsecutiveLatch = .init()

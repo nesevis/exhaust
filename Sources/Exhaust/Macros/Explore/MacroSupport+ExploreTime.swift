@@ -64,7 +64,7 @@ public extension __ExhaustRuntime {
         )
         reportSprawlIssues(
             report: report,
-            suppressIssueReporting: sprawlSuppressesIssueReporting(settings),
+            suppressIssueReporting: ParsedSprawlSettings(settings).suppressIssueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -110,7 +110,7 @@ public extension __ExhaustRuntime {
         let report = pipelineReport ?? .empty(termination: .budgetExhausted, seed: 0)
         reportSprawlIssues(
             report: report,
-            suppressIssueReporting: sprawlSuppressesIssueReporting(settings),
+            suppressIssueReporting: ParsedSprawlSettings(settings).suppressIssueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -148,7 +148,7 @@ public extension __ExhaustRuntime {
             )
             reportSprawlIssues(
                 report: report,
-                suppressIssueReporting: sprawlSuppressesIssueReporting(settings),
+                suppressIssueReporting: ParsedSprawlSettings(settings).suppressIssueReporting,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -207,7 +207,7 @@ public extension __ExhaustRuntime {
             let report = pipelineReport ?? .empty(termination: .budgetExhausted, seed: 0)
             reportSprawlIssues(
                 report: report,
-                suppressIssueReporting: sprawlSuppressesIssueReporting(settings),
+                suppressIssueReporting: ParsedSprawlSettings(settings).suppressIssueReporting,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -230,39 +230,23 @@ public extension __ExhaustRuntime {
         settings: [SprawlSettings],
         source injectedSource: (any CoverageSource)?,
         configure: ((inout SprawlRunnerConfiguration) -> Void)?,
-        adaptSource: ((any CoverageSource, SprawlExperiments) -> any CoverageSource)? = nil,
-        prune: (@Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree))? = nil,
-        reduceStrategy: (@Sendable (ChoiceTree, Output, FailureSymptom) -> (tree: ChoiceTree, value: Output))? = nil,
+        hooks: SprawlHooks<Output>? = nil,
         persistence: SprawlPersistenceContext? = nil,
         property: @escaping @Sendable (Output) -> SprawlVerdict
     ) -> SprawlReport {
-        var seed = UInt64.random(in: UInt64.min ... UInt64.max)
-        var suppressLogs = false
-        var logLevel: LogLevel = .error
-        for setting in settings {
-            switch setting {
-                case let .replay(replaySeed):
-                    // A screening-row replay resolves without a PRNG seed; a fuzz run replays the whole search from its root seed, so only seed-carrying replays apply here.
-                    guard let resolved = replaySeed.resolve(), let resolvedSeed = resolved.seed else {
-                        return .empty(
-                            termination: .invalidConfiguration("Invalid replay seed for #explore(time:): \(replaySeed). Pass the run seed from a prior report."),
-                            seed: 0
-                        )
-                    }
-                    seed = resolvedSeed
-                case let .suppress(option):
-                    if option == .logs || option == .all {
-                        suppressLogs = true
-                    }
-                case let .log(level):
-                    logLevel = level
-                case .commandLimit:
-                    return .empty(
-                        termination: .invalidConfiguration(".commandLimit is only valid for #execute(time:). #explore(time:) has no command-sequence structure to limit."),
-                        seed: 0
-                    )
-            }
+        let parsed = ParsedSprawlSettings(settings)
+        if let message = parsed.invalidReplayMessage {
+            return .empty(termination: .invalidConfiguration(message), seed: 0)
         }
+        if parsed.commandLimit != nil {
+            return .empty(
+                termination: .invalidConfiguration(".commandLimit is only valid for #execute(time:). #explore(time:) has no command-sequence structure to limit."),
+                seed: 0
+            )
+        }
+        let seed = parsed.seed ?? UInt64.random(in: UInt64.min ... UInt64.max)
+        let suppressLogs = parsed.suppressLogs
+        let logLevel = parsed.logLevel
 
         let budgetNanoseconds = time.nanoseconds
         guard budgetNanoseconds > 0 else {
@@ -305,11 +289,6 @@ public extension __ExhaustRuntime {
         }
         configure?(&configuration)
 
-        // Source adaptation runs after the configuration is final because the wrapping decision reads experiment knobs; the caller's closure sees the resolved experiments and returns the source unchanged when its knob is off.
-        let effectiveSource = adaptSource.map { adapt in
-            adapt(source, configuration.experiments)
-        } ?? source
-
         let logConfiguration = ExhaustLog.Configuration(
             isEnabled: suppressLogs == false,
             minimumLevel: logLevel,
@@ -319,10 +298,9 @@ public extension __ExhaustRuntime {
             let runner = SprawlRunner(
                 gen: gen,
                 property: property,
-                source: effectiveSource,
+                source: source,
                 configuration: configuration,
-                prune: prune,
-                reduceStrategy: reduceStrategy
+                hooks: hooks
             )
             let result = runner.run()
             if result.clusters.isEmpty {
@@ -586,16 +564,6 @@ public extension __ExhaustRuntime {
     }
 
     // MARK: - Helpers
-
-    /// Whether the settings ask the run to keep its fault inventory out of issue reporting.
-    internal static func sprawlSuppressesIssueReporting(_ settings: [SprawlSettings]) -> Bool {
-        settings.contains { setting in
-            if case let .suppress(option) = setting, option == .issueReporting || option == .all {
-                return true
-            }
-            return false
-        }
-    }
 
     /// The symptom kind for a caught NSException, carrying the exception name on Apple platforms.
     private static func exceptionSymptomKind(of caught: NSException?) -> String {

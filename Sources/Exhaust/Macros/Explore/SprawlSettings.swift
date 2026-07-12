@@ -31,8 +31,50 @@ public enum SprawlSettings: Sendable {
 
     /// Limits the maximum number of commands per generated sequence in `#execute(time:)` runs.
     ///
-    /// When omitted, the runner estimates a default from the command generator's domain size. Pass this when the default estimate produces sequences too short to reach deep state (for example, a bounded data structure whose accumulation faults require capacity-many operations without interruption). Values below 1 are a configuration error.
+    /// When omitted, sequences carry up to 40 commands. Pass this when the default produces sequences too short to reach deep state (for example, a bounded data structure whose accumulation faults require capacity-many operations without interruption), or to shorten sequences when each command is expensive. Values below 1 are a configuration error.
     ///
     /// Only valid for `#execute(time:)`. Passing this setting to `#explore(time:)` is a configuration error because `#explore` has no command-sequence structure to limit.
     case commandLimit(Int)
+}
+
+// MARK: - Parsing
+
+/// The fields the `time:` entry points read from their settings, extracted in one pass.
+///
+/// Both `#explore(time:)` and `#execute(time:)` parse through this type so field extraction cannot drift between the two modes; each entry point then validates the fields it does not support (`commandLimit` is an error on the value path) and applies the rest.
+struct ParsedSprawlSettings {
+    /// The replay seed, or nil when the run should draw a random one.
+    var seed: UInt64?
+    /// The configuration error for a replay seed that carries no run seed (screening-row seeds), rendered verbatim into the run's termination.
+    var invalidReplayMessage: String?
+    var suppressLogs = false
+    var suppressIssueReporting = false
+    var logLevel: LogLevel = .error
+    /// The `#execute(time:)` per-sequence command cap; nil when unset. Present on the value path, it is a configuration error the caller reports.
+    var commandLimit: Int?
+
+    init(_ settings: [SprawlSettings]) {
+        for setting in settings {
+            switch setting {
+                case let .replay(replaySeed):
+                    // A screening-row replay resolves without a PRNG seed; a fuzz run replays the whole search from its root seed, so only seed-carrying replays apply here.
+                    if let resolved = replaySeed.resolve(), let resolvedSeed = resolved.seed {
+                        seed = resolvedSeed
+                    } else {
+                        invalidReplayMessage = "Invalid replay seed for #explore(time:): \(replaySeed). Pass the run seed from a prior report."
+                    }
+                case let .suppress(option):
+                    if option == .logs || option == .all {
+                        suppressLogs = true
+                    }
+                    if option == .issueReporting || option == .all {
+                        suppressIssueReporting = true
+                    }
+                case let .log(level):
+                    logLevel = level
+                case let .commandLimit(limit):
+                    commandLimit = limit
+            }
+        }
+    }
 }

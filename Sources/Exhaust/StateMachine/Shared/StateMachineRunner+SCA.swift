@@ -413,24 +413,14 @@ extension __ExhaustRuntime {
     /// Builds a sequential property for the smoke source: runs commands in order, checks invariants after each step.
     ///
     /// Shared by all spec backends. The sync variant handles `StateMachineSpec`; the async variant bridges through `_blockingAwaitSemaphore`. Both are used as the smoke source's property closure and as the sequential backend's probe property.
-    static func syncSequentialProperty<Spec: StateMachineSpec>(_: Spec.Type) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
-        { tagged in
-            let spec = Spec()
-            for (_, command) in tagged {
-                do {
-                    try spec.run(command)
-                    try spec.checkInvariants()
-                } catch is StateMachineSkip {
-                    continue
-                } catch {
-                    return false
-                }
-            }
-            return true
+    static func syncSequentialProperty<Spec: StateMachineSpec>(_ specType: Spec.Type) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
+        let verdictProperty = syncSequentialVerdictProperty(specType)
+        return { tagged in
+            verdictProperty(tagged).isFailure == false
         }
     }
 
-    /// Verdict-returning twin of ``syncSequentialProperty(_:)`` for the `time:` runner: preserves the thrown error as the failure symptom, so the reduction gate's per-symptom accounting can tell invariant violations (`StateMachineCheckFailure`) apart from user-thrown error types instead of collapsing every spec fault into one capped symptom. The Bool variant remains the probe property for pruning and reduction, where only pass/fail matters.
+    /// The one sequential executor loop, returning a verdict: preserves the thrown error as the failure symptom, so the `time:` runner's reduction gate can tell invariant violations (`StateMachineCheckFailure`) apart from user-thrown error types instead of collapsing every spec fault into one capped symptom. ``syncSequentialProperty(_:)`` derives the Bool probe from this, so the two can never disagree on what passes.
     static func syncSequentialVerdictProperty<Spec: StateMachineSpec>(_: Spec.Type) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> SprawlVerdict {
         { tagged in
             let spec = Spec()
@@ -559,6 +549,22 @@ extension __ExhaustRuntime {
         }
 
         return sources
+    }
+}
+
+// MARK: - Sequence Generator Construction
+
+extension __ExhaustRuntime {
+    /// Builds the sequential command-sequence generator: up to `commandLimit` commands at constant scaling, each tagged with `ScheduleMarker.prefix`.
+    ///
+    /// Shared by plain `#execute`'s sequential entry points and the `time:` spec adapter, so the sequence shape (length range, scaling, marker tagging) cannot drift between the modes.
+    static func taggedSequenceGenerator<Command>(
+        commandGen: ReflectiveGenerator<Command>,
+        commandLimit: Int
+    ) -> Generator<[(ScheduleMarker, Command)]> {
+        commandGen.array(length: 0 ... commandLimit, scaling: .constant).gen.map { commands in
+            commands.map { (ScheduleMarker.prefix, $0) }
+        }
     }
 }
 
