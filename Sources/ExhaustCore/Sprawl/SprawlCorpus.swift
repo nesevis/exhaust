@@ -160,6 +160,20 @@ package final class SprawlCorpus {
 
     // MARK: - Admission
 
+    /// Whether the (edge, hit count) pair lands in a bucket no admitted entry has produced for that edge. The single admission-novelty predicate: ``offer(sequence:tree:hits:convergence:generation:phase:isBoundaryDerived:propertyFailed:)`` and ``wouldAdmit(hits:)`` both build on it, so the pre-check cannot drift from real admission. An unseen edge has mask 0 and is therefore always novel.
+    private func isNovelBucket(edge: Int, hitCount: UInt8) -> Bool {
+        seenBucketMasks[edge] & HitCountBucket.bucketMask(for: hitCount) == 0
+    }
+
+    /// Answers whether a candidate with the given hits would be admitted without mutating corpus state.
+    ///
+    /// The spec path's prune hook uses this to decide whether pruning is worth running on a passing candidate: pruning costs one sequential SUT execution, so the hook fires only on failures and would-be admissions.
+    package func wouldAdmit(hits: [(edge: Int, hitCount: UInt8)]) -> Bool {
+        hits.contains { edge, hitCount in
+            edge >= 0 && edge < edgeCount && isNovelBucket(edge: edge, hitCount: hitCount)
+        }
+    }
+
     /// Offers a candidate to the corpus.
     ///
     /// - Parameters:
@@ -196,11 +210,10 @@ package final class SprawlCorpus {
             if edgeIncidenceCounts[edge] < 3 {
                 edgeIncidenceCounts[edge] += 1
             }
-            let mask = HitCountBucket.bucketMask(for: hitCount)
             if seenBucketMasks[edge] == 0 {
                 introducedEdges.append(edge)
-                hasNovelBucket = true
-            } else if seenBucketMasks[edge] & mask == 0 {
+            }
+            if isNovelBucket(edge: edge, hitCount: hitCount) {
                 hasNovelBucket = true
             }
         }

@@ -9,12 +9,13 @@
 //     >> .benchmarks/normalization-on.jsonl
 
 import ArgumentParser
+import ExecuteFixture
 import Exhaust
 import ExploreFixture
 import Foundation
 
 @main
-struct ExploreBenchmark: ParsableCommand {
+struct ExploreBenchmark: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Runs one benchmark arm: the given seeds against one fixture, one JSONL record per run on stdout.",
         discussion: "The experiment arm comes from the EXHAUST_SPRAWL_EXPERIMENT environment variable set by the invoking command; --arm is pure metadata and cannot silently disagree with the knobs. Run with EXHAUST_RESUME=0 and a scratch EXHAUST_STATE_DIR so an interrupted benchmark cannot resume-contaminate the next run."
@@ -24,6 +25,7 @@ struct ExploreBenchmark: ParsableCommand {
     enum FixtureChoice: String, ExpressibleByArgument, CaseIterable {
         case parser
         case deep
+        case queue
     }
 
     @Option(help: "Seeds as a range like 1-20 or a list like 1,4,9.")
@@ -50,7 +52,7 @@ struct ExploreBenchmark: ParsableCommand {
         }
     }
 
-    func run() throws {
+    func run() async throws {
         let budget: SprawlDuration
         let budgetInSeconds: Double
         if let budgetMillis {
@@ -86,6 +88,14 @@ struct ExploreBenchmark: ParsableCommand {
                     ) { packet in
                         try DeepParser.decode(packet).byteCount >= 0
                     }
+                case .queue:
+                    report = await #execute(
+                        BenchmarkQueueSpec.self,
+                        time: budget,
+                        .commandLimit(40),
+                        .replay(.numeric(seed)),
+                        .suppress(.all)
+                    )
             }
             if case .instrumentationMissing = report.termination {
                 fail("the fixture build lacks coverage instrumentation; build the package in debug configuration")
@@ -223,5 +233,83 @@ struct BenchmarkRecord: Codable {
                 phase: cluster.discoveringPhase.rawValue
             )
         }
+    }
+}
+
+// MARK: - Queue Fixture Spec
+
+/// Twin of BoundedQueueSpec in ExecuteTests/ExecuteFuzzTests.swift: the benchmark must measure the same spec the tests validate, and the two targets cannot share the class because @StateMachine synthesis is module-internal. Change both or neither.
+@StateMachine(.sequential)
+final class BenchmarkQueueSpec {
+    var model: [Int] = []
+    @SystemUnderTest var queue: BoundedQueue = .init(capacity: 24)
+
+    @Invariant
+    func countMatchesModel() -> Bool {
+        queue.count == model.count
+    }
+
+    @Invariant
+    func elementsMatchModel() -> Bool {
+        queue.elements == model
+    }
+
+    @Command(weight: 1, .int(in: 0 ... 9))
+    func enqueue(value: Int) throws {
+        let succeeded = queue.enqueue(value)
+        if succeeded {
+            model.append(value)
+        }
+    }
+
+    @Command(weight: 1)
+    func dequeue() throws {
+        guard queue.isEmpty == false else {
+            throw skip()
+        }
+        let removed = try queue.dequeue()
+        let expected = model.removeFirst()
+        guard removed == expected else {
+            throw BoundedQueueError.corruption
+        }
+    }
+
+    @Command(weight: 1)
+    func peekTracked() throws {
+        guard queue.isEmpty == false else {
+            throw skip()
+        }
+        let peeked = try queue.peekTracked()
+        guard peeked == model.first else {
+            throw BoundedQueueError.corruption
+        }
+    }
+
+    @Command(weight: 1)
+    func clear() throws {
+        queue.clear()
+        if queue.elements == [-888] {
+            throw BoundedQueueError.corruption
+        }
+        model.removeAll()
+    }
+
+    @Command(weight: 1, .int(in: 1 ... 3), .int(in: 0 ... 9))
+    func batchEnqueue(count: Int, startValue: Int) throws {
+        let values = (0 ..< count).map { startValue + $0 }
+        let added = queue.batchEnqueue(values)
+        model.append(contentsOf: values.prefix(added))
+    }
+
+    @Command(weight: 1)
+    func stats() throws {
+        let info = queue.stats()
+        guard info.count == model.count else {
+            throw BoundedQueueError.corruption
+        }
+    }
+
+    func failureDescription() -> String? {
+        "queue: \(queue.elements), model: \(model)"
     }
 }

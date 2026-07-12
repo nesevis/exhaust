@@ -49,6 +49,8 @@ package struct SprawlRunnerConfiguration {
     package var persistence: SprawlPersistenceContext?
     /// Knobs for benchmark-gated mechanisms; see ``SprawlExperiments`` for the seam precedence.
     package var experiments: SprawlExperiments
+    /// Concurrency cap for the reduction pool. Nil uses the default (processor-count-derived). Width 1 serializes reductions FIFO without dropping them.
+    package var reductionPoolWidth: Int?
 
     package init(
         budgetNanoseconds: UInt64,

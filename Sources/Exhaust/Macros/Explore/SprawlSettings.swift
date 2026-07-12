@@ -28,4 +28,11 @@ public enum SprawlSettings: Sendable {
     ///
     /// Defaults to `.log(.error)` when omitted — only error-level messages appear.
     case log(LogLevel)
+
+    /// Limits the maximum number of commands per generated sequence in `#execute(time:)` runs.
+    ///
+    /// When omitted, the runner estimates a default from the command generator's domain size. Pass this when the default estimate produces sequences too short to reach deep state (for example, a bounded data structure whose accumulation faults require capacity-many operations without interruption). Values below 1 are a configuration error.
+    ///
+    /// Only valid for `#execute(time:)`. Passing this setting to `#explore(time:)` is a configuration error because `#explore` has no command-sequence structure to limit.
+    case commandLimit(Int)
 }

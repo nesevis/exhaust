@@ -230,6 +230,8 @@ public extension __ExhaustRuntime {
         settings: [SprawlSettings],
         source injectedSource: (any CoverageSource)?,
         configure: ((inout SprawlRunnerConfiguration) -> Void)?,
+        prune: (@Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree))? = nil,
+        reduceStrategy: (@Sendable (ChoiceTree, Output, FailureSymptom) -> (tree: ChoiceTree, value: Output))? = nil,
         persistence: SprawlPersistenceContext? = nil,
         property: @escaping @Sendable (Output) -> SprawlVerdict
     ) -> SprawlReport {
@@ -253,6 +255,11 @@ public extension __ExhaustRuntime {
                     }
                 case let .log(level):
                     logLevel = level
+                case .commandLimit:
+                    return .empty(
+                        termination: .invalidConfiguration(".commandLimit is only valid for #execute(time:). #explore(time:) has no command-sequence structure to limit."),
+                        seed: 0
+                    )
             }
         }
 
@@ -307,7 +314,9 @@ public extension __ExhaustRuntime {
                 gen: gen,
                 property: property,
                 source: source,
-                configuration: configuration
+                configuration: configuration,
+                prune: prune,
+                reduceStrategy: reduceStrategy
             )
             let result = runner.run()
             if result.clusters.isEmpty {
@@ -329,7 +338,7 @@ public extension __ExhaustRuntime {
     // MARK: - Crash Recovery
 
     /// The shared prologue of every `time:` entry point: builds the call site's crash-recovery context and reports any predecessor crash finding before the run starts.
-    private static func prepareSprawlPersistence(
+    package static func prepareSprawlPersistence(
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -572,7 +581,8 @@ public extension __ExhaustRuntime {
 
     // MARK: - Helpers
 
-    private static func sprawlSuppressesIssueReporting(_ settings: [SprawlSettings]) -> Bool {
+    /// Whether the settings ask the run to keep its fault inventory out of issue reporting.
+    internal static func sprawlSuppressesIssueReporting(_ settings: [SprawlSettings]) -> Bool {
         settings.contains { setting in
             if case let .suppress(option) = setting, option == .issueReporting || option == .all {
                 return true

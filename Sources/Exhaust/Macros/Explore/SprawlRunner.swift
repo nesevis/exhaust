@@ -14,11 +14,15 @@ package final class SprawlRunner<Output> {
     let property: @Sendable (Output) -> SprawlVerdict
     let source: any CoverageSource
     let configuration: SprawlRunnerConfiguration
+    /// Prunes the value and tree before corpus admission. Nil on the value path; the spec path removes precondition-skipped commands so the corpus stores only live sequences. Runs outside the attribution bracket, only on failures and would-be admissions.
+    private let prune: (@Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree))?
+    /// Replaces the default property-only `choiceGraphReduce`. Nil on the value path; the spec path injects a closure around its backend-specific reducer. Returns the reduced tree and value, which the runner flattens into a sequence.
+    private let reduceStrategy: (@Sendable (ChoiceTree, Output, FailureSymptom) -> (tree: ChoiceTree, value: Output))?
     private let reducerConfiguration: Interpreters.ReducerConfiguration
 
     let corpus: SprawlCorpus
     let inventory = FaultInventory()
-    private let pool = ReductionPool()
+    private let pool: ReductionPool
     private var gate: ReductionGate
     var prng: Xoshiro256
     var bandit = MutationBandit()
@@ -65,15 +69,20 @@ package final class SprawlRunner<Output> {
         gen: Generator<Output>,
         property: @escaping @Sendable (Output) -> SprawlVerdict,
         source: any CoverageSource,
-        configuration: SprawlRunnerConfiguration
+        configuration: SprawlRunnerConfiguration,
+        prune: (@Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree))? = nil,
+        reduceStrategy: (@Sendable (ChoiceTree, Output, FailureSymptom) -> (tree: ChoiceTree, value: Output))? = nil
     ) {
         self.gen = gen
         erasedGen = gen.erase()
         self.property = property
         self.source = source
         self.configuration = configuration
+        self.prune = prune
+        self.reduceStrategy = reduceStrategy
         corpus = SprawlCorpus(edgeCount: source.edgeCount, experiments: configuration.experiments)
         gate = ReductionGate(experiments: configuration.experiments)
+        pool = ReductionPool(maxConcurrent: configuration.reductionPoolWidth ?? SprawlTunables.maxConcurrentReductions)
         prng = Xoshiro256(seed: configuration.seed)
         reducerConfiguration = Interpreters.ReducerConfiguration(
             maxStalls: 2,
@@ -418,9 +427,22 @@ package final class SprawlRunner<Output> {
         }
         totalAttempts += 1
 
+        // The prune hook runs outside the attribution bracket (recordAttempt is always called outside it). It fires only on failures and would-be corpus admissions — the common non-novel pass never pays the pruning cost.
+        var effectiveValue = value
+        var effectiveTree = tree
+        var effectiveSequence = sequence
+        if let prune,
+           verdict.isFailure || corpus.wouldAdmit(hits: hits)
+        {
+            let pruned = prune(effectiveValue, effectiveTree)
+            effectiveValue = pruned.value
+            effectiveTree = pruned.tree
+            effectiveSequence = ChoiceSequence.flatten(effectiveTree)
+        }
+
         let admission = corpus.offer(
-            sequence: sequence,
-            tree: tree,
+            sequence: effectiveSequence,
+            tree: effectiveTree,
             hits: hits,
             convergence: convergence,
             generation: generation,
@@ -433,9 +455,9 @@ package final class SprawlRunner<Output> {
         }
         if case let .fail(symptom) = verdict {
             handleFailure(
-                value: value,
-                tree: tree,
-                sequence: sequence,
+                value: effectiveValue,
+                tree: effectiveTree,
+                sequence: effectiveSequence,
                 symptom: symptom,
                 parentIndex: parentIndex,
                 phase: phase,
@@ -505,30 +527,39 @@ package final class SprawlRunner<Output> {
         let attributionToken = attributionToken
         let inventory = inventory
         let pendingClassifications = pendingClassifications
+        let reduceStrategy = reduceStrategy
 
         pool.submit {
-            // Property-only predicate: reduce while the property fails, exactly as #exhaust does. Reduction attempts are never attributed.
-            let boolProperty: (Output) -> Bool = { capturedProperty($0).isFailure == false }
-            let outcome = try? Interpreters.choiceGraphReduce(
-                gen: capturedGen,
-                tree: capturedTree,
-                output: capturedValue,
-                config: reducerConfiguration,
-                property: boolProperty
-            )
-
             var reducedSequence: ChoiceSequence
             var reducedTree: ChoiceTree
             var reducedValue: Output
-            switch outcome {
-                case let .reduced(sequence, tree, output), let .unreduced(sequence, tree, output):
-                    reducedSequence = sequence
-                    reducedTree = tree
-                    reducedValue = output
-                case .failure, nil:
-                    reducedSequence = ChoiceSequence.flatten(capturedTree)
-                    reducedTree = capturedTree
-                    reducedValue = capturedValue
+
+            if let reduceStrategy {
+                let result = reduceStrategy(capturedTree, capturedValue, symptom)
+                reducedTree = result.tree
+                reducedSequence = ChoiceSequence.flatten(reducedTree)
+                reducedValue = result.value
+            } else {
+                // Property-only predicate: reduce while the property fails, exactly as #exhaust does. Reduction attempts are never attributed.
+                let boolProperty: (Output) -> Bool = { capturedProperty($0).isFailure == false }
+                let outcome = try? Interpreters.choiceGraphReduce(
+                    gen: capturedGen,
+                    tree: capturedTree,
+                    output: capturedValue,
+                    config: reducerConfiguration,
+                    property: boolProperty
+                )
+
+                switch outcome {
+                    case let .reduced(sequence, tree, output), let .unreduced(sequence, tree, output):
+                        reducedSequence = sequence
+                        reducedTree = tree
+                        reducedValue = output
+                    case .failure, nil:
+                        reducedSequence = ChoiceSequence.flatten(capturedTree)
+                        reducedTree = capturedTree
+                        reducedValue = capturedValue
+                }
             }
 
             // Normalization runs only on the would-be-new-cluster event: a reduced form whose key already exists needs no canonicalization, and the containsKey pre-check keeps the probing off the saturated-cluster path entirely.

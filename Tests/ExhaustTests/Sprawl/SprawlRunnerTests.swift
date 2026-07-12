@@ -144,6 +144,38 @@ struct SprawlRunnerTests {
         #expect(result.edgeSingletonCount == 0)
         #expect(result.edgeDoubletonCount == 0)
     }
+
+    @Test("Seam defaults produce identical output across refactors")
+    func seamRegressionGuard() {
+        // Exercises all three configuration seams (reduceStrategy, prune, reductionPoolWidth) at their defaults (nil). The pinned seed and attempt limit make the result deterministic; any behavioral change in the seam plumbing will shift these assertions.
+        let property: @Sendable (Int) -> SprawlVerdict = { value in
+            (value > 40 && value < 60) || value > 940 ? .fail(.returnedFalse) : .pass
+        }
+        let runner = SprawlRunner(
+            gen: Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
+            property: property,
+            source: bucketedSource(),
+            configuration: SprawlRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 11,
+                attemptLimit: 1500
+            )
+        )
+        let result = runner.run()
+
+        #expect(result.clusters.count == 2)
+        let descriptions = Set(result.clusters.map(\.reducedDescription))
+        #expect(descriptions == Set(["41", "941"]))
+        #expect(result.termination == .attemptLimitReached)
+        #expect(result.screeningAttempts > 0)
+        #expect(result.samplingAttempts > 0)
+        #expect(result.sprawlAttempts > 0)
+        #expect(result.totalAttempts >= 1500)
+        #expect(result.reductionsTimedOut == false)
+        for cluster in result.clusters {
+            #expect(cluster.reducedCount >= 1)
+        }
+    }
 }
 
 // MARK: - Helpers

@@ -241,9 +241,11 @@ extension __ExhaustRuntime {
 }
 
 extension __ExhaustRuntime {
-    /// Identifies skipped commands and prunes them from the choice tree, returning a shorter value and tree that still fail the property.
+    /// Identifies skipped commands and prunes them from the choice tree, returning a shorter value and tree.
     ///
-    /// Runs the command sequence through the skip identifier (which executes sequentially on a fresh spec) to find commands whose preconditions are not met. If any are found, those elements are removed from the tree, the tree is rematerialized, and the property is re-checked. If the pruned sequence still fails, the pruned value and tree are returned; otherwise the originals are returned unchanged.
+    /// Runs the command sequence through the skip identifier (which executes sequentially on a fresh spec) to find commands whose preconditions are not met. If any are found, those elements are removed from the tree and the tree is rematerialized. When `requireFailurePreserved` is `true`, the rematerialized value is returned only if it still fails the property; otherwise the originals are returned unchanged. When `false`, the rematerialized value is returned whenever materialization succeeds, without re-checking the property.
+    ///
+    /// - Parameter requireFailurePreserved: Whether to re-check that the pruned sequence still fails the property before returning it. The counterexample-reduction callers keep this `true`. The `#execute(time:)` prune hook passes `false` because it normalizes every admitted candidate rather than only counterexamples, and skip pruning is pure element deletion into a fully populated tree, so a failing candidate keeps failing.
     static func pruneSkippedCommands<Value: Collection>(
         value: Value,
         tree: ChoiceTree,
@@ -251,6 +253,7 @@ extension __ExhaustRuntime {
         seed: UInt64,
         property: @Sendable (Value) -> Bool,
         identifySkips: (Value) -> Set<Int>,
+        requireFailurePreserved: Bool = true,
         logEvent: String
     ) -> (value: Value, tree: ChoiceTree) {
         let skippedIndices = identifySkips(value)
@@ -273,10 +276,10 @@ extension __ExhaustRuntime {
         let prunedMode = Materializer.Mode.guided(seed: seed, fallbackTree: prunedTree)
         if case let .success(rematerialized, rematerializedTree, _) = Materializer.materialize(
             generator, prefix: prunedSequence, mode: prunedMode
-        ),
-            property(rematerialized) == false
-        {
-            return (rematerialized, rematerializedTree)
+        ) {
+            if requireFailurePreserved == false || property(rematerialized) == false {
+                return (rematerialized, rematerializedTree)
+            }
         }
         return (value, tree)
     }
@@ -424,6 +427,24 @@ extension __ExhaustRuntime {
                 }
             }
             return true
+        }
+    }
+
+    /// Verdict-returning twin of ``syncSequentialProperty(_:)`` for the `time:` runner: preserves the thrown error as the failure symptom, so the reduction gate's per-symptom accounting can tell invariant violations (`StateMachineCheckFailure`) apart from user-thrown error types instead of collapsing every spec fault into one capped symptom. The Bool variant remains the probe property for pruning and reduction, where only pass/fail matters.
+    static func syncSequentialVerdictProperty<Spec: StateMachineSpec>(_: Spec.Type) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> SprawlVerdict {
+        { tagged in
+            let spec = Spec()
+            for (_, command) in tagged {
+                do {
+                    try spec.run(command)
+                    try spec.checkInvariants()
+                } catch is StateMachineSkip {
+                    continue
+                } catch {
+                    return .fail(.thrown(error))
+                }
+            }
+            return .pass
         }
     }
 

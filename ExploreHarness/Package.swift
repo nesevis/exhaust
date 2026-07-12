@@ -36,11 +36,28 @@ let package = Package(
             ],
             swiftSettings: coverageFlags
         ),
+        // The deliberately buggy bounded queue SUT for #execute(time:) validation.
+        .target(
+            name: "ExecuteFixture",
+            dependencies: [
+                .product(name: "Exhaust", package: "Exhaust"),
+            ],
+            swiftSettings: coverageFlags
+        ),
         // Uninstrumented: the test module measures the fixture's coverage, not its own.
         .testTarget(
             name: "ExploreTests",
             dependencies: [
                 "ExploreFixture",
+                .product(name: "Exhaust", package: "Exhaust"),
+                .product(name: "ExhaustCore", package: "Exhaust"),
+            ]
+        ),
+        // Uninstrumented: validates #execute(time:) against the BoundedQueue fixture.
+        .testTarget(
+            name: "ExecuteTests",
+            dependencies: [
+                "ExecuteFixture",
                 .product(name: "Exhaust", package: "Exhaust"),
                 .product(name: "ExhaustCore", package: "Exhaust"),
             ]
@@ -54,11 +71,22 @@ let package = Package(
                 .product(name: "ExhaustCore", package: "Exhaust"),
             ]
         ),
+        // Spawned as a child process by the execute trap test: runs a spec fuzz under time: that traps.
+        .executableTarget(
+            name: "ExecuteTrapProbe",
+            dependencies: [
+                "ExecuteFixture",
+                .product(name: "Exhaust", package: "Exhaust"),
+                .product(name: "ExhaustCore", package: "Exhaust"),
+            ],
+            swiftSettings: coverageFlags
+        ),
         // Uninstrumented benchmark driver: loops seeds against one fixture under one experiment arm and emits one JSONL record per run to stdout. Arms are configured through the EXHAUST_SPRAWL_EXPERIMENT environment variable set by the invoking command; see README.md.
         .executableTarget(
             name: "ExploreBenchmark",
             dependencies: [
                 "ExploreFixture",
+                "ExecuteFixture",
                 .product(name: "Exhaust", package: "Exhaust"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]

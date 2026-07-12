@@ -94,6 +94,14 @@ package enum SprawlTunables {
     /// Sprawl attempts per swarm epoch. Attempts-based rather than wall-clock so the epoch schedule replays deterministically under a pinned seed regardless of machine load.
     package static let swarmEpochAttempts = 2048
 
+    // MARK: - Spec-Specific Defaults
+
+    /// Consecutive samples without a novel edge before random sampling is considered saturated for spec runs. Lower than the value path because spec attempts are orders of magnitude more expensive.
+    package static let specSamplingPlateauWindow = 200
+
+    /// Wall-clock deadline for one spec reduction. Higher than the value path because a spec reduction probe replays a whole command sequence against a fresh SUT.
+    package static let specReductionDeadlineNanoseconds: UInt64 = reductionDeadlineNanoseconds * 4
+
     // MARK: - Escape-Hatch Backoff (Experiment: escapeBackoff)
 
     /// Upper bound on the adaptive escape interval. The interval doubles each time an escape reduction lands in an existing cluster, so without a cap a long run would stop escaping entirely — and the escape hatch exists precisely because symptom matching is a weak signal.
