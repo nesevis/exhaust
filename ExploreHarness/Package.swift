@@ -44,6 +44,14 @@ let package = Package(
             ],
             swiftSettings: coverageFlags
         ),
+        // Uninstrumented shared home for the spec-path fixture specs. Both ExecuteTests and ExploreBenchmark import it, so the benchmark measures the exact spec the tests validate — access-level-mirroring @StateMachine synthesis (public specs get public members) is what makes the cross-module sharing possible.
+        .target(
+            name: "MatrixSpecs",
+            dependencies: [
+                "ExecuteFixture",
+                .product(name: "Exhaust", package: "Exhaust"),
+            ]
+        ),
         // Uninstrumented: the test module measures the fixture's coverage, not its own.
         .testTarget(
             name: "ExploreTests",
@@ -58,6 +66,7 @@ let package = Package(
             name: "ExecuteTests",
             dependencies: [
                 "ExecuteFixture",
+                "MatrixSpecs",
                 .product(name: "Exhaust", package: "Exhaust"),
                 .product(name: "ExhaustCore", package: "Exhaust"),
             ]
@@ -87,6 +96,7 @@ let package = Package(
             dependencies: [
                 "ExploreFixture",
                 "ExecuteFixture",
+                "MatrixSpecs",
                 .product(name: "Exhaust", package: "Exhaust"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]

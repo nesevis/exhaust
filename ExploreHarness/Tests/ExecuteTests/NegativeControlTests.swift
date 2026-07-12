@@ -1,5 +1,6 @@
 import ExecuteFixture
 import Exhaust
+import MatrixSpecs
 import Testing
 
 @Suite("Negative control: gradient-free latch", .serialized)
@@ -51,27 +52,5 @@ struct NegativeControlTests {
         )
         #expect(report.totalAttempts > 0)
         #expect(report.clusters.isEmpty, "The gradient-free latch was found — a feedback channel now ladders streak-gated state. Move this fixture into that channel's differential gate and update fuzzer-selftest-sut-landscape.md.")
-    }
-}
-
-// MARK: - Spec
-
-/// The negative control's spec: one command whose uniform digit argument makes the streak-gated fault blind-improbable. A future feedback channel's differential gate must measure this exact spec shape (one command kind, argument-carried signal) so the gate and the pinned baseline stay comparable.
-@StateMachine(.sequential)
-final class ConsecutiveLatchSpec {
-    @SystemUnderTest var latch: ConsecutiveLatch = .init()
-
-    @Invariant
-    func neverTripped() -> Bool {
-        latch.isTripped == false
-    }
-
-    @Command(weight: 1, .int(in: 0 ... 9))
-    func pulse(digit: Int) throws {
-        latch.pulse(digit)
-    }
-
-    func failureDescription() -> String? {
-        "\(latch)"
     }
 }

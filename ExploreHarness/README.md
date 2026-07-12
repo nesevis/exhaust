@@ -24,8 +24,8 @@ EXHAUST_SPRAWL_EXPERIMENT="normalization=on" \
 swift run ExploreBenchmark --seeds 1-20 --budget-seconds 10 --fixture parser --arm normalization-on \
   >> .benchmarks/normalization-on-parser.jsonl
 
-python3 Benchmarks/analyze.py .benchmarks/baseline-parser.jsonl .benchmarks/normalization-on-parser.jsonl \
+swift run ExploreBenchmark analyze .benchmarks/baseline-parser.jsonl .benchmarks/normalization-on-parser.jsonl \
   --discovery "faultB=.control;region: 2;[0]: 241"
 ```
 
-The analyzer pairs runs by (fixture, seed), prints per-seed deltas first, then medians, IQRs, and a two-sided paired sign-test verdict per metric. `.benchmarks/` is gitignored; benchmark outputs are never committed.
+The `analyze` subcommand pairs runs by (fixture, seed), prints per-seed deltas first, then per-fixture medians, IQRs, and two-sided paired sign-test verdicts per metric (plus a pooled block on multi-fixture files). `swift run ExploreBenchmark calibrate` runs the whole matrix calibration sweep and prints per-fixture window verdicts; it pins the resume environment itself. `.benchmarks/` is gitignored; benchmark outputs are never committed.

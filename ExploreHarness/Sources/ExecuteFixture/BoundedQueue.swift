@@ -8,6 +8,10 @@
 // fires before that guard is ever reached, so it forms no usable ladder toward A.
 // `isFull` exposes the same guard predicate and is intentionally left uncalled.
 //
+// ## Shape Coordinates
+//
+// Trigger class: accumulation/absence (A) plus a sequence-gated shared-symptom pair (S, P). Coverage surface: flat on every trigger (no edge correlates with any trigger variable's progress). Vocabulary: six commands, uniform weight. Argument domains: small ints (0...9, 1...3). Length scale: fault A's minimal is 24 commands at the default capacity — inside the default limit of 40; S and P are far inside.
+//
 // ## Ground-Truth Registry
 //
 // Fault A (swarm-suppressed accumulation):
@@ -37,6 +41,8 @@
 // A fires on highWaterMark (resets on dequeue/clear). S fires on clearWhenNonEmpty
 // (requires clear, which resets hwm). P fires on peekAtCountOne (needs count==1;
 // high hwm at capacity 24 implies count>=24, never 1). No trigger is a subset of another.
+//
+// Pinned baselines (MX1g re-measure, 2026-07-12, seeds 1-20, 10 s, defaults, .commandLimit(40)): A 6/20 (earlier pin 4/20), S 20/20, P 20/20.
 
 public struct BoundedQueue: Sendable {
     public private(set) var elements: [Int]
