@@ -51,6 +51,35 @@
             }
         }
 
+        @Test("Async macro expands to __runStateMachineTimeDispatchAsync")
+        func asyncSpec() {
+            withMacroTesting(macros: ["execute": ExecuteTimeAsyncMacro.self]) {
+                assertMacro {
+                    """
+                    #execute(ConcurrentQueueSpec.self, time: .minutes(5), .parallelize(lanes: .two))
+                    """
+                } diagnostics: {
+                    """
+                    #execute(ConcurrentQueueSpec.self, time: .minutes(5), .parallelize(lanes: .two))
+                    ┬───────────────────────────────────────────────────────────────────────────────
+                    ╰─ ⚠️ #execute(time:) is experimental: its settings, report format, and search behavior may change in any release
+                    """
+                } expansion: {
+                    """
+                    __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
+                        ConcurrentQueueSpec.self,
+                        time: .minutes(5),
+                        settings: [.parallelize(lanes: .two)],
+                        fileID: #fileID,
+                        filePath: #filePath,
+                        line: #line,
+                        column: #column
+                    )
+                    """
+                }
+            }
+        }
+
         @Test("Settings pass through as an array")
         func settingsPassThrough() {
             assertMacro {

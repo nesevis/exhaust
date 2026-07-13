@@ -71,7 +71,7 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: report)
+        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppressAttachments)
         return report
     }
 
@@ -117,7 +117,7 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: report)
+        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppressAttachments)
         return report
     }
 
@@ -157,7 +157,7 @@ public extension __ExhaustRuntime {
             )
             return report
         }
-        recordFuzzAttachments(report: report)
+        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppressAttachments)
         return report
     }
 
@@ -216,7 +216,7 @@ public extension __ExhaustRuntime {
             )
             return report
         }
-        recordFuzzAttachments(report: finalReport)
+        recordFuzzAttachments(report: finalReport, suppressAttachments: ParsedFuzzSettings(settings).suppressAttachments)
         return finalReport
     }
 
@@ -242,6 +242,12 @@ public extension __ExhaustRuntime {
         if parsed.commandLimit != nil {
             return .empty(
                 termination: .invalidConfiguration(".commandLimit is only valid for #execute(time:). #explore(time:) has no command-sequence structure to limit."),
+                seed: 0
+            )
+        }
+        if parsed.parallelize != nil {
+            return .empty(
+                termination: .invalidConfiguration(".parallelize is only valid for #execute(time:). #explore(time:) has no command sequences to parallelize."),
                 seed: 0
             )
         }
@@ -454,8 +460,8 @@ public extension __ExhaustRuntime {
     /// Records the run's checkpoint attachments: one per discovered cluster plus the final summary.
     ///
     /// Eager and outcome-independent — a passing fuzz run still attaches its summary, because "what did fifteen minutes buy" is the report's job either way. Must run on the test's own task: Swift Testing's attachment association is task-local, and the XCTest activity hop asserts the main actor, so the async entries call this after `dispatchToGCD` returns, never inside it.
-    package static func recordFuzzAttachments(report: FuzzReport) {
-        guard report.totalAttempts > 0 else {
+    package static func recordFuzzAttachments(report: FuzzReport, suppressAttachments: Bool) {
+        guard suppressAttachments == false, report.totalAttempts > 0 else {
             return
         }
         for cluster in report.clusters {

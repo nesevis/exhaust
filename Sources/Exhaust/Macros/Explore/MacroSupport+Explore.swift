@@ -68,6 +68,9 @@ public extension __ExhaustRuntime {
                             suppressIssueReporting = true
                         case .logs:
                             suppressLogs = true
+                        case .attachments:
+                            // Plain #explore records no attachments; accepted so .suppress reads the same everywhere.
+                            break
                         case .all:
                             suppressIssueReporting = true
                             suppressLogs = true

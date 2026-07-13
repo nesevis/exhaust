@@ -168,6 +168,57 @@ struct ExploreTimeRuntimeTests {
         #expect(summary.contains(".replay(7)"))
     }
 
+    @Test("suppress(.attachments) and suppress(.all) both parse into the attachment flag")
+    func suppressAttachmentsParsing() {
+        #expect(ParsedFuzzSettings([.suppress(.attachments)]).suppressAttachments)
+        #expect(ParsedFuzzSettings([.suppress(.attachments)]).suppressIssueReporting == false)
+        #expect(ParsedFuzzSettings([.suppress(.attachments)]).suppressLogs == false)
+        #expect(ParsedFuzzSettings([.suppress(.all)]).suppressAttachments)
+        #expect(ParsedFuzzSettings([.suppress(.issueReporting)]).suppressAttachments == false)
+    }
+
+    @Test("Terminal suspects collapse duplicate function names, keeping the line-bearing form")
+    func suspectsCollapseDuplicateNames() {
+        // Three renderings of the same function — full line, line 0 (interior edge), and no file at all — plus one genuinely distinct suspect. Only the line-bearing form of the duplicate and the distinct suspect should survive.
+        let edges: [FuzzReport.DiscriminatingEdge] = [
+            makeEdge(index: 1, location: "ExecuteFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
+            makeEdge(index: 2, location: "ExecuteFixture.RacyLedger.audit() + 80 (RacyLedger.swift:0)"),
+            makeEdge(index: 3, location: "ExecuteFixture.RacyLedger.audit() + 96"),
+            makeEdge(index: 4, location: "ExecuteFixture.RacyLedger.deposit(_:) + 12 (RacyLedger.swift:36)"),
+        ]
+        let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
+        #expect(suspects == [
+            "RacyLedger.audit (RacyLedger.swift:45)",
+            "RacyLedger.deposit (RacyLedger.swift:36)",
+        ])
+    }
+
+    @Test("Terminal suspects keep distinct line references within one function")
+    func suspectsKeepDistinctLines() {
+        // Two resolved lines in the same function are distinct locations; only the line-less rendering collapses.
+        let edges: [FuzzReport.DiscriminatingEdge] = [
+            makeEdge(index: 1, location: "ExecuteFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
+            makeEdge(index: 2, location: "ExecuteFixture.RacyLedger.audit() + 80 (RacyLedger.swift:52)"),
+            makeEdge(index: 3, location: "ExecuteFixture.RacyLedger.audit() + 96 (RacyLedger.swift:0)"),
+        ]
+        let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
+        #expect(suspects == [
+            "RacyLedger.audit (RacyLedger.swift:45)",
+            "RacyLedger.audit (RacyLedger.swift:52)",
+        ])
+    }
+
+    @Test("Terminal suspects prefer the line-bearing form even when it ranks behind a line-less duplicate")
+    func suspectsPreferLineBearingForm() {
+        // The line-less form leads the edge ranking; the collapse must still keep the line-bearing rendering.
+        let edges: [FuzzReport.DiscriminatingEdge] = [
+            makeEdge(index: 1, location: "ExecuteFixture.RacyLedger.audit() + 96 (RacyLedger.swift:0)"),
+            makeEdge(index: 2, location: "ExecuteFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
+        ]
+        let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
+        #expect(suspects == ["RacyLedger.audit (RacyLedger.swift:45)"])
+    }
+
     @Test("A run whose property never ran reports the pointless-run error even when suppressed")
     func pointlessRun() {
         let report = __ExhaustRuntime.runExploreTimeCore(
@@ -247,6 +298,34 @@ struct ExploreTimeRuntimeTests {
 // MARK: - Helpers
 
 private struct MarkerError: Error {}
+
+private func makeEdge(index: Int, location: String?) -> FuzzReport.DiscriminatingEdge {
+    FuzzReport.DiscriminatingEdge(
+        edgeIndex: index,
+        failureHitFraction: 1.0,
+        passingHitFraction: 0.0,
+        location: location
+    )
+}
+
+private func makeCluster(discriminatingEdges: [FuzzReport.DiscriminatingEdge]) -> FuzzReport.Cluster {
+    FuzzReport.Cluster(
+        id: 0,
+        reducedDescription: "value",
+        symptoms: ["returnedFalse"],
+        instanceCount: 1,
+        reducedCount: 1,
+        unnormalizedMemberCount: 0,
+        isLikelySplit: false,
+        discoveringPhase: .sampling,
+        firstSeen: .seconds(1),
+        firstSeenAttempt: 1,
+        lastSeen: .seconds(1),
+        discriminatingEdges: discriminatingEdges,
+        necessaryEdgeCount: discriminatingEdges.count,
+        nearMissEdgeIndices: []
+    )
+}
 
 private func passthroughSource() -> SyntheticCoverageSource<Int> {
     SyntheticCoverageSource<Int>(edgeCount: 32, edges: { value in

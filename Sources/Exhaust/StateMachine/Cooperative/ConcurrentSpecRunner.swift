@@ -30,6 +30,8 @@ struct ConcurrentExecutionResult<SystemUnderTest> {
     var systemUnderTest: SystemUnderTest?
     /// The spec's failure description after the concurrent execution, populated only when `recordTrace` is true and the execution failed.
     var failureDescription: String?
+    /// The concrete type name of the error behind a failure, populated on every failed execution regardless of `recordTrace`. The `time:` mode's fault inventory keys clusters on this, so it must match what the sequential executors report via `FailureSymptom.thrown(_:)` — collapsing all cooperative failures into one string would cap unrelated fault classes against each other in the reduction gate.
+    var failureSymptomKind: String?
 }
 
 /// Outcome of running a single command and checking its invariants inside the drain loop.
@@ -37,7 +39,7 @@ struct ConcurrentExecutionResult<SystemUnderTest> {
 private enum CommandOutcome {
     case ok
     case skipped
-    case failed(String)
+    case failed(message: String, symptomKind: String)
 }
 
 /// Runs a single command, checks invariants, and records trace events. Returns the outcome so the caller can handle exit flow (`break` in the prefix loop, `return` in a lane Task).
@@ -62,12 +64,12 @@ private func runCommandRecordingTrace<Spec: AsyncStateMachineSpec>(
         if recordTrace {
             trace.value.append(TraceEvent(kind: .failed(message: message, source: .check), lane: lane, label: label))
         }
-        return .failed(message)
+        return .failed(message: message, symptomKind: String(describing: type(of: failure)))
     } catch {
         if recordTrace {
             trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .error), lane: lane, label: label))
         }
-        return .failed("\(error)")
+        return .failed(message: "\(error)", symptomKind: String(describing: type(of: error)))
     }
     do {
         try await spec.value.checkInvariants()
@@ -79,12 +81,12 @@ private func runCommandRecordingTrace<Spec: AsyncStateMachineSpec>(
         if recordTrace {
             trace.value.append(TraceEvent(kind: .failed(message: message, source: .invariant), lane: lane, label: label))
         }
-        return .failed(message)
+        return .failed(message: message, symptomKind: String(describing: type(of: failure)))
     } catch {
         if recordTrace {
             trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .invariant), lane: lane, label: label))
         }
-        return .failed("\(error)")
+        return .failed(message: "\(error)", symptomKind: String(describing: type(of: error)))
     }
     return .ok
 }
@@ -131,12 +133,14 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
     // Single-threaded: Task closures are nonisolated with executorPreference, so all box accesses run via runSynchronously on the drain thread. Foreign-executor segments (MainActor, custom-executor actors) execute only user code that never touches these boxes. New box accesses must stay in nonisolated closure code.
     let spec = UnsafeSendableBox(specInit())
     let failed = UnsafeSendableBox<String?>(nil)
+    // Travels beside `failed` rather than inside it: ScheduleDrain's failure flag is `String?`-typed and only checks nil-ness, so the symptom kind rides in its own box instead of widening that seam.
+    let failedSymptomKind = UnsafeSendableBox<String?>(nil)
     let trace = UnsafeSendableBox<[TraceEvent]>([])
     let commandIndices: [UnsafeSendableBox<Int>] = (0 ..< concurrencyLevel).map { _ in UnsafeSendableBox(0) }
 
     if prefixCommands.isEmpty == false {
         let prefixDone = UnsafeSendableBox(false)
-        Task(executorPreference: executors[0]) { @Sendable [spec, failed, prefixDone, trace] in
+        Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace] in
             for command in prefixCommands {
                 guard failed.value == nil else { break }
                 let label = recordTrace ? "\(command)" : ""
@@ -144,7 +148,8 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                     command, on: spec, lane: .prefix, label: label,
                     trace: trace, recordTrace: recordTrace
                 )
-                if case let .failed(message) = outcome {
+                if case let .failed(message, symptomKind) = outcome {
+                    failedSymptomKind.value = symptomKind
                     failed.value = message
                     break
                 }
@@ -171,7 +176,8 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                 passed: false,
                 trace: recordTrace
                     ? __ExhaustRuntime.buildTrace(trace.value)
-                    : []
+                    : [],
+                failureSymptomKind: failedSymptomKind.value
             )
         }
     }
@@ -197,7 +203,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
             continue
         }
 
-        Task(executorPreference: executor) { @Sendable [spec, failed, runQueue, trace, commandIndex] in
+        Task(executorPreference: executor) { @Sendable [spec, failed, failedSymptomKind, runQueue, trace, commandIndex] in
             defer { runQueue.markComplete(lane: lane) }
             let traceLane = TraceEvent.Lane.lane(lane)
             for command in commands {
@@ -214,7 +220,8 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                     command, on: spec, lane: traceLane, label: label,
                     trace: trace, recordTrace: recordTrace
                 )
-                if case let .failed(message) = outcome {
+                if case let .failed(message, symptomKind) = outcome {
+                    failedSymptomKind.value = symptomKind
                     failed.value = message
                     return
                 }
@@ -257,6 +264,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         passed: concurrentFailed == false,
         trace: finalTrace,
         systemUnderTest: recordTrace ? spec.value.systemUnderTest : nil,
-        failureDescription: concurrentFailed && recordTrace ? spec.value.failureDescription() : nil
+        failureDescription: concurrentFailed && recordTrace ? spec.value.failureDescription() : nil,
+        failureSymptomKind: failedSymptomKind.value
     )
 }

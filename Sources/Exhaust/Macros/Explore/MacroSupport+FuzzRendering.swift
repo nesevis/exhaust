@@ -198,8 +198,8 @@ extension __ExhaustRuntime {
 
     // MARK: - Suspects
 
-    /// Picks up to three discriminating edges worth a terminal line, from the edges that symbolised into user code. Locations with a resolved line number lead (function-entry edges name a specific location; interior `:0` edges collapse to the enclosing function's name and read generic), symbols that restate the symptom's own error type trail, and duplicate rendered names collapse. Empty when nothing symbolised usefully.
-    private static func terminalSuspects(for cluster: FuzzReport.Cluster) -> [String] {
+    /// Picks up to three discriminating edges worth a terminal line, from the edges that symbolised into user code. Locations with a resolved line number lead (function-entry edges name a specific location; interior `:0` edges collapse to the enclosing function's name and read generic), and symbols that restate the symptom's own error type trail. Candidates naming the same function collapse into one unless both carry resolved lines that differ — `audit (RacyLedger.swift:45)` absorbs `audit (RacyLedger.swift)` and a file-less `audit` (the line-first ordering makes the line-bearing form the survivor), while `audit (RacyLedger.swift:52)` stays a separate suspect. Empty when nothing symbolised usefully.
+    static func terminalSuspects(for cluster: FuzzReport.Cluster) -> [String] {
         let candidates: [SuspectLocation] = cluster.discriminatingEdges.compactMap { edge in
             guard let location = edge.location, location.contains("/<compiler-generated>") == false else {
                 return nil
@@ -212,16 +212,35 @@ extension __ExhaustRuntime {
         let hasLine: (SuspectLocation) -> Bool = { ($0.line ?? 0) > 0 }
         let ordered = candidates.filter { namesSymptom($0) == false && hasLine($0) }
             + candidates.filter { namesSymptom($0) == false && hasLine($0) == false }
-            + candidates.filter(namesSymptom)
-        var seen = Set<String>()
-        var rendered: [String] = []
-        for candidate in ordered where seen.insert(candidate.rendered).inserted {
-            rendered.append(candidate.rendered)
-            if rendered.count == 3 {
+            + candidates.filter { namesSymptom($0) && hasLine($0) }
+            + candidates.filter { namesSymptom($0) && hasLine($0) == false }
+        var kept: [SuspectLocation] = []
+        for candidate in ordered {
+            let isDuplicate = kept.contains { existing in
+                guard existing.symbol == candidate.symbol else {
+                    return false
+                }
+                if let existingFile = existing.file, let candidateFile = candidate.file, existingFile != candidateFile {
+                    return false
+                }
+                // Two resolved lines that differ are distinct locations within one function, worth separate suspect entries.
+                if let existingLine = existing.line, existingLine > 0,
+                   let candidateLine = candidate.line, candidateLine > 0,
+                   existingLine != candidateLine
+                {
+                    return false
+                }
+                return true
+            }
+            if isDuplicate {
+                continue
+            }
+            kept.append(candidate)
+            if kept.count == 3 {
                 break
             }
         }
-        return rendered
+        return kept.map(\.rendered)
     }
 
     /// One suspect edge's location, split back out of the symbolizer's composed string for compact terminal rendering.

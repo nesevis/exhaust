@@ -10,13 +10,15 @@ import ExhaustCore
 
 /// Controls which outputs a test run silences.
 ///
-/// Pass a single option to ``PropertySettings/suppress(_:)`` to disable issue reporting, log output, or both.
+/// Pass a single option to ``PropertySettings/suppress(_:)`` to disable issue reporting, log output, attachments, or all three.
 public enum SuppressOption: Sendable, Equatable {
     /// Suppresses `reportIssue()` calls for property failures. The test does not fail via the framework; the caller asserts on the returned value instead. Generation and internal errors are not suppressed — they signal a malfunction rather than the expected failure the caller is asserting on.
     case issueReporting
     /// Suppresses all log output to the console. Overrides any `.log(_:)` setting.
     case logs
-    /// Suppresses both issue reporting and log output. The test run is silent except for generation and internal errors, which always surface.
+    /// Suppresses the test attachments a run records: a `time:` fuzz run's per-cluster inventories and summary, and the `.collectOpenPBTStats` JSONL on `#exhaust`. Use this when a test loops runs and the attachments would only accumulate noise in the result bundle. Stats suppressed here still reach ``ExhaustReport/openPBTStatsLines`` — only the attachment write is skipped, so `.collectOpenPBTStats` with `.suppress(.attachments)` collects without attaching.
+    case attachments
+    /// Suppresses issue reporting, log output, and attachments. The test run is silent except for generation and internal errors, which always surface.
     case all
 }
 

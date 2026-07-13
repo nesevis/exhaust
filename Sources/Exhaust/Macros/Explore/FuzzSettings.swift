@@ -21,7 +21,7 @@ public enum FuzzSettings: Sendable {
     /// - Important: Other tests running in parallel in the same process execute instrumented code during attempts and distort the coverage signal. Serialize the suite when replaying.
     case replay(ReplaySeed)
 
-    /// Silences issue reporting, log output, or both for this run.
+    /// Silences issue reporting, log output, attachments, or all three for this run.
     ///
     /// Use `.suppress(.issueReporting)` when the run is expected to find failures and the test asserts on the returned ``FuzzReport`` instead. Generation and internal errors are not suppressed — they signal a malfunction rather than the failures the caller is asserting on.
     case suppress(SuppressOption)
@@ -37,6 +37,13 @@ public enum FuzzSettings: Sendable {
     ///
     /// Only valid for `#execute(time:)`. Passing this setting to `#explore(time:)` is a configuration error because `#explore` has no command-sequence structure to limit.
     case commandLimit(Int)
+
+    /// Sets the number of concurrent lanes for `.tasks` specs in `#execute(time:)` runs.
+    ///
+    /// When omitted, `.tasks` specs run with two lanes. More lanes widen the space of interleavings each sequence can express, at the cost of spreading the same commands thinner across lanes. `.sequential` specs have no lanes, so they ignore this setting.
+    ///
+    /// Only valid for `#execute(time:)`. Passing this setting to `#explore(time:)` is a configuration error because `#explore` has no command sequences to parallelize.
+    case parallelize(lanes: ConcurrencyLevel)
 }
 
 // MARK: - Parsing
@@ -51,9 +58,12 @@ struct ParsedFuzzSettings {
     var invalidReplayMessage: String?
     var suppressLogs = false
     var suppressIssueReporting = false
+    var suppressAttachments = false
     var logLevel: LogLevel = .error
     /// The `#execute(time:)` per-sequence command cap; nil when unset. Present on the value path, it is a configuration error the caller reports.
     var commandLimit: Int?
+    /// The `#execute(time:)` lane count for `.tasks` specs; nil when unset. Present on the value path, it is a configuration error the caller reports.
+    var parallelize: ConcurrencyLevel?
 
     init(_ settings: [FuzzSettings]) {
         for setting in settings {
@@ -72,10 +82,15 @@ struct ParsedFuzzSettings {
                     if option == .issueReporting || option == .all {
                         suppressIssueReporting = true
                     }
+                    if option == .attachments || option == .all {
+                        suppressAttachments = true
+                    }
                 case let .log(level):
                     logLevel = level
                 case let .commandLimit(limit):
                     commandLimit = limit
+                case let .parallelize(lanes):
+                    parallelize = lanes
             }
         }
     }

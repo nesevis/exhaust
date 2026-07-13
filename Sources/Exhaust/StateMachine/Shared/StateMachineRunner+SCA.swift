@@ -324,6 +324,8 @@ extension __ExhaustRuntime {
         let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
         var currentOutput = output
         var currentTree = tree
+        // The reducer canonicalizes its sequence at init, so the sequence each pass returns is the one that reproduces its value through `.exact` materialization — re-flattening the tree afterwards is not guaranteed to. Track it so callers on the `(sequence, tree, value)` seam get the authoritative one.
+        var currentSequence = ChoiceSequence.flatten(tree)
         var mergedStats = ReductionStats()
         nonisolated(unsafe) var lastEvidence: Evidence?
         nonisolated(unsafe) var aborted = false
@@ -362,6 +364,7 @@ extension __ExhaustRuntime {
             if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
                 currentOutput = reduced
                 currentTree = reducedTree
+                currentSequence = sequence
                 if case let .success(value, tree, _) = Materializer.materialize(
                     generator, prefix: sequence, mode: .exact
                 ) {
@@ -388,6 +391,7 @@ extension __ExhaustRuntime {
             if case let .reduced(sequence, reducedTree, reduced) = result.outcome {
                 currentOutput = reduced
                 currentTree = reducedTree
+                currentSequence = sequence
                 if case let .success(value, tree, _) = Materializer.materialize(
                     generator, prefix: sequence, mode: .exact
                 ) {
@@ -400,6 +404,7 @@ extension __ExhaustRuntime {
         return ConcurrentTwoPassResult(
             value: currentOutput,
             tree: currentTree,
+            sequence: currentSequence,
             stats: mergedStats,
             lastEvidence: lastEvidence,
             aborted: aborted
@@ -438,13 +443,13 @@ extension __ExhaustRuntime {
         }
     }
 
-    /// Async variant of the sequential smoke property, bridging through `_blockingAwaitSemaphore`.
-    static func asyncSequentialProperty<Spec: AsyncStateMachineSpec>(
+    /// The one async sequential executor loop, returning a verdict: the async twin of ``syncSequentialVerdictProperty(_:)``, bridging through `_blockingAwaitSemaphore` and preserving the thrown error as the failure symptom. ``asyncSequentialProperty(specInit:)`` derives the Bool probe from this, so the two can never disagree on what passes.
+    static func asyncSequentialVerdictProperty<Spec: AsyncStateMachineSpec>(
         specInit: @escaping () -> Spec
-    ) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
+    ) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> FuzzVerdict {
         nonisolated(unsafe) let specInit = specInit
         return { tagged in
-            let passed = _blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+            let verdict: FuzzVerdict? = _blockingAwaitSemaphore(timeoutMilliseconds: nil) {
                 let spec = specInit()
                 for (_, command) in tagged {
                     do {
@@ -453,12 +458,23 @@ extension __ExhaustRuntime {
                     } catch is StateMachineSkip {
                         continue
                     } catch {
-                        return false
+                        return FuzzVerdict.fail(.thrown(error))
                     }
                 }
-                return true
+                return FuzzVerdict.pass
             }
-            return passed ?? false
+            // Unreachable with a nil timeout; kept as the fail-safe direction the Bool probe has always had.
+            return verdict ?? .fail(.returnedFalse)
+        }
+    }
+
+    /// Async variant of the sequential smoke property, derived from ``asyncSequentialVerdictProperty(specInit:)``.
+    static func asyncSequentialProperty<Spec: AsyncStateMachineSpec>(
+        specInit: @escaping () -> Spec
+    ) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
+        let verdictProperty = asyncSequentialVerdictProperty(specInit: specInit)
+        return { tagged in
+            verdictProperty(tagged).isFailure == false
         }
     }
 }
@@ -476,6 +492,8 @@ extension __ExhaustRuntime {
     struct ConcurrentTwoPassResult<Command, Evidence> {
         let value: [(ScheduleMarker, Command)]
         let tree: ChoiceTree
+        /// The reducer's own choice sequence for `value` — the one that reproduces it through `.exact` materialization. `ChoiceSequence.flatten(tree)` is not guaranteed to, because the reducer canonicalizes at init; consumers on the `(sequence, tree, value)` seam must carry this instead of re-flattening.
+        let sequence: ChoiceSequence
         let stats: ReductionStats
         let lastEvidence: Evidence?
         /// Whether the property aborted reduction. Backends surface this as ``StateMachineReduction/timedOut``.

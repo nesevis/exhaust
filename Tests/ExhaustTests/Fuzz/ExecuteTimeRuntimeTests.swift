@@ -24,12 +24,65 @@ struct ExecuteTimeRuntimeTests {
         }
     }
 
-    @Test(".tasks spec produces a diagnostic and zero attempts")
-    func tasksSpecDiagnostic() async throws {
+    @Test(".tasks spec with no async members routes to the sequential runner")
+    func syncTasksSpecRoutesSequentially() async throws {
+        // TasksCounterSpec has only synchronous members, so it conforms to plain StateMachineSpec and has no suspension points to interleave at. The dispatch routes it through the sequential adapter, mirroring plain #execute — the run reaches the instrumentation check instead of terminating on a configuration diagnostic.
         nonisolated(unsafe) var report: FuzzReport?
         await withKnownIssue {
             report = await __ExhaustRuntime.__runStateMachineTimeDispatch(
                 TasksCounterSpec.self,
+                time: .seconds(60),
+                settings: []
+            )
+        }
+        let resolved = try #require(report)
+        guard case .instrumentationMissing = resolved.termination else {
+            Issue.record("Expected instrumentationMissing (the sequential runner path), got \(resolved.termination)")
+            return
+        }
+    }
+
+    @Test("Async .sequential spec routes to the sequential runner")
+    func asyncSequentialSpecRoutesToRunner() async throws {
+        nonisolated(unsafe) var report: FuzzReport?
+        await withKnownIssue {
+            report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
+                AsyncSequentialCounterSpec.self,
+                time: .seconds(60),
+                settings: []
+            )
+        }
+        let resolved = try #require(report)
+        guard case .instrumentationMissing = resolved.termination else {
+            Issue.record("Expected instrumentationMissing (the async-sequential runner path), got \(resolved.termination)")
+            return
+        }
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Async .tasks spec routes to the cooperative runner")
+    func tasksSpecRoutesToCooperativeRunner() async throws {
+        nonisolated(unsafe) var report: FuzzReport?
+        await withKnownIssue {
+            report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
+                NonAtomicCounterSpec.self,
+                time: .seconds(60),
+                settings: [.parallelize(lanes: .two)]
+            )
+        }
+        let resolved = try #require(report)
+        guard case .instrumentationMissing = resolved.termination else {
+            Issue.record("Expected instrumentationMissing (the cooperative runner path), got \(resolved.termination)")
+            return
+        }
+    }
+
+    @Test("Async .threads spec produces a diagnostic and zero attempts")
+    func asyncThreadsSpecDiagnostic() async throws {
+        nonisolated(unsafe) var report: FuzzReport?
+        await withKnownIssue {
+            report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
+                AsyncThreadsCounterSpec.self,
                 time: .seconds(60),
                 settings: []
             )
@@ -117,6 +170,94 @@ struct ExecuteTimeRuntimeTests {
         )
         #expect(report.clusters.isEmpty == false)
         #expect(report.clusters.count == 1)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Cooperative adapter runs end-to-end with synthetic coverage and finds the interleaving fault")
+    func tasksAdapterEndToEnd() throws {
+        let adapter = try #require(__ExhaustRuntime.buildTasksSpecAdapter(
+            NonAtomicCounterSpec.self,
+            commandLimit: 8,
+            concurrencyLevel: 2
+        ))
+        let source = SyntheticCoverageSource<[(ScheduleMarker, NonAtomicCounterSpec.Command)]>(
+            edgeCount: 16,
+            edges: { tagged in
+                [tagged.count % 8]
+            }
+        )
+        let report = __ExhaustRuntime.runExploreTimeCore(
+            gen: adapter.generator,
+            time: .seconds(10),
+            settings: [.replay(7)],
+            source: source,
+            configure: { configuration in
+                configuration.skipScreening = true
+                configuration.attemptLimit = 500
+            },
+            hooks: adapter.hooks,
+            property: adapter.property
+        )
+        #expect(report.clusters.isEmpty == false, "Random sampling over lane markers should realize a lost-update interleaving")
+        #expect(report.clusters.allSatisfy { $0.symptoms.contains("StateMachineCheckFailure") }, "The lost update violates the invariant, so every cluster should carry the check-failure symptom")
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Cooperative adapter verdict is deterministic for a pinned schedule")
+    func tasksAdapterVerdictDeterministic() throws {
+        let adapter = try #require(__ExhaustRuntime.buildTasksSpecAdapter(
+            NonAtomicCounterSpec.self,
+            concurrencyLevel: 2
+        ))
+        // A handful of hand-pinned schedules covering prefix-only, single-lane, and cross-lane interleavings. The exact verdicts do not matter; every repetition must agree with the first, or coverage signatures would not be attributable to their choice sequences.
+        let lane1 = ScheduleMarker(rawValue: 1)
+        let lane2 = ScheduleMarker(rawValue: 2)
+        let schedules: [[(ScheduleMarker, NonAtomicCounterSpec.Command)]] = [
+            [(.prefix, .increment), (.prefix, .increment)],
+            [(lane1, .increment), (lane1, .increment)],
+            [(lane1, .increment), (lane2, .increment)],
+            [(lane1, .increment), (lane2, .increment), (lane1, .decrement), (.prefix, .increment)],
+            [(lane2, .increment), (lane1, .increment), (lane2, .increment), (lane1, .increment)],
+        ]
+        for tagged in schedules {
+            let first = adapter.property(tagged).isFailure
+            for _ in 0 ..< 10 {
+                #expect(adapter.property(tagged).isFailure == first, "Verdict flipped across repetitions of the same schedule: \(tagged.map(\.0))")
+            }
+        }
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Cooperative adapter counts a stalled drain as a pass")
+    func tasksAdapterStallCountsAsPass() throws {
+        // Pins the timeout-accounting ruling (2026-07-13): a timed-out drain is inconclusive, not a counterexample, so it must not enter the fault inventory. The short idle timeout keeps the stall evaluation fast.
+        let adapter = try #require(__ExhaustRuntime.buildTasksSpecAdapter(
+            StallingSpec.self,
+            concurrencyLevel: 2,
+            idleTimeoutMilliseconds: 50
+        ))
+        let tagged: [(ScheduleMarker, StallingSpec.Command)] = [
+            (ScheduleMarker(rawValue: 1), .parkForever),
+        ]
+        let verdict = adapter.property(tagged)
+        #expect(verdict.isFailure == false)
+    }
+
+    @Test("parallelize on #explore(time:) is a configuration error")
+    func parallelizeOnExplorePath() {
+        let report = __ExhaustRuntime.runExploreTimeCore(
+            gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
+            time: .seconds(60),
+            settings: [.parallelize(lanes: .two)],
+            source: SyntheticCoverageSource<Int>(edgeCount: 8, edges: { [$0 % 4] }),
+            configure: nil,
+            property: { _ in .pass }
+        )
+        guard case .invalidConfiguration = report.termination else {
+            Issue.record("Expected invalidConfiguration, got \(report.termination)")
+            return
+        }
+        #expect(report.totalAttempts == 0)
     }
 
     @Test("commandLimit setting caps generated sequence length")
@@ -401,6 +542,68 @@ final class TasksCounterSpec {
     @Invariant
     func matches() -> Bool {
         counter.value == expected
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
+}
+
+@StateMachine(.sequential)
+final class AsyncSequentialCounterSpec {
+    var expected: Int = 0
+    @SystemUnderTest var counter: PassingCounter = .init()
+
+    @Command
+    func increment() async throws {
+        expected += 1
+        counter.increment()
+    }
+
+    @Invariant
+    func matches() -> Bool {
+        counter.value == expected
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
+}
+
+@StateMachine(.threads)
+final class AsyncThreadsCounterSpec {
+    var expected: Int = 0
+    @SystemUnderTest var counter: ThreadsCounter = .init()
+
+    @Oracle
+    func oracleMatches(other: ThreadsCounter) -> Bool {
+        counter.value == other.value
+    }
+
+    @Command
+    func increment() async throws {
+        expected += 1
+        counter.increment()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
+}
+
+@StateMachine(.tasks)
+final class StallingSpec {
+    @SystemUnderTest var counter: PassingCounter = .init()
+
+    @Command
+    func parkForever() async throws {
+        // Never resumed: the drain loop's idle timeout is the only way out, which is exactly the stall the timeout-accounting test pins.
+        await withCheckedContinuation { (_: CheckedContinuation<Void, Never>) in }
+    }
+
+    @Invariant
+    func neverNegative() -> Bool {
+        counter.value >= 0
     }
 
     func failureDescription() -> String? {

@@ -18,6 +18,7 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
         ExhaustStateMachineMacro.self,
         ExhaustAsyncStateMachineMacro.self,
         ExecuteTimeMacro.self,
+        ExecuteTimeAsyncMacro.self,
         StateMachineDeclarationMacro.self,
         SUTMacro.self,
         CommandMacro.self,

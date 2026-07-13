@@ -20,6 +20,23 @@ struct ExhaustReportTests {
         #expect(report.totalMaterializations == 0)
     }
 
+    @Test("Suppressing attachments still collects OpenPBTStats into the report")
+    func suppressedAttachmentsStillCollectStats() throws {
+        // .suppress(.attachments) skips only the attachment write; the collected lines must still reach the report for .onReport consumers.
+        var capturedReport: ExhaustReport?
+        #exhaust(
+            #gen(.int(in: 0 ... 10)),
+            .collectOpenPBTStats,
+            .suppress(.attachments),
+            .onReport { capturedReport = $0 },
+            .budget(.custom(screening: 0, sampling: 50))
+        ) { value in
+            value >= 0
+        }
+        let report = try #require(capturedReport)
+        #expect(report.openPBTStatsLines.isEmpty == false)
+    }
+
     @Test("Report fires on failing property with encoder breakdown")
     func reportFiresOnFailingPropertyWithEncoderBreakdown() throws {
         var capturedReport: ExhaustReport?
