@@ -114,6 +114,72 @@ struct ExploreTimeResumeTests {
         #expect(FileManager.default.fileExists(atPath: store.progressFileURL.path) == false)
     }
 
+    @Test("A PC-table-hash mismatch re-attributes corpus entries from the live source")
+    func reattributionOnHashMismatch() throws {
+        let directory = scratchDirectory()
+        let store = FuzzProgressStore(directory: directory)
+        defer {
+            store.removeAll()
+        }
+        let gen = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)
+
+        var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1, maxRuns: UInt64.max)
+        let helperCorpus = FuzzCorpus(edgeCount: 16)
+        while helperCorpus.entries.count < 3, let (value, tree) = try interpreter.next() {
+            let sequence = ChoiceSequence.flatten(tree)
+            _ = helperCorpus.offer(
+                sequence: sequence,
+                tree: tree,
+                hits: [(edge: abs(value) % 4, hitCount: 1)],
+                convergence: 1.0,
+                generation: 0,
+                phase: .sampling
+            )
+        }
+        let entryRecords = helperCorpus.entries.map(FuzzProgressDocument.CorpusEntryRecord.init(entry:))
+
+        let document = FuzzProgressDocument(
+            metadata: FuzzProgressDocument.Metadata(
+                seed: 9,
+                budgetNanoseconds: 60_000_000_000,
+                consumedNanoseconds: 55_000_000_000,
+                lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
+                pcTableHash: 0xDEAD,
+                edgeCount: 16
+            ),
+            clusters: [],
+            snapshot: entryRecords
+        )
+        try store.write(document)
+
+        let context = FuzzPersistenceContext(store: store, resumeEnabled: true)
+        #expect(context.resumeDocument != nil)
+
+        // The live source has 32 edges and a different mapping than the document's 16-edge cached hits. The hash mismatch (document says 0xDEAD, runtime has 0) forces re-attribution through the live source.
+        let liveSource = SyntheticCoverageSource<Int>(edgeCount: 32, edges: { value in
+            [abs(value) % 10 + 20]
+        })
+
+        let report = __ExhaustRuntime.runExploreTimeCore(
+            gen: gen,
+            time: .seconds(60),
+            settings: [.replay(9), .suppress(.all)],
+            source: liveSource,
+            configure: { configuration in
+                configuration.attemptLimit = 50
+            },
+            persistence: context,
+            property: { _ in .pass }
+        )
+
+        // Restore succeeded: the corpus carries entries from the predecessor's snapshot.
+        #expect(report.corpusEntryCount >= 3)
+        // The live source reports 32 edges, proving attribution came from the live source (the document stored 16-edge signatures that are now invalid).
+        #expect(report.instrumentedEdgeCount == 32)
+        // Covered edges should be in the live source's range (20+), not the document's (0-3).
+        #expect(report.coveredEdgeCount > 0)
+    }
+
     @Test("Resume opt-out ignores predecessor state")
     func resumeOptOut() throws {
         let directory = scratchDirectory()

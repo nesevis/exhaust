@@ -4,7 +4,7 @@
 
 import Foundation
 
-/// Tunable constants for `#explore(time:)` search dynamics.
+/// Houses the tunable constants governing `#explore(time:)` search dynamics.
 package enum FuzzTunables {
     // MARK: - Corpus
 

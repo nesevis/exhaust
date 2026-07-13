@@ -11,7 +11,7 @@
 // property can reach — never the module. That scoping is the point: it gives the report's
 // coverage lines an honest denominator without any static reachability analysis.
 
-/// Pure estimator arithmetic over singleton/doubleton edge counts. See the file header for provenance and scoping.
+/// Computes completeness estimates from singleton and doubleton edge counts. See the file header for provenance and scoping.
 package enum CoverageEstimators {
     /// Good-Turing discovery probability `Û = f₁/n`: the estimated probability that the next attempt covers a new edge.
     ///

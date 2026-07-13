@@ -11,7 +11,7 @@ package final class ReductionPool: @unchecked Sendable {
     // @unchecked: all mutable state is guarded by `condition`.
     private static let dispatchQueue = DispatchQueue(
         label: "com.exhaust.reduction",
-        qos: .utility,
+        qos: .default,
         attributes: .concurrent
     )
 

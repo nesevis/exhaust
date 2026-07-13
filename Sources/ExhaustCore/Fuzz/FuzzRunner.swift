@@ -46,7 +46,7 @@ package final class FuzzRunner<Output> {
     /// Renders a reduced counterexample for its cluster's report description. Injected because the render runs inside the reduction task — the value never crosses back to a context that could render it later — while the runner's module must stay free of rendering dependencies. The default serves direct package-level construction (tests, harnesses); `runExploreTimeCore` supplies the production renderer.
     private let renderValue: @Sendable (Any) -> String
 
-    /// At most one thread at a time runs an instrumented evaluation bracket.
+    /// Serialises instrumented evaluation brackets so at most one thread runs a coverage-attributed property call at a time. Internal (not private) because the recovery extension's `restore` method re-attributes entries under this lock.
     let attributionToken = NSLock()
 
     /// Completed classifications waiting for the loop to apply their failure-weight upgrades and escape-interval feedback.
