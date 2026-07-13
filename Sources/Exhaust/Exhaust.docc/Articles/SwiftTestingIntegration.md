@@ -138,26 +138,11 @@ This works, but the mechanism behind it is unusual enough to be worth understand
 
 `#expect` normally records a Swift Testing issue the moment it fails. Inside `#exhaust`, the property closure runs hundreds of times during screening and sampling, then potentially thousands more during reduction. If `#expect` recorded an issue on every invocation, a single failing property would flood the test log with hundreds of duplicate failures — one for the initial counterexample, then one for every reduction probe that also fails. The test runner would report hundreds of issues for what is really one bug.
 
-### The solution: dual closures
+### The solution
 
-The `#exhaust` macro solves this by expanding a single closure into two:
+Exhaust rewrites each `#expect` to a failing `try #require` and suppresses issue reporting until a minimal counterexample is ready to be surfaced. The `#expect` and `#require` calls in the final re-run carry explicit source locations so failures point at the assertion line rather than the `#exhaust` call site.
 
-**The detection closure** is a rewritten copy where every `#expect(condition)` becomes `try __ExhaustRuntime.__detectRequire(condition)`, and every `try #require(optional)` becomes `try __ExhaustRuntime.__detectRequire(optional)`. These replacement functions throw a plain `Error` on failure instead of recording a Swift Testing issue. The pipeline uses this closure for screening, sampling, and reduction. Hundreds or thousands of invocations, with no test output.
-
-**The property closure** is the original, with `#expect` and `#require` calls preserved as-is but with explicit source locations injected. Exhaust runs this closure exactly once, on the final reduced counterexample, outside the issue suppression scope. This single invocation produces the failure message you see in the test runner: the minimal counterexample, at the correct source location.
-
-The dual-closure design means:
-
-- During screening, sampling, and reduction: failures are detected silently via try/catch. No issues are recorded, no console noise.
-- After reduction: `#expect` runs once with the reduced value and records a single, clean failure pointing at your assertion line.
-
-### Source locations
-
-In a macro expansion, `#_sourceLocation` resolves to the `#exhaust` call site, not the line where you wrote `#expect`. Without correction, every assertion failure would point at the `#exhaust` line rather than the failing `#expect`. Exhaust fixes this by rewriting `#expect` and `#require` calls in the property closure to include explicit `sourceLocation:` parameters derived from the original source positions. The detection closure doesn't need this. It never records issues.
-
-### What this means in practice
-
-You don't need to think about any of this when writing tests. Write `#expect` and `#require` exactly as you would in a regular Swift Testing test. Two things are worth knowing:
+Two things are worth knowing:
 
 **Assertion failures mean "property failure."** An `#expect` that fails inside `#exhaust` signals that the current input is a counterexample. The pipeline treats any `#expect` failure, `#require` failure, or thrown error as a property violation and proceeds to reduction.
 
@@ -208,9 +193,7 @@ Async closures work the same way, with `await` on the `#exhaust` call:
 }
 ```
 
-The async property is bridged to a synchronous form and dispatched onto a GCD thread where the synchronous pipeline runs. After reduction, the async property closure is re-run in the original async context so `#expect` records correctly.
-
-One implementation detail worth mentioning: on the GCD thread, `Test.current` is `nil`, which causes the test context to misdetect as XCTest. Exhaust works around this by using `withKnownIssue` directly on the async path rather than the `withExpectedIssue` helper that auto-detects the framework. You shouldn't encounter this, but if you see XCTest-style output from an async property test, this is the mechanism involved.
+The async property is bridged to a synchronous form for screening, sampling, and reduction. After reduction, the async property closure is re-run in the original async context so `#expect` records correctly.
 
 ## XCTest compatibility
 

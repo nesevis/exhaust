@@ -1,14 +1,14 @@
 # Coverage-guided fuzzing
 
-Give Exhaust a time budget and let it search for bugs by watching which branches your code takes.
+Give Exhaust a time budget and let it search for bugs by observing which branches your code takes.
 
-> Experiment: `#explore(time:)` and `#execute(time:)` are experimental. Settings, report format, and search behavior may change in any release. Every call site emits a build warning until the mode stabilizes.
+> Experiment: `#explore(time:)` and `#execute(time:)` are experimental. Settings, report format, and search behaviour may change in any release. Every call site emits a build warning until the mode stabilises.
 
 ## Overview
 
-`#exhaust` runs a property across boundary values and random samples, then stops. For most tests that's the right tradeoff: fast feedback, deterministic budget, done in well below a second. But the iteration budget is finite, and some branches in your code may never be reached by the generator's natural distribution.
+`#exhaust` runs a property across boundary values and random samples, then stops. For most tests that's the right tradeoff: fast feedback, deterministic budget, done in well under a second. But the iteration budget is finite, and some branches in your code may never be reached by the generator's natural distribution.
 
-`#explore(time:)` and `#execute(time:)` take a wall-clock time budget instead. You compile the target under test with coverage instrumentation (see below), and Exhaust watches which branches each generated input reaches, using that feedback to generate inputs that reach new branches. When it finds a failure, it keeps going. When the budget runs out, it reports every distinct fault it found, each reduced to a minimal counterexample.
+`#explore(time:)` and `#execute(time:)` take a wall-clock time budget instead. You compile the target under test with coverage instrumentation (see below), and Exhaust watches which branches each generated input reaches, using that feedback as a novelty signal to drive a search. When it finds a failure, it keeps going. When the budget runs out, it reports every distinct fault it found, each reduced to a minimal counterexample.
 
 ```swift
 @Test func parserHandlesAdversarialInput() async {
@@ -99,7 +99,7 @@ The search is driven by one signal: which branches each attempt reached. That si
 
 ### Nothing else in the process
 
-The branch counters are shared by the whole process, and Exhaust measures one attempt at a time: it zeroes the counters, runs the property once, and reads back what was hit. Any other code executing in an instrumented module during that window is indistinguishable from the property's own behavior.
+The branch counters are shared by the whole process, and Exhaust measures one attempt at a time: it zeroes the counters, runs the property once, and reads back what was hit. Any other code executing in an instrumented module during that window is indistinguishable from the property's own behaviour.
 
 What matters is that nothing else executes *during* the run. Each attempt re-zeroes the counters before it starts, so a test that ran to completion before the fuzz test cannot affect it — strictly serial execution is enough. `.serialized` alone does not provide that: it orders the tests within one suite, but separate suites still run concurrently with each other, so a fuzz target with a second suite (even a small helper suite) can cross-pollute. Either run the whole target with `swift test --no-parallel`, or filter each test run down to a single fuzz test. Filtering is the stronger form: serial scheduling guarantees ordering, not quiescence, so a test that leaks background work past its own completion (a detached task, an unawaited timer) can still fire mid-attempt — an empty process has nothing to leak.
 
@@ -133,8 +133,8 @@ Sequences carry up to 40 commands by default. Override with `.commandLimit(n)` w
 
 | Model | Status |
 |-------|--------|
-| `.sequential` | Supported. |
-| `.tasks` | Not yet supported. A diagnostic is reported and no budget is consumed. |
+| `.sequential` | Supported, for both synchronous and async specs. |
+| `.tasks` | Supported for async specs on macOS 15, iOS 18, tvOS 18, watchOS 11, and visionOS 2 or later. Each command carries a lane-assigning schedule marker drawn as part of the generated input, so the search mutates the interleaving with the same operators that mutate commands, and reduction minimises markers back toward sequential execution. `.parallelize(lanes:)` sets the lane count, defaulting to two. A `.tasks` spec with no async members runs through the sequential path — with no suspension points there are no interleavings to search. |
 | `.threads` | Permanently incompatible. Coverage-guided search needs deterministic replay of each attempt. Preemptive scheduling defeats that. The diagnostic directs `.threads` specs to plain `#execute`. |
 
 ## Reading the report
@@ -216,7 +216,8 @@ await #explore(myInputGenerator, time: .minutes(15), .replay(20260710), .log(.in
 | `.replay(seed)` | Replays a prior run's search from its seed. Pass the seed from a report's `Reproduce:` line. |
 | `.suppress(.issueReporting)` | Silences test failures. Use when asserting on the returned ``FuzzReport`` directly. |
 | `.suppress(.logs)` | Silences log output. |
-| `.suppress(.all)` | Both of the above. |
+| `.suppress(.attachments)` | Stops the run recording its per-cluster and summary attachments. Use when a test loops fuzz runs and the attachments would only accumulate noise in the result bundle. |
+| `.suppress(.all)` | All of the above. |
 | `.log(.info)` | Raises log verbosity (default is `.error`). |
 | `.commandLimit(n)` | Maximum commands per generated sequence. Default 40. Only valid for `#execute(time:)`. |
 

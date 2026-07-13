@@ -70,7 +70,7 @@ Throwing `XCTSkip` inside a property closure skips that input: it counts as neit
 
 ### OpenPBTStats attachments
 
-When `.collectOpenPBTStats` is enabled, Exhaust records the data as an `XCTAttachment`. The attachment appears in Xcode's test report alongside any other test attachments.
+When `.collectOpenPBTStats` is enabled, Exhaust records the data as an `XCTAttachment`. The attachment appears in Xcode's test report alongside any other test attachments. Pass `.suppress(.attachments)` to collect without attaching.
 
 ### State machine tests
 

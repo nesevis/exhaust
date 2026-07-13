@@ -8,7 +8,7 @@ The input space of most functions is too large to cover completely, so Exhaust s
 
 This is not flakiness. A flaky test fails unpredictably on the same input. A property fails because it reached a new input that happens to fail, and the failure comes with a seed that reproduces it every time.
 
-Each tool on this page is a different search strategy. `#exhaust` searches broadly, `#explore` lets you nudge the search in specific directions. `#execute` searches sequences of commands. Reduction searches for the minimal form of a failure. And lastly, `#examine` is the diagnostic: it helps check that the search is reaching the space you intended.
+Each tool on this page is a different search strategy. `#exhaust` searches broadly, `#explore` lets you nudge the search in specific directions or use code coverage as a feedback signal. `#execute` searches sequences of commands. Reduction searches for the minimal form of a failure. `#examine` is the diagnostic: it helps check that the search is reaching the space you intended.
 
 ## Properties and generators
 
@@ -63,9 +63,9 @@ A run that finds no failure in either phase passes. The moment either phase prod
 
 ## Reduction
 
-Finding a failure is only half the search. The other half is **reduction**. The first failing input can be noisy and full of values that aren't relevant to the failure itself. Reducing that input to a **minimal counterexample**, the simplest version of itself that still triggers the failure, is what lets you see the forest, not the trees.
+Finding a failure is only half the search. The other half is **reduction**. The first failing input is often noisy, full of values that aren't relevant to the failure itself. Reducing that input to a **minimal counterexample**, the simplest version that still triggers the failure, is what makes the underlying bug visible.
 
-Reduction is automatic, and it works for every generator without a line of custom code. You never write a reduction function. The reducer runs the property against smaller and smaller candidates, keeping a change only if the property still fails, until nothing it tries makes the input simpler.
+Reduction is automatic. You never write a reduction function — the reducer runs the property against smaller and smaller candidates, keeping a change only if the property still fails, until nothing it tries makes the input simpler.
 
 Because it understands how the parts of an input relate, it can delete an element, collapse nested structures, drive a number toward zero, or move magnitude between coupled values. <doc:HowReductionWorks> walks through a complete example.
 
@@ -118,6 +118,18 @@ Rather than checking a single output against an expected value, you check a **me
 
 The `.metamorph` generator combinator builds the relation into the generator, pairing the original input with transformed copies so the property reads as a plain assertion over them. When a failure is found, the original reduces and the copies follow.
 
+## Coverage-guided search: time budgets
+
+> Experiment: `#explore(time:)` and `#execute(time:)` are experimental. Settings, report format, and search behaviour may change in any release.
+
+`#exhaust` and `#explore(directions:)` run a fixed number of iterations and stop. Some bugs hide behind branches the generator's natural distribution never reaches. `#explore(time:)` takes a wall-clock **time budget** instead of an iteration count and uses code coverage as a feedback signal: when a generated input reaches a branch nothing previous has reached, that input is kept and becomes the basis for further modifications. Over time, the search accumulates a **corpus** of inputs that collectively cover more of the code under test than random sampling alone.
+
+The search has three phases. Screening and random sampling run first, the same as `#exhaust`. Then **mutation** takes over: Exhaust modifies inputs from the corpus, keeps those that reach new branches, and discards those that don't. When the time budget runs out or new branches stop appearing, the run terminates.
+
+Unlike `#exhaust`, a coverage-guided run does not stop at the first failure. Failures are reduced to minimal counterexamples and grouped into **fault clusters**. Two failures that reduce to the same minimal form are one cluster. The report lists each distinct fault with its reduced counterexample.
+
+`#execute(time:)` applies the same search to `@StateMachine` specs, mutating command sequences instead of values. <doc:CoverageGuidedFuzzing> covers instrumentation setup, isolation requirements, and how to read the report.
+
 ## Reproducing a find: seeds and replay
 
 Every failure Exhaust reports comes with a **seed**, a short code that pins where in the search the failure was found.
@@ -138,7 +150,7 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 
 - **Choice**: a single decision a generator records as it runs (which branch, which integer, which length).
 - **Choice Gradient Sampling (CGS)**: the technique that biases a generator toward a goal by measuring which choices lead toward it and reweighting them.
-- **Classification**: a report of how often generated values fall into named buckets. It observes, it does not steer.
+- **Classification**: a report of how often generated values fall into named buckets (`.classify(…)`). It observes, it does not steer.
 - **Filter**: a constraint that keeps only values satisfying a predicate. Exhaust tunes the generator toward valid values rather than discarding.
 - **Generator**: a description of the shape of inputs to try. The search space.
 - **Scaling**: how a generator turns the current size into a concrete length or magnitude.
@@ -157,6 +169,12 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 ### Exploration
 
 - **Direction**: a named region of the output that `#explore` steers toward via CGS.
+
+### Coverage-guided search
+
+- **Corpus**: the collection of inputs that reached distinct branches during a coverage-guided run. New inputs enter the corpus when they cover branches nothing previous has covered.
+- **Fault cluster**: a group of failures that reduce to the same minimal counterexample.
+- **Mutation**: modifying a corpus input to produce a new candidate and checking whether it reaches new branches.
 
 ### Inspection
 
@@ -189,5 +207,5 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 
 ### Easily confused
 
-- **"Coverage" now means code coverage.** The `#exhaust` phase that tries problematic values is called **screening**, not coverage. `#examine`'s **domain coverage** is how much of a generator's output space the samples reached. `#explore`'s **direction coverage** is how many samples hit each direction. Bare "coverage" is reserved for branch coverage of the system under test.
+- **"Coverage" has several meanings depending on context.** The `#exhaust` phase that tries problematic values is called **screening**, not coverage. `#examine`'s **domain coverage** is how much of a generator's output space the samples reached. `#explore(directions:)`'s **direction coverage** is how many samples hit each direction. In coverage-guided fuzzing (`#explore(time:)`), **coverage** refers to which branches in the instrumented code each input reached.
 - **"Reflection" is narrower than in most languages.** In Swift and Java, "reflection" typically means examining a value's structure at runtime. In Exhaust, inspection is the word for reading a generator's structure. Reflection means only one thing: running a generator backward to recover the choices behind a concrete value, which is what `reflecting:` and `#examine`'s round-trip check use.

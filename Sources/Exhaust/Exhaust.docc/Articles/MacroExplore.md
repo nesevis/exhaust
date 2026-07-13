@@ -32,7 +32,7 @@ For the full guide, see <doc:DirectedExploration>.
 
 **Coverage-guided fuzzing** (`time:`) gives Exhaust a wall-clock time budget. It watches which branches your code takes, uses that feedback to generate inputs that reach new branches, and catalogues every distinct fault it finds rather than stopping at the first.
 
-> Experiment: This mode is experimental. Settings, report format, and search behavior may change in any release.
+> Experiment: This mode is experimental. Settings, report format, and search behaviour may change in any release.
 
 ```swift
 @Test func parserHandlesAdversarialInput() async {

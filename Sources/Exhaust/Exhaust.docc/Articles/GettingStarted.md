@@ -2,9 +2,9 @@
 
 This is a guide for working developers who've written tests but haven't done property-based testing before. You'll already know how to write `#expect(result == expected)` for a few hand-picked inputs, and that's the foundation we're building on. 
 
-The examples throughout are Swift Testing, which is what Exhaust integrates with most closely, but Exhaust works fine with XCTest too — the macros are the same, but `XCTAssert…`-style assertions in the property closure are not supported in the same way Swift Testing's `#expect` and `#require` are. 
+The examples throughout are Swift Testing, which is what Exhaust integrates with most closely, but Exhaust works fine with XCTest too. The macros are the same, but `XCTAssert…`-style assertions in the property closure are not supported in the same way Swift Testing's `#expect` and `#require` are. 
 
-The guide aims to build up the thinking that makes Exhaust pay off — how to spot properties worth testing in code you're already writing, how to write generators that produce the inputs that matter, and when to reach for each of Exhaust's tools. The tools will come up as they become useful.
+The guide aims to build up the thinking that makes Exhaust pay off: how to spot properties worth testing in code you're already writing, how to write generators that produce the inputs that matter, and when to reach for each of Exhaust's tools. The tools will come up as they become useful.
 
 ## Where you are now
 
@@ -26,9 +26,9 @@ You have a function and you want to test it, so you write something like this:
 
 Three tests, all in service of the same claim: *mySort produces its output in ascending order*. Each test is a single example of that claim, exercising it from a different angle: a jumbled array, a reverse-sorted one, an array with duplicates. The test names announce the claim and the assertions supply instances. The more examples you add, the more confident you get that the implicit claim holds.
 
-Fine as far as it goes. These tests catch regressions, document intent, and run in milliseconds — everything you want from unit tests. But they share a quiet weakness: every assertion is a hand-picked input that you thought of. The bugs you find are the bugs you imagined, and the bugs you didn't imagine (`sort` panicking on a ten-thousand-element array, mishandling negative numbers, returning the wrong thing for an empty or singleton array) sit in your code unfound until production hits the cases you missed.
+Fine as far as it goes. These tests catch regressions, document intent, and run in milliseconds. Everything you want from unit tests. But they share a quiet weakness: every assertion is a hand-picked input that you thought of. The bugs you find are the bugs you imagined, and the bugs you didn't imagine (`sort` panicking on a ten-thousand-element array, mishandling negative numbers, returning the wrong thing for an empty or singleton array) sit in your code unfound until production hits the cases you missed.
 
-Looked at from a certain angle, what you're doing with hand-picked tests is *searching* the input space for bugs. Each test case is a probe — a single point in a vast domain of possible inputs — and triangulation is just what manual search looks like when you can only afford a handful of probes. It works when bugs live in regions you think to probe, and it fails silently when they don't. Property-based testing is the same search, but mechanised: Exhaust picks the probes, covers far more of the space than you could by hand, and is willing to search systematically in regions you'd never think to look.
+Looked at from a certain angle, what you're doing with hand-picked tests is *searching* the input space for bugs. Each test case is a probe, a single point in a vast domain of possible inputs, and triangulation is just what manual search looks like when you can only afford a handful of probes. It works when bugs live in regions you think to probe, and it fails silently when they don't. Property-based testing is the same search, but mechanised: Exhaust picks the probes, covers far more of the space than you could by hand, and is willing to search systematically in regions you'd never think to look.
 
 This guide is about how to find those bugs without having to imagine (or run into) them first.
 
@@ -50,7 +50,7 @@ Your test now runs against a generated user each time rather than a hand-crafted
 
 You're not yet getting everything Exhaust offers this way: just one input per run instead of hundreds, and if the test fails you'll see the whole random value that triggered it rather than a minimal counterexample. Those benefits come with the next step up, when you move the assertion inside an `#exhaust` call.
 
-The immediate win is time. Mock instances of rich domain types are tedious to write and tedious to maintain as those types evolve. `try #example(userGenerator)` replaces all of that with a single line. A side benefit is that every run exercises your function on data the fixture-writing habit would probably never have picked — the cases you didn't think to write down.
+The immediate win is time. Mock instances of rich domain types are tedious to write and tedious to maintain as those types evolve. `try #example(userGenerator)` replaces all of that with a single line. A side benefit is that every run exercises your function on data the fixture-writing habit would probably never have picked: the cases you didn't think to write down.
 
 If your types already conform to `Codable`, `#gen` can synthesise a generator from an example JSON value or an existing instance:
 
@@ -60,7 +60,7 @@ let gen = try #gen(from: user)
 let users = try #example(gen, count: 100)
 ```
 
-A synthesised generator is slower than a hand-written one (roughly three times per iteration) and has no knowledge of domain constraints — it generates across the full range of each field type. It gets you testing quickly, but when you want control over the values it generates, replace it with a hand-written generator. See <doc:BuildingGenerators#Synthesising-generators-from-Decodable-types> for the full picture.
+A synthesised generator is slower than a hand-written one (roughly three times per iteration) and has no knowledge of domain constraints: it generates across the full range of each field type. It gets you testing quickly, but when you want control over the values it generates, replace it with a hand-written generator. See <doc:BuildingGenerators#Synthesising-generators-from-Decodable-types> for the full picture.
 
 ## The smallest useful test you can write
 
@@ -84,13 +84,13 @@ If you'd rather add a new test than modify an existing one, here's the cheapest 
 
 This is a real, useful test, and it's about twelve lines of code. It'll catch overflows, regex catastrophic backtracking, infinite loops, out-of-memory errors on degenerate input, encoding bugs on emoji and combining characters, surrogate-pair mishandling, and unexpected exception types leaking out of the parser. 
 
-`.string()` produces values across the breadth of Unicode, so the test exercises far more of the input space than any hand-picked set of strings you'd come up with on your own. You don't need a fancy property, you don't need a custom generator, and you don't need to understand the theory — any of that can come later if you decide you want more out of PBT than this.
+`.string()` produces values across the breadth of Unicode, so the test exercises far more of the input space than any hand-picked set of strings you'd come up with on your own. You don't need a fancy property, you don't need a custom generator, and you don't need to understand the theory. Any of that can come later if you decide you want more out of PBT than this.
 
 This is the entry point. Everything from here on is about getting more value from the same basic shape: a generator, a property, and `#exhaust` to run them together.
 
 ## Look at your existing tests first
 
-Before reaching for new conceptual machinery, have a look at the unit tests you've already written, because each one is a property in disguise. A unit test asserts that *one* input produces *one* output, but you didn't pick that input at random — it's an instance of a more general claim you were really making, and the claim is usually more interesting than the instance.
+Have a look at the unit tests you've already written. Each one picks a specific input and checks a specific output, but the claim it's really making is usually broader than the single case it checks.
 
 Take a test like this:
 
@@ -121,7 +121,7 @@ This is the cheapest source of property tests you have. Every existing unit test
 
 ## Look at your specs and docs next
 
-The second-cheapest source of properties is the prose you've already written about the system. Code review comments, design documents, PR descriptions, ticket acceptance criteria, sentences from a domain expert — anywhere someone has written down a constraint of the form *for all X, Y must hold*, or one of its many disguised forms: *every order with discounted line items has a total above zero*, *the cache never returns stale data after invalidation*, *withdrawing more than the balance is rejected*.
+The second-cheapest source of properties is the prose you've already written about the system. Code review comments, design documents, PR descriptions, ticket acceptance criteria, sentences from a domain expert. Anywhere someone has written down a constraint of the form *for all X, Y must hold*, or one of its many disguised forms: *every order with discounted line items has a total above zero*, *the cache never returns stale data after invalidation*, *withdrawing more than the balance is rejected*.
 
 Each such sentence is a property in disguise, and the work is to notice the universal quantifier (*every*, *all*, *never*, *always*) and turn the constraint into an assertion Exhaust can check against generated input. You're not coming up with the property. The spec already defined it. You're just translating it from English into Swift.
 
@@ -133,9 +133,9 @@ Instead of writing assertions about *specific* outputs, you start writing assert
 
 The previous two sections gave you the easy cases: properties that were already written down somewhere, either implicit in a unit test or explicit in a spec, and just needed translating into Swift. This section is about the harder case, which is recognising properties from scratch when no test or document contains them in half-finished form. 
 
-Examples come naturally when you think about a function: *I called it with `this` and I got `that` back.* Properties ask you to step back from the example and articulate the shape of what's true regardless of input — another way of thinking about the same code. 
+Examples come naturally when you think about a function: *I called it with `this` and I got `that` back.* Properties ask you to step back from the example and articulate the shape of what's true regardless of input. Another way of thinking about the same code. 
 
-If this feels harder than writing a unit test, that's because it is: identifying properties is a skill that takes practice, and struggling with it the first few times doesn't mean you're missing something obvious. The patterns below are scaffolding for that practice — a handful of shapes that come up often enough that pattern-matching against them will usually reveal a property worth writing.
+If this feels harder than writing a unit test, that's because it is: identifying properties is a skill that takes practice, and struggling with it the first few times doesn't mean you're missing something obvious. The patterns below are scaffolding for that practice: a handful of shapes that come up often enough that pattern-matching against them will usually reveal a property worth writing.
 
 For sort, you might say:
 
@@ -191,15 +191,15 @@ The trap is what happens when you reach for computing instead of checking. Faced
 }
 ```
 
-On the surface this looks rigorous — you're checking that your code agrees with another hand-written source of truth. Underneath, though, **the code and the test will change together**. When you fix a bug in `fibonacci` you'll almost certainly update `referenceFibonacci` at the same time, because you'll notice they disagree and your instinct will be to make them agree. 
+On the surface this looks rigorous: you're checking that your code agrees with another hand-written source of truth. Underneath, though, **the code and the test will change together**. When you fix a bug in `fibonacci` you'll almost certainly update `referenceFibonacci` at the same time, because you'll notice they disagree and your instinct will be to make them agree. 
 
 When you misunderstand the function's promise, you'll misunderstand it the same way in both implementations: if you think Fibonacci starts at `F(0) = 1` when it actually starts at `F(0) = 0`, both functions will reflect that mistake and the test will happily pass. 
 
-The two sides of the equality are coupled through a shared mental model, and a test that's coupled to the thing it's testing can't reveal bugs in that thing — it can only tell you when your two copies of the thing have drifted apart, which is only rarely the bug you were looking for.
+The two sides of the equality are coupled through a shared mental model, and a test that's coupled to the thing it's testing can't reveal bugs in that thing. It can only tell you when your two copies of the thing have drifted apart, which is only rarely the bug you were looking for.
 
 The fix is to apply the following principle: *check, don't compute*. 
 
-What constraint does the output of `fibonacci` have to satisfy that you can verify without recomputing it? For Fibonacci, the defining recurrence is right there — each value equals the sum of the two before it.
+What constraint does the output of `fibonacci` have to satisfy that you can verify without recomputing it? For Fibonacci, the defining recurrence is right there: each value equals the sum of the two before it.
 
 ```swift
 @Test func fibonacciSatisfiesRecurrence() {
@@ -247,11 +247,11 @@ Three claims now, one per branch of the function's behaviour. An implementation 
 
 The property still doesn't mention an implementation, but it says enough about the output to constrain correct implementations uniquely.
 
-That question — *can I imagine a broken implementation that would satisfy this?* — is worth keeping in mind whenever you write a property. A yes means there's a stronger property waiting to be written.
+That question, *can I imagine a broken implementation that would satisfy this?*, is worth keeping in mind whenever you write a property. A yes means there's a stronger property waiting to be written.
 
 ## A generator and a property: the smallest useful PBT
 
-Once you have a property, you need a *generator* — something that produces the inputs to test the property against. Generators describe the shape of input you want. Exhaust draws many examples from them and runs your property on each. At its simplest:
+Once you have a property, you need a *generator*: something that produces the inputs to test the property against. Generators describe the shape of input you want. Exhaust draws many examples from them and runs your property on each. At its simplest:
 
 ```swift
 @Test func sortPreservesLength() {
@@ -265,7 +265,7 @@ Once you have a property, you need a *generator* — something that produces the
 
 That's the entire shift. You've gone from one example to many: Exhaust now generates hundreds of arrays, runs `sort` on each, and asserts that length is preserved every time. If any input violates the property, you get a counterexample for free.
 
-**The smallest useful PBT skill is just this.** Pick a property you'd be willing to write in a code comment, pick a generator that produces inputs of the right type, and run them together with `#exhaust`. That's it — you're now testing your function against a much wider set of inputs than you could ever hand-pick.
+**The smallest useful PBT skill is just this.** Pick a property you'd be willing to write in a code comment, use a generator that produces inputs of the right type, and run them together with `#exhaust`. That's it. You're now testing your function against a much wider set of inputs than you could ever hand-pick.
 
 It's worth running this against code you already trust, just to see what happens. You'll find yourself surprised how often a "this can't fail" function fails on an empty array, on an array of all-equal elements, on negative integers, or on an array of length one. These are real bugs, found by a property you would have written in a comment anyway.
 
@@ -275,7 +275,7 @@ It's worth running this against code you already trust, just to see what happens
 
 **Screening.** Before random sampling starts, Exhaust systematically exercises the values most likely to cause bugs. What counts as problematic depends on the type: min, max, and the steps either side of them for integers; NaN, the infinities, and values near the edges of representable precision for floats; DST transitions and epoch points for dates; troublesome Unicode scalars for characters; lengths 0, 1, 2, and the range's lower bound for collections. 
 
-The catalogue encodes the kinds of bugs each type is known for — the sort of thing a seasoned developer has learned to check for by hand over a career of finding them the hard way. These problematic values are drawn in combinations at pairwise coverage by default, so any bug that surfaces when two parameters hit their problematic values simultaneously gets caught without your having to remember to test the combination yourself. 
+The catalogue encodes the kinds of bugs each type is known for, the sort of thing a seasoned developer has learned to check for by hand over a career of finding them the hard way. These problematic values are drawn in combinations at pairwise coverage by default, so any bug that surfaces when two parameters hit their problematic values simultaneously gets caught without your having to remember to test the combination yourself. 
 
 Generators with very small domains get enumerated exhaustively as a special case. See <doc:PropertyTesting#Screening-of-problematic-values> for the full detail.
 
@@ -283,13 +283,13 @@ Generators with very small domains get enumerated exhaustively as a special case
 
 **Reduction.** The moment any phase produces a failing input, `#exhaust` switches from searching for failures to making the failure it found useful to you. Reduction works across every dimension of the input at once: it deletes elements from sequences, collapses recursive structure, swaps between branches, drives numeric values toward their simplest form, redistributes magnitude between coupled parameters, and reorders siblings into a natural reading order. 
 
-Big structural simplifications tend to happen first, because they reduce the counterexample fastest. Value minimisation happens late, once the structure has settled. The result is the minimal input the reducer can find that still triggers the failure — the counterexample format you've seen already in the `myDedupe` example, with a `Reduction diff` showing the path from the first failing input to the minimum.
+Big structural simplifications tend to happen first, because they reduce the counterexample fastest. Value minimisation happens late, once the structure has settled. The result is the minimal input the reducer can find that still triggers the failure. This is the counterexample format you've seen already in the `myDedupe` example, with a `Reduction diff` showing the path from the first failing input to the minimum.
 
 The first two phases search for bugs. The third strips away everything that doesn't contribute to the failure, making the underlying bug stand out. A property that passes all three means *no failures in the screening budget, no failures in random sampling, and nothing for reduction to simplify*. A failure in either of the first two triggers the third automatically. <doc:HowReductionWorks> walks through a complete example.
 
 ## Reading a failure report
 
-When reduction finishes, Exhaust reports the minimal counterexample it arrived at. Here's what one looks like — say you've written a `myDedupe` function that should remove consecutive duplicate elements from an array, leaving one of each, and a property to go with it:
+When reduction finishes, Exhaust reports the minimal counterexample it arrived at. Here's what one looks like. Say you've written a `myDedupe` function that should remove consecutive duplicate elements from an array, leaving one of each, and a property to go with it:
 
 ```swift
 @Test func myDedupePreservesDistinctElements() {
@@ -329,7 +329,7 @@ The property might fail on an eight-element input like `[3, 7, 7, 0, 7, 1, 1, 4]
 Expectation failed: (Set(myDedupe(xs)) → []) == (Set(xs) → [0])
 ```
 
-Now you can see it. `myDedupe` is incorrectly clearing the array when every element is a duplicate, instead of leaving one of each. The `Counterexample` block shows the reduced input — two zeros — and the `Reduction diff` (shown because the test passes `.includeDiff`) shows how Exhaust got there, stripping elements away until only the two needed to trigger the bug remain. You can paste the counterexample straight into a unit test as a regression: it's the minimal input that demonstrates the bug, and the failure message tells you exactly what went wrong.
+Now you can see it. `myDedupe` is incorrectly clearing the array when every element is a duplicate, instead of leaving one of each. The `Counterexample` block shows the reduced input, two zeros, and the `Reduction diff` (shown because the test passes `.includeDiff`) shows how Exhaust got there, stripping elements away until only the two needed to trigger the bug remain. You can paste the counterexample straight into a unit test as a regression: it's the minimal input that demonstrates the bug, and the failure message tells you exactly what went wrong.
 
 A habit worth forming: when a property test fails, don't reach for the debugger immediately. Read the reduced counterexample first, because it may just give you a direct route to the answer.
 
@@ -355,7 +355,7 @@ The trait re-runs the case; sometimes you want the value itself, to step through
 
 A seed is a coordinate in the search, so this extracts the same input only while the generator is unchanged. For a regression that survives generator changes, print the extracted value once and commit the literal. (The reduced counterexample, `[0, 0]` in the report above, is available too: it's the return value of the `#exhaust` call.)
 
-By default, `#exhaust` and `#explore` record failures as Swift Testing issues via `Issue.record`, so they surface in the test runner alongside any `#expect` failures. If you need to assert on the result of the run yourself — checking that a property fails in a particular way, say — there's a way to suppress that reporting and inspect the return value directly.
+By default, `#exhaust` and `#explore` record failures as Swift Testing issues via `Issue.record`, so they surface in the test runner alongside any `#expect` failures. If you need to assert on the result of the run yourself, for example to check that a property fails in a particular way, you can suppress that reporting and inspect the return value directly.
 
 Exhaust runs single-threaded by default, but the `.parallelize(lanes:)` setting splits random sampling across GCD lanes within a single test. Property closures are always `@Sendable`, which is what makes this safe: they cannot capture mutable local state.
 
@@ -385,9 +385,9 @@ The shaping question for a generator is *what values does my code accept?* The p
 
 A generator narrowed to "typical production inputs" is really a generator that only tests inputs a bug would already have had to survive to reach production.
 
-What counts as "the promise" is usually right there in the signature — specifically in the *input type*, which is a separate question from whatever validation the function does to the values once it has them. `parse()` takes any `String`, and one of your generators should produce any `String`, including malformed ones, because the parser's rejection behaviour is as much under test as its happy path. A validator on `addUser(name:age:)` should see ages well outside `0...150`, so the property can assert the out-of-range cases are handled the way the function claims to handle them.
+What counts as "the promise" is usually right there in the signature, specifically in the *input type*, which is a separate question from whatever validation the function does to the values once it has them. `parse()` takes any `String`, and one of your generators should produce any `String`, including malformed ones, because the parser's rejection behaviour is as much under test as its happy path. A validator on `addUser(name:age:)` should see ages well outside `0...150`, so the property can assert the out-of-range cases are handled the way the function claims to handle them.
 
-The generator only narrows when the input type itself rules out the invalid values. `myClamp` can't be called with a malformed range because `ClosedRange` won't let you construct one — the type has done the validation already, and the generator has to match what it permits. The bound comes from what the function can structurally *be called with*. Informal notions of "valid" or "sensible" input don't apply — if the signature permits it, the generator should produce it.
+The generator only narrows when the input type itself rules out the invalid values. `myClamp` can't be called with a malformed range because `ClosedRange` won't let you construct one. The type has done the validation already, and the generator has to match what it permits. The bound comes from what the function can structurally *be called with*. Informal notions of "valid" or "sensible" input don't apply: if the signature permits it, the generator should produce it.
 
 Exhaust will ramp from simple to complex inputs within the bounds you declare. The bounds themselves just have to match what the function has agreed to handle.
 
@@ -417,7 +417,7 @@ let generator = #gen(.closedRange(.int()), .int())
 
 Exhaust's character and string generators accept a `CharacterSet`, so you can specify exactly which characters will be generated. `.asciiString()` gives you ASCII-only out of the box, and a specific `CharacterSet` gives you any discontiguous alphabet you need, like alphanumerics plus `@` and `.` for email-shaped strings, say.
 
-When a property body reaches for `guard` to skip inputs, that's almost always a signal that the generator should be producing better-shaped inputs. The constraint has to live somewhere — the question is whether it lives in the generator (where it shapes what gets tested) or in the property body (where it silently discards inputs after the fact).
+When a property body reaches for `guard` to skip inputs, that's almost always a signal that the generator should be producing better-shaped inputs. The constraint has to live somewhere. The question is whether it lives in the generator (where it shapes what gets tested) or in the property body (where it silently discards inputs after the fact).
 
 ## When the generator can't reliably reach what you need: #explore
 
@@ -451,26 +451,26 @@ This is the moment for `#explore`. It lets you declare *the questions you want t
 }
 ```
 
-Each direction is a question, and Exhaust's job is to answer all of them. It doesn't do this by brute-force filtering — generating thousands of inputs and keeping only the ones that match a direction would hang the test on rare conditions. 
+Each direction is a question, and Exhaust's job is to answer all of them. It doesn't do this by brute-force filtering. Generating thousands of inputs and keeping only the ones that match a direction would hang the test on rare conditions. 
 
 Instead, it uses *choice gradient sampling*: the generator is really a sequence of decisions (which enum case, which integer from a range, which length for an array), and Exhaust runs a short sampling pass to learn which decisions lead toward a direction and which lead away. That pass produces a reweighted generator, biased toward the direction, and the actual test run then uses that biased generator normally. 
 
 Each direction gets its own tuning pass and its own biased generator.
 
-At the default `.standard` budget, the property runs on 30 examples per direction, and the report tells you which directions got exercised and whether any of them failed. If "refund + partial" turns out to be infeasible under your generator — because some constraint in the generator rules it out — the sampler exhausts its tuning budget without getting close, and `#explore` tells you the direction was unreachable. You find the bug in your generator instead of getting a false silence.
+At the default `.standard` budget, the property runs on 30 examples per direction, and the report tells you which directions got exercised and whether any of them failed. If "refund + partial" turns out to be infeasible under your generator, because some constraint in the generator rules it out, the sampler exhausts its tuning budget without getting close, and `#explore` tells you the direction was unreachable. You find the bug in your generator instead of getting a false silence.
 
 The `#explore` skill is recognising the moment when your worry shifts from "does the property hold?" to "is the property even being tested in the cases I care about?" The first question is `#exhaust`'s job; the second is `#explore`'s. See <doc:DirectedExploration> for the full reference.
 
 A few signs you've crossed into `#explore` territory:
 
-- You're tempted to write `if order.hasRefund && order.fulfilment == .partial { ... }` as a precondition inside the property. (Don't — declare it as a direction instead.)
+- You're tempted to write `if order.hasRefund && order.fulfilment == .partial { ... }` as a precondition inside the property. (Don't. Declare it as a direction instead.)
 - `#exhaust` tried hundreds of inputs and nothing failed, but you're still not sure why.
 - You're writing a comment in the test that says "this also covers the X case" without any way to verify
 - You can articulate the regions of the input space where bugs might live, even if you can't enumerate the bugs themselves
 
 ## When the bug is in a sequence of operations: @StateMachine
 
-Everything above this point has been about pure functions — feed in an input, check the output. A lot of real code isn't shaped like that, though. Some bugs only show up after a particular sequence of operations on a stateful object: you can insert fine, delete fine, lookup fine, but do `insert(x); delete(x); lookup(x)` in order and the object is left in a state that shouldn't be reachable. No single operation is buggy in isolation. The bug lives in the interaction.
+Everything above this point has been about pure functions: feed in an input, check the output. A lot of real code isn't shaped like that, though. Some bugs only show up after a particular sequence of operations on a stateful object: you can insert fine, delete fine, lookup fine, but do `insert(x); delete(x); lookup(x)` in order and the object is left in a state that shouldn't be reachable. No single operation is buggy in isolation. The bug lives in the interaction.
 
 Exhaust has a separate facility for this kind of testing, built around a `@StateMachine` macro. You declare a `final class` (or an `actor`) that describes the system under test (`@SystemUnderTest`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two. Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks. The shape looks like this:
 
@@ -504,5 +504,5 @@ Specs on an `actor` use `.sequential` because actor isolation serialises all dis
 }
 ```
 
-State machine testing has its own guide: <doc:StateMachineTesting>. If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@StateMachine` instead — that's what it's there for.
+State machine testing has its own guide: <doc:StateMachineTesting>. If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@StateMachine` instead. That's what it's there for.
 

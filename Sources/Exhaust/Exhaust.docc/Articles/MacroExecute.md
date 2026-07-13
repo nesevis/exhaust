@@ -25,7 +25,7 @@ For the full guide, see <doc:StateMachineTesting>.
 
 `#execute` also supports a `time:` mode that runs coverage-guided fuzzing over command sequences. Exhaust mutates sequences from a corpus toward novel SUT coverage until the time budget is consumed, cataloguing every distinct fault it discovers.
 
-> Experiment: This mode is experimental. Settings, report format, and search behavior may change in any release.
+> Experiment: This mode is experimental. Settings, report format, and search behaviour may change in any release.
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
