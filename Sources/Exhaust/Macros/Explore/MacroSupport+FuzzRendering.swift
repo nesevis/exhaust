@@ -38,7 +38,6 @@ extension __ExhaustRuntime {
         let ordered = report.clusters.filter(isFrontier).sorted { $0.firstSeen > $1.firstSeen }
             + report.clusters.filter { isFrontier($0) == false }
 
-        let symptomColumnWidth = ordered.map { $0.symptoms.joined(separator: ", ").count }.max() ?? 0
         if ordered.isEmpty == false {
             lines.append("")
         }
@@ -47,11 +46,7 @@ extension __ExhaustRuntime {
                 lines.append("")
             }
             lines.append(
-                contentsOf: renderClusterBrief(
-                    cluster,
-                    isFrontier: isFrontier(cluster),
-                    symptomColumnWidth: symptomColumnWidth
-                )
+                contentsOf: renderClusterBrief(cluster, isFrontier: isFrontier(cluster))
             )
         }
         if ordered.contains(where: \.isLikelySplit) {
@@ -91,37 +86,35 @@ extension __ExhaustRuntime {
         let reachable = report.estimatedReachableEdgeCount
         let remaining = max(0, Int(reachable.rounded()) - report.coveredEdgeCount)
         lines.append(
-            "About \(Int(reachable.rounded())) edges look reachable for this generator and property (Chao1 estimate); \(remaining) of those remain\(remaining == 1 ? "s" : "") uncovered (scoped to this run's search space, not the module)."
+            "About \(Int(reachable.rounded())) edges look reachable for this generator and property."
+        )
+        lines.append(
+            "\(remaining) of those remain\(remaining == 1 ? "s" : "") uncovered (scoped to this run's search space, not the module)."
         )
         return lines
     }
 
     // MARK: - Clusters
 
-    /// Renders one cluster's terminal block: an attribute line, the reduced counterexample (collapsed onto one line when it stays readable), and the single strongest user-code suspect. The full ranked edge list lives in the cluster's attachment.
+    /// Renders one cluster's terminal block: a name line, an attribute line, the reduced counterexample (collapsed onto one line when it stays readable), and the single strongest user-code suspect. The full ranked edge list lives in the cluster's attachment.
     private static func renderClusterBrief(
         _ cluster: FuzzReport.Cluster,
-        isFrontier: Bool,
-        symptomColumnWidth: Int
+        isFrontier: Bool
     ) -> [String] {
         let symptoms = cluster.symptoms.joined(separator: ", ")
-        let paddedSymptoms = symptoms.padding(
-            toLength: max(symptomColumnWidth, symptoms.count),
-            withPad: " ",
-            startingAt: 0
-        )
-        var phaseTag = cluster.discoveringPhase.rawValue
+        var frontierSuffix = ""
         if isFrontier {
-            phaseTag += "; discovered late, at \(renderDuration(cluster.firstSeen))"
+            frontierSuffix = ", discovered late at \(renderDuration(cluster.firstSeen))"
         }
-        let splitMarker = cluster.isLikelySplit ? "  ~paths" : ""
+        let splitMarker = cluster.isLikelySplit ? " ~paths" : ""
         let failureWord = cluster.instanceCount == 1 ? "failure" : "failures"
         let normalizedSuffix = cluster.unnormalizedMemberCount > 0
             ? " (\(cluster.unnormalizedMemberCount) normalized in)"
             : ""
         // Clusters display 1-based; `id` stays the report's zero-based array position.
         var lines = [
-            "Cluster \(cluster.id + 1)  \(paddedSymptoms)  \(cluster.instanceCount) \(failureWord), \(cluster.reducedCount) reduced\(normalizedSuffix)  [\(phaseTag)]\(splitMarker)",
+            "Cluster \(cluster.id + 1) \(symptoms)\(splitMarker)",
+            "  \(cluster.instanceCount) \(failureWord), \(cluster.reducedCount) reduced\(normalizedSuffix), found via \(cluster.discoveringPhase.rawValue)\(frontierSuffix)",
         ]
         let counterexample = collapsedCounterexample(cluster.reducedDescription)
         if counterexample.count == 1, let onlyLine = counterexample.first {
