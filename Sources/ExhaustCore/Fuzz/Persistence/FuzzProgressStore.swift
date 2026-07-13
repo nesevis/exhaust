@@ -54,7 +54,9 @@ package struct FuzzProgressStore: Sendable {
         let data = try JSONEncoder().encode(document)
         let temporaryURL = directory.appendingPathComponent("progress.json.tmp")
         try data.write(to: temporaryURL)
-        _ = try FileManager.default.replaceItemAt(progressFileURL, withItemAt: temporaryURL)
+        // replaceItemAt is unimplemented on Windows and unreliable on Linux in swift-corelibs-foundation.
+        try? FileManager.default.removeItem(at: progressFileURL)
+        try FileManager.default.moveItem(at: temporaryURL, to: progressFileURL)
     }
 
     /// Removes the whole per-test directory. Called on normal termination — a surviving log is the crash signal, so a completed run must not leave one behind.
