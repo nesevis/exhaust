@@ -134,7 +134,7 @@ Sequences carry up to 40 commands by default. Override with `.commandLimit(n)` w
 | Model | Status |
 |-------|--------|
 | `.sequential` | Supported, for both synchronous and async specs. |
-| `.tasks` | Supported for async specs on macOS 15, iOS 18, tvOS 18, watchOS 11, and visionOS 2 or later. Each command carries a lane-assigning schedule marker drawn as part of the generated input, so the search mutates the interleaving with the same operators that mutate commands, and reduction minimises markers back toward sequential execution. `.parallelize(lanes:)` sets the lane count, defaulting to two. A `.tasks` spec with no async members runs through the sequential path — with no suspension points there are no interleavings to search. |
+| `.tasks` | Supported for async specs. Requires macOS 15, iOS 18, tvOS 18, watchOS 11, or visionOS 2 on Apple platforms; no version requirement on Linux and Windows. The search mutates both commands and their lane assignments, and reduction minimises concurrency back toward sequential execution. `.parallelize(lanes:)` sets the lane count, defaulting to two. A `.tasks` spec with no async members runs through the sequential path. |
 | `.threads` | Permanently incompatible. Coverage-guided search needs deterministic replay of each attempt. Preemptive scheduling defeats that. The diagnostic directs `.threads` specs to plain `#execute`. |
 
 ## Reading the report
@@ -142,48 +142,44 @@ Sequences carry up to 40 commands by default. Override with `.commandLimit(n)` w
 When a run discovers faults, the terminal shows a summary. This is real output from a run against an instrumented parser fixture:
 
 ```
-#explore(time:) catalogued 4 fault clusters in 5510 attempts (33772/s; 97% Exhaust testing overhead).
-Coverage: 105 of 1171 instrumented edges hit; 1066 never hit (module-wide count,
+#explore(time:) catalogued 3 fault clusters in 4978 attempts (35650/s; 97% Exhaust testing overhead).
+Coverage: 103 of 1171 instrumented edges hit; 1068 never hit (module-wide count,
   includes code the property never calls).
-Estimated chance the next attempt covers a new edge: about 1 in 2755.
-About 106 edges look reachable for this generator and property (Chao1 estimate);
-  1 of those remains uncovered (scoped to this run's search space, not the module).
+Estimated chance the next attempt covers a new edge: about 1 in 2489.
+About 104 edges look reachable for this generator and property.
+1 of those remains uncovered (scoped to this run's search space, not the module).
 Stopped 0.3s early: no coverage-novel corpus admission in the plateau window;
   the unused budget was returned.
 
-Cluster 1  WindowError     257 failures, 7 reduced  [sampling]
+Cluster 1 WindowError
+  223 failures, 7 reduced, found via sampling
   Counterexample: Message(mode: .heartbeat, flags: 0, checksum: 0, region: 6, payload: [])
   suspects:
     - Parser.decode (Parser.swift)
     - decodeHeartbeat (Parser.swift)
     - validateWindow (Parser.swift)
 
-Cluster 2  IntegrityError  168 failures, 8 reduced (1 normalized in)  [sampling]
+Cluster 2 IntegrityError
+  154 failures, 6 reduced (1 normalized in), found via sampling
   Counterexample: Message(mode: .data, flags: 3, checksum: 0, region: 5, payload: [0, 0])
   suspects:
     - integrityCheck (Parser.swift:121)
     - Parser.decode (Parser.swift)
     - decodeData (Parser.swift)
 
-Cluster 3  ChecksumError   491 failures, 8 reduced  [mutation]
+Cluster 3 ChecksumError
+  454 failures, 8 reduced, found via mutation
   Counterexample: Message(mode: .handshake, flags: 0, checksum: 65535, region: 0, payload: [])
   suspects:
     - Parser.decode (Parser.swift)
     - checkChecksum (Parser.swift)
     - ChecksumError.init (Parser.swift:9)
 
-Cluster 4  IntegrityError  50 failures, 1 reduced (1 normalized in)  [mutation]
-  Counterexample: Message(mode: .control, flags: 12, checksum: 0, region: 2, payload: [241])
-  suspects:
-    - integrityCheck (Parser.swift:121)
-    - Parser.decode (Parser.swift)
-    - decodeControl (Parser.swift)
-
 Full per-cluster detail is in the explore-time-cluster attachments.
 Reproduce: .replay(1)
 ```
 
-**Clusters are distinct faults.** Two failures that look different on the surface but reduce to the same minimal form are one cluster. Clusters 2 and 4 both throw `IntegrityError`, but their reduced counterexamples are structurally different, so they are separate bugs.
+**Clusters group failures by their reduced form.** Two failures that look different on the surface but reduce to the same minimal counterexample are one cluster.
 
 **The edge count is the module, not the run.** The 1171 edges include everything in the instrumented module, most of which this property and generator can never reach. The Chao1 estimate is scoped to what this run can actually reach, which is a more honest completeness measure.
 
@@ -194,7 +190,8 @@ Reproduce: .replay(1)
 For `#execute(time:)` the report has the same structure, but each cluster's reduced counterexample is a command sequence:
 
 ```
-Cluster 1  BoundedQueueError  11028 failures, 25 reduced  [sampling]
+Cluster 1 BoundedQueueError
+  11028 failures, 25 reduced, found via sampling
   Counterexample: [.enqueue(value: 0), .clear, .enqueue(value: 0), .clear]
   suspect:
     - BoundedQueue.clear (BoundedQueue.swift:123)

@@ -35,7 +35,7 @@ For the full guide, see <doc:StateMachineTesting>.
 
 | Parameter | Description |
 |---|---|
-| `specType` | The `@StateMachine` spec to run. Only `.sequential` specs are supported. |
+| `specType` | The `@StateMachine` spec to run. `.sequential` and `.tasks` specs are supported. |
 | `time` | Wall-clock ``TimeBudget`` for the run (for example `.minutes(5)`). |
 | `settings` | Variadic ``FuzzSettings`` values: replay, suppression, log verbosity, `.commandLimit(n)`. |
 
