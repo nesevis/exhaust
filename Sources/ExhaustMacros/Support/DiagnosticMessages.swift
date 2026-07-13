@@ -13,6 +13,9 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case exploreMissingProperty = "#explore requires a property (trailing closure or 'property:' argument)"
     case exploreMissingGenerator = "#explore requires a generator as its first argument"
     case exploreMissingDirections = "#explore requires a 'directions:' argument"
+    case exploreTimeMissingTime = "#explore(time:) requires a 'time:' argument"
+    case executeTimeMissingTime = "#execute(time:) requires a 'time:' argument"
+    case exploreTimeWithDirections = "#explore cannot combine 'time:' and 'directions:'; the modes are mutually exclusive. Use 'time:' for a coverage-guided fuzz run or 'directions:' for goal-bounded exploration"
     case exampleMissingGenerator = "#example requires a generator as its first argument"
     case examineMissingGenerator = "#examine requires a generator as its first argument"
     case exhaustStateMachineMissingSpec = "#execute requires a spec type argument"
@@ -20,6 +23,8 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case closureCannotFailXCTest = "Closure has no failure mechanism; return a Bool or throw an error to signal failure"
     case xcTestUnwrapInPropertyClosure = "XCTUnwrap is expensive on failure (several hundred milliseconds per call); prefer a guard or throwing an explicit error"
     case xcTestAssertInPropertyClosure = "XCTAssert failures are invisible to Exhaust and will not trigger reduction; return a Bool or throw an error instead"
+    case exploreTimeExperimental = "#explore(time:) is experimental: its settings, report format, and search behavior may change in any release"
+    case executeTimeExperimental = "#execute(time:) is experimental: its settings, report format, and search behavior may change in any release"
 
     var message: String {
         rawValue
@@ -38,7 +43,9 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
                  .forwardOnlyComplexArguments,
                  .forwardOnlyParamMismatch,
                  .xcTestUnwrapInPropertyClosure,
-                 .xcTestAssertInPropertyClosure:
+                 .xcTestAssertInPropertyClosure,
+                 .exploreTimeExperimental,
+                 .executeTimeExperimental:
                 .warning
             case .noGeneratorArguments,
                  .exhaustMissingProperty,
@@ -46,6 +53,9 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
                  .exploreMissingProperty,
                  .exploreMissingGenerator,
                  .exploreMissingDirections,
+                 .exploreTimeMissingTime,
+                 .executeTimeMissingTime,
+                 .exploreTimeWithDirections,
                  .exampleMissingGenerator,
                  .examineMissingGenerator,
                  .exhaustStateMachineMissingSpec,

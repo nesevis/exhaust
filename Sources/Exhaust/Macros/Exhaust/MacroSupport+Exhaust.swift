@@ -152,6 +152,7 @@ public extension __ExhaustRuntime {
         var invalidReplaySeed: ReplaySeed?
         var suppressIssueReporting = false
         var suppressLogs = false
+        var suppressAttachments = false
         var visualize = false
         var includeDiff = false
         var onReportClosure: ((ExhaustReport) -> Void)?
@@ -182,9 +183,12 @@ public extension __ExhaustRuntime {
                             suppressIssueReporting = true
                         case .logs:
                             suppressLogs = true
+                        case .attachments:
+                            suppressAttachments = true
                         case .all:
                             suppressIssueReporting = true
                             suppressLogs = true
+                            suppressAttachments = true
                     }
                 case .visualize:
                     visualize = true
@@ -265,9 +269,11 @@ public extension __ExhaustRuntime {
                 if let statsAccumulator {
                     let lines = statsAccumulator.finalize()
                     if lines.isEmpty == false {
+                        // Suppression skips only the attachment write below; the lines still reach the report, so `.collectOpenPBTStats` with `.suppress(.attachments)` collects without attaching.
                         report.openPBTStatsLines = lines
                         let attachmentName = "\(testName)-openpbtstats.jsonl"
-                        switch TestContext.current {
+                        let attachmentContext: TestContext? = suppressAttachments ? nil : TestContext.current
+                        switch attachmentContext {
                             #if canImport(Testing)
                                 case .swiftTesting:
                                     Attachment.record(lines.jsonlString(), named: attachmentName)

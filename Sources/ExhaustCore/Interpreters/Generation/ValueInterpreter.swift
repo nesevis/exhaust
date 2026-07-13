@@ -515,15 +515,19 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 transformedValue = boundValue
             case let .metamorphic(transforms, _):
                 let savedState = (context.prng.seed, context.prng.currentState)
+                let seenSnapshot = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 guard let original = try generateRecursiveAny(
                     inner, context: &context
                 ) else {
                     return nil
                 }
+                let seenAfterOriginal = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 var copies: [Any] = [original]
                 copies.reserveCapacity(transforms.count + 1)
+                // Copies replay against the original's starting dedup state; see ReflectiveOperation.metamorphic.
                 for transform in transforms {
                     context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
+                    (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenSnapshot
                     guard let copy = try generateRecursiveAny(
                         inner, context: &context
                     ) else {
@@ -531,6 +535,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     }
                     try copies.append(transform(copy))
                 }
+                (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenAfterOriginal
                 transformedValue = copies
         }
         let nextGen = try continuation(transformedValue)

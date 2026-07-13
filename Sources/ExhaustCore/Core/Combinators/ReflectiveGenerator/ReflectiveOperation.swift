@@ -307,6 +307,8 @@ package enum TransformKind {
     ///
     /// The interpreter saves PRNG state before generating the inner value, then restores and re-generates for each transform to produce independent copies. The result is an `Array` of `Any` where index zero is the untransformed original (for reflection backward) and indices one through N are the transformed copies.
     ///
+    /// Each copy must replay the original's generation verbatim, so the interpreters snapshot the unique-dedup seen-state (`uniqueSeenKeys`, `uniqueSeenSequences`) alongside the PRNG, reset both before every copy, and discard the copies' own insertions afterwards. Without this, a `unique` inside the inner generator dedupes the copy against the original's accepted sequence and forces a fresh draw — a metamorphic pair whose halves differ under the identity transform, and a tree that no longer determines the value. Resetting to the pre-original snapshot also replays the original's dedup retries identically, so the copy lands on the accepted value rather than the first attempt.
+    ///
     /// - Parameters:
     ///   - transforms: Type-erased transform functions, one per copy.
     ///   - inputType: The metatype of the inner generator's output, for diagnostics.

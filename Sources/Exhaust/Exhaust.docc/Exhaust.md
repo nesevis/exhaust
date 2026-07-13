@@ -41,6 +41,7 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 
 - <doc:PropertyTesting>
 - <doc:DirectedExploration>
+- <doc:CoverageGuidedFuzzing>
 - <doc:GeneratorTesting>
 
 ### State Machine Testing
@@ -98,6 +99,12 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 ### Explore Settings
 
 - ``ExploreSettings``
+
+### Fuzz Settings
+
+- ``FuzzSettings``
+- ``FuzzReport``
+- ``TimeBudget``
 
 ### Examine Settings
 

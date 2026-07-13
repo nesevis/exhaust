@@ -1,0 +1,43 @@
+name: Explore Harness
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# The `#explore(time:)` validation harness is a separate package with coverage `.unsafeFlags` on its
+# fixture. It runs on its own lane, macOS only, and is excluded from the default `swift test` run.
+#
+# The whole harness runs serially (--no-parallel): coverage counters are process-global, so a test
+# executing instrumented fixture code concurrently with a fuzz attempt would land its edges in the
+# open attempt's signature and distort the feedback signal the assertions validate. Serial
+# execution closes that window — each attempt re-zeroes the counters, so tests that ran *before* a
+# fuzz run cannot affect it. The residual assumption is that no test leaks background work past its
+# own completion; a test that starts doing so must move to a filtered invocation of its own.
+jobs:
+  explore-harness:
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Select Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+
+      - name: Run harness serially
+        run: swift test --package-path ExploreHarness --no-parallel
+
+      - name: Collect crash reports
+        if: failure()
+        run: |
+          REPORT_DIR="$HOME/Library/Logs/DiagnosticReports"
+          if [ -d "$REPORT_DIR" ]; then
+            echo "### Crash reports" >> "$GITHUB_STEP_SUMMARY"
+            for f in "$REPORT_DIR"/*.ips "$REPORT_DIR"/*.crash; do
+              [ -f "$f" ] || continue
+              echo "#### $(basename "$f")" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+              head -80 "$f" >> "$GITHUB_STEP_SUMMARY"
+              echo '```' >> "$GITHUB_STEP_SUMMARY"
+            done
+          fi

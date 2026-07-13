@@ -89,46 +89,6 @@ func checkAllTrees(
     }
 }
 
-/// Checks that two generators produce pairwise-equal values from the same seed.
-func checkPairedValues(
-    _ gen1: AnyGenerator,
-    _ gen2: AnyGenerator,
-    seed: UInt64 = 42,
-    maxRuns: UInt64 = 10,
-    check: (Any, Any) -> Bool
-) -> Bool {
-    do {
-        var iter1 = ValueInterpreter(gen1, seed: seed, maxRuns: maxRuns)
-        var iter2 = ValueInterpreter(gen2, seed: seed, maxRuns: maxRuns)
-        while let v1 = try iter1.next(), let v2 = try iter2.next() {
-            if check(v1, v2) == false {
-                return false
-            }
-        }
-    } catch {
-        return true
-    }
-    return true
-}
-
-/// A property with a satisfiable failure condition for each recipe output type, so reduction has counterexamples to preserve. Values of unexpected types pass vacuously, matching the original int-only formulation.
-func failingProperty(for type: RecipeType) -> (Any) -> Bool {
-    switch type {
-        case .int:
-            { value in (value as? Int).map { $0 < 10 } ?? true }
-        case .bool:
-            { value in (value as? Bool).map { $0 == false } ?? true }
-        case .double:
-            { value in (value as? Double).map { $0 < 10 } ?? true }
-        case .string:
-            { value in (value as? String).map { $0.count < 2 } ?? true }
-        case .character:
-            { value in (value as? Character).map { $0 == "0" } ?? true }
-        case .arrayOf:
-            { value in (value as? [Any]).map { $0.count < 2 } ?? true }
-    }
-}
-
 /// Returns whether the recipe contains a combinator of the given kind at any depth, matched by `predicate`.
 func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorKind) -> Bool) -> Bool {
     guard case let .combinator(kind) = recipe else {

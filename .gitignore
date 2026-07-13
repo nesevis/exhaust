@@ -1,6 +1,6 @@
 .DS_Store
 Package.resolved
-/.build
+.build/
 /Packages
 xcuserdata/
 DerivedData/
@@ -9,3 +9,4 @@ DerivedData/
 .netrc
 Frameworks/ExhaustCore.xcframework/
 Frameworks/ExhaustCore.xcframework.zip
+/ExploreHarness/.benchmarks

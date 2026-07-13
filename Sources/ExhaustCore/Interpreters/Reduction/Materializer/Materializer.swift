@@ -101,7 +101,7 @@ package enum Materializer {
         switch mode {
             case .exact:
                 seed = precomputedSeed ?? ZobristHash.hash(of: prefix)
-                // Exact mode never reads the fallback tree at value sites (all values come from the prefix), but handleZip derives cursor scope limits from it. Those limits are load-bearing: they reject structurally misaligned candidates before the property runs — dropping the fallback here nearly doubles materializations on batch cross-sequence removal (Bound25).
+                // Exact mode never reads the fallback tree at value sites (all values come from the prefix), but handleZip still consults it for per-child fallback threading and for secondary scope limits when the prefix does not parse at a zip site. Scope rejection of structurally misaligned candidates before the property runs is load-bearing: dropping scoping nearly doubles materializations on batch cross-sequence removal (Bound25).
                 resolvedFallbackTree = fallbackTree
                 maximizeBoundRegionIndices = nil
             case let .guided(s, fb, indices):
@@ -156,7 +156,7 @@ extension Materializer {
     struct RejectionError: Error {}
 
     /// Internal mode enum — includes `.generate` for non-selected branch materialization.
-    enum InternalMode {
+    enum InternalMode: Equatable {
         /// Exact: reject out-of-range inner values, clamp bound values, no cursor suspension.
         case exact
         /// Guided: tiered resolution (prefix → fallback → PRNG), cursor suspension at binds.
@@ -180,6 +180,22 @@ extension Materializer.Mode {
 // MARK: - Recursive Engine
 
 extension Materializer {
+    /// Returns whether a candidate reading of a zip's children lands its cumulative per-child entry counts exactly on the prefix's parsed subtree boundaries.
+    @inline(__always)
+    static func zipChildBoundariesMatch(_ children: [ChoiceTree], from start: Int, ends: [Int]) -> Bool {
+        guard children.count == ends.count else {
+            return false
+        }
+        var boundary = start
+        for (child, end) in zip(children, ends) {
+            boundary += child.flattenedEntryCount
+            if boundary != end {
+                return false
+            }
+        }
+        return true
+    }
+
     /// Split a fallback tree into callee and continuation portions for non-group operations.
     @inline(__always)
     static func decomposeNonGroupFallback(
@@ -248,20 +264,40 @@ extension Materializer {
                 )
 
             case let .impure(.zip(generators, _), continuation):
-                // Zip: callee is a group with known child count.
                 let (calleeFallback, continuationFallback): (ChoiceTree?, ChoiceTree?)
+                var prefixChildEnds: [Int]?
                 if let fallbackTree,
                    case let .group(children, _) = fallbackTree, children.count == 2,
                    case let .group(inner, _) = children[0], inner.count == generators.count
                 {
-                    (calleeFallback, continuationFallback) = (children[0], children[1])
+                    let isAmbiguousShape = generators.count == 2
+                    if context.mode == .guided || isAmbiguousShape {
+                        prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
+                    }
+                    var useWrapperReading = true
+                    if isAmbiguousShape, let prefixChildEnds {
+                        let childrenStart = context.cursor.position + 1
+                        let wrapperMatches = zipChildBoundariesMatch(inner, from: childrenStart, ends: prefixChildEnds)
+                        let calleeMatches = zipChildBoundariesMatch(children, from: childrenStart, ends: prefixChildEnds)
+                        if wrapperMatches == false, calleeMatches {
+                            useWrapperReading = false
+                        }
+                    }
+                    (calleeFallback, continuationFallback) = useWrapperReading
+                        ? (children[0], children[1])
+                        : (fallbackTree, nil)
                 } else {
-                    (calleeFallback, continuationFallback) = (fallbackTree, nil)
+                    if context.mode == .guided {
+                        prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
+                    }
+                    calleeFallback = fallbackTree
+                    continuationFallback = nil
                 }
                 return try handleZip(
                     generators, continuation: continuation, inputValue: inputValue,
                     context: &context, calleeFallback: calleeFallback,
-                    continuationFallback: continuationFallback
+                    continuationFallback: continuationFallback,
+                    prefixChildEnds: prefixChildEnds
                 )
 
             case let .impure(.just(value), continuation):
@@ -395,7 +431,3 @@ extension Materializer {
         var filterObservations: [UInt64: FilterObservation] = [:]
     }
 }
-
-// MARK: - InternalMode Equatable
-
-extension Materializer.InternalMode: Equatable {}

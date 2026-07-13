@@ -125,6 +125,9 @@ package struct ExamineReportingConfiguration {
                             suppressIssueReporting = true
                         case .logs:
                             suppressLogs = true
+                        case .attachments:
+                            // #examine records no attachments; accepted so .suppress reads the same everywhere.
+                            break
                         case .all:
                             suppressIssueReporting = true
                             suppressLogs = true

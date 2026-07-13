@@ -46,6 +46,9 @@ struct ResolvedConcurrentConfig {
         switch option {
             case .issueReporting: suppressIssueReporting = true
             case .logs: suppressLogs = true
+            case .attachments:
+                // Plain #execute records no attachments; accepted so .suppress reads the same everywhere.
+                break
             case .all:
                 applySuppress(.issueReporting)
                 applySuppress(.logs)

@@ -395,6 +395,7 @@ extension OnlineCGSInterpreter {
                 result = boundValue
             case let .metamorphic(transforms, _):
                 let savedState = (context.prng.seed, context.prng.currentState)
+                let seenSnapshot = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 guard let original = try generateRecursive(
                     inner,
                     with: inputValue,
@@ -404,10 +405,13 @@ extension OnlineCGSInterpreter {
                     cgsState: &cgsState,
                     derivativeContext: derivativeContext
                 ) else { return nil }
+                let seenAfterOriginal = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 var results: [Any] = [original]
                 results.reserveCapacity(transforms.count + 1)
+                // Copies replay against the original's starting dedup state; see ReflectiveOperation.metamorphic.
                 for transform in transforms {
                     context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
+                    (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenSnapshot
                     guard let copy = try generateRecursive(
                         inner,
                         with: inputValue,
@@ -419,6 +423,7 @@ extension OnlineCGSInterpreter {
                     ) else { return nil }
                     try results.append(transform(copy))
                 }
+                (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenAfterOriginal
                 result = results
         }
         return try runContinuation(

@@ -633,15 +633,19 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 resultTree = .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)
             case let .metamorphic(transforms, _):
                 let savedState = (context.prng.seed, context.prng.currentState)
+                let seenSnapshot = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 guard let (original, innerTree) = try generateRecursiveAny(
                     inner, context: &context
                 ) else {
                     return nil
                 }
+                let seenAfterOriginal = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 var results: [Any] = [original]
                 results.reserveCapacity(transforms.count + 1)
+                // Copies replay against the original's starting dedup state; see ReflectiveOperation.metamorphic.
                 for transform in transforms {
                     context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
+                    (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenSnapshot
                     guard let (copy, _) = try generateRecursiveAny(
                         inner, context: &context
                     ) else {
@@ -649,6 +653,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     }
                     try results.append(transform(copy))
                 }
+                (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenAfterOriginal
                 result = results
                 resultTree = innerTree
         }

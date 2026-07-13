@@ -482,7 +482,7 @@ extension Materializer {
 
     /// Materializes each component of a zip in declaration order, collecting results into an array for the continuation.
     ///
-    /// When a fallback tree is available, each child is scoped to its flattened entry count so guided-mode cursor reads cannot bleed into sibling components. Scope limits are computed arithmetically from the cursor's position at the zip's group-open marker to avoid drift from transparent group markers consumed by ``Cursor/skipGroups()``.
+    /// Each child is scoped so cursor reads cannot bleed into sibling components. The primary scope source is the prefix's own parsed subtree spans (`prefixChildEnds`); when the prefix does not parse at this site, per-child entry counts from the fallback tree stand in. See ``Cursor/zipChildSubtreeEnds(count:)`` for why the prefix is authoritative.
     @inline(__always)
     static func handleZip(
         _ generators: ContiguousArray<AnyGenerator>,
@@ -490,7 +490,8 @@ extension Materializer {
         inputValue: Any,
         context: inout Context,
         calleeFallback: ChoiceTree? = nil,
-        continuationFallback: ChoiceTree? = nil
+        continuationFallback: ChoiceTree? = nil,
+        prefixChildEnds: [Int]? = nil
     ) throws -> (Any, ChoiceTree)? {
         let fallbackChildren: [ChoiceTree]? = calleeFallback.flatMap { fallback -> [ChoiceTree]? in
             guard case let .group(children, _) = fallback,
@@ -506,10 +507,9 @@ extension Materializer {
             choiceTrees.reserveCapacity(generators.count)
         }
 
-        let canScope = fallbackChildren != nil
+        let canScope = prefixChildEnds != nil || fallbackChildren != nil
 
-        // Scope limits are computed arithmetically from the cursor's current position (which sits at the zip's group-open marker). Each child's scope starts at basePosition + 1 (past the group-open) plus the cumulative flattenedEntryCount of preceding children. This avoids the cursor-position-based calculation that drifted when skipGroups()
-        // consumed a child's leading group(true) markers.
+        // Scope limits come from the prefix's parsed spans (`prefixChildEnds`, absolute end positions; see Cursor.zipChildSubtreeEnds(count:)). When the prefix does not parse at this site, the fallback tree's per-child entry counts stand in: cumulative flattenedEntryCount from basePosition + 1, which avoids the cursor-position drift skipGroups() used to cause.
         var childScopeStart = context.cursor.position + 1 // past the zip group open
 
         // Advance the cursor past transparent markers so it is ready for the first child's consume calls (tryConsumeBranch / tryConsumeValue).
@@ -520,19 +520,29 @@ extension Materializer {
         while zipIndex < generators.count {
             let gen = generators[zipIndex]
             let fb: ChoiceTree? = fallbackChildren?[zipIndex]
-            let entryCount = fb?.flattenedEntryCount
-            if canScope, let entryCount {
-                context.cursor.pushScope(limit: childScopeStart + entryCount)
+            // flattenedEntryCount is an uncached tree walk; skip it entirely when the prefix supplies the spans — the arithmetic fallback is never consulted at this site once prefixChildEnds is non-nil.
+            let entryCount = prefixChildEnds == nil ? fb?.flattenedEntryCount : nil
+            let scopeLimit: Int? = prefixChildEnds?[zipIndex] ?? entryCount.map { childScopeStart + $0 }
+            if let scopeLimit {
+                context.cursor.pushScope(limit: scopeLimit)
             }
             guard let (result, tree) = try generateRecursive(
                 gen, with: inputValue, context: &context, fallbackTree: fb
             ) else {
-                if canScope, entryCount != nil { context.cursor.popScope() }
+                if scopeLimit != nil {
+                    context.cursor.popScope()
+                }
                 return nil
             }
-            if canScope, entryCount != nil { context.cursor.popScope() }
-            if canScope { context.cursor.skipGroupCloses() }
-            if let entryCount { childScopeStart += entryCount }
+            if scopeLimit != nil {
+                context.cursor.popScope()
+            }
+            if canScope {
+                context.cursor.skipGroupCloses()
+            }
+            if let entryCount {
+                childScopeStart += entryCount
+            }
             results.append(result)
             if context.skipTree == false {
                 choiceTrees.append(tree)
@@ -620,14 +630,9 @@ extension Materializer {
                 )
 
             case let .bind(fingerprint, forward, _, _, _):
-                let innerFallback: ChoiceTree?
-                let boundFallback: ChoiceTree?
-                if let calleeFallback, case let .bind(_, iFB, bFB) = calleeFallback {
-                    innerFallback = iFB
-                    boundFallback = bFB
-                } else {
-                    innerFallback = nil
-                    boundFallback = nil
+                let (innerFallback, boundFallback): (ChoiceTree?, ChoiceTree?) = switch calleeFallback {
+                    case let .bind(_, iFB, bFB)?: (iFB, bFB)
+                    default: (nil, nil)
                 }
 
                 guard let (innerValue, innerTree) = try generateRecursive(

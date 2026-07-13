@@ -230,4 +230,40 @@ struct BitPatternConvertibleTests {
             UInt(bitPattern64: val.bitPattern64) == val
         }
     }
+
+    // MARK: - Mixed-sign zero ranges
+
+    /// The monotonic encoding orders -0.0 strictly below +0.0 while float comparison calls them equal, so `0.0 ... -0.0` is a valid `ClosedRange` whose encoded bounds invert. Gen.choose reorders the encoded bounds; without that, every interpreter's `min ... max` construction traps. Found by the self-fuzzing harness.
+    @Test("Double range 0.0 ... -0.0 generates zeros without trapping")
+    func mixedSignZeroDoubleRange() throws {
+        var iterator = ValueInterpreter(Gen.choose(in: 0.0 ... -0.0 as ClosedRange<Double>), seed: 1, maxRuns: 10)
+        var generated = 0
+        while let value = try iterator.next() {
+            #expect(value == 0.0)
+            generated += 1
+        }
+        #expect(generated == 10)
+    }
+
+    @Test("Float range 0.0 ... -0.0 generates zeros without trapping")
+    func mixedSignZeroFloatRange() throws {
+        var iterator = ValueInterpreter(Gen.choose(in: Float(0.0) ... Float(-0.0)), seed: 1, maxRuns: 10)
+        var generated = 0
+        while let value = try iterator.next() {
+            #expect(value == 0.0)
+            generated += 1
+        }
+        #expect(generated == 10)
+    }
+
+    @Test("Double range -0.0 ... 0.0 is unaffected by the bound reorder")
+    func orderedZeroDoubleRange() throws {
+        var iterator = ValueInterpreter(Gen.choose(in: -0.0 ... 0.0 as ClosedRange<Double>), seed: 1, maxRuns: 10)
+        var generated = 0
+        while let value = try iterator.next() {
+            #expect(value == 0.0)
+            generated += 1
+        }
+        #expect(generated == 10)
+    }
 }
