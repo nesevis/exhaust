@@ -573,7 +573,7 @@ struct BenchmarkRecord: Codable {
         discardedAttempts = report.discardedAttempts
         elapsedSeconds = report.elapsed.seconds
         attemptsPerSecond = report.attemptsPerSecond
-        overheadFraction = report.frameworkOverheadFraction
+        overheadFraction = report.testingOverheadFraction
         coveredEdges = report.coveredEdgeCount
         instrumentedEdges = report.instrumentedEdgeCount
         edgeSingletons = report.edgeSingletonCount

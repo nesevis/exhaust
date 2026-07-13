@@ -4,7 +4,7 @@ import Foundation
 
 /// The spec-path seams carried through `runExploreTimeCore` into ``FuzzRunner`` as one unit.
 ///
-/// Nil on the value path. A spec adapter populates both fields: the prune hook keeps precondition-skipped commands out of the corpus, and the reduce strategy routes reduction through the spec's backend reducer (sequential specs reuse ``FuzzRunner/propertyOnlyReduceStrategy(gen:property:reducerConfiguration:)`` with the spec deadline; `.tasks` specs will wrap their two-pass reducer).
+/// Nil on the value path. A spec adapter populates both fields: the prune hook keeps precondition-skipped commands out of the corpus, and the reduce strategy routes reduction through the spec's backend reducer (sequential specs reuse ``FuzzRunner/propertyOnlyReduceStrategy(gen:property:reducerConfiguration:)`` with the spec deadline; `.tasks` specs will wrap their two-pass reducer, which must run synchronously on the loop's lane: reduction is always inline so probes never pollute attempt coverage, and no concurrent dispatch context exists).
 package struct FuzzHooks<Output> {
     /// Prunes the value and tree before corpus admission. Runs outside the attribution bracket, only on failures and would-be admissions.
     package let prune: @Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree)
@@ -22,7 +22,7 @@ package struct FuzzHooks<Output> {
 
 /// Runs the covering-array, random-sampling, and mutation phases against one property, accumulating a corpus and a clustered fault inventory.
 ///
-/// The exploration loop is single-threaded: the corpus, gate, and PRNG are touched only by `run()`, which executes on one GCD lane. Reductions are dispatched to the bounded ``ReductionPool`` and complete in parallel; their classifications come back through a locked mailbox the loop drains between attempts, and the attribution token serialises every instrumented evaluation (per-attempt brackets here, classification re-runs there) so in-flight reductions never pollute a snapshot.
+/// The runner is single-threaded: the corpus, gate, PRNG, and every instrumented evaluation — attempt brackets, reduction probes, classification re-runs — execute on the one GCD lane that owns `run()`. Reduction runs inline at the point of failure discovery, trading attempts for signal purity: no instrumented code ever executes concurrently with an open attempt bracket, so every coverage snapshot is attributable to exactly one evaluation and classification feedback lands at a deterministic point in the attempt stream.
 package final class FuzzRunner<Output> {
     // Members without an access modifier are internal so the same-module extension files (FuzzRunner+Recovery, FuzzRunner+Mutation) can reach them; nothing outside the module sees them.
     private let gen: Generator<Output>
@@ -38,21 +38,14 @@ package final class FuzzRunner<Output> {
     /// Package-visible so tests can assert on corpus contents (tier membership, entry command counts) after a run.
     package let corpus: FuzzCorpus
     let inventory = FaultInventory()
-    private let pool: ReductionPool
     private var gate: ReductionGate
     var prng: Xoshiro256
     var bandit = MutationBandit()
 
-    /// Renders a reduced counterexample for its cluster's report description. Injected because the render runs inside the reduction task — the value never crosses back to a context that could render it later — while the runner's module must stay free of rendering dependencies. The default serves direct package-level construction (tests, harnesses); `runExploreTimeCore` supplies the production renderer.
+    /// Renders a reduced counterexample for its cluster's report description. Injected because the render runs during reduction — the value never crosses back to a context that could render it later — while the runner's module must stay free of rendering dependencies. The default serves direct package-level construction (tests, harnesses); `runExploreTimeCore` supplies the production renderer.
     private let renderValue: @Sendable (Any) -> String
 
-    /// Serialises instrumented evaluation brackets so at most one thread runs a coverage-attributed property call at a time. Internal (not private) because the recovery extension's `restore` method re-attributes entries under this lock.
-    let attributionToken = NSLock()
-
-    /// Completed classifications waiting for the loop to apply their failure-weight upgrades and escape-interval feedback.
-    private let pendingClassifications = SendableBox<[(parentIndex: Int?, symptom: FailureSymptom, wasEscape: Bool, classification: ClusterClassification)]>([])
-
-    /// Zobrist-keyed normalization results shared across reduction tasks; see ``FuzzNormalizer/normalize(reducedSequence:erasedGen:symptom:property:cache:)``.
+    /// Zobrist-keyed normalization results reused across reductions; boxed because ``FuzzNormalizer/normalize(reducedSequence:erasedGen:symptom:property:cache:)`` takes the shared-box type.
     private let normalizationCache = SendableBox<[UInt64: ChoiceSequence?]>([:])
 
     var startNanoseconds: UInt64 = 0
@@ -63,8 +56,11 @@ package final class FuzzRunner<Output> {
     private var discardedAttempts = 0
     private var totalAttempts = 0
 
-    /// Wall-clock nanoseconds spent inside the property body across all loop attempts; the report derives the framework-overhead fraction from it. Reduction-side evaluations run on other threads and are deliberately excluded.
+    /// Wall-clock nanoseconds spent inside the property body across all loop attempts; the report derives the testing-overhead fraction from it. Reduction-side evaluations are accounted separately in `reductionNanoseconds` so a failure-dense run does not read as a pipeline regression.
     private var propertyNanoseconds: UInt64 = 0
+
+    /// Wall-clock nanoseconds spent reducing, normalizing, and classifying failures inline. The report subtracts this from the elapsed time before computing throughput and overhead, so those figures keep describing the search pipeline.
+    private var reductionNanoseconds: UInt64 = 0
 
     // MARK: - Crash-Recovery State
 
@@ -109,11 +105,10 @@ package final class FuzzRunner<Output> {
         )
         corpus = FuzzCorpus(edgeCount: source.edgeCount, experiments: configuration.experiments)
         gate = ReductionGate(experiments: configuration.experiments)
-        pool = ReductionPool(maxConcurrent: configuration.reductionPoolWidth ?? FuzzTunables.maxConcurrentReductions)
         prng = Xoshiro256(seed: configuration.seed)
     }
 
-    /// The default reduce strategy: property-only `choiceGraphReduce`, reducing while the property fails exactly as `#exhaust` does. Reduction attempts are never attributed.
+    /// The default reduce strategy: property-only `choiceGraphReduce`, reducing while the property fails exactly as `#exhaust` does. Reduction probes run inline on the loop's lane, outside any attempt bracket; their coverage is never read.
     ///
     /// The sequential spec adapter reuses this with the spec reduction deadline, so the value path and sequential spec path share one reduction implementation and differ only in configuration. On a reducer failure the input comes back unreduced.
     package static func propertyOnlyReduceStrategy(
@@ -160,8 +155,6 @@ package final class FuzzRunner<Output> {
         }
 
         let finalTermination = termination ?? terminationDue() ?? .budgetExhausted
-        let reductionsCompleted = pool.drain(timeoutNanoseconds: FuzzTunables.reductionDrainTimeoutNanoseconds)
-        drainClassifications()
 
         let clusters = inventory.snapshot()
         let unmatched = inventory.unmatchedUnreducedCounts
@@ -197,8 +190,8 @@ package final class FuzzRunner<Output> {
             startNanoseconds: reportEpochNanoseconds,
             elapsedNanoseconds: monotonicNanoseconds() - startNanoseconds,
             propertyNanoseconds: propertyNanoseconds,
-            seed: configuration.seed,
-            reductionsTimedOut: reductionsCompleted == false
+            reductionNanoseconds: reductionNanoseconds,
+            seed: configuration.seed
         )
     }
 
@@ -210,12 +203,10 @@ package final class FuzzRunner<Output> {
         var lastHits: [(edge: Int, hitCount: UInt8)] = []
 
         let wrappedProperty: (Output) -> Bool = { [self] value in
-            attributionToken.lock()
             // Screening evaluates before its tree reaches onExample, so the candidate cannot be identified pre-evaluation; a cleared slot beats misattributing a trap to the previous attempt.
             breadcrumb?.clear()
             source.beginAttempt()
             let (verdict, hits) = evaluateInBracket(value, recordingBreadcrumb: nil)
-            attributionToken.unlock()
             lastVerdict = verdict
             lastHits = hits
             return verdict.isFailure == false
@@ -227,7 +218,7 @@ package final class FuzzRunner<Output> {
             continuePastFailure: true,
             property: wrappedProperty,
             onExample: { [self] value, tree, _ in
-                drainClassifications()
+                checkpointIfDue()
                 // Every covering-array row is boundary-derived; convergence is 1 because the tree came straight from materialisation.
                 recordAttempt(
                     value: value,
@@ -268,7 +259,7 @@ package final class FuzzRunner<Output> {
             if monotonicNanoseconds() >= backstopNanoseconds {
                 return nil
             }
-            drainClassifications()
+            checkpointIfDue()
 
             switch freshSample(interpreter: &interpreter, phase: .sampling) {
                 case let .evaluated(admission):
@@ -308,7 +299,7 @@ package final class FuzzRunner<Output> {
                 let deadline = startNanoseconds + configuration.budgetNanoseconds
                 return .plateau(unusedNanoseconds: deadline > now ? deadline - now : 0)
             }
-            drainClassifications()
+            checkpointIfDue()
 
             guard let (parentIndex, parent) = corpus.pickParent(random: randomUnit()) else {
                 // Empty mutable tier: fall back to fresh sampling until something is mutable.
@@ -342,7 +333,6 @@ package final class FuzzRunner<Output> {
         parentIndex: Int,
         armsMask: UInt8
     ) {
-        attributionToken.lock()
         source.beginAttempt()
         let result = Materializer.materializeAny(
             erasedGen,
@@ -350,7 +340,6 @@ package final class FuzzRunner<Output> {
             mode: .guided(seed: prng.next(), fallbackTree: parent.tree)
         )
         guard case let .success(anyValue, freshTree, decodingReport) = result else {
-            attributionToken.unlock()
             discardedAttempts += 1
             return
         }
@@ -361,7 +350,6 @@ package final class FuzzRunner<Output> {
             value,
             recordingBreadcrumb: (candidateHash: ZobristHash.hash(of: sequence), parentHash: parent.hash)
         )
-        attributionToken.unlock()
 
         let admission = recordAttempt(
             value: value,
@@ -396,17 +384,14 @@ package final class FuzzRunner<Output> {
         interpreter: inout ValueAndChoiceTreeInterpreter<Output>,
         phase: FuzzPhase
     ) -> FreshSampleOutcome {
-        attributionToken.lock()
         source.beginAttempt()
         let generated: (Output, ChoiceTree)?
         do {
             generated = try interpreter.next()
         } catch {
-            attributionToken.unlock()
             return .generationError(String(describing: error))
         }
         guard let (value, tree) = generated else {
-            attributionToken.unlock()
             return .exhausted
         }
         let sequence = ChoiceSequence.flatten(tree)
@@ -414,7 +399,6 @@ package final class FuzzRunner<Output> {
             value,
             recordingBreadcrumb: (candidateHash: ZobristHash.hash(of: sequence), parentHash: 0)
         )
-        attributionToken.unlock()
 
         let admission = recordAttempt(
             value: value,
@@ -542,7 +526,7 @@ package final class FuzzRunner<Output> {
                     attemptIndex: attemptIndex
                 )
             case let .reduce(isEscape):
-                dispatchReduction(
+                performReduction(
                     value: value,
                     tree: tree,
                     symptom: symptom,
@@ -554,7 +538,10 @@ package final class FuzzRunner<Output> {
         }
     }
 
-    private func dispatchReduction(
+    /// Reduces one gated failure inline on the loop's lane: reduce, normalize, capture the post-hoc signature, classify, and apply the classification's feedback before the next attempt.
+    ///
+    /// Inline execution trades attempts for signal purity: reduction probes never run concurrently with an attempt bracket, so they cannot pollute attempt signatures, and the feedback (failure-boost upgrades, escape-gate outcomes) lands at a deterministic point in the attempt stream. The time spent is accumulated into `reductionNanoseconds` so the report's throughput and overhead figures keep describing the search pipeline.
+    private func performReduction(
         value: Output,
         tree: ChoiceTree,
         symptom: FailureSymptom,
@@ -563,84 +550,68 @@ package final class FuzzRunner<Output> {
         attemptIndex: Int,
         wasEscape: Bool
     ) {
-        // The generator and property are Sendable by construction (the macro enforces @Sendable; ReflectiveGenerator is @unchecked Sendable); the tree and value are moved into the task and never touched by the loop again.
-        let capturedErasedGen = erasedGen
-        let capturedTree = tree
-        nonisolated(unsafe) let capturedValue = value
-        let capturedProperty = property
-        let normalizationEnabled = configuration.experiments.normalization
-        let normalizationCache = normalizationCache
-        let source = source
-        let attributionToken = attributionToken
-        let inventory = inventory
-        let pendingClassifications = pendingClassifications
-        let reduceStrategy = reduceStrategy
-        let renderValue = renderValue
+        let reductionStart = monotonicNanoseconds()
+        var (reducedSequence, reducedTree, reducedValue) = reduceStrategy(tree, value, symptom)
 
-        pool.submit {
-            var (reducedSequence, reducedTree, reducedValue) = reduceStrategy(capturedTree, capturedValue, symptom)
-
-            // Normalization runs only on the would-be-new-cluster event: a reduced form whose key already exists needs no canonicalization, and the containsKey pre-check keeps the probing off the saturated-cluster path entirely.
-            var unnormalizedResidual = false
-            if normalizationEnabled {
-                let rawKey = ChoiceSequence.flatten(reducedTree, skipBindInners: true).clusterKey
-                if inventory.containsKey(rawKey) == false,
-                   let normalized: FuzzNormalizer.NormalizedForm<Output> = FuzzNormalizer.normalize(
-                       reducedSequence: reducedSequence,
-                       erasedGen: capturedErasedGen,
-                       symptom: symptom,
-                       property: capturedProperty,
-                       cache: normalizationCache
-                   )
-                {
-                    unnormalizedResidual = true
-                    reducedSequence = normalized.sequence
-                    reducedTree = normalized.tree
-                    reducedValue = normalized.value
-                }
-            }
-
-            // Post-reduction classification: one instrumented evaluation under the attribution token yields the post-hoc signature. Clustering keys on (reduced form, signature).
-            let signature = Self.attributedSignature(
-                of: reducedValue,
-                property: capturedProperty,
-                source: source,
-                attributionToken: attributionToken
-            )
-
-            // Cluster identity is a cheap structural key over the reduced tree flattened with bind-inners skipped; the reflective description render is deferred to recordReduced and runs only when a new cluster is created.
-            let reducedKey = ChoiceSequence.flatten(reducedTree, skipBindInners: true).clusterKey
-            nonisolated(unsafe) let capturedReducedValue = reducedValue
-            let classification = inventory.recordReduced(
-                reducedSequence: reducedSequence,
-                reducedKey: reducedKey,
-                renderDescription: {
-                    renderValue(capturedReducedValue)
-                },
-                signature: signature,
-                symptom: symptom,
-                phase: phase,
-                timestampNanoseconds: monotonicNanoseconds(),
-                attemptIndex: attemptIndex,
-                unnormalizedResidual: unnormalizedResidual
-            )
-            pendingClassifications.withValue { pending in
-                pending.append((parentIndex: parentIndex, symptom: symptom, wasEscape: wasEscape, classification: classification))
+        // Normalization runs only on the would-be-new-cluster event: a reduced form whose key already exists needs no canonicalization, and the containsKey pre-check keeps the probing off the saturated-cluster path entirely.
+        var unnormalizedResidual = false
+        if configuration.experiments.normalization {
+            let rawKey = ChoiceSequence.flatten(reducedTree, skipBindInners: true).clusterKey
+            if inventory.containsKey(rawKey) == false,
+               let normalized: FuzzNormalizer.NormalizedForm<Output> = FuzzNormalizer.normalize(
+                   reducedSequence: reducedSequence,
+                   erasedGen: erasedGen,
+                   symptom: symptom,
+                   property: property,
+                   cache: normalizationCache
+               )
+            {
+                unnormalizedResidual = true
+                reducedSequence = normalized.sequence
+                reducedTree = normalized.tree
+                reducedValue = normalized.value
             }
         }
+
+        // Post-reduction classification: one clean-bracket evaluation yields the post-hoc signature. Cluster identity keys on the reduced form; the signature collects within the cluster, where a second distinct one raises the ~paths marker.
+        let signature = attributedSignature(of: reducedValue)
+
+        // Cluster identity is a cheap structural key over the reduced tree flattened with bind-inners skipped; the reflective description render is deferred to recordReduced and runs only when a new cluster is created.
+        let reducedKey = ChoiceSequence.flatten(reducedTree, skipBindInners: true).clusterKey
+        let classification = inventory.recordReduced(
+            reducedSequence: reducedSequence,
+            reducedKey: reducedKey,
+            renderDescription: {
+                renderValue(reducedValue)
+            },
+            signature: signature,
+            symptom: symptom,
+            phase: phase,
+            timestampNanoseconds: monotonicNanoseconds(),
+            attemptIndex: attemptIndex,
+            unnormalizedResidual: unnormalizedResidual
+        )
+        reductionNanoseconds += monotonicNanoseconds() - reductionStart
+
+        if classification.isNewCluster {
+            forceCheckpoint = true
+        }
+        if wasEscape {
+            gate.noteEscapeOutcome(symptom: symptom, isNewCluster: classification.isNewCluster)
+        }
+        if let parentIndex {
+            corpus.upgradeFailureBoost(
+                atParentIndex: parentIndex,
+                isNewCluster: classification.isNewCluster,
+                clusterInstanceCount: classification.instanceCount,
+                clusterCapReached: classification.capReached
+            )
+        }
+        checkpointIfDue()
     }
 
-    /// Evaluates the reduced value once under the attribution token and returns its coverage signature.
-    ///
-    /// Synchronous by construction: `NSLock.lock` is unavailable from async contexts, and the bracket must anyway be brief — it serialises against every per-attempt bracket in the exploration loop.
-    private static func attributedSignature(
-        of value: Output,
-        property: @Sendable (Output) -> FuzzVerdict,
-        source: any CoverageSource,
-        attributionToken: NSLock
-    ) -> BitSet {
-        attributionToken.lock()
-        defer { attributionToken.unlock() }
+    /// Evaluates the reduced value once in a bracket of its own and returns its coverage signature.
+    private func attributedSignature(of value: Output) -> BitSet {
         source.beginAttempt()
         if source.wantsValues {
             source.noteValue(value)
@@ -651,33 +622,6 @@ package final class FuzzRunner<Output> {
             signature.insert(edge)
         }
         return signature
-    }
-
-    /// Applies completed classifications' failure-weight upgrades on the loop thread — the corpus is single-threaded by design, so reduction tasks post here instead of calling in. Doubles as the checkpoint pulse: it runs once per loop iteration in every phase, which is exactly the cadence ``checkpointIfDue()`` needs.
-    private func drainClassifications() {
-        let completed = pendingClassifications.withValue { pending -> [(parentIndex: Int?, symptom: FailureSymptom, wasEscape: Bool, classification: ClusterClassification)] in
-            let drained = pending
-            pending.removeAll()
-            return drained
-        }
-        for (parentIndex, symptom, wasEscape, classification) in completed {
-            if classification.isNewCluster {
-                forceCheckpoint = true
-            }
-            if wasEscape {
-                gate.noteEscapeOutcome(symptom: symptom, isNewCluster: classification.isNewCluster)
-            }
-            guard let parentIndex else {
-                continue
-            }
-            corpus.upgradeFailureBoost(
-                atParentIndex: parentIndex,
-                isNewCluster: classification.isNewCluster,
-                clusterInstanceCount: classification.instanceCount,
-                clusterCapReached: classification.capReached
-            )
-        }
-        checkpointIfDue()
     }
 
     // MARK: - Termination Checks

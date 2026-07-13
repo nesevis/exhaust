@@ -169,22 +169,24 @@ public struct FuzzReport: Sendable {
     /// The root seed. Pass to `.replay(_:)` to re-run the search deterministically.
     public let seed: UInt64
 
-    /// True when outstanding reduction tasks did not finish within the end-of-run drain timeout. The affected failures appear in instance counts but not reduced counts.
-    public let reductionsTimedOut: Bool
+    /// Wall-clock time spent reducing, normalizing, and classifying failures, inline on the search's lane.
+    ///
+    /// Reduction displaces attempts one for one, so a failure-dense run spends a visible share of its budget here. ``attemptsPerSecond`` and ``testingOverheadFraction`` are computed net of this time, so they keep describing the search pipeline rather than the failure rate.
+    public let reductionTime: TimeBudget
 
     /// Attempts completed across all phases. Throughput is the currency of `time:` mode — bug yield scales with attempts.
     public var totalAttempts: Int {
         screeningAttempts + samplingAttempts + mutationAttempts
     }
 
-    /// The fraction of the run's wall-clock time spent outside the property body: generation, mutation, materialisation, coverage snapshots, and corpus bookkeeping.
+    /// The fraction of the run's search time spent outside the property body: generation, mutation, materialisation, coverage snapshots, and corpus bookkeeping. Time spent reducing failures is excluded (see ``reductionTime``).
     ///
-    /// Throughput is the currency of `time:` mode, and every microsecond of per-attempt framework overhead is subtracted directly from search power. A rising fraction against a baseline means the pipeline, not the property, is eating the budget. For sub-microsecond properties a high fraction is expected — there is little property time to dominate.
-    public let frameworkOverheadFraction: Double
+    /// Throughput is the currency of `time:` mode, and every microsecond of per-attempt testing overhead is subtracted directly from search power. A rising fraction against a baseline means the pipeline, not the property, is eating the budget. For sub-microsecond properties a high fraction is expected — there is little property time to dominate.
+    public let testingOverheadFraction: Double
 
-    /// Attempts per second over the whole run. A falling number against a baseline means framework or property overhead is eating the budget.
+    /// Attempts per second over the run's search time, net of ``reductionTime``. A falling number against a baseline means testing or property overhead is eating the budget.
     public var attemptsPerSecond: Double {
-        let seconds = elapsed.seconds
+        let seconds = elapsed.seconds - reductionTime.seconds
         guard seconds > 0 else {
             return 0
         }
@@ -253,11 +255,11 @@ package extension FuzzReport {
         edgeDoubletonCount = result.edgeDoubletonCount
         termination = Termination(termination: result.termination)
         elapsed = TimeBudget(nanoseconds: result.elapsedNanoseconds)
-        frameworkOverheadFraction = result.elapsedNanoseconds > 0
-            ? 1.0 - min(1.0, Double(result.propertyNanoseconds) / Double(result.elapsedNanoseconds))
+        reductionTime = TimeBudget(nanoseconds: result.reductionNanoseconds)
+        testingOverheadFraction = result.searchNanoseconds > 0
+            ? 1.0 - min(1.0, Double(result.propertyNanoseconds) / Double(result.searchNanoseconds))
             : 0
         seed = result.seed
-        reductionsTimedOut = result.reductionsTimedOut
     }
 
     /// The report for a run that never started: missing instrumentation or an invalid setting. Everything is zero except the termination reason.
@@ -277,8 +279,8 @@ package extension FuzzReport {
             termination: termination,
             elapsed: .zero,
             seed: seed,
-            reductionsTimedOut: false,
-            frameworkOverheadFraction: 0
+            reductionTime: .zero,
+            testingOverheadFraction: 0
         )
     }
 }

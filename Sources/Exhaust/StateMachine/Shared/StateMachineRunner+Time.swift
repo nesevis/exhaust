@@ -92,7 +92,7 @@ public extension __ExhaustRuntime {
         }
     }
 
-    /// Runs one spec adapter through `runExploreTimeCore` on a GCD worker with the spec-path configuration: screening skipped and reductions serialized (each reduction candidate instantiates its own SUT, and stateful subjects are not assumed safe for concurrent instantiation).
+    /// Runs one spec adapter through `runExploreTimeCore` on a GCD worker with the spec-path configuration: screening skipped (boundary-value catalogues apply to values, not command vocabularies).
     ///
     /// Every execution model routes through here; an arm only has to supply its adapter factory. The factory runs on the worker so the adapter's generator and closures never cross a concurrency boundary.
     private static func runSpecFuzz(
@@ -104,7 +104,7 @@ public extension __ExhaustRuntime {
         line: UInt,
         column: UInt
     ) async -> FuzzReport {
-        await dispatchToGCD(reserving: LaneReservation.fuzz(reductionPoolWidth: 1)) {
+        await dispatchToGCD(reserving: LaneReservation.fuzz) {
             let adapter = makeAdapter()
             return runExploreTimeCore(
                 gen: adapter.generator,
@@ -113,7 +113,6 @@ public extension __ExhaustRuntime {
                 source: nil,
                 configure: { configuration in
                     configuration.skipScreening = true
-                    configuration.reductionPoolWidth = 1
                 },
                 hooks: adapter.hooks,
                 persistence: prepareFuzzPersistence(

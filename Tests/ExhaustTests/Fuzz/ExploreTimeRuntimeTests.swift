@@ -78,8 +78,8 @@ struct ExploreTimeRuntimeTests {
         #expect(report.coveredEdgeCount > 0)
         #expect(report.instrumentedEdgeCount == 32)
         #expect(report.clusters.count == 1)
-        #expect(report.frameworkOverheadFraction >= 0)
-        #expect(report.frameworkOverheadFraction <= 1)
+        #expect(report.testingOverheadFraction >= 0)
+        #expect(report.testingOverheadFraction <= 1)
         if let cluster = report.clusters.first {
             #expect(cluster.reducedDescription == "42")
             #expect(cluster.symptoms == ["returnedFalse"])

@@ -55,7 +55,7 @@ package struct FaultCluster: Sendable {
     package private(set) var firstSeenNanoseconds: UInt64
     package private(set) var lastSeenNanoseconds: UInt64
 
-    /// The 1-based attempt index of the earliest failure attributed to this cluster. Wall-clock timestamps move with machine load, so benchmarks compare this build-independent discovery metric instead; reductions classify out of order, which is why attribution takes the minimum rather than the first arrival.
+    /// The 1-based attempt index of the earliest failure attributed to this cluster. Wall-clock timestamps move with machine load, so benchmarks compare this build-independent discovery metric instead; attribution takes the minimum rather than the first arrival so the metric never depends on recording order.
     package private(set) var firstSeenAttempt: Int
 
     /// Members whose own reduced form differed from this cluster's canonical form and joined only through normalization. A nonzero count means reduction stalled on some members (a masked flag bit, an unclamped byte) and the normalization pass re-drove them onto the canonical form instead of minting spurious clusters.
@@ -166,9 +166,9 @@ package struct ClusterClassification: Sendable {
     package let capReached: Bool
 }
 
-/// Accumulates fault clusters as dispatched reductions complete.
+/// Accumulates fault clusters as reductions complete.
 ///
-/// Lock-guarded rather than actor-isolated so the synchronous exploration loop can record, snapshot, and checkpoint without suspending or spawning Tasks whose completion nothing awaits. Reduction Tasks write concurrently from async contexts; every method takes the lock for a short, non-suspending critical section, so calling from either side is safe.
+/// Lock-guarded rather than actor-isolated so the synchronous exploration loop can record, snapshot, and checkpoint without suspending or spawning Tasks whose completion nothing awaits. Production recording happens inline on the loop's lane; the lock is what keeps the `@unchecked Sendable` honest for any other context that inspects the inventory.
 package final class FaultInventory: @unchecked Sendable {
     // @unchecked: all mutable state is guarded by `lock`, and no method suspends while holding it.
     private let lock = NSLock()
@@ -267,7 +267,7 @@ package final class FaultInventory: @unchecked Sendable {
 
     /// Whether a cluster with the given canonical key already exists — the normalization pass's pre-check, so the (comparatively expensive) probing runs only on the rare would-be-new-cluster event.
     ///
-    /// Two concurrent reductions of one genuinely new fault can both see `false` and both normalize; the second `recordReduced` then merges by key, so the race costs duplicated probing, never a duplicated cluster.
+    /// `recordReduced` merges by key regardless of this pre-check's answer, so a stale read can only cost duplicated probing, never a duplicated cluster.
     package func containsKey(_ reducedKey: String) -> Bool {
         lock.withLocking { clusterIndexByKey[reducedKey] != nil }
     }

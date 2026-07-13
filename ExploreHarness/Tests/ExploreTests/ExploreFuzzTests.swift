@@ -37,7 +37,7 @@ struct ExploreFuzzTests {
 
         // Throughput is recorded so a pipeline-cost regression surfaces as falling attempts per second.
         #expect(report.attemptsPerSecond > 0)
-        #expect(report.frameworkOverheadFraction >= 0 && report.frameworkOverheadFraction <= 1)
+        #expect(report.testingOverheadFraction >= 0 && report.testingOverheadFraction <= 1)
     }
 
     @Test("The clustered inventory separates the slippage pair that symptom deduplication cannot", .timeLimit(.minutes(2)))

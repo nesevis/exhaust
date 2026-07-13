@@ -152,7 +152,6 @@ extension FuzzRunner {
             if signaturesValid {
                 hits = zip(record.hitEdges, record.hitCounts).map { (edge: $0.0, hitCount: $0.1) }
             } else {
-                attributionToken.lock()
                 source.beginAttempt()
                 if source.wantsValues {
                     source.noteValue(value)
@@ -163,7 +162,6 @@ extension FuzzRunner {
                 source.forEachHitEdge { edge, hitCount in
                     reattributed.append((edge, hitCount))
                 }
-                attributionToken.unlock()
                 hits = reattributed
             }
             _ = corpus.offer(

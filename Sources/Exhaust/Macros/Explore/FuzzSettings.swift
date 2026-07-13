@@ -14,9 +14,11 @@ import ExhaustCore
 ///
 /// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 public enum FuzzSettings: Sendable {
-    /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
+    /// A fixed seed for replaying a prior run (reproduction, benchmarking, regression).
     ///
-    /// Accepts a raw `UInt64` or a Crockford Base32 string. Replay re-runs the whole search deterministically: the exploration loop is single-threaded and PRNG-driven, so the same seed visits the same attempts in the same order. Reduction runs concurrently, so the *order* in which clusters classify can differ between replays; the discovered clusters do not.
+    /// Accepts a raw `UInt64` or a Crockford Base32 string. The seed pins every decision the search makes: the screening rows, the random-sampling stream, each mutation choice, and — because reduction runs inline — the point in the attempt stream where each failure's classification feeds back. What the search observes between decisions is environmental: coverage signatures are read from process-global counters, and phase transitions are wall-clock cuts. A replay therefore reruns the same search from the same starting point and, given comparable time, rediscovers the same clusters. It does not reproduce an attempt-for-attempt identical log.
+    ///
+    /// - Important: Other tests running in parallel in the same process execute instrumented code during attempts and distort the coverage signal. Serialize the suite when replaying.
     case replay(ReplaySeed)
 
     /// Silences issue reporting, log output, or both for this run.

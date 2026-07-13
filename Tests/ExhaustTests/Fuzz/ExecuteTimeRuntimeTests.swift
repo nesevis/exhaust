@@ -110,7 +110,6 @@ struct ExecuteTimeRuntimeTests {
             source: source,
             configure: { configuration in
                 configuration.skipScreening = true
-                configuration.reductionPoolWidth = 1
                 configuration.attemptLimit = 500
             },
             hooks: adapter.hooks,
@@ -135,7 +134,6 @@ struct ExecuteTimeRuntimeTests {
             skipScreening: true,
             attemptLimit: 200
         )
-        configuration.reductionPoolWidth = 1
 
         let runner = FuzzRunner(
             gen: adapter.generator,
@@ -235,7 +233,6 @@ struct ExecuteTimeRuntimeTests {
             source: source,
             configure: { configuration in
                 configuration.skipScreening = true
-                configuration.reductionPoolWidth = 1
             },
             hooks: adapter.hooks,
             property: adapter.property
@@ -271,7 +268,6 @@ struct ExecuteTimeRuntimeTests {
             skipScreening: true,
             attemptLimit: 300
         )
-        configuration.reductionPoolWidth = 1
 
         let runner = FuzzRunner(
             gen: adapter.generator,

@@ -15,6 +15,16 @@ on:
 
 # Self-fuzzing lanes: Exhaust fuzzed with its own #explore(time:) mode, ExhaustCore
 # instrumented whole-graph via -Xswiftc.
+#
+# Isolation invariant: coverage counters are process-global, so a fuzz search must have its test
+# process to itself — any other test running in parallel adds spurious edges to attempt signatures
+# and silently changes a seed-pinned run's trajectory. Two guards enforce this:
+#   1. The replay job stays uninstrumented (no $COVERAGE_FLAGS) and never sets METAFUZZ_FUZZ, so
+#      its unfiltered, parallel invocations contain no live counters and no fuzz search.
+#   2. Any suite that runs a real fuzz search (FuzzEntryTests) runs only in an invocation filtered
+#      down to that suite, or as a standalone probe executable.
+# Do not add coverage flags to the replay job or lift the fuzz suite's env gate without
+# restructuring accordingly.
 env:
   COVERAGE_FLAGS: -Xswiftc -sanitize=undefined -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table
 

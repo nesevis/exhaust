@@ -27,11 +27,8 @@ package enum FuzzTunables {
 
     // MARK: - Fuzz Loop
 
-    /// Wall-clock deadline for one concurrent reduction. Mirrors #exhaust's scaling but is bounded: mutation-phase reductions run concurrently with exploration and must not outlive the end-of-run drain.
+    /// Wall-clock deadline for one inline reduction. Mirrors #exhaust's scaling but is bounded: reductions run inline on the loop's lane and displace attempts, so one pathological reduction must not eat the budget.
     package static let reductionDeadlineNanoseconds: UInt64 = 5_000_000_000
-
-    /// End-of-run wait for outstanding reduction tasks: twice ``reductionDeadlineNanoseconds``, so a reduction dispatched at the moment the budget expired can run its full deadline and still drain, with equal slack for classification hand-back. Leftovers are cancelled and reported as unreduced.
-    package static let reductionDrainTimeoutNanoseconds: UInt64 = reductionDeadlineNanoseconds * 2
 
     /// Mutations drawn from a picked parent before the loop re-picks. Amortises the weighted pick without letting one parent dominate.
     package static let childrenPerParent = 4
@@ -75,11 +72,6 @@ package enum FuzzTunables {
 
     /// Every K-th symptom-matched failure is reduced anyway once the cap is reached, bounding the risk of a new bug hiding behind a familiar symptom.
     package static let reductionEscapeInterval = 50
-
-    /// Upper bound on concurrently running reduction Tasks; overflow queues FIFO.
-    package static var maxConcurrentReductions: Int {
-        min(4, max(1, ProcessInfo.processInfo.activeProcessorCount - 1))
-    }
 
     // MARK: - Power Schedule (Experiment: powerSchedule)
 

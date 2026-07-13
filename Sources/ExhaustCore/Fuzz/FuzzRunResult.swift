@@ -47,8 +47,6 @@ package struct FuzzRunnerConfiguration {
     package var persistence: FuzzPersistenceContext?
     /// Knobs for benchmark-gated mechanisms; see ``FuzzExperiments`` for the seam precedence.
     package var experiments: FuzzExperiments
-    /// Concurrency cap for the reduction pool. Nil uses the default (processor-count-derived). Width 1 serializes reductions FIFO without dropping them.
-    package var reductionPoolWidth: Int?
 
     package init(
         budgetNanoseconds: UInt64,
@@ -91,19 +89,25 @@ package struct FuzzRunResult: Sendable {
     package var clusterDiscriminations: [ClusterDiscrimination]
     package var startNanoseconds: UInt64
     package var elapsedNanoseconds: UInt64
-    /// Nanoseconds spent inside the property body across all loop attempts; `elapsedNanoseconds` minus this is framework overhead.
+    /// Nanoseconds spent inside the property body across all loop attempts; `searchNanoseconds` minus this is testing overhead.
     package var propertyNanoseconds: UInt64
+    /// Nanoseconds spent reducing, normalizing, and classifying failures inline on the loop's lane.
+    package var reductionNanoseconds: UInt64
     package var seed: UInt64
-    package var reductionsTimedOut: Bool
 
     package var totalAttempts: Int {
         screeningAttempts + samplingAttempts + mutationAttempts
     }
 
+    /// The elapsed time net of inline reduction — the denominator for throughput and overhead, so a failure-dense run does not read as a slow pipeline.
+    package var searchNanoseconds: UInt64 {
+        elapsedNanoseconds - min(reductionNanoseconds, elapsedNanoseconds)
+    }
+
     package var attemptsPerSecond: Double {
-        guard elapsedNanoseconds > 0 else {
+        guard searchNanoseconds > 0 else {
             return 0
         }
-        return Double(totalAttempts) / (Double(elapsedNanoseconds) / 1_000_000_000)
+        return Double(totalAttempts) / (Double(searchNanoseconds) / 1_000_000_000)
     }
 }

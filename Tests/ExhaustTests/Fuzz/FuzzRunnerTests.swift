@@ -25,7 +25,6 @@ struct FuzzRunnerTests {
         #expect(result.corpusEntryCount > 0)
         #expect(result.coveredEdgeCount > 0)
         #expect(result.clusters.isEmpty)
-        #expect(result.reductionsTimedOut == false)
     }
 
     @Test("Phase skipping starts the run directly in the mutation phase")
@@ -147,7 +146,7 @@ struct FuzzRunnerTests {
 
     @Test("Seam defaults produce identical output across refactors")
     func seamRegressionGuard() {
-        // Exercises all three configuration seams (reduceStrategy, prune, reductionPoolWidth) at their defaults (nil). The pinned seed and attempt limit make the result deterministic; any behavioral change in the seam plumbing will shift these assertions.
+        // Exercises the configuration seams (reduceStrategy, prune) at their defaults (nil). The pinned seed and attempt limit make the result deterministic; any behavioral change in the seam plumbing will shift these assertions.
         let property: @Sendable (Int) -> FuzzVerdict = { value in
             (value > 40 && value < 60) || value > 940 ? .fail(.returnedFalse) : .pass
         }
@@ -171,7 +170,6 @@ struct FuzzRunnerTests {
         #expect(result.samplingAttempts > 0)
         #expect(result.mutationAttempts > 0)
         #expect(result.totalAttempts >= 1500)
-        #expect(result.reductionsTimedOut == false)
         for cluster in result.clusters {
             #expect(cluster.reducedCount >= 1)
         }

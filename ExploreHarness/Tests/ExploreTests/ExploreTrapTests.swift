@@ -89,7 +89,7 @@ struct ExploreTrapTests {
         }
     #endif
 
-    @Test("A fuzz run records throughput and framework overhead", .timeLimit(.minutes(2)))
+    @Test("A fuzz run records throughput and testing overhead", .timeLimit(.minutes(2)))
     func throughputRecorded() {
         let report = #explore(
             Fixture.messageGenerator,
@@ -99,12 +99,11 @@ struct ExploreTrapTests {
         ) { message in
             try Parser.decode(message).byteCount >= 0
         }
-        print()
         #expect(report.totalAttempts > 0)
         #expect(report.attemptsPerSecond > 0)
-        #expect(report.frameworkOverheadFraction >= 0 && report.frameworkOverheadFraction <= 1)
+        #expect(report.testingOverheadFraction >= 0 && report.testingOverheadFraction <= 1)
         // Recorded for the CI log so a pipeline-cost regression is visible as a falling number.
-        print("throughput: \(Int(report.attemptsPerSecond)) attempts/s, overhead \(Int(report.frameworkOverheadFraction * 100))%")
+        print("throughput: \(Int(report.attemptsPerSecond)) attempts/s, overhead \(Int(report.testingOverheadFraction * 100))%")
     }
 }
 

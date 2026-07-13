@@ -11,9 +11,9 @@ extension __ExhaustRuntime {
         var lines: [String] = []
 
         let clusterWord = report.clusters.count == 1 ? "fault cluster" : "fault clusters"
-        let overheadPercent = Int((report.frameworkOverheadFraction * 100).rounded())
+        let overheadPercent = Int((report.testingOverheadFraction * 100).rounded())
         lines.append(
-            "#explore(time:) catalogued \(report.clusters.count) \(clusterWord) in \(report.totalAttempts) attempts (\(Int(report.attemptsPerSecond.rounded()))/s; \(overheadPercent)% framework overhead)."
+            "#explore(time:) catalogued \(report.clusters.count) \(clusterWord) in \(report.totalAttempts) attempts (\(Int(report.attemptsPerSecond.rounded()))/s; \(overheadPercent)% Exhaust testing overhead)."
         )
 
         // Gap-framed: the uncovered count is the honest number; a percentage against module size would measure the module, not the search.
@@ -42,7 +42,10 @@ extension __ExhaustRuntime {
         if ordered.isEmpty == false {
             lines.append("")
         }
-        for cluster in ordered {
+        for (index, cluster) in ordered.enumerated() {
+            if index > 0 {
+                lines.append("")
+            }
             lines.append(
                 contentsOf: renderClusterBrief(
                     cluster,
@@ -61,9 +64,6 @@ extension __ExhaustRuntime {
         for (symptom, count) in report.unreducedFailureCounts.sorted(by: { $0.key < $1.key }) {
             lines.append("\(count) unreduced failure\(count == 1 ? "" : "s") with symptom \(symptom) matched no cluster.")
         }
-        if report.reductionsTimedOut {
-            lines.append("Some reductions did not finish before the drain timeout; instance counts include unclassified failures.")
-        }
         if report.clusters.isEmpty == false {
             lines.append("Full per-cluster detail is in the explore-time-cluster attachments.")
         }
@@ -81,7 +81,7 @@ extension __ExhaustRuntime {
         if nextEdgeProbability > 0 {
             let attemptsPerEdge = Int((1 / nextEdgeProbability).rounded())
             lines.append(
-                "Estimated chance the next attempt covers a new edge: \(String(format: "%.1e", nextEdgeProbability)) (about one per \(attemptsPerEdge) attempts)."
+                "Estimated chance the next attempt covers a new edge: about 1 in \(attemptsPerEdge)."
             )
         } else {
             lines.append(
@@ -91,7 +91,7 @@ extension __ExhaustRuntime {
         let reachable = report.estimatedReachableEdgeCount
         let remaining = max(0, Int(reachable.rounded()) - report.coveredEdgeCount)
         lines.append(
-            "Chao1 estimates about \(Int(reachable.rounded())) edges reachable for this generator and property; \(remaining) of those remain uncovered (estimate scoped to this run's search space, not the module)."
+            "About \(Int(reachable.rounded())) edges look reachable for this generator and property (Chao1 estimate); \(remaining) of those remain\(remaining == 1 ? "s" : "") uncovered (scoped to this run's search space, not the module)."
         )
         return lines
     }
@@ -115,17 +115,25 @@ extension __ExhaustRuntime {
             phaseTag += "; discovered late, at \(renderDuration(cluster.firstSeen))"
         }
         let splitMarker = cluster.isLikelySplit ? "  ~paths" : ""
-        let instanceWord = cluster.instanceCount == 1 ? "instance" : "instances"
+        let failureWord = cluster.instanceCount == 1 ? "failure" : "failures"
         let normalizedSuffix = cluster.unnormalizedMemberCount > 0
             ? " (\(cluster.unnormalizedMemberCount) normalized in)"
             : ""
+        // Clusters display 1-based; `id` stays the report's zero-based array position.
         var lines = [
-            "Cluster \(cluster.id)  \(paddedSymptoms)  \(cluster.instanceCount) \(instanceWord), \(cluster.reducedCount) reduced\(normalizedSuffix)  [\(phaseTag)]\(splitMarker)",
+            "Cluster \(cluster.id + 1)  \(paddedSymptoms)  \(cluster.instanceCount) \(failureWord), \(cluster.reducedCount) reduced\(normalizedSuffix)  [\(phaseTag)]\(splitMarker)",
         ]
-        lines.append(contentsOf: collapsedCounterexample(cluster.reducedDescription).map { "  \($0)" })
+        let counterexample = collapsedCounterexample(cluster.reducedDescription)
+        if counterexample.count == 1, let onlyLine = counterexample.first {
+            lines.append("  Counterexample: \(onlyLine)")
+        } else {
+            lines.append("  Counterexample:")
+            lines.append(contentsOf: counterexample.map { "    \($0)" })
+        }
         let suspects = terminalSuspects(for: cluster)
         if suspects.isEmpty == false {
-            lines.append("  suspect\(suspects.count == 1 ? "" : "s"): \(suspects.joined(separator: ", "))")
+            lines.append("  suspect\(suspects.count == 1 ? "" : "s"):")
+            lines.append(contentsOf: suspects.map { "    - \($0)" })
         }
         return lines
     }
@@ -134,7 +142,7 @@ extension __ExhaustRuntime {
     static func renderCluster(_ cluster: FuzzReport.Cluster, isFrontier: Bool) -> [String] {
         var attributes = [
             cluster.discoveringPhase.rawValue,
-            "\(cluster.instanceCount) instance\(cluster.instanceCount == 1 ? "" : "s"), \(cluster.reducedCount) reduced",
+            "\(cluster.instanceCount) failure\(cluster.instanceCount == 1 ? "" : "s"), \(cluster.reducedCount) reduced",
             "symptoms: \(cluster.symptoms.joined(separator: ", "))",
         ]
         if cluster.unnormalizedMemberCount > 0 {
@@ -146,7 +154,9 @@ extension __ExhaustRuntime {
         if cluster.isLikelySplit {
             attributes.append("multiple coverage signatures — possibly distinct paths to one fault")
         }
-        var lines = ["Cluster \(cluster.id) [\(attributes.joined(separator: "; "))]:"]
+        // Clusters display 1-based; `id` stays the report's zero-based array position.
+        var lines = ["Cluster \(cluster.id + 1) [\(attributes.joined(separator: "; "))]:"]
+        lines.append("Counterexample:")
         lines.append(cluster.reducedDescription)
         if cluster.discriminatingEdges.isEmpty == false {
             lines.append("  Necessary path: \(cluster.necessaryEdgeCount) edges. Suspect edges:")

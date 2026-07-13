@@ -4,7 +4,7 @@
 ///
 /// The production conformance (``SancovCoverageSource``) reads the process-global SanitizerCoverage counter region. The synthetic test conformance computes a signature as a pure function of the generated value, which makes the entire search loop deterministic and runnable in an uninstrumented suite — corpus acceptance, plateau detection, and cluster taxonomy are all tested through this seam.
 ///
-/// Usage per attempt: `beginAttempt()`, optionally `noteValue(_:)` when ``wantsValues`` is true, evaluate the property, then ``forEachHitEdge(_:)``. The bracket discipline matters for the sancov conformance because the counters are process-global; the attribution token (owned by the runner, not the source) guarantees at most one bracketed evaluation at a time.
+/// Usage per attempt: `beginAttempt()`, optionally `noteValue(_:)` when ``wantsValues`` is true, evaluate the property, then ``forEachHitEdge(_:)``. The bracket discipline matters for the sancov conformance because the counters are process-global; the runner is single-threaded, so at most one bracketed evaluation is ever open, and nothing the runner controls executes instrumented code outside it.
 package protocol CoverageSource: AnyObject, Sendable {
     /// The number of edges this source can report; signatures produced against it use this as their ``BitSet`` capacity.
     var edgeCount: Int { get }
@@ -45,7 +45,7 @@ package extension CoverageSource {
 ///
 /// Captures the registered regions once at init: registration completes during image loading, so by the time a runner constructs a source the region list is final, and the hot path reads raw pointers without locking. `beginAttempt` zeroes every counter byte; `forEachHitEdge` scans for nonzero bytes and reports them under the global edge indexing described on ``SancovRuntime``.
 package final class SancovCoverageSource: CoverageSource, @unchecked Sendable {
-    // @unchecked: the stored regions are immutable after init, and the counter bytes they point at are only mutated inside the attribution bracket, which the runner serialises with the attribution token.
+    // @unchecked: the stored regions are immutable after init, and the counter bytes they point at are only read and zeroed on the runner's single lane, inside the attempt bracket.
     private let regions: [SancovRuntime.CounterRegion]
 
     /// The total instrumented edge count across all regions.

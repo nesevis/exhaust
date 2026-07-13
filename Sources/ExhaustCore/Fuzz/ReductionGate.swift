@@ -1,19 +1,18 @@
-// Backpressure between failure discovery and reduction dispatch.
+// Backpressure between failure discovery and reduction.
 //
 // Densification deliberately steers the mutation phase back into failing regions, so a hot fault produces
-// failures at a high rate; unbounded Task-per-failure dispatch would let in-flight reductions
-// outconsume exploration. The gate is the synchronous half of the defence (dedup + per-symptom
-// cap); the bounded reduction pool is the asynchronous half.
+// failures at a high rate; reducing every failure inline would let reduction outconsume exploration.
+// The gate's dedup and per-symptom cap bound how many failures earn a reduction's cost.
 
-/// Decides synchronously, on the exploration loop, whether a failure earns a reduction dispatch.
+/// Decides, on the exploration loop, whether a failure earns a reduction.
 package struct ReductionGate {
     /// The gate's verdict for one failure.
     package enum Verdict: Equatable {
-        /// Dispatch a reduction Task. `escape` marks a dispatch that went through the capped symptom's escape hatch, so the caller can feed the classification outcome back into the adaptive interval.
+        /// Reduce this failure. `escape` marks an admission that went through the capped symptom's escape hatch, so the caller can feed the classification outcome back into the adaptive interval.
         case reduce(escape: Bool)
         /// Record the failure as an unreduced cluster member; its symptom's cap is reached.
         case recordUnreduced
-        /// A failure with an identical choice sequence was already dispatched; drop it entirely.
+        /// A failure with an identical choice sequence was already admitted; drop it entirely.
         case duplicate
     }
 
@@ -35,7 +34,7 @@ package struct ReductionGate {
 
     /// Evaluates one failure. Mutates the gate's counters according to the verdict, so call exactly once per failure.
     ///
-    /// The per-symptom cap uses *dispatched* counts as a synchronous proxy for the cluster's reduced count — classifications complete asynchronously and the gate cannot wait for them. Symptom matching is exactly the weak signal the inventory distrusts, so a capped symptom still escapes, bounding the risk of a genuinely new bug hiding behind a familiar symptom. With the `escapeBackoff` experiment off, the escape fires every fixed K-th seen failure. With it on, a coverage-novel failure escapes immediately — a new fault's first failing input necessarily lights edges nothing else has hit, so novelty is a far sharper new-bug signal than cadence — and the periodic fallback (for new bugs on already-covered paths) adapts through ``noteEscapeOutcome(symptom:isNewCluster:)``.
+    /// The per-symptom cap uses *admitted* counts as a proxy for the cluster's reduced count — a symptom does not map one-to-one onto a cluster, so the true per-cluster count is not addressable from here. Symptom matching is exactly the weak signal the inventory distrusts, so a capped symptom still escapes, bounding the risk of a genuinely new bug hiding behind a familiar symptom. With the `escapeBackoff` experiment off, the escape fires every fixed K-th seen failure. With it on, a coverage-novel failure escapes immediately — a new fault's first failing input necessarily lights edges nothing else has hit, so novelty is a far sharper new-bug signal than cadence — and the periodic fallback (for new bugs on already-covered paths) adapts through ``noteEscapeOutcome(symptom:isNewCluster:)``.
     package mutating func admit(sequenceHash: UInt64, symptom: FailureSymptom, coverageNovel: Bool = false) -> Verdict {
         guard dispatchedHashes.contains(sequenceHash) == false else {
             return .duplicate

@@ -112,10 +112,8 @@ enum LaneReservation {
     /// The reservation for a run with no lane fan-out: cooperative `.tasks`, the sequential-async spec, and async `#exhaust`/`#explore`, which occupy a single coordinator worker.
     static let single = 1
 
-    /// The reservation for a coverage-guided fuzz run: one lane for the exploration loop plus one per concurrent reduction worker dispatched to the global GCD queue.
-    static func fuzz(reductionPoolWidth: Int = FuzzTunables.maxConcurrentReductions) -> Int {
-        1 + reductionPoolWidth
-    }
+    /// The reservation for a coverage-guided fuzz run: one lane for the exploration loop, which runs reductions inline.
+    static let fuzz = 1
 
     /// The reservation for an async property run: the coordinator worker, widened to the `.parallelize` lane count when the sampling phase fans out via `concurrentPerform` (the coordinator doubles as one of the lanes, so no `+1`).
     static func property(parallelLanes: Int) -> Int {
