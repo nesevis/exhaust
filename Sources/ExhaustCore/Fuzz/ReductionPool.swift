@@ -1,16 +1,24 @@
-// The asynchronous half of reduction backpressure; the synchronous half is ReductionGate.
+// The concurrent half of reduction backpressure; the synchronous half is ReductionGate.
 
 import Foundation
 
-/// Runs reduction work with bounded concurrency; overflow queues FIFO.
+/// Runs reduction work on the global GCD queue with bounded concurrency; overflow queues FIFO.
 ///
 /// Lock-based rather than actor-isolated so the synchronous exploration loop can `submit` without suspending, preserving FIFO dispatch order. In-flight reduction cost stays bounded relative to exploration regardless of failure rate; the cap comes from ``FuzzTunables/maxConcurrentReductions``.
+///
+/// Reductions run on GCD rather than the cooperative pool because they are CPU-bound (the reducer's graph walk), block on `NSLock` (the attribution token during post-reduction signature capture), and never suspend. Occupying cooperative-pool threads with blocking work risks exhausting the pool under parallel test execution.
 package final class ReductionPool: @unchecked Sendable {
     // @unchecked: all mutable state is guarded by `condition`.
+    private static let dispatchQueue = DispatchQueue(
+        label: "com.exhaust.reduction",
+        qos: .utility,
+        attributes: .concurrent
+    )
+
     private let condition = NSCondition()
-    private let maxConcurrent: Int
+    let maxConcurrent: Int
     private var running = 0
-    private var queue: [@Sendable () async -> Void] = []
+    private var queue: [@Sendable () -> Void] = []
 
     /// Creates a pool with the given concurrency cap (defaults to the tunable).
     package init(maxConcurrent: Int = FuzzTunables.maxConcurrentReductions) {
@@ -18,7 +26,7 @@ package final class ReductionPool: @unchecked Sendable {
     }
 
     /// Submits one reduction; starts it immediately when a slot is free, otherwise queues it FIFO.
-    package func submit(_ work: @escaping @Sendable () async -> Void) {
+    package func submit(_ work: @escaping @Sendable () -> Void) {
         condition.lock()
         if running < maxConcurrent {
             running += 1
@@ -30,9 +38,9 @@ package final class ReductionPool: @unchecked Sendable {
         }
     }
 
-    private func start(_ work: @escaping @Sendable () async -> Void) {
-        Task {
-            await work()
+    private func start(_ work: @escaping @Sendable () -> Void) {
+        Self.dispatchQueue.async {
+            work()
             self.finishOne()
         }
     }

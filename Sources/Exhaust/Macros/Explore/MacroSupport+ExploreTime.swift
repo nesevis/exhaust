@@ -136,7 +136,7 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) async throws -> Bool
     ) async -> FuzzReport {
         let verdictProperty = bridgeAsyncVerdictProperty(property)
-        let report = await dispatchToGCD(reserving: LaneReservation.single) {
+        let report = await dispatchToGCD(reserving: LaneReservation.fuzz()) {
             let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
             let report = runExploreTimeCore(
                 gen: refGen.gen,
@@ -178,7 +178,7 @@ public extension __ExhaustRuntime {
     ) async -> FuzzReport {
         _ = property
         let verdictProperty = bridgeAsyncVerdictDetection(detection)
-        let finalReport = await dispatchToGCD(reserving: LaneReservation.single) {
+        let finalReport = await dispatchToGCD(reserving: LaneReservation.fuzz()) {
             let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
             nonisolated(unsafe) var pipelineReport: FuzzReport?
             // withExpectedIssue cannot be used on a GCD thread because Test.current is nil, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.

@@ -1,35 +1,36 @@
 import ExhaustCore
+import Foundation
 import Testing
 
 @Suite("ReductionPool bounded concurrency tests")
 struct ReductionPoolTests {
     @Test("All submitted work completes and drain waits for it")
-    func drainCompletes() async {
+    func drainCompletes() {
         let pool = ReductionPool(maxConcurrent: 2)
-        let counter = Counter()
+        let counter = AtomicCounter()
         for _ in 0 ..< 20 {
             pool.submit {
-                await counter.increment()
+                counter.increment()
             }
         }
         #expect(pool.drain(timeoutNanoseconds: 5_000_000_000))
-        #expect(await counter.value == 20)
+        #expect(counter.value == 20)
     }
 
     @Test("Concurrency never exceeds the cap")
-    func concurrencyBounded() async {
+    func concurrencyBounded() {
         let pool = ReductionPool(maxConcurrent: 3)
         let tracker = ConcurrencyTracker()
         for _ in 0 ..< 30 {
             pool.submit {
-                await tracker.enter()
-                try? await Task.sleep(nanoseconds: 1_000_000)
-                await tracker.exit()
+                tracker.enter()
+                Thread.sleep(forTimeInterval: 0.001)
+                tracker.exit()
             }
         }
         #expect(pool.drain(timeoutNanoseconds: 5_000_000_000))
-        #expect(await tracker.peak <= 3)
-        #expect(await tracker.total == 30)
+        #expect(tracker.peak <= 3)
+        #expect(tracker.total == 30)
     }
 
     @Test("Drain on an idle pool returns immediately")
@@ -42,7 +43,7 @@ struct ReductionPoolTests {
     func drainTimeout() {
         let pool = ReductionPool(maxConcurrent: 1)
         pool.submit {
-            try? await Task.sleep(nanoseconds: 200_000_000)
+            Thread.sleep(forTimeInterval: 0.2)
         }
         #expect(pool.drain(timeoutNanoseconds: 1_000_000) == false)
         #expect(pool.drain(timeoutNanoseconds: 5_000_000_000))
@@ -51,26 +52,36 @@ struct ReductionPoolTests {
 
 // MARK: - Helpers
 
-private actor Counter {
-    private(set) var value = 0
+private final class AtomicCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value = 0
+
+    var value: Int {
+        lock.withLocking { _value }
+    }
 
     func increment() {
-        value += 1
+        lock.withLocking { _value += 1 }
     }
 }
 
-private actor ConcurrencyTracker {
+private final class ConcurrencyTracker: @unchecked Sendable {
+    private let lock = NSLock()
     private var current = 0
     private(set) var peak = 0
     private(set) var total = 0
 
     func enter() {
-        current += 1
-        peak = max(peak, current)
-        total += 1
+        lock.withLocking {
+            current += 1
+            peak = max(peak, current)
+            total += 1
+        }
     }
 
     func exit() {
-        current -= 1
+        lock.withLocking {
+            current -= 1
+        }
     }
 }

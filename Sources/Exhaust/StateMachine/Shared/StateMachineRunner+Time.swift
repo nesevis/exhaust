@@ -104,7 +104,7 @@ public extension __ExhaustRuntime {
         line: UInt,
         column: UInt
     ) async -> FuzzReport {
-        await dispatchToGCD(reserving: LaneReservation.single) {
+        await dispatchToGCD(reserving: LaneReservation.fuzz(reductionPoolWidth: 1)) {
             let adapter = makeAdapter()
             return runExploreTimeCore(
                 gen: adapter.generator,
