@@ -95,7 +95,7 @@ package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
         public let fingerprint: UInt64
 
         /// Creates a branch marker with the given selection, branch count, and pick-site fingerprint.
-        public init(id: UInt64, branchCount: UInt64, fingerprint: UInt64 = 0) {
+        public init(id: UInt64, branchCount: UInt64, fingerprint: UInt64) {
             self.id = id
             self.branchCount = branchCount
             self.fingerprint = fingerprint

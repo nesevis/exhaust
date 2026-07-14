@@ -98,7 +98,11 @@ extension GraphStructuralEncoder {
         var replacement: [ChoiceSequenceValue] = []
         replacement.reserveCapacity(targetContent.count + 3)
         replacement.append(.group(true))
-        replacement.append(.branch(.init(id: targetBranchID, branchCount: pickMetadata.branchCount)))
+        replacement.append(.branch(.init(
+            id: targetBranchID,
+            branchCount: pickMetadata.branchCount,
+            fingerprint: pickMetadata.fingerprint
+        )))
         for index in 0 ..< targetContent.count {
             replacement.append(targetContent[index])
         }

@@ -257,7 +257,11 @@ extension ReductionMachine {
         var replacement: [ChoiceSequenceValue] = []
         replacement.reserveCapacity(targetContent.count + 3)
         replacement.append(.group(true))
-        replacement.append(.branch(.init(id: targetBranchID, branchCount: pickMetadata.branchCount)))
+        replacement.append(.branch(.init(
+            id: targetBranchID,
+            branchCount: pickMetadata.branchCount,
+            fingerprint: pickMetadata.fingerprint
+        )))
         replacement.append(contentsOf: targetContent)
         replacement.append(.group(false))
 
