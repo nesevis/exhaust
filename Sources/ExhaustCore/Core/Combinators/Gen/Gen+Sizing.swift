@@ -29,6 +29,21 @@ package extension Gen {
         rawGetSize()._bound(forward: forward, backward: { _ in 100 })
     }
 
+    /// Retrieves the current size parameter without reifying the dependent bind.
+    ///
+    /// Use this on internal hot paths whose structural operations already expose the dependency, such as size-dependent sequence lengths. The contramap supplies size 100 during reflection, allowing the downstream generator to expose its full range without adding a ``ReflectiveOperation/transform(kind:inner:)`` bind node.
+    ///
+    /// - Parameter forward: A closure that receives the current size and returns a generator.
+    /// - Returns: A generator that produces the result of the size-dependent inner generator.
+    static func nonReifiedGetSize<Output>(
+        _ forward: @escaping (UInt64) -> Generator<Output>
+    ) -> Generator<Output> {
+        Gen.contramap(
+            { (_: Output) in UInt64(100) },
+            rawGetSize()
+        ).bind(forward)
+    }
+
     /// Overrides the size parameter for a nested generator scope.
     ///
     /// Use this to cap complexity of nested generators — for example, forcing small collections inside a larger structure, or limiting recursive depth independently of the outer test's size progression. The override is lexically scoped: any ``getSize(_:)`` or ``chooseBits`` with scaling inside `generator` sees `newSize`, but the enclosing generator's size is restored after `generator` completes.
@@ -42,5 +57,25 @@ package extension Gen {
         _ generator: Generator<Output>
     ) -> Generator<Output> {
         liftF(.resize(newSize: newSize, next: generator.erase()))
+    }
+}
+
+package extension FreerMonad where Operation == ReflectiveOperation, Value == UInt64 {
+    /// Returns the continuation following an interpretation-time size read.
+    ///
+    /// Recognizes both a bare ``ReflectiveOperation/getSize`` and the contramap-wrapped form produced by ``Gen/nonReifiedGetSize(_:)``. Passing a size to the returned continuation produces the dependent generator without interpreting or reifying a bind.
+    var getSizeContinuation: ((Any) throws -> AnyGenerator)? {
+        switch self {
+            case let .impure(.getSize, continuation):
+                continuation
+            case let .impure(.contramap(_, innerGenerator), continuation):
+                if case .impure(.getSize, _) = innerGenerator {
+                    continuation
+                } else {
+                    nil
+                }
+            case .pure, .impure:
+                nil
+        }
     }
 }

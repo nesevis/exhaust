@@ -404,7 +404,7 @@ extension GeneratorTuning {
 
         // If the length generator uses getSize + bind (the common pattern), try to look one level deeper (only if we haven't already subdivided)
         if insideSubdividedChooseBits == false,
-           case let .impure(.getSize, getSizeContinuation) = lengthGen
+           let getSizeContinuation = lengthGen.getSizeContinuation
         {
             // Adapt as getSize → pick of subranges, each producing a sequence
             context.depth += 1

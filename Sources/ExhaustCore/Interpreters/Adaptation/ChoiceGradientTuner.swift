@@ -314,7 +314,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         }
 
                         // 2b. Check if length generator is .getSize → continuation
-                        if case let .impure(.getSize, getSizeContinuation) = lengthGen {
+                        if let getSizeContinuation = lengthGen.getSizeContinuation {
                             let subranges = (0 ... context.maxSize).split(
                                 into: Swift.min(4, Int(context.maxSize + 1))
                             )

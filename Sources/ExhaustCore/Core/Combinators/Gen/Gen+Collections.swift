@@ -18,7 +18,7 @@ package extension Gen {
     ) -> Generator<[Output]> {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
-            length: length ?? Gen.getSize { Gen.chooseDerived(in: 0 ... $0) },
+            length: length ?? Gen.nonReifiedGetSize { Gen.chooseDerived(in: 0 ... $0) },
             gen: elementGenerator.erase()
         )
         // Lift the operation. The continuation will decode the `[Any]` result.
@@ -252,7 +252,7 @@ package extension Gen {
         _ elementGenerator: Generator<Output>,
         lengthRange: ClosedRange<UInt64>? = nil
     ) -> Generator<[Output]> {
-        getSize { size in
+        nonReifiedGetSize { size in
             let actualRange = lengthRange ?? (0 ... size)
             let clampedMin = max(actualRange.lowerBound, 0)
             let clampedMax = min(actualRange.upperBound, size)

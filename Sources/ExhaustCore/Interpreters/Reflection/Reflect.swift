@@ -124,9 +124,13 @@ extension Interpreters {
 
             case .getSize:
                 // We can't derive the `getSize` parameter when reflecting as it is normally used within a `bind`. However, `isRangeExplicit` on `.chooseBits` helps us determine whether to use the `min` and `max` on that case, or default to the fitting range according to the value's `BitPatternConvertible` conformance.
-                var derivedSize: UInt64 = 0
-                if let sequence = finalOutput as? any Sequence {
-                    derivedSize = UInt64(sequence.underestimatedCount)
+                let derivedSize: UInt64 = switch finalOutput {
+                    case let size as UInt64:
+                        size
+                    case let sequence as any Sequence:
+                        UInt64(sequence.underestimatedCount)
+                    default:
+                        0
                 }
                 // Store max size (100) so that replay and materialization see the full range for size-scaled generators.
                 return [(value: derivedSize, path: [.getSize(100)])]

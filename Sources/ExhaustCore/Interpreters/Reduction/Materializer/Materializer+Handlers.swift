@@ -781,14 +781,14 @@ extension Materializer {
 
     /// Extracts ``ChoiceMetadata`` (valid range and explicitness) from a sequence's length generator without running a full materialization round-trip.
     ///
-    /// Handles two common shapes: a bare ``ReflectiveOperation/chooseBits`` and a ``ReflectiveOperation/getSize``-wrapped chooseBits. Returns empty metadata when the generator has an unrecognized shape, which causes the caller to skip range clamping.
+    /// Handles three common shapes: a bare ``ReflectiveOperation/chooseBits``, a ``ReflectiveOperation/getSize``-wrapped chooseBits, and the contramap-wrapped non-reified size form. Returns empty metadata when the generator has an unrecognized shape, which causes the caller to skip range clamping.
     private static func extractLengthMetadata(
         _ lengthGen: Generator<UInt64>
     ) throws -> ChoiceMetadata {
         if case let .impure(.chooseBits(min, max, _, isRangeExplicit, _, _), _) = lengthGen {
             return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         }
-        if case let .impure(.getSize, sizeContinuation) = lengthGen,
+        if let sizeContinuation = lengthGen.getSizeContinuation,
            case let .impure(.chooseBits(min, max, _, isRangeExplicit, _, _), _) = try sizeContinuation(100 as Any)
         {
             return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
