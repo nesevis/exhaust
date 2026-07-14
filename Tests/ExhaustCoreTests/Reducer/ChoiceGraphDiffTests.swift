@@ -4,12 +4,12 @@ import Testing
 
 @Suite("ChoiceGraphDiff")
 struct ChoiceGraphDiffTests {
-    @Test("Identical graphs produce structurally identical diff")
-    func identicalGraphsIdenticalDiff() {
+    @Test("Identical graphs allow structural source reuse")
+    func identicalGraphsAllowStructuralSourceReuse() {
         let graph = GraphFixture(.uint64Zip([10, 20], in: 0 ... 100)).graph
         let diff = ChoiceGraphDiff.diff(old: graph, new: graph)
 
-        #expect(diff.isStructurallyIdentical == true)
+        #expect(diff.canReuseStructuralSources == true)
         #expect(diff.added.isEmpty)
         #expect(diff.removed.isEmpty)
         #expect(diff.preserved.count >= 2, "Both leaf nodes should be preserved")
@@ -21,7 +21,7 @@ struct ChoiceGraphDiffTests {
         let graph2 = GraphFixture(.uint64Zip([10, 20], in: 0 ... 100)).graph
         let diff = ChoiceGraphDiff.diff(old: graph1, new: graph2)
 
-        #expect(diff.isStructurallyIdentical == false)
+        #expect(diff.canReuseStructuralSources == false)
         #expect(diff.added.count >= 1,
                 "Two-leaf zip vs single leaf should have at least one added path")
     }
@@ -32,7 +32,7 @@ struct ChoiceGraphDiffTests {
         let graph2 = GraphFixture(.uint64(10, in: 0 ... 100)).graph
         let diff = ChoiceGraphDiff.diff(old: graph1, new: graph2)
 
-        #expect(diff.isStructurallyIdentical == false)
+        #expect(diff.canReuseStructuralSources == false)
         #expect(diff.removed.count >= 1,
                 "Two-leaf zip vs single leaf should have at least one removed path")
     }
@@ -47,13 +47,13 @@ struct ChoiceGraphDiffTests {
         }
     }
 
-    @Test("Value changes only do not cause structural diff")
-    func valueChangesNotStructural() {
+    @Test("Value-only changes allow structural source reuse")
+    func valueChangesAllowStructuralSourceReuse() {
         let graph1 = GraphFixture(.uint64(10, in: 0 ... 100)).graph
         let graph2 = GraphFixture(.uint64(99, in: 0 ... 100)).graph
         let diff = ChoiceGraphDiff.diff(old: graph1, new: graph2)
 
-        #expect(diff.isStructurallyIdentical == true)
+        #expect(diff.canReuseStructuralSources == true)
     }
 
     @Test("Root kind change is structural")
@@ -62,7 +62,7 @@ struct ChoiceGraphDiffTests {
         let constantGraph = ChoiceGraph.build(from: .just)
         let diff = ChoiceGraphDiff.diff(old: choiceGraph, new: constantGraph)
 
-        #expect(diff.isStructurallyIdentical == false)
+        #expect(diff.canReuseStructuralSources == false)
         #expect(diff.removed.isEmpty == false)
     }
 

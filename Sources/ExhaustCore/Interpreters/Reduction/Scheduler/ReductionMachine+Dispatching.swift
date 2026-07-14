@@ -360,7 +360,7 @@ extension ReductionMachine {
         }
         let graphEnd = monotonicNanoseconds()
 
-        if diff.isStructurallyIdentical {
+        if diff.canReuseStructuralSources {
             let structuralSources = sources.filter { source in
                 guard case let .sorted(sorted) = source,
                       let first = sorted.peekTransformation
@@ -394,6 +394,6 @@ extension ReductionMachine {
         lastConvergencePass = [:]
         pendingReport = nil
         dispatchPhase = .dispatch
-        return .rebuilt(sequenceLength: sequence.count, structurallyChanged: diff.isStructurallyIdentical == false)
+        return .rebuilt(sequenceLength: sequence.count, structurallyChanged: diff.canReuseStructuralSources == false)
     }
 }

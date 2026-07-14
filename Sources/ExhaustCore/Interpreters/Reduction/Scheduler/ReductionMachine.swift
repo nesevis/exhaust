@@ -603,7 +603,7 @@ package struct ReductionMachine: ProbeSessionState {
         newGraph.observeBindTopologies(tree: tree)
         ChoiceGraphScheduler.transferConvergence(oldConvergence, to: &newGraph)
         let diff = ChoiceGraphDiff.diff(old: graph, new: newGraph)
-        if diff.isStructurallyIdentical {
+        if diff.canReuseStructuralSources {
             newGraph.couplingDependents = graph.couplingDependents
         }
         stats.graphStats.fullGraphRebuilds += 1
