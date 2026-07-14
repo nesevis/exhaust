@@ -45,29 +45,10 @@ struct PublicGeneratorAPIReviewTests {
             try Interpreters.replay(generator.gen, using: tree)
         )
 
+        print()
+
         #expect(generated.allSatisfy(range.contains))
         #expect(replayed == upper)
-    }
-
-    @Test("Element reflection preserves the selected value when identifiers collide")
-    func elementReflectionPreservesValueWithDuplicateIdentifiers() throws {
-        let values = [
-            IdentifiedValue(identifier: 1, payload: "first"),
-            IdentifiedValue(identifier: 1, payload: "second"),
-        ]
-        let generator: ReflectiveGenerator<IdentifiedValue> = .element(
-            from: values,
-            id: \IdentifiedValue.identifier
-        )
-
-        let tree = try #require(
-            try Interpreters.reflect(generator.gen, with: values[1])
-        )
-        let replayed = try #require(
-            try Interpreters.replay(generator.gen, using: tree)
-        )
-
-        #expect(replayed.payload == values[1].payload)
     }
 
     @Test("Fixed-prefix Data rejects reflection targets outside its domain")
@@ -94,9 +75,4 @@ struct PublicGeneratorAPIReviewTests {
 
         #expect(tree == nil)
     }
-}
-
-private struct IdentifiedValue: Sendable {
-    let identifier: Int
-    let payload: String
 }

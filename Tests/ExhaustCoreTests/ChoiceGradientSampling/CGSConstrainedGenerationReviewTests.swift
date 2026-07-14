@@ -65,8 +65,8 @@ struct CGSConstrainedGenerationReviewTests {
         #expect(hashableValues == [42, 42, 42])
     }
 
-    @Test("Sequential exploration charges warm-up samples to the shared attempt budget")
-    func sequentialExplorationChargesWarmupToAttemptBudget() throws {
+    @Test("Sequential exploration accounts for warm-up outside the direction attempt pool")
+    func sequentialExplorationAccountsForWarmupOutsideAttemptPool() throws {
         let maxAttemptsPerDirection = 1
         var runner = ClassificationExploreRunner(
             gen: Gen.just(0),
@@ -81,7 +81,9 @@ struct CGSConstrainedGenerationReviewTests {
 
         let result = try runner.run()
 
-        #expect(result.propertyInvocations <= maxAttemptsPerDirection)
+        #expect(result.warmupSamples == 100)
+        #expect(result.directionCoverage[0].tuningPassSamples == maxAttemptsPerDirection)
+        #expect(result.propertyInvocations == 100 + maxAttemptsPerDirection)
     }
 }
 

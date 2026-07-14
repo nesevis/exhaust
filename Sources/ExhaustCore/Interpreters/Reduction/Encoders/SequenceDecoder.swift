@@ -19,7 +19,7 @@ package enum SequenceDecoder {
     /// Uses a two-phase optimization: Phase 1 materializes value-only (no tree construction) and checks the property. Phase 2 re-materializes with full tree construction only on acceptance, avoiding the tree allocation cost for rejected probes.
     ///
     /// - Parameter filterObservations: Accumulator for per-fingerprint filter predicate observations. Merged from every materialization's ``DecodingReport``, including rejected and failed attempts.
-    /// - Returns: A ``ReductionResult`` if the candidate produces a failing output that is shortlex-smaller than the original, or `nil` if the candidate is rejected.
+    /// - Returns: A ``ReductionResult`` if the candidate produces a failing output and satisfies the decoder mode's admission policy, or `nil` if the candidate is rejected. Guided decoding requires the materialized sequence to be shortlex-smaller than the original unless its `skipShortlexCheck` option is `true`. Exact decoding does not check ordering; its producer enforces any phase-specific ordering requirement.
     public func decodeAny(
         candidate: consuming ChoiceSequence,
         gen: AnyGenerator,

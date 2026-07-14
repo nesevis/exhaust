@@ -93,12 +93,22 @@ struct ReductionMaterializerTests {
         }
     }
 
-    @Test("Exact mode rejects branch metadata from a different pick site")
-    func exactRejectsMismatchedBranchMetadata() {
-        let generator = Gen.pick(choices: [
-            (weight: UInt64(1), generator: Gen.just("first")),
-            (weight: UInt64(1), generator: Gen.just("second")),
-        ])
+    @Test("Exact mode accepts stale branch metadata and refreshes it")
+    func exactRefreshesBranchMetadata() throws {
+        let expectedFingerprint = Gen.sourceFingerprint(
+            fileID: "ReductionMaterializerTests.swift",
+            line: 42,
+            column: 7
+        )
+        let generator = Gen.pick(
+            choices: [
+                (weight: UInt64(1), generator: Gen.just("first")),
+                (weight: UInt64(1), generator: Gen.just("second")),
+            ],
+            fileID: "ReductionMaterializerTests.swift",
+            line: 42,
+            column: 7
+        )
         let prefix: ChoiceSequence = [
             .group(true),
             .branch(.init(id: 1, branchCount: 3, fingerprint: UInt64.max)),
@@ -106,14 +116,57 @@ struct ReductionMaterializerTests {
             .group(false),
         ]
 
-        let result = Materializer.materialize(
+        guard case let .success(value, tree, _) = Materializer.materialize(
             generator,
             prefix: prefix,
             mode: .exact
-        )
+        ) else {
+            Issue.record("Expected .success for stale branch metadata")
+            return
+        }
 
-        guard case .rejected = result else {
-            Issue.record("Expected .rejected for mismatched branch metadata")
+        let refreshedSequence = ChoiceSequence(tree)
+        let refreshedBranches: [ChoiceSequenceValue.Branch] = refreshedSequence.compactMap { element in
+            guard case let .branch(branch) = element else { return nil }
+            return branch
+        }
+        let refreshedBranch = try #require(refreshedBranches.first)
+
+        #expect(value == "second")
+        #expect(refreshedBranch.id == 1)
+        #expect(refreshedBranch.branchCount == 2)
+        #expect(refreshedBranch.fingerprint == expectedFingerprint)
+    }
+
+    @Test("Exact mode rejects an unavailable branch ID")
+    func exactRejectsUnavailableBranchID() {
+        let fingerprint = Gen.sourceFingerprint(
+            fileID: "ReductionMaterializerTests.swift",
+            line: 42,
+            column: 7
+        )
+        let generator = Gen.pick(
+            choices: [
+                (weight: UInt64(1), generator: Gen.just("first")),
+                (weight: UInt64(1), generator: Gen.just("second")),
+            ],
+            fileID: "ReductionMaterializerTests.swift",
+            line: 42,
+            column: 7
+        )
+        let prefix: ChoiceSequence = [
+            .group(true),
+            .branch(.init(id: 2, branchCount: 2, fingerprint: fingerprint)),
+            .just,
+            .group(false),
+        ]
+
+        guard case .rejected = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        ) else {
+            Issue.record("Expected .rejected for an unavailable branch ID")
             return
         }
     }

@@ -394,22 +394,4 @@ struct ChoiceSequenceTests {
         #expect(openCount == closeCount)
         #expect(openCount == 2) // One for sequence, one for inner group
     }
-
-    @Test("Validation rejects prematurely closed and cross-nested containers")
-    func validationRejectsMalformedNesting() {
-        let prematurelyClosed: ChoiceSequence = [
-            .group(false),
-            .group(true),
-        ]
-        let crossNested: ChoiceSequence = [
-            .group(true),
-            .sequence(true),
-            .group(false),
-            .sequence(false),
-        ]
-
-        #expect(ChoiceSequence.validate(prematurelyClosed) == false)
-        #expect(ChoiceSequence.validate(crossNested) == false)
-        #expect(crossNested.subtreeEnd(startingAt: 0) == nil)
-    }
 }

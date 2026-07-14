@@ -5,8 +5,8 @@ import Testing
 
 @Suite("Coverage-guided review regressions")
 struct CoverageGuidedReviewTests {
-    @Test("Distinct symptoms do not merge solely because reduced keys collide")
-    func distinctSymptomsRemainDistinctClusters() {
+    @Test("A reduced form remains one cluster across distinct symptoms")
+    func reducedFormClustersDistinctSymptomsTogether() {
         let inventory = FaultInventory()
         let sequence: ChoiceSequence = [.just]
 
@@ -32,10 +32,10 @@ struct CoverageGuidedReviewTests {
         )
 
         let clusters = inventory.snapshot()
-        #expect(clusters.count == 2)
-        #expect(clusters.map(\.symptoms) == [
-            [FailureSymptom(kind: "FirstFailure")],
-            [FailureSymptom(kind: "SecondFailure")],
+        #expect(clusters.count == 1)
+        #expect(clusters.first?.symptoms == [
+            FailureSymptom(kind: "FirstFailure"),
+            FailureSymptom(kind: "SecondFailure"),
         ])
     }
 

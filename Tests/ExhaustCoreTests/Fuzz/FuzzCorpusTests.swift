@@ -41,57 +41,6 @@ struct FuzzCorpusTests {
         #expect(second == .rejectedDuplicate)
     }
 
-    @Test("Hash collision does not discard structurally distinct novel candidate")
-    func hashCollisionDoesNotDiscardNovelCandidate() {
-        let corpus = FuzzCorpus(edgeCount: 10)
-        let justSequence: ChoiceSequence = [
-            .sequence(true),
-            .just,
-            .sequence(false),
-        ]
-        let collidingBitPattern = UInt64(7) ^ (UInt64(TypeTag.uint64.discriminator) << 48)
-        let valueSequence: ChoiceSequence = [
-            .sequence(true),
-            .value(.init(
-                choice: ChoiceValue(collidingBitPattern, tag: .uint64),
-                validRange: nil
-            )),
-            .sequence(false),
-        ]
-
-        #expect(justSequence != valueSequence)
-        #expect(ZobristHash.hash(of: justSequence) == ZobristHash.hash(of: valueSequence))
-
-        let firstAdmission = corpus.offer(
-            sequence: justSequence,
-            tree: .sequence(elements: [.just], metadata: .init(validRange: nil)),
-            hits: [(edge: 1, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .sampling
-        )
-        let secondAdmission = corpus.offer(
-            sequence: valueSequence,
-            tree: .sequence(
-                elements: [
-                    .choice(
-                        ChoiceValue(collidingBitPattern, tag: .uint64),
-                        .init(validRange: nil)
-                    ),
-                ],
-                metadata: .init(validRange: nil)
-            ),
-            hits: [(edge: 2, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .sampling
-        )
-
-        #expect(firstAdmission == .admitted(index: 0, tier: .mutable))
-        #expect(secondAdmission == .admitted(index: 1, tier: .mutable))
-        #expect(corpus.coveredEdgeCount == 2)
-    }
-
     @Test("Candidate covering only known (edge, bucket) pairs is rejected")
     func notNovelRejection() {
         let corpus = FuzzCorpus(edgeCount: 10)

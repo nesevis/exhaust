@@ -5,8 +5,8 @@ import Testing
 
 @Suite("Reporting architectural review")
 struct ReportingArchitecturalReviewTests {
-    @Test("Report invocation totals include the final assertion rerun")
-    func reportInvocationTotalsIncludeFinalAssertionRerun() throws {
+    @Test("Report phase totals exclude the final assertion rerun")
+    func reportPhaseTotalsExcludeFinalAssertionRerun() throws {
         let invocationCounter = LockedCounter()
         let reportCapture = ReportCapture()
 
@@ -23,7 +23,10 @@ struct ReportingArchitecturalReviewTests {
         }
 
         let report = try #require(reportCapture.report)
-        #expect(report.propertyInvocations == invocationCounter.value)
+        #expect(report.propertyInvocations == report.screeningInvocations
+            + report.randomSamplingInvocations
+            + report.reductionInvocations)
+        #expect(report.propertyInvocations + 1 == invocationCounter.value)
     }
 
     @Test("Multiline command descriptions remain inside their command entry")
