@@ -9,7 +9,7 @@
 ///
 /// Structural markers (``group``, ``sequence``, ``branch``, ``just``) delimit containers and pick sites, while ``value`` carries the actual numeric choices.
 @usableFromInline
-package enum ChoiceSequenceValue: Hashable, Equatable, Sendable {
+package enum ChoiceSequenceValue: Equatable, Sendable {
     /// The elements within the `true`--`false` range are logically grouped.
     case group(Bool)
     /// The elements within the `true`--`false` range are elements of a sequence.

@@ -345,7 +345,7 @@ private extension Generator where Operation == ReflectiveOperation {
         var valuesGenerated = 0
         var roundTripSuccesses = 0
         var replaySuccesses = 0
-        var uniqueSequences: Set<ChoiceSequence> = []
+        var uniqueSequenceHashes: Set<UInt64> = []
         var storedTrees: [ChoiceTree] = []
         storedTrees.reserveCapacity(samples)
         let startNanoseconds = monotonicNanoseconds()
@@ -367,7 +367,7 @@ private extension Generator where Operation == ReflectiveOperation {
             storedTrees.append(tree)
 
             let generatedSequence = ChoiceSequence.flatten(tree)
-            uniqueSequences.insert(generatedSequence)
+            uniqueSequenceHashes.insert(generatedSequence.operativeHash)
 
             if forwardOnlyDetected == false, failures.count < maxFailures {
                 let success = checkReflectionRoundTrip(
@@ -417,7 +417,7 @@ private extension Generator where Operation == ReflectiveOperation {
             valuesGenerated: valuesGenerated,
             reflectionRoundTripSuccesses: roundTripSuccesses,
             replayDeterminismSuccesses: replayCheck != nil ? replaySuccesses : nil,
-            uniqueChoiceSequences: uniqueSequences.count,
+            uniqueChoiceSequences: uniqueSequenceHashes.count,
             reflectionSkipped: skipReflection,
             pinnedFieldCount: skipReflection ? (storedTrees.first?.justNodeCount ?? 0) : 0,
             failures: failures,

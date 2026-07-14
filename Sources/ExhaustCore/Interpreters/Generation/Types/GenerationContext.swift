@@ -36,8 +36,8 @@ package struct GenerationContext: ~Copyable {
 
     /// Seen keys for `unique(by:)` deduplication, keyed by site fingerprint.
     package var uniqueSeenKeys: [UInt64: Set<AnyHashable>] = [:]
-    /// Seen choice sequences for `unique()` deduplication, keyed by site fingerprint.
-    package var uniqueSeenSequences: [UInt64: Set<ChoiceSequence>] = [:]
+    /// Seen operative choice-sequence hashes for `unique()` deduplication, keyed by site fingerprint.
+    package var uniqueSeenSequences: [UInt64: Set<UInt64>] = [:]
 
     /// Per-fingerprint filter predicate pass/fail observations.
     package var filterObservations: [UInt64: FilterObservation] = [:]

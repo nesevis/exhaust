@@ -29,8 +29,8 @@ struct CGSConstrainedGenerationReviewTests {
         #expect(accumulator.records.count == subdivisionsPerSite * siteCount)
     }
 
-    @Test("Online CGS preserves choice-sequence uniqueness for non-Hashable values")
-    func onlineCGSPreservesChoiceSequenceUniqueness() throws {
+    @Test("Online CGS treats choice-sequence uniqueness as tuning-transparent")
+    func onlineCGSTreatsChoiceSequenceUniquenessAsTransparent() throws {
         let generator = ReflectiveGenerator(
             Gen.just(NonHashableValue(value: 42))
         ).unique().gen
@@ -47,7 +47,22 @@ struct CGSConstrainedGenerationReviewTests {
             generatedValues.append(value)
         }
 
-        #expect(generatedValues.count == 1)
+        #expect(generatedValues.count == 3)
+
+        let hashableGenerator = ReflectiveGenerator(Gen.just(42)).unique().gen
+        var hashableInterpreter = OnlineCGSInterpreter(
+            hashableGenerator,
+            predicate: { _ in true },
+            sampleCount: 2,
+            seed: 42,
+            maxRuns: 3
+        )
+        var hashableValues = [Int]()
+        while let value = try hashableInterpreter.next() {
+            hashableValues.append(value)
+        }
+
+        #expect(hashableValues == [42, 42, 42])
     }
 
     @Test("Sequential exploration charges warm-up samples to the shared attempt budget")

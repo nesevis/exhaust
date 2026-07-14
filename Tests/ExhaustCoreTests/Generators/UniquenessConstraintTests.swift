@@ -176,33 +176,28 @@ struct UniquenessConstraintTests {
         #expect(count == 5, "Should produce exactly 5 unique remainders (0-4), got \(count)")
     }
 
-    // MARK: - CGS interpreter with unique combinator
+    // MARK: - CGS tuning transparency
 
-    @Test("CGS interpreter with unique combinator produces unique values")
-    func cgsUniqueness() throws {
-        let gen = uniqueGen(
-            Gen.pick(choices: [
-                (1, Gen.just(1)),
-                (1, Gen.just(2)),
-                (1, Gen.just(3)),
-            ]),
-            by: { (v: Int) in AnyHashable(v) }
+    @Test("CGS interpreter treats keyed uniqueness as tuning-transparent")
+    func choiceGradientSamplingTreatsKeyedUniquenessAsTransparent() throws {
+        let generator = uniqueGen(
+            Gen.just(1),
+            by: { (value: Int) in AnyHashable(value) }
         )
 
         var iterator = OnlineCGSInterpreter(
-            gen,
+            generator,
             predicate: { _ in true },
             seed: 42,
-            maxRuns: 100
+            maxRuns: 3
         )
 
-        var values = Set<Int>()
+        var values = [Int]()
         while let value = try iterator.next() {
-            let (inserted, _) = values.insert(value)
-            #expect(inserted, "Every yielded value should be unique")
+            values.append(value)
         }
 
-        #expect(values.count == 3, "3-way pick should produce exactly 3 unique values, got \(values.count)")
+        #expect(values == [1, 1, 1])
     }
 }
 

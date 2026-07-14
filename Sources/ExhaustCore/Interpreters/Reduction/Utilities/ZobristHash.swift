@@ -9,6 +9,21 @@
 ///
 /// Computes position-dependent XOR hashes that support O(1) incremental updates when single elements change. Used by reducer code for PRNG seeding and ``CandidateRejectionCache`` lookups.
 package enum ZobristHash {
+    /// Computes a deterministic hash from marker structure, numeric bit patterns, and selected branch identifiers.
+    ///
+    /// The initial count contribution distinguishes sequences whose trailing entry would otherwise contribute zero. Each entry is mixed once by kind and payload, then again by position, so different entry kinds do not share the deliberately simple contribution namespace used by ``hash(of:)``.
+    package static func operativeHash(of sequence: ChoiceSequence) -> UInt64 {
+        sequence.withUnsafeBufferPointer { buffer in
+            var hash = mix(UInt64(buffer.count), at: buffer.count)
+            var index = 0
+            while index < buffer.count {
+                hash ^= operativeContribution(at: index, buffer[index])
+                index += 1
+            }
+            return hash
+        }
+    }
+
     /// Computes a Zobrist hash: XOR of position-dependent contributions for each element.
     /// Enables O(1) incremental updates when single elements change.
     package static func hash(of sequence: ChoiceSequence) -> UInt64 {
@@ -93,5 +108,33 @@ package enum ZobristHash {
                 7
         }
         return mix(bits, at: position)
+    }
+
+    /// Computes one position-dependent contribution without generator-derived metadata.
+    private static func operativeContribution(
+        at position: Int,
+        _ value: ChoiceSequenceValue
+    ) -> UInt64 {
+        let identity = switch value {
+            case let .value(value):
+                mix(value.choice.bitPattern64, at: 0)
+            case .sequence(true, validRange: _, isLengthExplicit: _):
+                mix(0, at: 1)
+            case .sequence(false, validRange: _, isLengthExplicit: _):
+                mix(0, at: 2)
+            case .group(true):
+                mix(0, at: 3)
+            case .group(false):
+                mix(0, at: 4)
+            case .bind(true):
+                mix(0, at: 5)
+            case .bind(false):
+                mix(0, at: 6)
+            case .just:
+                mix(0, at: 7)
+            case let .branch(branch):
+                mix(branch.id, at: 8)
+        }
+        return mix(identity, at: position)
     }
 }

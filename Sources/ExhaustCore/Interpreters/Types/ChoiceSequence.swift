@@ -22,6 +22,13 @@ package extension Collection<ChoiceSequenceValue> {
 // MARK: - Helper functions
 
 package extension ChoiceSequence {
+    /// Computes a deterministic identity from the choices that affect replay, excluding generator-derived metadata.
+    ///
+    /// Callers that store this value as an identity deliberately accept the possibility of a 64-bit collision. Metadata changes to ranges, explicitness, branch counts, fingerprints, and value tags do not change the result.
+    var operativeHash: UInt64 {
+        ZobristHash.operativeHash(of: self)
+    }
+
     /// Creates a flat ``ChoiceSequence`` by flattening the given ``ChoiceTree``.
     init(_ tree: ChoiceTree) {
         self = Self.flatten(tree)

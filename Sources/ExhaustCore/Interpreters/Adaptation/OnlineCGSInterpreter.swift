@@ -214,28 +214,15 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
             context.runs += 1
         }
 
-        do {
-            return try Self.generateRecursive(
-                generator,
-                with: (),
-                context: &context,
-                predicate: predicate,
-                sampleCount: sampleCount,
-                cgsState: &cgsState,
-                derivativeContext: derivativeContext
-            )
-        } catch GeneratorError.uniqueBudgetExhausted {
-            ExhaustLog.warning(
-                category: .adaptation,
-                event: "uniqueness_budget_exhausted",
-                metadata: [
-                    "unique_count": "\(context.runs)",
-                    "requested": "\(context.maxRuns)",
-                ]
-            )
-            context.runs = context.maxRuns
-            return nil
-        }
+        return try Self.generateRecursive(
+            generator,
+            with: (),
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        )
     }
 
     // MARK: - Recursive Engine
@@ -374,9 +361,9 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     cgsState: &cgsState, derivativeContext: derivativeContext
                 )
 
-            case let .impure(operation: .unique(gen, fingerprint, keyExtractor), continuation):
+            case let .impure(operation: .unique(gen, _, _), continuation):
                 return try handleUnique(
-                    gen: gen, fingerprint: fingerprint, keyExtractor: keyExtractor,
+                    gen: gen,
                     continuation: continuation,
                     inputValue: inputValue, context: &context,
                     predicate: predicate, sampleCount: sampleCount,

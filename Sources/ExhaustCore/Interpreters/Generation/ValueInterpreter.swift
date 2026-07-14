@@ -583,7 +583,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 }
                 swap(&context.prng, &vactiContext.prng)
                 let sequence = ChoiceSequence.flatten(tree)
-                if context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted {
+                if context.uniqueSeenSequences[fingerprint, default: []].insert(sequence.operativeHash).inserted {
                     accepted = candidate
                     break
                 }

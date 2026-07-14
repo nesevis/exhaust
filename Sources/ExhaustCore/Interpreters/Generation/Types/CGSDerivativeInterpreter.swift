@@ -398,7 +398,7 @@ package enum CGSDerivativeInterpreter {
         rng: inout Xoshiro256,
         size: UInt64
     ) throws -> Output? {
-        // Skip dedup — this is just for fitness estimation
+        // Derivative samples contribute only fitness data and are discarded. VACTI owns generation-time uniqueness state, so derivative evaluation must not consume or enforce it.
         guard let result = try generateRecursive(
             gen, with: inputValue, rng: &rng, size: size
         ) else {

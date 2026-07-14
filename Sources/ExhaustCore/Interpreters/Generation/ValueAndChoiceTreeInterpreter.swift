@@ -837,7 +837,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 isDuplicate = context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted == false
             } else {
                 let sequence = ChoiceSequence.flatten(tree)
-                isDuplicate = context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted == false
+                isDuplicate = context.uniqueSeenSequences[fingerprint, default: []].insert(sequence.operativeHash).inserted == false
             }
             if isDuplicate == false {
                 return try runContinuation(

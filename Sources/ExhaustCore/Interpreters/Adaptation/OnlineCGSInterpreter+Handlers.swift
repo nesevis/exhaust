@@ -395,7 +395,6 @@ extension OnlineCGSInterpreter {
                 result = boundValue
             case let .metamorphic(transforms, _):
                 let savedState = (context.prng.seed, context.prng.currentState)
-                let seenSnapshot = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 guard let original = try generateRecursive(
                     inner,
                     with: inputValue,
@@ -405,13 +404,11 @@ extension OnlineCGSInterpreter {
                     cgsState: &cgsState,
                     derivativeContext: derivativeContext
                 ) else { return nil }
-                let seenAfterOriginal = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 var results: [Any] = [original]
                 results.reserveCapacity(transforms.count + 1)
-                // Copies replay against the original's starting dedup state; see ReflectiveOperation.metamorphic.
+                // Copies replay from the original's PRNG state; tuning does not own generation-time uniqueness state.
                 for transform in transforms {
                     context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
-                    (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenSnapshot
                     guard let copy = try generateRecursive(
                         inner,
                         with: inputValue,
@@ -423,7 +420,6 @@ extension OnlineCGSInterpreter {
                     ) else { return nil }
                     try results.append(transform(copy))
                 }
-                (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenAfterOriginal
                 result = results
         }
         return try runContinuation(
@@ -438,11 +434,12 @@ extension OnlineCGSInterpreter {
         )
     }
 
+    /// Treats uniqueness operations as transparent while collecting CGS fitness data.
+    ///
+    /// Online CGS discards every warm-up value; the tuned generator later runs through ``ValueAndChoiceTreeInterpreter``, which owns the per-site operative-hash sets. Maintaining deduplication state here would make tuning depend on whether the output happens to be `Hashable` and could exhaust a finite domain before its fitness data converges. Tuning may change pick weights, but it must neither consume nor enforce generation-time uniqueness state.
     @inline(__always)
     static func handleUnique<Output>(
         gen: AnyGenerator,
-        fingerprint: UInt64,
-        keyExtractor: ((Any) -> AnyHashable)?,
         continuation: (Any) throws -> AnyGenerator,
         inputValue: some Any,
         context: inout GenerationContext,
@@ -451,48 +448,25 @@ extension OnlineCGSInterpreter {
         cgsState: inout CGSState,
         derivativeContext: DerivativeContext
     ) throws -> Output? {
-        var attempts = 0 as UInt64
-        while attempts < GenerationContext.maxFilterRuns {
-            guard let result = try generateRecursive(
-                gen,
-                with: inputValue,
-                context: &context,
-                predicate: predicate,
-                sampleCount: sampleCount,
-                cgsState: &cgsState,
-                derivativeContext: derivativeContext
-            ) else { return nil }
-
-            let isDuplicate: Bool
-            if let keyExtractor {
-                let key = keyExtractor(result)
-                isDuplicate = context.uniqueSeenKeys[
-                    fingerprint, default: []
-                ].insert(key).inserted == false
-            } else if let key = result as? AnyHashable {
-                isDuplicate = context.uniqueSeenKeys[
-                    fingerprint, default: []
-                ].insert(key).inserted == false
-            } else {
-                // Non-Hashable types cannot be deduplicated in CGS mode (no choice-sequence tracking). All samples are treated as unique.
-                isDuplicate = false
-            }
-
-            if isDuplicate == false {
-                return try runContinuation(
-                    result: result,
-                    continuation: continuation,
-                    inputValue: inputValue,
-                    context: &context,
-                    predicate: predicate,
-                    sampleCount: sampleCount,
-                    cgsState: &cgsState,
-                    derivativeContext: derivativeContext
-                )
-            }
-            attempts += 1
-        }
-        throw GeneratorError.uniqueBudgetExhausted
+        guard let result = try generateRecursive(
+            gen,
+            with: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        ) else { return nil }
+        return try runContinuation(
+            result: result,
+            continuation: continuation,
+            inputValue: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        )
     }
 
     // MARK: - Run Continuation

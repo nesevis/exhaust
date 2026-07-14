@@ -10,6 +10,57 @@ import Testing
 
 @Suite("Choice Sequence Tests")
 struct ChoiceSequenceTests {
+    @Test("Operative hash ignores generator-derived metadata")
+    func operativeHashIgnoresMetadata() {
+        let first: ChoiceSequence = [
+            .sequence(true, validRange: 1 ... 3, isLengthExplicit: true),
+            .branch(.init(id: 1, branchCount: 2, fingerprint: 11)),
+            .value(.init(
+                choice: ChoiceValue(UInt64(42), tag: .uint64),
+                validRange: 0 ... 100,
+                isRangeExplicit: true
+            )),
+            .sequence(false, validRange: 1 ... 3, isLengthExplicit: true),
+        ]
+        let second: ChoiceSequence = [
+            .sequence(true, validRange: nil, isLengthExplicit: false),
+            .branch(.init(id: 1, branchCount: 20, fingerprint: 99)),
+            .value(.init(
+                choice: ChoiceValue(UInt64(42), tag: .int64),
+                validRange: nil,
+                isRangeExplicit: false
+            )),
+            .sequence(false, validRange: nil, isLengthExplicit: false),
+        ]
+
+        #expect(first.operativeHash == second.operativeHash)
+    }
+
+    @Test("Operative hash includes replay decisions")
+    func operativeHashIncludesReplayDecisions() {
+        let original: ChoiceSequence = [
+            .group(true),
+            .branch(.init(id: 1, branchCount: 2, fingerprint: 11)),
+            .value(.init(choice: ChoiceValue(UInt64(42), tag: .uint64), validRange: nil)),
+            .group(false),
+        ]
+        let changedBranch: ChoiceSequence = [
+            .group(true),
+            .branch(.init(id: 0, branchCount: 2, fingerprint: 11)),
+            .value(.init(choice: ChoiceValue(UInt64(42), tag: .uint64), validRange: nil)),
+            .group(false),
+        ]
+        let changedValue: ChoiceSequence = [
+            .group(true),
+            .branch(.init(id: 1, branchCount: 2, fingerprint: 11)),
+            .value(.init(choice: ChoiceValue(UInt64(43), tag: .uint64), validRange: nil)),
+            .group(false),
+        ]
+
+        #expect(original.operativeHash != changedBranch.operativeHash)
+        #expect(original.operativeHash != changedValue.operativeHash)
+    }
+
     @Test("Flatten simple choice")
     func flattenSimpleChoice() {
         let tree = ChoiceTree.choice(
