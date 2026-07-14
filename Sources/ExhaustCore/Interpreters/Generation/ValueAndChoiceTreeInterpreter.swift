@@ -265,7 +265,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         // MARK: getSize
 
             case .impure(operation: .getSize, let continuation):
-                let size = Self.consumeSize(&context)
+                let size = SharedInterpreterHelpers.currentSize(&context)
                 return try runContinuation(
                     result: size, calleeChoiceTree: .getSize(size),
                     continuation: continuation, context: &context
@@ -486,11 +486,6 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     }
 
     @inline(__always)
-    static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
-        SharedInterpreterHelpers.consumeSize(&context)
-    }
-
-    @inline(__always)
     private static func handleSequence(
         lengthGen: Generator<UInt64>,
         elementGen: AnyGenerator,
@@ -515,8 +510,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         if case let .impure(
             operation: .chooseBits(min, max, tag, isRangeExplicit, .some(scaling), typeTagPayload),
             continuation: elementContinuation
-        ) = elementGen, context.sizeOverride == nil {
-            let size = consumeSize(&context)
+        ) = elementGen {
+            let size = SharedInterpreterHelpers.currentSize(&context)
             let effectiveRange = Gen.applyScaling(
                 min: min, max: max, tag: tag, scaling: scaling, size: size
             )
@@ -676,7 +671,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     ) throws -> (Any, ChoiceTree)? {
         let effectiveRange: ClosedRange<UInt64>
         if let scaling {
-            let size = consumeSize(&context)
+            let size = SharedInterpreterHelpers.currentSize(&context)
             effectiveRange = Gen.applyScaling(
                 min: min, max: max, tag: tag, scaling: scaling, size: size
             )
@@ -732,14 +727,20 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         resizeGen: AnyGenerator,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
-        context.sizeOverride = newSize
-        defer { context.sizeOverride = nil }
-        guard let result = try generateRecursiveAny(
-            resizeGen, context: &context
-        ) else { return nil }
-        let calleeTree = ChoiceTree.resize(newSize: newSize, choices: [result.1])
+        let previousSizeOverride = context.sizeOverride
+        let innerResult: (Any, ChoiceTree)?
+        do {
+            context.sizeOverride = newSize
+            defer { context.sizeOverride = previousSizeOverride }
+            innerResult = try generateRecursiveAny(
+                resizeGen,
+                context: &context
+            )
+        }
+        guard let innerResult else { return nil }
+        let calleeTree = ChoiceTree.resize(newSize: newSize, choices: [innerResult.1])
         return try runContinuation(
-            result: result.0, calleeChoiceTree: calleeTree,
+            result: innerResult.0, calleeChoiceTree: calleeTree,
             continuation: continuation, context: &context
         )
     }

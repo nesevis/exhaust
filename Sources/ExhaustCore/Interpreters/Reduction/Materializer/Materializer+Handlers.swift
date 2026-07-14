@@ -122,7 +122,7 @@ extension Materializer {
                 // Fresh generation honors scaling; replay / guided / minimize operate on the declared range so they can reconstruct or target specific bit patterns without being re-narrowed.
                 let effective: ClosedRange<UInt64>
                 if let scaling {
-                    let size = Materializer.consumeSize(&context)
+                    let size = Materializer.currentSize(&context)
                     effective = Gen.applyScaling(
                         min: min, max: max, tag: tag, scaling: scaling, size: size
                     )
@@ -561,9 +561,9 @@ extension Materializer {
 
     // MARK: - resize
 
-    /// Materializes the inner generator with ``Context/sizeOverride`` set to the given size, then clears the override.
+    /// Materializes the inner generator with ``Context/sizeOverride`` set to the given size, then restores the enclosing override before materializing the continuation.
     ///
-    /// The override is cleared defensively after the inner call in case a downstream ``ReflectiveOperation/getSize`` was missing, which would leave a stale override for subsequent operations.
+    /// Every size read in the inner generator observes the same override. Nested resize operations restore this value when they finish, while operations composed after this resize observe the enclosing scope.
     @inline(__always)
     static func handleResize(
         newSize: UInt64,
@@ -580,16 +580,24 @@ extension Materializer {
             else { return nil }
             return inner
         }
-        context.sizeOverride = newSize
-        defer { context.sizeOverride = nil }
-        guard let result = try generateRecursive(
-            gen, with: inputValue, context: &context, fallbackTree: innerFallback
-        ) else { return nil }
+        let previousSizeOverride = context.sizeOverride
+        let innerResult: (Any, ChoiceTree)?
+        do {
+            context.sizeOverride = newSize
+            defer { context.sizeOverride = previousSizeOverride }
+            innerResult = try generateRecursive(
+                gen,
+                with: inputValue,
+                context: &context,
+                fallbackTree: innerFallback
+            )
+        }
+        guard let innerResult else { return nil }
         let calleeTree: ChoiceTree = context.skipTree
             ? .just
-            : .resize(newSize: newSize, choices: [result.1])
+            : .resize(newSize: newSize, choices: [innerResult.1])
         return try runContinuation(
-            result: result.0,
+            result: innerResult.0,
             calleeChoiceTree: calleeTree,
             continuation: continuation, inputValue: inputValue,
             context: &context, continuationFallback: continuationFallback

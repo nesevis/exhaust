@@ -63,6 +63,7 @@ package struct GenerationContext: ~Copyable {
             baseSeed: baseSeed,
             isFixed: isFixed,
             size: size,
+            sizeOverride: sizeOverride,
             prng: .init(seed: seed),
             materializePicks: materializePicks,
             runs: runs

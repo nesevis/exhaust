@@ -206,7 +206,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     ) throws -> Any? {
         let effectiveRange: ClosedRange<UInt64>
         if let scaling {
-            let size = consumeSize(&context)
+            let size = SharedInterpreterHelpers.currentSize(&context)
             effectiveRange = Gen.applyScaling(
                 min: min, max: max, tag: tag, scaling: scaling, size: size
             )
@@ -236,7 +236,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     private static func handleGetSize(
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> Any? {
-        let size = consumeSize(&context)
+        let size = SharedInterpreterHelpers.currentSize(&context)
         let nextGen = try continuation(size)
         if case let .pure(final) = nextGen { return final }
         return try generateRecursiveAny(nextGen, context: &context)
@@ -314,10 +314,10 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         if case let .impure(
             operation: .chooseBits(min, max, tag, _, scaling, _),
             continuation: elementContinuation
-        ) = fusedElementGen, scaling == nil || context.sizeOverride == nil {
+        ) = fusedElementGen {
             let effectiveRange: ClosedRange<UInt64>
             if let scaling {
-                let size = consumeSize(&context)
+                let size = SharedInterpreterHelpers.currentSize(&context)
                 effectiveRange = Gen.applyScaling(
                     min: min, max: max, tag: tag, scaling: scaling, size: size
                 )
@@ -400,12 +400,17 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         innerGen: AnyGenerator,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> Any? {
-        context.sizeOverride = newSize
-        defer { context.sizeOverride = nil }
-        guard let value = try generateRecursiveAny(innerGen, context: &context) else {
+        let previousSizeOverride = context.sizeOverride
+        let innerValue: Any?
+        do {
+            context.sizeOverride = newSize
+            defer { context.sizeOverride = previousSizeOverride }
+            innerValue = try generateRecursiveAny(innerGen, context: &context)
+        }
+        guard let innerValue else {
             return nil
         }
-        let nextGen = try continuation(value)
+        let nextGen = try continuation(innerValue)
         if case let .pure(final) = nextGen { return final }
         return try generateRecursiveAny(nextGen, context: &context)
     }
@@ -570,6 +575,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     baseSeed: context.baseSeed,
                     isFixed: context.isFixed,
                     size: context.size,
+                    sizeOverride: context.sizeOverride,
                     prng: Xoshiro256(seed: 0),
                     materializePicks: context.materializePicks,
                     runs: context.runs
@@ -596,10 +602,5 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         let nextGen = try continuation(value)
         if case let .pure(final) = nextGen { return final }
         return try generateRecursiveAny(nextGen, context: &context)
-    }
-
-    @inline(__always)
-    static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
-        SharedInterpreterHelpers.consumeSize(&context)
     }
 }

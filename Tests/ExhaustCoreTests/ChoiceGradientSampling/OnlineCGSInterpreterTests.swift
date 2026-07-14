@@ -74,6 +74,35 @@ struct OnlineCGSInterpreterTests {
         #expect(values1 == values2, "Same seed should produce identical output sequences")
     }
 
+    // MARK: - Resize Scoping
+
+    @Test("Resize remains active through its inner generator and restores before its continuation")
+    func resizeScope() throws {
+        let scopedGenerator = Gen.resize(
+            10,
+            Gen.zip(
+                Gen.rawGetSize(),
+                Gen.resize(3, Gen.rawGetSize()),
+                Gen.rawGetSize()
+            )
+        )
+        let generator = scopedGenerator.bind { scopedValues in
+            Gen.zip(Gen.just(scopedValues), Gen.rawGetSize())
+        }
+        var interpreter = OnlineCGSInterpreter(
+            generator,
+            predicate: { _ in true },
+            sampleCount: 1,
+            seed: 42,
+            maxRuns: 1
+        )
+
+        let value = try #require(try interpreter.next())
+
+        #expect(value.0 == (10, 3, 10))
+        #expect(value.1 == 1)
+    }
+
     // MARK: - Zip CGS Guidance
 
     @Test("Zip: CGS guidance improves joint predicate satisfaction")

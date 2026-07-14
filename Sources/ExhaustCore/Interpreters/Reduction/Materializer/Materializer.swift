@@ -11,11 +11,10 @@
 ///
 /// Always materializes all branch alternatives at pick sites so structural encoders can see inactive candidates. The result omits ``ChoiceSequence`` — the caller flattens `result.tree` to get a sequence with fresh metadata.
 package enum Materializer {
-    /// Reads the active generation size for a materialization call. Reads the one-shot `.resize` override first, then falls back to `context.size` (the Materializer's persistent baseline, defaulting to 100).
+    /// Returns the active generation size for a materialization call, preferring the innermost `.resize` override before the persistent `context.size` baseline.
     @inline(__always)
-    static func consumeSize(_ context: inout Context) -> UInt64 {
+    static func currentSize(_ context: inout Context) -> UInt64 {
         if let override = context.sizeOverride {
-            context.sizeOverride = nil
             return override
         }
         return context.size
@@ -309,9 +308,13 @@ extension Materializer {
                 )
 
             case let .impure(.getSize, continuation):
-                // Always use context.size (default 100 = max). At max size, all size-scaled generators produce their full range, so no valid prefix value is ever outside the derived range. Using the fallback tree's `.getSize` is unreliable — reflected trees may store a small size that produces tiny ranges, destroying values via clamping.
+                // Prefer the active resize scope. Outside a resize, use context.size
+                // (default 100 = max) so size-scaled generators expose their full
+                // range. The fallback tree's `.getSize` is unreliable because
+                // reflected trees may store a small size that narrows the range and
+                // destroys values through clamping.
                 let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
-                let size = consumeSize(&context)
+                let size = currentSize(&context)
                 let calleeTree: ChoiceTree = context.skipTree ? .just : .getSize(size)
                 return try runContinuation(
                     result: size, calleeChoiceTree: calleeTree,

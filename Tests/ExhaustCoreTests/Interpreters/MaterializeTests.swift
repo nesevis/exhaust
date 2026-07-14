@@ -152,6 +152,63 @@ struct MaterializeTests {
         try assertMaterializeRoundTrip(gen, runs: 200)
     }
 
+    @Test("Materializer preserves nested resize scopes")
+    func nestedResizeScopes() throws {
+        let generator = Gen.resize(
+            10,
+            Gen.zip(
+                Gen.rawGetSize(),
+                Gen.resize(3, Gen.rawGetSize()),
+                Gen.rawGetSize()
+            )
+        )
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: 42,
+            maxRuns: 1
+        )
+        let (_, tree) = try #require(try interpreter.next())
+        let sequence = ChoiceSequence.flatten(tree)
+
+        guard case let .success(materialized, _, _) = Materializer.materialize(
+            generator,
+            prefix: sequence,
+            mode: .exact,
+            fallbackTree: tree
+        ) else {
+            Issue.record("Materialization failed")
+            return
+        }
+
+        #expect(materialized == (10, 3, 10))
+    }
+
+    @Test("Materializer restores its ambient size before a resize continuation")
+    func resizeContinuationUsesAmbientSize() throws {
+        let generator = Gen.resize(10, Gen.rawGetSize()).bind { scopedSize in
+            Gen.zip(Gen.just(scopedSize), Gen.rawGetSize())
+        }
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: 42,
+            maxRuns: 1
+        )
+        let (_, tree) = try #require(try interpreter.next())
+        let sequence = ChoiceSequence.flatten(tree)
+
+        guard case let .success(materialized, _, _) = Materializer.materialize(
+            generator,
+            prefix: sequence,
+            mode: .exact,
+            fallbackTree: tree
+        ) else {
+            Issue.record("Materialization failed")
+            return
+        }
+
+        #expect(materialized == (10, 100))
+    }
+
     @Test("Pick of arrays round-trips through materialize")
     func pickOfArraysRoundtrip() throws {
         let gen = Gen.pick(choices: [

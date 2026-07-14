@@ -292,6 +292,119 @@ struct InterpreterRNGParityTests {
         #expect(valueAndTreeResult == (37, 37))
     }
 
+    @Test("Nested resize restores its enclosing scope")
+    func nestedResizeRestoresEnclosingScope() throws {
+        let generator = Gen.resize(
+            10,
+            Gen.zip(
+                Gen.rawGetSize(),
+                Gen.resize(3, Gen.rawGetSize()),
+                Gen.rawGetSize()
+            )
+        )
+        var valueInterpreter = ValueInterpreter(generator, seed: 777, maxRuns: 1)
+        var treeInterpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: 777,
+            maxRuns: 1
+        )
+
+        let valueOnlyResult = try #require(try valueInterpreter.next())
+        let valueAndTreeResult = try #require(try treeInterpreter.next()).value
+
+        #expect(valueOnlyResult == (10, 3, 10))
+        #expect(valueAndTreeResult == (10, 3, 10))
+    }
+
+    @Test("Resize restores the ambient size before its continuation")
+    func resizeRestoresAmbientSizeBeforeContinuation() throws {
+        let generator = Gen.resize(10, Gen.rawGetSize()).bind { scopedSize in
+            Gen.zip(Gen.just(scopedSize), Gen.rawGetSize())
+        }
+        var valueInterpreter = ValueInterpreter(
+            generator,
+            seed: 777,
+            maxRuns: 1,
+            sizeOverride: 50
+        )
+        var treeInterpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: 777,
+            maxRuns: 1,
+            sizeOverride: 50
+        )
+
+        let valueOnlyResult = try #require(try valueInterpreter.next())
+        let valueAndTreeResult = try #require(try treeInterpreter.next()).value
+
+        #expect(valueOnlyResult == (10, 50))
+        #expect(valueAndTreeResult == (10, 50))
+    }
+
+    @Test("Resize remains active in a choice-sequence unique sub-interpreter")
+    func resizeScopeSurvivesChoiceSequenceUnique() throws {
+        let generator = Gen.resize(
+            19,
+            uniqueGen(Gen.rawGetSize())
+        )
+        var valueInterpreter = ValueInterpreter(generator, seed: 777, maxRuns: 1)
+        var treeInterpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: 777,
+            maxRuns: 1
+        )
+
+        let valueOnlyResult = try #require(try valueInterpreter.next())
+        let valueAndTreeResult = try #require(try treeInterpreter.next()).value
+
+        #expect(valueOnlyResult == 19)
+        #expect(valueAndTreeResult == 19)
+    }
+
+    @Test("Resize applies to every materialized pick alternative")
+    func resizeScopeAppliesToMaterializedPickAlternatives() throws {
+        let generator = Gen.resize(
+            17,
+            Gen.pick(choices: [
+                (1, Gen.rawGetSize()),
+                (1, Gen.rawGetSize()),
+            ])
+        )
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            materializePicks: true,
+            seed: 777,
+            maxRuns: 1
+        )
+
+        let (_, tree) = try #require(try interpreter.next())
+        guard case let .resize(newSize, resizeChoices) = tree else {
+            Issue.record("Expected a resize tree")
+            return
+        }
+        #expect(newSize == 17)
+        #expect(resizeChoices.count == 1)
+
+        let innerTree = try #require(resizeChoices.first)
+        guard case let .group(branches, _) = innerTree else {
+            Issue.record("Expected a materialized pick group")
+            return
+        }
+
+        var recordedSizes = [UInt64]()
+        for branch in branches {
+            guard case let .branch(branchData) = branch,
+                  case let .getSize(size) = branchData.choice
+            else {
+                Issue.record("Expected each pick branch to contain a size read")
+                return
+            }
+            recordedSizes.append(size)
+        }
+
+        #expect(recordedSizes == [17, 17])
+    }
+
     // MARK: - CGS Derivative
 
     @Test("Derivative sampling uses the generation interpreter's floating-point mapping")

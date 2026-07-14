@@ -128,7 +128,7 @@ extension OnlineCGSInterpreter {
         }
         let effectiveRange: ClosedRange<UInt64>
         if let scaling {
-            let size = SharedInterpreterHelpers.consumeSize(&context)
+            let size = SharedInterpreterHelpers.currentSize(&context)
             effectiveRange = Gen.applyScaling(
                 min: min, max: max, tag: tag, scaling: scaling, size: size
             )
@@ -227,19 +227,24 @@ extension OnlineCGSInterpreter {
         cgsState: inout CGSState,
         derivativeContext: DerivativeContext
     ) throws -> Output? {
-        context.sizeOverride = newSize
-        defer { context.sizeOverride = nil }
-        guard let result = try generateRecursive(
-            gen,
-            with: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            cgsState: &cgsState,
-            derivativeContext: derivativeContext
-        ) else { return nil }
+        let previousSizeOverride = context.sizeOverride
+        let innerResult: Any?
+        do {
+            context.sizeOverride = newSize
+            defer { context.sizeOverride = previousSizeOverride }
+            innerResult = try generateRecursive(
+                gen,
+                with: inputValue,
+                context: &context,
+                predicate: predicate,
+                sampleCount: sampleCount,
+                cgsState: &cgsState,
+                derivativeContext: derivativeContext
+            )
+        }
+        guard let innerResult else { return nil }
         return try runContinuation(
-            result: result,
+            result: innerResult,
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
@@ -550,7 +555,7 @@ extension OnlineCGSInterpreter {
         //
         // Adapted from the adaptive rejection sampling vocabulary elimination in: Lipkin et al., "Fast Controlled Generation from Language Models with Adaptive Weighted Rejection Sampling", COLM 2025.
         // arXiv:2504.05410
-        let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
+        let currentSize = SharedInterpreterHelpers.currentSize(&context)
         let choiceCount = choices.count
         let minDeadObservations: UInt64 = 30
         // Recursive generators (BST, AVL) reuse the same source-level pick at every depth, producing identical fingerprints. Without depth scoping, vocabulary elimination at the root (where "leaf" is always dead) would kill "leaf" at inner depths too — but inner depths NEED leaves for validity.

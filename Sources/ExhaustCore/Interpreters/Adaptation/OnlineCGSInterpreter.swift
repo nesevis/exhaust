@@ -312,7 +312,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                 )
 
             case .impure(operation: .getSize, let continuation):
-                let size = SharedInterpreterHelpers.consumeSize(&context)
+                let size = SharedInterpreterHelpers.currentSize(&context)
                 return try runContinuation(
                     result: size,
                     continuation: continuation,
