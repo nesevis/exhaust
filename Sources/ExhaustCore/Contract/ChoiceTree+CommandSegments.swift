@@ -11,7 +11,7 @@ package extension ChoiceTree {
 
     static func findSequenceElements(in tree: ChoiceTree) -> [ChoiceTree]? {
         switch tree {
-            case let .sequence(_, elements, _):
+            case let .sequence(elements, _):
                 return elements
             case let .bind(_, inner, bound):
                 return findSequenceElements(in: inner) ?? findSequenceElements(in: bound)

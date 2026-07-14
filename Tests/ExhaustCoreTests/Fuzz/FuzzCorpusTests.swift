@@ -64,7 +64,7 @@ struct FuzzCorpusTests {
 
         let firstAdmission = corpus.offer(
             sequence: justSequence,
-            tree: .sequence(length: 1, elements: [.just], .init(validRange: nil)),
+            tree: .sequence(elements: [.just], metadata: .init(validRange: nil)),
             hits: [(edge: 1, hitCount: 1)],
             convergence: 1.0,
             generation: 0,
@@ -73,14 +73,13 @@ struct FuzzCorpusTests {
         let secondAdmission = corpus.offer(
             sequence: valueSequence,
             tree: .sequence(
-                length: 1,
                 elements: [
                     .choice(
                         ChoiceValue(collidingBitPattern, tag: .uint64),
                         .init(validRange: nil)
                     ),
                 ],
-                .init(validRange: nil)
+                metadata: .init(validRange: nil)
             ),
             hits: [(edge: 2, hitCount: 1)],
             convergence: 1.0,

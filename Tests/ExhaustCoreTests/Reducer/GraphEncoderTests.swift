@@ -15,26 +15,23 @@ struct GraphEncoderTests {
     @Test("Removal encoder removes members of the deletion antichain")
     func removalEncoderRemovesAntichainMembers() {
         let seq1 = ChoiceTree.sequence(
-            length: 2,
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let seq2 = ChoiceTree.sequence(
-            length: 1,
             elements: [
                 .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let seq3 = ChoiceTree.sequence(
-            length: 1,
             elements: [
                 .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let tree = ChoiceTree.group([seq1, seq2, seq3])
         let graph = ChoiceGraph.build(from: tree)
@@ -96,24 +93,21 @@ struct GraphEncoderTests {
     func migrationMergesSiblingSequencesAndShortens() throws {
         // Two sibling sequences under an outer sequence node — the sequence-of-sequences shape used by NestedLists and LargeUnionList.
         let inner1 = ChoiceTree.sequence(
-            length: 2,
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
                 .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let inner2 = ChoiceTree.sequence(
-            length: 1,
             elements: [
                 .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let outer = ChoiceTree.sequence(
-            length: 2,
             elements: [inner1, inner2],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let graph = ChoiceGraph.build(from: outer)
         let sequence = ChoiceSequence.flatten(outer)

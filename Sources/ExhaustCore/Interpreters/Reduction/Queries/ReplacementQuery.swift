@@ -141,7 +141,7 @@ enum ReplacementQuery {
         switch tree {
             case .choice: 1
             case .just, .getSize: 0
-            case let .sequence(_, elements, _): elements.reduce(0) { $0 + leafCount(in: $1) }
+            case let .sequence(elements, _): elements.reduce(0) { $0 + leafCount(in: $1) }
             case let .branch(b): leafCount(in: b.choice)
             case let .group(children, _): children.reduce(0) { $0 + leafCount(in: $1) }
             case let .resize(_, choices): choices.reduce(0) { $0 + leafCount(in: $1) }

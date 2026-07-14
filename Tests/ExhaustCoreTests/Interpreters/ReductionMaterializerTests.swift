@@ -425,6 +425,87 @@ struct ReductionMaterializerTests {
 
     // MARK: - Sequence handling
 
+    @Test(
+        "Exact mode rejects element counts outside an explicit length range",
+        arguments: [3, 7]
+    )
+    func exactRejectsExplicitSequenceLengthViolation(elementCount: Int) {
+        let generator = Gen.arrayOf(Gen.just(42), exactly: 5)
+        var prefix: ChoiceSequence = [
+            .sequence(
+                true,
+                validRange: 5 ... 5,
+                isLengthExplicit: true
+            ),
+        ]
+        prefix.append(contentsOf: Array(repeating: .just, count: elementCount))
+        prefix.append(.sequence(false))
+
+        guard case .rejected = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        ) else {
+            Issue.record("Expected .rejected for \(elementCount) elements")
+            return
+        }
+    }
+
+    @Test("Exact mode accepts element counts from a default size-scaled sequence")
+    func exactAcceptsImplicitSequenceLength() {
+        let generator = Gen.arrayOf(Gen.just(42))
+        let prefix: ChoiceSequence = [
+            .sequence(true),
+            .just,
+            .just,
+            .just,
+            .sequence(false),
+        ]
+
+        guard case let .success(value, _, _) = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        ) else {
+            Issue.record("Expected .success")
+            return
+        }
+
+        #expect(value == [42, 42, 42])
+    }
+
+    @Test("Guided mode derives fallback sequence length from its elements")
+    func guidedSequenceUsesFallbackElementCount() {
+        let generator = Gen.arrayOf(
+            Gen.just(42),
+            within: 0 ... 10,
+            scaling: .constant
+        )
+        let fallbackTree = ChoiceTree.sequence(
+            elements: [.just, .just, .just],
+            metadata: ChoiceMetadata(
+                validRange: 0 ... 10,
+                isRangeExplicit: true
+            )
+        )
+
+        guard case let .success(value, tree, _) = Materializer.materialize(
+            generator,
+            prefix: [],
+            mode: .guided(seed: 42, fallbackTree: fallbackTree)
+        ) else {
+            Issue.record("Expected .success")
+            return
+        }
+
+        #expect(value == [42, 42, 42])
+        guard case let .sequence(elements, _) = tree else {
+            Issue.record("Expected a sequence tree")
+            return
+        }
+        #expect(elements.count == 3)
+    }
+
     @Test("Exact mode handles variable-length sequences")
     func exactSequenceVariableLength() throws {
         let gen = Gen.arrayOf(

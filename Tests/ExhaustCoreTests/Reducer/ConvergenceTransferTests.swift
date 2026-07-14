@@ -93,9 +93,8 @@ private func sequenceGraph(values: [UInt64]) -> ChoiceGraph {
         ChoiceTree.choice(ChoiceValue(value, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
     }
     let tree = ChoiceTree.sequence(
-        length: UInt64(values.count),
         elements: elements,
-        .init(validRange: 0 ... 10, isRangeExplicit: true)
+        metadata: .init(validRange: 0 ... 10, isRangeExplicit: true)
     )
     return ChoiceGraph.build(from: tree)
 }

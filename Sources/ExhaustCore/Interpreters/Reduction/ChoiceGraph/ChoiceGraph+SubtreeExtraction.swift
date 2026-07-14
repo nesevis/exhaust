@@ -30,7 +30,7 @@ extension ChoiceGraph {
                 // Terminals — cannot contain further binds.
                 return nil
 
-            case let .sequence(_, elements, _):
+            case let .sequence(elements, _):
                 guard let step = remainingPath.first,
                       case let .sequenceChild(index) = step,
                       elements.indices.contains(index)

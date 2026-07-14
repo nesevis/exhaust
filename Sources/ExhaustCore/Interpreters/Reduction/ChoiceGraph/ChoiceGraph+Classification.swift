@@ -249,7 +249,7 @@ extension ChoiceGraph {
     ///
     /// Same node kind at each corresponding position, and same child counts at every non-leaf position, with these relaxations:
     /// - Leaf-level descriptors on ``ChoiceTree/choice(_:_:)`` (tag, width, range) are not compared — they are the signal expensive encoders operate on.
-    /// - ``ChoiceTree/sequence(length:elements:_:)`` element counts may differ; elements are compared pairwise up to the shared prefix. A sequence that shifts length but keeps element shape stable (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))`) remains ``BindTopology/identical``.
+    /// - ``ChoiceTree/sequence(elements:metadata:)`` element counts may differ; elements are compared pairwise up to the shared prefix. A sequence that shifts length but keeps element shape stable (Coupling's `int(in: 0...n).array(length: 2 ... max(2, n+1))`) remains ``BindTopology/identical``.
     /// - Transparent wrappers (``ChoiceTree/branch(fingerprint:weight:id:branchCount:choice:isSelected:)``) pass through without requiring a matching wrapper on the other side.
     static func sameTopology(_ low: ChoiceTree, _ high: ChoiceTree) -> Bool {
         // Strip transparent wrappers symmetrically before comparing.
@@ -262,7 +262,7 @@ extension ChoiceGraph {
                 return true
             case (.getSize, .getSize):
                 return true
-            case let (.sequence(_, lowElements, _), .sequence(_, highElements, _)):
+            case let (.sequence(lowElements, _), .sequence(highElements, _)):
                 let shared = min(lowElements.count, highElements.count)
                 var index = 0
                 while index < shared {
@@ -333,7 +333,7 @@ extension ChoiceGraph {
         switch tree {
             case .choice, .just, .getSize:
                 return
-            case let .sequence(_, elements, _):
+            case let .sequence(elements, _):
                 hash = (hash ^ UInt64(elements.count)) &* 1_099_511_628_211
                 for element in elements {
                     fold(element, into: &hash)

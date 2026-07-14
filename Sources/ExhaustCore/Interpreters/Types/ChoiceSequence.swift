@@ -84,7 +84,7 @@ package extension ChoiceSequence {
                 output.append(.just)
             case .getSize:
                 break
-            case let .sequence(_, elements, meta):
+            case let .sequence(elements, meta):
                 output.append(.sequence(true, validRange: meta.validRange, isLengthExplicit: meta.isRangeExplicit))
                 // while-loop: avoiding IteratorProtocol overhead in debug builds.
                 var eIdx = 0

@@ -595,7 +595,7 @@ private extension ChoiceTree {
         switch self {
             case .just: 1
             case .choice, .getSize: 0
-            case let .sequence(_, elements, _): elements.reduce(0) { $0 + $1.justNodeCount }
+            case let .sequence(elements, _): elements.reduce(0) { $0 + $1.justNodeCount }
             case let .branch(b): b.choice.justNodeCount
             case let .group(array, _): array.reduce(0) { $0 + $1.justNodeCount }
             case let .bind(_, inner, bound): inner.justNodeCount + bound.justNodeCount

@@ -121,7 +121,7 @@ struct ChoiceGraphBuilder {
             case .getSize:
                 return 0
 
-            case let .sequence(_, elements, metadata):
+            case let .sequence(elements, metadata):
                 return walkSequence(
                     elements: elements, metadata: metadata, offset: offset,
                     parent: parent, bindDepth: bindDepth, path: path, isActive: isActive

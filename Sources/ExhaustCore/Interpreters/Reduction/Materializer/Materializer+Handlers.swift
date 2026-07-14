@@ -323,7 +323,7 @@ extension Materializer {
 
     /// Materializes a variable-length sequence by resolving the length, then materializing each element in order.
     ///
-    /// Length resolution is mode-dependent: exact mode trusts the cursor's element count, guided mode clamps cursor or fallback lengths to the generator's valid range, and generate mode runs the length generator fresh. After all elements are materialized the cursor's sequence-close marker is consumed so the caller's cursor position is consistent.
+    /// Length resolution is mode-dependent: exact mode validates the cursor's element count against explicit generator metadata, guided mode clamps cursor or fallback element counts to the generator's valid range, and generate mode runs the length generator fresh. After all elements are materialized the cursor's sequence-close marker is consumed so the caller's cursor position is consistent.
     @inline(__always)
     static func handleSequence(
         lengthGen: Generator<UInt64>,
@@ -338,20 +338,22 @@ extension Materializer {
         let lengthMeta: ChoiceMetadata
         var elementFallbacks: [ChoiceTree]?
 
-        var fallbackLength: UInt64?
-
-        if let calleeFallback, case let .sequence(fbLength, fbElements, _) = calleeFallback {
-            elementFallbacks = fbElements
-            fallbackLength = fbLength
+        if let calleeFallback, case let .sequence(fallbackElements, _) = calleeFallback {
+            elementFallbacks = fallbackElements
         }
 
         if let seqInfo = context.cursor.tryConsumeSequenceOpen() {
-            if seqInfo.isLengthExplicit, context.mode == .exact {
-                // Exact mode + explicit-length: the prefix is authoritative.
-                // The length value is not stored in the flattened sequence, so we can't consume it from the cursor. Use the prefix element count.
-                length = UInt64(seqInfo.elementCount)
-                // Fast path: extract metadata directly from chooseBits length generators (the common case, for example `array(length: 0...10)`), avoiding a full generateRecursive + runContinuation round-trip.
+            if context.mode == .exact {
+                let prefixCount = UInt64(seqInfo.elementCount)
                 lengthMeta = try extractLengthMetadata(lengthGen)
+                if lengthMeta.isRangeExplicit {
+                    guard let validRange = lengthMeta.validRange,
+                          validRange.contains(prefixCount)
+                    else {
+                        throw RejectionError()
+                    }
+                }
+                length = prefixCount
             } else if seqInfo.isLengthExplicit {
                 // Guided/generate mode + explicit-length: use the prefix element count, clamped to the generator's valid range. For fixed-length generators (for example `exactly: 2`, range 2...2) this produces 2 regardless of prefix. For variable-length generators (for example
                 // `length: 0...10`) this preserves the prefix count. Analogous to the fallback-length clamping at the cursor-suspended path below.
@@ -371,15 +373,15 @@ extension Materializer {
         } else if context.mode == .exact {
             // Exact mode: prefix exhausted or structural mismatch at sequence site.
             throw RejectionError()
-        } else if let fbLen = fallbackLength {
-            // Cursor exhausted in guided mode. Use the fallback tree's stored length, clamped to the generator's valid range.
-            let resolvedLen = fbLen
+        } else if let elementFallbacks {
+            // Cursor exhausted in guided mode. Use the fallback tree's element count, clamped to the generator's valid range.
+            let resolvedLength = UInt64(elementFallbacks.count)
             lengthMeta = try extractLengthMetadata(lengthGen)
             if let freshRange = lengthMeta.validRange {
-                let clamped = Swift.max(resolvedLen, freshRange.lowerBound)
+                let clamped = Swift.max(resolvedLength, freshRange.lowerBound)
                 length = Swift.min(clamped, freshRange.upperBound)
             } else {
-                length = resolvedLen
+                length = resolvedLength
             }
         } else {
             let erasedLengthGen = lengthGen.erase()
@@ -466,7 +468,7 @@ extension Materializer {
 
         let choiceTree: ChoiceTree = context.skipTree
             ? .just
-            : .sequence(length: length, elements: elements, lengthMeta)
+            : .sequence(elements: elements, metadata: lengthMeta)
 
         if let continued = try runContinuation(
             result: results, calleeChoiceTree: choiceTree,
@@ -789,7 +791,7 @@ extension Materializer {
             return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         }
         if let sizeContinuation = lengthGen.getSizeContinuation,
-           case let .impure(.chooseBits(min, max, _, isRangeExplicit, _, _), _) = try sizeContinuation(100 as Any)
+           case let .impure(.chooseBits(min, max, _, isRangeExplicit, _, _), _) = try sizeContinuation(UInt64(100) as Any)
         {
             return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         }

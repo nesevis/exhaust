@@ -90,13 +90,12 @@ struct EncoderIsolationTests {
     @Test("Removal encoder produces strictly shorter candidates")
     func removalProducesShortherCandidates() {
         let tree = ChoiceTree.sequence(
-            length: 3,
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let graph = ChoiceGraph.build(from: tree)
         let sequence = ChoiceSequence.flatten(tree)
@@ -118,14 +117,13 @@ struct EncoderIsolationTests {
     @Test("Removal encoder tries progressively smaller batches on rejection")
     func removalTriesSmallerBatches() {
         let tree = ChoiceTree.sequence(
-            length: 4,
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let graph = ChoiceGraph.build(from: tree)
         let baseSequence = ChoiceSequence.flatten(tree)

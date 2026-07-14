@@ -151,7 +151,7 @@ private enum TreeVisualization {
                 let children = array.filter(\.hasVisibleContent).map(buildRenderNode)
                 return collapseChain(RenderTree(symbol: nil, children: children))
 
-            case let .sequence(_, elements, _):
+            case let .sequence(elements, _):
                 let children = elements.filter(\.hasVisibleContent).map(buildRenderNode)
                 if children.isEmpty {
                     return RenderTree(symbol: "·", children: [])
@@ -503,7 +503,7 @@ private extension ChoiceTree {
                 b.choice.hasVisibleContent
             case let .group(children, _):
                 children.contains(where: \.hasVisibleContent)
-            case let .sequence(_, elements, _):
+            case let .sequence(elements, _):
                 elements.isEmpty || elements.contains(where: \.hasVisibleContent)
             case let .bind(_, inner, bound):
                 inner.hasVisibleContent || bound.hasVisibleContent

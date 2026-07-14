@@ -63,13 +63,12 @@ struct ChoiceTreeNormalizedScoresTests {
             ChoiceMetadata(validRange: 0 ... 100)
         )
         let tree = ChoiceTree.sequence(
-            length: 3,
             elements: [element, element],
-            ChoiceMetadata(validRange: 0 ... 10)
+            metadata: ChoiceMetadata(validRange: 0 ... 10)
         )
         let scores = tree.normalizedScores()
         #expect(scores.count == 3) // 1 for length + 2 for elements
-        #expect(scores[0] == 0.3) // 3/10
+        #expect(scores[0] == 0.2) // 2/10
         #expect(scores[1] == 0.75)
         #expect(scores[2] == 0.75)
     }

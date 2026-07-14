@@ -552,9 +552,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         }
 
         let choiceTree = ChoiceTree.sequence(
-            length: length,
             elements: elements,
-            lengthTrees.metadata
+            metadata: lengthTrees.metadata
         )
 
         if let continued = try runContinuation(

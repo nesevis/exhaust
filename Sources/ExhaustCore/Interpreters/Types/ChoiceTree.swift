@@ -23,8 +23,8 @@ package indirect enum ChoiceTree: Hashable, Equatable, Sendable { // NOTE: The e
     /// A constant with no randomness. Produces a `.just` marker in the ``ChoiceSequence`` so that surrounding elements keep stable indices, but the reducer skips it: there is nothing to simplify.
     case just
 
-    /// A variable-length collection. Flattened as open-marker, then one subtree per element, then close-marker. The length and the element values are independently reducible: structural encoders can delete elements, and value encoders can minimize within them.
-    case sequence(length: UInt64, elements: [ChoiceTree], ChoiceMetadata)
+    /// A variable-length collection. Flattened as an open marker, one subtree per element, and a close marker. The element array is the sole authority for cardinality: structural encoders change length by editing the array, while value encoders minimize within its elements. Explicit metadata constrains admissible cardinality during materialization.
+    case sequence(elements: [ChoiceTree], metadata: ChoiceMetadata)
 
     /// A branching decision. The `fingerprint` identifies the pick site's recursive template: the ``ChoiceGraph`` uses matching fingerprints to build self-similarity edges, enabling substitution of one branch's subtree into another. Inactive (unselected) branches retain full structural metadata so screening analysis can reason about alternatives without regenerating.
     case branch(BranchData)
@@ -77,7 +77,7 @@ package extension ChoiceTree {
             case .choice: 1
             case .just: 1
             case .getSize: 0
-            case let .sequence(_, elements, _):
+            case let .sequence(elements, _):
                 2 + elements.reduce(0) { $0 + $1.flattenedEntryCount } // open + elements + close
             case let .branch(b):
                 b.choice.flattenedEntryCount
@@ -163,7 +163,7 @@ package extension ChoiceTree {
                 return false
             case let .branch(b):
                 return b.choice.containsBind
-            case let .sequence(_, elements, _):
+            case let .sequence(elements, _):
                 return elements.contains(where: \.containsBind)
             case let .group(array, _):
                 return array.contains(where: \.containsBind)
@@ -188,7 +188,7 @@ package extension ChoiceTree {
                 true
             case .choice, .just, .getSize:
                 false
-            case let .sequence(_, elements, _):
+            case let .sequence(elements, _):
                 elements.contains(where: \.containsPicks)
             case let .group(array, _):
                 array.contains(where: \.containsPicks)
@@ -214,7 +214,7 @@ package extension ChoiceTree {
                 let deeper = b.choice.pickComplexityHelper(pickDepth: pickDepth + 1)
                 if overflow { return .max }
                 return max(here, deeper)
-            case let .sequence(_, elements, _):
+            case let .sequence(elements, _):
                 return elements.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
             case let .group(array, _):
                 return array.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
@@ -241,13 +241,12 @@ package extension ChoiceTree {
             case .choice, .just, .getSize:
                 // For leaf nodes, return the transformed node directly.
                 return transformedNode
-            case let .sequence(length, elements, metadata):
+            case let .sequence(elements, metadata):
                 // For a sequence, recursively map over its elements.
                 let mapped = try elements.map { try $0.map(transform) }
                 return try .sequence(
-                    length: length,
                     elements: mapped,
-                    metadata
+                    metadata: metadata
                 )
             case let .branch(b):
                 return try .branch(
@@ -275,15 +274,14 @@ package extension ChoiceTree {
     /// Only affects sequence nodes whose `isRangeExplicit` is `false`.
     func relaxingNonExplicitSequenceLengthRanges() -> ChoiceTree {
         map { node in
-            guard case let .sequence(length, elements, metadata) = node,
+            guard case let .sequence(elements, metadata) = node,
                   metadata.isRangeExplicit == false
             else {
                 return node
             }
             return .sequence(
-                length: length,
                 elements: elements,
-                ChoiceMetadata(validRange: 0 ... UInt64.max, isRangeExplicit: false)
+                metadata: ChoiceMetadata(validRange: 0 ... UInt64.max, isRangeExplicit: false)
             )
         }
     }
@@ -317,7 +315,8 @@ extension ChoiceTree: CustomDebugStringConvertible {
             case .just:
                 return prefix + connector + "just"
 
-            case let .sequence(length, elements, meta):
+            case let .sequence(elements, meta):
+                let length = elements.count
                 if elements.first?.isCharacterChoice == true {
                     return prefix + connector + "string(length: \(length)) \(meta.validRange.map { "\($0)" } ?? "nil")"
                 }
@@ -376,7 +375,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 }
             case .just:
                 "just"
-            case let .sequence(_, elements, _):
+            case let .sequence(elements, _):
                 "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
             case let .branch(b):
                 "\(b.weight),\(b.id): \(b.choice.elementDescription)"
@@ -417,8 +416,8 @@ package extension ChoiceTree {
                 1
             case .just, .getSize:
                 0
-            case let .sequence(length, elements, _):
-                Int(length) + elements.reduce(0) { $0 + $1.complexity }
+            case let .sequence(elements, _):
+                elements.count + elements.reduce(0) { $0 + $1.complexity }
             case let .branch(data):
                 data.choice.complexity
             case let .group(children, _):
@@ -446,9 +445,9 @@ package extension ChoiceTree {
             case (.just, .just):
                 return nil
 
-            case let (.sequence(lhsLength, lhsElements, _), .sequence(rhsLength, rhsElements, _)):
-                if lhsLength != rhsLength {
-                    return "sequence length mismatch: \(lhsLength) vs \(rhsLength)"
+            case let (.sequence(lhsElements, _), .sequence(rhsElements, _)):
+                if lhsElements.count != rhsElements.count {
+                    return "sequence length mismatch: \(lhsElements.count) vs \(rhsElements.count)"
                 }
                 for index in 0 ..< min(lhsElements.count, rhsElements.count) {
                     if let mismatch = compareValues(lhsElements[index], rhsElements[index]) {
@@ -550,8 +549,9 @@ package extension ChoiceTree {
                     scores.append(Swift.min(position, 1.0))
                 }
 
-            case let .sequence(length, elements, metadata):
+            case let .sequence(elements, metadata):
                 if let range = metadata.validRange, range.upperBound > range.lowerBound {
+                    let length = UInt64(elements.count)
                     let position = Double(length - range.lowerBound) / Double(range.upperBound - range.lowerBound)
                     scores.append(Swift.min(position, 1.0))
                 }

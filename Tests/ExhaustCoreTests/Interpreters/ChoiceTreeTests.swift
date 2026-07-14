@@ -97,9 +97,8 @@ struct ChoiceTreeTests {
         @Test("Sequence without picks returns false")
         func sequenceWithoutPicks() {
             let seq = ChoiceTree.sequence(
-                length: 2,
                 elements: [.just, .just],
-                ChoiceMetadata(validRange: 0 ... 10)
+                metadata: ChoiceMetadata(validRange: 0 ... 10)
             )
             #expect(seq.containsPicks == false)
         }
@@ -193,12 +192,12 @@ struct ChoiceTreeTests {
         @Test("Recursively transforms sequence elements")
         func transformsSequence() {
             let meta = ChoiceMetadata(validRange: 0 ... 5)
-            let tree = ChoiceTree.sequence(length: 1, elements: [.just], meta)
+            let tree = ChoiceTree.sequence(elements: [.just], metadata: meta)
             let result = tree.map { node in
                 if case .just = node { return .getSize(1) }
                 return node
             }
-            if case let .sequence(_, elements, _) = result {
+            if case let .sequence(elements, _) = result {
                 #expect(elements == [.getSize(1)])
             } else {
                 Issue.record("Expected sequence")
@@ -244,12 +243,12 @@ struct ChoiceTreeTests {
         @Test("Non-explicit range is widened to full range")
         func nonExplicitWidened() {
             let meta = ChoiceMetadata(validRange: 2 ... 5, isRangeExplicit: false)
-            let tree = ChoiceTree.sequence(length: 3, elements: [.just], meta)
+            let tree = ChoiceTree.sequence(elements: [.just], metadata: meta)
             let result = tree.relaxingNonExplicitSequenceLengthRanges()
 
-            if case let .sequence(_, _, newMeta) = result {
-                #expect(newMeta.validRange == 0 ... UInt64.max)
-                #expect(newMeta.isRangeExplicit == false)
+            if case let .sequence(_, newMetadata) = result {
+                #expect(newMetadata.validRange == 0 ... UInt64.max)
+                #expect(newMetadata.isRangeExplicit == false)
             } else {
                 Issue.record("Expected sequence")
             }
@@ -258,12 +257,12 @@ struct ChoiceTreeTests {
         @Test("Explicit range is preserved")
         func explicitPreserved() {
             let meta = ChoiceMetadata(validRange: 2 ... 5, isRangeExplicit: true)
-            let tree = ChoiceTree.sequence(length: 3, elements: [.just], meta)
+            let tree = ChoiceTree.sequence(elements: [.just], metadata: meta)
             let result = tree.relaxingNonExplicitSequenceLengthRanges()
 
-            if case let .sequence(_, _, newMeta) = result {
-                #expect(newMeta.validRange == 2 ... 5)
-                #expect(newMeta.isRangeExplicit == true)
+            if case let .sequence(_, newMetadata) = result {
+                #expect(newMetadata.validRange == 2 ... 5)
+                #expect(newMetadata.isRangeExplicit == true)
             } else {
                 Issue.record("Expected sequence")
             }

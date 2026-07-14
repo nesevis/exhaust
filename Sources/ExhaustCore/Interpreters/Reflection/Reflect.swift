@@ -338,20 +338,7 @@ extension Interpreters {
         var combinedPath: [ChoiceTree] = []
         var combinedResults: [Any] = []
 
-        let validRange: ClosedRange<UInt64>
         let isLengthRangeExplicit = lengthGen.associatedRange != nil
-        if let lengthRange = lengthGen.associatedRange {
-            validRange = lengthRange
-        } else {
-            let targetLength = UInt64(targetArray.underestimatedCount)
-            let lengthReflection = try reflectRecursive(
-                lengthGen,
-                onFinalOutput: targetLength
-            )
-            validRange = lengthReflection
-                .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
-                ?? UInt64.bitPatternRange
-        }
 
         for elementTarget in targetArray {
             let elementResults = try reflectRecursive(
@@ -365,10 +352,26 @@ extension Interpreters {
             combinedPath.append(path.count == 1 ? path[0] : .group(path))
         }
 
+        let validRange: ClosedRange<UInt64>
+        if let lengthRange = lengthGen.associatedRange {
+            validRange = lengthRange
+        } else {
+            let targetLength = UInt64(combinedPath.count)
+            let lengthReflection = try reflectRecursive(
+                lengthGen,
+                onFinalOutput: targetLength
+            )
+            validRange = lengthReflection
+                .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
+                ?? UInt64.bitPatternRange
+        }
+
         let finalTree = ChoiceTree.sequence(
-            length: UInt64(targetArray.underestimatedCount),
             elements: combinedPath,
-            ChoiceMetadata(validRange: validRange, isRangeExplicit: isLengthRangeExplicit)
+            metadata: ChoiceMetadata(
+                validRange: validRange,
+                isRangeExplicit: isLengthRangeExplicit
+            )
         )
         return [(value: combinedResults, path: [finalTree])]
     }

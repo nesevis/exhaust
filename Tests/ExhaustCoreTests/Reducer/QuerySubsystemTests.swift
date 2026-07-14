@@ -189,12 +189,11 @@ struct ReorderingQueryTests {
     @Test("Groups sorted deepest-first rightmost-first")
     func groupsSortedDeepestFirst() {
         let tree = ChoiceTree.sequence(
-            length: 2,
             elements: [
                 .uint64Sequence([5, 3], in: 0 ... 100),
                 .uint64Sequence([7, 1], in: 0 ... 100),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let graph = GraphFixture(tree).graph
         let scope = ReorderingQuery.build(graph: graph)

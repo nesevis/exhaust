@@ -202,11 +202,11 @@ extension __ExhaustRuntime {
         at indices: Set<Int>
     ) -> ChoiceTree {
         switch tree {
-            case let .sequence(_, elements, meta):
+            case let .sequence(elements, metadata):
                 let pruned = elements.enumerated()
                     .filter { indices.contains($0.offset) == false }
                     .map(\.element)
-                return .sequence(length: UInt64(pruned.count), elements: pruned, meta)
+                return .sequence(elements: pruned, metadata: metadata)
             case let .group(children, isOpaque):
                 guard let targetIndex = children.firstIndex(where: { containsSequence($0) }) else {
                     return tree

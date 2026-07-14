@@ -15,21 +15,19 @@ struct ChoiceGraphScopeQueryTests {
     @Test("Covering aligned removal scope for zip of two sequences")
     func coveringAlignedRemovalTwoSequences() {
         let seq1 = ChoiceTree.sequence(
-            length: 3,
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let seq2 = ChoiceTree.sequence(
-            length: 2,
             elements: [
                 .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let tree = ChoiceTree.group([seq1, seq2])
         let graph = ChoiceGraph.build(from: tree)
@@ -60,13 +58,12 @@ struct ChoiceGraphScopeQueryTests {
     @Test("Per-parent removal for simple sequence")
     func perParentRemovalSimple() {
         let tree = ChoiceTree.sequence(
-            length: 3,
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let graph = ChoiceGraph.build(from: tree)
         let singleTargetScopes = RemovalQuery.elementRemovalScopes(graph: graph).filter { $0.targets.count == 1 }
@@ -79,13 +76,12 @@ struct ChoiceGraphScopeQueryTests {
     @Test("Per-parent removal respects length constraint")
     func perParentRemovalConstrained() {
         let tree = ChoiceTree.sequence(
-            length: 3,
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: 2 ... 5, isRangeExplicit: true)
+            metadata: .init(validRange: 2 ... 5, isRangeExplicit: true)
         )
         let graph = ChoiceGraph.build(from: tree)
         let singleTargetScopes = RemovalQuery.elementRemovalScopes(graph: graph).filter { $0.targets.count == 1 }
@@ -138,18 +134,16 @@ struct ChoiceGraphScopeQueryTests {
     @Test("Permutation scope for zip with same-shaped siblings")
     func permutationSameShape() {
         let seq1 = ChoiceTree.sequence(
-            length: 1,
             elements: [
                 .choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let seq2 = ChoiceTree.sequence(
-            length: 1,
             elements: [
                 .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let tree = ChoiceTree.group([seq1, seq2])
         let graph = ChoiceGraph.build(from: tree)
@@ -169,21 +163,19 @@ struct ChoiceGraphScopeQueryTests {
     @Test("Covering aligned removal encoder produces candidates removing from multiple sequences")
     func coveringAlignedRemovalProducesCandidates() {
         let seq1 = ChoiceTree.sequence(
-            length: 3,
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
                 .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
                 .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let seq2 = ChoiceTree.sequence(
-            length: 2,
             elements: [
                 .choice(ChoiceValue(4 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
                 .choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let tree = ChoiceTree.group([seq1, seq2])
         let sequence = ChoiceSequence.flatten(tree)
@@ -258,13 +250,12 @@ struct ChoiceGraphScopeQueryTests {
     @Test("Multi-leaf bind-inner leaves are all annotated as bind-inner")
     func scopeAnnotationMultiLeafSequence() {
         let innerSequence = ChoiceTree.sequence(
-            length: 3,
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(3 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let bound = ChoiceTree.choice(ChoiceValue(7 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: innerSequence, bound: bound)
@@ -299,12 +290,11 @@ struct ChoiceGraphScopeQueryTests {
     @Test("Multi-leaf inner leaves receive reshape-on-accept marker via annotation")
     func multiLeafInnerReshapeMarker() {
         let innerSequence = ChoiceTree.sequence(
-            length: 2,
             elements: [
                 .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
                 .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             ],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         let bound = ChoiceTree.choice(ChoiceValue(5 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let tree = ChoiceTree.bind(fingerprint: 0, inner: innerSequence, bound: bound)
