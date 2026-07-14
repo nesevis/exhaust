@@ -176,7 +176,7 @@ struct ChoiceTreeTests {
                 if case .just = node { return .getSize(99) }
                 return node
             }
-            #expect(result == .getSize(99))
+            #expect(result.hasSameRepresentation(as: .getSize(99)))
         }
 
         @Test("Recursively transforms group children")
@@ -186,7 +186,7 @@ struct ChoiceTreeTests {
                 if case .just = node { return .getSize(0) }
                 return node
             }
-            #expect(result == .group([.getSize(0), .getSize(0)]))
+            #expect(result.hasSameRepresentation(as: .group([.getSize(0), .getSize(0)])))
         }
 
         @Test("Recursively transforms sequence elements")
@@ -198,7 +198,7 @@ struct ChoiceTreeTests {
                 return node
             }
             if case let .sequence(elements, _) = result {
-                #expect(elements == [.getSize(1)])
+                #expect(elements.haveSameRepresentations(as: [.getSize(1)]))
             } else {
                 Issue.record("Expected sequence")
             }
@@ -214,10 +214,12 @@ struct ChoiceTreeTests {
                 if case .just = node { return .getSize(2) }
                 return node
             }
-            #expect(result == .branch(
-                fingerprint: 0, weight: 1, id: 0, branchCount: 1,
-                choice: .getSize(2), isSelected: true
-            ))
+            #expect(
+                result.hasSameRepresentation(as: .branch(
+                    fingerprint: 0, weight: 1, id: 0, branchCount: 1,
+                    choice: .getSize(2), isSelected: true
+                ))
+            )
         }
 
         @Test("Transforms through resize")
@@ -229,7 +231,7 @@ struct ChoiceTreeTests {
             }
             if case let .resize(size, choices) = result {
                 #expect(size == 50)
-                #expect(choices == [.getSize(3)])
+                #expect(choices.haveSameRepresentations(as: [.getSize(3)]))
             } else {
                 Issue.record("Expected resize")
             }
@@ -272,7 +274,7 @@ struct ChoiceTreeTests {
         func nonSequenceUnchanged() {
             let tree = ChoiceTree.just
             let result = tree.relaxingNonExplicitSequenceLengthRanges()
-            #expect(result == tree)
+            #expect(result.hasSameRepresentation(as: tree))
         }
     }
 

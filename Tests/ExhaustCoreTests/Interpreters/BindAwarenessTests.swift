@@ -20,8 +20,8 @@ struct BindAwarenessTests {
         let tree = ChoiceTree.bind(fingerprint: 0, inner: inner, bound: bound)
 
         #expect(tree.children.count == 2)
-        #expect(tree.children[0] == inner)
-        #expect(tree.children[1] == bound)
+        #expect(tree.children[0].hasSameRepresentation(as: inner))
+        #expect(tree.children[1].hasSameRepresentation(as: bound))
     }
 
     @Test("Bind tree replacingChild works for inner")
@@ -33,8 +33,8 @@ struct BindAwarenessTests {
         let newInner = ChoiceTree.choice(ChoiceValue(99 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let replaced = tree.replacingChild(at: 0, with: newInner)
 
-        #expect(replaced.children[0] == newInner)
-        #expect(replaced.children[1] == bound)
+        #expect(replaced.children[0].hasSameRepresentation(as: newInner))
+        #expect(replaced.children[1].hasSameRepresentation(as: bound))
     }
 
     @Test("Bind tree replacingChild works for bound")
@@ -46,8 +46,8 @@ struct BindAwarenessTests {
         let newBound = ChoiceTree.choice(ChoiceValue(99 as UInt64, tag: .uint64), .init(validRange: 0 ... 100, isRangeExplicit: true))
         let replaced = tree.replacingChild(at: 1, with: newBound)
 
-        #expect(replaced.children[0] == inner)
-        #expect(replaced.children[1] == newBound)
+        #expect(replaced.children[0].hasSameRepresentation(as: inner))
+        #expect(replaced.children[1].hasSameRepresentation(as: newBound))
     }
 
     @Test("Bind tree containsPicks delegates to children")

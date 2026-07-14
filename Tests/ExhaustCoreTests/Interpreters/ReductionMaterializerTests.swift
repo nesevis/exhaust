@@ -305,7 +305,7 @@ struct ReductionMaterializerTests {
         }
 
         #expect(value1 == value2)
-        #expect(tree1 == tree2)
+        #expect(tree1.hasSameRepresentation(as: tree2))
     }
 
     // MARK: - Fresh validRange metadata
