@@ -56,6 +56,16 @@ struct ChoiceGraphDiffTests {
         #expect(diff.isStructurallyIdentical == true)
     }
 
+    @Test("Root kind change is structural")
+    func rootKindChangeIsStructural() {
+        let choiceGraph = GraphFixture(.uint64(10, in: 0 ... 100)).graph
+        let constantGraph = ChoiceGraph.build(from: .just)
+        let diff = ChoiceGraphDiff.diff(old: choiceGraph, new: constantGraph)
+
+        #expect(diff.isStructurallyIdentical == false)
+        #expect(diff.removed.isEmpty == false)
+    }
+
     @Test("Added and removed sets are symmetric under reversal")
     func addedRemovedSymmetry() {
         let graph1 = GraphFixture(.uint64(10, in: 0 ... 100)).graph

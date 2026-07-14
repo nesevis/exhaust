@@ -1,4 +1,5 @@
 import Exhaust
+import Foundation
 import Testing
 
 // MARK: - Generator Sharing Across Concurrent Tasks
@@ -187,6 +188,24 @@ struct ConcurrentExhaustTests {
 
 @Suite("Concurrency safety — async property bridge")
 struct AsyncPropertyBridgeTests {
+    @Test("Async property preserves caller task-local values")
+    func asyncPropertyPreservesCallerTasklocalValues() async {
+        let observedValue = TaskLocalObservation()
+
+        await PropertyTaskLocal.$marker.withValue(true) {
+            _ = await #exhaust(
+                #gen(.just(0)),
+                .budget(.custom(screening: 0, sampling: 1)),
+                .suppress(.all)
+            ) { _ async in
+                observedValue.store(PropertyTaskLocal.marker)
+                return true
+            }
+        }
+
+        #expect(observedValue.value)
+    }
+
     @Test("Async property with suspension point under concurrent exhaust")
     func asyncPropertyWithSuspensionPointUnderConcurrentExhaust() async {
         let gen = #gen(.int(in: 0 ... 100))
@@ -226,6 +245,26 @@ struct AsyncPropertyBridgeTests {
                     #expect(counterexample >= 50)
                 }
             }
+        }
+    }
+}
+
+private enum PropertyTaskLocal {
+    @TaskLocal static var marker = false
+}
+
+/// Stores one observation across the async property bridge.
+private final class TaskLocalObservation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = false
+
+    var value: Bool {
+        lock.withLock { storage }
+    }
+
+    func store(_ value: Bool) {
+        lock.withLock {
+            storage = value
         }
     }
 }

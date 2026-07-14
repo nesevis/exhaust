@@ -222,6 +222,25 @@ struct InterpreterRNGParityTests {
         try assertParity(gen, seed: 4242, runs: 10)
     }
 
+    @Test("Failure-tree reproduction preserves the first unique value")
+    func uniqueFailureTreeReproductionPreservesValue() throws {
+        let generator = uniqueGen(Gen.choose(in: UInt64(0) ... UInt64.max))
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: 42,
+            maxRuns: 1
+        )
+
+        let originalValue = try #require(try interpreter.nextValueOnly())
+        let failureTree = try interpreter.reproduceFailureTree()
+        let replayedValue = try #require(try Interpreters.replay(
+            generator,
+            using: failureTree
+        ))
+
+        #expect(replayedValue == originalValue)
+    }
+
     // MARK: - Filter
 
     @Test("Rejection-sampling filter parity")
@@ -251,6 +270,69 @@ struct InterpreterRNGParityTests {
             Gen.arrayOf(Gen.choose(in: UInt64.min ... UInt64.max, scaling: UInt64.defaultScaling), within: UInt64(0) ... 8)
         )
         try assertParity(gen, seed: 777, runs: 10)
+    }
+
+    @Test("Resize applies to every size read in its lexical scope")
+    func resizeScopesEverySizeRead() throws {
+        let generator = Gen.resize(
+            37,
+            Gen.zip(Gen.rawGetSize(), Gen.rawGetSize())
+        )
+        var valueInterpreter = ValueInterpreter(generator, seed: 777, maxRuns: 1)
+        var treeInterpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: 777,
+            maxRuns: 1
+        )
+
+        let valueOnlyResult = try #require(try valueInterpreter.next())
+        let valueAndTreeResult = try #require(try treeInterpreter.next()).value
+
+        #expect(valueOnlyResult == (37, 37))
+        #expect(valueAndTreeResult == (37, 37))
+    }
+
+    // MARK: - CGS Derivative
+
+    @Test("Derivative sampling uses the generation interpreter's floating-point mapping")
+    func derivativeFloatingPointMappingParity() throws {
+        let generator = Gen.choose(in: Double(0) ... 100)
+        var valueInterpreter = ValueInterpreter(
+            generator,
+            seed: 1234,
+            maxRuns: 1,
+            sizeOverride: 50
+        )
+        var derivativeRandomNumberGenerator = Xoshiro256.derive(
+            from: 1234,
+            at: 0
+        )
+
+        let generatedValue = try #require(try valueInterpreter.next())
+        let derivativeValue = try #require(try CGSDerivativeInterpreter.sample(
+            generator,
+            using: &derivativeRandomNumberGenerator,
+            size: 50
+        ))
+
+        #expect(generatedValue.bitPattern == derivativeValue.bitPattern)
+    }
+
+    @Test("Derivative sampling enforces the common sequence length limit")
+    func derivativeSequenceLengthLimit() {
+        let oversizedLength = UInt64(SharedInterpreterHelpers.maximumSequenceLength + 1)
+        let generator = Gen.arrayOf(
+            Gen.just(0),
+            Gen.just(oversizedLength)
+        )
+        var randomNumberGenerator = Xoshiro256(seed: 42)
+
+        #expect(throws: GeneratorError.self) {
+            _ = try CGSDerivativeInterpreter.sample(
+                generator,
+                using: &randomNumberGenerator
+            )
+        }
     }
 
     // MARK: - Metamorphic

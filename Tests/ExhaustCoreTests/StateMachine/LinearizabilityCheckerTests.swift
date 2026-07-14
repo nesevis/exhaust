@@ -53,6 +53,20 @@ struct LinearizabilityCheckerTests {
         #expect(verdict(check(lanes: [[]], finalState: [])).linearizable)
     }
 
+    @Test("A prefix-only history still checks the final-state oracle")
+    func prefixOnlyHistoryChecksFinalStateOracle() {
+        let result = verdict(
+            check(
+                lanes: [],
+                prefix: [.push(1)],
+                finalState: []
+            )
+        )
+
+        #expect(result.linearizable == false)
+        #expect(result.witness == nil)
+    }
+
     @Test("Either order of two overlapping pushes is accepted")
     func eitherOrderOfConcurrentPushesIsAccepted() {
         // Two lanes each push one value. The stack ends up in whichever order the run happened to pick; both are valid, and the checker must accept the one that matches the observed final state. This is the case a fixed-order oracle gets wrong roughly half the time.

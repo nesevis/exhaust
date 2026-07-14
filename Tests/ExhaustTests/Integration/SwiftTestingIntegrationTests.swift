@@ -1,4 +1,5 @@
 import Exhaust
+import Foundation
 import Testing
 
 struct SwiftTestingIntegrationTests {
@@ -51,6 +52,21 @@ struct SwiftTestingIntegrationTests {
             #expect(value <= 5)
         }
         #expect(result != nil, "Should find a counterexample")
+    }
+
+    @Test("Issue.record arguments are evaluated during silent detection")
+    func issueRecordArgumentsAreEvaluatedDuringSilentDetection() {
+        let counter = DetectionEvaluationCounter()
+        let result = #exhaust(
+            #gen(.just(0)),
+            .suppress(.all),
+            .budget(.custom(screening: 0, sampling: 1))
+        ) { _ in
+            Issue.record("detection evaluation \(counter.increment())")
+        }
+
+        #expect(result == 0)
+        #expect(counter.value > 0)
     }
 
     @Test("void property with thrown error") func voidPropertyWithThrownError() {
@@ -261,6 +277,39 @@ struct SwiftTestingIntegrationTests {
         #expect(result != nil, "Regression seed should find a counterexample")
     }
 
+    @Test("Trait regression seeds apply to Bool properties", .exhaust(.regressions("1A")))
+    func traitRegressionSeedsApplyToBoolProperties() {
+        var result: Int?
+        withKnownIssue {
+            result = #exhaust(
+                #gen(.int(in: 0 ... 100)),
+                .budget(.custom(screening: 0, sampling: 0)),
+                .suppress(.all)
+            ) { _ in
+                false
+            }
+        }
+
+        #expect(result != nil)
+    }
+
+    @Test("Trait regression replay still delivers onReport", .exhaust(.regressions("1A")))
+    func traitRegressionReplayStillDeliversOnReport() {
+        var capturedReport: ExhaustReport?
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .suppress(.all),
+            .onReport { report in
+                capturedReport = report
+            }
+        ) { _ in
+            #expect(Bool(false))
+        }
+
+        #expect(result != nil)
+        #expect(capturedReport != nil)
+    }
+
     @Test("Trait with passing regression seed", .exhaust(.budget(.standard), .regressions("0")))
     func traitWithPassingRegressionSeed() {
         // Seed "0" should produce a value that passes value >= 0 on 0...100.
@@ -273,6 +322,23 @@ struct SwiftTestingIntegrationTests {
             #expect(value >= 0)
         }
         #expect(result == nil, "All values in 0...100 should pass")
+    }
+}
+
+/// Counts evaluation of expressions embedded in rewritten detection assertions.
+private final class DetectionEvaluationCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = 0
+
+    var value: Int {
+        lock.withLock { storage }
+    }
+
+    func increment() -> Int {
+        lock.withLock {
+            storage += 1
+            return storage
+        }
     }
 }
 

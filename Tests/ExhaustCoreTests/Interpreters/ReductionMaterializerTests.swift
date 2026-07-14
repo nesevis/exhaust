@@ -93,6 +93,31 @@ struct ReductionMaterializerTests {
         }
     }
 
+    @Test("Exact mode rejects branch metadata from a different pick site")
+    func exactRejectsMismatchedBranchMetadata() {
+        let generator = Gen.pick(choices: [
+            (weight: UInt64(1), generator: Gen.just("first")),
+            (weight: UInt64(1), generator: Gen.just("second")),
+        ])
+        let prefix: ChoiceSequence = [
+            .group(true),
+            .branch(.init(id: 1, branchCount: 3, fingerprint: UInt64.max)),
+            .just,
+            .group(false),
+        ]
+
+        let result = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        )
+
+        guard case .rejected = result else {
+            Issue.record("Expected .rejected for mismatched branch metadata")
+            return
+        }
+    }
+
     // MARK: - Exact mode: bind replay without cursor suspension
 
     @Test("Exact mode replays bound values from prefix without suspension")

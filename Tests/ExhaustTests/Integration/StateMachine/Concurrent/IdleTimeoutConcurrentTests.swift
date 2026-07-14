@@ -40,6 +40,30 @@ struct IdleTimeoutConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Cooperative timeout releases the suspended spec after its work resumes")
+    func cooperativeTimeoutReleasesSuspendedSpec() async throws {
+        let reference = WeakReference<SleepingSpec>()
+        let commands: [(ScheduleMarker, SleepingSpec.Command)] = [
+            (ScheduleMarker(rawValue: 1), .doSleep),
+        ]
+        let result = drainSchedule(
+            taggedCommands: commands,
+            specInit: {
+                let spec = SleepingSpec()
+                reference.value = spec
+                return spec
+            },
+            concurrencyLevel: 1,
+            recordTrace: false,
+            idleTimeoutMilliseconds: 10
+        )
+
+        #expect(result.timedOut)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(reference.value == nil)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Async preemptive idle timeout makes a stalling command pass and warns, without reducing")
     func asyncPreemptiveIdleTimeoutSurfacesStallingCommand() async throws {
         // The stalling command always exceeds the idle bound, so every probe times out. A timed-out probe counts as a pass, so discovery runs the full sampling budget, finds no counterexample, and returns nil. No candidate means no reduction: `reductionInvocations == 0` is the regression signal — a timeout misclassified as a race would have run the three-pass reducer, leaving `reductionInvocations > 0`. Because timeouts consume the whole budget, a warning fires.
@@ -142,6 +166,25 @@ struct IdleTimeoutConcurrentTests {
             )
         }
         #expect(silent.warnings.isEmpty)
+    }
+
+    @Test("Timeout warning percentage does not exceed one hundred")
+    func timeoutWarningPercentageIsBounded() throws {
+        let reporter = CapturingIssueReporter()
+        withIssueReporters([reporter]) {
+            warnIfTimeoutFractionHigh(
+                timedOutProbes: 11,
+                totalBudget: 10,
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+        }
+
+        let warning = try #require(reporter.warnings.first)
+        #expect(warning.contains("(100%)"))
+        #expect(warning.contains("110%") == false)
     }
 }
 
@@ -300,4 +343,8 @@ private final class CapturingIssueReporter: IssueReporter, @unchecked Sendable {
             }
         }
     }
+}
+
+private final class WeakReference<Value: AnyObject>: @unchecked Sendable {
+    weak var value: Value?
 }
