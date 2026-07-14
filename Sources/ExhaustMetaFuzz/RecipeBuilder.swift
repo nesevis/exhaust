@@ -166,8 +166,8 @@ private func buildCombinator(
             return Gen.classify(buildGenerator(from: inner), ("recipe", { _ in true }))
 
         case let .metamorphed(inner, transform):
-            // Mirrors ReflectiveGenerator.metamorph in the type-erased world: the value is [original, transformed copy], and the contramap backward hands reflection the untransformed original at position zero.
-            let metamorphicGen = AnyGenerator.impure(
+            // Mirrors the raw metamorphic operation used by ReflectiveGenerator.metamorph: the value is [original, transformed copy], and reflection uses the original at position zero while preserving the component array for its continuation.
+            return AnyGenerator.impure(
                 operation: .transform(
                     kind: .metamorphic(
                         transforms: [{ transform.forward($0) }],
@@ -176,15 +176,6 @@ private func buildCombinator(
                     inner: buildGenerator(from: inner)
                 ),
                 continuation: { .pure($0) }
-            )
-            return Gen.contramap(
-                { (result: Any) throws -> Any? in
-                    guard let copies = result as? [Any], let original = copies.first else {
-                        throw ReflectionError.contramapWasWrongType
-                    }
-                    return original
-                },
-                metamorphicGen
             )
 
         case let .unfolded(depthRange: depthRange):

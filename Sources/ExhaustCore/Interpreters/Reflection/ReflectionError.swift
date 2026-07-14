@@ -32,9 +32,6 @@ public enum ReflectionError: LocalizedError, Equatable {
     case forwardOnlyMap(inputType: String, outputType: String)
     /// Reflection failed because a forward-only `bind` was detected.
     case forwardOnlyBind(inputType: String, outputType: String)
-    /// Reflection failed because a metamorphic transform was detected.
-    /// Metamorph transforms are forward-only and cannot be reflected backward.
-    case forwardOnlyMetamorph
 
     public var errorDescription: String? {
         switch self {
@@ -60,8 +57,6 @@ public enum ReflectionError: LocalizedError, Equatable {
                 "Reflection failed: forward-only map (\(inputType) -> \(outputType)) detected."
             case let .forwardOnlyBind(inputType, outputType):
                 "Reflection failed: forward-only bind (\(inputType) -> \(outputType)) detected."
-            case .forwardOnlyMetamorph:
-                "Reflection failed: metamorphic transforms are forward-only and cannot be reflected."
         }
     }
 
@@ -89,8 +84,6 @@ public enum ReflectionError: LocalizedError, Equatable {
                 "Use .mapped(forward:backward:) to supply a backward function for bidirectional reflection."
             case .forwardOnlyBind:
                 "Use .bound(forward:backward:) to supply a backward function for bidirectional reflection."
-            case .forwardOnlyMetamorph:
-                "Metamorphic transforms cannot be reflected. If bidirectional operation is needed, use .mapped(forward:backward:) instead."
         }
     }
 }
