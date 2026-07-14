@@ -172,8 +172,8 @@ struct ExamineFirstPartyGeneratorsTests {
         #expect(report.passed)
     }
 
-    @Test func characterInRange() {
-        let report = #examine(.character(in: "a" ... "z"), .budget(50))
+    @Test func characterFromScalarRange() {
+        let report = #examine(.character(from: CharacterSet(charactersIn: "a" ... "z")), .budget(50))
         #expect(report.passed)
     }
 

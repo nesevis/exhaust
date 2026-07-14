@@ -6,13 +6,14 @@
 //
 
 import Exhaust
+import Foundation
 import Testing
 
 @Suite("Reducer Pass 5 Integration")
 struct ReducerReduceValuesIntegrationTests {
     @Test("Non-reflectable generator shrinks correctly")
     func nonReflectableGeneratorShrinksCorrectly() {
-        let stringGen = #gen(.character(in: "0" ... "9"))
+        let stringGen = #gen(.character(from: CharacterSet(charactersIn: "0" ... "9")))
             .array(length: 0 ... 20)
             // Reversible, but only accidentally ([Character] is more or less equal to String)
             .map { String($0) }

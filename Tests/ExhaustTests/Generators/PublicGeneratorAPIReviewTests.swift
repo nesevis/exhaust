@@ -22,35 +22,6 @@ struct PublicGeneratorAPIReviewTests {
         #expect(replayed == target)
     }
 
-    @Test("Character ranges preserve grapheme-cluster bounds")
-    func characterRangePreservesGraphemeClusterBounds() throws {
-        let lower: Character = "a"
-        let upper: Character = "a\u{0301}"
-        let range = lower ... upper
-        let generator = ReflectiveGenerator<Character>.character(in: range)
-        var interpreter = ValueInterpreter(
-            generator.gen,
-            seed: 42,
-            maxRuns: 200
-        )
-        var generated: [Character] = []
-        while let value = try interpreter.next() {
-            generated.append(value)
-        }
-
-        let tree = try #require(
-            try Interpreters.reflect(generator.gen, with: upper)
-        )
-        let replayed = try #require(
-            try Interpreters.replay(generator.gen, using: tree)
-        )
-
-        print()
-
-        #expect(generated.allSatisfy(range.contains))
-        #expect(replayed == upper)
-    }
-
     @Test("Fixed-prefix Data rejects reflection targets outside its domain")
     func fixedPrefixDataRejectsMismatchedPrefix() throws {
         let generator = ReflectiveGenerator<Data>.data(

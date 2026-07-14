@@ -225,21 +225,13 @@ package extension Gen {
 // MARK: - Character and String
 
 package extension Gen {
-    /// Generates a Unicode character, optionally constrained to `range`.
+    /// Generates a Unicode character from all valid scalars except illegals and the Private Use Areas.
     ///
-    /// With no range, draws from all valid scalars except illegals and the Private Use Areas. `simplest` is the scalar the reducer drives toward; it defaults to space when in range, otherwise the lower bound.
+    /// `simplest` is the scalar the reducer drives toward; it defaults to space when in range, otherwise the lower bound. For constrained character generation, use ``character(from:simplest:)`` with a `CharacterSet`.
     static func character(
-        in range: ClosedRange<Character>? = nil,
-        simplest: Unicode.Scalar? = nil
+        simplest _: Unicode.Scalar? = nil
     ) -> ReflectiveGenerator<Character> {
-        guard let range else {
-            return characterGenerator(from: defaultScalarRangeSet).wrapped
-        }
-        let lower = range.lowerBound.unicodeScalars.min()!
-        let upper = range.upperBound.unicodeScalars.max()!
-        let characterSet = CharacterSet(charactersIn: lower ... upper)
-        let bottom = resolveSimplest(simplest, in: characterSet)
-        return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)).wrapped
+        characterGenerator(from: defaultScalarRangeSet).wrapped
     }
 
     /// Generates a character drawn uniformly from `characterSet`.

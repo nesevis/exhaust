@@ -7,20 +7,15 @@ import ExhaustCore
 import Foundation
 
 public extension ReflectiveGenerator {
-    /// Generates a random Unicode character, optionally within the given range.
+    /// Generates a random Unicode character from all valid Unicode scalars except illegal characters and Private Use Areas.
     ///
-    /// When no range is specified, characters are drawn from all valid Unicode scalars except illegal characters and Private Use Areas. When a range is specified, only scalars within that range are used.
+    /// For characters within a specific range, use ``character(from:simplest:)`` with a `CharacterSet`:
     ///
     /// ```swift
-    /// let gen = #gen(.character(in: "a"..."z"))
+    /// let gen = #gen(.character(from: CharacterSet(charactersIn: "a"..."z")))
     /// ```
-    ///
-    /// - Parameter simplest: The character that the reducer substitutes for any character not essential to the property failure. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Defaults to space (U+0020) if the range contains it, otherwise the range's lower bound. Must be within the range.
-    static func character(
-        in range: ClosedRange<Character>? = nil,
-        simplest: Unicode.Scalar? = nil
-    ) -> ReflectiveGenerator<Character> {
-        Gen.character(in: range, simplest: simplest)
+    static func character() -> ReflectiveGenerator<Character> {
+        Gen.character()
     }
 
     /// Generates a random Unicode string with size-scaled or fixed length.

@@ -83,9 +83,9 @@ struct FoundationGeneratorTests {
 
     // MARK: - Character and String
 
-    @Test("character(in:) draws from the requested range")
-    func characterInRange() throws {
-        let gen = Gen.character(in: "a" ... "z").gen
+    @Test("character(from:) draws from the requested character set")
+    func characterFromRange() throws {
+        let gen = Gen.character(from: CharacterSet(charactersIn: "a" ... "z")).gen
         var iterator = ValueInterpreter(gen, seed: 42)
 
         for _ in 0 ..< 20 {
