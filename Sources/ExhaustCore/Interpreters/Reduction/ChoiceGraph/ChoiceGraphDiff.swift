@@ -3,17 +3,17 @@
 //  Exhaust
 //
 
-/// Describes the structural difference between two successive ``ChoiceGraph`` instances by comparing their ``ChoicePath``-identified nodes.
+/// Describes the structural difference between two successive ``ChoiceGraph`` instances by comparing their structural addresses.
 ///
-/// Produced by ``diff(old:new:)`` after a graph rebuild. Consumers use this to decide which encoder state to preserve (unchanged nodes), which to discard (removed nodes), and which regions need fresh scope enumeration (added nodes).
+/// Produced by ``diff(old:new:)`` after a graph rebuild. A matching path establishes that both graphs contain the same position, not that the position has the same logical occupant. Consumers that preserve state must apply any additional value or context guards that state requires.
 package struct ChoiceGraphDiff {
-    /// Nodes present in both graphs with the same ``ChoicePath``. The value maps old node ID to new node ID.
+    /// Paths present in both graphs. Each value maps the node at that position in the old graph to the node at that position in the new graph.
     package let preserved: [ChoicePath: (oldNodeID: Int, newNodeID: Int)]
 
-    /// ``ChoicePath``s present in the new graph but not in the old. These are structurally new nodes that need fresh encoder passes.
+    /// Structural addresses present in the new graph but not in the old. These positions need fresh encoder passes.
     package let added: Set<ChoicePath>
 
-    /// ``ChoicePath``s present in the old graph but not in the new. Encoder state keyed to these paths can be discarded.
+    /// Structural addresses present in the old graph but not in the new. Encoder state keyed to these positions can be discarded.
     package let removed: Set<ChoicePath>
 
     /// Whether the graph structure is identical — no added or removed paths, and all preserved nodes kept their node IDs.
@@ -23,7 +23,7 @@ package struct ChoiceGraphDiff {
         added.isEmpty && removed.isEmpty && preserved.allSatisfy { $0.value.oldNodeID == $0.value.newNodeID }
     }
 
-    /// Computes the structural diff between two graphs by matching nodes on ``ChoicePath``.
+    /// Computes the structural diff between two graphs by matching structural addresses.
     ///
     /// Only active nodes (non-nil ``ChoiceGraphNode/positionRange``) are compared — inactive branches are excluded because they don't participate in reduction.
     package static func diff(old: ChoiceGraph, new: ChoiceGraph) -> ChoiceGraphDiff {

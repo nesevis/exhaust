@@ -27,7 +27,7 @@ package enum ChoicePathStep: Equatable, Hashable, Sendable {
 
 /// A structural address from a ``ChoiceTree`` root to any node in the tree.
 ///
-/// Survives graph rebuilds as long as the tree shape above the addressed node does not change. Used to carry convergence records, warm starts, and other per-node state across rebuilds without relying on unstable sequential node IDs.
+/// The same path addresses the same position while the shape above it remains unchanged, but it does not identify the position's occupant across tree versions. For example, deleting a sequence element moves later elements into earlier paths.
 ///
-/// Two nodes in successive graphs with the same ``ChoicePath`` are the same logical node — their encoder state can be transferred directly.
+/// Cross-rebuild consumers use the path as the first component of a continuity check instead of relying on unstable node IDs. Each state category must add the guards its semantics require. Convergence transfer also checks the type tag and current bit pattern, except when the scheduler knows that an accepted value change made the old graph value stale without shifting the path.
 package typealias ChoicePath = [ChoicePathStep]

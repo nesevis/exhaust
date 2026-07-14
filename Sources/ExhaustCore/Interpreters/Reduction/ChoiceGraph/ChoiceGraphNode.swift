@@ -9,7 +9,7 @@
 ///
 /// Inactive (unselected) branches carry a nil ``positionRange`` and do not address live entries in the ``ChoiceSequence``. Encoders must skip these nodes. Only nodes with a non-nil position range correspond to mutable sequence positions.
 package struct ChoiceGraphNode {
-    /// Assigned sequentially during graph construction. Unstable across rebuilds — the same logical node gets a different ID after any structural change.
+    /// Assigned sequentially during graph construction. Unstable across rebuilds—a corresponding structural position can receive a different ID after any structural change.
     package let id: Int
 
     /// Determines which encoder passes may target this node. Value encoders target chooseBits leaves, structural encoders target pick, sequence, and bind nodes.
@@ -24,7 +24,7 @@ package struct ChoiceGraphNode {
     /// Nil only for the root. Used by scope queries to find enclosing bind and pick contexts for dependency analysis.
     package let parent: Int?
 
-    /// Structural address from the tree root to this node. Stable across rebuilds as long as the tree shape above this node does not change. Two nodes in successive graphs with the same ``ChoicePath`` are the same logical node.
+    /// Structural address from the tree root to this node. Equal paths address equal positions, but structural edits can move a different choice into an existing path. Cross-rebuild state transfer must apply guards appropriate to the transferred state.
     package let choicePath: ChoicePath
 
     /// Pre-computed scope properties derivable during the tree walk. Consumed by scope query files to classify nodes without re-deriving the information via full-graph traversals.
