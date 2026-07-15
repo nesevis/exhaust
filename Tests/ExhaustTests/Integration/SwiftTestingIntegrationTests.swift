@@ -208,15 +208,18 @@ struct SwiftTestingIntegrationTests {
     }
 
     @Test("screening replay tests exactly one row")
-    func screeningReplayTestsOneRow() {
+    func screeningReplayTestsOneRow() throws {
         let generator = #gen(.int(in: 0 ... 2), .int(in: 0 ... 2))
-        var invocations = 0
+        var capturedReport: ExhaustReport?
         #exhaust(generator, .replay("U3"), .suppress(.issueReporting), .onReport { report in
-            invocations = report.screeningInvocations
+            capturedReport = report
         }) { _ in
             true
         }
-        #expect(invocations == 1)
+        let report = try #require(capturedReport)
+        #expect(report.screeningRows == 1)
+        #expect(report.screeningInvocations == 1)
+        #expect(report.screeningRejectedRows == 0)
     }
 
     @Test("replay seed invalid string returns nil") func replaySeedInvalidStringReturnsNil() {
@@ -296,10 +299,12 @@ struct SwiftTestingIntegrationTests {
     @Test("Trait regression replay still delivers onReport", .exhaust(.regressions("1A")))
     func traitRegressionReplayStillDeliversOnReport() {
         var capturedReport: ExhaustReport?
+        var reportDeliveryCount = 0
         let result = #exhaust(
             #gen(.int(in: 0 ... 100)),
             .suppress(.all),
             .onReport { report in
+                reportDeliveryCount += 1
                 capturedReport = report
             }
         ) { _ in
@@ -308,6 +313,7 @@ struct SwiftTestingIntegrationTests {
 
         #expect(result != nil)
         #expect(capturedReport != nil)
+        #expect(reportDeliveryCount == 1)
     }
 
     @Test("Trait with passing regression seed", .exhaust(.budget(.standard), .regressions("0")))

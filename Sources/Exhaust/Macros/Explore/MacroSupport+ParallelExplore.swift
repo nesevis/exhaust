@@ -11,10 +11,10 @@ extension __ExhaustRuntime {
         var targetDirection: Int
         var hits: [Int]
         var coOccurrence: CoOccurrenceMatrix
-        var tuningPassSamples: Int = 0
-        var tuningPassPasses: Int = 0
-        var tuningPassFailures: Int = 0
-        var propertyInvocations: Int = 0
+        var directedSamplingSamples: Int = 0
+        var directedSamplingPasses: Int = 0
+        var directedSamplingFailures: Int = 0
+        var invocations = ClassificationExploreInvocationCounts()
         var failure: (value: Output, tree: ChoiceTree, matchingDirections: [Int])?
         var error: (any Error)?
 
@@ -67,7 +67,7 @@ extension __ExhaustRuntime {
         // Merge per-lane results.
         var mergedHits = Array(repeating: 0, count: directionCount)
         var mergedCoOccurrence = CoOccurrenceMatrix(directionCount: directionCount)
-        var mergedPropertyInvocations = 0
+        var mergedInvocations = ClassificationExploreInvocationCounts()
         var perDirectionSamples = Array(repeating: 0, count: directionCount)
         var perDirectionPasses = Array(repeating: 0, count: directionCount)
         var perDirectionFailures = Array(repeating: 0, count: directionCount)
@@ -79,11 +79,11 @@ extension __ExhaustRuntime {
                 mergedHits[index] += laneResult.hits[index]
             }
             mergedCoOccurrence.merge(laneResult.coOccurrence)
-            mergedPropertyInvocations += laneResult.propertyInvocations
+            mergedInvocations.merge(laneResult.invocations)
             let target = laneResult.targetDirection
-            perDirectionSamples[target] = laneResult.tuningPassSamples
-            perDirectionPasses[target] = laneResult.tuningPassPasses
-            perDirectionFailures[target] = laneResult.tuningPassFailures
+            perDirectionSamples[target] = laneResult.directedSamplingSamples
+            perDirectionPasses[target] = laneResult.directedSamplingPasses
+            perDirectionFailures[target] = laneResult.directedSamplingFailures
             if firstFailure == nil, let failure = laneResult.failure {
                 firstFailure = failure
             }
@@ -104,13 +104,13 @@ extension __ExhaustRuntime {
             coverageEntries.append(.init(
                 name: direction.name,
                 hits: hits,
-                tuningPassSamples: perDirectionSamples[index],
-                tuningPassPasses: perDirectionPasses[index],
-                tuningPassFailures: perDirectionFailures[index],
+                directedSamplingSamples: perDirectionSamples[index],
+                directedSamplingPasses: perDirectionPasses[index],
+                directedSamplingFailures: perDirectionFailures[index],
                 warmupHits: 0,
                 isCovered: hits >= hitsPerDirection,
                 warmupRuleOfThreeBound: nil,
-                tuningPassRuleOfThreeBound: perDirectionPasses[index] > 0 ? 3.0 / Double(perDirectionPasses[index]) : nil
+                directedSamplingRuleOfThreeBound: perDirectionPasses[index] > 0 ? 3.0 / Double(perDirectionPasses[index]) : nil
             ))
         }
 
@@ -124,6 +124,7 @@ extension __ExhaustRuntime {
             )
 
             let reducedDirections = classifyExploreValue(reducedResult.counterexample, directions: directions)
+            mergedInvocations.reduction += reducedResult.reductionInvocations
 
             return ClassificationExploreResult(
                 counterexample: reducedResult.counterexample,
@@ -132,7 +133,7 @@ extension __ExhaustRuntime {
                 counterexampleDirections: reducedDirections,
                 directionCoverage: coverageEntries,
                 coOccurrence: mergedCoOccurrence,
-                propertyInvocations: mergedPropertyInvocations,
+                invocations: mergedInvocations,
                 warmupSamples: nil,
                 totalMilliseconds: elapsed,
                 termination: .propertyFailed,
@@ -149,7 +150,7 @@ extension __ExhaustRuntime {
             counterexampleDirections: [],
             directionCoverage: coverageEntries,
             coOccurrence: mergedCoOccurrence,
-            propertyInvocations: mergedPropertyInvocations,
+            invocations: mergedInvocations,
             warmupSamples: nil,
             totalMilliseconds: elapsed,
             termination: allCovered ? .coverageAchieved : .budgetExhausted,
@@ -210,8 +211,8 @@ extension __ExhaustRuntime {
                 break
             }
 
-            result.propertyInvocations += 1
-            result.tuningPassSamples += 1
+            result.invocations.directedSampling += 1
+            result.directedSamplingSamples += 1
 
             let matching = classifyExploreValue(value, directions: directions)
             result.coOccurrence.recordSample(matchingDirections: matching)
@@ -223,9 +224,9 @@ extension __ExhaustRuntime {
             let propertyHolds = property(value)
             if matching.contains(targetDirection) {
                 if propertyHolds {
-                    result.tuningPassPasses += 1
+                    result.directedSamplingPasses += 1
                 } else {
-                    result.tuningPassFailures += 1
+                    result.directedSamplingFailures += 1
                 }
             }
 
@@ -265,7 +266,12 @@ extension __ExhaustRuntime {
         property: @escaping (Output) -> Bool,
         directions: [(name: String, predicate: (Output) -> Bool)],
         failure: (value: Output, tree: ChoiceTree, matchingDirections: [Int])
-    ) -> (counterexample: Output, original: Output, reducedSequence: ChoiceSequence?) {
+    ) -> (
+        counterexample: Output,
+        original: Output,
+        reducedSequence: ChoiceSequence?,
+        reductionInvocations: Int
+    ) {
         let fullTree = Materializer.materialize(
             gen,
             prefix: ChoiceSequence.flatten(failure.tree),
@@ -281,12 +287,14 @@ extension __ExhaustRuntime {
         }
 
         guard let reduceTree = reductionTree else {
-            return (failure.value, failure.value, nil)
+            return (failure.value, failure.value, nil, 0)
         }
 
+        var reductionInvocations = 0
         let reductionPredicate: (Output) -> Bool = failure.matchingDirections.isEmpty
             ? { output in
-                property(output) == false
+                reductionInvocations += 1
+                return property(output) == false
             }
             : { output in
                 for directionIndex in failure.matchingDirections
@@ -294,6 +302,7 @@ extension __ExhaustRuntime {
                 {
                     return false
                 }
+                reductionInvocations += 1
                 return property(output) == false
             }
 
@@ -306,7 +315,7 @@ extension __ExhaustRuntime {
                 property: { reductionPredicate($0) == false }
             )
             if case let .reduced(reducedSequence, _, reducedValue) = outcome {
-                return (reducedValue, failure.value, reducedSequence)
+                return (reducedValue, failure.value, reducedSequence, reductionInvocations)
             }
         } catch {
             ExhaustLog.error(
@@ -316,6 +325,6 @@ extension __ExhaustRuntime {
             )
         }
 
-        return (failure.value, failure.value, nil)
+        return (failure.value, failure.value, nil, reductionInvocations)
     }
 }

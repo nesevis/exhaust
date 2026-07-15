@@ -19,8 +19,13 @@ public struct ExploreReport<Output> {
     /// The direction membership set of the counterexample, if a failure was found. Each index corresponds to a direction in `directionCoverage`.
     public var counterexampleDirections: [Int]
 
-    /// Total property invocations across warm-up and all tuning passes.
-    public var propertyInvocations: Int
+    /// Reports property invocations separated by exploration phase.
+    public var invocations: ExploreInvocationCounts
+
+    /// Returns the total number of property invocations across all phases.
+    public var propertyInvocations: Int {
+        invocations.total
+    }
 
     /// Statistics from the untuned warm-up pass, or `nil` when no warm-up ran (the parallel path skips it, as does a run that exits before sampling).
     ///
@@ -34,6 +39,29 @@ public struct ExploreReport<Output> {
     public var termination: ExploreTermination
 }
 
+/// Counts property invocations in each phase of an `#explore` run.
+public struct ExploreInvocationCounts: Sendable, Equatable {
+    /// Counts property invocations during untuned warm-up sampling.
+    public var warmup: Int
+
+    /// Counts property invocations while replaying configured regression seeds against tuned generators.
+    public var regression: Int
+
+    /// Counts property invocations while sampling from direction-tuned generators.
+    public var directedSampling: Int
+
+    /// Counts property invocations made by the reducer while testing candidate counterexamples.
+    public var reduction: Int
+
+    /// Counts final source-located property invocations used to report assertion-closure failures.
+    public var diagnostic: Int
+
+    /// Returns the total number of property invocations across all phases.
+    public var total: Int {
+        warmup + regression + directedSampling + reduction + diagnostic
+    }
+}
+
 /// Statistics from the untuned warm-up pass of a sequential `#explore` run.
 public struct WarmupStats: Sendable {
     /// Total samples drawn during the warm-up pass. The samples are identically distributed, so per-direction rates computed against this denominator are unbiased.
@@ -44,9 +72,9 @@ public struct WarmupStats: Sendable {
 public enum ExploreTermination: Sendable {
     /// The property failed on a sample. The counterexample is available in ``ExploreReport/result``.
     case propertyFailed
-    /// Every direction accumulated at least K matching samples.
+    /// Every direction received the required number of matching samples.
     case coverageAchieved
-    /// The shared attempt pool reached zero before all directions filled their K-hit quotas.
+    /// The shared directed sampling pool reached zero before every direction received the required number of matching samples.
     case budgetExhausted
 }
 
@@ -58,14 +86,14 @@ public struct DirectionCoverage: Sendable {
     /// Total samples that matched this direction's predicate across all passes.
     public var hits: Int
 
-    /// Total samples drawn during this direction's own tuning pass. Zero if the direction was covered during warm-up or incidentally.
-    public var tuningPassSamples: Int
+    /// Counts samples drawn from this direction's tuned generator. Zero if the direction was covered during warm-up or incidentally.
+    public var directedSamplingSamples: Int
 
-    /// Samples from this direction's tuning pass where the property held.
-    public var tuningPassPasses: Int
+    /// Counts matching samples from this direction's tuned generator where the property held.
+    public var directedSamplingPasses: Int
 
-    /// Samples from this direction's tuning pass where the property failed.
-    public var tuningPassFailures: Int
+    /// Counts matching samples from this direction's tuned generator where the property failed.
+    public var directedSamplingFailures: Int
 
     /// Whether this direction met its quota, fell short, or could not be tuned at all.
     public var outcome: DirectionOutcome
@@ -73,22 +101,22 @@ public struct DirectionCoverage: Sendable {
     /// This direction's warm-up results, or `nil` when no warm-up ran.
     public var warmup: DirectionWarmup?
 
-    /// Whether this direction achieved its K-hit quota.
+    /// Whether this direction received the required number of matching samples.
     public var isCovered: Bool {
         outcome == .covered
     }
 
-    /// Rule-of-three upper bound on the in-direction failure rate from this direction's own tuning pass. Nil when the tuning pass produced no passing samples. Describes the failure rate under the CGS-biased distribution, not the generator's natural distribution.
-    public var tuningPassRuleOfThreeBound: Double? {
-        tuningPassPasses > 0 ? 3.0 / Double(tuningPassPasses) : nil
+    /// Returns the rule-of-three upper bound on the in-direction failure rate from this direction's tuned generator. Returns `nil` when directed sampling produced no matching, passing samples. Describes the failure rate under the CGS-biased distribution, not the generator's natural distribution.
+    public var directedSamplingRuleOfThreeBound: Double? {
+        directedSamplingPasses > 0 ? 3.0 / Double(directedSamplingPasses) : nil
     }
 }
 
 /// The outcome of a single direction's coverage attempt.
 public enum DirectionOutcome: Sendable, Equatable {
-    /// The direction accumulated its K-hit quota.
+    /// The direction received the required number of matching samples.
     case covered
-    /// Sampling ran but the quota was not met before the attempt budget ran out. The direction may be rare or unreachable under the generator.
+    /// Sampling ran but the required number of matching samples was not reached before the directed sampling budget ran out. The direction may be rare or unreachable under the generator.
     case uncovered
     /// CGS tuning for this direction failed before any tuned sampling could run. The direction may still show incidental hits from other passes. Only produced by the sequential path; the parallel path surfaces tuning failures as thrown errors.
     case tuningFailed(String)

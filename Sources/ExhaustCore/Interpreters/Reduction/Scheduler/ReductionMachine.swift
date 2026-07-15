@@ -459,12 +459,6 @@ package struct ReductionMachine: ProbeSessionState {
         return monotonicNanoseconds() - startNanoseconds >= deadlineNanoseconds
     }
 
-    mutating func countMaterialization() {
-        if collectStats {
-            stats.totalMaterializations += 1
-        }
-    }
-
     func allValuesConverged() -> Bool {
         ChoiceGraphScheduler.allValuesConverged(in: sequence, graph: graph)
     }

@@ -127,6 +127,10 @@ The `.onReport` setting delivers an `ExhaustReport` with timing and invocation d
 }
 ```
 
+Reduction statistics separate proposals rejected before the property ran from values for which the property passed or failed. `reductionProbes` is the complete proposal count, including structural relax proposals that do not belong to an encoder. `reductionProbesAccepted` is a separate decision made after the property fails, since a still-failing proposal can be rejected by a later materialisation or ordering check.
+
+`totalMaterializations` counts entries into the materialiser. It can exceed `reductionProbes` because Exhaust first materialises a value for the property, then materialises a still-failing value again to build its full choice tree.
+
 ## Test observability
 
 The `.collectOpenPBTStats` setting records per-example data in the [OpenPBTStats](https://dl.acm.org/doi/fullHtml/10.1145/3654777.3676407) JSON Lines format and attaches it to the test run. You can inspect the attached `.jsonl` file with the [Tyche](https://tyche-pbt.github.io/tyche-extension/) data inspector to visualise input distributions, sample breakdowns, and individual test examples.

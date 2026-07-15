@@ -1,10 +1,10 @@
 import Testing
 @testable import ExhaustCore
 
-@Suite("Screening review invariants")
-struct ScreeningReviewInvariantTests {
-    @Test("Materialization rejections do not prevent exhaustive completion")
-    func materializationRejectionsDoNotPreventExhaustiveCompletion() {
+@Suite("ScreeningRunner accounting")
+struct ScreeningRunnerAccountingTests {
+    @Test("Rejected rows are counted separately and prevent exhaustive completion")
+    func rejectedRowsAreCountedSeparatelyAndPreventExhaustiveCompletion() {
         let unfilteredGenerator = Gen.zip(
             Gen.choose(in: UInt64(0) ... 1),
             Gen.choose(in: UInt64(0) ... 1)
@@ -33,12 +33,15 @@ struct ScreeningReviewInvariantTests {
             }
         )
 
-        #expect(propertyInvocationCount == 2)
-        guard case let .exhaustive(iterations) = result else {
-            Issue.record("Expected every modelled row to complete exhaustive screening")
+        guard case let .partial(summary, _, _, _, _, _) = result else {
+            Issue.record("Expected rejected rows to leave screening incomplete")
             return
         }
-        #expect(iterations == 4)
+        #expect(summary.rowAttempts == 4)
+        #expect(summary.propertyInvocations == 2)
+        #expect(summary.rejectedRows == 2)
+        #expect(summary.rowAttempts == summary.propertyInvocations + summary.rejectedRows)
+        #expect(propertyInvocationCount == summary.propertyInvocations)
     }
 
     @Test("Covering array applies its documented per-parameter domain cap")

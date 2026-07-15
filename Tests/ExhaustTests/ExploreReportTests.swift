@@ -136,13 +136,20 @@ struct ExploreReportTests {
             directionCoverage: [],
             coOccurrence: CoOccurrenceMatrix(directionCount: 0),
             counterexampleDirections: [],
-            propertyInvocations: 100,
+            invocations: ExploreInvocationCounts(
+                warmup: 100,
+                regression: 0,
+                directedSampling: 0,
+                reduction: 0,
+                diagnostic: 0
+            ),
             warmup: WarmupStats(samples: 100),
             totalMilliseconds: 50.0,
             termination: .coverageAchieved
         )
         #expect(report.result == nil)
         #expect(report.termination == .coverageAchieved)
+        #expect(report.propertyInvocations == 100)
     }
 
     @Test("Report with failure has counterexample and direction membership")
@@ -154,16 +161,22 @@ struct ExploreReportTests {
                 DirectionCoverage(
                     name: "positive",
                     hits: 30,
-                    tuningPassSamples: 50,
-                    tuningPassPasses: 49,
-                    tuningPassFailures: 1,
+                    directedSamplingSamples: 50,
+                    directedSamplingPasses: 49,
+                    directedSamplingFailures: 1,
                     outcome: .covered,
                     warmup: DirectionWarmup(hits: 10)
                 ),
             ],
             coOccurrence: CoOccurrenceMatrix(directionCount: 1),
             counterexampleDirections: [0],
-            propertyInvocations: 50,
+            invocations: ExploreInvocationCounts(
+                warmup: 1,
+                regression: 2,
+                directedSampling: 3,
+                reduction: 4,
+                diagnostic: 5
+            ),
             warmup: WarmupStats(samples: 100),
             totalMilliseconds: 25.0,
             termination: .propertyFailed
@@ -171,6 +184,7 @@ struct ExploreReportTests {
         #expect(report.result == 42)
         #expect(report.counterexampleDirections == [0])
         #expect(report.termination == .propertyFailed)
+        #expect(report.propertyInvocations == 15)
     }
 
     @Test("isCovered reflects the outcome case")
@@ -186,22 +200,22 @@ struct ExploreReportTests {
         #expect(DirectionWarmup(hits: 10).ruleOfThreeBound == 0.3)
     }
 
-    @Test("Tuning-pass rule-of-three bound derives from passing samples")
-    func tuningBoundDerivesFromPasses() {
-        #expect(makeCoverage(outcome: .covered, tuningPassPasses: 0).tuningPassRuleOfThreeBound == nil)
-        #expect(makeCoverage(outcome: .covered, tuningPassPasses: 30).tuningPassRuleOfThreeBound == 0.1)
+    @Test("Directed sampling rule-of-three bound derives from passing samples")
+    func directedSamplingBoundDerivesFromPasses() {
+        #expect(makeCoverage(outcome: .covered, directedSamplingPasses: 0).directedSamplingRuleOfThreeBound == nil)
+        #expect(makeCoverage(outcome: .covered, directedSamplingPasses: 30).directedSamplingRuleOfThreeBound == 0.1)
     }
 }
 
 // MARK: - Helpers
 
-private func makeCoverage(outcome: DirectionOutcome, tuningPassPasses: Int = 0) -> DirectionCoverage {
+private func makeCoverage(outcome: DirectionOutcome, directedSamplingPasses: Int = 0) -> DirectionCoverage {
     DirectionCoverage(
         name: "direction",
         hits: 0,
-        tuningPassSamples: 0,
-        tuningPassPasses: tuningPassPasses,
-        tuningPassFailures: 0,
+        directedSamplingSamples: 0,
+        directedSamplingPasses: directedSamplingPasses,
+        directedSamplingFailures: 0,
         outcome: outcome,
         warmup: nil
     )

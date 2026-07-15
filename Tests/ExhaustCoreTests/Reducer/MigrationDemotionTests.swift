@@ -137,10 +137,13 @@ private func passReport(encoderName: EncoderName, transformation: GraphTransform
         transformation: transformation,
         boundValueFingerprint: nil,
         composedUpstreamLifts: nil,
-        probeCount: 1,
-        acceptCount: accepted ? 1 : 0,
-        cacheHitCount: 0,
-        decoderRejectCount: accepted ? 0 : 1,
+        counts: ReductionProbeCounts(
+            emitted: 1,
+            accepted: accepted ? 1 : 0,
+            propertyPassed: accepted ? 0 : 1,
+            propertyFailed: accepted ? 1 : 0,
+            materializationAttempts: accepted ? 2 : 1
+        ),
         anyAccepted: accepted,
         anyRequiresRebuild: false,
         latestTreeIsStripped: false,

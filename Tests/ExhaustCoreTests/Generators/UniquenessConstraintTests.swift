@@ -199,6 +199,27 @@ struct UniquenessConstraintTests {
 
         #expect(values == [1, 1, 1])
     }
+
+    @Test("CGS interpreter treats choice-sequence uniqueness as tuning-transparent")
+    func choiceGradientSamplingTreatsChoiceSequenceUniquenessAsTransparent() throws {
+        let generator = ReflectiveGenerator(
+            Gen.just(NonHashableValue(value: 42))
+        ).unique().gen
+        var interpreter = OnlineCGSInterpreter(
+            generator,
+            predicate: { _ in true },
+            sampleCount: 2,
+            seed: 42,
+            maxRuns: 3
+        )
+
+        var values = [NonHashableValue]()
+        while let value = try interpreter.next() {
+            values.append(value)
+        }
+
+        #expect(values == Array(repeating: NonHashableValue(value: 42), count: 3))
+    }
 }
 
 // MARK: - Helpers
@@ -217,4 +238,8 @@ private func uniqueGen<Value>(_ gen: Generator<Value>, by keyExtractor: @escapin
         operation: .unique(gen: gen.erase(), fingerprint: 0, keyExtractor: { value in keyExtractor(value as! Value) }),
         continuation: { .pure($0 as! Value) }
     )
+}
+
+private struct NonHashableValue: Equatable {
+    let value: Int
 }

@@ -8,16 +8,10 @@ extension ReductionMachine {
     /// - Returns: True if any stale floors were found and cleared.
     mutating func confirmConvergence() throws -> Bool {
         var anyStale = false
-        var probeCount = 0
-        var acceptCount = 0
-        var cacheHitCount = 0
-        var decoderRejectCount = 0
+        var counts = ReductionProbeCounts()
         defer {
             if collectStats {
-                stats.encoderProbes[.convergenceConfirmation, default: 0] += probeCount
-                stats.encoderProbesAccepted[.convergenceConfirmation, default: 0] += acceptCount
-                stats.encoderProbesRejectedByCache[.convergenceConfirmation, default: 0] += cacheHitCount
-                stats.encoderProbesRejectedByDecoder[.convergenceConfirmation, default: 0] += decoderRejectCount
+                stats.record(counts, for: .convergenceConfirmation)
             }
         }
 
@@ -44,14 +38,11 @@ extension ReductionMachine {
                 at: range.lowerBound,
                 decoder: decoder,
                 baseHash: baseHash,
-                probeCount: &probeCount,
-                cacheHitCount: &cacheHitCount,
-                decoderRejectCount: &decoderRejectCount
+                counts: &counts
             )
 
             if result == .accepted {
                 anyStale = true
-                acceptCount += 1
                 clearConvergence(nodeID: nodeID)
                 ChoiceGraphScheduler.logReducer("stale_convergence_detected", isInstrumented: isInstrumented, metadata: [
                     "position": "\(range.lowerBound)", "old_floor": "\(origin.bound)", "probe_succeeded_at": "\(origin.bound - 1)",
@@ -62,13 +53,10 @@ extension ReductionMachine {
                     at: range.lowerBound,
                     decoder: decoder,
                     baseHash: baseHash,
-                    probeCount: &probeCount,
-                    cacheHitCount: &cacheHitCount,
-                    decoderRejectCount: &decoderRejectCount
+                    counts: &counts
                 )
                 if gapResult == .accepted {
                     anyStale = true
-                    acceptCount += 1
                     clearConvergence(nodeID: nodeID)
                     ChoiceGraphScheduler.logReducer("non_monotone_convergence_detected", isInstrumented: isInstrumented, metadata: [
                         "position": "\(range.lowerBound)", "floor": "\(origin.bound)", "gap_probe_succeeded_at": "\(origin.bound - 2)",
@@ -91,15 +79,13 @@ extension ReductionMachine {
         at sequenceIndex: Int,
         decoder: SequenceDecoder,
         baseHash: UInt64,
-        probeCount: inout Int,
-        cacheHitCount: inout Int,
-        decoderRejectCount: inout Int
+        counts: inout ReductionProbeCounts
     ) throws -> ProbeResult {
         var candidate = sequence
         candidate[sequenceIndex] = candidate[sequenceIndex].withBitPattern(value)
         guard candidate.shortLexPrecedes(sequence) else { return .skipped }
 
-        probeCount += 1
+        counts.recordEmission()
 
         let probeHash = ZobristHash.incrementalHash(
             baseHash: baseHash,
@@ -107,13 +93,13 @@ extension ReductionMachine {
             probe: candidate
         )
         if rejectCache.contains(probeHash) {
-            cacheHitCount += 1
+            counts.recordCacheRejection()
             return .skipped
         }
 
         var filterObservations: [UInt64: FilterObservation] = [:]
 
-        if try decoder.decodeAny(
+        let outcome = try decoder.decodeAny(
             candidate: candidate,
             gen: gen,
             tree: tree,
@@ -121,18 +107,13 @@ extension ReductionMachine {
             property: property,
             filterObservations: &filterObservations,
             precomputedHash: probeHash
-        ) != nil {
-            if collectStats {
-                stats.totalMaterializations += 1
-            }
+        )
+        counts.record(outcome)
+        if outcome.reduction != nil {
             return .accepted
         }
 
         rejectCache.insert(probeHash)
-        decoderRejectCount += 1
-        if collectStats {
-            stats.totalMaterializations += 1
-        }
         return .rejected
     }
 

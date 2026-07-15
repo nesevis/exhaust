@@ -139,4 +139,25 @@ struct ConcurrentFailureRenderingTests {
         #expect(output.contains("Reproduce:"))
         #expect(output.contains("Preemptive") == false)
     }
+
+    @Test("Multiline command descriptions remain inside their command entry")
+    func multilineCommandDescriptionsRemainInsideEntry() {
+        var lines: [String] = []
+        __ExhaustRuntime.renderCommandPartition(
+            [(ScheduleMarker(rawValue: 1), MultilineCommand())],
+            into: &lines
+        )
+
+        #expect(lines == [
+            "Lane A:",
+            "  1A. first line\n      second line",
+            "",
+        ])
+    }
+}
+
+private struct MultilineCommand: CustomStringConvertible {
+    var description: String {
+        "first line\nsecond line"
+    }
 }

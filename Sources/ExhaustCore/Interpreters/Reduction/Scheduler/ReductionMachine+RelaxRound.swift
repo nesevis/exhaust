@@ -47,20 +47,30 @@ extension ReductionMachine {
         let materializationBudget = tuning.relaxMaterializationBudget
         var perturbationAccepted = false
         var materializationsUsed = 0
+        var probeCounts = ReductionProbeCounts()
+        defer {
+            if collectStats {
+                stats.recordStructuralRelax(probeCounts)
+            }
+        }
         for candidate in candidates {
             guard materializationsUsed < materializationBudget else { break }
             guard deadlineCheck() == false else { break }
+            probeCounts.recordEmission()
             let decoder: SequenceDecoder = .exact(materializePicks: true)
             var filterObservations: [UInt64: FilterObservation] = [:]
 
-            if let result = try decoder.decodeAny(
+            let outcome = try decoder.decodeAny(
                 candidate: candidate,
                 gen: gen,
                 tree: tree,
                 originalSequence: sequence,
                 property: property,
                 filterObservations: &filterObservations
-            ) {
+            )
+            probeCounts.record(outcome)
+
+            if let result = outcome.reduction {
                 sequence = result.sequence
                 tree = result.tree
                 output = result.output
@@ -73,9 +83,6 @@ extension ReductionMachine {
             }
 
             materializationsUsed += 1
-            if collectStats {
-                stats.totalMaterializations += 1
-            }
         }
 
         guard perturbationAccepted else {

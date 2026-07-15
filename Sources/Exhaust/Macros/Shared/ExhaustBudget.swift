@@ -14,20 +14,20 @@
 /// | `.thorough` | 600 | 600 |
 /// | `.extensive` | 2000 | 2000 |
 ///
-/// Use `.standard` (the default) for development — sufficient for generators with fewer than 50 independent parameters. Use `.quick` when iteration speed matters more than screening depth. Use `.thorough` when the generator has high combinatorial complexity (many picks, nested sequences) and you want stronger screening guarantees. Use `.extensive` when counterexamples are rare or you want broad screening; expect roughly 10x the runtime of `.standard`.
+/// Use `.standard` (the default) for development. It is sufficient for generators with fewer than 50 independent parameters. Use `.quick` when iteration speed matters more than screening depth. Use `.thorough` when the generator has high combinatorial complexity (many picks, nested sequences) and you want stronger screening guarantees. Use `.extensive` when counterexamples are rare or you want broad screening; expect roughly 10x the runtime of `.standard`.
 ///
 /// Scale any preset with arithmetic: `.thorough * 3` produces a custom budget of 1800/1800, and `.standard / 2` produces 100/100.
 ///
 /// When used with `#explore`, the same presets map to per-direction budgets:
 ///
-/// | Preset | Hits per direction | Max attempts per direction |
+/// | Preset | Matching samples per direction | Maximum generated samples per direction |
 /// |---|---|---|
 /// | `.quick` | 10 | 100 |
 /// | `.standard` | 30 | 300 |
 /// | `.thorough` | 100 | 1000 |
 /// | `.extensive` | 300 | 3000 |
 ///
-/// For `.custom(screening:sampling:)`, the screening budget is reused as hits per direction, and `sampling` maps to max attempts per direction.
+/// For `.custom(screening:sampling:)`, the screening budget is reused as the required matching samples per direction, and `sampling` maps to maximum generated samples per direction. Warm-up, regression replay, reduction, and diagnostic invocations do not consume this directed sampling budget.
 public enum ExhaustBudget: Sendable {
     /// Faster than default. Use when iteration speed matters more than screening depth.
     case quick
@@ -73,7 +73,7 @@ public enum ExhaustBudget: Sendable {
         }
     }
 
-    /// The per-direction contribution to the shared attempt pool. Used by `#explore`.
+    /// The per-direction contribution to the shared directed sampling pool. Warm-up, regression replay, reduction, and diagnostic invocations do not consume this pool.
     public var maxAttemptsPerDirection: Int {
         switch self {
             case .quick: 100

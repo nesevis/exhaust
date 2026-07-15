@@ -425,7 +425,7 @@ extension Materializer {
         /// When `false`, pick sites skip non-selected branch materialization.
         /// Only `DeleteByBranchPromotionEncoder` needs full branch alternatives.
         var materializePicks: Bool = false
-        /// When `true`, tree construction sites return `.just` instead of real nodes. Used by the two-phase decoder: Phase 1 checks the property without allocating a tree; Phase 2 re-materialises with the real tree only on acceptance.
+        /// When `true`, tree construction sites return `.just` instead of real nodes. Used by the two-phase decoder: Phase 1 checks the property without allocating a tree; Phase 2 re-materialises with the real tree only after the property fails.
         var skipTree: Bool = false
         /// Accumulates per-coordinate resolution tier data for guided mode.
         /// `nil` for exact mode and pure-generate mode.

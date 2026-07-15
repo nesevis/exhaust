@@ -457,7 +457,7 @@ Instead, it uses *choice gradient sampling*: the generator is really a sequence 
 
 Each direction gets its own tuning pass and its own biased generator.
 
-At the default `.standard` budget, the property runs on 30 examples per direction, and the report tells you which directions got exercised and whether any of them failed. If "refund + partial" turns out to be infeasible under your generator, because some constraint in the generator rules it out, the sampler exhausts its tuning budget without getting close, and `#explore` tells you the direction was unreachable. You find the bug in your generator instead of getting a false silence.
+At the default `.standard` budget, Exhaust looks for 30 matching examples per direction, and the report tells you which directions got exercised and whether any of them failed. If "refund + partial" turns out to be infeasible under your generator, because some constraint in the generator rules it out, Exhaust uses the directed sampling budget without reaching the required matches, and `#explore` tells you the direction was unreachable. You find the bug in your generator instead of getting a false silence.
 
 The `#explore` skill is recognising the moment when your worry shifts from "does the property hold?" to "is the property even being tested in the cases I care about?" The first question is `#exhaust`'s job; the second is `#explore`'s. See <doc:DirectedExploration> for the full reference.
 
@@ -505,4 +505,3 @@ Specs on an `actor` use `.sequential` because actor isolation serialises all dis
 ```
 
 State machine testing has its own guide: <doc:StateMachineTesting>. If you find yourself trying to bend `#exhaust` into testing a collection of operations over time, or generating an array of actions and applying them one by one in a loop, reach for `@StateMachine` instead. That's what it's there for.
-

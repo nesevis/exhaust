@@ -255,10 +255,7 @@ extension ReductionMachine {
         }
 
         if collectStats {
-            stats.encoderProbes[report.encoderName, default: 0] += report.probeCount
-            stats.encoderProbesAccepted[report.encoderName, default: 0] += report.acceptCount
-            stats.encoderProbesRejectedByCache[report.encoderName, default: 0] += report.cacheHitCount
-            stats.encoderProbesRejectedByDecoder[report.encoderName, default: 0] += report.decoderRejectCount
+            stats.record(report.counts, for: report.encoderName)
         }
 
         if collectDiagnostics {

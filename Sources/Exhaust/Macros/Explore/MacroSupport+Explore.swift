@@ -55,7 +55,13 @@ public extension __ExhaustRuntime {
                             directionCoverage: [],
                             coOccurrence: CoOccurrenceMatrix(directionCount: 0),
                             counterexampleDirections: [],
-                            propertyInvocations: 0,
+                            invocations: ExploreInvocationCounts(
+                                warmup: 0,
+                                regression: 0,
+                                directedSampling: 0,
+                                reduction: 0,
+                                diagnostic: 0
+                            ),
                             warmup: nil,
                             totalMilliseconds: 0,
                             termination: .budgetExhausted
@@ -158,7 +164,13 @@ public extension __ExhaustRuntime {
                     directionCoverage: [],
                     coOccurrence: CoOccurrenceMatrix(directionCount: 0),
                     counterexampleDirections: [],
-                    propertyInvocations: 0,
+                    invocations: ExploreInvocationCounts(
+                        warmup: 0,
+                        regression: 0,
+                        directedSampling: 0,
+                        reduction: 0,
+                        diagnostic: 0
+                    ),
                     warmup: nil,
                     totalMilliseconds: 0,
                     termination: .budgetExhausted
@@ -177,9 +189,9 @@ public extension __ExhaustRuntime {
                 return DirectionCoverage(
                     name: entry.name,
                     hits: entry.hits,
-                    tuningPassSamples: entry.tuningPassSamples,
-                    tuningPassPasses: entry.tuningPassPasses,
-                    tuningPassFailures: entry.tuningPassFailures,
+                    directedSamplingSamples: entry.directedSamplingSamples,
+                    directedSamplingPasses: entry.directedSamplingPasses,
+                    directedSamplingFailures: entry.directedSamplingFailures,
                     outcome: outcome,
                     warmup: warmupRan ? DirectionWarmup(hits: entry.warmupHits) : nil
                 )
@@ -190,6 +202,13 @@ public extension __ExhaustRuntime {
                 case .coverageAchieved: .coverageAchieved
                 case .budgetExhausted: .budgetExhausted
             }
+            let invocations = ExploreInvocationCounts(
+                warmup: result.invocations.warmup,
+                regression: result.invocations.regression,
+                directedSampling: result.invocations.directedSampling,
+                reduction: result.invocations.reduction,
+                diagnostic: 0
+            )
 
             if let counterexample = result.counterexample {
                 let matchedDirections = result.counterexampleDirections.map { index in
@@ -199,8 +218,8 @@ public extension __ExhaustRuntime {
                     counterexample: counterexample,
                     original: result.original,
                     seed: result.seed,
-                    propertyInvocations: result.propertyInvocations,
-                    totalBudget: directions.count * budget.maxAttemptsPerDirection,
+                    invocations: invocations,
+                    directedSamplingBudget: directions.count * budget.maxAttemptsPerDirection,
                     matchedDirections: matchedDirections,
                     reducedSequence: result.reducedSequence
                 )
@@ -236,7 +255,7 @@ public extension __ExhaustRuntime {
                 directionCoverage: directionCoverage,
                 coOccurrence: result.coOccurrence,
                 counterexampleDirections: result.counterexampleDirections,
-                propertyInvocations: result.propertyInvocations,
+                invocations: invocations,
                 warmup: result.warmupSamples.map { WarmupStats(samples: $0) },
                 totalMilliseconds: result.totalMilliseconds,
                 termination: termination
@@ -286,7 +305,7 @@ public extension __ExhaustRuntime {
             .map(\.name)
         if uncoveredNames.isEmpty == false {
             reportError(
-                "Exploration never reached \(uncoveredNames.count == 1 ? "direction" : "directions") \(uncoveredNames.map { "\"\($0)\"" }.joined(separator: ", ")) within the attempt budget. The generator cannot produce matching values, or the predicate never holds. Widen the generator, fix the predicate, or raise the budget.",
+                "Exploration never reached \(uncoveredNames.count == 1 ? "direction" : "directions") \(uncoveredNames.map { "\"\($0)\"" }.joined(separator: ", ")) within the directed sampling budget. The generator cannot produce matching values, or the predicate never holds. Widen the generator, fix the predicate, or raise the budget.",
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -342,7 +361,7 @@ public extension __ExhaustRuntime {
                 )
             }
 
-            guard let report = pipelineResult else {
+            guard var report = pipelineResult else {
                 return __explore(
                     refGen,
                     settings: settings,
@@ -362,11 +381,12 @@ public extension __ExhaustRuntime {
             }
             if let counterexample = report.result {
                 if suppressIssueReporting == false {
+                    report.invocations.diagnostic += 1
                     do {
                         try property(counterexample)
                     } catch {}
 
-                    let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: report.propertyInvocations).encoded
+                    let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: nil).encoded
                     reportError(
                         "Reproduce: .replay(\"\(encoded)\")",
                         fileID: fileID,
@@ -485,7 +505,7 @@ public extension __ExhaustRuntime {
                 )
             #endif
 
-            guard let report = pipelineResult else {
+            guard var report = pipelineResult else {
                 return __explore(
                     refGen,
                     settings: settings,
@@ -501,12 +521,13 @@ public extension __ExhaustRuntime {
             }
             if let counterexample = report.result {
                 if suppressIssueReporting == false {
+                    report.invocations.diagnostic += 1
                     let valueBox = UnsafeSendableBox(counterexample)
                     __ExhaustRuntime.blockingAwait {
                         try? await property(valueBox.value)
                     }
 
-                    let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: report.propertyInvocations).encoded
+                    let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: nil).encoded
                     reportError(
                         "Reproduce: .replay(\"\(encoded)\")",
                         fileID: fileID,

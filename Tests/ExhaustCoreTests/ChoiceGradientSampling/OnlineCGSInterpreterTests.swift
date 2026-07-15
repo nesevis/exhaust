@@ -192,6 +192,57 @@ struct OnlineCGSInterpreterTests {
 
     // MARK: - ChooseBits Subdivision
 
+    @Test("Equal-range chooseBits operations retain separate tuning sites")
+    func equalRangeChooseBitsOperationsRetainSeparateTuningSites() throws {
+        let subdivisionsPerSite = 4
+        let siteCount = 2
+        let accumulator = FitnessAccumulator()
+        let generator = Gen.zip(
+            Gen.choose(in: UInt64(0) ... 15),
+            Gen.choose(in: UInt64(0) ... 15)
+        )
+        var interpreter = OnlineCGSInterpreter(
+            generator,
+            predicate: { values in
+                values.0 < 4 && values.1 >= 12
+            },
+            sampleCount: 8,
+            seed: 42,
+            maxRuns: 1,
+            fitnessAccumulator: accumulator,
+            subdivisionThresholds: .relaxed
+        )
+
+        _ = try interpreter.next()
+
+        #expect(accumulator.records.count == subdivisionsPerSite * siteCount)
+    }
+
+    @Test("Repeated sequence elements share their chooseBits tuning site")
+    func repeatedSequenceElementsShareChooseBitsTuningSite() throws {
+        let subdivisionsPerSite = 4
+        let accumulator = FitnessAccumulator()
+        let generator = Gen.arrayOf(
+            Gen.choose(in: UInt64(0) ... 15),
+            exactly: 2
+        )
+        var interpreter = OnlineCGSInterpreter(
+            generator,
+            predicate: { values in
+                values[0] < 4 && values[1] >= 12
+            },
+            sampleCount: 8,
+            seed: 42,
+            maxRuns: 1,
+            fitnessAccumulator: accumulator,
+            subdivisionThresholds: .relaxed
+        )
+
+        _ = try interpreter.next()
+
+        #expect(accumulator.records.count == subdivisionsPerSite)
+    }
+
     @Test("ChooseBits subdivision concentrates output in favoured subrange")
     func chooseBitsSubdivision() throws {
         let gen = Gen.choose(in: 1 ... 1000 as ClosedRange<UInt64>)

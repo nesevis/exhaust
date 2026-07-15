@@ -17,7 +17,7 @@ import ExhaustCore
 
 /// Controls test behavior for `#explore` classification tests, passed as variadic arguments.
 public enum ExploreSettings: Sendable {
-    /// Controls per-direction hit targets and attempt budgets. Defaults to `.standard` (30 hits per direction, 300 max attempts per direction). See ``ExhaustBudget`` for the per-preset explore interpretation.
+    /// Controls the required matching samples per direction and directed sampling budgets. Defaults to `.standard` (30 matching samples per direction, 300 generated samples per direction). See ``ExhaustBudget`` for the per-preset explore interpretation.
     case budget(ExhaustBudget)
 
     /// A fixed seed for deterministic replay (reproduction, benchmarking, regression).
@@ -32,10 +32,10 @@ public enum ExploreSettings: Sendable {
 
     /// Controls log verbosity for this explore run.
     ///
-    /// Defaults to `.log(.error)` when omitted — only error-level messages appear.
+    /// Defaults to `.log(.error)` when omitted, so only error-level messages appear.
     case log(LogLevel)
 
-    /// Runs per-direction tuning passes in parallel, one GCD lane per direction.
+    /// Runs per-direction tuning and directed sampling in parallel, one GCD lane per direction.
     ///
     /// Skips the warm-up phase (each direction's CGS tuning provides its own online warm-up) and gives each direction a fixed allocation of `maxAttemptsPerDirection` samples. Disabled when combined with `.replay` (replay forces sequential execution for deterministic reproduction).
     ///

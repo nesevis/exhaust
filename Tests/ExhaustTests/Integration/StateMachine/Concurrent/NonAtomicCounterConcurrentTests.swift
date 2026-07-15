@@ -89,7 +89,7 @@ struct NonAtomicCounterConcurrentTests {
         #expect(report.propertyInvocations == 10)
         #expect(report.reductionInvocations == 7)
         #expect(report.totalMilliseconds > 0)
-        #expect(report.totalMaterializations == 7)
+        #expect(report.totalMaterializations == 9)
         #expect(report.cycles == 5)
         #expect(report.encoderProbes[.laneCollapse] == 6)
         #expect(report.encoderProbesAccepted[.laneCollapse] == 0)

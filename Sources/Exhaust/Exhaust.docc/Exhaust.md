@@ -127,6 +127,7 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 
 - ``ExhaustReport``
 - ``ExploreReport``
+- ``ExploreInvocationCounts``
 - ``ExploreTermination``
 - ``DirectionCoverage``
 - ``DirectionOutcome``
