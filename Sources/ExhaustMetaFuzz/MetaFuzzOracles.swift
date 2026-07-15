@@ -63,6 +63,15 @@ public struct ExactInterpreterParityViolation: Error, CustomStringConvertible {
     }
 }
 
+/// Exact value-only and value-and-tree interpreters left different PRNG states after the same successful execution.
+public struct RandomProgressionParityViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
 /// Replaying a tree produced by exact generation failed to reproduce that generation's value.
 public struct GeneratedWitnessReplayViolation: Error, CustomStringConvertible {
     public let description: String
@@ -211,6 +220,16 @@ extension MetaFuzz {
                     guard anyEquals(value, treeValue) else {
                         throw ExactInterpreterParityViolation(
                             "value-only produced \(value), value-and-tree produced \(treeValue), recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed), iteration \(iteration)"
+                        )
+                    }
+                    let valueSnapshot = valueInterpreter.randomNumberGeneratorSnapshot
+                    let treeSnapshot = treeInterpreter.randomNumberGeneratorSnapshot
+                    guard randomNumberGeneratorSnapshotsEqual(
+                        valueSnapshot,
+                        treeSnapshot
+                    ) else {
+                        throw RandomProgressionParityViolation(
+                            "interpreter PRNG states differed after recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed), iteration \(iteration): value-only \(valueSnapshot), value-and-tree \(treeSnapshot)"
                         )
                     }
                 case (.exhausted, .exhausted):
@@ -412,6 +431,17 @@ extension MetaFuzz {
         let bands = MutationIntensity.allCases
         return bands[Int(prng.next(upperBound: UInt64(bands.count)))]
     }
+}
+
+private func randomNumberGeneratorSnapshotsEqual(
+    _ first: (seed: UInt64, state: Xoshiro256.StateType),
+    _ second: (seed: UInt64, state: Xoshiro256.StateType)
+) -> Bool {
+    first.seed == second.seed
+        && first.state.0 == second.state.0
+        && first.state.1 == second.state.1
+        && first.state.2 == second.state.2
+        && first.state.3 == second.state.3
 }
 
 private enum InterpreterGenerationOutcome: CustomStringConvertible {

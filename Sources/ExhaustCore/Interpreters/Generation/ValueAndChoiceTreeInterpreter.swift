@@ -57,6 +57,14 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         context.baseSeed
     }
 
+    /// Returns the PRNG seed and current state after the most recent generation step.
+    package var randomNumberGeneratorSnapshot: (
+        seed: UInt64,
+        state: Xoshiro256.StateType
+    ) {
+        (context.prng.seed, context.prng.currentState)
+    }
+
     /// Per-fingerprint filter predicate observations accumulated across all generation runs.
     public var filterObservations: [UInt64: FilterObservation] {
         context.filterObservations

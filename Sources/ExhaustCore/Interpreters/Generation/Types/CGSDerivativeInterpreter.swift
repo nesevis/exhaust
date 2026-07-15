@@ -426,6 +426,14 @@ package enum CGSDerivativeInterpreter {
         size: UInt64
     ) throws -> Output? {
         let nextGen = try continuation(result)
-        return try generateRecursive(nextGen, with: inputValue, rng: &rng, size: size) as? Output
+        guard let finalValue = try generateRecursive(
+            nextGen,
+            with: inputValue,
+            rng: &rng,
+            size: size
+        ) else {
+            return nil
+        }
+        return finalValue as? Output
     }
 }

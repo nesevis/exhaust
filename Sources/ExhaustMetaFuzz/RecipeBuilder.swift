@@ -57,11 +57,19 @@ private func buildCombinator(
     column: UInt = #column
 ) -> AnyGenerator {
     switch kind {
-        case let .mapped(inner, transform):
+        case let .contramapped(inner, transform):
             return Gen.contramap(
                 { (newOutput: Any) throws -> Any in transform.backward(newOutput) },
                 buildGenerator(from: inner).map { transform.forward($0) }
             )
+
+        case let .mapped(inner, transform):
+            return ReflectiveGenerator(
+                buildGenerator(from: inner)
+            ).mapped(
+                forward: { transform.forward($0) },
+                backward: { transform.backward($0) }
+            ).gen.erase()
 
         case let .pruned(inner):
             return Gen.prune(buildGenerator(from: inner))

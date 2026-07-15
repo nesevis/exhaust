@@ -20,6 +20,7 @@ package func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
 
     var choices: [(Int, Generator<GenRecipe>)] = [
         (3, leafGenerator(producing: type)),
+        (1, contramappedGenerator(producing: type, maxDepth: maxDepth)),
         (1, mappedGenerator(producing: type, maxDepth: maxDepth)),
         (1, prunedGenerator(producing: type, maxDepth: maxDepth)),
         (1, arrayGenerator(producing: type, maxDepth: maxDepth)),
@@ -138,6 +139,25 @@ private func narrowingSafeInnerGenerator(
         return recipeGenerator(producing: innerType, maxDepth: maxDepth - 1)
     }
     return leafGenerator(producing: innerType)
+}
+
+private func contramappedGenerator(
+    producing type: RecipeType,
+    maxDepth: Int
+) -> Generator<GenRecipe> {
+    let transforms = InvertibleTransform.applicable(to: type)
+    guard transforms.isEmpty == false else {
+        return leafGenerator(producing: type)
+    }
+    return Gen.choose(from: transforms).bind { transform in
+        narrowingSafeInnerGenerator(
+            for: transform,
+            producing: type,
+            maxDepth: maxDepth
+        ).map { inner in
+            .combinator(.contramapped(inner, transform))
+        }
+    }
 }
 
 private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {

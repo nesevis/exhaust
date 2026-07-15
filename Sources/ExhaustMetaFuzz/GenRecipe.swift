@@ -239,6 +239,7 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
     }
 
     package enum CombinatorKind: Equatable, Hashable, CustomStringConvertible, Sendable, Codable {
+        case contramapped(GenRecipe, InvertibleTransform)
         case mapped(GenRecipe, InvertibleTransform)
         case pruned(GenRecipe)
         case array(GenRecipe, lengthRange: ClosedRange<UInt64>)
@@ -262,6 +263,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
 
         package var description: String {
             switch self {
+                case let .contramapped(inner, transform):
+                    "contramap(\(transform), \(inner))"
                 case let .mapped(inner, transform):
                     "\(inner).map(\(transform))"
                 case let .pruned(inner):
@@ -322,6 +325,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                 return 1
             case let .combinator(kind):
                 switch kind {
+                    case let .contramapped(inner, _):
+                        return 1 + inner.nodeCount
                     case let .mapped(inner, _):
                         return 1 + inner.nodeCount
                     case let .pruned(inner):
@@ -373,6 +378,11 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                 return kind.outputType
             case let .combinator(kind):
                 switch kind {
+                    case let .contramapped(inner, transform):
+                        if let type = transform.applicableType {
+                            return type
+                        }
+                        return inner.outputType
                     case let .mapped(inner, transform):
                         if let type = transform.applicableType {
                             return type

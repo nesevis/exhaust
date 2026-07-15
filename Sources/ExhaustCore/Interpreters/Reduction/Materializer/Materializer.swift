@@ -39,7 +39,7 @@ package enum Materializer {
         case success(value: Output, tree: ChoiceTree, decodingReport: DecodingReport?)
         /// Exact mode: out-of-range or structural mismatch — candidate is invalid.
         case rejected(decodingReport: DecodingReport?)
-        /// Guided mode: filter or generation failure.
+        /// Generation or user-supplied operation failure that is not an invalid exact candidate.
         case failed(decodingReport: DecodingReport?)
     }
 

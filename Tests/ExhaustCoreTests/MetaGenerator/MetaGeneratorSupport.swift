@@ -98,7 +98,8 @@ func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorK
         return true
     }
     switch kind {
-        case let .mapped(inner, _),
+        case let .contramapped(inner, _),
+             let .mapped(inner, _),
              let .pruned(inner),
              let .array(inner, _),
              let .filtered(inner, _),
@@ -184,6 +185,7 @@ struct CombinatorFixture: Sendable, CustomStringConvertible {
 
 /// One fixture per combinator whose output is reflectable, so the coverage sweep can assert each reflects rather than skipping it. `boundRange` and `unfolded` are omitted deliberately: both build on a backward-less `.bind`/unfold, so their outputs are not reflectable by construction and a nil reflection is expected rather than a regression.
 let reflectableCombinatorFixtures: [CombinatorFixture] = [
+    .init(name: "contramapped", recipe: .combinator(.contramapped(.leaf(.int(0 ... 10)), .increment))),
     .init(name: "mapped", recipe: .combinator(.mapped(.leaf(.int(0 ... 10)), .increment))),
     .init(name: "pruned", recipe: .combinator(.pruned(.leaf(.int(0 ... 10))))),
     .init(name: "array", recipe: .combinator(.array(.leaf(.int(0 ... 5)), lengthRange: 1 ... 3))),

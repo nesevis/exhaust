@@ -22,6 +22,25 @@ struct PublicGeneratorAPIReviewTests {
         #expect(replayed == target)
     }
 
+    @Test("Pick reflection rejects a bound branch whose inner generator cannot produce the target")
+    func pickReflectionRejectsInconsistentBoundBranch() throws {
+        let dependentGenerator = #gen(.just(0)).bound(
+            forward: { value in .just(value) },
+            backward: { value in value }
+        )
+        let generator = #gen(.oneOf(dependentGenerator, .just(1)))
+        let target = 1
+
+        let tree = try #require(
+            try Interpreters.reflect(generator.gen, with: target)
+        )
+        let replayed = try #require(
+            try Interpreters.replay(generator.gen, using: tree)
+        )
+
+        #expect(replayed == target)
+    }
+
     @Test("Fixed-prefix Data overloads reject reflection targets outside their domains")
     func fixedPrefixDataRejectsMismatchedPrefix() throws {
         let generators: [ReflectiveGenerator<Data>] = [

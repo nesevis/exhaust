@@ -79,13 +79,22 @@ struct InterpreterRNGParityTests {
 
     // MARK: - Unique
 
-    @Test("Key-based unique parity")
-    func keyBasedUniqueParity() throws {
+    @Test("Key-based unique retry parity")
+    func keyBasedUniqueRetryParity() throws {
+        var keyExtractionCount = 0
         let generator = uniqueGen(
-            Gen.choose(in: UInt64(0) ... UInt64.max),
-            by: { AnyHashable($0) }
+            Gen.choose(from: [false, true]),
+            by: { value in
+                keyExtractionCount += 1
+                return AnyHashable(value)
+            }
         )
-        try assertParity(generator, seed: 4242, runs: 10)
+        try assertParity(generator, seed: 0, runs: 2)
+
+        #expect(
+            keyExtractionCount > 4,
+            "The fixture must reject at least one duplicate before accepting the second value"
+        )
     }
 
     @Test("Failure-tree reproduction preserves the first unique value")
@@ -173,15 +182,21 @@ struct InterpreterRNGParityTests {
 
     // MARK: - Filter
 
-    @Test("Rejection-sampling filter parity")
-    func filterParity() throws {
+    @Test("Rejection-sampling filter retry parity")
+    func filterRetryParity() throws {
+        var predicateEvaluationCount = 0
         let generator = filterGen(
-            Gen.choose(
-                in: UInt64.min ... UInt64.max,
-                scaling: UInt64.defaultScaling
-            )
-        ) { $0 % 2 == 0 }
-        try assertParity(generator, seed: 1234, runs: 10)
+            Gen.choose(in: UInt64(0) ... 1)
+        ) { value in
+            predicateEvaluationCount += 1
+            return value % 2 == 0
+        }
+        try assertParity(generator, seed: 5, runs: 1)
+
+        #expect(
+            predicateEvaluationCount == 4,
+            "Each interpreter must reject the first odd candidate and accept the second even candidate"
+        )
     }
 
     // MARK: - Resize
@@ -395,12 +410,30 @@ private func assertParity<Value>(
             try treeInterpreter.next(),
             sourceLocation: sourceLocation
         )
+        let valueSnapshot = valueInterpreter.randomNumberGeneratorSnapshot
+        let treeSnapshot = treeInterpreter.randomNumberGeneratorSnapshot
         #expect(
             equals(valueOnly, valueAndTree),
             "Iteration \(iteration): ValueInterpreter=\(valueOnly), ValueAndChoiceTreeInterpreter=\(valueAndTree)",
             sourceLocation: sourceLocation
         )
+        #expect(
+            randomNumberGeneratorSnapshotsEqual(valueSnapshot, treeSnapshot),
+            "Iteration \(iteration): ValueInterpreter PRNG=\(valueSnapshot), ValueAndChoiceTreeInterpreter PRNG=\(treeSnapshot)",
+            sourceLocation: sourceLocation
+        )
     }
+}
+
+private func randomNumberGeneratorSnapshotsEqual(
+    _ first: (seed: UInt64, state: Xoshiro256.StateType),
+    _ second: (seed: UInt64, state: Xoshiro256.StateType)
+) -> Bool {
+    first.seed == second.seed
+        && first.state.0 == second.state.0
+        && first.state.1 == second.state.1
+        && first.state.2 == second.state.2
+        && first.state.3 == second.state.3
 }
 
 /// Equatable convenience overload.

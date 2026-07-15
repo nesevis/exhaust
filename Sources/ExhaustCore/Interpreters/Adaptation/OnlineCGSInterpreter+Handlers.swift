@@ -504,7 +504,7 @@ extension OnlineCGSInterpreter {
         let nextGen = try continuation(result)
         var continuationContext = derivativeContext
         continuationContext.descendSitePath(through: .continuation)
-        return try generateRecursive(
+        guard let finalValue = try generateRecursive(
             nextGen,
             with: inputValue,
             context: &context,
@@ -512,7 +512,10 @@ extension OnlineCGSInterpreter {
             sampleCount: sampleCount,
             cgsState: &cgsState,
             derivativeContext: continuationContext
-        ) as? Output
+        ) else {
+            return nil
+        }
+        return finalValue as? Output
     }
 
     // MARK: - Pick (CGS Core)

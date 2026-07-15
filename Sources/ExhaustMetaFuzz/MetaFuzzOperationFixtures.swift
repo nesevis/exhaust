@@ -15,6 +15,11 @@ package struct MetaFuzzOperationCoverageViolation: Error, CustomStringConvertibl
     package let description: String
 }
 
+/// Reports that an approximate interpreter trapped, produced no value, or left the recipe's declared output type.
+package struct MetaFuzzApproximationSafetyViolation: Error, CustomStringConvertible {
+    package let description: String
+}
+
 /// Deterministic coverage spine for the operation laws exercised by the random MetaFuzz recipe walk.
 package let metaFuzzOperationFixtures: [MetaFuzzOperationFixture] = [
     .init(
@@ -26,7 +31,11 @@ package let metaFuzzOperationFixtures: [MetaFuzzOperationFixture] = [
         recipe: .leaf(.justInt(7))
     ),
     .init(
-        name: "contramap and transform.map",
+        name: "contramap",
+        recipe: .combinator(.contramapped(.leaf(.int(-10 ... 10)), .increment))
+    ),
+    .init(
+        name: "transform.map",
         recipe: .combinator(.mapped(.leaf(.int(-10 ... 10)), .increment))
     ),
     .init(
@@ -119,5 +128,95 @@ package extension MetaFuzz {
             valueSeed: valueSeed,
             perturbationSeed: perturbationSeed
         ))
+    }
+
+    /// Checks that derivative and online approximation execute one operation fixture non-vacuously without changing its declared output type.
+    static func checkApproximationFixture(
+        _ fixture: MetaFuzzOperationFixture,
+        seed: UInt64 = 42,
+        samples: UInt64 = 16
+    ) throws {
+        let derivativeGenerator = buildGenerator(from: fixture.recipe)
+        for sampleIndex in 0 ..< samples {
+            var randomNumberGenerator = Xoshiro256.derive(
+                from: seed,
+                at: sampleIndex
+            )
+            do {
+                guard let output = try CGSDerivativeInterpreter.sample(
+                    derivativeGenerator,
+                    using: &randomNumberGenerator,
+                    size: 100
+                ) else {
+                    throw MetaFuzzApproximationSafetyViolation(
+                        description: "derivative sampling produced no value for \(fixture.name)"
+                    )
+                }
+                guard fixture.recipe.outputType.acceptsApproximateOutput(output) else {
+                    throw MetaFuzzApproximationSafetyViolation(
+                        description: "derivative sampling produced \(type(of: output)), outside \(fixture.recipe.outputType), for \(fixture.name)"
+                    )
+                }
+            } catch let violation as MetaFuzzApproximationSafetyViolation {
+                throw violation
+            } catch {
+                throw MetaFuzzApproximationSafetyViolation(
+                    description: "derivative sampling threw \(error) for \(fixture.name)"
+                )
+            }
+        }
+
+        var onlineInterpreter = OnlineCGSInterpreter(
+            buildGenerator(from: fixture.recipe),
+            predicate: { _ in false },
+            sampleCount: 16,
+            seed: seed,
+            maxRuns: samples
+        )
+        var onlineSampleCount: UInt64 = 0
+        do {
+            while let output = try onlineInterpreter.next() {
+                guard fixture.recipe.outputType.acceptsApproximateOutput(output) else {
+                    throw MetaFuzzApproximationSafetyViolation(
+                        description: "online CGS produced \(type(of: output)), outside \(fixture.recipe.outputType), for \(fixture.name)"
+                    )
+                }
+                onlineSampleCount += 1
+            }
+        } catch let violation as MetaFuzzApproximationSafetyViolation {
+            throw violation
+        } catch {
+            throw MetaFuzzApproximationSafetyViolation(
+                description: "online CGS threw \(error) for \(fixture.name)"
+            )
+        }
+        guard onlineSampleCount == samples else {
+            throw MetaFuzzApproximationSafetyViolation(
+                description: "online CGS produced \(onlineSampleCount)/\(samples) values for \(fixture.name)"
+            )
+        }
+    }
+}
+
+private extension RecipeType {
+    /// Returns whether an approximate interpreter's result retains the recipe's declared runtime shape.
+    func acceptsApproximateOutput(_ output: Any) -> Bool {
+        switch self {
+            case .int:
+                output is Int
+            case .bool:
+                output is Bool
+            case .double:
+                output is Double
+            case .string:
+                output is String
+            case .character:
+                output is Character
+            case let .arrayOf(elementType):
+                Mirror(reflecting: output).displayStyle == .collection
+                    && Mirror(reflecting: output).children.allSatisfy {
+                        elementType.acceptsApproximateOutput($0.value)
+                    }
+        }
     }
 }

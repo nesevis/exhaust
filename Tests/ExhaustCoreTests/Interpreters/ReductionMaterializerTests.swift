@@ -57,6 +57,33 @@ struct ReductionMaterializerTests {
         }
     }
 
+    @Test("Exact mode reports a throwing transform as failed")
+    func exactReportsThrowingTransformAsFailed() throws {
+        let generator = try ReflectiveGenerator(
+            Gen.choose(in: 0 ... 10 as ClosedRange<Int>)
+        ).map { value in
+            guard value != 5 else {
+                throw ExactMaterializationFixtureError.rejectedValue
+            }
+            return value
+        }.gen
+        let prefix: ChoiceSequence = [
+            .value(.init(
+                choice: ChoiceValue(Int(5), tag: .int),
+                validRange: Int(0).bitPattern64 ... Int(10).bitPattern64
+            )),
+        ]
+
+        guard case .failed = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        ) else {
+            Issue.record("Expected .failed for a throwing transform")
+            return
+        }
+    }
+
     @Test("Exact mode rejects when prefix is exhausted")
     func exactRejectsExhaustedPrefix() {
         let gen = Gen.zip(
@@ -563,4 +590,8 @@ struct ReductionMaterializerTests {
 
         #expect(value == originalValue)
     }
+}
+
+private enum ExactMaterializationFixtureError: Error {
+    case rejectedValue
 }

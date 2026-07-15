@@ -16,6 +16,16 @@ struct MetaFuzzOracleTests {
         try MetaFuzz.checkOperationFixture(fixture)
     }
 
+    @Test(
+        "Every generator operation remains total and well-typed under approximation",
+        arguments: metaFuzzOperationFixtures
+    )
+    func operationFixturesSatisfyApproximationSafety(
+        fixture: MetaFuzzOperationFixture
+    ) throws {
+        try MetaFuzz.checkApproximationFixture(fixture)
+    }
+
     @Test("No oracle fires on healthy code across generated cases", arguments: [1, 2])
     func oraclesHoldOnHealthyCode(maxDepth: Int) throws {
         let caseGen = MetaFuzz.caseGenerator(maxDepth: maxDepth)

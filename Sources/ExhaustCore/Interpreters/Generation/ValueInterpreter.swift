@@ -42,6 +42,14 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         )
     }
 
+    /// Returns the PRNG seed and current state after the most recent generation step.
+    package var randomNumberGeneratorSnapshot: (
+        seed: UInt64,
+        state: Xoshiro256.StateType
+    ) {
+        (context.prng.seed, context.prng.currentState)
+    }
+
     public mutating func next() throws -> Element? {
         guard context.runs < context.maxRuns else {
             return nil
