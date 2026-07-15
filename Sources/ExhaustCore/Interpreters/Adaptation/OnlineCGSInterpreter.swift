@@ -22,11 +22,25 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         4
     }
 
+    /// Identifies the structural edge traversed while descending toward a transient subdivision site.
+    enum SitePathComponent: UInt64 {
+        case continuation = 1
+        case transformInner
+        case bindInner
+        case bindBound
+        case pickBranch
+        case sequenceElement
+        case zipComponent
+    }
+
     /// An inspectable data structure representing the composition of all outer continuations needed to produce a `FinalOutput` from a local sub-generator. Each ``handlePick`` or ``handleZip`` call pushes a frame; `apply` composes them to build a full derivative.
     ///
     /// This replaces the opaque `DerivativeWrapper` closure chain with a defunctionalized representation, matching the paper's treatment of CGS derivatives as syntactic transformations on the generator data structure (Goldstein, Ch. 3).
     public struct DerivativeContext {
         public private(set) var frames: [DerivativeFrame] = []
+
+        /// Distinguishes transient subdivision sites by their structural route through the generator while leaving derivative depth unchanged.
+        var sitePathFingerprint: UInt64 = 0xA076_1D64_78BD_642F
 
         /// Creates an empty derivative context with no frames.
         public init() {}
@@ -46,6 +60,32 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         /// Each frame captures the surrounding generator structure (a bind continuation, zip siblings, or sequence elements) at one level of descent into the generator tree. Callers invoke this as the interpreter recurses through ``ReflectiveOperation`` nodes so that ``apply(_:)`` can later reassemble a complete ``FinalOutput`` generator from a sub-generator at the target choice site.
         public mutating func push(_ frame: DerivativeFrame) {
             frames.append(frame)
+        }
+
+        /// Extends the tuning-only structural identity without adding a derivative frame.
+        ///
+        /// Each component records one generator-tree edge. Sequence element indices are deliberately omitted so every runtime element generated from one element template shares fitness.
+        @inline(__always)
+        mutating func descendSitePath(
+            through component: SitePathComponent
+        ) {
+            sitePathFingerprint = Xoshiro256.fold(
+                sitePathFingerprint,
+                mixing: component.rawValue
+            )
+        }
+
+        /// Extends the tuning-only structural identity with a discriminator for zip components and pick branches.
+        @inline(__always)
+        mutating func descendSitePath(
+            through component: SitePathComponent,
+            discriminator: UInt64
+        ) {
+            descendSitePath(through: component)
+            sitePathFingerprint = Xoshiro256.fold(
+                sitePathFingerprint,
+                mixing: discriminator
+            )
         }
 
         /// Compose all frames onto `gen` to produce a full `FinalOutput` generator.
