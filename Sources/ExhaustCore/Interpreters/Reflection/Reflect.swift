@@ -462,14 +462,18 @@ extension Interpreters {
                 }
                 // Xia et al.'s comap at bind sites: extract the inner value from the final output.
                 let innerValue = try backward(finalOutput)
-                // Reconstruct the bound generator from the extracted inner value.
-                let boundGen = try forward(innerValue)
-                // Reflect both: inner against the extracted value, bound against the final output.
+                // Reflect the inner generator against the extracted value. A permissive inner operation such as `just` may return a different value, so each actual reflected candidate is authoritative when reconstructing the dependent generator.
                 let innerResults = try reflectRecursive(inner, onFinalOutput: innerValue)
-                let boundResults = try reflectRecursive(boundGen, onFinalOutput: finalOutput)
-                // Combine paths: inner choices followed by bound choices.
-                return innerResults.flatMap { innerResult in
-                    boundResults.map { boundResult in
+                return try innerResults.flatMap { innerResult in
+                    let boundGenerator = try forward(innerResult.value)
+                    let boundResults = try reflectRecursive(
+                        boundGenerator,
+                        onFinalOutput: finalOutput
+                    )
+                    return boundResults.compactMap { boundResult -> (value: Any, path: [ChoiceTree])? in
+                        guard structurallyEqual(boundResult.value, finalOutput) else {
+                            return nil
+                        }
                         let innerTree = innerResult.path.count == 1
                             ? innerResult.path[0]
                             : .group(innerResult.path)
