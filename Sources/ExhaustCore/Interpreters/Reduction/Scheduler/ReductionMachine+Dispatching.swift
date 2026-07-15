@@ -361,18 +361,24 @@ extension ReductionMachine {
         let graphEnd = monotonicNanoseconds()
 
         if diff.canReuseStructuralSources {
-            let structuralSources = sources.filter { source in
-                guard case let .sorted(sorted) = source,
-                      let first = sorted.peekTransformation
-                else {
-                    return true
-                }
-                return first.operation.isValueDependent == false
-            }
+            let structuralSources = sources.filter { $0.isValueDependent == false }
             sources = structuralSources
                 + CandidateSourceBuilder.buildValueSources(from: graph, deferBindInner: convergence.deferBindInner)
 
             ChoiceGraphScheduler.logReducer("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
+                "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
+            ])
+        } else if diff.canReuseStructuralSourcesExceptPermutation {
+            scopeRejectionCache.clear()
+            let reusableStructuralSources = sources.filter(\.canReuseAfterLeafKindChange)
+            sources = reusableStructuralSources
+                + CandidateSourceBuilder.buildPermutationSources(from: graph)
+                + CandidateSourceBuilder.buildValueSources(
+                    from: graph,
+                    deferBindInner: convergence.deferBindInner
+                )
+
+            ChoiceGraphScheduler.logReducer("graph_leaf_kind_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else {

@@ -54,6 +54,9 @@ struct ChoiceGraphDiffTests {
         let diff = ChoiceGraphDiff.diff(old: graph1, new: graph2)
 
         #expect(diff.canReuseStructuralSources == true)
+        #expect(diff.kindChangedPaths.isEmpty)
+        #expect(diff.onlyLeafKindsChanged == false)
+        #expect(diff.canReuseStructuralSourcesExceptPermutation == false)
     }
 
     @Test("A public bind changing its bound node kind is structural")
@@ -112,6 +115,16 @@ struct ChoiceGraphDiffTests {
         let diff = ChoiceGraphDiff.diff(old: choiceGraph, new: constantGraph)
 
         #expect(diff.canReuseStructuralSources == false)
+        #expect(diff.kindChangedPaths == [[.bindBound]])
+        #expect(diff.onlyLeafKindsChanged == true)
+        #expect(diff.canReuseStructuralSourcesExceptPermutation == true)
+
+        let reverseDiff = ChoiceGraphDiff.diff(old: constantGraph, new: choiceGraph)
+
+        #expect(reverseDiff.canReuseStructuralSources == false)
+        #expect(reverseDiff.kindChangedPaths == [[.bindBound]])
+        #expect(reverseDiff.onlyLeafKindsChanged == true)
+        #expect(reverseDiff.canReuseStructuralSourcesExceptPermutation == true)
     }
 
     @Test("Added and removed sets are symmetric under reversal")
@@ -123,5 +136,36 @@ struct ChoiceGraphDiffTests {
 
         #expect(forward.added == backward.removed)
         #expect(forward.removed == backward.added)
+    }
+}
+
+@Suite("Leaf-kind candidate source reuse")
+struct LeafKindCandidateSourceReuseTests {
+    @Test("Only non-permutation structural sources are reusable")
+    func onlyNonPermutationStructuralSourcesAreReusable() {
+        let sequenceGraph = GraphFixture(
+            .uint64Sequence([10, 20, 30], in: 0 ... 100)
+        ).graph
+        let structuralSources = CandidateSourceBuilder.buildStructuralSources(
+            from: sequenceGraph
+        )
+
+        #expect(structuralSources.isEmpty == false)
+        #expect(structuralSources.allSatisfy(\.canReuseAfterLeafKindChange))
+
+        let zipGraph = GraphFixture(.uint64Zip([10, 20], in: 0 ... 100)).graph
+        let permutationSources = CandidateSourceBuilder.buildPermutationSources(
+            from: zipGraph
+        )
+
+        #expect(permutationSources.count == 1)
+        #expect(permutationSources.allSatisfy(\.isPermutationSource))
+        #expect(permutationSources.allSatisfy { $0.canReuseAfterLeafKindChange == false })
+
+        let valueSources = CandidateSourceBuilder.buildValueSources(from: zipGraph)
+
+        #expect(valueSources.isEmpty == false)
+        #expect(valueSources.allSatisfy(\.isValueDependent))
+        #expect(valueSources.allSatisfy { $0.canReuseAfterLeafKindChange == false })
     }
 }
