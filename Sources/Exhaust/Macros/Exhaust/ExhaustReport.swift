@@ -265,13 +265,14 @@ public struct ExhaustReport: Sendable {
 
     /// Populates reduction statistics from a ``ReductionStats`` value. Each call overwrites the previous stats; the reducer runs a single reduction pass per report, so there is nothing to accumulate.
     package mutating func applyReductionStats(_ stats: ReductionStats) {
-        encoderProbes = stats.encoderProbes
-        encoderProbesAccepted = stats.encoderProbesAccepted
-        encoderProbesRejectedByCache = stats.encoderProbesRejectedByCache
-        encoderProbesRejectedDuringMaterialization = stats.encoderProbesRejectedDuringMaterialization
-        encoderProbesWherePropertyPassed = stats.encoderProbesWherePropertyPassed
-        encoderProbesWherePropertyFailed = stats.encoderProbesWherePropertyFailed
-        encoderProbesRejectedByDecoder = stats.encoderProbesRejectedByDecoder
+        let counts = stats.encoderCounts
+        encoderProbes = counts.mapValues(\.emitted)
+        encoderProbesAccepted = counts.mapValues(\.accepted)
+        encoderProbesRejectedByCache = counts.mapValues(\.rejectedByCache)
+        encoderProbesRejectedDuringMaterialization = counts.mapValues(\.rejectedDuringMaterialization)
+        encoderProbesWherePropertyPassed = counts.mapValues(\.propertyPassed)
+        encoderProbesWherePropertyFailed = counts.mapValues(\.propertyFailed)
+        encoderProbesRejectedByDecoder = counts.mapValues(\.decoderRejections)
         reductionProbes = stats.reductionProbes
         reductionProbesAccepted = stats.reductionProbesAccepted
         reductionProbesRejectedByCache = stats.reductionProbesRejectedByCache
