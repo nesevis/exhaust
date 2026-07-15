@@ -2,9 +2,11 @@ import Foundation
 
 /// Combines generators through a transform closure, synthesizing a bidirectional backward mapping when possible.
 ///
-/// When the closure body is a struct or class initializer call with labeled arguments that map one-to-one to the closure parameters, the macro synthesizes a `Mirror`-based backward mapping automatically. When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` and emits a warning explaining why.
+/// When the closure body is a struct or class initializer call with labeled arguments that map one-to-one to the closure parameters, the macro synthesizes a `Mirror`-based backward mapping automatically. For qualified enum-case calls, it verifies the runtime case and extracts its associated values. A static factory has the same source shape as a qualified enum case, so it still generates values but rejects reflection when its output is not that enum case. When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` and emits a warning explaining why.
 ///
 /// Both named parameters and shorthand parameters (`$0`, `$1`, and so on) are supported.
+///
+/// - Note: Enum-case reflection uses the enum's `Mirror` representation. An enum that conforms to `CustomReflectable` must preserve the case name and associated-value structure in its custom mirror for reflection to succeed.
 ///
 /// ```swift
 /// let personGen = #gen(nameGen, ageGen) { name, age in

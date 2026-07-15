@@ -40,8 +40,8 @@ struct IdleTimeoutConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Cooperative timeout releases the suspended spec after its work resumes")
-    func cooperativeTimeoutReleasesSuspendedSpec() async throws {
+    @Test("Cooperative timeout cancels and releases a cancellable suspended spec")
+    func cooperativeTimeoutReleasesSuspendedSpec() {
         let reference = WeakReference<SleepingSpec>()
         let commands: [(ScheduleMarker, SleepingSpec.Command)] = [
             (ScheduleMarker(rawValue: 1), .doSleep),
@@ -59,7 +59,6 @@ struct IdleTimeoutConcurrentTests {
         )
 
         #expect(result.timedOut)
-        try await Task.sleep(for: .milliseconds(300))
         #expect(reference.value == nil)
     }
 
@@ -81,6 +80,8 @@ struct IdleTimeoutConcurrentTests {
         }
         #expect(result == nil)
         #expect(reporter.warnings.count == 1)
+        let warning = try #require(reporter.warnings.first)
+        #expect(warning.contains("11 of 11 probes timed out (100%)"))
 
         let report = try #require(reportBox.value)
         #expect(report.reductionInvocations == 0)
@@ -145,7 +146,7 @@ struct IdleTimeoutConcurrentTests {
         withIssueReporters([firing]) {
             warnIfTimeoutFractionHigh(
                 timedOutProbes: 25,
-                totalBudget: 100,
+                totalProbes: 100,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -158,7 +159,7 @@ struct IdleTimeoutConcurrentTests {
         withIssueReporters([silent]) {
             warnIfTimeoutFractionHigh(
                 timedOutProbes: 24,
-                totalBudget: 100,
+                totalProbes: 100,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -166,25 +167,6 @@ struct IdleTimeoutConcurrentTests {
             )
         }
         #expect(silent.warnings.isEmpty)
-    }
-
-    @Test("Timeout warning percentage does not exceed one hundred")
-    func timeoutWarningPercentageIsBounded() throws {
-        let reporter = CapturingIssueReporter()
-        withIssueReporters([reporter]) {
-            warnIfTimeoutFractionHigh(
-                timedOutProbes: 11,
-                totalBudget: 10,
-                fileID: #fileID,
-                filePath: #filePath,
-                line: #line,
-                column: #column
-            )
-        }
-
-        let warning = try #require(reporter.warnings.first)
-        #expect(warning.contains("(100%)"))
-        #expect(warning.contains("110%") == false)
     }
 }
 

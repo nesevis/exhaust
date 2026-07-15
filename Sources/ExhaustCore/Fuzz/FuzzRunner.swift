@@ -2,6 +2,20 @@
 
 import Foundation
 
+private struct EvaluatedFuzzCandidate<Output> {
+    let value: Output
+    let tree: ChoiceTree
+    let sequence: ChoiceSequence
+    let verdict: FuzzVerdict
+    let hits: [(edge: Int, hitCount: UInt8)]
+}
+
+private struct PrunedCandidateSelection<Output> {
+    let corpus: EvaluatedFuzzCandidate<Output>
+    let failure: EvaluatedFuzzCandidate<Output>?
+    let independentFailureCoverageNovel: Bool?
+}
+
 /// The spec-path seams carried through `runExploreTimeCore` into ``FuzzRunner`` as one unit.
 ///
 /// Nil on the value path. A spec adapter populates both fields: the prune hook keeps precondition-skipped commands out of the corpus, and the reduce strategy routes reduction through the spec's backend reducer (sequential specs reuse ``FuzzRunner/propertyOnlyReduceStrategy(gen:property:reducerConfiguration:)`` with the spec deadline; `.tasks` specs will wrap their two-pass reducer, which must run synchronously on the loop's lane: reduction is always inline so probes never pollute attempt coverage, and no concurrent dispatch context exists).
@@ -56,7 +70,7 @@ package final class FuzzRunner<Output> {
     private var discardedAttempts = 0
     private var totalAttempts = 0
 
-    /// Wall-clock nanoseconds spent inside the property body across all loop attempts; the report derives the testing-overhead fraction from it. Reduction-side evaluations are accounted separately in `reductionNanoseconds` so a failure-dense run does not read as a pipeline regression.
+    /// Wall-clock nanoseconds spent inside the property body across search attempts and prune re-evaluations; the report derives the testing-overhead fraction from it. Reduction-side evaluations are accounted separately in `reductionNanoseconds` so a failure-dense run does not read as a pipeline regression.
     private var propertyNanoseconds: UInt64 = 0
 
     /// Wall-clock nanoseconds spent reducing, normalizing, and classifying failures inline. The report subtracts this from the elapsed time before computing throughput and overhead, so those figures keep describing the search pipeline.
@@ -463,44 +477,109 @@ package final class FuzzRunner<Output> {
         }
         totalAttempts += 1
 
-        // The prune hook runs outside the attribution bracket (recordAttempt is always called outside it). It fires only on failures and would-be corpus admissions — the common non-novel pass never pays the pruning cost.
-        var effectiveValue = value
-        var effectiveTree = tree
-        var effectiveSequence = sequence
-        if let prune,
-           verdict.isFailure || corpus.wouldAdmit(hits: hits)
-        {
-            let pruned = prune(effectiveValue, effectiveTree)
-            effectiveValue = pruned.value
-            effectiveTree = pruned.tree
-            effectiveSequence = ChoiceSequence.flatten(effectiveTree)
-        }
+        let originalCandidate = EvaluatedFuzzCandidate(
+            value: value,
+            tree: tree,
+            sequence: sequence,
+            verdict: verdict,
+            hits: hits
+        )
+        let candidates = candidatesAfterPruning(
+            original: originalCandidate,
+            parentIndex: parentIndex
+        )
 
         let admission = corpus.offer(
-            sequence: effectiveSequence,
-            tree: effectiveTree,
-            hits: hits,
+            sequence: candidates.corpus.sequence,
+            tree: candidates.corpus.tree,
+            hits: candidates.corpus.hits,
             convergence: convergence,
             generation: generation,
             phase: phase,
             isBoundaryDerived: isBoundaryDerived,
-            propertyFailed: verdict.isFailure
+            propertyFailed: candidates.corpus.verdict.isFailure
         )
         if admission.isAdmitted {
             lastAdmissionNanoseconds = monotonicNanoseconds()
         }
-        if case let .fail(symptom) = verdict {
+        if let failure = candidates.failure,
+           case let .fail(symptom) = failure.verdict
+        {
             handleFailure(
-                value: effectiveValue,
-                tree: effectiveTree,
-                sequence: effectiveSequence,
+                value: failure.value,
+                tree: failure.tree,
+                sequence: failure.sequence,
                 symptom: symptom,
                 parentIndex: parentIndex,
                 phase: phase,
-                coverageNovel: admission.isAdmitted
+                coverageNovel: candidates.independentFailureCoverageNovel
+                    ?? admission.isAdmitted
             )
         }
         return admission
+    }
+
+    /// Re-evaluates a pruned corpus candidate without allowing a changed verdict to erase the failure observed by the original attempt.
+    private func candidatesAfterPruning(
+        original: EvaluatedFuzzCandidate<Output>,
+        parentIndex: Int?
+    ) -> PrunedCandidateSelection<Output> {
+        guard let prune,
+              original.verdict.isFailure || corpus.wouldAdmit(hits: original.hits)
+        else {
+            return PrunedCandidateSelection(
+                corpus: original,
+                failure: original.verdict.isFailure ? original : nil,
+                independentFailureCoverageNovel: nil
+            )
+        }
+
+        let pruned = prune(original.value, original.tree)
+        let prunedSequence = ChoiceSequence.flatten(pruned.tree)
+        let parentHash = parentIndex.map { corpus.entries[$0].hash } ?? 0
+        source.beginAttempt()
+        let (prunedVerdict, prunedHits) = evaluateInBracket(
+            pruned.value,
+            recordingBreadcrumb: (
+                candidateHash: ZobristHash.hash(of: prunedSequence),
+                parentHash: parentHash
+            )
+        )
+        let prunedCandidate = EvaluatedFuzzCandidate(
+            value: pruned.value,
+            tree: pruned.tree,
+            sequence: prunedSequence,
+            verdict: prunedVerdict,
+            hits: prunedHits
+        )
+
+        switch (original.verdict, prunedVerdict) {
+            case let (.fail(originalSymptom), .fail(prunedSymptom))
+            where originalSymptom == prunedSymptom:
+                return PrunedCandidateSelection(
+                    corpus: prunedCandidate,
+                    failure: prunedCandidate,
+                    independentFailureCoverageNovel: nil
+                )
+            case (.fail, _):
+                return PrunedCandidateSelection(
+                    corpus: prunedCandidate,
+                    failure: original,
+                    independentFailureCoverageNovel: corpus.wouldAdmit(hits: original.hits)
+                )
+            case (.pass, .fail):
+                return PrunedCandidateSelection(
+                    corpus: prunedCandidate,
+                    failure: prunedCandidate,
+                    independentFailureCoverageNovel: nil
+                )
+            case (.pass, .pass):
+                return PrunedCandidateSelection(
+                    corpus: prunedCandidate,
+                    failure: nil,
+                    independentFailureCoverageNovel: nil
+                )
+        }
     }
 
     // MARK: - Failure Handling

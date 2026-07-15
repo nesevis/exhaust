@@ -156,7 +156,7 @@ public extension MetaFuzz {
     static func check(_ fuzzCase: MetaFuzzCase) throws {
         try checkExactInterpreterParity(fuzzCase)
 
-        let gen = buildGenerator(from: fuzzCase.recipe)
+        let gen = buildOracleGenerator(from: fuzzCase.recipe)
         let property = failingProperty(for: fuzzCase.recipe.outputType)
         var prng = Xoshiro256(seed: fuzzCase.perturbationSeed)
 
@@ -201,12 +201,12 @@ extension MetaFuzz {
     /// Exact interpreter parity: the value-only and value-and-tree interpreters must produce the same observable stream for one recipe, seed, and run budget.
     private static func checkExactInterpreterParity(_ fuzzCase: MetaFuzzCase) throws {
         var valueInterpreter = ValueInterpreter(
-            buildGenerator(from: fuzzCase.recipe),
+            buildOracleGenerator(from: fuzzCase.recipe),
             seed: fuzzCase.valueSeed,
             maxRuns: valuesPerCase
         )
         var treeInterpreter = ValueAndChoiceTreeInterpreter(
-            buildGenerator(from: fuzzCase.recipe),
+            buildOracleGenerator(from: fuzzCase.recipe),
             seed: fuzzCase.valueSeed,
             maxRuns: valuesPerCase
         )
@@ -279,8 +279,8 @@ extension MetaFuzz {
     /// Determinism: the same recipe and seed must produce the same value stream twice.
     private static func checkDeterminism(_ fuzzCase: MetaFuzzCase) throws {
         let held = checkPairedValues(
-            buildGenerator(from: fuzzCase.recipe),
-            buildGenerator(from: fuzzCase.recipe),
+            buildOracleGenerator(from: fuzzCase.recipe),
+            buildOracleGenerator(from: fuzzCase.recipe),
             seed: fuzzCase.valueSeed,
             maxRuns: valuesPerCase,
             check: anyEquals
@@ -294,8 +294,8 @@ extension MetaFuzz {
     private static func checkFunctorIdentity(_ fuzzCase: MetaFuzzCase) throws {
         let mappedRecipe = GenRecipe.combinator(.mapped(fuzzCase.recipe, .identity))
         let held = checkPairedValues(
-            buildGenerator(from: fuzzCase.recipe),
-            buildGenerator(from: mappedRecipe),
+            buildOracleGenerator(from: fuzzCase.recipe),
+            buildOracleGenerator(from: mappedRecipe),
             seed: fuzzCase.valueSeed,
             maxRuns: valuesPerCase,
             check: anyEquals
@@ -431,6 +431,17 @@ extension MetaFuzz {
         let bands = MutationIntensity.allCases
         return bands[Int(prng.next(upperBound: UInt64(bands.count)))]
     }
+}
+
+/// Rebuilds recipes from one synthetic source location so source-fingerprinted operations denote the same generator in every oracle.
+private func buildOracleGenerator(from recipe: GenRecipe) -> AnyGenerator {
+    buildGenerator(
+        from: recipe,
+        fileID: "ExhaustMetaFuzz/OracleGenerator",
+        filePath: "ExhaustMetaFuzz/OracleGenerator.swift",
+        line: 1,
+        column: 1
+    )
 }
 
 private func randomNumberGeneratorSnapshotsEqual(

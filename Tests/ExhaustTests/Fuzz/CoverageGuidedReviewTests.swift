@@ -80,6 +80,44 @@ struct CoverageGuidedReviewTests {
         #expect(entry.signature.contains(0))
         #expect(entry.signature.contains(1) == false)
     }
+
+    @Test("A passing prune re-evaluation does not erase the original failure")
+    func passingPruneReevaluationPreservesOriginalFailure() throws {
+        let generator = Gen.choose(in: 0 ... 1 as ClosedRange<Int>)
+        let (zeroTree, seedProducingOne) = try treesAndSeed(for: generator)
+        let hooks = FuzzHooks<Int>(
+            prune: { _, _ in
+                (value: 0, tree: zeroTree)
+            },
+            reduceStrategy: { tree, value, _ in
+                (sequence: ChoiceSequence.flatten(tree), tree: tree, value: value)
+            }
+        )
+        let runner = FuzzRunner(
+            gen: generator,
+            property: { value in
+                value == 1 ? .fail(.returnedFalse) : .pass
+            },
+            source: SyntheticCoverageSource<Int>(edgeCount: 2, edges: { [$0] }),
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: seedProducingOne,
+                skipScreening: true,
+                attemptLimit: 1
+            ),
+            hooks: hooks
+        )
+
+        let result = runner.run()
+
+        #expect(result.totalAttempts == 1)
+        #expect(result.clusters.map(\.reducedDescription) == ["1"])
+        #expect(result.clusters.first?.symptoms == [.returnedFalse])
+        let entry = try #require(runner.corpus.entries.first)
+        #expect(entry.propertyFailed == false)
+        #expect(entry.signature.contains(0))
+        #expect(entry.signature.contains(1) == false)
+    }
 }
 
 private func treesAndSeed(

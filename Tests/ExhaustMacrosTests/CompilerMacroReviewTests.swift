@@ -8,20 +8,6 @@
 
     @Suite("Compiler macro architectural review")
     struct CompilerMacroReviewTests {
-        @Test("A static factory call does not synthesize enum-case reflection")
-        func staticFactoryCallUsesForwardOnlyMapping() throws {
-            let closureExpression: ExprSyntax = "{ value in Factory.make(value: value) }"
-            let closure = try #require(closureExpression.as(ClosureExprSyntax.self))
-
-            let outcome = analyzeClosureForBidirectional(closure, generatorCount: 1)
-            let isForwardOnly = switch outcome {
-                case .forwardOnly: true
-                case .bidirectional, .scalarConversion: false
-            }
-
-            #expect(isForwardOnly)
-        }
-
         @Test("Forward-only #gen fallbacks emit reason-specific warnings")
         func forwardOnlyFallbacksEmitWarnings() throws {
             let testCases: [(source: ExprSyntax, expectedDiagnostic: ExhaustMacroDiagnostic)] = [
@@ -73,8 +59,8 @@
             }
         }
 
-        @Test("A parameter named command does not capture the response description source")
-        func commandParameterDoesNotCaptureResponseDescription() {
+        @Test("Command parameters do not capture generated dispatch locals")
+        func commandParametersDoNotCaptureGeneratedDispatchLocals() {
             let command = CommandInfo(
                 methodName: "echo",
                 parameters: [
@@ -83,12 +69,17 @@
                         bindingName: "command",
                         type: "String"
                     ),
+                    CommandParameter(
+                        externalLabel: "result",
+                        bindingName: "result",
+                        type: "String"
+                    ),
                 ],
                 weight: "1",
-                generatorExprs: [".string()"],
+                generatorExprs: [".string()", ".string()"],
                 isAsync: false,
                 isThrows: false,
-                returnType: nil,
+                returnType: "String",
                 syntax: nil
             )
 
@@ -98,11 +89,19 @@
                 access: ""
             ).trimmedDescription
 
-            #expect(expansion.contains("commandDescription: command.description") == false)
+            #expect(expansion.contains("func run(_ commandValue: Command) throws"))
+            #expect(expansion.contains("switch commandValue"))
+            #expect(expansion.contains("self.echo(command: command, result: result)"))
+            #expect(expansion.contains("let resultValue ="))
+            #expect(
+                expansion.contains(
+                    "CommandResponse(commandDescription: commandValue.description, returnValue: resultValue)"
+                )
+            )
         }
 
-        @Test("An invariant with parameters and a non-Bool result is diagnosed")
-        func invalidInvariantSignatureIsDiagnosed() throws {
+        @Test("An invariant with parameters is diagnosed")
+        func invariantWithParametersIsDiagnosed() throws {
             let attribute: AttributeSyntax = "@StateMachine(.sequential)"
             let declaration: DeclSyntax = """
             final class InvalidInvariantSpec {
@@ -112,7 +111,7 @@
               func increment() {}
 
               @Invariant
-              func valid(after step: Int) -> String { "invalid" }
+              func valid(after step: Int) -> Bool { true }
             }
             """
             let classDeclaration = try #require(declaration.as(ClassDeclSyntax.self))
@@ -125,7 +124,11 @@
                 in: context
             )
 
-            #expect(context.diagnostics.contains { $0.diagMessage.severity == .error })
+            #expect(
+                context.diagnostics.map(\.diagMessage.diagnosticID) == [
+                    StateMachineDiagnostic.invariantHasParameters.diagnosticID,
+                ]
+            )
         }
 
         @Test("A throwing oracle is diagnosed before non-throwing synthesis")
@@ -152,7 +155,11 @@
                 in: context
             )
 
-            #expect(context.diagnostics.contains { $0.diagMessage.severity == .error })
+            #expect(
+                context.diagnostics.map(\.diagMessage.diagnosticID) == [
+                    StateMachineDiagnostic.throwingOracle.diagnosticID,
+                ]
+            )
         }
 
         @Test("A member-isolated command is diagnosed before nonisolated synthesis")
@@ -177,7 +184,40 @@
                 in: context
             )
 
-            #expect(context.diagnostics.contains { $0.diagMessage.severity == .error })
+            #expect(
+                context.diagnostics.map(\.diagMessage.diagnosticID) == [
+                    StateMachineDiagnostic.mainActorCommand.diagnosticID,
+                ]
+            )
+        }
+
+        @Test("A type-isolated command is diagnosed before nonisolated synthesis")
+        func typeIsolatedCommandIsDiagnosed() throws {
+            let attribute: AttributeSyntax = "@StateMachine(.sequential)"
+            let declaration: DeclSyntax = """
+            @MainActor
+            final class IsolatedCommandSpec {
+              @SystemUnderTest var counter: Counter
+
+              @Command
+              func increment() {}
+            }
+            """
+            let classDeclaration = try #require(declaration.as(ClassDeclSyntax.self))
+            let context = RecordingMacroExpansionContext()
+
+            _ = try StateMachineDeclarationMacro.expansion(
+                of: attribute,
+                providingMembersOf: classDeclaration,
+                conformingTo: [],
+                in: context
+            )
+
+            #expect(
+                context.diagnostics.map(\.diagMessage.diagnosticID) == [
+                    StateMachineDiagnostic.mainActorCommand.diagnosticID,
+                ]
+            )
         }
     }
 

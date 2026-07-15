@@ -1,0 +1,48 @@
+{
+  "kind" : "pipelineCase",
+  "note" : "Bind cursor positioning: exact materialisation entered a zipped inner generator while the cursor still pointed at bind-open, shifting fallback-derived zip child scopes by one and rejecting the first value. Fixed 2026-07-16 by consuming only bind-open before entering the inner generator; see PublicGeneratorAPIReviewTests.",
+  "oracle" : "ExactRoundTripViolation",
+  "perturbationSeed" : 0,
+  "recipe" : {
+    "combinator" : {
+      "_0" : {
+        "reifiedBind" : {
+          "_0" : {
+            "combinator" : {
+              "_0" : {
+                "zipped" : {
+                  "_0" : {
+                    "leaf" : {
+                      "_0" : {
+                        "int" : {
+                          "_0" : [
+                            0,
+                            0
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  "_1" : {
+                    "leaf" : {
+                      "_0" : {
+                        "int" : {
+                          "_0" : [
+                            0,
+                            0
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "valueSeed" : 0,
+  "version" : 1
+}

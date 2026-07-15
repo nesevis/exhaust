@@ -89,7 +89,7 @@ package struct FuzzRunResult: Sendable {
     package var clusterDiscriminations: [ClusterDiscrimination]
     package var startNanoseconds: UInt64
     package var elapsedNanoseconds: UInt64
-    /// Nanoseconds spent inside the property body across all loop attempts; `searchNanoseconds` minus this is testing overhead.
+    /// Nanoseconds spent inside the property body across search attempts and prune re-evaluations; `searchNanoseconds` minus this is testing overhead.
     package var propertyNanoseconds: UInt64
     /// Nanoseconds spent reducing, normalizing, and classifying failures inline on the loop's lane.
     package var reductionNanoseconds: UInt64

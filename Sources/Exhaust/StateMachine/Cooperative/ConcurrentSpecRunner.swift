@@ -140,7 +140,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
 
     if prefixCommands.isEmpty == false {
         let prefixDone = UnsafeSendableBox(false)
-        Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace] in
+        let prefixTask = Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace] in
             for command in prefixCommands {
                 guard failed.value == nil else { break }
                 let label = recordTrace ? "\(command)" : ""
@@ -163,6 +163,13 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
             executor: executors[0],
             idleTimeoutMilliseconds: idleTimeoutMilliseconds
         ) == .timedOut {
+            prefixTask.cancel()
+            _ = ScheduleDrain.drainUntilDone(
+                prefixDone,
+                runQueue: runQueue,
+                executor: executors[0],
+                idleTimeoutMilliseconds: idleTimeoutMilliseconds
+            )
             return ConcurrentExecutionResult(
                 passed: false,
                 trace: recordTrace
@@ -193,6 +200,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         )
     }
 
+    var laneTasks = [Task<Void, Never>]()
     for (laneIndex, commands) in laneCommands.enumerated() {
         let lane = LaneID(index: UInt8(laneIndex))
         let executor = executors[laneIndex]
@@ -203,7 +211,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
             continue
         }
 
-        Task(executorPreference: executor) { @Sendable [spec, failed, failedSymptomKind, runQueue, trace, commandIndex] in
+        let laneTask = Task(executorPreference: executor) { @Sendable [spec, failed, failedSymptomKind, runQueue, trace, commandIndex] in
             defer { runQueue.markComplete(lane: lane) }
             let traceLane = TraceEvent.Lane.lane(lane)
             for command in commands {
@@ -227,6 +235,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                 }
             }
         }
+        laneTasks.append(laneTask)
     }
 
     // Drain the concurrent section via the core engine. Lane-switch tracking for suspended/resumed markers only exists when a trace is recorded; the nil handler on the probe path also skips the engine's per-continuation open-command bookkeeping.
@@ -250,6 +259,18 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         failureFlag: failed,
         onTraceSignal: onTraceSignal
     ) == .timedOut {
+        for laneTask in laneTasks {
+            laneTask.cancel()
+        }
+        _ = ScheduleDrain.drainConcurrentSection(
+            runQueue: runQueue,
+            executors: executors,
+            schedule: schedule,
+            concurrencyLevel: concurrencyLevel,
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+            failureFlag: failed,
+            onTraceSignal: nil
+        )
         let finalTrace: [TraceStep] = recordTrace
             ? __ExhaustRuntime.buildTrace(trace.value)
             : []

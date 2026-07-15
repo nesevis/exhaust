@@ -53,6 +53,24 @@ struct MetaFuzzOracleTests {
         #expect(checked > 0, "The case generator must produce checkable cases")
     }
 
+    @Test("Tuned filter laws compare one stable generator identity")
+    func tunedFilterLawsUseStableGeneratorIdentity() throws {
+        let recipe = GenRecipe.combinator(.filtered(
+            .combinator(.oneOf([
+                .leaf(.int(-18 ... 34)),
+                .leaf(.int(-99 ... 80)),
+                .leaf(.int(43 ... 79)),
+            ])),
+            .isEven
+        ))
+
+        try MetaFuzz.check(MetaFuzzCase(
+            recipe: recipe,
+            valueSeed: 9_223_372_036_854_775_887,
+            perturbationSeed: 8_260_363_646_961_457_174
+        ))
+    }
+
     @Test("Case generation is deterministic under a pinned seed")
     func caseGenerationIsDeterministic() throws {
         let first = try describeCases(seed: 7)

@@ -585,6 +585,7 @@ extension Materializer {
         do {
             context.sizeOverride = newSize
             defer { context.sizeOverride = previousSizeOverride }
+            context.cursor.skipGroupOpen()
             innerResult = try generateRecursive(
                 gen,
                 with: inputValue,
@@ -641,10 +642,11 @@ extension Materializer {
 
             case let .bind(fingerprint, forward, _, _, _):
                 let (innerFallback, boundFallback): (ChoiceTree?, ChoiceTree?) = switch calleeFallback {
-                    case let .bind(_, iFB, bFB)?: (iFB, bFB)
+                    case let .bind(_, fallbackInner, fallbackBound)?: (fallbackInner, fallbackBound)
                     default: (nil, nil)
                 }
 
+                context.cursor.skipBindOpen()
                 guard let (innerValue, innerTree) = try generateRecursive(
                     inner, with: inputValue, context: &context, fallbackTree: innerFallback
                 ) else { return nil }

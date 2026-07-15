@@ -80,7 +80,7 @@ let personGen = #gen(.string(length: 1...20), .int(in: 0...120)) { name, age in
 }
 ```
 
-When Exhaust can synthesise the backward mapping (extracting struct properties by label, or pattern-matching enum cases), it inserts a `mapped` transform and the generator is fully reflectable. When it cannot, the generator remains forward-only. Generation and reduction still work, but reflection from a concrete value cannot pass backward through the composition. See [Bidirectional transforms](#bidirectional-transforms) for the full picture.
+When Exhaust can synthesise the backward mapping (extracting struct properties by label, or validating an enum case and extracting its associated values), it inserts a `mapped` transform and the generator is fully reflectable. A qualified static factory call has the same source shape as an enum case, so it still generates values but reflection rejects its non-enum output. When Exhaust cannot synthesise the backward mapping, the generator remains forward-only. Generation and reduction still work, but reflection from a concrete value cannot pass backward through the composition. See [Bidirectional transforms](#bidirectional-transforms) for the full picture.
 
 ## Synthesising generators from Decodable types
 
@@ -268,7 +268,7 @@ let celsius = #gen(.double(in: -273.15...1000.0))
     )
 ```
 
-`#gen` uses `mapped` automatically when it can synthesise a backward mapping. For structs it extracts properties by label, and for enum cases it uses pattern matching. For custom transformations where Exhaust cannot infer the reverse, you can provide it explicitly.
+`#gen` uses `mapped` automatically when it can synthesise a backward mapping. For structs it extracts properties by label, and for enum cases it validates the case and extracts associated values. For custom transformations where Exhaust cannot infer the reverse, you can provide it explicitly.
 
 `bound` is the bidirectional equivalent of `.bind` (`.flatMap`). The `backward` function is a comap: given the final output, it extracts the inner value that was used to select the dependent generator. This enables reflection through the bind. Without `backward`, Exhaust can generate and reduce but cannot reflect a concrete value backward through the dependency.
 

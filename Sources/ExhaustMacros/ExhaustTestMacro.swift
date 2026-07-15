@@ -37,7 +37,14 @@ public struct ExhaustTestMacro: ExpressionMacro {
                 }
                 context.diagnose(Diagnostic(node: site.node, message: diagnostic))
             }
-            let runtimeFunction = isVoid ? "__exhaustExpect" : "__exhaust"
+            let runtimeFunction = switch (
+                closureRequiresTypeDirectedResultDispatch(trailingClosure),
+                isVoid
+            ) {
+                case (true, _): "__exhaustDispatched"
+                case (false, true): "__exhaustExpect"
+                case (false, false): "__exhaust"
+            }
             return try expandExhaust(
                 of: node,
                 args: args,
@@ -140,6 +147,22 @@ func closureIsVoidReturning(_ closure: ClosureExprSyntax) -> Bool {
 
     // Single expression that returns a value — Bool path.
     return false
+}
+
+/// Returns whether Swift's type checker must distinguish a throwing `Bool` helper from a throwing `Void` helper.
+private func closureRequiresTypeDirectedResultDispatch(_ closure: ClosureExprSyntax) -> Bool {
+    guard closure.statements.count == 1,
+          let onlyStatement = closure.statements.first
+    else {
+        return false
+    }
+
+    if onlyStatement.item.is(TryExprSyntax.self) {
+        return true
+    }
+
+    return onlyStatement.item.as(ExpressionStmtSyntax.self)?.expression.is(TryExprSyntax.self)
+        ?? false
 }
 
 /// Checks whether a syntax node is a statement-only construct that never produces a value (guard, for, while, repeat, do, throw).
@@ -643,7 +666,14 @@ public struct ExhaustAsyncTestMacro: ExpressionMacro {
                 }
                 context.diagnose(Diagnostic(node: site.node, message: diagnostic))
             }
-            let runtimeFunction = isVoid ? "__exhaustExpectAsync" : "__exhaustAsync"
+            let runtimeFunction = switch (
+                closureRequiresTypeDirectedResultDispatch(trailingClosure),
+                isVoid
+            ) {
+                case (true, _): "__exhaustDispatchedAsync"
+                case (false, true): "__exhaustExpectAsync"
+                case (false, false): "__exhaustAsync"
+            }
             return try expandExhaust(
                 of: node,
                 args: args,

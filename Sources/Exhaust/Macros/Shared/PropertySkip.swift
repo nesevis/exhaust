@@ -36,6 +36,15 @@ package final class SkipCounter: @unchecked Sendable {
         lock.withLocking { storage += 1 }
     }
 
+    /// Returns the accumulated count and resets the counter for the next independent run.
+    package func drain() -> Int {
+        lock.withLocking {
+            let count = storage
+            storage = 0
+            return count
+        }
+    }
+
     /// The number of skipped invocations recorded so far.
     package var count: Int {
         lock.withLocking { storage }

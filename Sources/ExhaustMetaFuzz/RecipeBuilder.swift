@@ -56,56 +56,66 @@ private func buildCombinator(
     line: UInt = #line,
     column: UInt = #column
 ) -> AnyGenerator {
+    func buildNestedGenerator(from recipe: GenRecipe) -> AnyGenerator {
+        buildGenerator(
+            from: recipe,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+    }
+
     switch kind {
         case let .contramapped(inner, transform):
             return Gen.contramap(
                 { (newOutput: Any) throws -> Any in transform.backward(newOutput) },
-                buildGenerator(from: inner).map { transform.forward($0) }
+                buildNestedGenerator(from: inner).map { transform.forward($0) }
             )
 
         case let .mapped(inner, transform):
             return ReflectiveGenerator(
-                buildGenerator(from: inner)
+                buildNestedGenerator(from: inner)
             ).mapped(
                 forward: { transform.forward($0) },
                 backward: { transform.backward($0) }
             ).gen.erase()
 
         case let .pruned(inner):
-            return Gen.prune(buildGenerator(from: inner))
+            return Gen.prune(buildNestedGenerator(from: inner))
 
         case let .array(inner, lengthRange: range):
-            return Gen.arrayOf(buildGenerator(from: inner), within: range).erase()
+            return Gen.arrayOf(buildNestedGenerator(from: inner), within: range).erase()
 
         case let .oneOf(recipes):
-            return Gen.pick(choices: recipes.map { (1, buildGenerator(from: $0)) })
+            return Gen.pick(choices: recipes.map { (1, buildNestedGenerator(from: $0)) })
 
         case let .filtered(inner, predicate):
-            let innerGen = buildGenerator(from: inner)
+            let innerGen = buildNestedGenerator(from: inner)
             return AnyGenerator.impure(
                 operation: .filter(
                     gen: innerGen.erase(),
                     fingerprint: recipeFingerprint(structure: "\(inner).filter(\(predicate))", fileID: fileID, line: line, column: column),
                     filterType: .auto,
                     predicate: { predicate.evaluate($0) },
-                    sourceLocation: FilterSourceLocation(fileID: fileID, filePath: filePath, line: column, column: column)
+                    sourceLocation: FilterSourceLocation(fileID: fileID, filePath: filePath, line: line, column: column)
                 ),
                 continuation: { .pure($0) }
             )
 
         case let .resized(inner, size: size):
-            return Gen.resize(size, buildGenerator(from: inner))
+            return Gen.resize(size, buildNestedGenerator(from: inner))
 
         case let .zipped(a, b):
             // Keep the raw `.zip` output as `[first, second]` rather than projecting to one element. The `.zip` operation reflects structurally by decomposing the array into its children, so the whole pair round-trips; projecting to a single element produced a value the reflector could not decompose, silently voiding every zip round-trip assertion.
             return AnyGenerator.impure(
-                operation: .zip([buildGenerator(from: a), buildGenerator(from: b)]),
+                operation: .zip([buildNestedGenerator(from: a), buildNestedGenerator(from: b)]),
                 continuation: { .pure($0) }
             )
 
         case let .optional(inner):
             // Mirrors `liftToOptional()` in the type-erased world: the value branch's backward transform unwraps one optional layer and throws `reflectedNil` for nil, which `reflectPickOperation` treats as "this value belongs to the other branch". A plain forward-only `.map` here makes any nil-bearing nested optional unreflectable.
-            let innerGen = buildGenerator(from: inner)
+            let innerGen = buildNestedGenerator(from: inner)
             let someBranch = AnyGenerator.impure(
                 operation: .contramap(
                     transform: { result in
@@ -131,13 +141,13 @@ private func buildCombinator(
             ])
 
         case let .boundArray(element: element, maxLength: maxLength):
-            let elementGen = buildGenerator(from: element)
+            let elementGen = buildNestedGenerator(from: element)
             return Gen.choose(in: 0 ... maxLength).bind { length in
                 Gen.arrayOf(elementGen, exactly: length).erase()
             }
 
         case let .boundRange(inner):
-            let innerGen = buildGenerator(from: inner)
+            let innerGen = buildNestedGenerator(from: inner)
             return innerGen.bind { loAny in
                 let lo = loAny as! Int
                 let hi = lo + 50
@@ -145,7 +155,7 @@ private func buildCombinator(
             }
 
         case let .reifiedBind(inner):
-            let innerGenerator = buildGenerator(from: inner)
+            let innerGenerator = buildNestedGenerator(from: inner)
             return AnyGenerator.impure(
                 operation: .transform(
                     kind: .bind(
@@ -166,7 +176,7 @@ private func buildCombinator(
             )
 
         case let .recursive(base: base, maxDepth: maxDepth):
-            let baseGen = buildGenerator(from: base)
+            let baseGen = buildNestedGenerator(from: base)
             // The UInt64 depthRange selects the base-as-generator overload. An Int range would
             // resolve to the base-as-VALUE overload, and with Output == Any that traps the
             // generator itself as the base value.
@@ -178,16 +188,16 @@ private func buildCombinator(
             }
 
         case let .weightedOneOf(branches):
-            return Gen.pick(choices: branches.map { (weight: $0.weight, generator: buildGenerator(from: $0.recipe)) })
+            return Gen.pick(choices: branches.map { (weight: $0.weight, generator: buildNestedGenerator(from: $0.recipe)) })
 
         case let .scaledArray(inner, lengthRange: range, scaling: scaling):
-            return Gen.arrayOf(buildGenerator(from: inner), within: range, scaling: scaling.sizeScaling).erase()
+            return Gen.arrayOf(buildNestedGenerator(from: inner), within: range, scaling: scaling.sizeScaling).erase()
 
         case let .unique(inner):
             // Choice-sequence deduplication (nil key extractor): works for any output type and exercises the sub-interpreter path in the value-only engine.
             return AnyGenerator.impure(
                 operation: .unique(
-                    gen: buildGenerator(from: inner).erase(),
+                    gen: buildNestedGenerator(from: inner).erase(),
                     fingerprint: recipeFingerprint(structure: "\(inner).unique", fileID: fileID, line: line, column: column),
                     keyExtractor: nil
                 ),
@@ -195,7 +205,7 @@ private func buildCombinator(
             )
 
         case let .classified(inner):
-            return Gen.classify(buildGenerator(from: inner), ("recipe", { _ in true }))
+            return Gen.classify(buildNestedGenerator(from: inner), ("recipe", { _ in true }))
 
         case let .metamorphed(inner, transform):
             // Mirrors the raw metamorphic operation used by ReflectiveGenerator.metamorph: the value is [original, transformed copy], and reflection uses the original at position zero while preserving the component array for its continuation.
@@ -205,7 +215,7 @@ private func buildCombinator(
                         transforms: [{ transform.forward($0) }],
                         inputType: Any.self
                     ),
-                    inner: buildGenerator(from: inner)
+                    inner: buildNestedGenerator(from: inner)
                 ),
                 continuation: { .pure($0) }
             )
@@ -238,7 +248,7 @@ private func buildCombinator(
                         inputType: metatype,
                         outputType: metatype
                     ),
-                    inner: buildGenerator(from: inner)
+                    inner: buildNestedGenerator(from: inner)
                 ),
                 continuation: { .pure($0) }
             )

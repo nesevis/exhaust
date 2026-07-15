@@ -7,7 +7,7 @@ import SwiftSyntaxMacros
 ///
 /// When the closure body is a struct or class initializer call with labeled arguments that map 1:1 to the closure parameters, the macro synthesizes a Mirror-based backward mapping, producing a fully bidirectional generator.
 ///
-/// When the closure body is an enum case construction (detected via member access callee, for example `Pet.cat(age)`), the macro synthesizes a pattern-matching backward closure inspired by [swift-case-paths](https://github.com/pointfreeco/swift-case-paths) by Point-Free. This returns `nil` for non-matching cases, enabling `pick` to prune branches during reflection.
+/// When the closure body is a qualified enum case construction (detected via member access callee, for example `Pet.cat(age)`), the macro emits a backward path that validates the runtime enum case through `Mirror`. This returns `nil` for non-matching cases and for static-factory calls with the same syntax, enabling `pick` to prune branches during reflection without generating an invalid case pattern.
 ///
 /// When backward inference is not possible (complex expressions, multi-statement bodies), the macro falls back to a forward-only `.map` with a warning.
 public struct GenerateMacro: ExpressionMacro {
@@ -61,7 +61,7 @@ public struct GenerateMacro: ExpressionMacro {
 
     /// Builds the expansion for a bidirectional mapping.
     ///
-    /// Dispatches to either Mirror-based extraction (struct/class init) or pattern-matching extraction (enum case) based on whether the closure analysis detected a member access callee.
+    /// Dispatches to either member-label extraction or runtime enum-case extraction based on whether the closure analysis detected a member access callee.
     private static func buildBidirectionalExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
@@ -119,11 +119,9 @@ public struct GenerateMacro: ExpressionMacro {
         }
     }
 
-    // MARK: - Pattern-matching expansion (enum cases)
+    // MARK: - Runtime enum-case expansion
 
-    /// Builds the expansion using pattern-matching backward extraction for enum cases.
-    ///
-    /// Generates `guard case let .caseName(bindings) = $0 else { return nil }` closures for the backward pass. This approach is inspired by [swift-case-paths](https://github.com/pointfreeco/swift-case-paths) by Point-Free.
+    /// Builds the expansion using runtime enum-case validation and associated-value extraction.
     private static func buildEnumCaseExpansion(
         generatorArgs: [LabeledExprListSyntax.Element],
         closure: ClosureExprSyntax,
@@ -131,32 +129,18 @@ public struct GenerateMacro: ExpressionMacro {
     ) -> ExprSyntax {
         let closureText = closure.trimmedDescription
         let caseName = result.caseName!
-        let argCount = result.originalArgumentLabels.count
-
-        // Build pattern bindings: `v0`, `v1`, ... with optional labels: `age: v0`
-        let patternBindings = (0 ..< argCount).map { i -> String in
-            if let label = result.originalArgumentLabels[i] {
-                return "\(label): v\(i)"
-            }
-            return "v\(i)"
-        }.joined(separator: ", ")
-
-        let casePattern = ".\(caseName)(\(patternBindings))"
 
         if generatorArgs.count == 1 {
             let genExpr = generatorArgs[0].expression.trimmedDescription
-            let backward = "{ guard case let \(casePattern) = $0 else { return nil }; return v0 }"
-            return "__ExhaustRuntime._macroMap(\(raw: genExpr), backward: \(raw: backward), forward: \(raw: closureText))"
+            return "__ExhaustRuntime._macroMapEnumCase(\(raw: genExpr), caseName: \"\(raw: caseName)\", forward: \(raw: closureText))"
         } else {
             let genExprs = generatorArgs.map(\.expression.trimmedDescription)
             let zipArgs = genExprs.joined(separator: ", ")
 
-            // Reorder bindings from argument order to generator/parameter order
-            let paramOrder = buildBackwardArgIndices(result: result)
-            let returnValues = paramOrder.map { "v\($0) as Any" }.joined(separator: ", ")
-
-            let backward = "{ guard case let \(casePattern) = $0 else { return nil }; return [\(returnValues)] }"
-            return "__ExhaustRuntime._macroZip(\(raw: zipArgs), backward: \(raw: backward), forward: \(raw: closureText))"
+            let parameterOrder = buildBackwardArgIndices(result: result)
+                .map(String.init)
+                .joined(separator: ", ")
+            return "__ExhaustRuntime._macroZipEnumCase(\(raw: zipArgs), caseName: \"\(raw: caseName)\", parameterOrder: [\(raw: parameterOrder)], forward: \(raw: closureText))"
         }
     }
 

@@ -317,12 +317,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime._macroMap(intGen, backward: {
-                        guard case let .cat(v0) = $0 else {
-                            return nil
-                        };
-                        return v0
-                    }, forward: { age in
+                __ExhaustRuntime._macroMapEnumCase(intGen, caseName: "cat", forward: { age in
                     Pet.cat(age)
                     })
                 """
@@ -339,12 +334,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime._macroZip(intGen, strGen, backward: {
-                        guard case let .dog(v0, v1) = $0 else {
-                            return nil
-                        };
-                        return [v0 as Any, v1 as Any]
-                    }, forward: { age, name in
+                __ExhaustRuntime._macroZipEnumCase(intGen, strGen, caseName: "dog", parameterOrder: [0, 1], forward: { age, name in
                     Pet.dog(age, name)
                     })
                 """
@@ -361,12 +351,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime._macroMap(intGen, backward: {
-                        guard case let .cat(age: v0) = $0 else {
-                            return nil
-                        };
-                        return v0
-                    }, forward: { age in
+                __ExhaustRuntime._macroMapEnumCase(intGen, caseName: "cat", forward: { age in
                     Pet.cat(age: age)
                     })
                 """
@@ -381,12 +366,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime._macroMap(intGen, backward: {
-                        guard case let .cat(v0) = $0 else {
-                            return nil
-                        };
-                        return v0
-                    }, forward: {
+                __ExhaustRuntime._macroMapEnumCase(intGen, caseName: "cat", forward: {
                         Pet.cat($0)
                     })
                 """
@@ -450,12 +430,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime._macroMap(intGen, backward: {
-                        guard case let .baz(v0) = $0 else {
-                            return nil
-                        };
-                        return v0
-                    }, forward: { x in
+                __ExhaustRuntime._macroMapEnumCase(intGen, caseName: "baz", forward: { x in
                     Foo.Bar.baz(x)
                     })
                 """
@@ -489,12 +464,7 @@
                 """
             } expansion: {
                 """
-                __ExhaustRuntime._macroZip(nameGen, ageGen, backward: {
-                        guard case let .dog(v0, v1) = $0 else {
-                            return nil
-                        };
-                        return [v1 as Any, v0 as Any]
-                    }, forward: { name, age in
+                __ExhaustRuntime._macroZipEnumCase(nameGen, ageGen, caseName: "dog", parameterOrder: [1, 0], forward: { name, age in
                     Pet.dog(age, name)
                     })
                 """

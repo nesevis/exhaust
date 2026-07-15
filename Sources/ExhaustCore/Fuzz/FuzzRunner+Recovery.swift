@@ -12,6 +12,7 @@ extension FuzzRunner {
         }
         progressWriter = FuzzProgressWriter(store: persistence.store)
         breadcrumb = FuzzBreadcrumb(fileURL: persistence.store.breadcrumbFileURL)
+        breadcrumb?.clear()
         pcTableHashAtStart = SancovRuntime.pcTableHash()
         lastCheckpointNanoseconds = startNanoseconds
 
@@ -28,7 +29,6 @@ extension FuzzRunner {
                 ]
             )
         }
-        breadcrumb?.clear()
         if let survivor = persistence.survivor {
             corpus.quarantine(sequenceHash: survivor.candidateHash)
             if survivor.parentHash != 0 {

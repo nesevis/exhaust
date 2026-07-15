@@ -27,6 +27,32 @@ public extension __ExhaustRuntime {
         )).wrapped
     }
 
+    /// Maps a single generator through a qualified enum-case or static-factory call, validating the output shape during reflection.
+    ///
+    /// Swift syntax cannot distinguish `Pet.cat(value)` from `Factory.make(value)`. The backward path therefore accepts only a runtime enum value whose case name matches `caseName`. Static factories still generate values, but their non-enum outputs reject reflection.
+    static func _macroMapEnumCase<Input, Output>(
+        _ generator: ReflectiveGenerator<Input>,
+        caseName: String,
+        forward: @Sendable @escaping (Input) -> Output
+    ) -> ReflectiveGenerator<Output> {
+        _macroMap(
+            generator,
+            backward: { output in
+                guard let payloadValues = _mirrorExtractEnumCase(
+                    output,
+                    caseName: caseName,
+                    associatedValueCount: 1
+                ),
+                    payloadValues.count == 1
+                else {
+                    return nil
+                }
+                return payloadValues[0] as? Input
+            },
+            forward: forward
+        )
+    }
+
     /// Maps a single generator with a failable backward closure for extraction.
     ///
     /// This is **macro infrastructure** for enum case generators. The backward closure uses pattern matching to extract associated values, returning `nil` when the enum value doesn't match the expected case.
@@ -99,6 +125,35 @@ public extension __ExhaustRuntime {
             ),
             inner: zipNode
         )).wrapped
+    }
+
+    /// Zips generators through a qualified enum-case or static-factory call, validating the output shape during reflection.
+    ///
+    /// `parameterOrder` maps generator order to associated-value order. Non-enum factory outputs and other enum cases reject reflection without requiring the macro to synthesize a case pattern that may not compile.
+    static func _macroZipEnumCase<each Input, Output>(
+        _ generators: repeat ReflectiveGenerator<each Input>,
+        caseName: String,
+        parameterOrder: [Int],
+        forward: @Sendable @escaping ((repeat each Input)) -> Output
+    ) -> ReflectiveGenerator<Output> {
+        let backward: @Sendable (Output) -> [Any]? = { output in
+            guard let payloadValues = _mirrorExtractEnumCase(
+                output,
+                caseName: caseName,
+                associatedValueCount: parameterOrder.count
+            ),
+                payloadValues.count == parameterOrder.count,
+                parameterOrder.allSatisfy(payloadValues.indices.contains)
+            else {
+                return nil
+            }
+            return parameterOrder.map { payloadValues[$0] }
+        }
+        return _macroZip(
+            repeat each generators,
+            backward: backward,
+            forward: forward
+        )
     }
 
     /// Zips multiple generators with a failable backward closure for extraction.

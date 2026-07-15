@@ -120,14 +120,14 @@ public extension __ExhaustRuntime {
         #endif
 
         // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop. This deadlocks under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD's global queue is far larger than the fixed cooperative pool, so this avoids that starvation — but it is not unbounded: a top-level concurrent queue caps at 64 threads, so aggregate lane demand is bounded by `LaneGate` (via `dispatchToGCD(reserving:)`) to keep it under that wall.
-        let timedOutProbeCount = UnsafeSendableBox(0)
+        let timeoutProbeCounts = UnsafeSendableBox((attempts: 0, timedOut: 0))
         let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.single) {
             ExhaustLog.withConfiguration(config.logConfiguration) {
                 runCooperativeMachine(
                     Spec.self,
                     config: config,
                     regressionSeeds: regressionSeeds,
-                    timedOutProbeCount: timedOutProbeCount,
+                    timeoutProbeCounts: timeoutProbeCounts,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -139,8 +139,8 @@ public extension __ExhaustRuntime {
             reportError(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }
         warnIfTimeoutFractionHigh(
-            timedOutProbes: timedOutProbeCount.value,
-            totalBudget: config.budget.screeningBudget + config.budget.samplingBudget,
+            timedOutProbes: timeoutProbeCounts.value.timedOut,
+            totalProbes: timeoutProbeCounts.value.attempts,
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -158,7 +158,7 @@ private extension __ExhaustRuntime {
         _: Spec.Type,
         config: ResolvedConcurrentConfig,
         regressionSeeds: [String],
-        timedOutProbeCount: UnsafeSendableBox<Int>,
+        timeoutProbeCounts: UnsafeSendableBox<(attempts: Int, timedOut: Int)>,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -204,6 +204,7 @@ private extension __ExhaustRuntime {
         let invocationCounter = UnsafeSendableBox(0)
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             invocationCounter.value += 1
+            timeoutProbeCounts.value.attempts += 1
             let result = drainSchedule(
                 taggedCommands: taggedCommands,
                 specInit: specInit,
@@ -213,7 +214,7 @@ private extension __ExhaustRuntime {
             )
             if result.timedOut {
                 // A timed-out probe is inconclusive, not a counterexample. Count it as a pass so discovery keeps sampling, and tally it for the timeout-rate warning.
-                timedOutProbeCount.value += 1
+                timeoutProbeCounts.value.timedOut += 1
                 return true
             }
             return result.passed

@@ -54,19 +54,22 @@ struct SwiftTestingIntegrationTests {
         #expect(result != nil, "Should find a counterexample")
     }
 
-    @Test("Issue.record arguments are evaluated during silent detection")
-    func issueRecordArgumentsAreEvaluatedDuringSilentDetection() {
-        let counter = DetectionEvaluationCounter()
+    @Test("Silent detection executes the closure without evaluating Issue.record arguments")
+    func silentDetectionReplacesIssueRecordWithoutSkippingClosure() {
+        let closureCounter = DetectionEvaluationCounter()
+        let issueArgumentCounter = DetectionEvaluationCounter()
         let result = #exhaust(
             #gen(.just(0)),
             .suppress(.all),
             .budget(.custom(screening: 0, sampling: 1))
         ) { _ in
-            Issue.record("detection evaluation \(counter.increment())")
+            _ = closureCounter.increment()
+            Issue.record("detection evaluation \(issueArgumentCounter.increment())")
         }
 
         #expect(result == 0)
-        #expect(counter.value > 0)
+        #expect(closureCounter.value == 1)
+        #expect(issueArgumentCounter.value == 0)
     }
 
     @Test("void property with thrown error") func voidPropertyWithThrownError() {
@@ -81,6 +84,19 @@ struct SwiftTestingIntegrationTests {
             }
         }
         #expect(result != nil, "Should detect thrown errors as failures")
+    }
+
+    @Test("single-call throwing Void helper uses assertion semantics")
+    func singleCallThrowingVoidHelperUsesAssertionSemantics() {
+        let result = #exhaust(
+            #gen(.just(1)),
+            .suppress(.issueReporting),
+            .budget(.custom(screening: 0, sampling: 1))
+        ) { value in
+            try validateSingleCallThrowingVoid(value)
+        }
+
+        #expect(result == 1)
     }
 
     // MARK: - Bool property unchanged
@@ -280,17 +296,14 @@ struct SwiftTestingIntegrationTests {
         #expect(result != nil, "Regression seed should find a counterexample")
     }
 
-    @Test("Trait regression seeds apply to Bool properties", .exhaust(.regressions("1A")))
+    @Test("Trait regression seeds apply to Bool properties", .exhaust(.regressions("1A-1")))
     func traitRegressionSeedsApplyToBoolProperties() {
-        var result: Int?
-        withKnownIssue {
-            result = #exhaust(
-                #gen(.int(in: 0 ... 100)),
-                .budget(.custom(screening: 0, sampling: 0)),
-                .suppress(.all)
-            ) { _ in
-                false
-            }
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .budget(.custom(screening: 0, sampling: 0)),
+            .suppress(.all)
+        ) { _ in
+            false
         }
 
         #expect(result != nil)
@@ -316,6 +329,29 @@ struct SwiftTestingIntegrationTests {
         #expect(reportDeliveryCount == 1)
     }
 
+    @Test("Async regression replay reports skips from reduction", .exhaust(.regressions("1A-1")))
+    func asyncRegressionReplayReportsReductionSkips() async {
+        let invocationCounter = DetectionEvaluationCounter()
+        var capturedReport: ExhaustReport?
+        let result = await #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .suppress(.all),
+            .onReport { report in
+                capturedReport = report
+            }
+        ) { _ async throws -> Bool in
+            await Task.yield()
+            let invocation = invocationCounter.increment()
+            if invocation > 1, invocation.isMultiple(of: 2) {
+                throw PropertySkip()
+            }
+            return false
+        }
+
+        #expect(result != nil)
+        #expect(capturedReport?.skippedInvocations ?? 0 > 0)
+    }
+
     @Test("Trait with passing regression seed", .exhaust(.budget(.standard), .regressions("0")))
     func traitWithPassingRegressionSeed() {
         // Seed "0" should produce a value that passes value >= 0 on 0...100.
@@ -328,6 +364,14 @@ struct SwiftTestingIntegrationTests {
             #expect(value >= 0)
         }
         #expect(result == nil, "All values in 0...100 should pass")
+    }
+}
+
+private struct SingleCallValidationError: Error {}
+
+private func validateSingleCallThrowingVoid(_ value: Int) throws {
+    if value == 1 {
+        throw SingleCallValidationError()
     }
 }
 
