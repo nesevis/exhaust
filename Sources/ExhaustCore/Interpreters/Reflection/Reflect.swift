@@ -41,7 +41,7 @@ extension Interpreters {
 
         switch matchingPaths.count {
             case 0:
-                throw ReflectionError.couldNotMapInputToGenerator
+                return nil
             case 1:
                 return matchingPaths[0]
             default:
@@ -185,6 +185,8 @@ extension Interpreters {
             return try reflectRecursive(nextGen, onFinalOutput: finalOutput)
                 .map { ($0.value, $0.path) }
         } catch ReflectionError.reflectedNil {
+            return []
+        } catch ReflectionError.contramapWasWrongType {
             return []
         }
     }

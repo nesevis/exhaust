@@ -273,7 +273,7 @@ private struct ReplayKeyedContainer<Key: CodingKey>: KeyedDecodingContainerProto
     }
 
     func decodeIfPresent<T: Decodable>(_: T.Type, forKey key: Key) throws -> T? {
-        resolveOptional(forKey: key)
+        try resolveOptional(forKey: key)
     }
 
     func nestedContainer<NestedKey: CodingKey>(
@@ -415,25 +415,38 @@ extension ReplayKeyedContainer {
         }
     }
 
-    private func resolveOptional<T>(forKey key: Key) -> T? {
+    private func resolveOptional<T>(forKey key: Key) throws -> T? {
         switch storage {
             case let .positional(state):
-                guard let index = findIndex(forKey: key, in: state),
-                      state.producesReplayValue[index] == false
-                else {
+                guard let index = findIndex(forKey: key, in: state) else {
                     return nil
                 }
                 advanceCursor(state, past: index)
+                guard state.producesReplayValue[index] == false else {
+                    throw GenSchemaMiss(codingPath: codingPath + [key])
+                }
                 let value = state.values[index]
                 if state.isOptional[index], leafIsNil(value) {
                     return nil
                 }
-                return value as? T
+                guard let typed = value as? T else {
+                    throw GenSchemaMiss(codingPath: codingPath + [key])
+                }
+                return typed
             case let .dictionary(fields):
-                guard case let .leaf(value)? = fields[key.stringValue] else {
+                guard let entry = fields[key.stringValue] else {
                     return nil
                 }
-                return value as? T
+                guard case let .leaf(value) = entry else {
+                    throw GenSchemaMiss(codingPath: codingPath + [key])
+                }
+                if leafIsNil(value) {
+                    return nil
+                }
+                guard let typed = value as? T else {
+                    throw GenSchemaMiss(codingPath: codingPath + [key])
+                }
+                return typed
         }
     }
 }

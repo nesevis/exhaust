@@ -11,6 +11,7 @@ package final class DiscoveryDecoder: Decoder {
     private var unkeyedEntries: [UnkeyedEntry] = []
     private var singleChild: AnyGenerator?
     private var nestedDecoders: [(key: String, decoder: DiscoveryDecoder)] = []
+    private var observedUnkeyedCollectionTraversal = false
 
     package init(jsonValue: Any, codingPath: [any CodingKey] = []) {
         self.jsonValue = jsonValue
@@ -58,7 +59,7 @@ package final class DiscoveryDecoder: Decoder {
             }
 
             // A single element type across all positions with no nested decoders reads as a collection (a loop over homogeneous elements), so the length varies. Mixed types or nested decoders read as a positional/tuple decode that wants exactly this sequence, so the length stays fixed.
-            if hasNested == false, elementTypes.count == 1 {
+            if observedUnkeyedCollectionTraversal, hasNested == false, elementTypes.count == 1 {
                 return .homogeneousArray(element: elements[0].generator)
             }
             return .unkeyed(elements)
@@ -109,6 +110,10 @@ package final class DiscoveryDecoder: Decoder {
 
     func recordUnkeyedNested(decoder: DiscoveryDecoder) {
         unkeyedEntries.append(.nested(decoder: decoder))
+    }
+
+    func recordUnkeyedCollectionTraversal() {
+        observedUnkeyedCollectionTraversal = true
     }
 
     func recordSingle(_ generator: AnyGenerator) {
@@ -337,17 +342,19 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
     let decoder: DiscoveryDecoder
     let codingPath: [any CodingKey]
     var count: Int? {
-        array.count
+        decoder.recordUnkeyedCollectionTraversal()
+        return array.count
     }
 
     var isAtEnd: Bool {
-        currentIndex >= array.count
+        decoder.recordUnkeyedCollectionTraversal()
+        return currentIndex >= array.count
     }
 
     var currentIndex: Int = 0
 
     mutating func decodeNil() throws -> Bool {
-        guard isAtEnd == false else { return true }
+        guard currentIndex < array.count else { return true }
         if array[currentIndex] is NSNull {
             currentIndex += 1
             return true
@@ -356,7 +363,7 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
     }
 
     mutating func decode<T: Decodable>(_ type: T.Type) throws -> T {
-        guard isAtEnd == false else {
+        guard currentIndex < array.count else {
             throw DecodingError.valueNotFound(
                 type,
                 .init(codingPath: codingPath, debugDescription: "Unkeyed container exhausted")
@@ -410,7 +417,7 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
     mutating func nestedContainer<NestedKey: CodingKey>(
         keyedBy _: NestedKey.Type
     ) throws -> KeyedDecodingContainer<NestedKey> {
-        guard isAtEnd == false,
+        guard currentIndex < array.count,
               let dict = array[currentIndex] as? [String: Any]
         else {
             throw GeneratorSynthesizerError.unexpectedContainer
@@ -425,7 +432,7 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
     }
 
     mutating func nestedUnkeyedContainer() throws -> any UnkeyedDecodingContainer {
-        guard isAtEnd == false,
+        guard currentIndex < array.count,
               let nestedArray = array[currentIndex] as? [Any]
         else {
             throw GeneratorSynthesizerError.unexpectedContainer
@@ -439,7 +446,7 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
     }
 
     mutating func superDecoder() throws -> any Decoder {
-        guard isAtEnd == false else {
+        guard currentIndex < array.count else {
             throw DecodingError.valueNotFound(
                 Any.self,
                 .init(codingPath: codingPath, debugDescription: "Unkeyed container exhausted")
@@ -510,54 +517,7 @@ private struct DiscoverySingleValueContainer: SingleValueDecodingContainer {
 
 // MARK: - Primitive Decoding
 
-private func decodePrimitive<T>(_ type: T.Type, from jsonValue: Any) throws -> T {
-    if let value = jsonValue as? T {
-        return value
-    }
-    if type == Bool.self, let number = jsonValue as? NSNumber {
-        return number.boolValue as! T
-    }
-    if type == Int.self, let number = jsonValue as? NSNumber {
-        return number.intValue as! T
-    }
-    if type == Int8.self, let number = jsonValue as? NSNumber {
-        return number.int8Value as! T
-    }
-    if type == Int16.self, let number = jsonValue as? NSNumber {
-        return number.int16Value as! T
-    }
-    if type == Int32.self, let number = jsonValue as? NSNumber {
-        return number.int32Value as! T
-    }
-    if type == Int64.self, let number = jsonValue as? NSNumber {
-        return number.int64Value as! T
-    }
-    if type == UInt.self, let number = jsonValue as? NSNumber {
-        return number.uintValue as! T
-    }
-    if type == UInt8.self, let number = jsonValue as? NSNumber {
-        return number.uint8Value as! T
-    }
-    if type == UInt16.self, let number = jsonValue as? NSNumber {
-        return number.uint16Value as! T
-    }
-    if type == UInt32.self, let number = jsonValue as? NSNumber {
-        return number.uint32Value as! T
-    }
-    if type == UInt64.self, let number = jsonValue as? NSNumber {
-        return number.uint64Value as! T
-    }
-    if type == Float.self, let number = jsonValue as? NSNumber {
-        return number.floatValue as! T
-    }
-    if type == Double.self, let number = jsonValue as? NSNumber {
-        return number.doubleValue as! T
-    }
-    if type == String.self, let string = jsonValue as? String {
-        return string as! T
-    }
-    throw DecodingError.typeMismatch(
-        type,
-        .init(codingPath: [], debugDescription: "Cannot decode \(type) from \(Swift.type(of: jsonValue))")
-    )
+private func decodePrimitive<T: Decodable>(_ type: T.Type, from jsonValue: Any) throws -> T {
+    let data = try JSONSerialization.data(withJSONObject: jsonValue, options: .fragmentsAllowed)
+    return try JSONDecoder().decode(type, from: data)
 }
