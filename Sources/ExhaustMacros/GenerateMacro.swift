@@ -47,7 +47,11 @@ public struct GenerateMacro: ExpressionMacro {
                     generatorArg: generatorArgs[0],
                     closure: trailingClosure
                 )
-            case .forwardOnly:
+            case let .forwardOnly(diagnostic):
+                context.diagnose(Diagnostic(
+                    node: Syntax(node),
+                    message: diagnostic
+                ))
                 return buildForwardOnlyExpansion(
                     generatorArgs: generatorArgs,
                     closure: trailingClosure

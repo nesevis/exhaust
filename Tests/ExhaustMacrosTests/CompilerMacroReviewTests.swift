@@ -22,18 +22,55 @@
             #expect(isForwardOnly)
         }
 
-        @Test("A forward-only #gen fallback emits its explanatory warning")
-        func forwardOnlyFallbackEmitsWarning() throws {
-            let expression: ExprSyntax = "#gen(intGenerator) { value in value * 2 }"
-            let expansion = try #require(expression.as(MacroExpansionExprSyntax.self))
-            let context = RecordingMacroExpansionContext()
+        @Test("Forward-only #gen fallbacks emit reason-specific warnings")
+        func forwardOnlyFallbacksEmitWarnings() throws {
+            let testCases: [(source: ExprSyntax, expectedDiagnostic: ExhaustMacroDiagnostic)] = [
+                (
+                    "#gen(firstGenerator, secondGenerator) { Pair($0, $0) }",
+                    .forwardOnlyShorthandParams
+                ),
+                (
+                    """
+                    #gen(intGenerator) { value in
+                        let doubled = value * 2
+                        return doubled
+                    }
+                    """,
+                    .forwardOnlyMultiStatement
+                ),
+                (
+                    "#gen(intGenerator) { value in value * 2 }",
+                    .forwardOnlyNotFunctionCall
+                ),
+                (
+                    "#gen(firstGenerator, secondGenerator) { first, second in Pair(first, second) }",
+                    .forwardOnlyUnlabeledArguments
+                ),
+                (
+                    "#gen(intGenerator) { value in Box(value: value * 2) }",
+                    .forwardOnlyComplexArguments
+                ),
+                (
+                    "#gen(intGenerator) { value in Box(value: other) }",
+                    .forwardOnlyParamMismatch
+                ),
+            ]
 
-            _ = try GenerateMacro.expansion(of: expansion, in: context)
+            for testCase in testCases {
+                let expansion = try #require(
+                    testCase.source.as(MacroExpansionExprSyntax.self)
+                )
+                let context = RecordingMacroExpansionContext()
 
-            #expect(context.diagnostics.contains { diagnostic in
-                diagnostic.diagMessage.severity == .warning
-                    && diagnostic.message.contains("Cannot infer backward mapping")
-            })
+                _ = try GenerateMacro.expansion(of: expansion, in: context)
+
+                #expect(context.diagnostics.count == 1)
+                #expect(context.diagnostics.first?.diagMessage.severity == .warning)
+                #expect(
+                    context.diagnostics.first?.diagMessage.diagnosticID
+                        == testCase.expectedDiagnostic.diagnosticID
+                )
+            }
         }
 
         @Test("A parameter named command does not capture the response description source")

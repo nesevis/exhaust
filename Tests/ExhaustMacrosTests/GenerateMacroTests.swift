@@ -65,6 +65,12 @@
                 """
                 #gen(intGen) { $0 * 2 }
                 """
+            } diagnostics: {
+                """
+                #gen(intGen) { $0 * 2 }
+                ┬──────────────────────
+                ╰─ ⚠️ Cannot infer backward mapping: closure body is not an initializer or function call
+                """
             } expansion: {
                 """
                 intGen.map {
@@ -127,6 +133,13 @@
                     Person(name: name.uppercased())
                 }
                 """
+            } diagnostics: {
+                """
+                #gen(nameGen) { name in
+                ╰─ ⚠️ Cannot infer backward mapping: arguments must be simple parameter references
+                    Person(name: name.uppercased())
+                }
+                """
             } expansion: {
                 """
                 nameGen.map { name in
@@ -141,6 +154,14 @@
             assertMacro {
                 """
                 #gen(intGen) { x in
+                    let doubled = x * 2
+                    return doubled
+                }
+                """
+            } diagnostics: {
+                """
+                #gen(intGen) { x in
+                ╰─ ⚠️ Cannot infer backward mapping: multi-statement closures cannot be analyzed
                     let doubled = x * 2
                     return doubled
                 }
@@ -245,11 +266,18 @@
             }
         }
 
-        @Test("Two unlabeled arguments produce bidirectional with positional Mirror labels")
-        func twoUnlabeledArgumentsBidirectional() {
+        @Test("Two unlabeled arguments produce forward-only mapping")
+        func twoUnlabeledArgumentsFallback() {
             assertMacro {
                 """
                 #gen(intGen, strGen) { x, y in
+                    Pair(x, y)
+                }
+                """
+            } diagnostics: {
+                """
+                #gen(intGen, strGen) { x, y in
+                ╰─ ⚠️ Cannot infer backward mapping: unlabeled arguments cannot map to property names
                     Pair(x, y)
                 }
                 """
