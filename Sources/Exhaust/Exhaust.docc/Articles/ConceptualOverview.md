@@ -30,6 +30,12 @@ Two dials shape how a generator fills the space. **Size** is a value from 0 to 1
 
 A **filter** (`.filter {…}`) keeps only values that satisfy a predicate. Exhaust tunes the generator toward valid values rather than generating and discarding, so a sparse constraint stays practical.
 
+## Screening
+
+Because a generator is inspectable, Exhaust can read its parameters and their domains. It uses this to build a catalogue of **problematic values**: the values bugs are known to cluster around. What counts as problematic depends on the type. Range limits and the steps either side of them for integers. NaN, the infinities, and values near the edges of representable precision for floats. Daylight-saving transitions and epoch points for dates. Troublesome Unicode scalars for characters. Lengths 0, 1, 2, and the range's lower bound for collections.
+
+**Screening** is the systematic exercise of these values. If a generator has two parameters, each with its own problematic values, Exhaust tries every pair: each problematic value from the first parameter combined with each problematic value from the second, at least once, budget allowing. Empirical studies find that around 70% of reported defects are triggered by one or two conditions acting together (Kuhn and Reilly, 2002). An overflow that needs one parameter at its maximum and another above zero surfaces the moment that pair is tried together, and stays hidden while they vary one at a time.
+
 ## The default search: #exhaust
 
 `#exhaust` is the workhorse. Give it a generator and a property and it runs the property across hundreds of inputs, in two phases.
@@ -53,9 +59,7 @@ A **filter** (`.filter {…}`) keeps only values that satisfy a predicate. Exhau
     )
 ```
 
-**Screening** comes first. Before any random sampling, Exhaust tests the **problematic values**: the catalogue of values bugs are known to cluster around. What counts as problematic depends on the type. Range limits and the steps either side of them for integers. NaN, the infinities, and values near the edges of representable precision for floats. Daylight-saving transitions and epoch points for dates. Troublesome Unicode scalars for characters. Lengths 0, 1, 2, and the range's lower bound for collections.
-
-These are drawn in combinations at **pairwise** coverage, so every pair of problematic values from two parameters is tried together at least once, budget allowing. That matters because empirical studies find that around 70% of reported defects are triggered by one or two conditions (Kuhn and Reilly, 2002): an overflow that needs one parameter at its maximum and another above zero surfaces the moment that pair is tried together, and stays hidden while they vary one at a time.
+Screening comes first. Before any random sampling, Exhaust tries the problematic-value combinations described above.
 
 **Random sampling** follows. Once the screening budget is spent, Exhaust draws from the generator's natural distribution, exercising random, varied inputs. Screening and sampling have separate budgets. At the default `.standard` budget you get 200 of each.
 
@@ -164,7 +168,7 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 - **Property**: a claim about your code that should hold for every generated input. What `#exhaust` and `#explore` check.
 - **Random sampling**: the second phase, drawing from the generator's natural distribution.
 - **Reduction**: reducing a failing input to the minimal counterexample, automatically and for every type.
-- **Screening**: the first phase of an `#exhaust` run, testing problematic values pairwise before random sampling. Screening of the input space, not code coverage.
+- **Screening**: the systematic exercise of known-problematic values at pairwise strength. Runs as the first phase of `#exhaust`, `#explore`, and coverage-guided search. Screening of the input space, not code coverage.
 
 ### Exploration
 

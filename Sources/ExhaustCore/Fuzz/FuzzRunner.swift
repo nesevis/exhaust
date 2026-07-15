@@ -231,6 +231,9 @@ package final class FuzzRunner<Output> {
                     phase: .screening,
                     isBoundaryDerived: true
                 )
+            },
+            shouldTerminate: { [self] in
+                terminationDue() != nil
             }
         )
     }

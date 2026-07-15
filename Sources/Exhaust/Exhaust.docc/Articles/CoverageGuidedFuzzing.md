@@ -87,8 +87,8 @@ FUZZ=1 swift test \
 
 Exhaust runs the property in three phases:
 
-1. **Screening.** The same known problematic-value combinations `#exhaust` uses: integer min/max/zero, IEEE 754 sentinels, Unicode edge cases, and so on. Inputs that reach new branches are kept for the next phase.
-2. **Sampling.** Random generation, as in `#exhaust`. Exhaust watches the rate of new branch discovery and moves on when it flatlines.
+1. **Screening.** The same known problematic-value combinations `#exhaust` uses: integer min/max/zero, IEEE 754 sentinels, Unicode edge cases, and so on. Screening has its own row budget (10,000 rows by default) and stops at the cap, at the end of the covering array, or when the wall-clock budget runs out, whichever comes first. Inputs that reach new branches are kept for the next phase.
+2. **Sampling.** Random generation, as in `#exhaust`. Exhaust watches the rate of new branch discovery and moves on when it flatlines or 10% of the time budget has elapsed, whichever comes first.
 3. **Mutation.** Exhaust takes inputs that reached interesting branches, modifies them, and checks whether the modified version reaches branches that nothing in the collection has reached before. When it does, the new input joins the collection and becomes a candidate for further modification. This continues until the budget runs out or new branches stop appearing.
 
 Failures at any phase are reduced to minimal counterexamples and catalogued. The run does not stop at the first failure.

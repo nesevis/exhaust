@@ -28,13 +28,15 @@ package enum ScreeningRunner {
     /// - Parameters:
     ///   - skipToRow: When set, skips property evaluation for all rows before this index and only tests the target row. Used for O(1) screening replay.
     ///   - continuePastFailure: When `true`, a failing row is reported through `onExample` and iteration continues instead of returning `.failure`. `#explore(time:)` catalogues every failure; `#exhaust` keeps the default first-failure return. A run that continued past a failure never reports `.exhaustive`, because that case asserts the domain passed.
+    ///   - shouldTerminate: Checked each iteration. When it returns `true`, screening stops early and reports `.partial`. The `#explore(time:)` path passes its wall-clock budget check so a slow property does not consume the entire time budget before the mutation phase begins.
     package static func run<Output>(
         _ gen: Generator<Output>,
         screeningBudget: UInt64,
         skipToRow: Int? = nil,
         continuePastFailure: Bool = false,
         property: (Output) -> Bool,
-        onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
+        onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil,
+        shouldTerminate: (() -> Bool)? = nil
     ) -> Result<Output> {
         guard var analysis = ChoiceTreeAnalysis.analyze(gen, compositeThreshold: screeningBudget) else {
             return .notApplicable
@@ -86,6 +88,9 @@ package enum ScreeningRunner {
             var rowIndex = 0
             var failureObserved = false
             while rowIndex < budget, let row = generator.next() {
+                if shouldTerminate?() == true {
+                    break
+                }
                 if let target = skipToRow, rowIndex < target {
                     rowIndex += 1
                     continue
@@ -129,6 +134,9 @@ package enum ScreeningRunner {
         var rowIndex = skipToRow ?? 0
         var failureObserved = false
         while rowIndex < budget, UInt64(rowIndex) < domainSizes[0] {
+            if shouldTerminate?() == true {
+                break
+            }
             let row = CoveringArrayRow(values: [UInt64(rowIndex)])
             let rowResult = testRow(
                 erasedGen, row: row, rowIndex: rowIndex,
