@@ -45,19 +45,19 @@ public macro gen<each GeneratedValue>(
 
 /// Synthesizes a generator from a `Decodable` type and example JSON data.
 ///
-/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and screening analysis treat it identically to a hand-written generator. Use this overload when writing generators for a large number existing types would be impractical.
+/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. Generation, replay, reduction, and screening treat the result like a hand-written generator. Reflection is unavailable as described under Limitations. Use this overload when writing generators for a large number of existing types would be impractical.
 ///
 /// ## What Gets a Full Generator
 ///
-/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary — both when the element type conforms to ``ExhaustGenerable`` and when it is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
+/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary when the element type conforms to ``ExhaustGenerable`` or is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
 ///
 /// ## What Gets Pinned
 ///
-/// Fields the synthesizer cannot characterize from the example are pinned to the constant value from the example JSON — they still work, they simply do not vary. This covers non-`CaseIterable` `RawRepresentable` enums, collections whose example is empty (no element to discover from), and values decoded through patterns the synthesizer does not model (manual element-by-element unkeyed decoding, class inheritance via a super decoder). Separately, when a generated value drives a hand-written `init(from:)` down a branch the example does not cover, that one sample is pinned to the example and a deduplicated warning is logged.
+/// Fields the synthesizer cannot characterize from the example are pinned to the constant value from the example JSON. They still work but do not vary. This covers non-`CaseIterable` `RawRepresentable` enums, collections whose example is empty (no element to discover from), and values decoded through patterns the synthesizer does not model (manual element-by-element unkeyed decoding, class inheritance via a super decoder). Separately, when a generated value drives a hand-written `init(from:)` down a branch the example does not cover, that one sample is pinned to the example and a deduplicated warning is logged.
 ///
 /// ## Limitations
 ///
-/// The generator is forward-only. Reflection is not supported — ``#examine`` will report a forward-only warning on the top-level map. Reduction still works because the reducer operates on the choice sequence, not reflected values.
+/// The generator is forward-only. `#exhaust(…, reflecting:)` cannot decompose a concrete value through it. Exhaust still reduces counterexamples found during generation because the reducer operates on the recorded choice sequence.
 ///
 /// The ``ReflectiveGenerator/isSynthesized`` flag is set to `true` on the returned generator. Diagnostic tools can check this flag to identify `.just` nodes that represent fields the decoder could not generate.
 ///
@@ -83,19 +83,19 @@ public macro gen<T: Decodable>(
 
 /// Synthesizes a generator from a `Codable` instance by encoding it to JSON and discovering the decode pattern.
 ///
-/// Encodes the instance with `JSONEncoder`, then runs `T.init(from:)` once against the resulting JSON to discover the type's decode call pattern and build a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and screening analysis treat it identically to a hand-written generator. Use this when you already have an instance (for example, from a factory method or test fixture) and want a generator without writing out JSON.
+/// Encodes the instance with `JSONEncoder`, then runs `T.init(from:)` once against the resulting JSON to discover the type's decode call pattern and build a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. Generation, replay, reduction, and screening treat the result like a hand-written generator. Reflection is unavailable as described under Limitations. Use this when you already have an instance (for example, from a factory method or test fixture) and want a generator without writing out JSON.
 ///
 /// ## What Gets a Full Generator
 ///
-/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary — both when the element type conforms to ``ExhaustGenerable`` and when it is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
+/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary when the element type conforms to ``ExhaustGenerable`` or is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
 ///
 /// ## What Gets Pinned
 ///
-/// Fields the synthesizer cannot characterize from the example are pinned to the constant value from the encoded instance — they still work, they simply do not vary. This covers non-`CaseIterable` `RawRepresentable` enums, collections whose example is empty (no element to discover from), and values decoded through patterns the synthesizer does not model (manual element-by-element unkeyed decoding, class inheritance via a super decoder). Separately, when a generated value drives a hand-written `init(from:)` down a branch the example does not cover, that one sample is pinned to the example and a deduplicated warning is logged.
+/// Fields the synthesizer cannot characterize from the example are pinned to the constant value from the encoded instance. They still work but do not vary. This covers non-`CaseIterable` `RawRepresentable` enums, collections whose example is empty (no element to discover from), and values decoded through patterns the synthesizer does not model (manual element-by-element unkeyed decoding, class inheritance via a super decoder). Separately, when a generated value drives a hand-written `init(from:)` down a branch the example does not cover, that one sample is pinned to the example and a deduplicated warning is logged.
 ///
 /// ## Limitations
 ///
-/// The generator is forward-only. Reflection is not supported — ``#examine`` will report a forward-only warning on the top-level map. Reduction still works because the reducer operates on the choice sequence, not reflected values.
+/// The generator is forward-only. `#exhaust(…, reflecting:)` cannot decompose a concrete value through it. Exhaust still reduces counterexamples found during generation because the reducer operates on the recorded choice sequence.
 ///
 /// The ``ReflectiveGenerator/isSynthesized`` flag is set to `true` on the returned generator. Diagnostic tools can check this flag to identify `.just` nodes that represent fields the decoder could not generate.
 ///
@@ -119,19 +119,19 @@ public macro gen<T: Codable>(
 
 /// Synthesizes a generator from a `Decodable` type and an example JSON string.
 ///
-/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. The resulting generator is a normal ``ReflectiveGenerator`` — all interpreters, the reducer, and screening analysis treat it identically to a hand-written generator. Use this overload when writing generators for a large number of existing types would be impractical.
+/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a ``ReflectiveGenerator`` that produces arbitrary values of type `T`. Generation, replay, reduction, and screening treat the result like a hand-written generator. Reflection is unavailable as described under Limitations. Use this overload when writing generators for a large number of existing types would be impractical.
 ///
 /// ## What Gets a Full Generator
 ///
-/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary — both when the element type conforms to ``ExhaustGenerable`` and when it is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
+/// Types conforming to ``ExhaustGenerable`` (all integer types, `Bool`, `Float`, `Double`, `String`, `Character`, `Date`, `UUID`, `URL`, `Data`, `Decimal`, `CGFloat`) produce full generators with size scaling, problematic-value analysis, and reduction support. `Optional`, `Array`, `Dictionary`, and `Set` produce full generators whose length and contents vary when the element type conforms to ``ExhaustGenerable`` or is a nested `Decodable` type discovered from a representative element of the example. `CaseIterable` enums produce even-weighted picks across all cases. A hand-written `init(from:)` that branches, reorders fields, or decodes a nested structure inline generates correctly, as long as the example exercises the path it takes.
 ///
 /// ## What Gets Pinned
 ///
-/// Fields the synthesizer cannot characterize from the example are pinned to the constant value from the JSON — they still work, they simply do not vary. This covers non-`CaseIterable` `RawRepresentable` enums, collections whose example is empty (no element to discover from), and values decoded through patterns the synthesizer does not model (manual element-by-element unkeyed decoding, class inheritance via a super decoder). Separately, when a generated value drives a hand-written `init(from:)` down a branch the example does not cover, that one sample is pinned to the example and a deduplicated warning is logged.
+/// Fields the synthesizer cannot characterize from the example are pinned to the constant value from the JSON. They still work but do not vary. This covers non-`CaseIterable` `RawRepresentable` enums, collections whose example is empty (no element to discover from), and values decoded through patterns the synthesizer does not model (manual element-by-element unkeyed decoding, class inheritance via a super decoder). Separately, when a generated value drives a hand-written `init(from:)` down a branch the example does not cover, that one sample is pinned to the example and a deduplicated warning is logged.
 ///
 /// ## Limitations
 ///
-/// The generator is forward-only. Reflection is not supported — ``#examine`` will report a forward-only warning on the top-level map. Reduction still works because the reducer operates on the choice sequence, not reflected values.
+/// The generator is forward-only. `#exhaust(…, reflecting:)` cannot decompose a concrete value through it. Exhaust still reduces counterexamples found during generation because the reducer operates on the recorded choice sequence.
 ///
 /// The ``ReflectiveGenerator/isSynthesized`` flag is set to `true` on the returned generator. Diagnostic tools can check this flag to identify `.just` nodes that represent fields the decoder could not generate.
 ///

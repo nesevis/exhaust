@@ -76,6 +76,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameter gen: Generator for each set element.
     /// - Returns: A generator producing sets of random size.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete set from this factory because set construction discards the order elements were drawn in and collapses duplicates. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func set<Element: Hashable>(
         _ gen: ReflectiveGenerator<Element>
     ) -> ReflectiveGenerator<Set<Element>> where Output == Set<Element> {
@@ -95,6 +96,7 @@ public extension ReflectiveGenerator {
     ///   - count: The allowed range of element draws per set.
     ///   - scaling: How set size scales with the size parameter. Defaults to `.linear`.
     /// - Returns: A generator producing sets with count in the given range.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete set from this factory because set construction discards the order elements were drawn in and collapses duplicates. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func set<Element: Hashable>(
         _ gen: ReflectiveGenerator<Element>,
         count: ClosedRange<Int>,
@@ -117,6 +119,7 @@ public extension ReflectiveGenerator {
     ///   - gen: Generator for each set element.
     ///   - count: The exact number of element draws per set.
     /// - Returns: A generator producing sets of at most `count` elements.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete set from this factory because set construction discards the order elements were drawn in and collapses duplicates. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func set<Element: Hashable>(
         _ gen: ReflectiveGenerator<Element>,
         count: Int
@@ -127,7 +130,7 @@ public extension ReflectiveGenerator {
 
     /// Creates a generator that produces dictionaries from key and value generators.
     ///
-    /// Array length (and thus dictionary size) is size-scaled. Keys are deduplicated by hash — if the key generator produces duplicates, the first value is kept.
+    /// Array length, and thus dictionary size, is size-scaled. Keys are deduplicated by hash. If the key generator produces duplicates, the first value is kept.
     ///
     /// There is no instance-method counterpart (unlike ``array()`` and ``set()``). A chaining `.dictionary()` on a tuple generator would silently drop entries on key collision, with no way to control or detect how many entries survive. The static form keeps pair generation internal so the collision semantics stay hidden from the call site.
     ///
@@ -139,6 +142,7 @@ public extension ReflectiveGenerator {
     ///   - keyGen: Generator for dictionary keys.
     ///   - valueGen: Generator for dictionary values.
     /// - Returns: A generator producing dictionaries of random size.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete dictionary from this factory because dictionary construction discards pair order and may collapse duplicate keys. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func dictionary<Key: Hashable, DictValue>(
         _ keyGen: ReflectiveGenerator<Key>,
         _ valueGen: ReflectiveGenerator<DictValue>
@@ -160,6 +164,7 @@ public extension ReflectiveGenerator {
     ///   - count: The allowed range of entry counts.
     ///   - scaling: How the entry count scales with the size parameter. Defaults to `.linear`.
     /// - Returns: A generator producing dictionaries with entry count in the given range.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete dictionary from this factory because dictionary construction discards pair order and may collapse duplicate keys. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func dictionary<Key: Hashable, DictValue>(
         _ keyGen: ReflectiveGenerator<Key>,
         _ valueGen: ReflectiveGenerator<DictValue>,
@@ -184,6 +189,7 @@ public extension ReflectiveGenerator {
     ///   - valueGen: Generator for dictionary values.
     ///   - count: The exact number of entries in each generated dictionary.
     /// - Returns: A generator producing dictionaries of the specified entry count.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete dictionary from this factory because dictionary construction discards pair order and may collapse duplicate keys. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func dictionary<Key: Hashable, DictValue>(
         _ keyGen: ReflectiveGenerator<Key>,
         _ valueGen: ReflectiveGenerator<DictValue>,
@@ -203,6 +209,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameter gen: Generator for the source collection to slice.
     /// - Returns: A generator producing random sub-sequences.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete slice from this factory because the output does not contain the generated source collection needed to reconstruct the dependent choices. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func slice<C: Collection>(
         of gen: ReflectiveGenerator<C>
     ) -> ReflectiveGenerator<C.SubSequence> where Output == C.SubSequence {
@@ -219,6 +226,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameter collection: The collection to slice.
     /// - Returns: A generator producing random sub-sequences of the collection.
+    /// - Note: `#exhaust(…, reflecting:)` can reduce a concrete sub-sequence from this overload because the captured collection supplies the source needed to recover its start and length.
     static func slice<C: Collection>(
         of collection: C
     ) -> ReflectiveGenerator<C.SubSequence> where Output == C.SubSequence {
@@ -236,6 +244,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameter gen: Generator for the source collection to shuffle.
     /// - Returns: A generator producing shuffled arrays.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete shuffled array from this factory because the output does not preserve the generated collection's source order. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func shuffled(
         _ gen: ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<[Output.Element]> where Output: Collection {
@@ -296,6 +305,7 @@ public extension ReflectiveGenerator {
     /// ```
     ///
     /// - Returns: A generator producing sets of this generator's values.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete set from this factory because set construction discards the order elements were drawn in and collapses duplicates. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     func set() -> ReflectiveGenerator<Set<Output>> where Output: Hashable {
         Gen.setOf(gen).wrapped
     }
@@ -312,6 +322,7 @@ public extension ReflectiveGenerator {
     ///   - count: The allowed range of element draws per set.
     ///   - scaling: How set size scales with the size parameter. Defaults to `.linear`.
     /// - Returns: A generator producing sets with count in the given range.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete set from this factory because set construction discards the order elements were drawn in and collapses duplicates. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     func set(
         count: ClosedRange<Int>,
         scaling: SizeScaling<Int> = .linear
@@ -331,6 +342,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameter count: The exact number of element draws per set.
     /// - Returns: A generator producing sets of at most `count` elements.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete set from this factory because set construction discards the order elements were drawn in and collapses duplicates. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     func set(count: Int) -> ReflectiveGenerator<Set<Output>> where Output: Hashable {
         precondition(count >= 0, "Count must be non-negative")
         return Gen.setOf(gen, exactly: UInt64(count)).wrapped
@@ -343,6 +355,7 @@ public extension ReflectiveGenerator {
     /// ```
     ///
     /// - Returns: A generator producing non-empty sub-sequences of the generated collection.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete slice from this factory because the output does not contain the generated source collection needed to reconstruct the dependent choices. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     func slice() -> ReflectiveGenerator<Output.SubSequence> where Output: Collection {
         Gen.slice(of: gen).wrapped
     }
@@ -354,6 +367,7 @@ public extension ReflectiveGenerator {
     /// ```
     ///
     /// - Returns: A generator producing shuffled arrays of this collection's elements.
+    /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete shuffled array from this factory because the output does not preserve the generated collection's source order. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     func shuffled() -> ReflectiveGenerator<[Output.Element]> where Output: Collection {
         Gen.shuffled(gen).wrapped
     }

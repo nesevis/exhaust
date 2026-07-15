@@ -1,6 +1,6 @@
 /// Produces arbitrary values for property-based testing.
 ///
-/// Construct generators with the `#gen` macro and static factory methods (`.int()`, `.string()`, `.bool()`, and so on), then combine them with `.array()`, `.filter()`, `.map()`, and pass the result to `#exhaust`. Prefer `#gen(.int(...))` over spelling out `ReflectiveGenerator.int(...)`; the type name is needed only for annotations and `.recursive`/`.unfold` roots.
+/// Construct generators with the `#gen` macro and static factory methods (`.int()`, `.string()`, `.bool()`, and so on), then combine them with `.array()`, `.filter()`, `.map()`, and pass the result to `#exhaust`. Prefer `#gen(.int(…))` over spelling out `ReflectiveGenerator.int(…)`. The type name is needed only for annotations and `.recursive`/`.unfold` roots.
 ///
 /// ```swift
 /// let gen = #gen(
@@ -14,7 +14,11 @@
 /// }
 /// ```
 ///
-/// When a property fails, Exhaust automatically reduces the counterexample to a minimal failing case. Generators that support bidirectional transforms — ``mapped(forward:backward:)`` and ``bound(forward:backward:)`` — also enable ``#examine`` to decompose a concrete value back into its generator inputs.
+/// When a property fails, Exhaust automatically reduces the counterexample to a minimal failing case.
+///
+/// Reflection lets `#exhaust(…, reflecting:)` start from a concrete value and recover the generator choices needed to reduce it. Bidirectional transforms such as ``mapped(forward:backward:)`` and ``bound(forward:backward:)`` preserve that capability.
+///
+/// The ``ReflectiveGenerator`` type does not itself guarantee reflection support. Forward-only transforms such as ``map(_:)`` and ``bind(_:fileID:line:column:)``, along with factory methods that document a lossy conversion, cannot decompose a value passed to `#exhaust(…, reflecting:)`. Exhaust can still generate values through them, replay those values from recorded choices, and reduce generated counterexamples.
 ///
 /// - Note: `@unchecked Sendable` is safe because the underlying indirect enum stores only `@Sendable` closures and `Sendable` value types. The compiler cannot verify sendability through the indirection automatically.
 public struct ReflectiveGenerator<Output>: @unchecked Sendable {
@@ -33,7 +37,9 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
 
     /// Chains this generator with a dependent generator whose structure depends on the produced value.
     ///
-    /// Use `.bind` when the next generator genuinely depends on the value from this one — for example, generating an array whose length is determined by a previously generated integer. When generators are independent, prefer `#gen(a, b) { ... }` — they compose without introducing a dependency edge in the choice graph.
+    /// Use `.bind` when the next generator genuinely depends on the value from this one, such as generating an array whose length is determined by a previously generated integer. When generators are independent, prefer `#gen(a, b) { … }` because they compose without introducing a dependency edge in the choice graph.
+    ///
+    /// This transform is forward-only. Exhaust still replays and reduces generated counterexamples from recorded choices, but `#exhaust(…, reflecting:)` cannot cross the dependency. Use ``bound(forward:backward:)`` when the final output can recover the value that selected the dependent generator.
     ///
     /// - Parameter transform: A function that takes the generated value and returns a new generator.
     /// - Returns: A generator that sequences the two computations.
@@ -58,7 +64,7 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
 
     /// Applies a forward-only transform to the generated value.
     ///
-    /// Reduction is unaffected: the reducer operates on the choice sequence, not the transformed output. Reflection is not supported through this transform — ``#examine`` will report a forward-only warning. For reflection support, use ``mapped(forward:backward:)`` or ``#gen`` with a trailing closure.
+    /// Reduction is unaffected because the reducer operates on the choice sequence, not the transformed output. `#exhaust(…, reflecting:)` cannot pass through this transform. For reflection support, use ``mapped(forward:backward:)`` or ``#gen`` with a trailing closure.
     ///
     /// ```swift
     /// let lengths = #gen(.asciiString()).map { $0.count }

@@ -11,12 +11,14 @@ public extension ReflectiveGenerator {
     /// - ``FilterType/choiceGradientSampling``: Runs a warmup pass to learn which combinations of choices lead to valid outputs, then biases generation accordingly. Produces the best balance of validity rate and output diversity for complex or recursive generators. The warmup adds a brief startup cost that is not worthwhile when the predicate already accepts most values.
     /// - ``FilterType/auto`` (default): Uses ``FilterType/choiceGradientSampling``. Override with ``FilterType/rejectionSampling`` when the predicate already accepts most values and the warmup cost is not worthwhile.
     ///
-    /// All strategies maintain deterministic behavior — given the same seed, the generator will produce the same sequence of values.
+    /// All strategies maintain deterministic behavior. Given the same seed, the generator produces the same sequence of values.
     ///
-    /// - Note: A filter constructed inside a `bind`/`flatMap` closure whose predicate captures the bound value (for example `outer.bind { n in inner.filter { $0 < n } }`) is an exception under the CGS strategies. Such a filter is tuned once per call site and reuses those weights for every bound value, so for the same seed its output can differ across runs and a specific counterexample may not reproduce. The output is always valid, because the predicate is still enforced on every candidate — but prefer ``FilterType/rejectionSampling`` for these bind-inner filters when reproducibility matters.
+    /// Reflection treats the filter as transparent and does not apply the predicate. `#exhaust(…, reflecting:)` can therefore decompose a supplied value even when it fails the predicate. Generated values and candidates materialized during reduction still satisfy the predicate.
+    ///
+    /// - Note: A filter constructed inside a `bind`/`flatMap` closure whose predicate captures the bound value (for example `outer.bind { n in inner.filter { $0 < n } }`) is an exception under the CGS strategies. Such a filter is tuned once per call site and reuses those weights for every bound value, so for the same seed its output can differ across runs and a specific counterexample may not reproduce. The output is always valid because the predicate is still enforced on every candidate. Prefer ``FilterType/rejectionSampling`` for these bind-inner filters when reproducibility matters.
     ///
     /// ```swift
-    /// // Auto strategy (default) — in this case uses .choiceGradientSampling
+    /// // Auto strategy (default), which uses .choiceGradientSampling here
     /// let balancedBST = #gen(myBSTGen)
     ///     .filter { $0.isValid }
     ///
