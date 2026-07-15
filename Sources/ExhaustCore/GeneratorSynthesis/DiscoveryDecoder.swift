@@ -278,8 +278,8 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
     }
 
     private func decodeValue<T: Decodable>(_ type: T.Type, from jsonValue: Any, key: Key) throws -> T {
-        if type is any ExhaustGenerable.Type, let primitive = try? decodePrimitive(type, from: jsonValue) {
-            return primitive
+        if type is any ExhaustGenerable.Type {
+            return try decodePrimitive(type, from: jsonValue)
         }
         let nested = DiscoveryDecoder(jsonValue: jsonValue, codingPath: codingPath + [key])
         return try T(from: nested)
@@ -372,9 +372,8 @@ private struct DiscoveryUnkeyedContainer: UnkeyedDecodingContainer {
         let jsonValue = array[currentIndex]
         currentIndex += 1
 
-        if let generableType = type as? ExhaustGenerable.Type,
-           let primitive = try? decodePrimitive(type, from: jsonValue)
-        {
+        if let generableType = type as? ExhaustGenerable.Type {
+            let primitive = try decodePrimitive(type, from: jsonValue)
             decoder.recordUnkeyed(elementType: type, generableType.defaultGenerator)
             return primitive
         }
@@ -474,9 +473,8 @@ private struct DiscoverySingleValueContainer: SingleValueDecodingContainer {
     }
 
     func decode<T: Decodable>(_ type: T.Type) throws -> T {
-        if let generableType = type as? ExhaustGenerable.Type,
-           let primitive = try? decodePrimitive(type, from: value)
-        {
+        if let generableType = type as? ExhaustGenerable.Type {
+            let primitive = try decodePrimitive(type, from: value)
             decoder.recordSingle(generableType.defaultGenerator)
             return primitive
         }
