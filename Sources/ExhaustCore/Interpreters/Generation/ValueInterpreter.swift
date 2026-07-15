@@ -46,6 +46,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         guard context.runs < context.maxRuns else {
             return nil
         }
+        context.beginUniqueDecisionRecording()
 
         // Per-run seed derivation: each run gets an independent PRNG
         if context.isFixed == false {
@@ -565,7 +566,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     return nil
                 }
                 let key = keyExtractor(candidate)
-                if context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted {
+                if context.acceptUniqueKey(key, fingerprint: fingerprint) {
                     accepted = candidate
                     break
                 }
@@ -580,6 +581,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     materializePicks: context.materializePicks,
                     runs: context.runs
                 )
+                vactiContext.uniqueGenerationTrace = context.uniqueGenerationTrace
                 swap(&context.prng, &vactiContext.prng)
                 let vactiResult = try ValueAndChoiceTreeInterpreter<Any>
                     .generateRecursiveAny(uniqueGen, context: &vactiContext)
@@ -589,7 +591,10 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 }
                 swap(&context.prng, &vactiContext.prng)
                 let sequence = ChoiceSequence.flatten(tree)
-                if context.uniqueSeenSequences[fingerprint, default: []].insert(sequence.operativeHash).inserted {
+                if context.acceptUniqueChoiceSequence(
+                    hash: sequence.operativeHash,
+                    fingerprint: fingerprint
+                ) {
                     accepted = candidate
                     break
                 }

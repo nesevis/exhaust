@@ -241,6 +241,70 @@ struct InterpreterRNGParityTests {
         #expect(replayedValue == originalValue)
     }
 
+    @Test("Failure-tree reproduction preserves a key-based unique value")
+    func keyBasedUniqueFailureTreeReproductionPreservesValue() throws {
+        let generator = uniqueGen(
+            Gen.choose(in: UInt64(0) ... UInt64.max),
+            by: { AnyHashable($0) }
+        )
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: 42,
+            maxRuns: 1
+        )
+
+        let originalValue = try #require(try interpreter.nextValueOnly())
+        let failureTree = try interpreter.reproduceFailureTree()
+        let replayedValue = try #require(try Interpreters.replay(
+            generator,
+            using: failureTree
+        ))
+
+        #expect(replayedValue == originalValue)
+    }
+
+    @Test("Failure-tree reproduction preserves sequence uniqueness history")
+    func uniqueFailureTreeReproductionPreservesPriorHistory() throws {
+        let generator = uniqueGen(Gen.choose(from: [0, 1]))
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: 42,
+            maxRuns: 2
+        )
+
+        let firstValue = try #require(try interpreter.nextValueOnly())
+        let originalValue = try #require(try interpreter.nextValueOnly())
+        let failureTree = try interpreter.reproduceFailureTree()
+        let replayedValue = try #require(try Interpreters.replay(
+            generator,
+            using: failureTree
+        ))
+
+        #expect(originalValue != firstValue)
+        #expect(replayedValue == originalValue)
+    }
+
+    @Test("Failure-tree reproduction preserves unique returned from bind")
+    func bindReturnedUniqueFailureTreeReproductionPreservesValue() throws {
+        let generator = Gen.choose(from: [false, true]).bind { _ in
+            uniqueGen(Gen.choose(in: UInt64(0) ... UInt64.max))
+        }
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: 42,
+            maxRuns: 1
+        )
+
+        let originalValue = try #require(try interpreter.nextValueOnly())
+        let failureTree = try interpreter.reproduceFailureTree()
+        let replayedValue = try #require(try Interpreters.replay(
+            generator,
+            using: failureTree
+        ))
+
+        #expect(replayedValue == originalValue)
+    }
+
     // MARK: - Filter
 
     @Test("Rejection-sampling filter parity")

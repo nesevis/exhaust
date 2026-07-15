@@ -125,16 +125,6 @@ func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorK
     }
 }
 
-/// Returns whether the recipe contains a `unique` combinator at any depth.
-func containsUnique(_ recipe: GenRecipe) -> Bool {
-    recipeContains(recipe) { kind in
-        if case .unique = kind {
-            return true
-        }
-        return false
-    }
-}
-
 /// Mean length of the arrays a generator produces at a fixed size override, over `samples` runs.
 func meanArrayLength(_ gen: AnyGenerator, size: UInt64, samples: UInt64) throws -> Double {
     var iter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: samples, sizeOverride: size)

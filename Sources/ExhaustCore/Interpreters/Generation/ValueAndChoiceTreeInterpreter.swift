@@ -72,6 +72,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             context.printClassifications()
             return nil
         }
+        context.beginUniqueDecisionRecording()
 
         if context.isFixed == false {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
@@ -124,16 +125,13 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     ///
     /// Delegates to ``ValueInterpreter``'s tree-free recursive engine, which shares the same ``GenerationContext`` (filter cache, unique dedup, PRNG). PRNG consumption is identical to ``next()`` so the run can be reproduced with tree construction via ``reproduceWithTree()``.
     ///
-    /// Falls back to tree-building generation (discarding the tree) when the generator contains a choice-sequence-based `.unique` site, because the value-only path cannot safely reproduce the dedup without a tree.
+    /// Records the decisions accepted by reached `.unique` operations so a later tree-building reproduction repeats their retry paths without changing the persistent deduplication history.
     public mutating func nextValueOnly() throws -> FinalOutput? {
-        if context.uniqueSeenSequences.isEmpty == false {
-            return try next()?.value
-        }
-
         guard context.runs < context.maxRuns else {
             context.printClassifications()
             return nil
         }
+        context.beginUniqueDecisionRecording()
 
         if context.isFixed == false {
             context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
@@ -182,7 +180,11 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         let savedRuns = context.runs
         context.runs = failingRunIndex
-        defer { context.runs = savedRuns }
+        context.beginUniqueDecisionReplay()
+        defer {
+            context.endUniqueDecisionReplay()
+            context.runs = savedRuns
+        }
 
         if erasedGenerator == nil {
             erasedGenerator = generator.erase()
@@ -191,6 +193,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         guard let (value, tree) = try Self.generateRecursiveAny(
             erasedGenerator!, context: &context
         ) else {
+            return nil
+        }
+        guard context.replayedAllUniqueDecisions else {
             return nil
         }
         // swiftlint:disable:next force_cast
@@ -832,15 +837,18 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             guard let (result, tree) = try Self.generateRecursiveAny(
                 uniqueGen, context: &context
             ) else { return nil }
-            let isDuplicate: Bool
+            let accepted: Bool
             if let keyExtractor {
                 let key = keyExtractor(result)
-                isDuplicate = context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted == false
+                accepted = context.acceptUniqueKey(key, fingerprint: fingerprint)
             } else {
                 let sequence = ChoiceSequence.flatten(tree)
-                isDuplicate = context.uniqueSeenSequences[fingerprint, default: []].insert(sequence.operativeHash).inserted == false
+                accepted = context.acceptUniqueChoiceSequence(
+                    hash: sequence.operativeHash,
+                    fingerprint: fingerprint
+                )
             }
-            if isDuplicate == false {
+            if accepted {
                 return try runContinuation(
                     result: result, calleeChoiceTree: tree,
                     continuation: continuation, context: &context
