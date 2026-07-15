@@ -21,6 +21,7 @@ package func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
     var choices: [(Int, Generator<GenRecipe>)] = [
         (3, leafGenerator(producing: type)),
         (1, mappedGenerator(producing: type, maxDepth: maxDepth)),
+        (1, prunedGenerator(producing: type, maxDepth: maxDepth)),
         (1, arrayGenerator(producing: type, maxDepth: maxDepth)),
         (1, oneOfGenerator(producing: type, maxDepth: maxDepth)),
         (1, weightedOneOfGenerator(producing: type, maxDepth: maxDepth)),
@@ -30,6 +31,7 @@ package func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
         (1, recursiveGenerator(producing: type, maxDepth: maxDepth)),
         (1, uniqueGenerator(producing: type, maxDepth: maxDepth)),
         (1, classifiedGenerator(producing: type, maxDepth: maxDepth)),
+        (1, reifiedBindGenerator(producing: type, maxDepth: maxDepth)),
     ]
     if type == .int {
         choices.append((1, boundRangeGenerator(maxDepth: maxDepth)))
@@ -147,6 +149,12 @@ private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
         narrowingSafeInnerGenerator(for: transform, producing: type, maxDepth: maxDepth).map { inner in
             .combinator(.mapped(inner, transform))
         }
+    }
+}
+
+private func prunedGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
+    recipeGenerator(producing: type, maxDepth: maxDepth - 1).map { inner in
+        .combinator(.pruned(inner))
     }
 }
 
@@ -308,6 +316,12 @@ private func unfoldedGenerator() -> Generator<GenRecipe> {
 private func boundRangeGenerator(maxDepth _: Int) -> Generator<GenRecipe> {
     leafGenerator(producing: .int).map { inner in
         .combinator(.boundRange(inner))
+    }
+}
+
+private func reifiedBindGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
+    recipeGenerator(producing: type, maxDepth: maxDepth - 1).map { inner in
+        .combinator(.reifiedBind(inner))
     }
 }
 

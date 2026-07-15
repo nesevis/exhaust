@@ -63,6 +63,9 @@ private func buildCombinator(
                 buildGenerator(from: inner).map { transform.forward($0) }
             )
 
+        case let .pruned(inner):
+            return Gen.prune(buildGenerator(from: inner))
+
         case let .array(inner, lengthRange: range):
             return Gen.arrayOf(buildGenerator(from: inner), within: range).erase()
 
@@ -133,6 +136,27 @@ private func buildCombinator(
                 return Gen.choose(in: lo ... hi).map { $0 as Any }
             }
 
+        case let .reifiedBind(inner):
+            let innerGenerator = buildGenerator(from: inner)
+            return AnyGenerator.impure(
+                operation: .transform(
+                    kind: .bind(
+                        fingerprint: recipeFingerprint(
+                            structure: "\(inner).reifiedBind",
+                            fileID: fileID,
+                            line: line,
+                            column: column
+                        ),
+                        forward: { value in Gen.just(value).erase() },
+                        backward: { $0 },
+                        inputType: Any.self,
+                        outputType: Any.self
+                    ),
+                    inner: innerGenerator
+                ),
+                continuation: { .pure($0) }
+            )
+
         case let .recursive(base: base, maxDepth: maxDepth):
             let baseGen = buildGenerator(from: base)
             // The UInt64 depthRange selects the base-as-generator overload. An Int range would
@@ -190,9 +214,9 @@ private func buildCombinator(
             ).erase()
 
         case .getSized:
-            // Reads the generation size and derives an integer in 0...size. getSize reflects (its bound backward maps the value back to a size), so this round-trips.
+            // Reads the generation size and returns an explicitly bounded integer. getSize reflects by mapping the value back to size 100, whose 0...100 range contains every generated value.
             return Gen.getSize { size in
-                Gen.chooseDerived(in: 0 ... Int(size))
+                Gen.choose(in: 0 ... Int(size))
             }.erase()
 
         case let .isomorphed(inner, transform):

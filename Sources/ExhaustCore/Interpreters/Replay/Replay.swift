@@ -243,8 +243,15 @@ extension Interpreters {
             guard let resolved = PickBranchResolution.unpack(branch) else {
                 throw ReplayError.wrongInputChoice
             }
-            guard let chosenGen = PickBranchResolution.generator(for: resolved.id, in: pickChoices),
-                  let result = try replayWithChoices(chosenGen, choices: [resolved.choice])
+            let branchChoices = replayChoices(for: resolved.choice)
+            guard let chosenGenerator = PickBranchResolution.generator(
+                for: resolved.id,
+                in: pickChoices
+            ),
+                let result = try replayWithChoices(
+                    chosenGenerator,
+                    choices: branchChoices
+                )
             else {
                 return nil
             }
@@ -256,6 +263,19 @@ extension Interpreters {
         }
 
         return try replayWithChoicesHelper(nextGen, choices: &choices)
+    }
+
+    private static func replayChoices(for choice: ChoiceTree) -> [ChoiceTree] {
+        guard case let .group(children, _) = choice else {
+            return [choice]
+        }
+        let containsBranch = children.contains {
+            $0.isBranch || $0.isSelected
+        }
+        guard containsBranch == false else {
+            return [choice]
+        }
+        return children
     }
 
     private static func replayWithChoicesSequence<Output>(

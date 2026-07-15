@@ -45,20 +45,6 @@ struct OptionalTests {
         #expect(drawn == 100)
     }
 
-    @Test("Round-trips through reflect and replay", arguments: [UInt64(1), 7, 42, 100, 999, 12345])
-    func roundTrip(seed: UInt64) throws {
-        let gen = optionalGen(Gen.choose(in: 0 ... 50) as Generator<Int>)
-
-        var optIter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed)
-        let (value, tree) = try #require(try optIter.prefix(1).last)
-        let flattened = ChoiceSequence.flatten(tree)
-        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
-            Issue.record("Expected .success")
-            return
-        }
-        #expect(value == materialized)
-    }
-
     @Test("Round-trips with validateGenerator helper")
     func roundTripValidate() throws {
         let gen = optionalGen(Gen.choose(in: 0 ... 100) as Generator<Int>)

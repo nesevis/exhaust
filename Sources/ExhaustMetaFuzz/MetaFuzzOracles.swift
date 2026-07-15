@@ -54,6 +54,24 @@ public struct DeterminismViolation: Error, CustomStringConvertible {
     }
 }
 
+/// Exact value-only and value-and-tree interpreters disagreed on a value, exhaustion point, or recoverable generation failure.
+public struct ExactInterpreterParityViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// Replaying a tree produced by exact generation failed to reproduce that generation's value.
+public struct GeneratedWitnessReplayViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
 /// A reduced value passed the property its original failed.
 public struct ReductionPreservationViolation: Error, CustomStringConvertible {
     public let description: String
@@ -127,6 +145,8 @@ public extension MetaFuzz {
     ///
     /// A throw from generation itself is treated as a vacuous pass: legitimate rejection paths (filter exhaustion, recoverable reflection failures) throw by design, and clustering them would flood the inventory with false positives. Engine defects that manifest as traps are caught by the run machinery, not here.
     static func check(_ fuzzCase: MetaFuzzCase) throws {
+        try checkExactInterpreterParity(fuzzCase)
+
         let gen = buildGenerator(from: fuzzCase.recipe)
         let property = failingProperty(for: fuzzCase.recipe.outputType)
         var prng = Xoshiro256(seed: fuzzCase.perturbationSeed)
@@ -148,6 +168,7 @@ public extension MetaFuzz {
             }
 
             let sequence = ChoiceSequence.flatten(tree)
+            try checkGeneratedWitnessReplay(gen, tree: tree, value: value, fuzzCase)
             try checkMarkerBalance(sequence, fuzzCase)
             try checkExactRoundTrip(gen, sequence: sequence, tree: tree, value: value, fuzzCase)
             try checkCodecRoundTrip(sequence, fuzzCase)
@@ -168,6 +189,74 @@ public extension MetaFuzz {
 // MARK: - Individual Oracles
 
 extension MetaFuzz {
+    /// Exact interpreter parity: the value-only and value-and-tree interpreters must produce the same observable stream for one recipe, seed, and run budget.
+    private static func checkExactInterpreterParity(_ fuzzCase: MetaFuzzCase) throws {
+        var valueInterpreter = ValueInterpreter(
+            buildGenerator(from: fuzzCase.recipe),
+            seed: fuzzCase.valueSeed,
+            maxRuns: valuesPerCase
+        )
+        var treeInterpreter = ValueAndChoiceTreeInterpreter(
+            buildGenerator(from: fuzzCase.recipe),
+            seed: fuzzCase.valueSeed,
+            maxRuns: valuesPerCase
+        )
+
+        for iteration in 0 ..< valuesPerCase {
+            let valueOutcome = nextValueOutcome(&valueInterpreter)
+            let treeOutcome = nextTreeValueOutcome(&treeInterpreter)
+
+            switch (valueOutcome, treeOutcome) {
+                case let (.value(value), .value(treeValue)):
+                    guard anyEquals(value, treeValue) else {
+                        throw ExactInterpreterParityViolation(
+                            "value-only produced \(value), value-and-tree produced \(treeValue), recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed), iteration \(iteration)"
+                        )
+                    }
+                case (.exhausted, .exhausted):
+                    return
+                case let (.failure(valueFailure), .failure(treeFailure)):
+                    guard valueFailure == treeFailure else {
+                        throw ExactInterpreterParityViolation(
+                            "interpreter failures differed: value-only \(valueFailure), value-and-tree \(treeFailure), recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed), iteration \(iteration)"
+                        )
+                    }
+                    return
+                default:
+                    throw ExactInterpreterParityViolation(
+                        "interpreter outcomes differed: value-only \(valueOutcome), value-and-tree \(treeOutcome), recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed), iteration \(iteration)"
+                    )
+            }
+        }
+    }
+
+    /// Generated-witness replay: a tree emitted beside a value must replay to that value without requiring reflection.
+    private static func checkGeneratedWitnessReplay(
+        _ generator: AnyGenerator,
+        tree: ChoiceTree,
+        value: Any,
+        _ fuzzCase: MetaFuzzCase
+    ) throws {
+        do {
+            guard let replayed = try Interpreters.replay(generator, using: tree) else {
+                throw GeneratedWitnessReplayViolation(
+                    "replay returned nil for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)"
+                )
+            }
+            guard anyEquals(replayed, value) else {
+                throw GeneratedWitnessReplayViolation(
+                    "replay produced \(replayed), not \(value), for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)"
+                )
+            }
+        } catch let violation as GeneratedWitnessReplayViolation {
+            throw violation
+        } catch {
+            throw GeneratedWitnessReplayViolation(
+                "replay threw \(error) for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)"
+            )
+        }
+    }
+
     /// Determinism: the same recipe and seed must produce the same value stream twice.
     private static func checkDeterminism(_ fuzzCase: MetaFuzzCase) throws {
         let held = checkPairedValues(
@@ -322,6 +411,49 @@ extension MetaFuzz {
     private static func pickIntensity(_ prng: inout Xoshiro256) -> MutationIntensity {
         let bands = MutationIntensity.allCases
         return bands[Int(prng.next(upperBound: UInt64(bands.count)))]
+    }
+}
+
+private enum InterpreterGenerationOutcome: CustomStringConvertible {
+    case value(Any)
+    case exhausted
+    case failure(String)
+
+    var description: String {
+        switch self {
+            case let .value(value):
+                "value(\(value))"
+            case .exhausted:
+                "exhausted"
+            case let .failure(failure):
+                "failure(\(failure))"
+        }
+    }
+}
+
+private func nextValueOutcome(
+    _ interpreter: inout ValueInterpreter<Any>
+) -> InterpreterGenerationOutcome {
+    do {
+        guard let value = try interpreter.next() else {
+            return .exhausted
+        }
+        return .value(value)
+    } catch {
+        return .failure("\(type(of: error)): \(error)")
+    }
+}
+
+private func nextTreeValueOutcome(
+    _ interpreter: inout ValueAndChoiceTreeInterpreter<Any>
+) -> InterpreterGenerationOutcome {
+    do {
+        guard let value = try interpreter.next()?.value else {
+            return .exhausted
+        }
+        return .value(value)
+    } catch {
+        return .failure("\(type(of: error)): \(error)")
     }
 }
 

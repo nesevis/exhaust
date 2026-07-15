@@ -6,6 +6,16 @@ import Testing
 /// Smoke coverage for the self-fuzzing oracle roster: on a healthy build, no generated case may violate any oracle. A violation here is either a real engine defect or an over-strict oracle — both need a human look before the harness can trust the roster.
 @Suite("MetaFuzz oracles")
 struct MetaFuzzOracleTests {
+    @Test(
+        "Every generator operation satisfies the exact MetaFuzz laws",
+        arguments: metaFuzzOperationFixtures
+    )
+    func operationFixturesSatisfyExactLaws(
+        fixture: MetaFuzzOperationFixture
+    ) throws {
+        try MetaFuzz.checkOperationFixture(fixture)
+    }
+
     @Test("No oracle fires on healthy code across generated cases", arguments: [1, 2])
     func oraclesHoldOnHealthyCode(maxDepth: Int) throws {
         let caseGen = MetaFuzz.caseGenerator(maxDepth: maxDepth)

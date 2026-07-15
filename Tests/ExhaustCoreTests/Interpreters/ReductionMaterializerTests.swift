@@ -8,54 +8,6 @@ import Testing
 
 @Suite("ReductionMaterializer")
 struct ReductionMaterializerTests {
-    // MARK: - Exact mode: round-trip
-
-    @Test("Exact mode round-trips a simple chooseBits generator")
-    func exactRoundTrip() throws {
-        let gen = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)
-
-        // Generate a value + tree via VACTI.
-        var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-        let (originalValue, originalTree) = try #require(try interpreter.next())
-        let prefix = ChoiceSequence(originalTree)
-
-        // Exact round-trip should reproduce the same value.
-        guard case let .success(value, tree, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact
-        ) else {
-            Issue.record("Expected .success, got rejected/failed")
-            return
-        }
-
-        #expect(value == originalValue)
-        // Fresh tree should have valid metadata.
-        if case let .choice(_, meta) = tree {
-            #expect(meta.validRange == 0.bitPattern64 ... 100.bitPattern64)
-        }
-    }
-
-    @Test("Exact mode round-trips a zip of two generators")
-    func exactRoundTripZip() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: 0 ... 50 as ClosedRange<Int>),
-            Gen.choose(in: 0 ... 50 as ClosedRange<Int>)
-        )
-
-        var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 99)
-        let (originalValue, originalTree) = try #require(try interpreter.next())
-        let prefix = ChoiceSequence(originalTree)
-
-        guard case let .success(value, _, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact
-        ) else {
-            Issue.record("Expected .success")
-            return
-        }
-
-        #expect(value.0 == originalValue.0)
-        #expect(value.1 == originalValue.1)
-    }
-
     // MARK: - Exact mode: out-of-range rejection
 
     @Test("Exact mode rejects inner value outside valid range")
@@ -70,6 +22,37 @@ struct ReductionMaterializerTests {
         let result = Materializer.materialize(gen, prefix: prefix, mode: .exact)
         guard case .rejected = result else {
             Issue.record("Expected .rejected for out-of-range inner value, got \(result)")
+            return
+        }
+    }
+
+    @Test("Exact mode rejects a filter candidate that fails its predicate")
+    func exactRejectsFilteredCandidate() {
+        let generator = Gen.filter(
+            Gen.choose(in: 0 ... 10 as ClosedRange<Int>),
+            type: .rejectionSampling,
+            predicate: { $0.isMultiple(of: 2) },
+            sourceLocation: FilterSourceLocation(
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+        )
+        let prefix: ChoiceSequence = [
+            .value(.init(
+                choice: ChoiceValue(Int(3), tag: .int),
+                validRange: Int(0).bitPattern64 ... Int(10).bitPattern64
+            )),
+        ]
+
+        let result = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        )
+        guard case .rejected = result else {
+            Issue.record("Expected .rejected for a filtered-out exact candidate, got \(result)")
             return
         }
     }

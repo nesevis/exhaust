@@ -151,7 +151,8 @@ struct LeafKindCandidateSourceReuseTests {
         )
 
         #expect(structuralSources.isEmpty == false)
-        #expect(structuralSources.allSatisfy(\.canReuseAfterLeafKindChange))
+        // swiftformat:disable:next preferKeyPath
+        #expect(structuralSources.allSatisfy { $0.canReuseAfterLeafKindChange })
 
         let zipGraph = GraphFixture(.uint64Zip([10, 20], in: 0 ... 100)).graph
         let permutationSources = CandidateSourceBuilder.buildPermutationSources(
@@ -159,13 +160,15 @@ struct LeafKindCandidateSourceReuseTests {
         )
 
         #expect(permutationSources.count == 1)
-        #expect(permutationSources.allSatisfy(\.isPermutationSource))
+        // swiftformat:disable:next preferKeyPath
+        #expect(permutationSources.allSatisfy { $0.isPermutationSource })
         #expect(permutationSources.allSatisfy { $0.canReuseAfterLeafKindChange == false })
 
         let valueSources = CandidateSourceBuilder.buildValueSources(from: zipGraph)
 
         #expect(valueSources.isEmpty == false)
-        #expect(valueSources.allSatisfy(\.isValueDependent))
+        // swiftformat:disable:next preferKeyPath
+        #expect(valueSources.allSatisfy { $0.isValueDependent })
         #expect(valueSources.allSatisfy { $0.canReuseAfterLeafKindChange == false })
     }
 }

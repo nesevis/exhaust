@@ -81,7 +81,12 @@ package extension Generator where Operation == ReflectiveOperation {
             kind: .bind(
                 fingerprint: fingerprint,
                 forward: { try forward($0 as! Value).erase() },
-                backward: { try backward($0 as! NewValue) as Any },
+                backward: { output in
+                    guard let typedOutput = output as? NewValue else {
+                        throw ReflectionError.contramapWasWrongType
+                    }
+                    return try backward(typedOutput) as Any
+                },
                 inputType: Value.self,
                 outputType: NewValue.self
             ),

@@ -28,30 +28,7 @@ struct MetaGeneratorPropertyTests {
         #expect(tally.evaluated > 0, "Round-trip sweep for \(type) reached no verdict: \(tally.summary)")
     }
 
-    // MARK: 2. Replay Determinism
-
-    @Test("Replaying the same ChoiceTree produces identical values", arguments: metaRecipeTypes)
-    func replayDeterminism(type: RecipeType) throws {
-        let tally = Tally()
-        let badRecipe = try findMinimalCounterexample(recipeGenerator(producing: type, maxDepth: 2), maxIterations: 50) { recipe in
-            guard recipe.nodeCount <= metaRecipeNodeBudget else {
-                return true
-            }
-            let gen = buildGenerator(from: recipe)
-            return checkAllTrees(gen, maxRuns: 10, tally: tally) { tree in
-                guard let r1 = try Interpreters.replay(gen, using: tree),
-                      let r2 = try Interpreters.replay(gen, using: tree)
-                else {
-                    return nil
-                }
-                return anyEquals(r1, r2)
-            }
-        }
-        #expect(badRecipe == nil, "Replay not deterministic for minimal recipe: \(badRecipe!)")
-        #expect(tally.evaluated > 0, "Replay-determinism sweep for \(type) reached no verdict: \(tally.summary)")
-    }
-
-    // MARK: 3. Materialize Agreement
+    // MARK: 2. Materialize Agreement
 
     @Test("Materialize with flattened tree agrees with replay", arguments: metaRecipeTypes)
     func materializeAgreement(type: RecipeType) throws {
@@ -79,40 +56,7 @@ struct MetaGeneratorPropertyTests {
         #expect(tally.evaluated > 0, "Materialize sweep for \(type) reached no verdict: \(tally.summary)")
     }
 
-    // MARK: 3b. Interpreter Parity
-
-    @Test("VI and VACTI consume the PRNG identically for random recipes", arguments: metaRecipeTypes)
-    func interpreterParity(type: RecipeType) throws {
-        var recipeIter = ValueInterpreter(recipeGenerator(producing: type, maxDepth: 2), seed: 42, maxRuns: 30)
-        var checkedRecipes = 0
-        while let recipe = try recipeIter.next() {
-            guard recipe.nodeCount <= metaRecipeNodeBudget else {
-                continue
-            }
-            checkedRecipes += 1
-            let gen = buildGenerator(from: recipe)
-            var vi = ValueInterpreter(gen, seed: 7, maxRuns: 5)
-            var vacti = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 7, maxRuns: 5)
-            for iteration in 0 ..< 5 {
-                let viValue = try vi.next()
-                let vactiPair = try vacti.next()
-                switch (viValue, vactiPair) {
-                    case (nil, nil):
-                        continue
-                    case let (.some(a), .some(pair)):
-                        #expect(
-                            anyEquals(a, pair.0),
-                            "Iteration \(iteration): VI=\(a), VACTI=\(pair.0) for recipe: \(recipe)"
-                        )
-                    default:
-                        Issue.record("Iteration \(iteration): one interpreter exhausted before the other for recipe: \(recipe)")
-                }
-            }
-        }
-        #expect(checkedRecipes > 0, "The node budget must not exclude every recipe")
-    }
-
-    // MARK: 3c. Reflect Stabilization
+    // MARK: 3. Reflect Stabilization
 
     @Test("Reflect stabilizes after one round for random recipes", arguments: metaRecipeTypes)
     func reflectStabilizes(type: RecipeType) throws {
@@ -142,7 +86,7 @@ struct MetaGeneratorPropertyTests {
         #expect(tally.evaluated > 0, "Reflect-stabilization sweep for \(type) reached no verdict: \(tally.summary)")
     }
 
-    // MARK: 3d. Fast-Path Parity
+    // MARK: 4. Fast-Path Parity
 
     /// `nextValueOnly()` (the tree-free fast path, backed by ValueInterpreter) and `reproduceWithTree()` (the tree-building path) must produce the same value for the same run. This is the spec the sampling pipeline relies on; `reproduceFailureTree()` asserts it at runtime and falls back to `.just` when it breaks. Sweeping it over the recipe space checks it for every generator shape, not just the ones the pipeline happened to hit.
     ///

@@ -99,11 +99,13 @@ func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorK
     }
     switch kind {
         case let .mapped(inner, _),
+             let .pruned(inner),
              let .array(inner, _),
              let .filtered(inner, _),
              let .resized(inner, _),
              let .optional(inner),
              let .boundRange(inner),
+             let .reifiedBind(inner),
              let .scaledArray(inner, _, _),
              let .classified(inner),
              let .metamorphed(inner, _),
@@ -183,6 +185,7 @@ struct CombinatorFixture: Sendable, CustomStringConvertible {
 /// One fixture per combinator whose output is reflectable, so the coverage sweep can assert each reflects rather than skipping it. `boundRange` and `unfolded` are omitted deliberately: both build on a backward-less `.bind`/unfold, so their outputs are not reflectable by construction and a nil reflection is expected rather than a regression.
 let reflectableCombinatorFixtures: [CombinatorFixture] = [
     .init(name: "mapped", recipe: .combinator(.mapped(.leaf(.int(0 ... 10)), .increment))),
+    .init(name: "pruned", recipe: .combinator(.pruned(.leaf(.int(0 ... 10))))),
     .init(name: "array", recipe: .combinator(.array(.leaf(.int(0 ... 5)), lengthRange: 1 ... 3))),
     .init(name: "oneOf", recipe: .combinator(.oneOf([.leaf(.int(0 ... 5)), .leaf(.int(6 ... 10))]))),
     .init(name: "weightedOneOf", recipe: .combinator(.weightedOneOf([
@@ -199,6 +202,7 @@ let reflectableCombinatorFixtures: [CombinatorFixture] = [
     .init(name: "unique", recipe: .combinator(.unique(.leaf(.int(0 ... 1000))))),
     .init(name: "classified", recipe: .combinator(.classified(.leaf(.int(0 ... 10))))),
     .init(name: "boundArray", recipe: .combinator(.boundArray(element: .leaf(.int(0 ... 5)), maxLength: 3))),
+    .init(name: "reifiedBind", recipe: .combinator(.reifiedBind(.leaf(.int(0 ... 10))))),
     .init(name: "getSized", recipe: .combinator(.getSized)),
     .init(name: "isomorphed", recipe: .combinator(.isomorphed(.leaf(.int(0 ... 10)), .increment))),
 ]

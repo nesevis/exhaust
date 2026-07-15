@@ -240,6 +240,7 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
 
     package enum CombinatorKind: Equatable, Hashable, CustomStringConvertible, Sendable, Codable {
         case mapped(GenRecipe, InvertibleTransform)
+        case pruned(GenRecipe)
         case array(GenRecipe, lengthRange: ClosedRange<UInt64>)
         case oneOf([GenRecipe])
         case weightedOneOf([WeightedBranch])
@@ -249,6 +250,7 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
         case optional(GenRecipe)
         case boundArray(element: GenRecipe, maxLength: UInt64)
         case boundRange(GenRecipe)
+        case reifiedBind(GenRecipe)
         case recursive(base: GenRecipe, maxDepth: UInt64)
         case scaledArray(GenRecipe, lengthRange: ClosedRange<UInt64>, scaling: RecipeScaling)
         case unique(GenRecipe)
@@ -262,6 +264,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
             switch self {
                 case let .mapped(inner, transform):
                     "\(inner).map(\(transform))"
+                case let .pruned(inner):
+                    "prune(\(inner))"
                 case let .array(inner, lengthRange: range):
                     "\(inner).array(\(range))"
                 case let .oneOf(recipes):
@@ -280,6 +284,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                     "\(element).boundArray(maxLength: \(maxLength))"
                 case let .boundRange(inner):
                     "\(inner).boundRange"
+                case let .reifiedBind(inner):
+                    "\(inner).reifiedBind"
                 case let .recursive(base: base, maxDepth: maxDepth):
                     "recursive(\(base), maxDepth: \(maxDepth))"
                 case let .scaledArray(inner, lengthRange: range, scaling: scaling):
@@ -318,6 +324,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                 switch kind {
                     case let .mapped(inner, _):
                         return 1 + inner.nodeCount
+                    case let .pruned(inner):
+                        return 1 + inner.nodeCount
                     case let .array(inner, lengthRange: _):
                         return 1 + inner.nodeCount
                     case let .oneOf(recipes):
@@ -335,6 +343,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                     case let .boundArray(element: element, maxLength: _):
                         return 1 + element.nodeCount
                     case let .boundRange(inner):
+                        return 1 + inner.nodeCount
+                    case let .reifiedBind(inner):
                         return 1 + inner.nodeCount
                     case let .recursive(base: base, maxDepth: _):
                         return 1 + base.nodeCount
@@ -368,6 +378,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                             return type
                         }
                         return inner.outputType
+                    case let .pruned(inner):
+                        return inner.outputType
                     case let .array(inner, lengthRange: _):
                         return RecipeType.arrayOf(inner.outputType)
                     case let .oneOf(recipes):
@@ -387,6 +399,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                         return .arrayOf(element.outputType)
                     case .boundRange:
                         return .int
+                    case let .reifiedBind(inner):
+                        return inner.outputType
                     case let .recursive(base: base, maxDepth: _):
                         return base.outputType
                     case let .scaledArray(inner, lengthRange: _, scaling: _):
