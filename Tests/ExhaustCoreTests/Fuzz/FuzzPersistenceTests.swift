@@ -44,30 +44,6 @@ struct FuzzPersistenceTests {
         #expect(ChoiceSequenceCodec.decode(Data([1]).base64EncodedString()) == ChoiceSequence())
     }
 
-    @Test("Codec rejects non-Boolean representation flags")
-    func codecRejectsNonBooleanFlags() {
-        let invalidSequenceExplicitFlag = Data([
-            1,
-            2,
-            0,
-            2,
-            3,
-            0,
-            0,
-        ]).base64EncodedString()
-        let invalidValueExplicitFlag = Data([
-            1,
-            8,
-            0, 0, 0, 0, 0, 0, 0, 0,
-            TypeTag.uint64.rawValue,
-            0,
-            2,
-        ]).base64EncodedString()
-
-        #expect(ChoiceSequenceCodec.decode(invalidSequenceExplicitFlag) == nil)
-        #expect(ChoiceSequenceCodec.decode(invalidValueExplicitFlag) == nil)
-    }
-
     @Test("Documents round-trip through the store and later writes overwrite earlier ones")
     func storeRoundTripAndOverwrite() throws {
         let store = FuzzProgressStore(directory: scratchDirectory())

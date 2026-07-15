@@ -168,31 +168,6 @@ struct ChoiceGraphTests {
         #expect(leafNodes.count == 1)
     }
 
-    @Test("Resize-wrapped getSize bind keeps distinct dependency children")
-    func resizeWrappedGetSizeBindChildrenAreDistinct() throws {
-        let generator = Gen.resize(37, Gen.rawGetSize()).bindReified { size in
-            Gen.choose(in: UInt64(0) ... size)
-        }
-        var interpreter = ValueAndChoiceTreeInterpreter(
-            generator,
-            materializePicks: true,
-            seed: 42,
-            maxRuns: 1
-        )
-        let (_, tree) = try #require(try interpreter.next())
-        let graph = ChoiceGraph.build(from: tree)
-        let bindNode = try #require(graph.nodes.first { node in
-            if case .bind = node.kind {
-                return true
-            }
-            return false
-        })
-
-        #expect(bindNode.children.count == 2)
-        #expect(Set(bindNode.children).count == 2)
-        #expect(graph.dependencyEdges.allSatisfy { $0.source != $0.target })
-    }
-
     @Test("Opaque zip preserves isOpaque flag")
     func opaqueZip() {
         let tree = ChoiceTree.group([

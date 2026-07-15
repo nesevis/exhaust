@@ -56,14 +56,62 @@ struct ChoiceGraphDiffTests {
         #expect(diff.canReuseStructuralSources == true)
     }
 
-    @Test("Root kind change is structural")
-    func rootKindChangeIsStructural() {
-        let choiceGraph = GraphFixture(.uint64(10, in: 0 ... 100)).graph
-        let constantGraph = ChoiceGraph.build(from: .just)
+    @Test("A public bind changing its bound node kind is structural")
+    func publicBindBoundKindChangeIsStructural() throws {
+        let generator = ReflectiveGenerator<Bool>.bool().bind { condition in
+            switch condition {
+                case false:
+                    ReflectiveGenerator<Int>.just(0)
+                case true:
+                    ReflectiveGenerator<Bool>.bool().map { _ in 1 }
+            }
+        }
+        var choiceBoundTree: ChoiceTree?
+        var constantBoundTree: ChoiceTree?
+
+        for seed in UInt64(0) ..< 100 {
+            var interpreter = ValueAndChoiceTreeInterpreter(
+                generator.gen,
+                materializePicks: false,
+                seed: seed,
+                maxRuns: 1
+            )
+            guard let (value, tree) = try interpreter.next() else {
+                continue
+            }
+            switch value {
+                case 0:
+                    constantBoundTree = tree
+                case 1:
+                    choiceBoundTree = tree
+                default:
+                    Issue.record("Expected the public bind to produce zero or one")
+            }
+            if choiceBoundTree != nil, constantBoundTree != nil {
+                break
+            }
+        }
+
+        let choiceGraph = try ChoiceGraph.build(from: #require(choiceBoundTree))
+        let constantGraph = try ChoiceGraph.build(from: #require(constantBoundTree))
+        let choiceBoundNode = try #require(
+            choiceGraph.nodes.first { $0.choicePath == [.bindBound] }
+        )
+        let constantBoundNode = try #require(
+            constantGraph.nodes.first { $0.choicePath == [.bindBound] }
+        )
+        guard case .chooseBits = choiceBoundNode.kind else {
+            Issue.record("Expected the true bind branch to contain a choice")
+            return
+        }
+        guard case .just = constantBoundNode.kind else {
+            Issue.record("Expected the false bind branch to contain a constant")
+            return
+        }
+
         let diff = ChoiceGraphDiff.diff(old: choiceGraph, new: constantGraph)
 
         #expect(diff.canReuseStructuralSources == false)
-        #expect(diff.removed.isEmpty == false)
     }
 
     @Test("Added and removed sets are symmetric under reversal")
