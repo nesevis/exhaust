@@ -26,6 +26,16 @@ struct MetaFuzzOracleTests {
         try MetaFuzz.checkApproximationFixture(fixture)
     }
 
+    @Test(
+        "Every supported generator operation survives screening materialization",
+        arguments: metaFuzzOperationFixtures
+    )
+    func operationFixturesSatisfyScreeningMaterialization(
+        fixture: MetaFuzzOperationFixture
+    ) throws {
+        try MetaFuzz.checkScreeningFixture(fixture)
+    }
+
     @Test("No oracle fires on healthy code across generated cases", arguments: [1, 2])
     func oraclesHoldOnHealthyCode(maxDepth: Int) throws {
         let caseGen = MetaFuzz.caseGenerator(maxDepth: maxDepth)
