@@ -74,6 +74,63 @@ struct OnlineCGSInterpreterTests {
         #expect(values1 == values2, "Same seed should produce identical output sequences")
     }
 
+    // MARK: - Generation Parity
+
+    @Test("Non-subdivided floating-point choices use the generation mapping")
+    func floatingPointMappingParity() throws {
+        let unitBitPattern = Double(1).bitPattern
+        let lowerBound = Double(bitPattern: unitBitPattern - 400)
+        let upperBound = Double(bitPattern: unitBitPattern + 400)
+        let generator = Gen.choose(
+            in: lowerBound ... upperBound,
+            scaling: .constant
+        )
+        var valueInterpreter = ValueInterpreter(
+            generator,
+            seed: 1234,
+            maxRuns: 1
+        )
+        var onlineInterpreter = OnlineCGSInterpreter(
+            generator,
+            predicate: { _ in true },
+            sampleCount: 1,
+            seed: 1234,
+            maxRuns: 1
+        )
+
+        let generatedValue = try #require(try valueInterpreter.next())
+        let onlineValue = try #require(try onlineInterpreter.next())
+        var rawRandomNumberGenerator = Xoshiro256(
+            seed: Xoshiro256.deriveSeed(from: 1234, at: 0)
+        )
+        let rawBits = rawRandomNumberGenerator.next(
+            in: lowerBound.bitPattern ... upperBound.bitPattern
+        )
+
+        #expect(rawBits != generatedValue.bitPattern)
+        #expect(generatedValue.bitPattern == onlineValue.bitPattern)
+    }
+
+    @Test("Sequence generation enforces the common element-count limit")
+    func sequenceLengthLimit() {
+        let oversizedLength = UInt64(SharedInterpreterHelpers.maximumSequenceLength + 1)
+        let generator = Gen.arrayOf(
+            Gen.just(0),
+            Gen.just(oversizedLength)
+        )
+        var interpreter = OnlineCGSInterpreter(
+            generator,
+            predicate: { _ in true },
+            sampleCount: 1,
+            seed: 42,
+            maxRuns: 1
+        )
+
+        #expect(throws: GeneratorError.self) {
+            _ = try interpreter.next()
+        }
+    }
+
     // MARK: - Resize Scoping
 
     @Test("Resize remains active through its inner generator and restores before its continuation")

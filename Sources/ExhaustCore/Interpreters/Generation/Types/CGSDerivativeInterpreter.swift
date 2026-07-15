@@ -202,9 +202,12 @@ package enum CGSDerivativeInterpreter {
                 min: min, max: max, tag: tag, scaling: $0, size: size
             )
         } ?? (min ... max)
-        let bits = rng.next(in: effective)
+        let rawBits = rng.next(in: effective)
+        let randomBits = tag.isFloatingPoint
+            ? tag.linearlyDistributed(rawBits: rawBits, in: effective)
+            : rawBits
         return try runContinuation(
-            bits, continuation,
+            randomBits, continuation,
             inputValue: inputValue, rng: &rng, size: size
         )
     }
@@ -223,9 +226,10 @@ package enum CGSDerivativeInterpreter {
         ) else {
             return nil
         }
+        let elementCount = try SharedInterpreterHelpers.sequenceElementCount(length)
         var results: [Any] = []
-        results.reserveCapacity(Int(length))
-        for _ in 0 ..< length {
+        results.reserveCapacity(elementCount)
+        for _ in 0 ..< elementCount {
             guard let element = try generateRecursive(
                 elementGen, with: inputValue, rng: &rng, size: size
             ) else {

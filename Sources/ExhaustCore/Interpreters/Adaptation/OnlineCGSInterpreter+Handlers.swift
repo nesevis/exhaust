@@ -135,7 +135,10 @@ extension OnlineCGSInterpreter {
         } else {
             effectiveRange = min ... max
         }
-        let randomBits = context.prng.next(in: effectiveRange)
+        let rawBits = context.prng.next(in: effectiveRange)
+        let randomBits = tag.isFloatingPoint
+            ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+            : rawBits
         return try runContinuation(
             result: randomBits,
             continuation: continuation,
@@ -177,10 +180,10 @@ extension OnlineCGSInterpreter {
             return nil
         }
 
-        let elementCount = Int(length)
+        let elementCount = try SharedInterpreterHelpers.sequenceElementCount(length)
         var results: [Any] = []
         results.reserveCapacity(elementCount)
-        for _ in 0 ..< length {
+        for _ in 0 ..< elementCount {
             var elementContext = derivativeContext
             elementContext.push(.sequenceElement(
                 index: results.count,
