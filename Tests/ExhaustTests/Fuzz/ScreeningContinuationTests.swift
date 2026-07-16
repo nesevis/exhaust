@@ -27,7 +27,7 @@ struct ScreeningContinuationTests {
         #expect(examples.count(where: { $0.passed == false }) == 1)
     }
 
-    @Test("Continue-past-failure catalogues every failure and finishes the domain")
+    @Test("Continue-past-failure catalogs every failure and finishes the domain")
     func continuePastFailureCataloguesAll() {
         let gen = #gen(.int(in: 0 ... 9))
         var examples: [(value: Int, passed: Bool)] = []

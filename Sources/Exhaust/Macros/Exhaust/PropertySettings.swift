@@ -16,7 +16,7 @@ public enum SuppressOption: Sendable, Equatable {
     case issueReporting
     /// Suppresses all log output to the console. Overrides any `.log(_:)` setting.
     case logs
-    /// Suppresses the test attachments a run records: a `time:` fuzz run's per-cluster inventories and summary, and the `.collectOpenPBTStats` JSONL on `#exhaust`. Use this when a test loops runs and the attachments would only accumulate noise in the result bundle. Stats suppressed here still reach ``ExhaustReport/openPBTStatsLines`` — only the attachment write is skipped, so `.collectOpenPBTStats` with `.suppress(.attachments)` collects without attaching.
+    /// Suppresses the test attachments a run records: a `time:` fuzz run's per-cluster inventories and summary, and the `.collectOpenPBTStats` JSONL on `#exhaust`. Use this when a test loops runs and the attachments would only accumulate noise in the result bundle.
     case attachments
     /// Suppresses issue reporting, log output, and attachments. The test run is silent except for generation and internal errors, which always surface.
     case all
@@ -76,7 +76,7 @@ public enum PropertySettings {
     ///
     /// Has no effect when combined with `.replay`.
     ///
-    /// The ``ReflectiveGenerator/unique(fileID:line:column:)`` combinator deduplicates per-lane, not across lanes, so a parallel run can repeat a value between lanes.
+    /// The `ReflectiveGenerator.unique(fileID:line:column:)` combinator deduplicates per-lane, not across lanes, so a parallel run can repeat a value between lanes.
     ///
     /// ```swift
     /// #exhaust(gen, .budget(.extensive), .parallelize(lanes: .two)) { value in

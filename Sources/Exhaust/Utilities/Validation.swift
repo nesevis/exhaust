@@ -5,16 +5,16 @@ import IssueReporting
 
 // MARK: - Types
 
-/// Summarizes the correctness and coverage results of a ``#examine`` validation run.
+/// Summarizes the correctness and coverage results of a `#examine` validation run.
 ///
-/// Capture the return value of ``#examine`` to assert on coverage quality:
+/// Capture the return value of `#examine` to assert on coverage quality:
 /// ```swift
 /// let report = #examine(myGen, .budget(200))
-/// #expect(report.decilesCovered.allSatisfy { $0.value >= 6 })
+/// #expect(report.numericCoverage.allSatisfy { $0.decilesCovered >= 6 })
 /// #expect(report.branchCoverage == 1.0)
 /// ```
 ///
-/// Correctness properties (``reflectionRoundTripSuccesses``, ``replayDeterminismSuccesses``) reflect whether the generator round-trips and replays correctly. Coverage properties (``decilesCovered``, ``branchCoverage``, ``sequenceLengthDeciles``, ``characterVariety``, ``complexityDeciles``) measure how well the generator explores its domain. When a metric does not apply to the generator (for example, ``branchCoverage`` on a generator with no picks), the property returns a passing default so assertions do not fail on irrelevant checks.
+/// Correctness properties (``reflectionRoundTripSuccesses``, ``replayDeterminismSuccesses``) reflect whether the generator round-trips and replays correctly. Coverage properties (`NumericTypeCoverage.decilesCovered`, ``branchCoverage``, ``sequenceLengthDeciles``, ``characterVariety``, ``complexityDeciles``) measure how well the generator explores its domain. When a metric does not apply to the generator (for example, ``branchCoverage`` on a generator with no picks), the property returns a passing default so assertions do not fail on irrelevant checks.
 public struct ExamineReport: Sendable, CustomStringConvertible {
     /// Number of samples requested for the validation run.
     public let sampleCount: Int
@@ -36,7 +36,7 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     public let generationTime: Double
     /// Total wall-clock time for the entire validation run, in seconds.
     public let elapsedTime: Double
-    /// Per-filter predicate observations accumulated during generation, keyed by filter fingerprint. Check ``FilterObservation/validityRate`` and ``FilterObservation/sourceLocation`` to identify sparse filters.
+    /// Per-filter predicate observations accumulated during generation, keyed by filter fingerprint. Check `FilterObservation.validityRate` and `FilterObservation.sourceLocation` to identify sparse filters.
     public let filterObservations: [UInt64: FilterObservation]
 
     // MARK: - Coverage Metrics
@@ -208,7 +208,7 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     }
 }
 
-/// Describes a single failure detected during an ``#examine`` validation run.
+/// Describes a single failure detected during a `#examine` validation run.
 ///
 /// Match on cases to diagnose failures reported in ``ExamineReport/failures``.
 public enum ExamineFailure: Sendable, CustomStringConvertible {

@@ -115,13 +115,13 @@ extension OnlineCGSInterpreter {
                }
            )
         {
-            let synthesisedPick: Generator<Output> = .impure(
+            let synthesizedPick: Generator<Output> = .impure(
                 operation: .pick(choices: choices, totalWeight: choices.reduce(0) { $0 &+ $1.weight }),
                 continuation: continuation
             )
 
             return try generateRecursive(
-                synthesisedPick,
+                synthesizedPick,
                 with: inputValue,
                 context: &context,
                 predicate: predicate,

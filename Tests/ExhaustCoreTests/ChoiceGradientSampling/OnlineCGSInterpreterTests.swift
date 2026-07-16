@@ -14,7 +14,7 @@ import Testing
 struct OnlineCGSInterpreterTests {
     // MARK: - Simple Pick Guidance
 
-    @Test("Pick guidance: CGS favours branch matching predicate")
+    @Test("Pick guidance: CGS favors branch matching predicate")
     func simplePickGuidance() throws {
         let gen = Gen.pick(choices: [
             (1, Gen.choose(in: 1 ... 100)),
@@ -40,7 +40,7 @@ struct OnlineCGSInterpreterTests {
 
         #expect(cgsHitRate > naiveHitRate,
                 "CGS hit rate (\(cgsHitRate)) should exceed naive (\(naiveHitRate))")
-        #expect(cgsHitRate > 0.7, "CGS should strongly favour the valid branch, got \(cgsHitRate)")
+        #expect(cgsHitRate > 0.7, "CGS should strongly favor the valid branch, got \(cgsHitRate)")
     }
 
     // MARK: - Deterministic Seeding
@@ -243,7 +243,7 @@ struct OnlineCGSInterpreterTests {
         #expect(accumulator.records.count == subdivisionsPerSite)
     }
 
-    @Test("ChooseBits subdivision concentrates output in favoured subrange")
+    @Test("ChooseBits subdivision concentrates output in favored subrange")
     func chooseBitsSubdivision() throws {
         let gen = Gen.choose(in: 1 ... 1000 as ClosedRange<UInt64>)
         let predicate: (UInt64) -> Bool = { $0 < 100 }

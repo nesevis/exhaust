@@ -191,7 +191,7 @@ package extension __ExhaustRuntime {
     ///   - count: Number of iterations to run in this batch.
     ///   - lane: Batch index for stats attribution, or `nil` for sequential runs.
     ///   - statsPropertyName: Property name passed to the per-batch ``OpenPBTStatsAccumulator``, or `nil` to skip stats collection.
-    ///   - cancelled: Shared flag checked before each iteration. Set to `true` by the first lane to find a failure.
+    ///   - canceled: Shared flag checked before each iteration. Set to `true` by the first lane to find a failure.
     private static func runSamplingBatch<Output>( // swiftlint:disable:this function_body_length
         gen: Generator<Output>,
         property: @Sendable (Output) -> Bool,
@@ -200,7 +200,7 @@ package extension __ExhaustRuntime {
         count: UInt64,
         lane: Int?,
         statsPropertyName: String?,
-        cancelled: some CancellationFlag
+        canceled: some CancellationFlag
     ) -> BatchResult<Output> {
         var result = BatchResult<Output>()
         let statsAccumulator: OpenPBTStatsAccumulator? = statsPropertyName.map {
@@ -217,7 +217,7 @@ package extension __ExhaustRuntime {
             if let statsAccumulator {
                 var previousTotalAttempts = 0
                 var previousTotalPasses = 0
-                while cancelled.isCancelled == false {
+                while canceled.isCancelled == false {
                     let generateStart = monotonicNanoseconds()
                     guard let (next, tree) = try interpreter.next() else { break }
                     let generateEnd = monotonicNanoseconds()
@@ -265,13 +265,13 @@ package extension __ExhaustRuntime {
                     if passed == false {
                         let absoluteIteration = Int(startIndex) + result.iterations
                         result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
-                        cancelled.isCancelled = true
+                        canceled.isCancelled = true
                         break
                     }
                 }
                 result.statsLines = statsAccumulator.finalize()
             } else {
-                while cancelled.isCancelled == false {
+                while canceled.isCancelled == false {
                     guard let next = try interpreter.nextValueOnly() else { break }
                     result.iterations += 1
 
@@ -279,7 +279,7 @@ package extension __ExhaustRuntime {
                         let absoluteIteration = Int(startIndex) + result.iterations
                         let tree = try interpreter.reproduceFailureTree()
                         result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
-                        cancelled.isCancelled = true
+                        canceled.isCancelled = true
                         break
                     }
                 }
@@ -455,11 +455,11 @@ package extension __ExhaustRuntime {
                 count: context.samplingBudget,
                 lane: nil,
                 statsPropertyName: statsPropertyName,
-                cancelled: UnsafeSendableBox(false)
+                canceled: UnsafeSendableBox(false)
             )
             batchResults = [singleResult]
         } else {
-            let cancelled = SendableBox(false)
+            let canceled = SendableBox(false)
             nonisolated(unsafe) let unsafeContext = context
 
             let resultStorage = SendableBox<[BatchResult<Output>?]>(
@@ -476,7 +476,7 @@ package extension __ExhaustRuntime {
                     count: iterationsForLane,
                     lane: laneIndex,
                     statsPropertyName: statsPropertyName,
-                    cancelled: cancelled
+                    canceled: canceled
                 )
                 resultStorage.withValue { $0[laneIndex] = batchResult }
             }

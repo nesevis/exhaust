@@ -1,6 +1,6 @@
 // Mutation operators over flattened choice sequences for the mutation phase.
 //
-// There is no operator catalogue to keep correct: the materialiser's three-tier resolution
+// There is no operator catalog to keep correct: the materializer's three-tier resolution
 // (prefix → fallback tree → PRNG) makes any perturbation of the flattened sequence produce a
 // valid value, so mutations here only need to be cheap and varied, not structurally sound.
 // A mutation that mangles marker pairing degrades to PRNG fallback with low convergence, and
@@ -8,7 +8,7 @@
 
 /// The perturbation weight class of one fuzz mutation.
 ///
-/// Low preserves the parent's branch decisions and moves only leaf values; medium changes structure (block deletion, duplication, replacement, branch pivot); high corrupts a large region so the materialiser falls through to PRNG for most of the resolution — effectively fresh sampling biased by the surviving fragments, useful for escaping local minima.
+/// Low preserves the parent's branch decisions and moves only leaf values; medium changes structure (block deletion, duplication, replacement, branch pivot); high corrupts a large region so the materializer falls through to PRNG for most of the resolution — effectively fresh sampling biased by the surviving fragments, useful for escaping local minima.
 package enum MutationIntensity: CaseIterable, Sendable {
     case low
     case medium
@@ -67,7 +67,7 @@ package enum FuzzMutator {
         return result
     }
 
-    /// Produces a perturbed copy of one value entry: a fresh in-range draw, a small bit-pattern delta, a boundary-catalogue substitution, or the semantically simplest value.
+    /// Produces a perturbed copy of one value entry: a fresh in-range draw, a small bit-pattern delta, a boundary-catalog substitution, or the semantically simplest value.
     private static func perturb(
         _ entry: ChoiceSequenceValue.Value,
         prng: inout Xoshiro256
@@ -88,15 +88,15 @@ package enum FuzzMutator {
                     ? shifted
                     : min(max(shifted, range.lowerBound), range.upperBound)
             case 2:
-                // Boundary substitution: the same per-type catalogue the covering array draws from plays the dictionary role during fuzzing.
-                let catalogue = ProblematicValues.computeProblematicValues(
+                // Boundary substitution: the same per-type catalog the covering array draws from plays the dictionary role during fuzzing.
+                let catalog = ProblematicValues.computeProblematicValues(
                     min: range.lowerBound,
                     max: range.upperBound,
                     tag: tag
                 )
-                newPattern = catalogue.isEmpty
+                newPattern = catalog.isEmpty
                     ? prng.next(in: range)
-                    : catalogue[Int(prng.next(upperBound: UInt64(catalogue.count)))]
+                    : catalog[Int(prng.next(upperBound: UInt64(catalog.count)))]
             default:
                 newPattern = entry.choice.semanticSimplest.bitPattern64
         }
@@ -183,7 +183,7 @@ package enum FuzzMutator {
 
     /// Recombines two corpus entries at a bind boundary: the donor's bound content rides on top of the recipient's inner subtree.
     ///
-    /// Returns nil when either sequence lacks a usable `.bind(true)` region — the caller falls back to a plain mutation. Structural mismatch between the recipient's inner value and the donor's bound content is expected; the materialiser degrades it to PRNG fallback with low convergence.
+    /// Returns nil when either sequence lacks a usable `.bind(true)` region — the caller falls back to a plain mutation. Structural mismatch between the recipient's inner value and the donor's bound content is expected; the materializer degrades it to PRNG fallback with low convergence.
     package static func splice(
         recipient: ChoiceSequence,
         donor: ChoiceSequence,

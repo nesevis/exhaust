@@ -162,7 +162,7 @@ extension ChoiceGraph {
     /// - Upstream changed, downstream fingerprint same: classifies as `.identical` — the bind produces the same shape for different upstream values.
     /// - Upstream changed, downstream fingerprint different: classifies as `.divergent` — the bind reshapes under upstream variation.
     ///
-    /// Call after each graph rebuild. Avoids the two materialisation probes that ``classifyBind`` requires by observing natural upstream variation across rebuild cycles.
+    /// Call after each graph rebuild. Avoids the two materialization probes that ``classifyBind`` requires by observing natural upstream variation across rebuild cycles.
     mutating func observeBindTopologies(tree: ChoiceTree) {
         for nodeID in liveNodeIDs {
             let node = nodes[nodeID]

@@ -99,7 +99,7 @@ private func justIntLeaf() -> Generator<GenRecipe> {
 }
 
 private func doubleRangeLeaf() -> Generator<GenRecipe> {
-    // Generate two bounds and sort them to form a valid range. Guided materialisation deliberately lets float NaN and infinity bit patterns bypass range clamping (Materializer+Handlers), so a mutated fuzz case can deliver non-finite draws here; fold them to zero so every draw builds a valid recipe instead of trapping in the range constructor. Finite draws are unaffected.
+    // Generate two bounds and sort them to form a valid range. Guided materialization deliberately lets float NaN and infinity bit patterns bypass range clamping (Materializer+Handlers), so a mutated fuzz case can deliver non-finite draws here; fold them to zero so every draw builds a valid recipe instead of trapping in the range constructor. Finite draws are unaffected.
     Gen.choose(in: -100.0 ... 100.0 as ClosedRange<Double>).bind { a in
         Gen.choose(in: -100.0 ... 100.0 as ClosedRange<Double>).map { b in
             let first = a.isFinite ? a : 0

@@ -52,44 +52,88 @@ private func runCommandRecordingTrace<Spec: AsyncStateMachineSpec>(
     trace: UnsafeSendableBox<[TraceEvent]>,
     recordTrace: Bool
 ) async -> CommandOutcome {
+    guard Task.isCancelled == false else {
+        return .skipped
+    }
     // `label` is empty on the non-trace path; callers only build the (reflection-priced) command description when recordTrace is true.
     if recordTrace { trace.value.append(TraceEvent(kind: .started, lane: lane, label: label)) }
     do {
         try await spec.value.run(command)
     } catch is StateMachineSkip {
+        guard Task.isCancelled == false else {
+            return .skipped
+        }
         if recordTrace { trace.value.append(TraceEvent(kind: .skipped, lane: lane, label: label)) }
         return .skipped
     } catch let failure as StateMachineCheckFailure {
+        guard Task.isCancelled == false else {
+            return .skipped
+        }
         let message = failure.message ?? "check failed"
         if recordTrace {
             trace.value.append(TraceEvent(kind: .failed(message: message, source: .check), lane: lane, label: label))
         }
         return .failed(message: message, symptomKind: String(describing: type(of: failure)))
     } catch {
+        if Task.isCancelled {
+            return .skipped
+        }
         if recordTrace {
             trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .error), lane: lane, label: label))
         }
         return .failed(message: "\(error)", symptomKind: String(describing: type(of: error)))
     }
+    guard Task.isCancelled == false else {
+        return .skipped
+    }
     do {
         try await spec.value.checkInvariants()
+        guard Task.isCancelled == false else {
+            return .skipped
+        }
         if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: lane, label: label)) }
     } catch is StateMachineSkip {
+        guard Task.isCancelled == false else {
+            return .skipped
+        }
         if recordTrace { trace.value.append(TraceEvent(kind: .completed, lane: lane, label: label)) }
     } catch let failure as StateMachineCheckFailure {
+        guard Task.isCancelled == false else {
+            return .skipped
+        }
         let message = failure.message ?? "check failed"
         if recordTrace {
             trace.value.append(TraceEvent(kind: .failed(message: message, source: .invariant), lane: lane, label: label))
         }
         return .failed(message: message, symptomKind: String(describing: type(of: failure)))
     } catch {
+        if Task.isCancelled {
+            return .skipped
+        }
         if recordTrace {
             trace.value.append(TraceEvent(kind: .failed(message: "\(error)", source: .invariant), lane: lane, label: label))
         }
         return .failed(message: "\(error)", symptomKind: String(describing: type(of: error)))
     }
+    guard Task.isCancelled == false else {
+        return .skipped
+    }
     return .ok
 }
+
+/// Transfers pending and future continuations to direct cleanup scheduling after the bounded cancellation drain cannot establish quiescence.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+private func abandonTimedOutTasks(
+    runQueue: RunQueue,
+    executors: [LaneExecutor]
+) {
+    for (lane, job) in runQueue.abandon() {
+        executors[Int(lane.index)].runAfterAbandonment(job)
+    }
+}
+
+/// Gives cancellation-aware work a short acknowledgment window without charging the caller's full idle timeout twice.
+private let cancellationDrainMilliseconds = 5
 
 /// Drains a tagged command sequence through the cooperative scheduler with deterministic interleaving.
 ///
@@ -130,7 +174,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
     let executors: [LaneExecutor] = (0 ..< concurrencyLevel).map { index in
         LaneExecutor(lane: LaneID(index: UInt8(index)), runQueue: runQueue)
     }
-    // Single-threaded: Task closures are nonisolated with executorPreference, so all box accesses run via runSynchronously on the drain thread. Foreign-executor segments (MainActor, custom-executor actors) execute only user code that never touches these boxes. New box accesses must stay in nonisolated closure code.
+    // Before abandonment, Task closures are nonisolated with executorPreference, so box accesses run via runSynchronously on the drain thread. After abandonment, canceled continuations can resume on GCD threads; the cancellation guards above and in both command loops prevent them from touching the trace, failure, and command-index boxes. The only cleanup writes left are prefixDone (unread after return) and RunQueue.markComplete (lock-protected).
     let spec = UnsafeSendableBox(specInit())
     let failed = UnsafeSendableBox<String?>(nil)
     // Travels beside `failed` rather than inside it: ScheduleDrain's failure flag is `String?`-typed and only checks nil-ness, so the symptom kind rides in its own box instead of widening that seam.
@@ -142,6 +186,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         let prefixDone = UnsafeSendableBox(false)
         let prefixTask = Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace] in
             for command in prefixCommands {
+                guard Task.isCancelled == false else { break }
                 guard failed.value == nil else { break }
                 let label = recordTrace ? "\(command)" : ""
                 let outcome = await runCommandRecordingTrace(
@@ -164,12 +209,18 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
             idleTimeoutMilliseconds: idleTimeoutMilliseconds
         ) == .timedOut {
             prefixTask.cancel()
-            _ = ScheduleDrain.drainUntilDone(
+            let cancellationOutcome = ScheduleDrain.drainUntilDone(
                 prefixDone,
                 runQueue: runQueue,
                 executor: executors[0],
-                idleTimeoutMilliseconds: idleTimeoutMilliseconds
+                idleTimeoutMilliseconds: cancellationDrainMilliseconds
             )
+            if case .timedOut = cancellationOutcome {
+                abandonTimedOutTasks(
+                    runQueue: runQueue,
+                    executors: executors
+                )
+            }
             return ConcurrentExecutionResult(
                 passed: false,
                 trace: recordTrace
@@ -215,6 +266,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
             defer { runQueue.markComplete(lane: lane) }
             let traceLane = TraceEvent.Lane.lane(lane)
             for command in commands {
+                guard Task.isCancelled == false else { return }
                 guard failed.value == nil else { return }
                 commandIndex.value += 1
                 let label: String
@@ -262,15 +314,21 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         for laneTask in laneTasks {
             laneTask.cancel()
         }
-        _ = ScheduleDrain.drainConcurrentSection(
+        let cancellationOutcome = ScheduleDrain.drainConcurrentSection(
             runQueue: runQueue,
             executors: executors,
             schedule: schedule,
             concurrencyLevel: concurrencyLevel,
-            idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+            idleTimeoutMilliseconds: cancellationDrainMilliseconds,
             failureFlag: failed,
             onTraceSignal: nil
         )
+        if case .timedOut = cancellationOutcome {
+            abandonTimedOutTasks(
+                runQueue: runQueue,
+                executors: executors
+            )
+        }
         let finalTrace: [TraceStep] = recordTrace
             ? __ExhaustRuntime.buildTrace(trace.value)
             : []

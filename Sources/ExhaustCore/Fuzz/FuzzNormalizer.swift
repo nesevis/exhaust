@@ -48,7 +48,7 @@ package enum FuzzNormalizer {
         reducedSequence: ChoiceSequence,
         erasedGen: AnyGenerator,
         symptom: FailureSymptom,
-        property: @Sendable (Output) -> FuzzVerdict,
+        property: (Output) -> FuzzVerdict,
         cache: SendableBox<[UInt64: ChoiceSequence?]>
     ) -> NormalizedForm<Output>? {
         let sequenceHash = ZobristHash.hash(of: reducedSequence)

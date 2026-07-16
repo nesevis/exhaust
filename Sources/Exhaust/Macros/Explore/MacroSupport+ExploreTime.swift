@@ -92,8 +92,6 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) throws -> Void,
         detection: @escaping @Sendable (Output) throws -> Void
     ) -> FuzzReport {
-        // The source-located property closure is part of the macro contract but unused until the report can re-materialise reduced counterexamples and replay them for source-anchored issues.
-        _ = property
         let verdictProperty = wrapVerdictDetection(detection)
         let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
         nonisolated(unsafe) var pipelineReport: FuzzReport?
@@ -108,10 +106,17 @@ public extension __ExhaustRuntime {
                 property: verdictProperty
             )
         }
-        let report = pipelineReport ?? .empty(termination: .budgetExhausted, seed: 0)
+        var report = pipelineReport ?? .empty(termination: .budgetExhausted, seed: 0)
+        let parsedSettings = ParsedFuzzSettings(settings)
+        replayFuzzDiagnostics(
+            report: &report,
+            gen: refGen.gen,
+            suppressIssueReporting: parsedSettings.suppressIssueReporting,
+            property: property
+        )
         reportFuzzIssues(
             report: report,
-            suppressIssueReporting: ParsedFuzzSettings(settings).suppressIssueReporting,
+            suppressIssueReporting: parsedSettings.suppressIssueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -176,9 +181,8 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) async throws -> Void,
         detection: @escaping @Sendable (Output) async throws -> Void
     ) async -> FuzzReport {
-        _ = property
         let verdictProperty = bridgeAsyncVerdictDetection(detection)
-        let finalReport = await dispatchToGCD(reserving: LaneReservation.fuzz) {
+        var finalReport = await dispatchToGCD(reserving: LaneReservation.fuzz) {
             let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
             nonisolated(unsafe) var pipelineReport: FuzzReport?
             // withExpectedIssue cannot be used on a GCD thread because Test.current is nil, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
@@ -205,19 +209,75 @@ public extension __ExhaustRuntime {
                     property: verdictProperty
                 )
             #endif
-            let report = pipelineReport ?? .empty(termination: .budgetExhausted, seed: 0)
-            reportFuzzIssues(
-                report: report,
-                suppressIssueReporting: ParsedFuzzSettings(settings).suppressIssueReporting,
-                fileID: fileID,
-                filePath: filePath,
-                line: line,
-                column: column
-            )
-            return report
+            return pipelineReport ?? .empty(termination: .budgetExhausted, seed: 0)
         }
+        let parsedSettings = ParsedFuzzSettings(settings)
+        await replayFuzzDiagnosticsAsync(
+            report: &finalReport,
+            gen: refGen.gen,
+            suppressIssueReporting: parsedSettings.suppressIssueReporting,
+            property: property
+        )
+        reportFuzzIssues(
+            report: finalReport,
+            suppressIssueReporting: parsedSettings.suppressIssueReporting,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
         recordFuzzAttachments(report: finalReport, suppressAttachments: ParsedFuzzSettings(settings).suppressAttachments)
         return finalReport
+    }
+
+    // MARK: - Diagnostic Replay
+
+    /// Re-materializes each reduced fault cluster and runs the source-located assertion closure once so Swift Testing or XCTest can report the original expression and reduced value.
+    package static func replayFuzzDiagnostics<Output>(
+        report: inout FuzzReport,
+        gen: Generator<Output>,
+        suppressIssueReporting: Bool,
+        property: @Sendable (Output) throws -> Void
+    ) {
+        guard suppressIssueReporting == false else {
+            return
+        }
+        for cluster in report.clusters {
+            let result = Materializer.materialize(
+                gen,
+                prefix: cluster.reducedSequence,
+                mode: .exact
+            )
+            guard case let .success(value, _, _) = result else {
+                continue
+            }
+            report.recordDiagnosticInvocation()
+            try? property(value)
+        }
+    }
+
+    /// Re-materializes each reduced fault cluster and awaits the source-located assertion closure once so async diagnostics carry the original expression and reduced value.
+    package static func replayFuzzDiagnosticsAsync<Output>(
+        report: inout FuzzReport,
+        gen: Generator<Output>,
+        suppressIssueReporting: Bool,
+        property: @Sendable (Output) async throws -> Void
+    ) async {
+        guard suppressIssueReporting == false else {
+            return
+        }
+        for cluster in report.clusters {
+            let result = Materializer.materialize(
+                gen,
+                prefix: cluster.reducedSequence,
+                mode: .exact
+            )
+            guard case let .success(value, _, _) = result else {
+                continue
+            }
+            report.recordDiagnosticInvocation()
+            try? await property(value)
+        }
     }
 
     // MARK: - Core
@@ -320,7 +380,7 @@ public extension __ExhaustRuntime {
                     category: .propertyTest,
                     event: "explore_time_no_failures",
                     metadata: [
-                        "attempts": "\(result.totalAttempts)",
+                        "attempts": "\(result.counts.totalAttempts)",
                         "covered_edges": "\(result.coveredEdgeCount)",
                         "seed": "\(result.seed)",
                     ]
@@ -432,14 +492,14 @@ public extension __ExhaustRuntime {
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
                 // The generation error explains why nothing ran; the pointless-run diagnostic below would misdirect the reader toward the time budget.
-                if report.totalAttempts == 0 {
+                if report.evaluatedSearchCases == 0 {
                     return
                 }
             case .budgetExhausted, .coveragePlateau, .attemptLimitReached:
                 break
         }
 
-        if report.totalAttempts == 0 {
+        if report.evaluatedSearchCases == 0 {
             reportError(
                 "The property was never invoked, so this test asserts nothing. Check the time budget and generator.",
                 fileID: fileID, filePath: filePath, line: line, column: column

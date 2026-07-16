@@ -5,7 +5,7 @@ package struct CorpusEntry: Sendable {
     /// The flattened choice sequence — the mutation substrate.
     package let sequence: ChoiceSequence
 
-    /// The choice tree behind `sequence`, kept as the guided-materialisation fallback for mutations of this entry.
+    /// The choice tree behind `sequence`, kept as the guided-materialization fallback for mutations of this entry.
     package let tree: ChoiceTree
 
     /// The edges hit during this entry's property evaluation.
@@ -17,7 +17,7 @@ package struct CorpusEntry: Sendable {
     /// Whether the entry was admitted on boundary-derived credit rather than coverage novelty. Retained for faithful re-offer on restore.
     package let isBoundaryDerived: Bool
 
-    /// The materialiser's convergence ratio for this entry; decides tier membership.
+    /// The materializer's convergence ratio for this entry; decides tier membership.
     package let convergence: Double
 
     /// Mutation distance from a phase-1/2 root: roots are 0, a mutation of a parent is `parent.generation + 1`.
@@ -180,10 +180,10 @@ package final class FuzzCorpus {
     ///   - sequence: The candidate's flattened choice sequence.
     ///   - tree: The choice tree behind `sequence`, kept as the mutation fallback.
     ///   - hits: The (edge, hit count) pairs from the candidate's attributed evaluation.
-    ///   - convergence: The materialiser's convergence ratio; routes the entry to a tier.
+    ///   - convergence: The materializer's convergence ratio; routes the entry to a tier.
     ///   - generation: Mutation distance from a phase-1/2 root.
     ///   - phase: The phase offering the candidate.
-    ///   - isBoundaryDerived: Whether the candidate came from the covering array's boundary catalogues. Grants admission even without coverage novelty (phases 1 and 2 only; the mutation phase never sets this).
+    ///   - isBoundaryDerived: Whether the candidate came from the covering array's boundary catalogs. Grants admission even without coverage novelty (phases 1 and 2 only; the mutation phase never sets this).
     ///   - propertyFailed: Whether the property failed on this candidate, recorded for report-time discrimination.
     /// - Returns: The admission verdict. On admission, seen-bucket masks and rarity counts are already updated.
     package func offer(

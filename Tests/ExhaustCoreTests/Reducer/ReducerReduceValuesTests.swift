@@ -197,7 +197,7 @@ struct ReducerReduceValuesTests {
         let (_, tree) = try generate(gen)
 
         // Property fails when the array has 3 elements and at least one >= 100.
-        // Pass 3 will zero what it can. Pass 5 will minimise the load-bearing value.
+        // Pass 3 will zero what it can. Pass 5 will minimize the load-bearing value.
         let property: ([UInt64]) -> Bool = { arr in
             guard arr.count == 3 else { return true }
             return arr.allSatisfy { $0 < 100 }

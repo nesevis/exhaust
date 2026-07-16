@@ -66,7 +66,7 @@ package extension ChoiceSequence {
     /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/reduction purposes.
     ///
     /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites (not just the selected branch). Used for complexity comparison in reduction passes.
-    /// - Parameter skipBindInners: When `true`, a bind's inner subtree is omitted from the flattened output, leaving `.bind(true) <bound> .bind(false)`. Used only to compute a canonical cluster identity: the inner is redundant length-or-selector bookkeeping that varies across reduction paths reaching the same value. Never use for materialisation or reduction, which need the inner.
+    /// - Parameter skipBindInners: When `true`, a bind's inner subtree is omitted from the flattened output, leaving `.bind(true) <bound> .bind(false)`. Used only to compute a canonical cluster identity: the inner is redundant length-or-selector bookkeeping that varies across reduction paths reaching the same value. Never use for materialization or reduction, which need the inner.
     static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false, skipBindInners: Bool = false) -> ChoiceSequence {
         var result = ChoiceSequence()
         result.reserveCapacity(64)

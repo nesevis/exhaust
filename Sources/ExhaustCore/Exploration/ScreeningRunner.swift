@@ -52,7 +52,7 @@ package enum ScreeningRunner {
     ///
     /// - Parameters:
     ///   - skipToRow: When set, skips property evaluation for all rows before this index and only tests the target row. Used for O(1) screening replay.
-    ///   - continuePastFailure: When `true`, a failing row is reported through `onExample` and iteration continues instead of returning `.failure`. `#explore(time:)` catalogues every failure; `#exhaust` keeps the default first-failure return. A run that continued past a failure never reports `.exhaustive`, because that case asserts the domain passed.
+    ///   - continuePastFailure: When `true`, a failing row is reported through `onExample` and iteration continues instead of returning `.failure`. `#explore(time:)` catalogs every failure; `#exhaust` keeps the default first-failure return. A run that continued past a failure never reports `.exhaustive`, because that case asserts the domain passed.
     ///   - shouldTerminate: Checked each iteration. When it returns `true`, screening stops early and reports `.partial`. The `#explore(time:)` path passes its wall-clock budget check so a slow property does not consume the entire time budget before the mutation phase begins.
     package static func run<Output>(
         _ gen: Generator<Output>,

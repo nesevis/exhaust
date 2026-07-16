@@ -139,7 +139,7 @@ package enum FloatReduction {
         return buildRatio(sign: sign, significand: significand, exponent: exponent)
     }
 
-    /// Constructs a reduced integer ratio from a decoded sign, significand, and exponent, cancelling common trailing zeros so the denominator is as small as possible.
+    /// Constructs a reduced integer ratio from a decoded sign, significand, and exponent, canceling common trailing zeros so the denominator is as small as possible.
     ///
     /// Returns `nil` when the significand shifted by the exponent overflows 64-bit integers.
     package static func buildRatio(

@@ -226,11 +226,7 @@ package extension Gen {
 
 package extension Gen {
     /// Generates a Unicode character from all valid scalars except illegals and the Private Use Areas.
-    ///
-    /// `simplest` is the scalar the reducer drives toward; it defaults to space when in range, otherwise the lower bound. For constrained character generation, use ``character(from:simplest:)`` with a `CharacterSet`.
-    static func character(
-        simplest _: Unicode.Scalar? = nil
-    ) -> ReflectiveGenerator<Character> {
+    static func character() -> ReflectiveGenerator<Character> {
         characterGenerator(from: defaultScalarRangeSet).wrapped
     }
 

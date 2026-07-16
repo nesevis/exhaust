@@ -54,7 +54,7 @@ public struct ExhaustReport: Sendable {
     /// Skipped invocations count toward ``propertyInvocations`` but assert nothing. A run whose every invocation was skipped fails as pointless.
     public var skippedInvocations: Int = 0
 
-    /// Whether the sampling phase ended before its budget because a ``ReflectiveGenerator/unique(fileID:line:column:)`` site exhausted its retry budget.
+    /// Whether the sampling phase ended before its budget because a `ReflectiveGenerator.unique(fileID:line:column:)` site exhausted its retry budget.
     ///
     /// When true, ``randomSamplingInvocations`` is smaller than the configured sampling budget: the deduplicated domain ran dry and the remaining iterations never ran.
     public var runTruncatedByUniqueExhaustion = false
@@ -155,7 +155,7 @@ public struct ExhaustReport: Sendable {
 
     /// Per-encoder probe counts from the reduction phase.
     ///
-    /// Each key is an ``EncoderName`` identifying a reduction encoder, and the value is the total number of probes that encoder generated across all cycles. Includes cache rejections that did not lead to a materialization.
+    /// Each key is an `EncoderName` identifying a reduction encoder, and the value is the total number of probes that encoder generated across all cycles. Includes cache rejections that did not lead to a materialization.
     public var encoderProbes: [EncoderName: Int] = [:]
 
     /// Per-encoder counts of probes that were accepted (decoder produced a valid reduction) during the reduction phase.

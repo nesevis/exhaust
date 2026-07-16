@@ -10,7 +10,7 @@ import Testing
 
 /// Pins the transport semantics of ``ChoiceGraphScheduler/transferConvergence(_:to:)`` across structural rebuilds.
 ///
-/// `sequenceChild` path steps are positional sibling indices, so a mid-sequence deletion shifts every later sibling's path down by one. Without the bit-pattern guard, the shifted survivor inherits its deleted-or-shifted neighbor's convergence record (F1 in `reducer-critical-pair-catalogue.md`). These tests document what the guard drops, what it keeps, and the two deliberate exceptions: equal-value aliases (indistinguishable, still transfer) and pass-accepted leaves (exempt because their old-graph values are stale).
+/// `sequenceChild` path steps are positional sibling indices, so a mid-sequence deletion shifts every later sibling's path down by one. Without the bit-pattern guard, the shifted survivor inherits its deleted-or-shifted neighbor's convergence record (F1 in `reducer-critical-pair-catalog.md`). These tests document what the guard drops, what it keeps, and the two deliberate exceptions: equal-value aliases (indistinguishable, still transfer) and pass-accepted leaves (exempt because their old-graph values are stale).
 @Suite("Convergence transfer")
 struct ConvergenceTransferTests {
     @Test("Mid-sequence deletion drops shifted records instead of aliasing")

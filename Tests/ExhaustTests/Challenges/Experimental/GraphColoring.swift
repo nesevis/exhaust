@@ -244,7 +244,7 @@ struct GraphColoringChallenge {
             let edgePairGen = #gen(
                 .int(in: 0 ... n - 1, scaling: .constant),
                 .int(in: 0 ... n - 1, scaling: .constant)
-            ) { left, right in (Int(left), Int(right)) }
+            )
             return edgePairGen.array(length: 1 ... 8, scaling: .constant)
                 .map { (idxPairs: [(Int, Int)]) -> Graph in
                     var seen: Set<Edge> = []

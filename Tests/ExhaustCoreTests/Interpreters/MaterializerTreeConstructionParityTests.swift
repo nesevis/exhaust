@@ -3,7 +3,7 @@ import Testing
 
 @Suite("Materializer tree-construction parity")
 struct MaterializerTreeConstructionParityTests {
-    @Test("Exact materialisation has tree-construction parity", arguments: [false, true])
+    @Test("Exact materialization has tree-construction parity", arguments: [false, true])
     func exactMaterialisationParity(materializePicks: Bool) throws {
         let generator = makeParityGenerator()
         var interpreter = ValueAndChoiceTreeInterpreter(
@@ -111,15 +111,15 @@ private func assertTreeConstructionParity<Output: Equatable>(
     )
 
     guard case let .success(valueOnlyOutput, valueOnlyTree, _) = valueOnlyResult else {
-        Issue.record("Value-only materialisation did not succeed")
+        Issue.record("Value-only materialization did not succeed")
         return
     }
     guard case let .success(treeBuildingOutput, _, _) = treeBuildingResult else {
-        Issue.record("Tree-building materialisation did not succeed")
+        Issue.record("Tree-building materialization did not succeed")
         return
     }
     guard case .just = valueOnlyTree else {
-        Issue.record("Value-only materialisation unexpectedly constructed a tree")
+        Issue.record("Value-only materialization unexpectedly constructed a tree")
         return
     }
 

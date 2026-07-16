@@ -24,11 +24,16 @@ public extension ReflectiveGenerator {
     ///
     /// When no length is specified, string length scales with the size parameter from 0 to 100 characters.
     ///
-    /// For ASCII-only strings, use ``asciiString(length:scaling:)``. For a specific character set, use ``string(from:length:scaling:)``.
+    /// For ASCII-only strings, use ``asciiString(length:scaling:)``. For a specific character set, use ``string(from:simplest:length:scaling:)``.
     ///
     /// ```swift
     /// let gen = #gen(.string(length: 1...20))
     /// ```
+    ///
+    /// - Parameters:
+    ///   - length: The inclusive range of generated string lengths, or `nil` to scale from zero through 100 characters.
+    ///   - scaling: The distribution used to scale the generated length.
+    /// - Returns: A generator that produces Unicode strings.
     static func string(
         length: ClosedRange<Int>? = nil,
         scaling: SizeScaling<Int> = .linear
@@ -43,6 +48,11 @@ public extension ReflectiveGenerator {
     /// ```swift
     /// let gen = #gen(.asciiString(length: 1...20))
     /// ```
+    ///
+    /// - Parameters:
+    ///   - length: The inclusive range of generated string lengths, or `nil` to scale from zero through 100 characters.
+    ///   - scaling: The distribution used to scale the generated length.
+    /// - Returns: A generator that produces printable ASCII strings.
     static func asciiString(
         length: ClosedRange<Int>? = nil,
         scaling: SizeScaling<Int> = .linear
@@ -60,7 +70,10 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.character(from: .letters))
     /// ```
     ///
-    /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
+    /// - Parameters:
+    ///   - characterSet: The set of Unicode scalars to draw from.
+    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
+    /// - Returns: A generator that produces characters from the set.
     static func character(
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil
@@ -84,7 +97,12 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.string(from: .letters, length: 1...10))
     /// ```
     ///
-    /// - Parameter simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
+    /// - Parameters:
+    ///   - characterSet: The set of Unicode scalars to draw from.
+    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
+    ///   - length: The inclusive range of generated string lengths, or `nil` to scale from zero through 100 characters.
+    ///   - scaling: The distribution used to scale the generated length.
+    /// - Returns: A generator that produces strings from the set.
     static func string(
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil,

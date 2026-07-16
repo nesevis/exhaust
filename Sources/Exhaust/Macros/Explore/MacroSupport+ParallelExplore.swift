@@ -39,7 +39,7 @@ extension __ExhaustRuntime {
         let runStopwatch = Stopwatch()
         let baseSeed = seed ?? Xoshiro256().seed
 
-        let cancelled = SendableBox(false)
+        let canceled = SendableBox(false)
         let resultStorage = SendableBox<[DirectionLaneResult<Output>?]>(
             Array(repeating: nil, count: directionCount)
         )
@@ -57,7 +57,7 @@ extension __ExhaustRuntime {
                 hitsPerDirection: hitsPerDirection,
                 maxAttemptsPerDirection: maxAttemptsPerDirection,
                 baseSeed: baseSeed,
-                cancelled: cancelled
+                canceled: canceled
             )
             resultStorage.withValue { $0[directionIndex] = laneResult }
         }
@@ -170,7 +170,7 @@ extension __ExhaustRuntime {
         hitsPerDirection: Int,
         maxAttemptsPerDirection: Int,
         baseSeed: UInt64,
-        cancelled: SendableBox<Bool>
+        canceled: SendableBox<Bool>
     ) -> DirectionLaneResult<Output> {
         var result = DirectionLaneResult<Output>(targetDirection: targetDirection, directionCount: directionCount)
 
@@ -201,7 +201,7 @@ extension __ExhaustRuntime {
             maxRuns: UInt64(maxAttemptsPerDirection)
         )
 
-        while cancelled.value == false, result.hits[targetDirection] < hitsPerDirection {
+        while canceled.value == false, result.hits[targetDirection] < hitsPerDirection {
             let value: Output
             do {
                 guard let next = try interpreter.nextValueOnly() else { break }
@@ -231,7 +231,7 @@ extension __ExhaustRuntime {
             }
 
             if propertyHolds == false {
-                cancelled.value = true
+                canceled.value = true
                 do {
                     let tree = try interpreter.reproduceFailureTree()
                     result.failure = (value: value, tree: tree, matchingDirections: matching)

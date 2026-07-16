@@ -23,14 +23,34 @@ package struct FuzzHooks<Output> {
     /// Prunes the value and tree before corpus admission. Runs outside the attribution bracket, only on failures and would-be admissions.
     package let prune: @Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree)
     /// Reduces one failing candidate, returning the reduced sequence, tree, and value.
-    package let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom) -> (sequence: ChoiceSequence, tree: ChoiceTree, value: Output)
+    package let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom) -> FuzzReductionResult<Output>
 
     package init(
         prune: @escaping @Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree),
-        reduceStrategy: @escaping @Sendable (ChoiceTree, Output, FailureSymptom) -> (sequence: ChoiceSequence, tree: ChoiceTree, value: Output)
+        reduceStrategy: @escaping @Sendable (ChoiceTree, Output, FailureSymptom) -> FuzzReductionResult<Output>
     ) {
         self.prune = prune
         self.reduceStrategy = reduceStrategy
+    }
+}
+
+/// Carries one reduced counterexample and the property invocations used to produce it without coupling fuzz reporting to the reducer's full statistics type.
+package struct FuzzReductionResult<Output> {
+    package let sequence: ChoiceSequence
+    package let tree: ChoiceTree
+    package let value: Output
+    package let propertyInvocations: Int
+
+    package init(
+        sequence: ChoiceSequence,
+        tree: ChoiceTree,
+        value: Output,
+        propertyInvocations: Int
+    ) {
+        self.sequence = sequence
+        self.tree = tree
+        self.value = value
+        self.propertyInvocations = propertyInvocations
     }
 }
 
@@ -47,7 +67,7 @@ package final class FuzzRunner<Output> {
     /// Prunes the value and tree before corpus admission. Nil on the value path; the spec path removes precondition-skipped commands so the corpus stores only live sequences. Runs outside the attribution bracket, only on failures and would-be admissions.
     private let prune: (@Sendable (Output, ChoiceTree) -> (value: Output, tree: ChoiceTree))?
     /// The reduction the failure dispatch runs. The value path's default is ``propertyOnlyReduceStrategy(gen:property:reducerConfiguration:)``; the spec path injects its backend reducer through ``FuzzHooks``.
-    private let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom) -> (sequence: ChoiceSequence, tree: ChoiceTree, value: Output)
+    private let reduceStrategy: @Sendable (ChoiceTree, Output, FailureSymptom) -> FuzzReductionResult<Output>
 
     /// Package-visible so tests can assert on corpus contents (tier membership, entry command counts) after a run.
     package let corpus: FuzzCorpus
@@ -64,11 +84,7 @@ package final class FuzzRunner<Output> {
 
     var startNanoseconds: UInt64 = 0
     private var lastAdmissionNanoseconds: UInt64 = 0
-    private var screeningAttempts = 0
-    private var samplingAttempts = 0
-    var mutationAttempts = 0
-    private var discardedAttempts = 0
-    private var totalAttempts = 0
+    var counts = FuzzRunCounts()
 
     /// Wall-clock nanoseconds spent inside the property body across search attempts and prune re-evaluations; the report derives the testing-overhead fraction from it. Reduction-side evaluations are accounted separately in `reductionNanoseconds` so a failure-dense run does not read as a pipeline regression.
     private var propertyNanoseconds: UInt64 = 0
@@ -129,21 +145,33 @@ package final class FuzzRunner<Output> {
         gen: Generator<Output>,
         property: @escaping @Sendable (Output) -> FuzzVerdict,
         reducerConfiguration: Interpreters.ReducerConfiguration
-    ) -> @Sendable (ChoiceTree, Output, FailureSymptom) -> (sequence: ChoiceSequence, tree: ChoiceTree, value: Output) {
+    ) -> @Sendable (ChoiceTree, Output, FailureSymptom) -> FuzzReductionResult<Output> {
         { tree, value, _ in
             let boolProperty: (Output) -> Bool = { property($0).isFailure == false }
-            let outcome = try? Interpreters.choiceGraphReduce(
+            let result = try? Interpreters.choiceGraphReduceCollectingStats(
                 gen: gen,
                 tree: tree,
                 output: value,
                 config: reducerConfiguration,
                 property: boolProperty
             )
-            switch outcome {
+            let propertyInvocations = (result?.stats.reductionProbesWherePropertyPassed ?? 0)
+                + (result?.stats.reductionProbesWherePropertyFailed ?? 0)
+            switch result?.outcome {
                 case let .reduced(sequence, reducedTree, output), let .unreduced(sequence, reducedTree, output):
-                    return (sequence, reducedTree, output)
+                    return FuzzReductionResult(
+                        sequence: sequence,
+                        tree: reducedTree,
+                        value: output,
+                        propertyInvocations: propertyInvocations
+                    )
                 case .failure, nil:
-                    return (ChoiceSequence.flatten(tree), tree, value)
+                    return FuzzReductionResult(
+                        sequence: ChoiceSequence.flatten(tree),
+                        tree: tree,
+                        value: value,
+                        propertyInvocations: propertyInvocations
+                    )
             }
         }
     }
@@ -189,10 +217,7 @@ package final class FuzzRunner<Output> {
         return FuzzRunResult(
             clusters: clusters,
             unmatchedUnreducedCounts: unmatched,
-            screeningAttempts: screeningAttempts,
-            samplingAttempts: samplingAttempts,
-            mutationAttempts: mutationAttempts,
-            discardedAttempts: discardedAttempts,
+            counts: counts,
             corpusEntryCount: corpus.entries.count,
             mutableTierCount: corpus.mutableTierIndices.count,
             coveredEdgeCount: corpus.coveredEdgeCount,
@@ -226,14 +251,14 @@ package final class FuzzRunner<Output> {
             return verdict.isFailure == false
         }
 
-        _ = ScreeningRunner.run(
+        let result = ScreeningRunner.run(
             gen,
             screeningBudget: min(configuration.screeningBudget, remainingAttemptBudget()),
             continuePastFailure: true,
             property: wrappedProperty,
             onExample: { [self] value, tree, _ in
                 checkpointIfDue()
-                // Every covering-array row is boundary-derived; convergence is 1 because the tree came straight from materialisation.
+                // Every covering-array row is boundary-derived; convergence is 1 because the tree came straight from materialization.
                 recordAttempt(
                     value: value,
                     tree: tree,
@@ -250,6 +275,8 @@ package final class FuzzRunner<Output> {
                 terminationDue() != nil
             }
         )
+        counts.screeningAttempts = result.summary.rowAttempts
+        counts.screeningRejectedAttempts = result.summary.rejectedRows
     }
 
     // MARK: - Phase 2: Random Sampling
@@ -324,7 +351,7 @@ package final class FuzzRunner<Output> {
                     case .evaluated:
                         break
                     case .exhausted:
-                        discardedAttempts += 1
+                        break
                     case let .generationError(message):
                         return .generationError(message)
                 }
@@ -339,6 +366,7 @@ package final class FuzzRunner<Output> {
                     break
                 }
                 let (mutated, armsMask) = nextCandidate(from: parent)
+                counts.mutationAttempts += 1
                 evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: armsMask)
             }
         }
@@ -357,7 +385,7 @@ package final class FuzzRunner<Output> {
             mode: .guided(seed: prng.next(), fallbackTree: parent.tree)
         )
         guard case let .success(anyValue, freshTree, decodingReport) = result else {
-            discardedAttempts += 1
+            counts.discardedAttempts += 1
             return
         }
         // swiftlint:disable:next force_cast
@@ -432,7 +460,7 @@ package final class FuzzRunner<Output> {
 
     /// The instrumented tail of one evaluation bracket: records the breadcrumb slot, notes the value, times the property, and collects the attempt's hits.
     ///
-    /// Must run inside the attribution token, after `source.beginAttempt()` and after candidate production — generation and materialisation can execute user code, and its coverage belongs to the attempt whose bracket is open.
+    /// Must run inside the attribution token, after `source.beginAttempt()` and after candidate production — generation and materialization can execute user code, and its coverage belongs to the attempt whose bracket is open.
     private func evaluateInBracket(
         _ value: Output,
         recordingBreadcrumb slot: (candidateHash: UInt64, parentHash: UInt64)?
@@ -469,13 +497,15 @@ package final class FuzzRunner<Output> {
     ) -> CorpusAdmission {
         switch phase {
             case .screening:
-                screeningAttempts += 1
+                break
             case .sampling:
-                samplingAttempts += 1
+                counts.samplingAttempts += 1
             case .mutation:
-                mutationAttempts += 1
+                if parentIndex == nil {
+                    counts.mutationAttempts += 1
+                }
         }
-        totalAttempts += 1
+        counts.evaluatedSearchCases += 1
 
         let originalCandidate = EvaluatedFuzzCandidate(
             value: value,
@@ -545,6 +575,7 @@ package final class FuzzRunner<Output> {
                 parentHash: parentHash
             )
         )
+        counts.pruneInvocations += 1
         let prunedCandidate = EvaluatedFuzzCandidate(
             value: pruned.value,
             tree: pruned.tree,
@@ -597,7 +628,7 @@ package final class FuzzRunner<Output> {
             corpus.applyProvisionalFailureBoost(toParentAt: parentIndex)
         }
         let hash = ZobristHash.hash(of: sequence)
-        let attemptIndex = totalAttempts
+        let attemptIndex = counts.totalAttempts
         switch gate.admit(sequenceHash: hash, symptom: symptom, coverageNovel: coverageNovel) {
             case .duplicate:
                 return
@@ -633,7 +664,11 @@ package final class FuzzRunner<Output> {
         wasEscape: Bool
     ) {
         let reductionStart = monotonicNanoseconds()
-        var (reducedSequence, reducedTree, reducedValue) = reduceStrategy(tree, value, symptom)
+        let reduction = reduceStrategy(tree, value, symptom)
+        counts.reductionInvocations += reduction.propertyInvocations
+        var reducedSequence = reduction.sequence
+        var reducedTree = reduction.tree
+        var reducedValue = reduction.value
 
         // Normalization runs only on the would-be-new-cluster event: a reduced form whose key already exists needs no canonicalization, and the containsKey pre-check keeps the probing off the saturated-cluster path entirely.
         var unnormalizedResidual = false
@@ -644,7 +679,10 @@ package final class FuzzRunner<Output> {
                    reducedSequence: reducedSequence,
                    erasedGen: erasedGen,
                    symptom: symptom,
-                   property: property,
+                   property: { [self] value in
+                       counts.normalizationInvocations += 1
+                       return property(value)
+                   },
                    cache: normalizationCache
                )
             {
@@ -698,6 +736,7 @@ package final class FuzzRunner<Output> {
         if source.wantsValues {
             source.noteValue(value)
         }
+        counts.classificationInvocations += 1
         _ = property(value)
         var signature = BitSet(capacity: source.edgeCount)
         source.forEachHitEdge { edge, _ in
@@ -710,7 +749,7 @@ package final class FuzzRunner<Output> {
 
     /// The run-wide stop conditions every phase checks: wall clock and the testing attempt limit.
     private func terminationDue() -> FuzzTermination? {
-        if let limit = configuration.attemptLimit, totalAttempts >= limit {
+        if let limit = configuration.attemptLimit, counts.totalAttempts >= limit {
             return .attemptLimitReached
         }
         if monotonicNanoseconds() - startNanoseconds >= configuration.budgetNanoseconds {
@@ -724,7 +763,7 @@ package final class FuzzRunner<Output> {
         guard let limit = configuration.attemptLimit else {
             return UInt64.max
         }
-        return UInt64(max(0, limit - totalAttempts))
+        return UInt64(max(0, limit - counts.totalAttempts))
     }
 
     /// One uniform draw in [0, 1) from the run PRNG (the top 53 bits of one 64-bit draw), so probability-space decisions replay deterministically under a pinned seed.

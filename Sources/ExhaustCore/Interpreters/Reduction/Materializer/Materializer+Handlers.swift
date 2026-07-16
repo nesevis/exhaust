@@ -679,7 +679,7 @@ extension Materializer {
                         // Their markers are `.group` (not `.bind`), so skip cursor suspension — skipBindBound() would scan for `.bind` markers and corrupt the cursor.
                         //
                         // For non-getSize binds, suspend only when the inner value changed.
-                        // When unchanged, the bound structure is identical and prefix entries are valid — the cursor stays active so encoder modifications to bound content are honoured. Compare flattened ChoiceSequences (strips metadata, compares only values/branches/ markers).
+                        // When unchanged, the bound structure is identical and prefix entries are valid — the cursor stays active so encoder modifications to bound content are honored. Compare flattened ChoiceSequences (strips metadata, compares only values/branches/ markers).
                         // No bind suspension: the cursor reads entries as-is. Cross-depth promotions have structurally compatible bound content; stale entries from value changes are caught by the property check.
                         context.boundDepth += 1
                         let boundResult = try generateRecursive(
@@ -716,7 +716,7 @@ extension Materializer {
                 }
 
             case let .metamorphic(transforms, _):
-                // skipTree override: the metamorphic combinator produces independent copies via Interpreters.replay(inner, using: innerTree). Replay needs the real tree because the cursor has already advanced past the inner generator's choices — the tree is the only record of what choices were made. Without it, replay returns nil and every metamorphic generator fails materialisation. The override is scoped to the inner generateRecursive call only; once innerTree is captured, skipTree is restored so runContinuation returns .just as its callee tree.
+                // skipTree override: the metamorphic combinator produces independent copies via Interpreters.replay(inner, using: innerTree). Replay needs the real tree because the cursor has already advanced past the inner generator's choices — the tree is the only record of what choices were made. Without it, replay returns nil and every metamorphic generator fails materialization. The override is scoped to the inner generateRecursive call only; once innerTree is captured, skipTree is restored so runContinuation returns .just as its callee tree.
                 let savedSkipTree = context.skipTree
                 context.skipTree = false
                 guard let (original, innerTree) = try generateRecursive(

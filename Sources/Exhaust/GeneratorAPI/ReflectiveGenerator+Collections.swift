@@ -83,7 +83,7 @@ public extension ReflectiveGenerator {
         Gen.setOf(gen.gen).wrapped
     }
 
-    /// Creates a generator that produces sets with count within a specified range.
+    /// Generates sets from a ranged number of element draws, with duplicate values collapsed.
     ///
     /// The count controls how many elements are drawn, and duplicates collapse. When the element generator repeats a value, the resulting set is smaller than the count, even below the range's lower bound (for example, drawing `Bool` three times can produce a 1-element set).
     ///
@@ -95,7 +95,7 @@ public extension ReflectiveGenerator {
     ///   - gen: Generator for each set element.
     ///   - count: The allowed range of element draws per set.
     ///   - scaling: How set size scales with the size parameter. Defaults to `.linear`.
-    /// - Returns: A generator producing sets with count in the given range.
+    /// - Returns: A generator producing sets with at most the range's upper bound of elements; duplicates can reduce the result below its lower bound.
     /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete set from this factory because set construction discards the order elements were drawn in and collapses duplicates. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func set<Element: Hashable>(
         _ gen: ReflectiveGenerator<Element>,
@@ -150,7 +150,7 @@ public extension ReflectiveGenerator {
         Gen.dictionaryOf(keyGen.gen, valueGen.gen).wrapped
     }
 
-    /// Creates a generator that produces dictionaries with entry count within a specified range.
+    /// Generates dictionaries from a ranged number of key-value draws, with duplicate keys collapsed.
     ///
     /// Keys are deduplicated first-wins, so the generated dictionary may have fewer entries than requested when the key generator produces duplicates.
     ///
@@ -161,9 +161,9 @@ public extension ReflectiveGenerator {
     /// - Parameters:
     ///   - keyGen: Generator for dictionary keys.
     ///   - valueGen: Generator for dictionary values.
-    ///   - count: The allowed range of entry counts.
-    ///   - scaling: How the entry count scales with the size parameter. Defaults to `.linear`.
-    /// - Returns: A generator producing dictionaries with entry count in the given range.
+    ///   - count: The allowed range of key-value draws.
+    ///   - scaling: How the draw count scales with the size parameter. Defaults to `.linear`.
+    /// - Returns: A generator producing dictionaries with at most the range's upper bound of entries; duplicate keys can reduce the result below its lower bound.
     /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete dictionary from this factory because dictionary construction discards pair order and may collapse duplicate keys. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func dictionary<Key: Hashable, DictValue>(
         _ keyGen: ReflectiveGenerator<Key>,
@@ -176,7 +176,7 @@ public extension ReflectiveGenerator {
         return Gen.dictionaryOf(keyGen.gen, valueGen.gen, within: range, scaling: LengthConversion.uint64Scaling(scaling)).wrapped
     }
 
-    /// Creates a generator that produces dictionaries of an exact entry count.
+    /// Generates dictionaries from an exact number of key-value draws, with duplicate keys collapsed.
     ///
     /// Keys are deduplicated first-wins, so the generated dictionary may have fewer entries than requested when the key generator produces duplicates.
     ///
@@ -187,8 +187,8 @@ public extension ReflectiveGenerator {
     /// - Parameters:
     ///   - keyGen: Generator for dictionary keys.
     ///   - valueGen: Generator for dictionary values.
-    ///   - count: The exact number of entries in each generated dictionary.
-    /// - Returns: A generator producing dictionaries of the specified entry count.
+    ///   - count: The exact number of key-value draws per dictionary.
+    /// - Returns: A generator producing dictionaries with at most `count` entries.
     /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete dictionary from this factory because dictionary construction discards pair order and may collapse duplicate keys. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func dictionary<Key: Hashable, DictValue>(
         _ keyGen: ReflectiveGenerator<Key>,
@@ -416,7 +416,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameters:
     ///   - collection: The collection to pick elements from.
-    ///   - id: A key path to a hashable property used to identify elements during reflection.
+    ///   - path: A key path to a hashable property used to identify elements during reflection.
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection>(
         from collection: C,
@@ -436,7 +436,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameters:
     ///   - collection: The collection to pick elements from.
-    ///   - id: A key path to an equatable property used to identify elements during reflection.
+    ///   - path: A key path to an equatable property used to identify elements during reflection.
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection>(
         from collection: C,

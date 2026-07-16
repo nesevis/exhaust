@@ -215,7 +215,7 @@ public extension __ExhaustRuntime {
         }
     }
 
-    /// Runs one spec adapter through `runExploreTimeCore` on a GCD worker with the spec-path configuration: screening skipped (boundary-value catalogues apply to values, not command vocabularies).
+    /// Runs one spec adapter through `runExploreTimeCore` on a GCD worker with the spec-path configuration: screening skipped (boundary-value catalogs apply to values, not command vocabularies).
     ///
     /// Every execution model routes through here; an arm only has to supply its adapter factory. The factory runs on the worker so the adapter's generator and closures never cross a concurrency boundary. A nil adapter means the spec's command generator is not a top-level pick — the one construction the cooperative adapter cannot marker-tag — and terminates the run as a configuration error.
     private static func runSpecFuzz(
@@ -438,7 +438,7 @@ extension __ExhaustRuntime {
         }
 
         // Two-pass reduction (lane collapse + deletion, then value minimization), run inline on the fuzz loop's GCD lane. The drain loop's spin-polling stays off the cooperative pool because the loop's lane hosts it, which is what inline reduction guarantees by construction.
-        let reduceStrategy: @Sendable (ChoiceTree, [(ScheduleMarker, Spec.Command)], FailureSymptom) -> (sequence: ChoiceSequence, tree: ChoiceTree, value: [(ScheduleMarker, Spec.Command)]) = { tree, value, _ in
+        let reduceStrategy: @Sendable (ChoiceTree, [(ScheduleMarker, Spec.Command)], FailureSymptom) -> FuzzReductionResult<[(ScheduleMarker, Spec.Command)]> = { tree, value, _ in
             let probeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> StateMachineProbeVerdict<Void> = { tagged in
                 let result = drainSchedule(
                     taggedCommands: tagged,
@@ -461,7 +461,13 @@ extension __ExhaustRuntime {
                 deadlineNanoseconds: FuzzTunables.specReductionDeadlineNanoseconds,
                 property: probeProperty
             )
-            return (result.sequence, result.tree, result.value)
+            return FuzzReductionResult(
+                sequence: result.sequence,
+                tree: result.tree,
+                value: result.value,
+                propertyInvocations: result.stats.reductionProbesWherePropertyPassed
+                    + result.stats.reductionProbesWherePropertyFailed
+            )
         }
 
         return SpecFuzzAdapter(

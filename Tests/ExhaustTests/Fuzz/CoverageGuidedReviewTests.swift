@@ -48,7 +48,12 @@ struct CoverageGuidedReviewTests {
                 (value: 0, tree: zeroTree)
             },
             reduceStrategy: { tree, value, _ in
-                (sequence: ChoiceSequence.flatten(tree), tree: tree, value: value)
+                FuzzReductionResult(
+                    sequence: ChoiceSequence.flatten(tree),
+                    tree: tree,
+                    value: value,
+                    propertyInvocations: 0
+                )
             }
         )
         let runner = FuzzRunner(
@@ -90,7 +95,12 @@ struct CoverageGuidedReviewTests {
                 (value: 0, tree: zeroTree)
             },
             reduceStrategy: { tree, value, _ in
-                (sequence: ChoiceSequence.flatten(tree), tree: tree, value: value)
+                FuzzReductionResult(
+                    sequence: ChoiceSequence.flatten(tree),
+                    tree: tree,
+                    value: value,
+                    propertyInvocations: 0
+                )
             }
         )
         let runner = FuzzRunner(
@@ -110,7 +120,16 @@ struct CoverageGuidedReviewTests {
 
         let result = runner.run()
 
-        #expect(result.totalAttempts == 1)
+        #expect(result.counts.totalAttempts == 1)
+        #expect(result.counts.evaluatedSearchCases == 1)
+        #expect(result.counts.pruneInvocations == 1)
+        #expect(result.counts.classificationInvocations == 1)
+        #expect(result.counts.totalPropertyInvocations == result.counts.evaluatedSearchCases
+            + result.counts.pruneInvocations
+            + result.counts.reductionInvocations
+            + result.counts.normalizationInvocations
+            + result.counts.classificationInvocations
+            + result.counts.recoveryInvocations)
         #expect(result.clusters.map(\.reducedDescription) == ["1"])
         #expect(result.clusters.first?.symptoms == [.returnedFalse])
         let entry = try #require(runner.corpus.entries.first)

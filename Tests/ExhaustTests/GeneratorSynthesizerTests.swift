@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Generator Synthesizer")
 struct GeneratorSynthesizerTests {
-    @Test("Synthesises a generator from a flat struct")
+    @Test("Synthesizes a generator from a flat struct")
     func flatStruct() throws {
         let json = """
         {"name": "Gaute", "age": 30, "active": true}
@@ -16,7 +16,7 @@ struct GeneratorSynthesizerTests {
         #expect(Set(values.map(\.age)).count > 1)
     }
 
-    @Test("Synthesises a generator from a nested struct")
+    @Test("Synthesizes a generator from a nested struct")
     func nestedStruct() throws {
         let json = """
         {"name": "Bob", "address": {"street": "123 Main St", "city": "Springfield"}}
@@ -54,7 +54,7 @@ struct GeneratorSynthesizerTests {
         #expect(values.allSatisfy { $0.priority == .high })
     }
 
-    @Test("Exhaust finds a counterexample with a synthesised generator")
+    @Test("Exhaust finds a counterexample with a synthesized generator")
     func exhaustFindsCounterexample() throws {
         let json = """
         {"name": "Gaute", "age": 30, "active": true}
@@ -132,19 +132,19 @@ struct GeneratorSynthesizerTests {
         #expect(Set(values.map(\.age)).count > 1)
     }
 
-    @Test("Synthesised generators are marked with isSynthesised flag")
+    @Test("Synthesized generators are marked with isSynthesised flag")
     func isSynthesisedFlag() throws {
         let json = """
         {"name": "Gaute", "age": 30, "active": true}
         """
-        let synthesised = try #gen(Person.self, from: json)
+        let synthesized = try #gen(Person.self, from: json)
         let handWritten = #gen(.int(in: 0 ... 100))
 
-        #expect(synthesised.isSynthesized)
+        #expect(synthesized.isSynthesized)
         #expect(handWritten.isSynthesized == false)
     }
 
-    @Test("#examine skips reflection for synthesised generators")
+    @Test("#examine skips reflection for synthesized generators")
     func examineSkipsReflection() throws {
         let json = """
         {"name": "Gaute", "age": 30, "active": true}
@@ -158,7 +158,7 @@ struct GeneratorSynthesizerTests {
         #expect(report.pinnedFieldCount == 0)
     }
 
-    @Test("#examine reports pinned fields for synthesised generators")
+    @Test("#examine reports pinned fields for synthesized generators")
     func examineReportsPinnedFields() throws {
         let json = """
         {"name": "test", "priority": "high"}

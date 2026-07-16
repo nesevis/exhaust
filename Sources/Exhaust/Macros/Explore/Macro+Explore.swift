@@ -56,7 +56,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 
 /// Runs a coverage-guided property test that continues past where `#exhaust` would stop, mutating from a corpus toward novel SUT coverage until the time budget is consumed.
 ///
-/// The run inherits `#exhaust`'s covering-array and random-sampling phases, then spends the remaining budget in the mutation phase: exploration from corpus parents, guided by branch-coverage feedback from the instrumented target. Failures are catalogued and clustered rather than terminating the run — opting into a time budget is opting into "find everything you can within it".
+/// The run inherits `#exhaust`'s covering-array and random-sampling phases, then spends the remaining budget in the mutation phase: exploration from corpus parents, guided by branch-coverage feedback from the instrumented target. Failures are cataloged and clustered rather than terminating the run — opting into a time budget is opting into "find everything you can within it".
 ///
 /// ```swift
 /// #explore(messageGen, time: .minutes(15)) { message in
@@ -82,7 +82,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 
 /// Runs a coverage-guided property test with an async property closure, continuing past where `#exhaust` would stop until the time budget is consumed.
 ///
-/// The run inherits `#exhaust`'s covering-array and random-sampling phases, then spends the remaining budget in the mutation phase: exploration from corpus parents, guided by branch-coverage feedback from the instrumented target. Failures are catalogued and clustered rather than terminating the run. Use this overload when the property needs to `await`. The expanded call is `async`, so call it with `await`.
+/// The run inherits `#exhaust`'s covering-array and random-sampling phases, then spends the remaining budget in the mutation phase: exploration from corpus parents, guided by branch-coverage feedback from the instrumented target. Failures are cataloged and clustered rather than terminating the run. Use this overload when the property needs to `await`. The expanded call is `async`, so call it with `await`.
 ///
 /// ```swift
 /// await #explore(messageGen, time: .minutes(15)) { message in

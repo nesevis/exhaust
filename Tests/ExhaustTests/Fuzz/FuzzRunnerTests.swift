@@ -19,12 +19,53 @@ struct FuzzRunnerTests {
         )
         let result = runner.run()
         #expect(result.termination == .attemptLimitReached)
-        #expect(result.totalAttempts >= 3000)
-        #expect(result.screeningAttempts > 0)
-        #expect(result.mutationAttempts > 0)
+        #expect(result.counts.totalAttempts >= 3000)
+        #expect(result.counts.screeningAttempts > 0)
+        #expect(result.counts.mutationAttempts > 0)
         #expect(result.corpusEntryCount > 0)
         #expect(result.coveredEdgeCount > 0)
         #expect(result.clusters.isEmpty)
+    }
+
+    @Test("Rejected screening probes remain separate from evaluated search cases")
+    func rejectedScreeningProbeAccounting() {
+        let unfilteredGenerator = Gen.zip(
+            Gen.choose(in: UInt64(0) ... 1),
+            Gen.choose(in: UInt64(0) ... 1)
+        )
+        let generator = Gen.filter(
+            unfilteredGenerator,
+            type: .rejectionSampling,
+            predicate: { value in
+                value.0 == 0 && value.1 == 0
+            },
+            sourceLocation: FilterSourceLocation(
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+        )
+        let runner = FuzzRunner(
+            gen: generator,
+            property: { _ in .pass },
+            source: SyntheticCoverageSource<(UInt64, UInt64)>(edgeCount: 1, edges: { _ in [0] }),
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 7,
+                screeningBudget: 4,
+                skipSampling: true,
+                attemptLimit: 4
+            )
+        )
+
+        let result = runner.run()
+
+        #expect(result.counts.totalAttempts == 4)
+        #expect(result.counts.screeningAttempts == 4)
+        #expect(result.counts.screeningRejectedAttempts == 2)
+        #expect(result.counts.evaluatedSearchCases == 2)
+        #expect(result.counts.totalPropertyInvocations == 2)
     }
 
     @Test("Phase skipping starts the run directly in the mutation phase")
@@ -42,9 +83,9 @@ struct FuzzRunnerTests {
             )
         )
         let result = runner.run()
-        #expect(result.screeningAttempts == 0)
-        #expect(result.samplingAttempts == 0)
-        #expect(result.mutationAttempts >= 500)
+        #expect(result.counts.screeningAttempts == 0)
+        #expect(result.counts.samplingAttempts == 0)
+        #expect(result.counts.mutationAttempts >= 500)
         // The empty-corpus fallback sampled fresh values and seeded the corpus.
         #expect(result.corpusEntryCount > 0)
         #expect(result.mutableTierCount > 0)
@@ -139,7 +180,7 @@ struct FuzzRunnerTests {
             )
         )
         let result = runner.run()
-        #expect(result.totalAttempts >= 3000)
+        #expect(result.counts.totalAttempts >= 3000)
         #expect(result.edgeSingletonCount == 0)
         #expect(result.edgeDoubletonCount == 0)
     }
@@ -166,10 +207,10 @@ struct FuzzRunnerTests {
         let descriptions = Set(result.clusters.map(\.reducedDescription))
         #expect(descriptions == Set(["41", "941"]))
         #expect(result.termination == .attemptLimitReached)
-        #expect(result.screeningAttempts > 0)
-        #expect(result.samplingAttempts > 0)
-        #expect(result.mutationAttempts > 0)
-        #expect(result.totalAttempts >= 1500)
+        #expect(result.counts.screeningAttempts > 0)
+        #expect(result.counts.samplingAttempts > 0)
+        #expect(result.counts.mutationAttempts > 0)
+        #expect(result.counts.totalAttempts >= 1500)
         for cluster in result.clusters {
             #expect(cluster.reducedCount >= 1)
         }

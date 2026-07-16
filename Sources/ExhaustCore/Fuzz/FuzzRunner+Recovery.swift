@@ -50,7 +50,7 @@ extension FuzzRunner {
         persistence.store.removeAll()
     }
 
-    /// Hands one checkpoint to the async writer when the interval elapsed or a new cluster forced one. The loop's cost is snapshotting value-type state (copy-on-write array grabs); record building, choice-sequence encoding, JSON serialisation, and I/O all happen on the writer's queue.
+    /// Hands one checkpoint to the async writer when the interval elapsed or a new cluster forced one. The loop's cost is snapshotting value-type state (copy-on-write array grabs); record building, choice-sequence encoding, JSON serialization, and I/O all happen on the writer's queue.
     func checkpointIfDue() {
         guard let writer = progressWriter else {
             return
@@ -99,7 +99,7 @@ extension FuzzRunner {
 
     /// Rebuilds the corpus and inventory from a predecessor's document.
     ///
-    /// Every entry is re-materialised in `.exact` mode — the tree is not persisted and mutations need it as the guided fallback. When the PC-table hash and edge count match the predecessor's, cached hits are trusted; otherwise each entry is re-attributed with one instrumented evaluation against the new edge ordering, and cluster signatures (stale edge indices) are dropped. Entries the current generator can no longer materialise are silently pruned — exactly the right pruning after a code change.
+    /// Every entry is re-materialized in `.exact` mode — the tree is not persisted and mutations need it as the guided fallback. When the PC-table hash and edge count match the predecessor's, cached hits are trusted; otherwise each entry is re-attributed with one instrumented evaluation against the new edge ordering, and cluster signatures (stale edge indices) are dropped. Entries the current generator can no longer materialize are silently pruned — exactly the right pruning after a code change.
     private func restore(from document: FuzzProgressDocument) {
         let signaturesValid = document.metadata.pcTableHash == pcTableHashAtStart
             && document.metadata.edgeCount == source.edgeCount
@@ -157,6 +157,7 @@ extension FuzzRunner {
                     source.noteValue(value)
                 }
                 // Attribution only — a failing entry's cluster was already restored, so no failure dispatch here.
+                counts.recoveryInvocations += 1
                 _ = property(value)
                 var reattributed: [(edge: Int, hitCount: UInt8)] = []
                 source.forEachHitEdge { edge, hitCount in

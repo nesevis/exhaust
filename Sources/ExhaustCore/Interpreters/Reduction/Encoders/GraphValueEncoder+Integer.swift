@@ -38,7 +38,7 @@ extension GraphValueEncoder {
             }
         }
 
-        // Phase selection. armBatchZero is true for the initial start(scope:) call (the trivial all-targets shortcut is worth one probe at pass start) and false for refresh calls from refreshState(graph:sequence:). Re-arming batch-zero on every refresh wastes one full materialisation per structural acceptance: at refresh time we already know batch-zero was infeasible at pass start (otherwise the per-leaf search wouldn't be running), and the rebuilt graph's leaves rarely change that.
+        // Phase selection. armBatchZero is true for the initial start(scope:) call (the trivial all-targets shortcut is worth one probe at pass start) and false for refresh calls from refreshState(graph:sequence:). Re-arming batch-zero on every refresh wastes one full materialization per structural acceptance: at refresh time we already know batch-zero was infeasible at pass start (otherwise the per-leaf search wouldn't be running), and the rebuilt graph's leaves rarely change that.
         let initialPhase: IntegerPhase = (armBatchZero && scope.batchZeroEligible) ? .batchZero : .perLeaf
 
         mode = .valueLeaves(IntegerState(

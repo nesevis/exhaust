@@ -12,8 +12,11 @@ extension __ExhaustRuntime {
 
         let clusterWord = report.clusters.count == 1 ? "fault cluster" : "fault clusters"
         let overheadPercent = Int((report.testingOverheadFraction * 100).rounded())
+        let evaluationDetail = report.rejectedSearchAttempts > 0
+            ? ", \(report.evaluatedSearchCases) evaluated"
+            : ""
         lines.append(
-            "#explore(time:) catalogued \(report.clusters.count) \(clusterWord) in \(report.totalAttempts) attempts (\(Int(report.attemptsPerSecond.rounded()))/s; \(overheadPercent)% Exhaust testing overhead)."
+            "#explore(time:) cataloged \(report.clusters.count) \(clusterWord) in \(report.totalAttempts) attempts\(evaluationDetail) (\(Int(report.attemptsPerSecond.rounded())) evaluated/s; \(overheadPercent)% Exhaust testing overhead)."
         )
 
         // Gap-framed: the uncovered count is the honest number; a percentage against module size would measure the module, not the search.
@@ -68,7 +71,7 @@ extension __ExhaustRuntime {
 
     /// Renders the estimator lines: the Good-Turing price of one more edge and the Chao1 completeness fraction against the run's own reachable set. The reachable-set scoping is stated inline so the fraction cannot be read as module coverage.
     private static func renderEstimatorLines(_ report: FuzzReport) -> [String] {
-        guard report.totalAttempts > 0, report.coveredEdgeCount > 0 else {
+        guard report.evaluatedSearchCases > 0, report.coveredEdgeCount > 0 else {
             return []
         }
         var lines: [String] = []
@@ -80,7 +83,7 @@ extension __ExhaustRuntime {
             )
         } else {
             lines.append(
-                "No edge was hit by only a single attempt — the estimated chance of a new edge on the next attempt is below 1 in \(report.totalAttempts)."
+                "No edge was hit by only a single evaluated case — the estimated chance of a new edge on the next evaluated case is below 1 in \(report.evaluatedSearchCases)."
             )
         }
         let reachable = report.estimatedReachableEdgeCount
@@ -191,7 +194,7 @@ extension __ExhaustRuntime {
 
     // MARK: - Suspects
 
-    /// Picks up to three discriminating edges worth a terminal line, from the edges that symbolised into user code. Locations with a resolved line number lead (function-entry edges name a specific location; interior `:0` edges collapse to the enclosing function's name and read generic), and symbols that restate the symptom's own error type trail. Candidates naming the same function collapse into one unless both carry resolved lines that differ — `audit (RacyLedger.swift:45)` absorbs `audit (RacyLedger.swift)` and a file-less `audit` (the line-first ordering makes the line-bearing form the survivor), while `audit (RacyLedger.swift:52)` stays a separate suspect. Empty when nothing symbolised usefully.
+    /// Picks up to three discriminating edges worth a terminal line, from the edges that symbolized into user code. Locations with a resolved line number lead (function-entry edges name a specific location; interior `:0` edges collapse to the enclosing function's name and read generic), and symbols that restate the symptom's own error type trail. Candidates naming the same function collapse into one unless both carry resolved lines that differ — `audit (RacyLedger.swift:45)` absorbs `audit (RacyLedger.swift)` and a file-less `audit` (the line-first ordering makes the line-bearing form the survivor), while `audit (RacyLedger.swift:52)` stays a separate suspect. Empty when nothing symbolized usefully.
     static func terminalSuspects(for cluster: FuzzReport.Cluster) -> [String] {
         let candidates: [SuspectLocation] = cluster.discriminatingEdges.compactMap { edge in
             guard let location = edge.location, location.contains("/<compiler-generated>") == false else {
@@ -242,7 +245,7 @@ extension __ExhaustRuntime {
         let file: String?
         let line: Int?
 
-        /// Splits `demangled symbol + offset (File.swift:line)` into its parts and shortens the symbol to its readable core. Every stage degrades gracefully — an unrecognised shape renders as-is.
+        /// Splits `demangled symbol + offset (File.swift:line)` into its parts and shortens the symbol to its readable core. Every stage degrades gracefully — an unrecognized shape renders as-is.
         init(parsing location: String) {
             var working = location
             var parsedFile: String?

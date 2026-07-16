@@ -1,6 +1,6 @@
 import IssueReporting
 
-/// Controls how ``#examine`` reports validation failures for a specific check.
+/// Controls how `#examine` reports validation failures for a specific check.
 ///
 /// Each severity level determines both whether a failure appears in test output and whether it causes the test to fail. Use `.error` (the default) when validation failures should block the test, `.warning` when you want visibility without failure, and `.silent` when you only need the data in the returned ``ExamineReport``.
 ///
@@ -26,7 +26,7 @@ public enum ExamineSeverity: Sendable {
     }
 }
 
-/// Controls test behavior for ``#examine`` validation runs, passed as variadic arguments.
+/// Controls test behavior for `#examine` validation runs, passed as variadic arguments.
 ///
 /// ```swift
 /// #examine(personGen, .reflection(.warning), .budget(500))

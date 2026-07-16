@@ -186,7 +186,7 @@
 
         /// Sets the suite budget as a task-local for the duration of each test body.
         ///
-        /// The default `scopeProvider` for recursive ``SuiteTrait`` returns `nil` at the suite level and `self` at the test level, so this fires once per test function.
+        /// The default `scopeProvider` for recursive `SuiteTrait` returns `nil` at the suite level and `self` at the test level, so this fires once per test function.
         public func provideScope(
             for _: Test,
             testCase _: Test.Case?,

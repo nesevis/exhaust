@@ -41,7 +41,17 @@ package final class LaneExecutor: TaskExecutor, @unchecked Sendable {
     }
 
     package func enqueue(_ job: consuming ExecutorJob) {
-        runQueue.enqueue(lane: lane, job: UnownedJob(job))
+        let unownedJob = UnownedJob(job)
+        if runQueue.enqueue(lane: lane, job: unownedJob) == false {
+            runAfterAbandonment(unownedJob)
+        }
+    }
+
+    /// Runs a continuation outside the deterministic drain after its probe has timed out and transferred cleanup ownership.
+    package func runAfterAbandonment(_ job: UnownedJob) {
+        DispatchQueue.global().async { [self] in
+            job.runSynchronously(on: asUnownedTaskExecutor())
+        }
     }
 
     package func asUnownedTaskExecutor() -> UnownedTaskExecutor {
@@ -67,16 +77,45 @@ package final class RunQueue: @unchecked Sendable {
 
     private var lanes: [Lane]
     private let condition = NSCondition()
+    private var isAbandoned = false
 
     package init(laneCount: Int) {
         lanes = Array(repeating: Lane(), count: laneCount)
     }
 
     /// Appends a job to the specified lane's queue. May be called from any thread.
-    package func enqueue(lane: LaneID, job: UnownedJob) {
+    package func enqueue(lane: LaneID, job: UnownedJob) -> Bool {
         withLocking {
+            guard isAbandoned == false else {
+                return false
+            }
             lanes[Int(lane.index)].jobs.append(job)
             condition.signal()
+            return true
+        }
+    }
+
+    /// Transfers pending and future continuations out of the deterministic drain after timeout.
+    ///
+    /// Pending jobs are returned to the caller for immediate scheduling. Future jobs make ``enqueue(lane:job:)`` return `false`, which tells their ``LaneExecutor`` to schedule them directly. This breaks the executor/task/queue retention cycle without waiting through a second idle-timeout window.
+    package func abandon() -> [(lane: LaneID, job: UnownedJob)] {
+        withLocking {
+            guard isAbandoned == false else {
+                return []
+            }
+            isAbandoned = true
+            var pending: [(lane: LaneID, job: UnownedJob)] = []
+            for laneIndex in lanes.indices {
+                let lane = lanes[laneIndex]
+                for jobIndex in lane.cursor ..< lane.jobs.count {
+                    pending.append((LaneID(index: UInt8(laneIndex)), lane.jobs[jobIndex]))
+                }
+                lanes[laneIndex].jobs.removeAll(keepingCapacity: false)
+                lanes[laneIndex].cursor = 0
+                lanes[laneIndex].isComplete = true
+            }
+            condition.broadcast()
+            return pending
         }
     }
 
