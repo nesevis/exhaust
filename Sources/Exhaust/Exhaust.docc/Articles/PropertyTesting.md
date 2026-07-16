@@ -143,7 +143,7 @@ The `.collectOpenPBTStats` setting records per-example data in the [OpenPBTStats
 
 Each line records the example's pass/fail status, a `customDump` representation, and complexity features derived automatically from the choice tree. Filter rejections from CGS or rejection sampling are surfaced as `gave_up` entries.
 
-The attachment is recorded via Swift Testing's `Attachment` API, or via `XCTAttachment` when running under XCTest. Pass `.suppress(.attachments)` to collect the statistics without recording the attachment — the data still reaches ``ExhaustReport/openPBTStatsLines``, so an `.onReport` closure can consume it while the result bundle stays clean.
+The attachment is recorded via Swift Testing's `Attachment` API, or via `XCTAttachment` when running under XCTest. Its name ends in `-openpbtstats.jsonl`. Pass `.suppress(.attachments)` to prevent Exhaust from adding it to the test result bundle.
 
 ### Why this matters
 

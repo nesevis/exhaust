@@ -142,7 +142,7 @@ Sequences carry up to 40 commands by default. Override with `.commandLimit(n)` w
 When a run discovers faults, the terminal shows a summary. This is real output from a run against an instrumented parser fixture:
 
 ```
-#explore(time:) catalogued 3 fault clusters in 4978 attempts (35650/s; 97% Exhaust testing overhead).
+#explore(time:) cataloged 3 fault clusters in 4978 attempts (35650 evaluated/s; 97% Exhaust testing overhead).
 Coverage: 103 of 1171 instrumented edges hit; 1068 never hit (module-wide count,
   includes code the property never calls).
 Estimated chance the next attempt covers a new edge: about 1 in 2489.

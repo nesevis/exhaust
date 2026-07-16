@@ -16,7 +16,7 @@ let failing = try #example(personGen, seed: "5QF8M2-3")
 |---|---|
 | `gen` | The generator to produce values from. |
 | `count` | Number of values to generate (array overload). |
-| `seed` | Optional ``ReplaySeed`` for deterministic output. Accepts a raw `UInt64` or a string from a failure report. |
+| `seed` | Optional `ReplaySeed` for deterministic output. Accepts a raw `UInt64` or a string from a failure report. |
 
 Returns a single value or an array of values.
 

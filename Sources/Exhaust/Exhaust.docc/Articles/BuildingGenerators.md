@@ -143,8 +143,8 @@ Some fields fall back to a constant from the example, pinned with `.just(decoded
 > ```swift
 > let report = #examine(gen, .budget(50))
 > // Output includes:
-> //   Correctness: reflection skipped (synthesised generator)
-> //   Pinned fields: 1 field could not be synthesised (constant value from example JSON)
+> //   Correctness: reflection skipped (synthesized generator)
+> //   Pinned fields: 1 field could not be synthesized (constant value from example JSON)
 > ```
 
 ### Limitations
