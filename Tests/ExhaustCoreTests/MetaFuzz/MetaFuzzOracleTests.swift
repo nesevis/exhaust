@@ -71,6 +71,29 @@ struct MetaFuzzOracleTests {
         ))
     }
 
+    @Test("Reduction accepts distinct shortlex-equivalent sequences")
+    func reductionAcceptsShortlexEquivalence() throws {
+        let recipe: GenRecipe = .combinator(.weightedOneOf([
+            .init(
+                weight: 1,
+                recipe: .combinator(.reifiedBind(.leaf(.justDouble(15))))
+            ),
+            .init(
+                weight: 1,
+                recipe: .combinator(.weightedOneOf([
+                    .init(weight: 1, recipe: .leaf(.justDouble(15))),
+                    .init(weight: 1, recipe: .leaf(.justDouble(0))),
+                ]))
+            ),
+        ]))
+
+        try MetaFuzz.check(MetaFuzzCase(
+            recipe: recipe,
+            valueSeed: 1_024_109_006_746_627_469,
+            perturbationSeed: 1_034_211_488_305_825_975
+        ))
+    }
+
     @Test("Case generation is deterministic under a pinned seed")
     func caseGenerationIsDeterministic() throws {
         let first = try describeCases(seed: 7)
