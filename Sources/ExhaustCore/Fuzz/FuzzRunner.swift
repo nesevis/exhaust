@@ -85,12 +85,7 @@ package final class FuzzRunner<Output> {
     var startNanoseconds: UInt64 = 0
     private var lastAdmissionNanoseconds: UInt64 = 0
     var counts = FuzzRunCounts()
-
-    /// Wall-clock nanoseconds spent inside the property body across search attempts and prune re-evaluations; the report derives the testing-overhead fraction from it. Reduction-side evaluations are accounted separately in `reductionNanoseconds` so a failure-dense run does not read as a pipeline regression.
-    private var propertyNanoseconds: UInt64 = 0
-
-    /// Wall-clock nanoseconds spent reducing, normalizing, and classifying failures inline. The report subtracts this from the elapsed time before computing throughput and overhead, so those figures keep describing the search pipeline.
-    private var reductionNanoseconds: UInt64 = 0
+    private var timing = FuzzRunTiming()
 
     // MARK: - Crash-Recovery State
 
@@ -187,13 +182,24 @@ package final class FuzzRunner<Output> {
         // Sampling hands over to the mutation phase by returning nil (plateau or time backstop); a non-nil value is a hard stop that skips the mutation phase.
         var termination: FuzzTermination?
         if configuration.skipScreening == false {
-            runScreeningPhase()
+            let screeningMeasurement = measureSearchPhase {
+                runScreeningPhase()
+            }
+            timing.screeningOverheadNanoseconds += screeningMeasurement.overheadNanoseconds
         }
         if terminationDue() == nil, configuration.skipSampling == false {
-            termination = runSamplingPhase()
+            let samplingMeasurement = measureSearchPhase {
+                runSamplingPhase()
+            }
+            timing.samplingOverheadNanoseconds += samplingMeasurement.overheadNanoseconds
+            termination = samplingMeasurement.result
         }
         if termination == nil, terminationDue() == nil {
-            termination = runFuzzPhase()
+            let mutationMeasurement = measureSearchPhase {
+                runFuzzPhase()
+            }
+            timing.mutationOverheadNanoseconds += mutationMeasurement.overheadNanoseconds
+            termination = mutationMeasurement.result
         }
 
         let finalTermination = termination ?? terminationDue() ?? .budgetExhausted
@@ -213,6 +219,7 @@ package final class FuzzRunner<Output> {
         }
 
         finishPersistence()
+        let elapsedNanoseconds = monotonicNanoseconds() - startNanoseconds
 
         return FuzzRunResult(
             clusters: clusters,
@@ -227,10 +234,27 @@ package final class FuzzRunner<Output> {
             termination: finalTermination,
             clusterDiscriminations: discriminations,
             startNanoseconds: reportEpochNanoseconds,
-            elapsedNanoseconds: monotonicNanoseconds() - startNanoseconds,
-            propertyNanoseconds: propertyNanoseconds,
-            reductionNanoseconds: reductionNanoseconds,
+            elapsedNanoseconds: elapsedNanoseconds,
+            timing: timing,
             seed: configuration.seed
+        )
+    }
+
+    /// Measures one complete search phase and removes property and reduction intervals nested inside it, yielding the phase's exclusive overhead contribution.
+    private func measureSearchPhase<Result>(
+        _ operation: () -> Result
+    ) -> (result: Result, overheadNanoseconds: UInt64) {
+        let phaseStartNanoseconds = monotonicNanoseconds()
+        let propertyStartNanoseconds = timing.propertyNanoseconds
+        let reductionStartNanoseconds = timing.reductionNanoseconds
+        let result = operation()
+        let phaseNanoseconds = monotonicNanoseconds() - phaseStartNanoseconds
+        let propertyNanoseconds = timing.propertyNanoseconds - propertyStartNanoseconds
+        let reductionNanoseconds = timing.reductionNanoseconds - reductionStartNanoseconds
+        let excludedNanoseconds = propertyNanoseconds + reductionNanoseconds
+        return (
+            result: result,
+            overheadNanoseconds: phaseNanoseconds - min(excludedNanoseconds, phaseNanoseconds)
         )
     }
 
@@ -473,7 +497,7 @@ package final class FuzzRunner<Output> {
         }
         let propertyStart = monotonicNanoseconds()
         let verdict = property(value)
-        propertyNanoseconds += monotonicNanoseconds() - propertyStart
+        timing.propertyNanoseconds += monotonicNanoseconds() - propertyStart
         var hits: [(edge: Int, hitCount: UInt8)] = []
         source.forEachHitEdge { edge, hitCount in
             hits.append((edge, hitCount))
@@ -653,7 +677,7 @@ package final class FuzzRunner<Output> {
 
     /// Reduces one gated failure inline on the loop's lane: reduce, normalize, capture the post-hoc signature, classify, and apply the classification's feedback before the next attempt.
     ///
-    /// Inline execution trades attempts for signal purity: reduction probes never run concurrently with an attempt bracket, so they cannot pollute attempt signatures, and the feedback (failure-boost upgrades, escape-gate outcomes) lands at a deterministic point in the attempt stream. The time spent is accumulated into `reductionNanoseconds` so the report's throughput and overhead figures keep describing the search pipeline.
+    /// Inline execution trades attempts for signal purity: reduction probes never run concurrently with an attempt bracket, so they cannot pollute attempt signatures, and the feedback (failure-boost upgrades, escape-gate outcomes) lands at a deterministic point in the attempt stream. The time spent is accumulated into the reduction timing bucket so the report's throughput and overhead figures keep describing the search pipeline.
     private func performReduction(
         value: Output,
         tree: ChoiceTree,
@@ -711,7 +735,7 @@ package final class FuzzRunner<Output> {
             attemptIndex: attemptIndex,
             unnormalizedResidual: unnormalizedResidual
         )
-        reductionNanoseconds += monotonicNanoseconds() - reductionStart
+        timing.reductionNanoseconds += monotonicNanoseconds() - reductionStart
 
         if classification.isNewCluster {
             forceCheckpoint = true

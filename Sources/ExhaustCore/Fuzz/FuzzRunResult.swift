@@ -99,6 +99,25 @@ package struct FuzzRunCounts: Sendable {
     }
 }
 
+/// Holds non-overlapping wall-clock buckets whose sum is the runner's elapsed time once residual setup and finalization work is derived.
+package struct FuzzRunTiming: Sendable {
+    package var propertyNanoseconds: UInt64 = 0
+    package var screeningOverheadNanoseconds: UInt64 = 0
+    package var samplingOverheadNanoseconds: UInt64 = 0
+    package var mutationOverheadNanoseconds: UInt64 = 0
+    package var reductionNanoseconds: UInt64 = 0
+
+    /// Returns elapsed time not attributed to a property invocation, search phase, or reduction, clamping inconsistent input rather than underflowing.
+    package func otherNanoseconds(totalNanoseconds: UInt64) -> UInt64 {
+        let accountedNanoseconds = propertyNanoseconds
+            + screeningOverheadNanoseconds
+            + samplingOverheadNanoseconds
+            + mutationOverheadNanoseconds
+            + reductionNanoseconds
+        return totalNanoseconds - min(accountedNanoseconds, totalNanoseconds)
+    }
+}
+
 /// The raw result of a `time:` run, wrapped into the public report by the macro runtime.
 package struct FuzzRunResult: Sendable {
     package var clusters: [FaultCluster]
@@ -116,15 +135,12 @@ package struct FuzzRunResult: Sendable {
     package var clusterDiscriminations: [ClusterDiscrimination]
     package var startNanoseconds: UInt64
     package var elapsedNanoseconds: UInt64
-    /// Nanoseconds spent inside the property body across search attempts and prune re-evaluations; `searchNanoseconds` minus this is testing overhead.
-    package var propertyNanoseconds: UInt64
-    /// Nanoseconds spent reducing, normalizing, and classifying failures inline on the loop's lane.
-    package var reductionNanoseconds: UInt64
+    package var timing: FuzzRunTiming
     package var seed: UInt64
 
     /// The elapsed time net of inline reduction — the denominator for throughput and overhead, so a failure-dense run does not read as a slow pipeline.
     package var searchNanoseconds: UInt64 {
-        elapsedNanoseconds - min(reductionNanoseconds, elapsedNanoseconds)
+        elapsedNanoseconds - min(timing.reductionNanoseconds, elapsedNanoseconds)
     }
 
     package var attemptsPerSecond: Double {

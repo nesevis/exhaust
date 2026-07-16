@@ -87,6 +87,27 @@ public struct FuzzReport: Sendable {
         case mutation
     }
 
+    /// Partitions the run's elapsed time into non-overlapping property, search-phase overhead, reduction, and residual durations.
+    public struct TimingBreakdown: Sendable, Equatable {
+        /// Measures wall-clock time spent inside search and prune property invocations.
+        public let property: TimeBudget
+
+        /// Measures covering-array screening work outside property invocations and inline reduction.
+        public let screeningOverhead: TimeBudget
+
+        /// Measures random-sampling work outside property invocations and inline reduction.
+        public let samplingOverhead: TimeBudget
+
+        /// Measures coverage-guided mutation work outside property invocations and inline reduction.
+        public let mutationOverhead: TimeBudget
+
+        /// Measures inline reduction, normalization, classification, and their property invocations.
+        public let reduction: TimeBudget
+
+        /// Measures setup, recovery, between-phase bookkeeping, and finalization work outside the search phases.
+        public let other: TimeBudget
+    }
+
     /// Why the run stopped.
     public enum Termination: Sendable, Equatable {
         /// The wall-clock budget elapsed.
@@ -195,13 +216,18 @@ public struct FuzzReport: Sendable {
     /// Wall-clock time the run consumed.
     public let elapsed: TimeBudget
 
+    /// Provides a non-overlapping partition of ``elapsed`` for diagnosing where the run spends its budget.
+    public let timing: TimingBreakdown
+
     /// The root seed. Pass to `.replay(_:)` to re-run the search deterministically.
     public let seed: UInt64
 
-    /// Wall-clock time spent reducing, normalizing, and classifying failures, inline on the search's lane.
+    /// Returns wall-clock time spent reducing, normalizing, and classifying failures, inline on the search's lane.
     ///
     /// Reduction displaces search opportunities, so a failure-dense run spends a visible share of its budget here. ``attemptsPerSecond`` and ``testingOverheadFraction`` are computed net of this time, so they keep describing the search pipeline rather than the failure rate.
-    public let reductionTime: TimeBudget
+    public var reductionTime: TimeBudget {
+        timing.reduction
+    }
 
     /// Candidate opportunities opened across all search phases, including candidates rejected before property entry.
     public var totalAttempts: Int {
@@ -314,9 +340,21 @@ package extension FuzzReport {
         edgeDoubletonCount = result.edgeDoubletonCount
         termination = Termination(termination: result.termination)
         elapsed = TimeBudget(nanoseconds: result.elapsedNanoseconds)
-        reductionTime = TimeBudget(nanoseconds: result.reductionNanoseconds)
+        timing = TimingBreakdown(
+            property: TimeBudget(nanoseconds: result.timing.propertyNanoseconds),
+            screeningOverhead: TimeBudget(nanoseconds: result.timing.screeningOverheadNanoseconds),
+            samplingOverhead: TimeBudget(nanoseconds: result.timing.samplingOverheadNanoseconds),
+            mutationOverhead: TimeBudget(nanoseconds: result.timing.mutationOverheadNanoseconds),
+            reduction: TimeBudget(nanoseconds: result.timing.reductionNanoseconds),
+            other: TimeBudget(
+                nanoseconds: result.timing.otherNanoseconds(totalNanoseconds: result.elapsedNanoseconds)
+            )
+        )
         testingOverheadFraction = result.searchNanoseconds > 0
-            ? 1.0 - min(1.0, Double(result.propertyNanoseconds) / Double(result.searchNanoseconds))
+            ? 1.0 - min(
+                1.0,
+                Double(result.timing.propertyNanoseconds) / Double(result.searchNanoseconds)
+            )
             : 0
         seed = result.seed
     }
@@ -345,8 +383,15 @@ package extension FuzzReport {
             edgeDoubletonCount: 0,
             termination: termination,
             elapsed: .zero,
+            timing: TimingBreakdown(
+                property: .zero,
+                screeningOverhead: .zero,
+                samplingOverhead: .zero,
+                mutationOverhead: .zero,
+                reduction: .zero,
+                other: .zero
+            ),
             seed: seed,
-            reductionTime: .zero,
             testingOverheadFraction: 0
         )
     }

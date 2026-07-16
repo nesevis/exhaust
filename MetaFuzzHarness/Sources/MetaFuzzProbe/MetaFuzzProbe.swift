@@ -71,6 +71,22 @@ struct MetaFuzzProbe: ParsableCommand {
             }
         }
 
+        let percentage: (TimeBudget) -> String = { duration in
+            guard report.elapsed.nanoseconds > 0 else {
+                return "0.0"
+            }
+            return String(format: "%.1f", duration.seconds / report.elapsed.seconds * 100)
+        }
+        let timing = report.timing
+        print(
+            "metafuzz: probe throughput \(String(format: "%.1f", report.attemptsPerSecond)) evaluated cases/s "
+                + "(\(report.evaluatedSearchCases) cases); property \(percentage(timing.property))% · "
+                + "screening \(percentage(timing.screeningOverhead))% · "
+                + "sampling \(percentage(timing.samplingOverhead))% · "
+                + "mutation \(percentage(timing.mutationOverhead))% · "
+                + "reduction \(percentage(timing.reduction))% · other \(percentage(timing.other))%"
+        )
+
         if report.clusters.isEmpty {
             print("metafuzz: no findings in \(budgetSeconds)s")
             return

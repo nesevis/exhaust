@@ -72,11 +72,24 @@ jobs:
         env:
           EXHAUST_STATE_DIR: ${{ runner.temp }}/metafuzz-state
         run: |
-          swift build --package-path MetaFuzzHarness --product MetaFuzzProbe $COVERAGE_FLAGS
+          set -o pipefail
+          swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS
           bash MetaFuzzHarness/scripts/nightly-fuzz.sh \
-            "$(swift build --package-path MetaFuzzHarness --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
+            "$(swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
             --budget-seconds "${{ github.event.inputs.budget || '900' }}" \
-            --findings-directory "${{ runner.temp }}/metafuzz-findings"
+            --findings-directory "${{ runner.temp }}/metafuzz-findings" \
+            2>&1 | tee "${{ runner.temp }}/metafuzz-probe.log"
+
+      - name: Probe metrics summary
+        if: always() && github.event_name != 'push'
+        run: |
+          PROBE_OUTPUT="${{ runner.temp }}/metafuzz-probe.log"
+          echo "### Meta-fuzz probe metrics" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$PROBE_OUTPUT" ] && grep -q '^metafuzz: probe throughput ' "$PROBE_OUTPUT"; then
+            grep '^metafuzz: probe throughput ' "$PROBE_OUTPUT" | tail -1 | sed 's/^metafuzz: /- /' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No probe completed, so throughput is unavailable." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload findings
         if: failure()
