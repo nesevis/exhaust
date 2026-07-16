@@ -88,6 +88,16 @@ struct ExploreTimeRuntimeTests {
         #expect(report.clusters.count == 1)
         #expect(report.testingOverheadFraction >= 0)
         #expect(report.testingOverheadFraction <= 1)
+        let timing = report.timing
+        let attributedNanoseconds = timing.property.nanoseconds
+            + timing.screeningOverhead.nanoseconds
+            + timing.samplingOverhead.nanoseconds
+            + timing.mutationOverhead.nanoseconds
+            + timing.reduction.nanoseconds
+            + timing.other.nanoseconds
+        #expect(attributedNanoseconds == report.elapsed.nanoseconds)
+        #expect(timing.property > .zero)
+        #expect(timing.screeningOverhead > .zero)
         if let cluster = report.clusters.first {
             #expect(cluster.reducedDescription == "42")
             #expect(cluster.symptoms == ["returnedFalse"])

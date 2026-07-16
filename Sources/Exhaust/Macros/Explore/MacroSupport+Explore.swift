@@ -347,7 +347,7 @@ public extension __ExhaustRuntime {
             let boolProperty = wrapDetectionProperty(detection)
 
             nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
-            withExpectedIssue(isIntermittent: true) {
+            withRoutedExpectedIssue(isIntermittent: true) {
                 pipelineResult = __explore(
                     refGen,
                     settings: settings + [.suppress(.issueReporting)],
@@ -396,7 +396,7 @@ public extension __ExhaustRuntime {
                     )
                 }
             } else {
-                // The pipeline ran with issue reporting suppressed inside withExpectedIssue, so its coverage issues never surfaced. Re-report them here with the caller's own suppression setting.
+                // The pipeline ran with issue reporting suppressed inside withRoutedExpectedIssue, so its coverage issues never surfaced. Re-report them here with the caller's own suppression setting.
                 reportExploreCoverageIssues(
                     report: report,
                     suppressIssueReporting: suppressIssueReporting,

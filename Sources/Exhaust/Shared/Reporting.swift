@@ -41,6 +41,29 @@ func reportError(
     #endif
 }
 
+/// Runs `body`, treating the issues it records as expected, through IssueReporting on Apple platforms and directly through swift-testing elsewhere.
+///
+/// IssueReporting's `withExpectedIssue` routes to swift-testing's `withKnownIssue` on Apple platforms only, so on other platforms swift-testing issues recorded inside `body` (from `#expect`/`#require` in a property closure, or from ``reportError(_:fileID:filePath:line:column:)``'s direct path) would surface as real test failures. There, when a swift-testing test is current, the direct `withKnownIssue` absorbs them instead — the same routing the async pipelines use. Outside a swift-testing context the fallback remains `withExpectedIssue`.
+func withRoutedExpectedIssue(isIntermittent: Bool, _ body: () -> Void) {
+    #if canImport(ObjectiveC)
+        withExpectedIssue(isIntermittent: isIntermittent) {
+            body()
+        }
+    #else
+        #if canImport(Testing)
+            if Test.current != nil {
+                withKnownIssue(isIntermittent: isIntermittent) {
+                    body()
+                }
+                return
+            }
+        #endif
+        withExpectedIssue(isIntermittent: isIntermittent) {
+            body()
+        }
+    #endif
+}
+
 /// Routes a user-configured severity to ``reportError(_:fileID:filePath:line:column:)`` or ``reportWarning(_:fileID:filePath:line:column:)``.
 ///
 /// `#examine` checks carry a per-check severity setting, so their reporting site cannot pick a function at compile time.

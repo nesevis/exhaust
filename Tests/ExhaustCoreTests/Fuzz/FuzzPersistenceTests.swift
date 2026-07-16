@@ -104,25 +104,27 @@ struct FuzzPersistenceTests {
         #expect(loaded.clusters.count == 1)
     }
 
-    @Test("The breadcrumb records, reads back, and clears")
-    func breadcrumbRoundTrip() throws {
-        let directory = scratchDirectory()
-        let fileURL = directory.appendingPathComponent("breadcrumb.bin")
-        defer {
-            try? FileManager.default.removeItem(at: directory)
+    #if canImport(Darwin) || canImport(Glibc)
+        @Test("The breadcrumb records, reads back, and clears")
+        func breadcrumbRoundTrip() throws {
+            let directory = scratchDirectory()
+            let fileURL = directory.appendingPathComponent("breadcrumb.bin")
+            defer {
+                try? FileManager.default.removeItem(at: directory)
+            }
+
+            let breadcrumb = try #require(FuzzBreadcrumb(fileURL: fileURL))
+            #expect(FuzzBreadcrumb.readSurvivor(fileURL: fileURL) == nil)
+
+            breadcrumb.record(candidateHash: 0xAAAA_BBBB, parentHash: 0x1111_2222)
+            let survivor = try #require(FuzzBreadcrumb.readSurvivor(fileURL: fileURL))
+            #expect(survivor.candidateHash == 0xAAAA_BBBB)
+            #expect(survivor.parentHash == 0x1111_2222)
+
+            breadcrumb.clear()
+            #expect(FuzzBreadcrumb.readSurvivor(fileURL: fileURL) == nil)
         }
-
-        let breadcrumb = try #require(FuzzBreadcrumb(fileURL: fileURL))
-        #expect(FuzzBreadcrumb.readSurvivor(fileURL: fileURL) == nil)
-
-        breadcrumb.record(candidateHash: 0xAAAA_BBBB, parentHash: 0x1111_2222)
-        let survivor = try #require(FuzzBreadcrumb.readSurvivor(fileURL: fileURL))
-        #expect(survivor.candidateHash == 0xAAAA_BBBB)
-        #expect(survivor.parentHash == 0x1111_2222)
-
-        breadcrumb.clear()
-        #expect(FuzzBreadcrumb.readSurvivor(fileURL: fileURL) == nil)
-    }
+    #endif
 
     @Test("Quarantined hashes leave parent selection and stay out on re-admission")
     func corpusQuarantine() {

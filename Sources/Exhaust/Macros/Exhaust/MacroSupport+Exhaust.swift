@@ -629,7 +629,7 @@ public extension __ExhaustRuntime {
 
     /// Runs a property test with a `Void`-returning property that uses `#expect`/`#require` for assertions.
     ///
-    /// Wraps the property into a `Bool`-returning form via `withExpectedIssue`, delegates to the existing pipeline, then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
+    /// Wraps the property into a `Bool`-returning form via `withRoutedExpectedIssue`, delegates to the existing pipeline, then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
     @discardableResult
     static func __exhaustExpect<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
@@ -672,7 +672,7 @@ public extension __ExhaustRuntime {
                 // Suppress assertion issues during screening/sampling/reduction.
                 // The final re-run (outside this scope) produces the user-facing assertion output.
                 let diagnostics = CapturedDiagnostics<Output>()
-                withExpectedIssue(isIntermittent: true) {
+                withRoutedExpectedIssue(isIntermittent: true) {
                     #if canImport(Testing)
                         if let regression = replayRegressionSeeds(
                             gen: gen,
@@ -720,7 +720,7 @@ public extension __ExhaustRuntime {
                 }
 
                 guard let counterexample = diagnostics.pipelineResult else {
-                    // The pipeline's own issues fired inside withExpectedIssue, where they are swallowed as known issues. Re-report them here so a run that asserted nothing fails the test.
+                    // The pipeline's own issues fired inside withRoutedExpectedIssue, where they are swallowed as known issues. Re-report them here so a run that asserted nothing fails the test.
                     diagnostics.reportPassDiagnostics(
                         suppressIssueReporting: suppressIssueReporting,
                         fileID: fileID,
@@ -1033,7 +1033,7 @@ public extension __ExhaustRuntime {
 extension __ExhaustRuntime {
     /// Collects the diagnostics an `#expect` wrapper must re-report after its known-issue scope ends.
     ///
-    /// The wrappers run the Bool pipeline with issue reporting suppressed inside `withExpectedIssue`/`withKnownIssue`, where anything the pipeline records is swallowed. The pipeline's report is captured through an appended `.onReport` closure calling ``capture(from:)``, and ``reportPassDiagnostics(suppressIssueReporting:fileID:filePath:line:column:)`` re-reports outside the scope.
+    /// The wrappers run the Bool pipeline with issue reporting suppressed inside `withRoutedExpectedIssue`/`withKnownIssue`, where anything the pipeline records is swallowed. The pipeline's report is captured through an appended `.onReport` closure calling ``capture(from:)``, and ``reportPassDiagnostics(suppressIssueReporting:fileID:filePath:line:column:)`` re-reports outside the scope.
     ///
     /// Marked `@unchecked Sendable` for the same reason the `nonisolated(unsafe)` locals it replaces were safe: the pipeline mutates the fields on the GCD worker inside `dispatchToGCD`, and the wrapper reads them only after the hop's continuation resumes, so no access is ever concurrent.
     final class CapturedDiagnostics<Output>: @unchecked Sendable {

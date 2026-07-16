@@ -63,57 +63,75 @@ struct IdleTimeoutConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Cooperative timeout hands off cleanup when suspended work ignores cancellation")
-    func cooperativeTimeoutHandsOffCancellationIgnoringWork() {
+    @Test("Cooperative timeout hands off cleanup when suspended work ignores cancellation", .timeLimit(.minutes(1)))
+    func cooperativeTimeoutHandsOffCancellationIgnoringWork() async throws {
         let reference = WeakReference<CancellationIgnoringSpec>()
-        let idleTimeoutMilliseconds = 100
+        let suspendedWork = SendableBox<CancellationIgnoringSystemUnderTest?>(nil)
         let commands: [(ScheduleMarker, CancellationIgnoringSpec.Command)] = [
             (ScheduleMarker(rawValue: 1), .wait),
         ]
-        let start = monotonicNanoseconds()
-        let result = drainSchedule(
-            taggedCommands: commands,
-            specInit: {
-                let spec = CancellationIgnoringSpec()
-                reference.value = spec
-                return spec
-            },
-            concurrencyLevel: 1,
-            recordTrace: false,
-            idleTimeoutMilliseconds: idleTimeoutMilliseconds
-        )
-        let elapsedNanoseconds = monotonicNanoseconds() - start
+        let result = await __ExhaustRuntime.dispatchToGCD {
+            drainSchedule(
+                taggedCommands: commands,
+                specInit: {
+                    let spec = CancellationIgnoringSpec()
+                    reference.value = spec
+                    let workUnderTest = spec.counter
+                    suspendedWork.withValue { $0 = workUnderTest }
+                    return spec
+                },
+                concurrencyLevel: 1,
+                recordTrace: false,
+                idleTimeoutMilliseconds: 100
+            )
+        }
 
+        // drainSchedule returned while the test still holds the unresumed continuation, so the cleanup was handed off rather than awaited inline. A drain that waited for the suspended work could never return here — that regression surfaces as a hang caught by the time limit, not as a wall-clock margin.
         #expect(result.timedOut)
-        #expect(elapsedNanoseconds < UInt64(idleTimeoutMilliseconds) * 1_800_000)
 
-        Thread.sleep(forTimeInterval: 0.4)
+        // The handed-off cleanup still holds the spec until the suspended work resumes.
+        try #require(reference.value != nil)
+
+        // Install the deinit observer before releasing the work, then await the deallocation event itself. No polling: a cleanup that never releases the spec never resumes this continuation, and the time limit reports it.
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            reference.value?.onDeinit = { continuation.resume() }
+            suspendedWork.withValue { $0 }?.resume()
+        }
         #expect(reference.value == nil)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Canceled prefix cleanup does not execute remaining commands or mutate the completed result")
-    func cooperativePrefixTimeoutStopsAfterCancellationIgnoringWork() {
+    @Test("Canceled prefix cleanup does not execute remaining commands or mutate the completed result", .timeLimit(.minutes(1)))
+    func cooperativePrefixTimeoutStopsAfterCancellationIgnoringWork() async throws {
         let reference = WeakReference<CancellationIgnoringSpec>()
+        let suspendedWork = SendableBox<CancellationIgnoringSystemUnderTest?>(nil)
         let commands: [(ScheduleMarker, CancellationIgnoringSpec.Command)] = [
             (.prefix, .wait),
             (.prefix, .wait),
         ]
-        let result = drainSchedule(
-            taggedCommands: commands,
-            specInit: {
-                let spec = CancellationIgnoringSpec()
-                reference.value = spec
-                return spec
-            },
-            concurrencyLevel: 1,
-            recordTrace: true,
-            idleTimeoutMilliseconds: 100
-        )
+        let result = await __ExhaustRuntime.dispatchToGCD {
+            drainSchedule(
+                taggedCommands: commands,
+                specInit: {
+                    let spec = CancellationIgnoringSpec()
+                    reference.value = spec
+                    let workUnderTest = spec.counter
+                    suspendedWork.withValue { $0 = workUnderTest }
+                    return spec
+                },
+                concurrencyLevel: 1,
+                recordTrace: true,
+                idleTimeoutMilliseconds: 100
+            )
+        }
 
         #expect(result.timedOut)
 
-        Thread.sleep(forTimeInterval: 0.4)
+        try #require(reference.value != nil)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            reference.value?.onDeinit = { continuation.resume() }
+            suspendedWork.withValue { $0 }?.resume()
+        }
         #expect(reference.value == nil)
     }
 
@@ -269,6 +287,13 @@ final class CancellationIgnoringSpec {
     @SystemUnderTest
     var counter = CancellationIgnoringSystemUnderTest()
 
+    // nonisolated(unsafe): written once by the test thread before the work is resumed; the SUT's lock inside resume() orders that write before the cleanup thread's read in deinit.
+    nonisolated(unsafe) var onDeinit: (@Sendable () -> Void)?
+
+    deinit {
+        onDeinit?()
+    }
+
     @Invariant
     func alwaysTrue() -> Bool {
         true
@@ -286,12 +311,39 @@ final class CancellationIgnoringSpec {
 }
 
 /// Uses a continuation that does not observe task cancellation, exercising timeout cleanup after cancellation cannot wake the command immediately.
+///
+/// The continuation resumes only when the test calls ``resume()``, never on its own. This keeps the tests free of wall-clock assumptions: the drain returning at all proves the handoff, and the release of the spec is observed after the test-controlled resume. A `wait()` that starts after `resume()` was already called returns immediately, so a cleanup path that still runs a remaining command cannot suspend forever.
 final class CancellationIgnoringSystemUnderTest: @unchecked Sendable {
+    // @unchecked: the lock guards the continuation list across the command task and the test thread.
+    private let lock = NSLock()
+    private var pendingContinuations: [CheckedContinuation<Void, Never>] = []
+    private var isReleased = false
+
     func wait() async {
         await withCheckedContinuation { continuation in
-            DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(300)) {
+            let resumeImmediately = lock.withLock {
+                if isReleased {
+                    return true
+                }
+                pendingContinuations.append(continuation)
+                return false
+            }
+            if resumeImmediately {
                 continuation.resume()
             }
+        }
+    }
+
+    /// Releases every suspended `wait()` and makes future ones return immediately.
+    func resume() {
+        let pending = lock.withLock {
+            isReleased = true
+            let taken = pendingContinuations
+            pendingContinuations = []
+            return taken
+        }
+        for continuation in pending {
+            continuation.resume()
         }
     }
 }

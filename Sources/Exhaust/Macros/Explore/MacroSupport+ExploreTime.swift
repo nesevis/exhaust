@@ -79,7 +79,7 @@ public extension __ExhaustRuntime {
 
     /// Runs a coverage-guided `time:` fuzz run with a Void/#expect/#require closure.
     ///
-    /// The detection closure (the property with `#expect` rewritten to `#require`) records an issue on every failing attempt, and a fuzz run deliberately keeps failing past the first failure, so the whole run executes inside `withExpectedIssue(isIntermittent:)`. The fault inventory is reported afterwards, outside that scope, so it surfaces as a real failure.
+    /// The detection closure (the property with `#expect` rewritten to `#require`) records an issue on every failing attempt, and a fuzz run deliberately keeps failing past the first failure, so the whole run executes inside `withRoutedExpectedIssue(isIntermittent:_:)`. The fault inventory is reported afterwards, outside that scope, so it surfaces as a real failure.
     @discardableResult
     static func __exploreTimeExpect<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -95,7 +95,7 @@ public extension __ExhaustRuntime {
         let verdictProperty = wrapVerdictDetection(detection)
         let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
         nonisolated(unsafe) var pipelineReport: FuzzReport?
-        withExpectedIssue(isIntermittent: true) {
+        withRoutedExpectedIssue(isIntermittent: true) {
             pipelineReport = runExploreTimeCore(
                 gen: refGen.gen,
                 time: time,

@@ -39,7 +39,9 @@ struct ParallelExploreTests {
             ],
             .budget(Self.budget),
             .parallelize,
-            .suppress(.all)
+            .suppress(.all),
+            // Seed 2 samples a counterexample outside both directions, so reduction probes are never direction-rejected. Under an unpinned seed the first failure can land on 71 — already minimal inside "high" — where every probe is direction-rejected and the reduction count is legitimately zero.
+            .replay(2)
         ) { value in
             value < 50
         }
