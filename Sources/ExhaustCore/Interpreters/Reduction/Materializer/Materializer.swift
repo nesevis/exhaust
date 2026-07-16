@@ -298,6 +298,7 @@ extension Materializer {
         // Fuse switch to avoid overhead of copying `operation`
         switch gen {
             case let .pure(value):
+                context.emitFlat(.just)
                 return (value, .just)
 
             case let .impure(.contramap(_, nextGen), continuation):

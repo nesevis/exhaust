@@ -149,6 +149,24 @@ struct MaterializerFlatEmissionTests {
         try assertFlatEmissionMatchesFlatten(gen)
     }
 
+    @Test("Raw Freer pure matches flattened tree")
+    func rawPure() throws {
+        // Not Gen.just: a bare FreerMonad .pure node, which flattens to a .just entry through its returned tree rather than through the .just reflective operation.
+        let gen = Generator<Int>.pure(42)
+        try assertFlatEmissionMatchesFlatten(gen)
+    }
+
+    @Test("Zip containing a raw Freer pure matches flattened tree")
+    func zipWithRawPure() throws {
+        // The raw .pure child sits before a real choice, so a missing .just entry would shift every subsequent coordinate.
+        let gen = Gen.zip(
+            Generator<Int>.pure(7),
+            Gen.choose(in: UInt64(0) ... 100),
+            Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: 1 ... 3)
+        )
+        try assertFlatEmissionMatchesFlatten(gen)
+    }
+
     @Test("Reified map matches flattened tree")
     func reifiedMap() throws {
         let gen: Generator<Int> = Gen.liftF(.transform(
