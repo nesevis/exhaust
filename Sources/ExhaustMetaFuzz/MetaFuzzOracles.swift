@@ -198,6 +198,15 @@ public extension MetaFuzz {
 // MARK: - Individual Oracles
 
 extension MetaFuzz {
+    /// Encoders covered by the strict shortlex reduction oracle.
+    ///
+    /// IMPORTANT: `.numericReorder` is intentionally removed from this set. It is a final
+    /// presentation pass that replaces shortlex order with natural numeric order, so including it
+    /// would make the shortlex oracle report valid presentation reordering as a reduction defect.
+    private static let shortlexReductionEncoders = Set(EncoderName.allCases).subtracting([
+        .numericReorder,
+    ])
+
     /// Exact interpreter parity: the value-only and value-and-tree interpreters must produce the same observable stream for one recipe, seed, and run budget.
     private static func checkExactInterpreterParity(_ fuzzCase: MetaFuzzCase) throws {
         var valueInterpreter = ValueInterpreter(
@@ -397,7 +406,15 @@ extension MetaFuzz {
     ) throws {
         let originalSequence = ChoiceSequence.flatten(tree)
         let outcome = try? Interpreters.choiceGraphReduce(
-            gen: gen, tree: tree, output: value, config: .init(maxStalls: 2), property: property
+            gen: gen,
+            tree: tree,
+            output: value,
+            config: .init(
+                maxStalls: 2,
+                wallClockDeadlineNanoseconds: FuzzTunables.reductionDeadlineNanoseconds,
+                enabledEncoders: shortlexReductionEncoders
+            ),
+            property: property
         )
         guard case let .reduced(reducedSequence, reducedTree, shrunk) = outcome else {
             return
@@ -405,7 +422,10 @@ extension MetaFuzz {
         guard property(shrunk) == false else {
             throw ReductionPreservationViolation("reduced value \(shrunk) passes the property its original failed for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
-        guard reducedSequence.shortLexPrecedes(originalSequence) || reducedSequence == originalSequence else {
+        // `shortLexPrecedes` is strict: distinct sequences can belong to the same equivalence
+        // class. Match the reducer's monotonicity contract by rejecting only a strictly larger
+        // result, where the original sequence precedes the reduced sequence.
+        guard originalSequence.shortLexPrecedes(reducedSequence) == false else {
             throw ReductionShortlexViolation("reduction enlarged the sequence for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
         switch Materializer.materialize(gen, prefix: reducedSequence, mode: .exact, fallbackTree: reducedTree) {
@@ -417,7 +437,15 @@ extension MetaFuzz {
                 throw ReductionClosedLoopViolation("reduced sequence failed to materialize for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
         let secondOutcome = try? Interpreters.choiceGraphReduce(
-            gen: gen, tree: reducedTree, output: shrunk, config: .init(maxStalls: 2), property: property
+            gen: gen,
+            tree: reducedTree,
+            output: shrunk,
+            config: .init(
+                maxStalls: 2,
+                wallClockDeadlineNanoseconds: FuzzTunables.reductionDeadlineNanoseconds,
+                enabledEncoders: shortlexReductionEncoders
+            ),
+            property: property
         )
         if case let .reduced(secondSequence, _, _) = secondOutcome {
             guard reducedSequence.shortLexPrecedes(secondSequence) == false else {

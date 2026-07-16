@@ -28,7 +28,7 @@ package enum FuzzTunables {
     // MARK: - Fuzz Loop
 
     /// Wall-clock deadline for one inline reduction. Mirrors #exhaust's scaling but is bounded: reductions run inline on the loop's lane and displace attempts, so one pathological reduction must not eat the budget.
-    package static let reductionDeadlineNanoseconds: UInt64 = 5_000_000_000
+    package static let reductionDeadlineNanoseconds: UInt64 = 3_000_000_000
 
     /// Mutations drawn from a picked parent before the loop re-picks. Amortises the weighted pick without letting one parent dominate.
     package static let childrenPerParent = 4
