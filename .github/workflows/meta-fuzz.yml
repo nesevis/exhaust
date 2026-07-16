@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
   schedule:
-    # Nightly campaign, 03:17 UTC — offset to avoid the top-of-hour scheduling crunch.
-    - cron: "17 3 * * *"
+    # Nightly campaign, 04:00 AEST (18:00 UTC on the preceding calendar day).
+    - cron: "0 18 * * *"
   workflow_dispatch:
     inputs:
       budget:
@@ -65,31 +65,54 @@ jobs:
           EXHAUST_RESUME: "0"
           EXHAUST_STATE_DIR: ${{ runner.temp }}/metafuzz-state
         run: |
-          swift test --package-path MetaFuzzHarness --filter FuzzEntryTests $COVERAGE_FLAGS
+          swift build --package-path MetaFuzzHarness --build-tests $COVERAGE_FLAGS
+          bash Scripts/measure-memory.sh "${{ runner.temp }}/metafuzz-probe" -- \
+            swift test --package-path MetaFuzzHarness --skip-build \
+              --filter FuzzEntryTests $COVERAGE_FLAGS
 
       - name: Nightly fuzz campaign
         if: github.event_name != 'push'
         env:
           EXHAUST_STATE_DIR: ${{ runner.temp }}/metafuzz-state
         run: |
-          set -o pipefail
           swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS
-          bash MetaFuzzHarness/scripts/nightly-fuzz.sh \
-            "$(swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
-            --budget-seconds "${{ github.event.inputs.budget || '900' }}" \
-            --findings-directory "${{ runner.temp }}/metafuzz-findings" \
-            2>&1 | tee "${{ runner.temp }}/metafuzz-probe.log"
+          bash Scripts/measure-memory.sh "${{ runner.temp }}/metafuzz-probe" -- \
+            bash MetaFuzzHarness/scripts/nightly-fuzz.sh \
+              "$(swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
+              --budget-seconds "${{ github.event.inputs.budget || '900' }}" \
+              --findings-directory "${{ runner.temp }}/metafuzz-findings"
 
       - name: Probe metrics summary
-        if: always() && github.event_name != 'push'
+        if: always()
         run: |
-          PROBE_OUTPUT="${{ runner.temp }}/metafuzz-probe.log"
+          PROBE_PREFIX="${{ runner.temp }}/metafuzz-probe"
+          PROBE_OUTPUT="${PROBE_PREFIX}.log"
+          MEMORY_METRICS="${PROBE_PREFIX}.metrics.env"
           echo "### Meta-fuzz probe metrics" >> "$GITHUB_STEP_SUMMARY"
           if [ -f "$PROBE_OUTPUT" ] && grep -q '^metafuzz: probe throughput ' "$PROBE_OUTPUT"; then
             grep '^metafuzz: probe throughput ' "$PROBE_OUTPUT" | tail -1 | sed 's/^metafuzz: /- /' >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No probe completed, so throughput is unavailable." >> "$GITHUB_STEP_SUMMARY"
           fi
+          if [ -f "$MEMORY_METRICS" ]; then
+            source "$MEMORY_METRICS"
+            echo "- maximum resident set size ${max_rss_mib} MiB" >> "$GITHUB_STEP_SUMMARY"
+            echo "- peak memory footprint ${peak_footprint_mib} MiB" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- memory metrics unavailable" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload probe metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: meta-fuzz-metrics
+          path: |
+            ${{ runner.temp }}/metafuzz-probe.log
+            ${{ runner.temp }}/metafuzz-probe.time.txt
+            ${{ runner.temp }}/metafuzz-probe.metrics.env
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Upload findings
         if: failure()
