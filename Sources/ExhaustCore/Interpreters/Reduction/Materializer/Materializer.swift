@@ -99,7 +99,8 @@ package enum Materializer {
 
         switch mode {
             case .exact:
-                seed = precomputedSeed ?? ZobristHash.hash(of: prefix)
+                // The seed only feeds context.prng. In exact mode the PRNG is consulted nowhere except the pick handler's jump-seed draw, whose value is discarded unless materializePicks routes it into non-selected branch contexts. Without materializePicks the O(n) prefix hash buys nothing and a constant seed is byte-identical.
+                seed = precomputedSeed ?? (materializePicks ? ZobristHash.hash(of: prefix) : 0)
                 // Exact mode never reads the fallback tree at value sites (all values come from the prefix), but handleZip still consults it for per-child fallback threading and for secondary scope limits when the prefix does not parse at a zip site. Scope rejection of structurally misaligned candidates before the property runs is load-bearing: dropping scoping nearly doubles materializations on batch cross-sequence removal (Bound25).
                 resolvedFallbackTree = fallbackTree
                 maximizeBoundRegionIndices = nil
@@ -136,6 +137,87 @@ package enum Materializer {
             var report = context.decodingReport
             report?.filterObservations = context.filterObservations
             return .success(value: value, tree: tree, decodingReport: report)
+        } catch is RejectionError {
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .rejected(decodingReport: report)
+        } catch {
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .failed(decodingReport: report)
+        }
+    }
+}
+
+// MARK: - Flat Emission
+
+package extension Materializer {
+    /// Result of a flat-emission materialization: the value and the flattened sequence, with no `ChoiceTree`.
+    enum FlatResult {
+        /// Materialization succeeded with a value and the sequence the equivalent tree would flatten to.
+        case success(value: Any, sequence: ChoiceSequence, decodingReport: DecodingReport?)
+        /// Exact mode: out-of-range or structural mismatch; the candidate is invalid.
+        case rejected(decodingReport: DecodingReport?)
+        /// Generation or user-supplied operation failure that is not an invalid exact candidate.
+        case failed(decodingReport: DecodingReport?)
+    }
+
+    /// Materializes a value from an already-erased generator, emitting the flattened `ChoiceSequence` directly during the walk instead of building a `ChoiceTree`.
+    ///
+    /// The returned sequence is entry-for-entry identical to `ChoiceSequence.flatten` of the tree that `materializeAny` would produce for the same inputs, and cursor and PRNG consumption match exactly, so a later tree-building rematerialization with the same inputs reproduces this result. Use this when the caller needs the sequence (deduplication, hashing, corpus identity) but not the tree; rebuild the tree on demand with `materializeAny`.
+    ///
+    /// Non-selected pick branches are never emitted (flatten only includes the selected branch), so there is no `materializePicks` parameter.
+    static func materializeAnyFlat(
+        _ gen: AnyGenerator,
+        prefix: consuming ChoiceSequence,
+        mode: Mode,
+        fallbackTree: ChoiceTree? = nil,
+        precomputedSeed: UInt64? = nil,
+        collectDecodingReport: Bool = true
+    ) -> FlatResult {
+        let seed: UInt64
+        let resolvedFallbackTree: ChoiceTree?
+        let maximizeBoundRegionIndices: Set<Int>?
+
+        switch mode {
+            case .exact:
+                // Same reasoning as materializeAny: with materializePicks off (always, here), the PRNG output is discarded in exact mode, so the prefix hash is skipped.
+                seed = precomputedSeed ?? 0
+                resolvedFallbackTree = fallbackTree
+                maximizeBoundRegionIndices = nil
+            case let .guided(s, fb, indices):
+                seed = s
+                resolvedFallbackTree = fb ?? fallbackTree
+                maximizeBoundRegionIndices = indices
+        }
+
+        var context = Context(
+            cursor: Cursor(from: consume prefix),
+            prng: Xoshiro256(seed: seed),
+            mode: mode.internalMode,
+            size: 100,
+            maximizeBoundRegionIndices: maximizeBoundRegionIndices,
+            materializePicks: false,
+            skipTree: true,
+            decodingReport: collectDecodingReport ? DecodingReport() : nil
+        )
+        context.flatOutput = ChoiceSequence()
+        context.flatOutput!.reserveCapacity(64)
+
+        do {
+            guard let (value, _) = try generateRecursive(
+                gen, with: (), context: &context, fallbackTree: resolvedFallbackTree
+            ) else {
+                var report = context.decodingReport
+                report?.filterObservations = context.filterObservations
+                switch mode {
+                    case .exact: return .rejected(decodingReport: report)
+                    case .guided: return .failed(decodingReport: report)
+                }
+            }
+            var report = context.decodingReport
+            report?.filterObservations = context.filterObservations
+            return .success(value: value, sequence: context.flatOutput ?? ChoiceSequence(), decodingReport: report)
         } catch is RejectionError {
             var report = context.decodingReport
             report?.filterObservations = context.filterObservations
@@ -301,8 +383,10 @@ extension Materializer {
 
             case let .impure(.just(value), continuation):
                 let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                let calleeStart = context.flatCount
+                context.emitFlat(.just)
                 return try runContinuation(
-                    result: value, calleeChoiceTree: .just,
+                    result: value, calleeChoiceTree: .just, calleeStart: calleeStart,
                     continuation: continuation, inputValue: inputValue,
                     context: &context, continuationFallback: continuationFallback
                 )
@@ -315,9 +399,10 @@ extension Materializer {
                 // destroys values through clamping.
                 let (_, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 let size = currentSize(&context)
-                let calleeTree: ChoiceTree = context.skipTree ? .just : .getSize(size)
+                // Flat emission keeps the real .getSize leaf (it emits no entries and costs one box) so the bind handler can still detect getSize-binds and emit group markers for them.
+                let calleeTree: ChoiceTree = context.skipTree && context.emitsFlat == false ? .just : .getSize(size)
                 return try runContinuation(
-                    result: size, calleeChoiceTree: calleeTree,
+                    result: size, calleeChoiceTree: calleeTree, calleeStart: context.flatCount,
                     continuation: continuation, inputValue: inputValue,
                     context: &context, continuationFallback: continuationFallback
                 )
@@ -372,6 +457,7 @@ extension Materializer {
     static func runContinuation(
         result: Any,
         calleeChoiceTree: ChoiceTree,
+        calleeStart: Int,
         continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
@@ -381,29 +467,32 @@ extension Materializer {
 
         if context.skipTree {
             if case let .pure(value) = nextGen {
-                return (value, .just)
+                // Flat emission preserves the callee tree so bind can distinguish `.getSize` inners; other callees are dummies either way.
+                return (value, context.emitsFlat ? calleeChoiceTree : .just)
+            }
+            // A non-pure continuation means the tree path would wrap [callee, continuation] in a pair group, whose open marker precedes entries that are already emitted. Everything after calleeStart is exactly the callee's span (nothing else has been appended since it finished), so the insert shifts only that span.
+            if context.emitsFlat {
+                context.flatOutput!.insert(.group(true), at: calleeStart)
             }
             if let (continuationResult, _) = try generateRecursive(
                 nextGen, with: inputValue, context: &context,
                 fallbackTree: continuationFallback
             ) {
+                context.emitFlat(.group(false))
                 return (continuationResult, .just)
             }
             return nil
         }
 
-        if calleeChoiceTree.isChoice, case let .pure(value) = nextGen {
+        // A pure continuation makes no choices and contributes no structure, so the result tree is exactly the callee's; recursing into the pure generator only produced a synthetic .just to discard. Past this check the continuation is always impure, so the group wrap is unconditional.
+        if case let .pure(value) = nextGen {
             return (value, calleeChoiceTree)
         }
         if let (continuationResult, innerChoiceTree) = try generateRecursive(
             nextGen, with: inputValue, context: &context,
             fallbackTree: continuationFallback
         ) {
-            if nextGen.isPure {
-                return (continuationResult, calleeChoiceTree)
-            } else {
-                return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
-            }
+            return (continuationResult, .group([calleeChoiceTree, innerChoiceTree]))
         }
         return nil
     }
@@ -427,10 +516,35 @@ extension Materializer {
         var materializePicks: Bool = false
         /// When `true`, tree construction sites return `.just` instead of real nodes. Used by the two-phase decoder: Phase 1 checks the property without allocating a tree; Phase 2 re-materializes with the real tree only after the property fails.
         var skipTree: Bool = false
+        /// Flat-emission buffer. When non-nil, the walk appends each node's flattened entries here in exactly `ChoiceSequence.flatten` order, so the caller gets the sequence without building a tree. Requires `skipTree` (handlers must not also build real nodes) and `materializePicks == false` (flatten only emits the selected branch). Handlers still return trees, but they are dummies, except `.getSize` leaves, which survive so the bind handler can choose group markers over bind markers.
+        var flatOutput: ChoiceSequence?
+        /// Suppresses flat emission for sub-walks whose trees the tree path discards: a sequence's generate-mode length walk and the metamorphic inner walk (which bulk-appends its flattened real tree instead).
+        var flatEmissionSuspended: Bool = false
+        /// Accumulates per-coordinate resolution tier data for guided mode.
         /// Accumulates per-coordinate resolution tier data for guided mode.
         /// `nil` for exact mode and pure-generate mode.
         var decodingReport: DecodingReport?
         /// Per-fingerprint filter predicate observations accumulated during this materialization.
         var filterObservations: [UInt64: FilterObservation] = [:]
+
+        /// Whether flat emission is active right now (a buffer exists and no discarded-tree sub-walk has suspended it).
+        @inline(__always)
+        var emitsFlat: Bool {
+            flatOutput != nil && flatEmissionSuspended == false
+        }
+
+        /// The current flat-buffer length, which is the index the next emitted entry will occupy. Handlers snapshot this before walking their callee so `runContinuation` can retro-insert the pair-group open marker.
+        @inline(__always)
+        var flatCount: Int {
+            flatOutput?.count ?? 0
+        }
+
+        /// Appends one entry to the flat buffer when emission is active.
+        @inline(__always)
+        mutating func emitFlat(_ entry: ChoiceSequenceValue) {
+            if emitsFlat {
+                flatOutput!.append(entry)
+            }
+        }
     }
 }

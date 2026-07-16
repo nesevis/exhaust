@@ -128,6 +128,7 @@ struct ChoiceSequenceTests {
         let flattened = ChoiceSequence.flatten(tree)
 
         #expect(flattened.shortString == "[[VV][V]]")
+        #expect(ChoiceSequence(tree, reservingCapacity: flattened.count) == flattened)
     }
 
     @Test("Flatten group")

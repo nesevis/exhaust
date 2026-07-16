@@ -41,6 +41,30 @@ struct FuzzCorpusTests {
         #expect(second == .rejectedDuplicate)
     }
 
+    @Test("Precomputed sequence hash preserves duplicate detection")
+    func precomputedHashDuplicateRejection() {
+        let corpus = FuzzCorpus(edgeCount: 10)
+        let candidate = sequence(length: 2)
+        _ = corpus.offer(
+            sequence: candidate,
+            tree: .just,
+            hits: [(edge: 1, hitCount: 1)],
+            convergence: 1.0,
+            generation: 0,
+            phase: .sampling,
+            precomputedHash: ZobristHash.hash(of: candidate)
+        )
+        let duplicate = corpus.offer(
+            sequence: candidate,
+            tree: .just,
+            hits: [(edge: 9, hitCount: 1)],
+            convergence: 1.0,
+            generation: 0,
+            phase: .sampling
+        )
+        #expect(duplicate == .rejectedDuplicate)
+    }
+
     @Test("Candidate covering only known (edge, bucket) pairs is rejected")
     func notNovelRejection() {
         let corpus = FuzzCorpus(edgeCount: 10)

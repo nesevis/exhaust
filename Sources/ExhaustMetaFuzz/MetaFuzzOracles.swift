@@ -45,6 +45,15 @@ public struct FlattenBalanceViolation: Error, CustomStringConvertible {
     }
 }
 
+/// Flat-emission materialization diverged from tree-building materialization of identical inputs: a different outcome, a sequence that differs from the fresh tree's flattening, or a different convergence.
+public struct FlatEmissionParityViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
 /// The same recipe and seed produced different value streams on two runs.
 public struct DeterminismViolation: Error, CustomStringConvertible {
     public let description: String
@@ -181,11 +190,19 @@ public extension MetaFuzz {
             try checkMarkerBalance(sequence, fuzzCase)
             try checkExactRoundTrip(gen, sequence: sequence, tree: tree, value: value, fuzzCase)
             try checkCodecRoundTrip(sequence, fuzzCase)
+            try checkFlatEmissionParity(gen, prefix: sequence, mode: .exact, fallbackTree: tree, fuzzCase)
 
             let intensity = pickIntensity(&prng)
             let mutated = FuzzMutator.mutate(sequence, intensity: intensity, prng: &prng)
             try checkCodecRoundTrip(mutated, fuzzCase)
             try checkGuidedTotality(gen, mutated: mutated, fallbackTree: tree, fuzzCase, prng: &prng)
+            try checkFlatEmissionParity(
+                gen,
+                prefix: mutated,
+                mode: .guided(seed: prng.next(), fallbackTree: tree),
+                fallbackTree: tree,
+                fuzzCase
+            )
 
             if reductionChecked == false, property(value) == false {
                 try checkReduction(gen, tree: tree, value: value, property: property, fuzzCase)
@@ -393,6 +410,32 @@ extension MetaFuzz {
             case .rejected, .failed:
                 // A clean discard is inside the guided contract: filters can reject the materialized value.
                 return
+        }
+    }
+
+    /// Flat-emission parity: the flat-emission walk must reach the same outcome as tree-building materialization of identical inputs, its sequence must equal the fresh tree's flattening entry for entry, and both paths must report the same convergence.
+    private static func checkFlatEmissionParity(
+        _ gen: AnyGenerator,
+        prefix: ChoiceSequence,
+        mode: Materializer.Mode,
+        fallbackTree: ChoiceTree?,
+        _ fuzzCase: MetaFuzzCase
+    ) throws {
+        let treeResult = Materializer.materializeAny(gen, prefix: prefix, mode: mode, fallbackTree: fallbackTree)
+        let flatResult = Materializer.materializeAnyFlat(gen, prefix: prefix, mode: mode, fallbackTree: fallbackTree)
+        switch (treeResult, flatResult) {
+            case let (.success(_, freshTree, treeReport), .success(_, flatSequence, flatReport)):
+                let flattened = ChoiceSequence.flatten(freshTree)
+                guard flatSequence == flattened else {
+                    throw FlatEmissionParityViolation("flat emission \(flatSequence.shortString) diverged from flattened tree \(flattened.shortString) for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                }
+                guard treeReport?.convergence == flatReport?.convergence else {
+                    throw FlatEmissionParityViolation("flat emission convergence \(String(describing: flatReport?.convergence)) diverged from tree path \(String(describing: treeReport?.convergence)) for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                }
+            case (.rejected, .rejected), (.failed, .failed):
+                return
+            default:
+                throw FlatEmissionParityViolation("flat emission outcome diverged from tree materialization for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
     }
 

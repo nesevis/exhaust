@@ -6,6 +6,8 @@ private struct EvaluatedFuzzCandidate<Output> {
     let value: Output
     let tree: ChoiceTree
     let sequence: ChoiceSequence
+    /// `ZobristHash.hash(of:)` of `sequence` when the producing path already computed it for the crash breadcrumb, so corpus admission does not hash the same sequence twice. Nil on paths that never hashed (screening rows).
+    let sequenceHash: UInt64?
     let verdict: FuzzVerdict
     let hits: [(edge: Int, hitCount: UInt8)]
 }
@@ -403,27 +405,53 @@ package final class FuzzRunner<Output> {
         armsMask: UInt8
     ) {
         source.beginAttempt()
-        let result = Materializer.materializeAny(
+        // Phase 1: flat emission produces the value, the fresh sequence, and (below) its hash without building a ChoiceTree. The tree is rebuilt in phase 2 only for the rare candidates that consume it: corpus admission and failure dispatch.
+        let guidedSeed = prng.next()
+        let result = Materializer.materializeAnyFlat(
             erasedGen,
             prefix: candidate,
-            mode: .guided(seed: prng.next(), fallbackTree: parent.tree)
+            mode: .guided(seed: guidedSeed, fallbackTree: parent.tree)
         )
-        guard case let .success(anyValue, freshTree, decodingReport) = result else {
+        guard case let .success(anyValue, sequence, decodingReport) = result else {
             counts.discardedAttempts += 1
             return
         }
         // swiftlint:disable:next force_cast
         let value = anyValue as! Output
-        let sequence = ChoiceSequence.flatten(freshTree)
+        let sequenceHash = ZobristHash.hash(of: sequence)
         let (verdict, hits) = evaluateInBracket(
             value,
-            recordingBreadcrumb: (candidateHash: ZobristHash.hash(of: sequence), parentHash: parent.hash)
+            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent.hash)
         )
+
+        // Phase 2: rebuild the tree only when something downstream reads it. The gate is exact: `wouldAdmit` and offer's admission share one novelty predicate, mutation-phase offers are never boundary-derived, and the prune hook fires on the same failure-or-would-admit condition, so a candidate that fails this check can never have its placeholder tree stored or read. The rebuild is deterministic for identical candidate, seed, and fallback; the sequence comparison turns an impossible divergence into a discarded attempt instead of corrupt corpus state. Coverage from the rebuild cannot pollute the next attempt: its bracket begins with beginAttempt(), which clears attribution state (the same argument that covers inline reduction probes).
+        var tree = ChoiceTree.just
+        if verdict.isFailure || corpus.wouldAdmit(hits: hits) {
+            let rebuilt = Materializer.materializeAny(
+                erasedGen,
+                prefix: candidate,
+                mode: .guided(seed: guidedSeed, fallbackTree: parent.tree)
+            )
+            guard case let .success(_, freshTree, _) = rebuilt,
+                  ChoiceSequence.flatten(freshTree) == sequence
+            else {
+                ExhaustLog.error(
+                    category: .propertyTest,
+                    event: "flat_emission_rebuild_divergence",
+                    "guided tree rebuild diverged from the flat-emission sequence for an identical candidate, seed, and fallback"
+                )
+                assertionFailure("flat-emission parity break: guided tree rebuild diverged for identical inputs")
+                counts.discardedAttempts += 1
+                return
+            }
+            tree = freshTree
+        }
 
         let admission = recordAttempt(
             value: value,
-            tree: freshTree,
+            tree: tree,
             sequence: sequence,
+            sequenceHash: sequenceHash,
             verdict: verdict,
             hits: hits,
             convergence: decodingReport?.convergence ?? 0,
@@ -464,15 +492,17 @@ package final class FuzzRunner<Output> {
             return .exhausted
         }
         let sequence = ChoiceSequence.flatten(tree)
+        let sequenceHash = ZobristHash.hash(of: sequence)
         let (verdict, hits) = evaluateInBracket(
             value,
-            recordingBreadcrumb: (candidateHash: ZobristHash.hash(of: sequence), parentHash: 0)
+            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: 0)
         )
 
         let admission = recordAttempt(
             value: value,
             tree: tree,
             sequence: sequence,
+            sequenceHash: sequenceHash,
             verdict: verdict,
             hits: hits,
             convergence: 1.0,
@@ -511,6 +541,7 @@ package final class FuzzRunner<Output> {
         value: Output,
         tree: ChoiceTree,
         sequence: ChoiceSequence,
+        sequenceHash: UInt64? = nil,
         verdict: FuzzVerdict,
         hits: [(edge: Int, hitCount: UInt8)],
         convergence: Double,
@@ -535,6 +566,7 @@ package final class FuzzRunner<Output> {
             value: value,
             tree: tree,
             sequence: sequence,
+            sequenceHash: sequenceHash,
             verdict: verdict,
             hits: hits
         )
@@ -551,7 +583,8 @@ package final class FuzzRunner<Output> {
             generation: generation,
             phase: phase,
             isBoundaryDerived: isBoundaryDerived,
-            propertyFailed: candidates.corpus.verdict.isFailure
+            propertyFailed: candidates.corpus.verdict.isFailure,
+            precomputedHash: candidates.corpus.sequenceHash
         )
         if admission.isAdmitted {
             lastAdmissionNanoseconds = monotonicNanoseconds()
@@ -590,12 +623,13 @@ package final class FuzzRunner<Output> {
 
         let pruned = prune(original.value, original.tree)
         let prunedSequence = ChoiceSequence.flatten(pruned.tree)
+        let prunedSequenceHash = ZobristHash.hash(of: prunedSequence)
         let parentHash = parentIndex.map { corpus.entries[$0].hash } ?? 0
         source.beginAttempt()
         let (prunedVerdict, prunedHits) = evaluateInBracket(
             pruned.value,
             recordingBreadcrumb: (
-                candidateHash: ZobristHash.hash(of: prunedSequence),
+                candidateHash: prunedSequenceHash,
                 parentHash: parentHash
             )
         )
@@ -604,6 +638,7 @@ package final class FuzzRunner<Output> {
             value: pruned.value,
             tree: pruned.tree,
             sequence: prunedSequence,
+            sequenceHash: prunedSequenceHash,
             verdict: prunedVerdict,
             hits: prunedHits
         )

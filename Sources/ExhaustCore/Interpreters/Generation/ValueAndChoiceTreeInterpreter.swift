@@ -519,16 +519,36 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         results.reserveCapacity(count)
         elements.reserveCapacity(count)
 
-        // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element.
+        // Unwrap a forward-inert contramap layer before matching so character generators and similar wrappers can use the fused chooseBits loop.
+        var fusedElementGen = elementGen
+        var contramapContinuation: ((Any) throws -> AnyGenerator)?
         if case let .impure(
-            operation: .chooseBits(min, max, tag, isRangeExplicit, .some(scaling), typeTagPayload),
-            continuation: elementContinuation
+            operation: .contramap(_, innerGen),
+            continuation: outerContinuation
         ) = elementGen {
-            let size = SharedInterpreterHelpers.currentSize(&context)
-            let effectiveRange = Gen.applyScaling(
-                min: min, max: max, tag: tag, scaling: scaling, size: size
+            fusedElementGen = innerGen
+            contramapContinuation = outerContinuation
+        }
+
+        // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element. Unscaled direct elements already optimize well under WMO; include them only when fusing away the contramap dispatch as well.
+        if case let .impure(
+            operation: .chooseBits(min, max, tag, isRangeExplicit, scaling, typeTagPayload),
+            continuation: elementContinuation
+        ) = fusedElementGen, scaling != nil || contramapContinuation != nil {
+            let effectiveRange: ClosedRange<UInt64>
+            if let scaling {
+                let size = SharedInterpreterHelpers.currentSize(&context)
+                effectiveRange = Gen.applyScaling(
+                    min: min, max: max, tag: tag, scaling: scaling, size: size
+                )
+            } else {
+                effectiveRange = min ... max
+            }
+            let metadata = ChoiceMetadata(
+                validRange: min ... max,
+                isRangeExplicit: isRangeExplicit,
+                typeTagPayload: typeTagPayload
             )
-            let metadata = ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit, typeTagPayload: typeTagPayload)
 
             for elementIndex in 0 ..< count {
                 try SharedInterpreterHelpers.checkGenerationDeadline(context.deadlineNanoseconds, elementIndex: elementIndex)
@@ -537,11 +557,22 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
                     : rawBits
                 let calleeTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), metadata)
-                guard let (result, elementTree) = try runContinuation(
+                guard var (result, elementTree) = try runContinuation(
                     result: randomBits, calleeChoiceTree: calleeTree,
                     continuation: elementContinuation, context: &context
                 ) else {
                     return nil
+                }
+                if let contramapContinuation {
+                    guard let continued = try runContinuation(
+                        result: result,
+                        calleeChoiceTree: elementTree,
+                        continuation: contramapContinuation,
+                        context: &context
+                    ) else {
+                        return nil
+                    }
+                    (result, elementTree) = continued
                 }
                 results.append(result)
                 elements.append(elementTree)
@@ -778,7 +809,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             }
         }
         let filteredGen = mustResolve
-            ? GenerationContext.resolveTunedFilter(
+            ? context.resolveTunedFilterMemoized(
                 fingerprint: fingerprint,
                 generator: filterGen,
                 predicate: predicate,

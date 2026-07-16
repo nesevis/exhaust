@@ -17,6 +17,91 @@ package enum MutationIntensity: CaseIterable, Sendable {
 
 /// Pure functions producing mutated choice sequences from corpus parents.
 package enum FuzzMutator {
+    /// Stable mutation sites for one admitted corpus sequence.
+    ///
+    /// A corpus entry is mutated repeatedly but never changes in place. Indexing its leaves,
+    /// branches, and bind regions once at admission avoids rediscovering the same structure for
+    /// every child.
+    package struct Layout: Sendable {
+        fileprivate let valueIndices: [Int]
+        fileprivate let branchIndices: [Int]
+        fileprivate let bindRegions: [BindRegion]
+        fileprivate let problematicValues: [CatalogKey: [UInt64]]
+    }
+
+    fileprivate struct CatalogKey: Hashable, Sendable {
+        let min: UInt64
+        let max: UInt64
+        let tag: TypeTag
+    }
+
+    /// Indexes the mutation sites in a sequence for reuse by corpus-parent mutations.
+    package static func layout(of sequence: ChoiceSequence) -> Layout {
+        var valueIndices: [Int] = []
+        var branchIndices: [Int] = []
+        var bindOpenIndices: [Int] = []
+        var problematicValues: [CatalogKey: [UInt64]] = [:]
+        var matchingCloseByOpen = [Int](repeating: -1, count: sequence.count)
+        var openStack: [Int] = []
+        openStack.reserveCapacity(16)
+
+        var index = 0
+        while index < sequence.count {
+            switch sequence[index] {
+                case let .value(entry):
+                    valueIndices.append(index)
+                    let tag = entry.choice.tag
+                    let range = entry.validRange ?? tag.bitPatternRange
+                    let key = CatalogKey(min: range.lowerBound, max: range.upperBound, tag: tag)
+                    if problematicValues[key] == nil {
+                        problematicValues[key] = ProblematicValues.computeProblematicValues(
+                            min: range.lowerBound,
+                            max: range.upperBound,
+                            tag: tag
+                        )
+                    }
+                case let .branch(branch) where branch.branchCount > 1:
+                    branchIndices.append(index)
+                case .branch, .just:
+                    break
+                case .bind(true):
+                    bindOpenIndices.append(index)
+                    openStack.append(index)
+                case .group(true), .sequence(true, validRange: _, isLengthExplicit: _):
+                    openStack.append(index)
+                case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .bind(false):
+                    if let open = openStack.popLast() {
+                        matchingCloseByOpen[open] = index
+                    }
+            }
+            index += 1
+        }
+
+        var bindRegions: [BindRegion] = []
+        bindRegions.reserveCapacity(bindOpenIndices.count)
+        for open in bindOpenIndices {
+            let close = matchingCloseByOpen[open]
+            guard close >= 0,
+                  case .bind(false) = sequence[close],
+                  let innerEnd = subtreeEnd(
+                      startingAt: open + 1,
+                      in: sequence,
+                      matchingCloseByOpen: matchingCloseByOpen
+                  ),
+                  innerEnd <= close
+            else {
+                continue
+            }
+            bindRegions.append(BindRegion(open: open, boundStart: innerEnd, close: close))
+        }
+        return Layout(
+            valueIndices: valueIndices,
+            branchIndices: branchIndices,
+            bindRegions: bindRegions,
+            problematicValues: problematicValues
+        )
+    }
+
     // MARK: - Entry Point
 
     /// Returns a mutation of `sequence` at the given intensity.
@@ -25,6 +110,7 @@ package enum FuzzMutator {
     package static func mutate(
         _ sequence: ChoiceSequence,
         intensity: MutationIntensity,
+        layout: Layout? = nil,
         prng: inout Xoshiro256
     ) -> ChoiceSequence {
         guard sequence.isEmpty == false else {
@@ -32,9 +118,9 @@ package enum FuzzMutator {
         }
         switch intensity {
             case .low:
-                return mutateValues(sequence, prng: &prng)
+                return mutateValues(sequence, layout: layout, prng: &prng)
             case .medium:
-                return mutateStructure(sequence, prng: &prng)
+                return mutateStructure(sequence, branchIndices: layout?.branchIndices, prng: &prng)
             case .high:
                 return corruptRegion(sequence, prng: &prng)
         }
@@ -43,16 +129,26 @@ package enum FuzzMutator {
     // MARK: - Low Intensity: Leaf Values
 
     /// Perturbs one to three `.value` entries, leaving all structural markers in place.
-    private static func mutateValues(_ sequence: ChoiceSequence, prng: inout Xoshiro256) -> ChoiceSequence {
-        var valueIndices: [Int] = []
-        for (index, element) in sequence.enumerated() {
-            if case .value = element {
-                valueIndices.append(index)
+    private static func mutateValues(
+        _ sequence: ChoiceSequence,
+        layout: Layout?,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence {
+        let valueIndices: [Int]
+        if let layout {
+            valueIndices = layout.valueIndices
+        } else {
+            var discovered: [Int] = []
+            for (index, element) in sequence.enumerated() {
+                if case .value = element {
+                    discovered.append(index)
+                }
             }
+            valueIndices = discovered
         }
         guard valueIndices.isEmpty == false else {
             // No leaves to move; a structural mutation is the nearest useful neighborhood.
-            return mutateStructure(sequence, prng: &prng)
+            return mutateStructure(sequence, branchIndices: nil, prng: &prng)
         }
 
         var result = sequence
@@ -62,7 +158,11 @@ package enum FuzzMutator {
             guard case let .value(entry) = result[target] else {
                 continue
             }
-            result[target] = .value(perturb(entry, prng: &prng))
+            result[target] = .value(perturb(
+                entry,
+                problematicValues: layout?.problematicValues,
+                prng: &prng
+            ))
         }
         return result
     }
@@ -70,6 +170,7 @@ package enum FuzzMutator {
     /// Produces a perturbed copy of one value entry: a fresh in-range draw, a small bit-pattern delta, a boundary-catalog substitution, or the semantically simplest value.
     private static func perturb(
         _ entry: ChoiceSequenceValue.Value,
+        problematicValues: [CatalogKey: [UInt64]]?,
         prng: inout Xoshiro256
     ) -> ChoiceSequenceValue.Value {
         let tag = entry.choice.tag
@@ -89,11 +190,13 @@ package enum FuzzMutator {
                     : min(max(shifted, range.lowerBound), range.upperBound)
             case 2:
                 // Boundary substitution: the same per-type catalog the covering array draws from plays the dictionary role during fuzzing.
-                let catalog = ProblematicValues.computeProblematicValues(
-                    min: range.lowerBound,
-                    max: range.upperBound,
-                    tag: tag
-                )
+                let key = CatalogKey(min: range.lowerBound, max: range.upperBound, tag: tag)
+                let catalog = problematicValues?[key]
+                    ?? ProblematicValues.computeProblematicValues(
+                        min: range.lowerBound,
+                        max: range.upperBound,
+                        tag: tag
+                    )
                 newPattern = catalog.isEmpty
                     ? prng.next(in: range)
                     : catalog[Int(prng.next(upperBound: UInt64(catalog.count)))]
@@ -110,7 +213,11 @@ package enum FuzzMutator {
     // MARK: - Medium Intensity: Structure
 
     /// Applies one structural mutation: block deletion, block duplication, block replacement, or branch pivot.
-    private static func mutateStructure(_ sequence: ChoiceSequence, prng: inout Xoshiro256) -> ChoiceSequence {
+    private static func mutateStructure(
+        _ sequence: ChoiceSequence,
+        branchIndices cachedBranchIndices: [Int]?,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence {
         var result = sequence
         switch prng.next(upperBound: 4) {
             case 0:
@@ -124,11 +231,17 @@ package enum FuzzMutator {
                 let donor = randomBlock(in: sequence, maximumFraction: 0.25, prng: &prng)
                 result.replaceSubrange(target, with: sequence[donor])
             default:
-                var branchIndices: [Int] = []
-                for (index, element) in result.enumerated() {
-                    if case let .branch(branch) = element, branch.branchCount > 1 {
-                        branchIndices.append(index)
+                let branchIndices: [Int]
+                if let cachedBranchIndices {
+                    branchIndices = cachedBranchIndices
+                } else {
+                    var discovered: [Int] = []
+                    for (index, element) in result.enumerated() {
+                        if case let .branch(branch) = element, branch.branchCount > 1 {
+                            discovered.append(index)
+                        }
                     }
+                    branchIndices = discovered
                 }
                 guard branchIndices.isEmpty == false else {
                     let block = randomBlock(in: result, maximumFraction: 0.25, prng: &prng)
@@ -187,10 +300,14 @@ package enum FuzzMutator {
     package static func splice(
         recipient: ChoiceSequence,
         donor: ChoiceSequence,
+        recipientLayout: Layout? = nil,
+        donorLayout: Layout? = nil,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
-        guard let recipientBind = randomBindRegion(in: recipient, prng: &prng),
-              let donorBind = randomBindRegion(in: donor, prng: &prng)
+        let recipientRegions = recipientLayout?.bindRegions ?? layout(of: recipient).bindRegions
+        let donorRegions = donorLayout?.bindRegions ?? layout(of: donor).bindRegions
+        guard let recipientBind = randomBindRegion(in: recipientRegions, prng: &prng),
+              let donorBind = randomBindRegion(in: donorRegions, prng: &prng)
         else {
             return nil
         }
@@ -205,55 +322,38 @@ package enum FuzzMutator {
     }
 
     /// A bind region in a flattened sequence: `open` is the `.bind(true)` index, `boundStart` the first element of the bound subtree (the inner subtree spans `open + 1 ..< boundStart`), and `close` the matching `.bind(false)`.
-    struct BindRegion {
+    fileprivate struct BindRegion: Sendable {
         let open: Int
         let boundStart: Int
         let close: Int
     }
 
-    /// Picks one of the sequence's bind regions at random, or nil when none parses.
-    private static func randomBindRegion(in sequence: ChoiceSequence, prng: inout Xoshiro256) -> BindRegion? {
-        var regions: [BindRegion] = []
-        for (index, element) in sequence.enumerated() {
-            guard case .bind(true) = element else {
-                continue
-            }
-            guard let innerEnd = sequence.subtreeEnd(startingAt: index + 1),
-                  let close = matchingBindClose(in: sequence, openIndex: index),
-                  innerEnd <= close
-            else {
-                continue
-            }
-            regions.append(BindRegion(open: index, boundStart: innerEnd, close: close))
-        }
+    /// Picks one of the pre-indexed bind regions at random.
+    private static func randomBindRegion(in regions: [BindRegion], prng: inout Xoshiro256) -> BindRegion? {
         guard regions.isEmpty == false else {
             return nil
         }
         return regions[Int(prng.next(upperBound: UInt64(regions.count)))]
     }
 
-    /// Finds the `.bind(false)` matching the `.bind(true)` at `openIndex`, balancing all marker kinds.
-    private static func matchingBindClose(in sequence: ChoiceSequence, openIndex: Int) -> Int? {
-        var depth = 0
-        var index = openIndex
-        while index < sequence.count {
-            switch sequence[index] {
-                case .group(true), .sequence(true, validRange: _, isLengthExplicit: _), .bind(true):
-                    depth += 1
-                case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .bind(false):
-                    depth -= 1
-                    if depth == 0 {
-                        if case .bind(false) = sequence[index] {
-                            return index
-                        }
-                        return nil
-                    }
-                case .value, .just, .branch:
-                    break
-            }
-            index += 1
+    /// Returns the end of one subtree using precomputed structural pairs.
+    private static func subtreeEnd(
+        startingAt start: Int,
+        in sequence: ChoiceSequence,
+        matchingCloseByOpen: [Int]
+    ) -> Int? {
+        guard start < sequence.count else {
+            return nil
         }
-        return nil
+        switch sequence[start] {
+            case .value, .just, .branch:
+                return start + 1
+            case .group(true), .sequence(true, validRange: _, isLengthExplicit: _), .bind(true):
+                let close = matchingCloseByOpen[start]
+                return close >= 0 ? close + 1 : nil
+            case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .bind(false):
+                return nil
+        }
     }
 
     // MARK: - Block Selection

@@ -304,7 +304,43 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         elementGen: AnyGenerator,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> Any? {
-        guard let lengthValue = try generateRecursiveAny(lengthGen.erase(), context: &context) else {
+        // The length spine is walked without the generic erase: erase() boxes a fresh impure node (operation copy included) on every sequence visit, and the two shapes the factories produce (getSize-wrapped and bare chooseBits) dispatch here directly. PRNG consumption is identical to the erased walk, preserving VI/VACTI parity. Unusual spines fall back to the erased walk unchanged.
+        let lengthValue: Any?
+        switch lengthGen {
+            case let .pure(value):
+                lengthValue = value
+            case .impure(operation: .getSize, let lengthContinuation):
+                let size = SharedInterpreterHelpers.currentSize(&context)
+                let nextGen = try lengthContinuation(size)
+                if case let .pure(final) = nextGen {
+                    lengthValue = final
+                } else {
+                    lengthValue = try generateRecursiveAny(nextGen, context: &context)
+                }
+            case let .impure(operation: .chooseBits(lengthMin, lengthMax, lengthTag, _, lengthScaling, _), continuation: lengthContinuation):
+                let effectiveLengthRange: ClosedRange<UInt64>
+                if let lengthScaling {
+                    let size = SharedInterpreterHelpers.currentSize(&context)
+                    effectiveLengthRange = Gen.applyScaling(
+                        min: lengthMin, max: lengthMax, tag: lengthTag, scaling: lengthScaling, size: size
+                    )
+                } else {
+                    effectiveLengthRange = lengthMin ... lengthMax
+                }
+                let rawBits = context.prng.next(in: effectiveLengthRange)
+                let randomBits: Any = lengthTag.isFloatingPoint
+                    ? lengthTag.linearlyDistributed(rawBits: rawBits, in: effectiveLengthRange)
+                    : rawBits
+                let nextGen = try lengthContinuation(randomBits)
+                if case let .pure(final) = nextGen {
+                    lengthValue = final
+                } else {
+                    lengthValue = try generateRecursiveAny(nextGen, context: &context)
+                }
+            default:
+                lengthValue = try generateRecursiveAny(lengthGen.erase(), context: &context)
+        }
+        guard let lengthValue else {
             return nil
         }
         // swiftlint:disable:next force_cast
@@ -444,7 +480,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             }
         }
         let tunedGen = mustResolve
-            ? GenerationContext.resolveTunedFilter(
+            ? context.resolveTunedFilterMemoized(
                 fingerprint: fingerprint,
                 generator: filterGen,
                 predicate: predicate,

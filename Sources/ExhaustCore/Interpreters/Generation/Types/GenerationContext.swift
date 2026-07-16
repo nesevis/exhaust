@@ -56,6 +56,9 @@ package struct GenerationContext: ~Copyable {
     /// Per-fingerprint filter predicate pass/fail observations.
     package var filterObservations: [UInt64: FilterObservation] = [:]
 
+    /// Per-context memo of resolved tuned filters, consulted before the process-wide cache behind `resolveTunedFilter`. Snapshotting locally is sound because tuning is deterministic per fingerprint and a global entry never changes once written; the memo exists to keep the global cache's lock off the per-visit path.
+    package var resolvedTunedFilters: [UInt64: AnyGenerator] = [:]
+
     /// Fingerprints of the filter sites currently being expanded on this context's generation path. Aliased call sites (a filter applied in a loop, a helper applied twice, a recursive layer body) can make the ``resolveTunedFilter(fingerprint:generator:predicate:type:)`` cache entry contain another filter node with the same fingerprint, and resolving that nested node would expand the cached chain into itself forever. The generation interpreters consult this path and generate a re-entered fingerprint from its embedded inner instead. Contexts created fresh mid-expansion (``jump(seed:)``, unique's sub-interpreter) start with an empty path; that stays sound because each context's own guard breaks the cycle within it.
     package var filterExpansionPath: ContiguousArray<UInt64> = []
 
@@ -215,5 +218,24 @@ package extension GenerationContext {
         let tuned = Gen.tuneFilter(generator, predicate: predicate, type: type, seed: fingerprint)
         tunedFilterCache.withValue { $0[fingerprint] = tuned }
         return tuned
+    }
+
+    /// Resolves the tuned generator for a filter through this context's ``resolvedTunedFilters`` memo, touching the locked process-wide cache only on the first visit per site.
+    mutating func resolveTunedFilterMemoized(
+        fingerprint: UInt64,
+        generator: AnyGenerator,
+        predicate: @escaping (Any) -> Bool,
+        type: FilterType
+    ) -> AnyGenerator {
+        if type == .rejectionSampling { return generator }
+        if let local = resolvedTunedFilters[fingerprint] { return local }
+        let resolved = Self.resolveTunedFilter(
+            fingerprint: fingerprint,
+            generator: generator,
+            predicate: predicate,
+            type: type
+        )
+        resolvedTunedFilters[fingerprint] = resolved
+        return resolved
     }
 }

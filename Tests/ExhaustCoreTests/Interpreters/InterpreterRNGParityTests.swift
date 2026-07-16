@@ -77,6 +77,23 @@ struct InterpreterRNGParityTests {
         try assertParity(generator, seed: 54321, runs: 5)
     }
 
+    @Test("Unscaled array generation parity")
+    func unscaledArrayParity() throws {
+        let generator = Gen.arrayOf(
+            Gen.choose(in: UInt64(10) ... 1000),
+            exactly: 128
+        )
+        try assertParity(generator, seed: 54321, runs: 10)
+        try assertTreeRoundTrip(generator, seed: 54321, equals: ==)
+    }
+
+    @Test("Contramap-wrapped character array generation parity")
+    func characterArrayParity() throws {
+        let generator = Gen.arrayOf(Gen.character().gen, exactly: 128)
+        try assertParity(generator, seed: 54321, runs: 10)
+        try assertTreeRoundTrip(generator, seed: 54321, equals: ==)
+    }
+
     // MARK: - Unique
 
     @Test("Key-based unique retry parity")
@@ -379,6 +396,38 @@ struct InterpreterRNGParityTests {
 }
 
 // MARK: - Helpers
+
+/// Verifies that a VACTI tree from a fused sequence path still replays and materializes to the
+/// generated value.
+private func assertTreeRoundTrip<Value>(
+    _ generator: Generator<Value>,
+    seed: UInt64,
+    equals: (Value, Value) -> Bool,
+    sourceLocation: SourceLocation = #_sourceLocation
+) throws {
+    var interpreter = ValueAndChoiceTreeInterpreter(generator, seed: seed, maxRuns: 1)
+    let generated = try #require(try interpreter.next(), sourceLocation: sourceLocation)
+    let replayed = try #require(
+        try Interpreters.replay(generator, using: generated.tree),
+        sourceLocation: sourceLocation
+    )
+    #expect(equals(generated.value, replayed), sourceLocation: sourceLocation)
+
+    let result = Materializer.materialize(
+        generator,
+        prefix: ChoiceSequence(generated.tree),
+        mode: .exact,
+        fallbackTree: generated.tree
+    )
+    guard case let .success(materialized, _, _) = result else {
+        Issue.record(
+            "Exact materialization rejected the generated tree",
+            sourceLocation: sourceLocation
+        )
+        return
+    }
+    #expect(equals(generated.value, materialized), sourceLocation: sourceLocation)
+}
 
 /// Draws `runs` values from a `ValueInterpreter` and a `ValueAndChoiceTreeInterpreter` with the same seed and asserts pairwise equality via `equals`.
 private func assertParity<Value>(
