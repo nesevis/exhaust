@@ -8,21 +8,23 @@ struct IssueReportingIntegrationTests {
     @Test("Issue routing preserves severity and source location")
     func issueRoutingPreservesSeverityAndSourceLocation() {
         let reporter = RecordingIssueReporter()
-        withIssueReporters([reporter]) {
-            reportError(
-                "error message",
-                fileID: "IssueReporting/Fixture.swift",
-                filePath: "/tmp/Fixture.swift",
-                line: 41,
-                column: 7
-            )
-            reportWarning(
-                "warning message",
-                fileID: "IssueReporting/Fixture.swift",
-                filePath: "/tmp/Fixture.swift",
-                line: 43,
-                column: 9
-            )
+        absorbingDirectTestingIssues {
+            withIssueReporters([reporter]) {
+                reportError(
+                    "error message",
+                    fileID: "IssueReporting/Fixture.swift",
+                    filePath: "/tmp/Fixture.swift",
+                    line: 41,
+                    column: 7
+                )
+                reportWarning(
+                    "warning message",
+                    fileID: "IssueReporting/Fixture.swift",
+                    filePath: "/tmp/Fixture.swift",
+                    line: 43,
+                    column: 9
+                )
+            }
         }
 
         #expect(reporter.issues == [
@@ -66,40 +68,44 @@ struct IssueReportingIntegrationTests {
     func exploreAssertionRerunIsCountedAsDiagnosticInvocation() {
         let reporter = RecordingIssueReporter()
         let directions: [(String, @Sendable (Int) -> Bool)] = [("any", { _ in true })]
-        let report = withIssueReporters([reporter]) {
-            __ExhaustRuntime.__exploreExpect(
-                ReflectiveGenerator(Gen.just(0)),
-                settings: [
-                    .budget(.custom(screening: 1, sampling: 1)),
-                    .replay(42),
-                ],
-                directions: directions,
-                property: { _ in throw DiagnosticFailure() },
-                detection: { _ in throw DiagnosticFailure() }
-            )
+        let report = absorbingDirectTestingIssues {
+            withIssueReporters([reporter]) {
+                __ExhaustRuntime.__exploreExpect(
+                    ReflectiveGenerator(Gen.just(0)),
+                    settings: [
+                        .budget(.custom(screening: 1, sampling: 1)),
+                        .replay(42),
+                    ],
+                    directions: directions,
+                    property: { _ in throw DiagnosticFailure() },
+                    detection: { _ in throw DiagnosticFailure() }
+                )
+            }
         }
 
         #expect(report.result == 0)
         #expect(report.invocations.diagnostic == 1)
         #expect(report.propertyInvocations == report.invocations.total)
         #expect(reporter.issues.count == 1)
-        #expect(reporter.issues[0].message == "Reproduce: .replay(\"1A\")")
+        #expect(reporter.issues.first?.message == "Reproduce: .replay(\"1A\")")
     }
 
     @Test("Explore Bool failure reports phase counts and a bare replay seed")
     func exploreBoolFailureReportsPhaseCountsAndBareReplaySeed() {
         let reporter = RecordingIssueReporter()
         let directions: [(String, @Sendable (Int) -> Bool)] = [("any", { _ in true })]
-        let report = withIssueReporters([reporter]) {
-            __ExhaustRuntime.__explore(
-                ReflectiveGenerator(Gen.just(0)),
-                settings: [
-                    .budget(.custom(screening: 1, sampling: 1)),
-                    .replay(42),
-                ],
-                directions: directions,
-                property: { _ in false }
-            )
+        let report = absorbingDirectTestingIssues {
+            withIssueReporters([reporter]) {
+                __ExhaustRuntime.__explore(
+                    ReflectiveGenerator(Gen.just(0)),
+                    settings: [
+                        .budget(.custom(screening: 1, sampling: 1)),
+                        .replay(42),
+                    ],
+                    directions: directions,
+                    property: { _ in false }
+                )
+            }
         }
 
         let message = reporter.issues.first?.message ?? ""
@@ -118,17 +124,19 @@ struct IssueReportingIntegrationTests {
     func asyncExploreAssertionRerunIsCountedAsDiagnosticInvocation() async {
         let reporter = RecordingIssueReporter()
         let directions: [(String, @Sendable (Int) -> Bool)] = [("any", { _ in true })]
-        let report = await withIssueReporters([reporter]) {
-            await __ExhaustRuntime.__exploreExpectAsync(
-                ReflectiveGenerator(Gen.just(0)),
-                settings: [
-                    .budget(.custom(screening: 1, sampling: 1)),
-                    .replay(42),
-                ],
-                directions: directions,
-                property: { _ in throw DiagnosticFailure() },
-                detection: { _ in throw DiagnosticFailure() }
-            )
+        let report = await absorbingDirectTestingIssues(isIntermittent: true) {
+            await withIssueReporters([reporter]) {
+                await __ExhaustRuntime.__exploreExpectAsync(
+                    ReflectiveGenerator(Gen.just(0)),
+                    settings: [
+                        .budget(.custom(screening: 1, sampling: 1)),
+                        .replay(42),
+                    ],
+                    directions: directions,
+                    property: { _ in throw DiagnosticFailure() },
+                    detection: { _ in throw DiagnosticFailure() }
+                )
+            }
         }
 
         #expect(report.result == 0)
@@ -154,6 +162,48 @@ struct IssueReportingIntegrationTests {
 
             #expect(reporter.issues.count == 1)
         }
+    #endif
+}
+
+/// Runs `body`, absorbing the issues Exhaust's non-Apple reporting shim records directly with swift-testing.
+///
+/// On Apple platforms `withIssueReporters` redirects error reporting away from swift-testing, so `body` runs bare. On non-Apple platforms the shim's direct `Issue.record` delivery cannot be redirected, so this helper absorbs those records as known issues.
+private func absorbingDirectTestingIssues<Value>(
+    isIntermittent: Bool = false,
+    _ body: () -> Value
+) -> Value {
+    #if canImport(ObjectiveC)
+        return body()
+    #else
+        var captured: Value?
+        withKnownIssue(isIntermittent: isIntermittent) {
+            captured = body()
+        }
+        guard let captured else {
+            fatalError("withKnownIssue did not run its body")
+        }
+        return captured
+    #endif
+}
+
+/// Runs async `body`, absorbing the issues Exhaust's non-Apple reporting shim records directly with swift-testing.
+///
+/// The direct record happens on a bridged thread where the swift-testing test association may not propagate, so async callers pass `isIntermittent: true`.
+private func absorbingDirectTestingIssues<Value>(
+    isIntermittent: Bool = false,
+    _ body: () async -> Value
+) async -> Value {
+    #if canImport(ObjectiveC)
+        return await body()
+    #else
+        var captured: Value?
+        await withKnownIssue(isIntermittent: isIntermittent) {
+            captured = await body()
+        }
+        guard let captured else {
+            fatalError("withKnownIssue did not run its body")
+        }
+        return captured
     #endif
 }
 
