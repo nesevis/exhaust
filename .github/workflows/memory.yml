@@ -1,0 +1,92 @@
+name: Memory Profiles
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Nightly profiles, 04:00 AEST (18:00 UTC on the preceding calendar day).
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+jobs:
+  profile:
+    runs-on: macos-26
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Select Xcode 26.5
+        run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
+
+      - name: Build memory profiles
+        run: swift build --package-path MemoryHarness --build-tests
+
+      - name: Measure memory profiles
+        shell: bash
+        run: |
+          status=0
+          mkdir -p .build/memory
+
+          bash Scripts/measure-memory.sh .build/memory/property -- \
+            swift test --package-path MemoryHarness --skip-build --no-parallel \
+              --filter PropertyMemoryProfileTests || status=1
+
+          bash Scripts/measure-memory.sh .build/memory/execute -- \
+            swift test --package-path MemoryHarness --skip-build --no-parallel \
+              --filter ExecuteMemoryProfileTests || status=1
+
+          bash Scripts/measure-memory.sh .build/memory/reduction -- \
+            swift test --package-path MemoryHarness --skip-build --no-parallel \
+              --filter ReductionMemoryProfileTests || status=1
+
+          bash Scripts/measure-memory.sh .build/memory/retention -- \
+            swift test --package-path MemoryHarness --skip-build --no-parallel \
+              --filter RetentionMemoryProfileTests || status=1
+
+          exit "$status"
+
+      - name: Memory summary
+        if: always()
+        shell: bash
+        run: |
+          append_profile() {
+            local label="$1"
+            local prefix="$2"
+            local metrics_path="${prefix}.metrics.env"
+
+            if [ ! -f "$metrics_path" ]; then
+              echo "| ${label} | unavailable | unavailable | unavailable |"
+              return
+            fi
+
+            source "$metrics_path"
+            echo "| ${label} | ${max_rss_mib} MiB | ${peak_footprint_mib} MiB | ${command_status} |"
+          }
+
+          {
+            echo "### Exhaust memory profiles"
+            echo
+            echo "| Profile | Maximum RSS | Peak footprint | Test status |"
+            echo "|---|---:|---:|---:|"
+            append_profile "#exhaust passing" ".build/memory/property"
+            append_profile "#execute passing" ".build/memory/execute"
+            append_profile "Reduction" ".build/memory/reduction"
+            append_profile "Repeated #exhaust" ".build/memory/retention"
+
+            if grep -q '^memory-retention: ' .build/memory/retention.log 2>/dev/null; then
+              echo
+              echo "#### Retained-memory samples"
+              grep '^memory-retention: ' .build/memory/retention.log \
+                | sed 's/^memory-retention: /- /'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload memory results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-profiles
+          path: .build/memory/
+          if-no-files-found: warn
+          retention-days: 30
