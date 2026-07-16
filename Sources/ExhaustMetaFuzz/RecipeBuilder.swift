@@ -143,16 +143,16 @@ private func buildCombinator(
         case let .boundArray(element: element, maxLength: maxLength):
             let elementGen = buildNestedGenerator(from: element)
             return Gen.choose(in: 0 ... maxLength).bind { length in
-                Gen.arrayOf(elementGen, exactly: length).erase()
-            }
+                Gen.arrayOf(elementGen, exactly: length)
+            }.erase()
 
         case let .boundRange(inner):
             let innerGen = buildNestedGenerator(from: inner)
             return innerGen.bind { loAny in
                 let lo = loAny as! Int
                 let hi = lo + 50
-                return Gen.choose(in: lo ... hi).map { $0 as Any }
-            }
+                return Gen.choose(in: lo ... hi)
+            }.erase()
 
         case let .reifiedBind(inner):
             let innerGenerator = buildNestedGenerator(from: inner)
