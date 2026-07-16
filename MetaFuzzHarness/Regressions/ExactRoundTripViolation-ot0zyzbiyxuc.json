@@ -1,0 +1,45 @@
+{
+  "kind" : "pipelineCase",
+  "oracle" : "ExactRoundTripViolation",
+  "perturbationSeed" : 0,
+  "recipe" : {
+    "combinator" : {
+      "_0" : {
+        "resized" : {
+          "_0" : {
+            "combinator" : {
+              "_0" : {
+                "zipped" : {
+                  "_0" : {
+                    "leaf" : {
+                      "_0" : {
+                        "justInt" : {
+                          "_0" : 0
+                        }
+                      }
+                    }
+                  },
+                  "_1" : {
+                    "leaf" : {
+                      "_0" : {
+                        "int" : {
+                          "_0" : [
+                            0,
+                            0
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "size" : 1
+        }
+      }
+    }
+  },
+  "valueSeed" : 0,
+  "version" : 1
+}

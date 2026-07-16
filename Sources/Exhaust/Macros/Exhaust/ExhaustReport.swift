@@ -28,11 +28,17 @@ public struct ExhaustReport: Sendable {
     /// Total wall-clock time, in milliseconds.
     public var totalMilliseconds: Double = 0
 
-    /// Total property invocations across all phases (screening, random sampling, and reduction).
+    /// Total property invocations across all phases, including the final source-located diagnostic rerun when one executes.
     public var propertyInvocations: Int = 0
 
     /// Property invocations during the screening phase.
     public var screeningInvocations: Int = 0
+
+    /// Counts covering-array rows considered as screening candidates.
+    public var screeningRows: Int = 0
+
+    /// Counts screening rows rejected before property invocation.
+    public var screeningRejectedRows: Int = 0
 
     /// Property invocations during the random sampling phase.
     public var randomSamplingInvocations: Int = 0
@@ -40,12 +46,15 @@ public struct ExhaustReport: Sendable {
     /// Property invocations during the reduction phase (counted by the wrapping closure).
     public var reductionInvocations: Int = 0
 
+    /// Property invocations used to reproduce a final source-located diagnostic after reduction.
+    public var diagnosticInvocations: Int = 0
+
     /// Property invocations that were skipped by throwing ``PropertySkip`` (or `XCTSkip`).
     ///
     /// Skipped invocations count toward ``propertyInvocations`` but assert nothing. A run whose every invocation was skipped fails as pointless.
     public var skippedInvocations: Int = 0
 
-    /// Whether the sampling phase ended before its budget because a ``ReflectiveGenerator/unique(fileID:line:column:)`` site exhausted its retry budget.
+    /// Whether the sampling phase ended before its budget because a `ReflectiveGenerator.unique(fileID:line:column:)` site exhausted its retry budget.
     ///
     /// When true, ``randomSamplingInvocations`` is smaller than the configured sampling budget: the deduplicated domain ran dry and the remaining iterations never ran.
     public var runTruncatedByUniqueExhaustion = false
@@ -71,7 +80,36 @@ public struct ExhaustReport: Sendable {
         screeningInvocations = screening
         randomSamplingInvocations = randomSampling
         reductionInvocations = reduction
+        diagnosticInvocations = 0
         propertyInvocations = screening + randomSampling + reduction
+    }
+
+    /// Records one source-located diagnostic rerun after the pipeline has produced its report.
+    package mutating func recordDiagnosticInvocation() {
+        diagnosticInvocations += 1
+        propertyInvocations += 1
+    }
+
+    /// Applies screening row and invocation counts without changing later phase buckets.
+    package mutating func applyScreeningSummary(_ summary: ScreeningRunner.Summary) {
+        screeningRows = summary.rowAttempts
+        screeningRejectedRows = summary.rejectedRows
+        screeningInvocations = summary.propertyInvocations
+        propertyInvocations = screeningInvocations
+            + randomSamplingInvocations
+            + reductionInvocations
+            + diagnosticInvocations
+    }
+
+    /// Applies sampling and reduction counts while preserving the screening summary already recorded for the run.
+    package mutating func applyPostScreeningInvocations(
+        randomSampling: Int,
+        reduction: Int
+    ) {
+        randomSamplingInvocations = randomSampling
+        reductionInvocations = reduction
+        diagnosticInvocations = 0
+        propertyInvocations = screeningInvocations + randomSampling + reduction
     }
 
     /// Records the three phase buckets for a concurrent runner whose reduction probes flow through the same shared invocation counter as the phase that discovered the failure.
@@ -97,9 +135,27 @@ public struct ExhaustReport: Sendable {
     /// Total materialization attempts (decoder invocations) during the reduction phase.
     public var totalMaterializations: Int = 0
 
+    /// Counts reduction proposals opened by encoder passes and structural relax rounds.
+    public var reductionProbes: Int = 0
+
+    /// Counts reduction proposals admitted after the property failed. Structural relax proposals count as admitted even if the later relax round rolls back.
+    public var reductionProbesAccepted: Int = 0
+
+    /// Counts reduction proposals rejected by the cache before materialization.
+    public var reductionProbesRejectedByCache: Int = 0
+
+    /// Counts reduction proposals rejected during materialization before the property ran.
+    public var reductionProbesRejectedDuringMaterialization: Int = 0
+
+    /// Counts reduction proposals whose materialized value satisfied the property.
+    public var reductionProbesWherePropertyPassed: Int = 0
+
+    /// Counts reduction proposals whose materialized value falsified the property. This includes admitted proposals and proposals rejected by the subsequent tree-building materialization or ordering check.
+    public var reductionProbesWherePropertyFailed: Int = 0
+
     /// Per-encoder probe counts from the reduction phase.
     ///
-    /// Each key is an ``EncoderName`` identifying a reduction encoder, and the value is the total number of probes that encoder generated across all cycles. Includes cache rejections that did not lead to a materialization.
+    /// Each key is an `EncoderName` identifying a reduction encoder, and the value is the total number of probes that encoder generated across all cycles. Includes cache rejections that did not lead to a materialization.
     public var encoderProbes: [EncoderName: Int] = [:]
 
     /// Per-encoder counts of probes that were accepted (decoder produced a valid reduction) during the reduction phase.
@@ -108,7 +164,16 @@ public struct ExhaustReport: Sendable {
     /// Per-encoder counts of probes that were rejected by the scope rejection cache without materializing.
     public var encoderProbesRejectedByCache: [EncoderName: Int] = [:]
 
-    /// Per-encoder counts of probes that were materialized but rejected by the decoder (failed shortlex check, range violation, or property still passes).
+    /// Per-encoder counts of probes rejected during materialization before the property ran. Structural relax proposals have no encoder and appear only in the run-wide reduction counts.
+    public var encoderProbesRejectedDuringMaterialization: [EncoderName: Int] = [:]
+
+    /// Per-encoder counts of probes whose materialized value satisfied the property. Structural relax proposals have no encoder and appear only in the run-wide reduction counts.
+    public var encoderProbesWherePropertyPassed: [EncoderName: Int] = [:]
+
+    /// Per-encoder counts of probes whose materialized value falsified the property. Structural relax proposals have no encoder and appear only in the run-wide reduction counts.
+    public var encoderProbesWherePropertyFailed: [EncoderName: Int] = [:]
+
+    /// Combines per-encoder materialization rejection, property success, and property failure that was not admitted. Use the separated per-encoder counts when the rejection stage matters.
     public var encoderProbesRejectedByDecoder: [EncoderName: Int] = [:]
 
     /// Total reduction cycles completed.
@@ -172,13 +237,13 @@ public struct ExhaustReport: Sendable {
         } ?? ""
         let activeEncoders = encoderProbes.keys.sorted { encoderProbes[$0, default: 0] > encoderProbes[$1, default: 0] }
         let encoderLabel = activeEncoders.isEmpty ? "" : " " + activeEncoders.map { name in
-            let emitted = encoderProbes[name] ?? 0
             let accepted = encoderProbesAccepted[name] ?? 0
-            let cacheRej = encoderProbesRejectedByCache[name] ?? 0
-            let decRej = encoderProbesRejectedByDecoder[name] ?? 0
-            let invocations = emitted - cacheRej - decRej
-            let pct = invocations > 0 ? accepted * 100 / invocations : 0
-            return "\(name.rawValue)=i\(invocations)/a\(accepted)/c\(cacheRej)/d\(decRej)/\(pct)%"
+            let cacheRejections = encoderProbesRejectedByCache[name] ?? 0
+            let decoderRejections = encoderProbesRejectedByDecoder[name] ?? 0
+            let invocations = (encoderProbesWherePropertyPassed[name] ?? 0)
+                + (encoderProbesWherePropertyFailed[name] ?? 0)
+            let acceptancePercentage = invocations > 0 ? accepted * 100 / invocations : 0
+            return "\(name.rawValue)=i\(invocations)/a\(accepted)/c\(cacheRejections)/d\(decoderRejections)/\(acceptancePercentage)%"
         }.joined(separator: " ")
         let timingLabel: String
         if let timings = stepTimings {
@@ -195,15 +260,25 @@ public struct ExhaustReport: Sendable {
         } else {
             timingLabel = ""
         }
-        return "cycles=\(cycles) invocations=\(screeningInvocations)scr/\(randomSamplingInvocations)gen/\(reductionInvocations)red materializations=\(totalMaterializations)\(graphLabel)\(encoderLabel)\(timingLabel)"
+        return "cycles=\(cycles) invocations=\(screeningInvocations)scr/\(randomSamplingInvocations)gen/\(reductionInvocations)red/\(diagnosticInvocations)diag materializations=\(totalMaterializations)\(graphLabel)\(encoderLabel)\(timingLabel)"
     }
 
     /// Populates reduction statistics from a ``ReductionStats`` value. Each call overwrites the previous stats; the reducer runs a single reduction pass per report, so there is nothing to accumulate.
     package mutating func applyReductionStats(_ stats: ReductionStats) {
-        encoderProbes = stats.encoderProbes
-        encoderProbesAccepted = stats.encoderProbesAccepted
-        encoderProbesRejectedByCache = stats.encoderProbesRejectedByCache
-        encoderProbesRejectedByDecoder = stats.encoderProbesRejectedByDecoder
+        let counts = stats.encoderCounts
+        encoderProbes = counts.mapValues(\.emitted)
+        encoderProbesAccepted = counts.mapValues(\.accepted)
+        encoderProbesRejectedByCache = counts.mapValues(\.rejectedByCache)
+        encoderProbesRejectedDuringMaterialization = counts.mapValues(\.rejectedDuringMaterialization)
+        encoderProbesWherePropertyPassed = counts.mapValues(\.propertyPassed)
+        encoderProbesWherePropertyFailed = counts.mapValues(\.propertyFailed)
+        encoderProbesRejectedByDecoder = counts.mapValues(\.decoderRejections)
+        reductionProbes = stats.reductionProbes
+        reductionProbesAccepted = stats.reductionProbesAccepted
+        reductionProbesRejectedByCache = stats.reductionProbesRejectedByCache
+        reductionProbesRejectedDuringMaterialization = stats.reductionProbesRejectedDuringMaterialization
+        reductionProbesWherePropertyPassed = stats.reductionProbesWherePropertyPassed
+        reductionProbesWherePropertyFailed = stats.reductionProbesWherePropertyFailed
         totalMaterializations = stats.totalMaterializations
         cycles = stats.cycles
         structuralFloorMotionEvents = stats.structuralFloorMotionEvents

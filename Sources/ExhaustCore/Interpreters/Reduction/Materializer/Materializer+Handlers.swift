@@ -122,7 +122,7 @@ extension Materializer {
                 // Fresh generation honors scaling; replay / guided / minimize operate on the declared range so they can reconstruct or target specific bit patterns without being re-narrowed.
                 let effective: ClosedRange<UInt64>
                 if let scaling {
-                    let size = Materializer.consumeSize(&context)
+                    let size = Materializer.currentSize(&context)
                     effective = Gen.applyScaling(
                         min: min, max: max, tag: tag, scaling: scaling, size: size
                     )
@@ -323,7 +323,7 @@ extension Materializer {
 
     /// Materializes a variable-length sequence by resolving the length, then materializing each element in order.
     ///
-    /// Length resolution is mode-dependent: exact mode trusts the cursor's element count, guided mode clamps cursor or fallback lengths to the generator's valid range, and generate mode runs the length generator fresh. After all elements are materialized the cursor's sequence-close marker is consumed so the caller's cursor position is consistent.
+    /// Length resolution is mode-dependent: exact mode validates the cursor's element count against explicit generator metadata, guided mode clamps cursor or fallback element counts to the generator's valid range, and generate mode runs the length generator fresh. After all elements are materialized the cursor's sequence-close marker is consumed so the caller's cursor position is consistent.
     @inline(__always)
     static func handleSequence(
         lengthGen: Generator<UInt64>,
@@ -338,20 +338,22 @@ extension Materializer {
         let lengthMeta: ChoiceMetadata
         var elementFallbacks: [ChoiceTree]?
 
-        var fallbackLength: UInt64?
-
-        if let calleeFallback, case let .sequence(fbLength, fbElements, _) = calleeFallback {
-            elementFallbacks = fbElements
-            fallbackLength = fbLength
+        if let calleeFallback, case let .sequence(fallbackElements, _) = calleeFallback {
+            elementFallbacks = fallbackElements
         }
 
         if let seqInfo = context.cursor.tryConsumeSequenceOpen() {
-            if seqInfo.isLengthExplicit, context.mode == .exact {
-                // Exact mode + explicit-length: the prefix is authoritative.
-                // The length value is not stored in the flattened sequence, so we can't consume it from the cursor. Use the prefix element count.
-                length = UInt64(seqInfo.elementCount)
-                // Fast path: extract metadata directly from chooseBits length generators (the common case, for example `array(length: 0...10)`), avoiding a full generateRecursive + runContinuation round-trip.
+            if context.mode == .exact {
+                let prefixCount = UInt64(seqInfo.elementCount)
                 lengthMeta = try extractLengthMetadata(lengthGen)
+                if lengthMeta.isRangeExplicit {
+                    guard let validRange = lengthMeta.validRange,
+                          validRange.contains(prefixCount)
+                    else {
+                        throw RejectionError()
+                    }
+                }
+                length = prefixCount
             } else if seqInfo.isLengthExplicit {
                 // Guided/generate mode + explicit-length: use the prefix element count, clamped to the generator's valid range. For fixed-length generators (for example `exactly: 2`, range 2...2) this produces 2 regardless of prefix. For variable-length generators (for example
                 // `length: 0...10`) this preserves the prefix count. Analogous to the fallback-length clamping at the cursor-suspended path below.
@@ -371,15 +373,15 @@ extension Materializer {
         } else if context.mode == .exact {
             // Exact mode: prefix exhausted or structural mismatch at sequence site.
             throw RejectionError()
-        } else if let fbLen = fallbackLength {
-            // Cursor exhausted in guided mode. Use the fallback tree's stored length, clamped to the generator's valid range.
-            let resolvedLen = fbLen
+        } else if let elementFallbacks {
+            // Cursor exhausted in guided mode. Use the fallback tree's element count, clamped to the generator's valid range.
+            let resolvedLength = UInt64(elementFallbacks.count)
             lengthMeta = try extractLengthMetadata(lengthGen)
             if let freshRange = lengthMeta.validRange {
-                let clamped = Swift.max(resolvedLen, freshRange.lowerBound)
+                let clamped = Swift.max(resolvedLength, freshRange.lowerBound)
                 length = Swift.min(clamped, freshRange.upperBound)
             } else {
-                length = resolvedLen
+                length = resolvedLength
             }
         } else {
             let erasedLengthGen = lengthGen.erase()
@@ -466,7 +468,7 @@ extension Materializer {
 
         let choiceTree: ChoiceTree = context.skipTree
             ? .just
-            : .sequence(length: length, elements: elements, lengthMeta)
+            : .sequence(elements: elements, metadata: lengthMeta)
 
         if let continued = try runContinuation(
             result: results, calleeChoiceTree: choiceTree,
@@ -559,9 +561,9 @@ extension Materializer {
 
     // MARK: - resize
 
-    /// Materializes the inner generator with ``Context/sizeOverride`` set to the given size, then clears the override.
+    /// Materializes the inner generator with ``Context/sizeOverride`` set to the given size, then restores the enclosing override before materializing the continuation.
     ///
-    /// The override is cleared defensively after the inner call in case a downstream ``ReflectiveOperation/getSize`` was missing, which would leave a stale override for subsequent operations.
+    /// Every size read in the inner generator observes the same override. Nested resize operations restore this value when they finish, while operations composed after this resize observe the enclosing scope.
     @inline(__always)
     static func handleResize(
         newSize: UInt64,
@@ -578,16 +580,25 @@ extension Materializer {
             else { return nil }
             return inner
         }
-        context.sizeOverride = newSize
-        defer { context.sizeOverride = nil }
-        guard let result = try generateRecursive(
-            gen, with: inputValue, context: &context, fallbackTree: innerFallback
-        ) else { return nil }
+        let previousSizeOverride = context.sizeOverride
+        let innerResult: (Any, ChoiceTree)?
+        do {
+            context.sizeOverride = newSize
+            defer { context.sizeOverride = previousSizeOverride }
+            context.cursor.skipGroupOpen()
+            innerResult = try generateRecursive(
+                gen,
+                with: inputValue,
+                context: &context,
+                fallbackTree: innerFallback
+            )
+        }
+        guard let innerResult else { return nil }
         let calleeTree: ChoiceTree = context.skipTree
             ? .just
-            : .resize(newSize: newSize, choices: [result.1])
+            : .resize(newSize: newSize, choices: [innerResult.1])
         return try runContinuation(
-            result: result.0,
+            result: innerResult.0,
             calleeChoiceTree: calleeTree,
             continuation: continuation, inputValue: inputValue,
             context: &context, continuationFallback: continuationFallback
@@ -631,10 +642,11 @@ extension Materializer {
 
             case let .bind(fingerprint, forward, _, _, _):
                 let (innerFallback, boundFallback): (ChoiceTree?, ChoiceTree?) = switch calleeFallback {
-                    case let .bind(_, iFB, bFB)?: (iFB, bFB)
+                    case let .bind(_, fallbackInner, fallbackBound)?: (fallbackInner, fallbackBound)
                     default: (nil, nil)
                 }
 
+                context.cursor.skipBindOpen()
                 guard let (innerValue, innerTree) = try generateRecursive(
                     inner, with: inputValue, context: &context, fallbackTree: innerFallback
                 ) else { return nil }
@@ -667,7 +679,7 @@ extension Materializer {
                         // Their markers are `.group` (not `.bind`), so skip cursor suspension — skipBindBound() would scan for `.bind` markers and corrupt the cursor.
                         //
                         // For non-getSize binds, suspend only when the inner value changed.
-                        // When unchanged, the bound structure is identical and prefix entries are valid — the cursor stays active so encoder modifications to bound content are honoured. Compare flattened ChoiceSequences (strips metadata, compares only values/branches/ markers).
+                        // When unchanged, the bound structure is identical and prefix entries are valid — the cursor stays active so encoder modifications to bound content are honored. Compare flattened ChoiceSequences (strips metadata, compares only values/branches/ markers).
                         // No bind suspension: the cursor reads entries as-is. Cross-depth promotions have structurally compatible bound content; stale entries from value changes are caught by the property check.
                         context.boundDepth += 1
                         let boundResult = try generateRecursive(
@@ -704,7 +716,7 @@ extension Materializer {
                 }
 
             case let .metamorphic(transforms, _):
-                // skipTree override: the metamorphic combinator produces independent copies via Interpreters.replay(inner, using: innerTree). Replay needs the real tree because the cursor has already advanced past the inner generator's choices — the tree is the only record of what choices were made. Without it, replay returns nil and every metamorphic generator fails materialisation. The override is scoped to the inner generateRecursive call only; once innerTree is captured, skipTree is restored so runContinuation returns .just as its callee tree.
+                // skipTree override: the metamorphic combinator produces independent copies via Interpreters.replay(inner, using: innerTree). Replay needs the real tree because the cursor has already advanced past the inner generator's choices — the tree is the only record of what choices were made. Without it, replay returns nil and every metamorphic generator fails materialization. The override is scoped to the inner generateRecursive call only; once innerTree is captured, skipTree is restored so runContinuation returns .just as its callee tree.
                 let savedSkipTree = context.skipTree
                 context.skipTree = false
                 guard let (original, innerTree) = try generateRecursive(
@@ -789,7 +801,7 @@ extension Materializer {
             return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         }
         if let sizeContinuation = lengthGen.getSizeContinuation,
-           case let .impure(.chooseBits(min, max, _, isRangeExplicit, _, _), _) = try sizeContinuation(100 as Any)
+           case let .impure(.chooseBits(min, max, _, isRangeExplicit, _, _), _) = try sizeContinuation(UInt64(100) as Any)
         {
             return ChoiceMetadata(validRange: min ... max, isRangeExplicit: isRangeExplicit)
         }

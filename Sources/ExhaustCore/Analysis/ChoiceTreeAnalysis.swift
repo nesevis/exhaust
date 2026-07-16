@@ -186,9 +186,9 @@ package enum ChoiceTreeAnalysis {
                 guard walkTree(inner, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters) else { return false }
                 return walkTreeValidateOnly(bound)
 
-            case let .sequence(length, elements, metadata):
+            case let .sequence(elements, metadata):
                 return walkSequence(
-                    length: length,
+                    length: UInt64(elements.count),
                     elements: elements,
                     metadata: metadata,
                     expandSequencePairs: expandSequencePairs,
@@ -225,7 +225,7 @@ package enum ChoiceTreeAnalysis {
                 children.allSatisfy { walkTreeValidateOnly($0) }
             case let .bind(_, inner, bound):
                 walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
-            case let .sequence(_, elements, _):
+            case let .sequence(elements, _):
                 elements.allSatisfy { walkTreeValidateOnly($0) }
             case let .branch(b):
                 walkTreeValidateOnly(b.choice)
@@ -535,7 +535,7 @@ package enum ChoiceTreeAnalysis {
             case .getSize:
                 return true
 
-            case let .sequence(_, _, metadata):
+            case let .sequence(_, metadata):
                 // Nested sequence (for example, a String inside an array of structs). Extracting inner sequence parameters would explode the composite domain, so treat it as opaque — the outer sequence still contributes its own length and non-sequence element parameters.
                 if metadata.validRange != nil { return true }
                 return false

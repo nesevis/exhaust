@@ -109,13 +109,12 @@ struct ChoiceTreeVisualizationTests {
     @Test("Sequence elements render as children")
     func sequenceElements() {
         let tree = ChoiceTree.sequence(
-            length: 3,
             elements: [
                 .choice(ChoiceValue(UInt64(0), tag: .uint), meta256),
                 .choice(ChoiceValue(UInt64(128), tag: .uint), meta256),
                 .choice(ChoiceValue(UInt64(255), tag: .uint), meta256),
             ],
-            meta256
+            metadata: meta256
         )
         let result = tree.visualization(width: 40)
         // All three elements should be visible

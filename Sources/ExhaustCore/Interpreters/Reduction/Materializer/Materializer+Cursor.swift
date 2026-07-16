@@ -89,6 +89,28 @@ extension Materializer {
             }
         }
 
+        /// Advances past one group-open marker without consuming an inner generator's opening marker.
+        mutating func skipGroupOpen() {
+            guard exhausted == false, position < effectiveEnd else {
+                return
+            }
+            if case .group(true) = entries[position] {
+                position &+= 1
+            }
+        }
+
+        /// Advances past one bind-open marker without consuming the inner generator's opening marker.
+        ///
+        /// The bind handler calls this before entering its inner generator so a nested zip computes child scopes from the zip's own group-open position.
+        mutating func skipBindOpen() {
+            guard exhausted == false, position < effectiveEnd else {
+                return
+            }
+            if case .bind(true) = entries[position] {
+                position &+= 1
+            }
+        }
+
         /// Advances past any trailing `.group(false)` and `.bind(false)` markers at the current position.
         ///
         /// Called in ``handleZip(_:continuation:inputValue:context:calleeFallback:continuationFallback:)`` after each child's scope is popped, so that `childStartPosition` reflects the start of the next child's entries rather than the closing markers of the completed child. This prevents the next child's scope from being computed too tightly: without this call, a getSize-bind child (whose `.group(false)` close marker is left unconsumed) causes the following child to receive a scope that excludes its own value entry.

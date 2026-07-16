@@ -101,7 +101,6 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         let isClassDecl = declaration.is(ClassDeclSyntax.self)
         let isActorDecl = declaration.is(ActorDeclSyntax.self)
         let isReferenceType = isClassDecl || isActorDecl
-
         guard isReferenceType else {
             return []
         }
@@ -152,6 +151,9 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         let isClassDecl = declaration.is(ClassDeclSyntax.self)
         let isActorDecl = declaration.is(ActorDeclSyntax.self)
         let isReferenceType = isClassDecl || isActorDecl
+        let classIsMainActorIsolated = declaration
+            .as(ClassDeclSyntax.self)
+            .map { hasAttribute("MainActor", on: $0) } ?? false
 
         // Shared validation
         if isReferenceType == false {
@@ -210,7 +212,22 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
                         message: StateMachineDiagnostic.commandHasUnsupportedParameter
                     ))
                 }
+                if classIsMainActorIsolated || hasAttribute("MainActor", on: funcDecl) {
+                    context.diagnose(Diagnostic(
+                        node: diagnosticNode,
+                        message: StateMachineDiagnostic.mainActorCommand
+                    ))
+                }
             }
+        }
+
+        for invariant in invariants
+            where invariant.syntax.signature.parameterClause.parameters.isEmpty == false
+        {
+            context.diagnose(Diagnostic(
+                node: Syntax(invariant.syntax),
+                message: StateMachineDiagnostic.invariantHasParameters
+            ))
         }
 
         // Mode-specific validation
@@ -258,6 +275,12 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
                     context.diagnose(Diagnostic(
                         node: Syntax(node),
                         message: StateMachineDiagnostic.actorWithThreads
+                    ))
+                }
+                for oracle in oracles where oracle.isThrows {
+                    context.diagnose(Diagnostic(
+                        node: Syntax(oracle.syntax),
+                        message: StateMachineDiagnostic.throwingOracle
                     ))
                 }
         }
@@ -346,6 +369,7 @@ struct CommandParameter {
 struct InvariantInfo {
     let methodName: String
     let isAsync: Bool
+    let syntax: FunctionDeclSyntax
 }
 
 struct SUTProperty {
@@ -442,7 +466,11 @@ func extractInvariants(from members: MemberBlockItemListSyntax) -> [InvariantInf
               hasAttribute("Invariant", on: funcDecl)
         else { return nil }
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
-        return InvariantInfo(methodName: funcDecl.name.trimmedDescription, isAsync: isAsync)
+        return InvariantInfo(
+            methodName: funcDecl.name.trimmedDescription,
+            isAsync: isAsync,
+            syntax: funcDecl
+        )
     }
 }
 
@@ -551,11 +579,27 @@ func synthesizeCommandGenerator(commands: [CommandInfo], access: String, context
 }
 
 func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, access: String) -> DeclSyntax {
+    let parameterBindingNames = Set(
+        commands.flatMap { commandInfo in
+            commandInfo.parameters.map(\.bindingName)
+        }
+    )
+
+    func availableLocalName(preferredName: String) -> String {
+        var candidateName = preferredName
+        while parameterBindingNames.contains(candidateName) {
+            candidateName += "Value"
+        }
+        return candidateName
+    }
+
+    let commandVariableName = availableLocalName(preferredName: "command")
+    let resultVariableName = availableLocalName(preferredName: "result")
     var cases: [String] = []
 
-    for cmd in commands {
+    for commandInfo in commands {
         let effectKeywords: String
-        switch (cmd.isThrows, cmd.isAsync) {
+        switch (commandInfo.isThrows, commandInfo.isAsync) {
             case (true, true): effectKeywords = "try await "
             case (true, false): effectKeywords = "try "
             case (false, true): effectKeywords = "await "
@@ -564,26 +608,29 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, access: Str
 
         let call: String
         let pattern: String
-        if cmd.parameters.isEmpty {
-            call = "\(effectKeywords)self.\(cmd.methodName)()"
-            pattern = "case .\(cmd.methodName)"
+        if commandInfo.parameters.isEmpty {
+            call = "\(effectKeywords)self.\(commandInfo.methodName)()"
+            pattern = "case .\(commandInfo.methodName)"
         } else {
-            let bindings = cmd.parameters.map(\.bindingName).joined(separator: ", ")
-            let args = cmd.parameters.map { param in
-                param.externalLabel.map { "\($0): \(param.bindingName)" } ?? param.bindingName
+            let bindings = commandInfo.parameters.map(\.bindingName).joined(separator: ", ")
+            let arguments = commandInfo.parameters.map { parameter in
+                parameter.externalLabel.map { "\($0): \(parameter.bindingName)" }
+                    ?? parameter.bindingName
             }.joined(separator: ", ")
-            call = "\(effectKeywords)self.\(cmd.methodName)(\(args))"
-            pattern = "case let .\(cmd.methodName)(\(bindings))"
+            call = "\(effectKeywords)self.\(commandInfo.methodName)(\(arguments))"
+            pattern = "case let .\(commandInfo.methodName)(\(bindings))"
         }
 
-        if let returnType = cmd.returnType {
+        if let returnType = commandInfo.returnType {
             let isOptional = returnType.hasSuffix("?") || returnType.hasPrefix("Optional<")
-            let returnExpr = isOptional ? #"result ?? "nil" as Any"# : "result"
+            let returnExpression = isOptional
+                ? #"\#(resultVariableName) ?? "nil" as Any"#
+                : resultVariableName
             cases.append(
                 """
                         \(pattern):
-                            let result = \(call)
-                            return CommandResponse(commandDescription: command.description, returnValue: \(returnExpr))
+                            let \(resultVariableName) = \(call)
+                            return CommandResponse(commandDescription: \(commandVariableName).description, returnValue: \(returnExpression))
                 """
             )
         } else {
@@ -591,7 +638,7 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, access: Str
                 """
                         \(pattern):
                             \(call)
-                            return CommandResponse(commandDescription: command.description, returnValue: nil)
+                            return CommandResponse(commandDescription: \(commandVariableName).description, returnValue: nil)
                 """
             )
         }
@@ -599,12 +646,12 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, access: Str
 
     let casesBlock = cases.joined(separator: "\n")
     let signature = hasAnyAsync
-        ? "@discardableResult \(access)func run(_ command: Command) async throws -> CommandResponse"
-        : "@discardableResult \(access)func run(_ command: Command) throws -> CommandResponse"
+        ? "@discardableResult \(access)func run(_ \(commandVariableName): Command) async throws -> CommandResponse"
+        : "@discardableResult \(access)func run(_ \(commandVariableName): Command) throws -> CommandResponse"
 
     return """
     \(raw: signature) {
-        switch command {
+        switch \(raw: commandVariableName) {
     \(raw: casesBlock)
         }
     }
@@ -671,6 +718,8 @@ struct OracleInfo {
     let parameterLabel: String
     let parameterType: String
     let isAsync: Bool
+    let isThrows: Bool
+    let syntax: FunctionDeclSyntax
 }
 
 func extractOracles(from members: MemberBlockItemListSyntax) -> [OracleInfo] {
@@ -681,11 +730,14 @@ func extractOracles(from members: MemberBlockItemListSyntax) -> [OracleInfo] {
         let params = funcDecl.signature.parameterClause.parameters
         guard params.count == 1, let firstParam = params.first else { return nil }
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
+        let isThrows = funcDecl.signature.effectSpecifiers?.throwsClause != nil
         return OracleInfo(
             methodName: funcDecl.name.trimmedDescription,
             parameterLabel: firstParam.firstName.trimmedDescription,
             parameterType: firstParam.type.trimmedDescription,
-            isAsync: isAsync
+            isAsync: isAsync,
+            isThrows: isThrows,
+            syntax: funcDecl
         )
     }
 }
@@ -736,6 +788,9 @@ enum StateMachineDiagnostic: String, DiagnosticMessage {
     case invalidCommandWeight = "@Command weight must be a positive integer literal"
     case oracleParameterCount = "@Oracle must take exactly one parameter of the SystemUnderTest type"
     case commandHasUnsupportedParameter = "@Command parameters must not be inout, variadic, or generic — the synthesized Command enum cannot represent them"
+    case invariantHasParameters = "@Invariant methods must not take parameters because Exhaust calls them after every command"
+    case throwingOracle = "@Oracle methods must not throw because oracle checks cannot propagate errors"
+    case mainActorCommand = "Commands isolated to @MainActor are unsupported because synthesized command dispatch is nonisolated"
 
     var message: String {
         rawValue
@@ -751,7 +806,8 @@ enum StateMachineDiagnostic: String, DiagnosticMessage {
                  .structNotAllowed, .missingMode, .nonLiteralMode, .noOracle, .multipleOracles,
                  .actorRequiresSequential, .actorWithThreads,
                  .duplicateCommandName, .invalidCommandWeight, .oracleParameterCount,
-                 .commandHasUnsupportedParameter:
+                 .commandHasUnsupportedParameter, .invariantHasParameters, .throwingOracle,
+                 .mainActorCommand:
                 .error
             case .oracleRequiresThreads, .invariantUnderThreads:
                 .warning

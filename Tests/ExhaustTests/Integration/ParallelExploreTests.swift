@@ -45,6 +45,8 @@ struct ParallelExploreTests {
         }
         #expect(report.result != nil)
         #expect(report.termination == .propertyFailed)
+        #expect(report.invocations.reduction > 0)
+        #expect(report.propertyInvocations == report.invocations.total)
     }
 
     @Test("Cancellation stops other lanes early when a failure is found")
@@ -66,6 +68,7 @@ struct ParallelExploreTests {
         #expect(report.result != nil)
         let maxPossible = 3 * 2000
         #expect(report.propertyInvocations < maxPossible, "Should stop early, not exhaust all budgets")
+        #expect(report.invocations.directedSampling < maxPossible, "Should stop early, not exhaust all directed sampling budgets")
     }
 
     @Test("Direction coverage stats are populated for each direction")
@@ -86,7 +89,7 @@ struct ParallelExploreTests {
         #expect(report.directionCoverage.count == 2)
         for coverage in report.directionCoverage {
             #expect(coverage.hits >= Self.budget.hitsPerDirection)
-            #expect(coverage.tuningPassSamples > 0)
+            #expect(coverage.directedSamplingSamples > 0)
             #expect(coverage.warmup == nil)
         }
     }
@@ -129,8 +132,8 @@ struct ParallelExploreTests {
         #expect((report.warmup?.samples ?? 0) > 0)
     }
 
-    @Test("Property invocations do not exceed the total budget")
-    func propertyInvocationsDoNotExceedTheTotalBudget() {
+    @Test("Directed sampling invocations do not exceed the total directed sampling budget")
+    func directedSamplingInvocationsDoNotExceedTheTotalDirectedSamplingBudget() {
         let gen = #gen(.int(in: 0 ... 100))
         let report = #explore(
             gen,
@@ -145,6 +148,12 @@ struct ParallelExploreTests {
             value >= 0
         }
         let maxBudget = report.directionCoverage.count * Self.budget.maxAttemptsPerDirection
+        #expect(report.invocations.warmup == 0)
+        #expect(report.invocations.regression == 0)
+        #expect(report.invocations.directedSampling <= maxBudget)
+        #expect(report.invocations.reduction == 0)
+        #expect(report.invocations.diagnostic == 0)
+        #expect(report.propertyInvocations == report.invocations.total)
         #expect(report.propertyInvocations <= maxBudget)
     }
 
@@ -170,18 +179,18 @@ struct ParallelExploreTests {
         // Each lane targets one direction, but classifies every sample against
         // all directions. The "even" lane (tuned for even numbers) will
         // incidentally produce values < 30, contributing hits to "small", and
-        // vice versa. For a passing property, tuningPassPasses equals the lane's
+        // vice versa. For a passing property, directedSamplingPasses equals the lane's
         // own hits for its target direction (every matching sample passes).
         // If cross-lane hits weren't merged, total hits would equal
-        // tuningPassPasses — strictly less than the merged total when the
+        // directedSamplingPasses, which is strictly less than the merged total when the
         // predicates overlap.
         #expect(
-            evenCoverage.hits > evenCoverage.tuningPassPasses,
-            "Even direction should have hits from the small lane too (got \(evenCoverage.hits) total vs \(evenCoverage.tuningPassPasses) own-lane hits)"
+            evenCoverage.hits > evenCoverage.directedSamplingPasses,
+            "Even direction should have hits from the small lane too (got \(evenCoverage.hits) total vs \(evenCoverage.directedSamplingPasses) own-lane hits)"
         )
         #expect(
-            smallCoverage.hits > smallCoverage.tuningPassPasses,
-            "Small direction should have hits from the even lane too (got \(smallCoverage.hits) total vs \(smallCoverage.tuningPassPasses) own-lane hits)"
+            smallCoverage.hits > smallCoverage.directedSamplingPasses,
+            "Small direction should have hits from the even lane too (got \(smallCoverage.hits) total vs \(smallCoverage.directedSamplingPasses) own-lane hits)"
         )
     }
 }

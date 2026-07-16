@@ -255,10 +255,7 @@ extension ReductionMachine {
         }
 
         if collectStats {
-            stats.encoderProbes[report.encoderName, default: 0] += report.probeCount
-            stats.encoderProbesAccepted[report.encoderName, default: 0] += report.acceptCount
-            stats.encoderProbesRejectedByCache[report.encoderName, default: 0] += report.cacheHitCount
-            stats.encoderProbesRejectedByDecoder[report.encoderName, default: 0] += report.decoderRejectCount
+            stats.record(report.counts, for: report.encoderName)
         }
 
         if collectDiagnostics {
@@ -360,19 +357,25 @@ extension ReductionMachine {
         }
         let graphEnd = monotonicNanoseconds()
 
-        if diff.isStructurallyIdentical {
-            let structuralSources = sources.filter { source in
-                guard case let .sorted(sorted) = source,
-                      let first = sorted.peekTransformation
-                else {
-                    return true
-                }
-                return first.operation.isValueDependent == false
-            }
+        if diff.canReuseStructuralSources {
+            let structuralSources = sources.filter { $0.isValueDependent == false }
             sources = structuralSources
                 + CandidateSourceBuilder.buildValueSources(from: graph, deferBindInner: convergence.deferBindInner)
 
             ChoiceGraphScheduler.logReducer("graph_value_only_rebuild", isInstrumented: isInstrumented, metadata: [
+                "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
+            ])
+        } else if diff.canReuseStructuralSourcesExceptPermutation {
+            scopeRejectionCache.clear()
+            let reusableStructuralSources = sources.filter(\.canReuseAfterLeafKindChange)
+            sources = reusableStructuralSources
+                + CandidateSourceBuilder.buildPermutationSources(from: graph)
+                + CandidateSourceBuilder.buildValueSources(
+                    from: graph,
+                    deferBindInner: convergence.deferBindInner
+                )
+
+            ChoiceGraphScheduler.logReducer("graph_leaf_kind_rebuild", isInstrumented: isInstrumented, metadata: [
                 "seq_len": "\(sequence.count)", "nodes": "\(graph.nodes.count)", "sources": "\(sources.count)",
             ])
         } else {
@@ -394,6 +397,6 @@ extension ReductionMachine {
         lastConvergencePass = [:]
         pendingReport = nil
         dispatchPhase = .dispatch
-        return .rebuilt(sequenceLength: sequence.count, structurallyChanged: diff.isStructurallyIdentical == false)
+        return .rebuilt(sequenceLength: sequence.count, structurallyChanged: diff.canReuseStructuralSources == false)
     }
 }

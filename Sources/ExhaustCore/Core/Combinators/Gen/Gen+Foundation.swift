@@ -17,7 +17,7 @@ import Foundation
 package extension Gen {
     /// Generates valid UUID v4 values from two `UInt64` halves.
     ///
-    /// The two `chooseBits` ranges carry exactly 122 random bits (60 + 62); the version nibble and variant bits are inserted in the forward map and stripped in the backward map, so the mapping is bijective.
+    /// The two `chooseBits` ranges carry exactly 122 random bits (60 + 62). The mapping is bijective within the generated v4 domain; reflection also accepts other `Foundation.UUID` values by stripping their version and variant bits, so replay canonicalizes those values to v4.
     static func uuid() -> ReflectiveGenerator<UUID> {
         Gen.zip(
             Gen.chooseBits(in: 0 ... 0x0FFF_FFFF_FFFF_FFFF),
@@ -225,21 +225,9 @@ package extension Gen {
 // MARK: - Character and String
 
 package extension Gen {
-    /// Generates a Unicode character, optionally constrained to `range`.
-    ///
-    /// With no range, draws from all valid scalars except illegals and the Private Use Areas. `simplest` is the scalar the reducer drives toward; it defaults to space when in range, otherwise the lower bound.
-    static func character(
-        in range: ClosedRange<Character>? = nil,
-        simplest: Unicode.Scalar? = nil
-    ) -> ReflectiveGenerator<Character> {
-        guard let range else {
-            return characterGenerator(from: defaultScalarRangeSet).wrapped
-        }
-        let lower = range.lowerBound.unicodeScalars.min()!
-        let upper = range.upperBound.unicodeScalars.max()!
-        let characterSet = CharacterSet(charactersIn: lower ... upper)
-        let bottom = resolveSimplest(simplest, in: characterSet)
-        return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)).wrapped
+    /// Generates a Unicode character from all valid scalars except illegals and the Private Use Areas.
+    static func character() -> ReflectiveGenerator<Character> {
+        characterGenerator(from: defaultScalarRangeSet).wrapped
     }
 
     /// Generates a character drawn uniformly from `characterSet`.
@@ -420,11 +408,12 @@ package extension Gen {
     static func data(
         prefix: [UInt8]
     ) -> ReflectiveGenerator<Data> {
-        Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)).wrapped
+        let generator = Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)).wrapped
             .mapped(
                 forward: { Data(prefix + $0) },
                 backward: { Array($0.dropFirst(prefix.count)) }
             )
+        return validatingDataPrefix(generator, prefix: prefix)
     }
 
     /// Generates `Data` with `prefix` followed by a random suffix with length in `range`.
@@ -433,7 +422,7 @@ package extension Gen {
         within range: ClosedRange<UInt64>,
         scaling: SizeScaling<UInt64> = .linear
     ) -> ReflectiveGenerator<Data> {
-        Gen.arrayOf(
+        let generator = Gen.arrayOf(
             Gen.choose(in: UInt8.min ... UInt8.max),
             within: range,
             scaling: scaling
@@ -441,6 +430,7 @@ package extension Gen {
             forward: { Data(prefix + $0) },
             backward: { Array($0.dropFirst(prefix.count)) }
         )
+        return validatingDataPrefix(generator, prefix: prefix)
     }
 
     /// Generates `Data` with `prefix` followed by exactly `length` random bytes.
@@ -448,14 +438,25 @@ package extension Gen {
         prefix: [UInt8],
         length: UInt64
     ) -> ReflectiveGenerator<Data> {
-        Gen.arrayOf(
+        let generator = Gen.arrayOf(
             Gen.choose(in: UInt8.min ... UInt8.max),
             exactly: length
         ).wrapped.mapped(
             forward: { Data(prefix + $0) },
             backward: { Array($0.dropFirst(prefix.count)) }
         )
+        return validatingDataPrefix(generator, prefix: prefix)
     }
+}
+
+private func validatingDataPrefix(
+    _ generator: ReflectiveGenerator<Data>,
+    prefix: [UInt8]
+) -> ReflectiveGenerator<Data> {
+    Gen.comap(
+        { (data: Data) -> Data? in data.starts(with: prefix) ? data : nil },
+        generator.gen
+    ).wrapped
 }
 
 // MARK: - CharacterSet Extensions

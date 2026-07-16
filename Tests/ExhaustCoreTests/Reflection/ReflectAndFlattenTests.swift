@@ -75,13 +75,13 @@ struct ReflectAndFlattenTests {
         // Flatten the reflected tree
         let flattened = ChoiceSequence.flatten(tree)
 
-        guard case let .success(materialised, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
+        guard case let .success(materialized, _, _) = Materializer.materialize(gen, prefix: flattened, mode: .exact, fallbackTree: tree) else {
             Issue.record("Expected .success")
             return
         }
 
-        #expect(value.0 == materialised.0)
-        #expect(value.1 == materialised.1)
+        #expect(value.0 == materialized.0)
+        #expect(value.1 == materialized.1)
     }
 
     @Test("Reflect and flatten pick/branch")
@@ -269,7 +269,7 @@ struct ReflectAndFlattenTests {
         #expect(materialized == value)
     }
 
-    @Test("Materialising works for sequences")
+    @Test("Materializing works for sequences")
     func materializationWithSequence() throws {
         // Use a variable-length generator so element deletion is valid
         let gen = Gen.arrayOf(Gen.choose(in: UInt64(0) ... 10), within: UInt64(0) ... 10)
@@ -296,7 +296,7 @@ struct ReflectAndFlattenTests {
         #expect(materialized == [1, 4, 5])
     }
 
-    @Test("Materialising works for picks")
+    @Test("Materializing works for picks")
     func materializationWithPick() throws {
         let gen = Gen.pick(choices: [
             (1, Gen.choose(in: UInt64(0) ... 10)),

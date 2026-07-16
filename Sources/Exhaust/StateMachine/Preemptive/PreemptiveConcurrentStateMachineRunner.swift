@@ -45,7 +45,7 @@ public extension __ExhaustRuntime {
         let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
-        let timedOutProbeCount = UnsafeSendableBox(0)
+        let timeoutProbeCounts = UnsafeSendableBox((attempts: 0, timedOut: 0))
         // Gate + offload: acquire a lane reservation, then run the (synchronous) machine on a GCD worker. The gate bounds how many preemptive runs execute at once so their lanes are not starved of threads under `--parallel`; the GCD hop frees the cooperative thread. Reporting is deferred to the async return context where Swift Testing's task-locals are available.
         let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await dispatchToGCD(reserving: LaneReservation.threads(config.concurrencyLevel)) {
             ExhaustLog.withConfiguration(config.logConfiguration) {
@@ -53,7 +53,7 @@ public extension __ExhaustRuntime {
                     innerBackend: innerBackend,
                     config: config,
                     regressionSeeds: regressionSeeds,
-                    timedOutProbeCount: timedOutProbeCount,
+                    timeoutProbeCounts: timeoutProbeCounts,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -65,8 +65,8 @@ public extension __ExhaustRuntime {
             reportError(issue, fileID: fileID, filePath: filePath, line: line, column: column)
         }
         warnIfTimeoutFractionHigh(
-            timedOutProbes: timedOutProbeCount.value,
-            totalBudget: config.budget.screeningBudget + config.budget.samplingBudget,
+            timedOutProbes: timeoutProbeCounts.value.timedOut,
+            totalProbes: timeoutProbeCounts.value.attempts,
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -83,7 +83,7 @@ extension __ExhaustRuntime {
         innerBackend: Inner,
         config: ResolvedConcurrentConfig,
         regressionSeeds: [String],
-        timedOutProbeCount: UnsafeSendableBox<Int>,
+        timeoutProbeCounts: UnsafeSendableBox<(attempts: Int, timedOut: Int)>,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -115,11 +115,12 @@ extension __ExhaustRuntime {
         let invocationCounter = UnsafeSendableBox(0)
         let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
             invocationCounter.value += 1
+            timeoutProbeCounts.value.attempts += 1
             let partition = LanePartition(markers: taggedCommands.map(\.0))
             let outcome = innerBackend.execute(taggedCommands, partition: partition)
             if case .timedOut = outcome {
                 // A timed-out probe is inconclusive, not a counterexample: under host contention the lanes simply did not finish in time. Count it as a pass so discovery keeps sampling, and tally it so the runner can warn when timeouts dominate the budget.
-                timedOutProbeCount.value += 1
+                timeoutProbeCounts.value.timedOut += 1
                 return true
             }
             return classifyFailure(
@@ -131,9 +132,10 @@ extension __ExhaustRuntime {
 
         let smokeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
             invocationCounter.value += 1
+            timeoutProbeCounts.value.attempts += 1
             let smoke = innerBackend.runSmoke(tagged.map(\.1))
             if smoke.timedOut {
-                timedOutProbeCount.value += 1
+                timeoutProbeCounts.value.timedOut += 1
                 return true
             }
             return smoke.failed == false

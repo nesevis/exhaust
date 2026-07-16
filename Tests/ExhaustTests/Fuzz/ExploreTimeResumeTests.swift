@@ -15,7 +15,7 @@ struct ExploreTimeResumeTests {
         }
         let gen = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)
 
-        // Build the predecessor's snapshot from really-generated sequences so `.exact` re-materialisation succeeds against the same generator.
+        // Build the predecessor's snapshot from really-generated sequences so `.exact` re-materialization succeeds against the same generator.
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1, maxRuns: UInt64.max)
         let helperCorpus = FuzzCorpus(edgeCount: 32)
         var sequences: [ChoiceSequence] = []

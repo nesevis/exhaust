@@ -25,6 +25,11 @@ struct SortedCandidateSource {
         return transformations[index]
     }
 
+    /// The first transformation originally held by the source, including after enumeration finishes.
+    var firstTransformation: GraphTransformation? {
+        transformations.first
+    }
+
     mutating func next(lastAccepted _: Bool) -> GraphTransformation? {
         guard index < transformations.count else { return nil }
         let result = transformations[index]
@@ -47,6 +52,34 @@ enum AnyCandidateSource {
             case let .batchedCrossSequence(source): source.peekPriority
             case let .batchRemoval(source): source.peekPriority
         }
+    }
+
+    /// Whether the source contains operations whose scopes depend on current leaf values.
+    var isValueDependent: Bool {
+        guard case let .sorted(source) = self,
+              let transformation = source.firstTransformation
+        else {
+            return false
+        }
+        return transformation.operation.isValueDependent
+    }
+
+    /// Whether the source groups zip children by structural node kind for permutation.
+    var isPermutationSource: Bool {
+        guard case let .sorted(source) = self,
+              let transformation = source.firstTransformation
+        else {
+            return false
+        }
+        if case .permute = transformation.operation {
+            return true
+        }
+        return false
+    }
+
+    /// Whether the source's remaining enumeration stays valid when a live leaf changes between a value and a constant.
+    var canReuseAfterLeafKindChange: Bool {
+        isValueDependent == false && isPermutationSource == false
     }
 
     mutating func next(lastAccepted: Bool) -> GraphTransformation? {
@@ -132,12 +165,18 @@ enum CandidateSourceBuilder {
         }
 
         // Permutation.
-        let permutationCandidates = buildPermutationCandidates(graph: graph)
-        if permutationCandidates.isEmpty == false {
-            sources.append(.sorted(SortedCandidateSource(permutationCandidates)))
-        }
+        sources += buildPermutationSources(from: graph)
 
         return sources
+    }
+
+    /// Builds the structural source whose sibling-shape groups depend on graph node kinds.
+    static func buildPermutationSources(from graph: ChoiceGraph) -> [AnyCandidateSource] {
+        let permutationCandidates = buildPermutationCandidates(graph: graph)
+        guard permutationCandidates.isEmpty == false else {
+            return []
+        }
+        return [.sorted(SortedCandidateSource(permutationCandidates))]
     }
 
     /// Sources whose scopes depend on leaf values (current ChoiceValue, valid ranges, distance-to-target). Must be rebuilt after any value change, even structurally-identical ones.

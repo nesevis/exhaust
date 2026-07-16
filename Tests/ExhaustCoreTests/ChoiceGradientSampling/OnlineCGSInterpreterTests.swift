@@ -14,7 +14,7 @@ import Testing
 struct OnlineCGSInterpreterTests {
     // MARK: - Simple Pick Guidance
 
-    @Test("Pick guidance: CGS favours branch matching predicate")
+    @Test("Pick guidance: CGS favors branch matching predicate")
     func simplePickGuidance() throws {
         let gen = Gen.pick(choices: [
             (1, Gen.choose(in: 1 ... 100)),
@@ -40,7 +40,7 @@ struct OnlineCGSInterpreterTests {
 
         #expect(cgsHitRate > naiveHitRate,
                 "CGS hit rate (\(cgsHitRate)) should exceed naive (\(naiveHitRate))")
-        #expect(cgsHitRate > 0.7, "CGS should strongly favour the valid branch, got \(cgsHitRate)")
+        #expect(cgsHitRate > 0.7, "CGS should strongly favor the valid branch, got \(cgsHitRate)")
     }
 
     // MARK: - Deterministic Seeding
@@ -72,6 +72,92 @@ struct OnlineCGSInterpreterTests {
         let values2 = try Array(collecting: &iterator2)
 
         #expect(values1 == values2, "Same seed should produce identical output sequences")
+    }
+
+    // MARK: - Generation Parity
+
+    @Test("Non-subdivided floating-point choices use the generation mapping")
+    func floatingPointMappingParity() throws {
+        let unitBitPattern = Double(1).bitPattern
+        let lowerBound = Double(bitPattern: unitBitPattern - 400)
+        let upperBound = Double(bitPattern: unitBitPattern + 400)
+        let generator = Gen.choose(
+            in: lowerBound ... upperBound,
+            scaling: .constant
+        )
+        var valueInterpreter = ValueInterpreter(
+            generator,
+            seed: 1234,
+            maxRuns: 1
+        )
+        var onlineInterpreter = OnlineCGSInterpreter(
+            generator,
+            predicate: { _ in true },
+            sampleCount: 1,
+            seed: 1234,
+            maxRuns: 1
+        )
+
+        let generatedValue = try #require(try valueInterpreter.next())
+        let onlineValue = try #require(try onlineInterpreter.next())
+        var rawRandomNumberGenerator = Xoshiro256(
+            seed: Xoshiro256.deriveSeed(from: 1234, at: 0)
+        )
+        let rawBits = rawRandomNumberGenerator.next(
+            in: lowerBound.bitPattern ... upperBound.bitPattern
+        )
+
+        #expect(rawBits != generatedValue.bitPattern)
+        #expect(generatedValue.bitPattern == onlineValue.bitPattern)
+    }
+
+    @Test("Sequence generation enforces the common element-count limit")
+    func sequenceLengthLimit() {
+        let oversizedLength = UInt64(SharedInterpreterHelpers.maximumSequenceLength + 1)
+        let generator = Gen.arrayOf(
+            Gen.just(0),
+            Gen.just(oversizedLength)
+        )
+        var interpreter = OnlineCGSInterpreter(
+            generator,
+            predicate: { _ in true },
+            sampleCount: 1,
+            seed: 42,
+            maxRuns: 1
+        )
+
+        #expect(throws: GeneratorError.self) {
+            _ = try interpreter.next()
+        }
+    }
+
+    // MARK: - Resize Scoping
+
+    @Test("Resize remains active through its inner generator and restores before its continuation")
+    func resizeScope() throws {
+        let scopedGenerator = Gen.resize(
+            10,
+            Gen.zip(
+                Gen.rawGetSize(),
+                Gen.resize(3, Gen.rawGetSize()),
+                Gen.rawGetSize()
+            )
+        )
+        let generator = scopedGenerator.bind { scopedValues in
+            Gen.zip(Gen.just(scopedValues), Gen.rawGetSize())
+        }
+        var interpreter = OnlineCGSInterpreter(
+            generator,
+            predicate: { _ in true },
+            sampleCount: 1,
+            seed: 42,
+            maxRuns: 1
+        )
+
+        let value = try #require(try interpreter.next())
+
+        #expect(value.0 == (10, 3, 10))
+        #expect(value.1 == 1)
     }
 
     // MARK: - Zip CGS Guidance
@@ -106,7 +192,58 @@ struct OnlineCGSInterpreterTests {
 
     // MARK: - ChooseBits Subdivision
 
-    @Test("ChooseBits subdivision concentrates output in favoured subrange")
+    @Test("Equal-range chooseBits operations retain separate tuning sites")
+    func equalRangeChooseBitsOperationsRetainSeparateTuningSites() throws {
+        let subdivisionsPerSite = 4
+        let siteCount = 2
+        let accumulator = FitnessAccumulator()
+        let generator = Gen.zip(
+            Gen.choose(in: UInt64(0) ... 15),
+            Gen.choose(in: UInt64(0) ... 15)
+        )
+        var interpreter = OnlineCGSInterpreter(
+            generator,
+            predicate: { values in
+                values.0 < 4 && values.1 >= 12
+            },
+            sampleCount: 8,
+            seed: 42,
+            maxRuns: 1,
+            fitnessAccumulator: accumulator,
+            subdivisionThresholds: .relaxed
+        )
+
+        _ = try interpreter.next()
+
+        #expect(accumulator.records.count == subdivisionsPerSite * siteCount)
+    }
+
+    @Test("Repeated sequence elements share their chooseBits tuning site")
+    func repeatedSequenceElementsShareChooseBitsTuningSite() throws {
+        let subdivisionsPerSite = 4
+        let accumulator = FitnessAccumulator()
+        let generator = Gen.arrayOf(
+            Gen.choose(in: UInt64(0) ... 15),
+            exactly: 2
+        )
+        var interpreter = OnlineCGSInterpreter(
+            generator,
+            predicate: { values in
+                values[0] < 4 && values[1] >= 12
+            },
+            sampleCount: 8,
+            seed: 42,
+            maxRuns: 1,
+            fitnessAccumulator: accumulator,
+            subdivisionThresholds: .relaxed
+        )
+
+        _ = try interpreter.next()
+
+        #expect(accumulator.records.count == subdivisionsPerSite)
+    }
+
+    @Test("ChooseBits subdivision concentrates output in favored subrange")
     func chooseBitsSubdivision() throws {
         let gen = Gen.choose(in: 1 ... 1000 as ClosedRange<UInt64>)
         let predicate: (UInt64) -> Bool = { $0 < 100 }

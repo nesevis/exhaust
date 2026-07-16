@@ -15,7 +15,7 @@ struct DispatchPriority: Comparable, Equatable {
     /// Bound subtree size that reducing this value would structurally unlock. Zero for removal, replacement, exchange, and permutation.
     let valueBenefit: Int
 
-    /// Maximum value-space distance any source leaf must traverse to reach its reduction target. Zero for exact operations (removal, replacement, permutation, minimisation). Non-zero for approximate operations (exchange), where closer-to-target candidates are preferred.
+    /// Maximum value-space distance any source leaf must traverse to reach its reduction target. Zero for exact operations (removal, replacement, permutation, minimization). Non-zero for approximate operations (exchange), where closer-to-target candidates are preferred.
     let reductionMagnitude: Int
 
     /// Expected number of probes the encoder will need.

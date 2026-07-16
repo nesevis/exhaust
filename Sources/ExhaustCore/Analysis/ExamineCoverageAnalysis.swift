@@ -146,7 +146,8 @@ private extension ExamineCoverageAnalysis {
                     complexity += 1
                 }
 
-            case let .sequence(length, elements, metadata):
+            case let .sequence(elements, metadata):
+                let length = UInt64(elements.count)
                 if let range = metadata.validRange {
                     sequences.record(length: length, range: range)
                 }

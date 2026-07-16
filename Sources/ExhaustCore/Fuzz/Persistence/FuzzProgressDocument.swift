@@ -39,7 +39,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
         /// Hash of the instrumented PC table at write time, or 0 when unavailable. A mismatch on resume means edge indices moved: cached signatures are dropped and corpus entries are re-attributed.
         package var pcTableHash: UInt64
 
-        /// The instrumented edge count at write time — the capacity of every serialised signature.
+        /// The instrumented edge count at write time — the capacity of every serialized signature.
         package var edgeCount: Int
 
         package init(
@@ -59,7 +59,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
         }
     }
 
-    /// One fault cluster, serialised for restore into ``FaultInventory``.
+    /// One fault cluster, serialized for restore into ``FaultInventory``.
     package struct ClusterRecord: Codable, Sendable {
         package var id: Int
         package var reducedSequence: String
@@ -100,7 +100,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
         }
     }
 
-    /// One corpus entry, serialised so restore can re-offer it in original admission order.
+    /// One corpus entry, serialized so restore can re-offer it in original admission order.
     package struct CorpusEntryRecord: Codable, Sendable {
         package var sequence: String
         /// Hit edges and their saturating counts, parallel arrays — the exact offer input, so restore rebuilds bucket masks and rarity identically.

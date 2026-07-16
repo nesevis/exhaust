@@ -97,7 +97,7 @@ extension OnlineCGSInterpreter {
         //
         // These synthesized picks are intentionally never baked: `bakeWeights` walks the original generator (default thresholds, to keep the choice-tree structure that replay and reduction depend on) or the pre-pass subdivided generator (relaxed), and neither contains this on-the-fly pick. A chooseBits cannot carry CGS weights in the final generator without becoming a pick, which would break replay structural compatibility — so a standalone scalar's own tuning is warmup-only by design, and `.rejectionSampling` is the right strategy for such filters. This is not dead code.
         //
-        // The fingerprint is per-site, folded from the range and tag rather than a constant, so distinct chooseBits sites at the same derivative depth do not share fitness keys and corrupt each other's vocabulary elimination. A per-process value suffices because these records never leave the warmup.
+        // The fingerprint combines the range and tag with the CGS-only structural path. This keeps equal chooseBits domains at different generator positions from sharing fitness while allowing repeated sequence elements to reuse their element-template site. A per-process value suffices because these records never leave the warmup.
         if derivativeContext.depth < cgsState.subdivisionThresholds.maximumDerivativeDepth,
            max >= min,
            (min ... max).saturatingCount >= cgsState.subdivisionThresholds.minimumRangeSize,
@@ -107,17 +107,21 @@ extension OnlineCGSInterpreter {
                makeFingerprint: {
                    var fingerprint = Xoshiro256.fold(min, mixing: max)
                    fingerprint = Xoshiro256.fold(fingerprint, mixing: UInt64(bitPattern: Int64(tag.hashValue)))
+                   fingerprint = Xoshiro256.fold(
+                       fingerprint,
+                       mixing: derivativeContext.sitePathFingerprint
+                   )
                    return fingerprint
                }
            )
         {
-            let synthesisedPick: Generator<Output> = .impure(
+            let synthesizedPick: Generator<Output> = .impure(
                 operation: .pick(choices: choices, totalWeight: choices.reduce(0) { $0 &+ $1.weight }),
                 continuation: continuation
             )
 
             return try generateRecursive(
-                synthesisedPick,
+                synthesizedPick,
                 with: inputValue,
                 context: &context,
                 predicate: predicate,
@@ -128,14 +132,17 @@ extension OnlineCGSInterpreter {
         }
         let effectiveRange: ClosedRange<UInt64>
         if let scaling {
-            let size = SharedInterpreterHelpers.consumeSize(&context)
+            let size = SharedInterpreterHelpers.currentSize(&context)
             effectiveRange = Gen.applyScaling(
                 min: min, max: max, tag: tag, scaling: scaling, size: size
             )
         } else {
             effectiveRange = min ... max
         }
-        let randomBits = context.prng.next(in: effectiveRange)
+        let rawBits = context.prng.next(in: effectiveRange)
+        let randomBits = tag.isFloatingPoint
+            ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+            : rawBits
         return try runContinuation(
             result: randomBits,
             continuation: continuation,
@@ -177,11 +184,12 @@ extension OnlineCGSInterpreter {
             return nil
         }
 
-        let elementCount = Int(length)
+        let elementCount = try SharedInterpreterHelpers.sequenceElementCount(length)
         var results: [Any] = []
         results.reserveCapacity(elementCount)
-        for _ in 0 ..< length {
+        for _ in 0 ..< elementCount {
             var elementContext = derivativeContext
+            elementContext.descendSitePath(through: .sequenceElement)
             elementContext.push(.sequenceElement(
                 index: results.count,
                 completed: results,
@@ -227,19 +235,24 @@ extension OnlineCGSInterpreter {
         cgsState: inout CGSState,
         derivativeContext: DerivativeContext
     ) throws -> Output? {
-        context.sizeOverride = newSize
-        defer { context.sizeOverride = nil }
-        guard let result = try generateRecursive(
-            gen,
-            with: inputValue,
-            context: &context,
-            predicate: predicate,
-            sampleCount: sampleCount,
-            cgsState: &cgsState,
-            derivativeContext: derivativeContext
-        ) else { return nil }
+        let previousSizeOverride = context.sizeOverride
+        let innerResult: Any?
+        do {
+            context.sizeOverride = newSize
+            defer { context.sizeOverride = previousSizeOverride }
+            innerResult = try generateRecursive(
+                gen,
+                with: inputValue,
+                context: &context,
+                predicate: predicate,
+                sampleCount: sampleCount,
+                cgsState: &cgsState,
+                derivativeContext: derivativeContext
+            )
+        }
+        guard let innerResult else { return nil }
         return try runContinuation(
-            result: result,
+            result: innerResult,
             continuation: continuation,
             inputValue: inputValue,
             context: &context,
@@ -352,6 +365,7 @@ extension OnlineCGSInterpreter {
             case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
                 // Push the forward transform as a frame so derivative rollouts inside `inner` apply it. Without this, a rollout crossing the transform boundary hands the untransformed inner value (for example `[Character]` instead of `String`) to outer frames, which trap on their continuation casts.
                 var innerContext = derivativeContext
+                innerContext.descendSitePath(through: .transformInner)
                 innerContext.push(.transform(continuation: { innerValue in
                     try continuation(forward(innerValue)).erase()
                 }))
@@ -367,6 +381,7 @@ extension OnlineCGSInterpreter {
                 result = try forward(innerValue)
             case let .bind(_, forward, _, _, _):
                 var innerContext = derivativeContext
+                innerContext.descendSitePath(through: .bindInner)
                 innerContext.push(.bind(continuation: { innerValue in
                     let boundGen = try forward(innerValue)
                     return try boundGen.bind { boundValue in
@@ -383,6 +398,8 @@ extension OnlineCGSInterpreter {
                     derivativeContext: innerContext
                 ) else { return nil }
                 let boundGen = try forward(innerValue)
+                var boundContext = derivativeContext
+                boundContext.descendSitePath(through: .bindBound)
                 guard let boundValue = try generateRecursive(
                     boundGen,
                     with: inputValue,
@@ -390,12 +407,13 @@ extension OnlineCGSInterpreter {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext
+                    derivativeContext: boundContext
                 ) else { return nil }
                 result = boundValue
             case let .metamorphic(transforms, _):
                 let savedState = (context.prng.seed, context.prng.currentState)
-                let seenSnapshot = (context.uniqueSeenKeys, context.uniqueSeenSequences)
+                var innerContext = derivativeContext
+                innerContext.descendSitePath(through: .transformInner)
                 guard let original = try generateRecursive(
                     inner,
                     with: inputValue,
@@ -403,15 +421,13 @@ extension OnlineCGSInterpreter {
                     predicate: predicate,
                     sampleCount: sampleCount,
                     cgsState: &cgsState,
-                    derivativeContext: derivativeContext
+                    derivativeContext: innerContext
                 ) else { return nil }
-                let seenAfterOriginal = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 var results: [Any] = [original]
                 results.reserveCapacity(transforms.count + 1)
-                // Copies replay against the original's starting dedup state; see ReflectiveOperation.metamorphic.
+                // Copies replay from the original's PRNG state; tuning does not own generation-time uniqueness state.
                 for transform in transforms {
                     context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
-                    (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenSnapshot
                     guard let copy = try generateRecursive(
                         inner,
                         with: inputValue,
@@ -419,11 +435,10 @@ extension OnlineCGSInterpreter {
                         predicate: predicate,
                         sampleCount: sampleCount,
                         cgsState: &cgsState,
-                        derivativeContext: derivativeContext
+                        derivativeContext: innerContext
                     ) else { return nil }
                     try results.append(transform(copy))
                 }
-                (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenAfterOriginal
                 result = results
         }
         return try runContinuation(
@@ -438,11 +453,12 @@ extension OnlineCGSInterpreter {
         )
     }
 
+    /// Treats uniqueness operations as transparent while collecting CGS fitness data.
+    ///
+    /// Online CGS discards every warm-up value; the tuned generator later runs through ``ValueAndChoiceTreeInterpreter``, which owns the per-site operative-hash sets. Maintaining deduplication state here would make tuning depend on whether the output happens to be `Hashable` and could exhaust a finite domain before its fitness data converges. Tuning may change pick weights, but it must neither consume nor enforce generation-time uniqueness state.
     @inline(__always)
     static func handleUnique<Output>(
         gen: AnyGenerator,
-        fingerprint: UInt64,
-        keyExtractor: ((Any) -> AnyHashable)?,
         continuation: (Any) throws -> AnyGenerator,
         inputValue: some Any,
         context: inout GenerationContext,
@@ -451,48 +467,25 @@ extension OnlineCGSInterpreter {
         cgsState: inout CGSState,
         derivativeContext: DerivativeContext
     ) throws -> Output? {
-        var attempts = 0 as UInt64
-        while attempts < GenerationContext.maxFilterRuns {
-            guard let result = try generateRecursive(
-                gen,
-                with: inputValue,
-                context: &context,
-                predicate: predicate,
-                sampleCount: sampleCount,
-                cgsState: &cgsState,
-                derivativeContext: derivativeContext
-            ) else { return nil }
-
-            let isDuplicate: Bool
-            if let keyExtractor {
-                let key = keyExtractor(result)
-                isDuplicate = context.uniqueSeenKeys[
-                    fingerprint, default: []
-                ].insert(key).inserted == false
-            } else if let key = result as? AnyHashable {
-                isDuplicate = context.uniqueSeenKeys[
-                    fingerprint, default: []
-                ].insert(key).inserted == false
-            } else {
-                // Non-Hashable types cannot be deduplicated in CGS mode (no choice-sequence tracking). All samples are treated as unique.
-                isDuplicate = false
-            }
-
-            if isDuplicate == false {
-                return try runContinuation(
-                    result: result,
-                    continuation: continuation,
-                    inputValue: inputValue,
-                    context: &context,
-                    predicate: predicate,
-                    sampleCount: sampleCount,
-                    cgsState: &cgsState,
-                    derivativeContext: derivativeContext
-                )
-            }
-            attempts += 1
-        }
-        throw GeneratorError.uniqueBudgetExhausted
+        guard let result = try generateRecursive(
+            gen,
+            with: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        ) else { return nil }
+        return try runContinuation(
+            result: result,
+            continuation: continuation,
+            inputValue: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        )
     }
 
     // MARK: - Run Continuation
@@ -509,15 +502,20 @@ extension OnlineCGSInterpreter {
         derivativeContext: DerivativeContext
     ) throws -> Output? {
         let nextGen = try continuation(result)
-        return try generateRecursive(
+        var continuationContext = derivativeContext
+        continuationContext.descendSitePath(through: .continuation)
+        guard let finalValue = try generateRecursive(
             nextGen,
             with: inputValue,
             context: &context,
             predicate: predicate,
             sampleCount: sampleCount,
             cgsState: &cgsState,
-            derivativeContext: derivativeContext
-        ) as? Output
+            derivativeContext: continuationContext
+        ) else {
+            return nil
+        }
+        return finalValue as? Output
     }
 
     // MARK: - Pick (CGS Core)
@@ -546,6 +544,13 @@ extension OnlineCGSInterpreter {
             _ = context.prng.next()
 
             var branchContext = derivativeContext
+            branchContext.descendSitePath(
+                through: .pickBranch,
+                discriminator: Xoshiro256.fold(
+                    selectedChoice.fingerprint,
+                    mixing: selectedChoice.id
+                )
+            )
             branchContext.push(.bind(continuation: { try continuation($0).erase() }))
 
             guard let result = try generateRecursive(
@@ -576,7 +581,7 @@ extension OnlineCGSInterpreter {
         //
         // Adapted from the adaptive rejection sampling vocabulary elimination in: Lipkin et al., "Fast Controlled Generation from Language Models with Adaptive Weighted Rejection Sampling", COLM 2025.
         // arXiv:2504.05410
-        let currentSize = context.sizeOverride ?? GenerationContext.scaledSize(forRun: context.runs)
+        let currentSize = SharedInterpreterHelpers.currentSize(&context)
         let choiceCount = choices.count
         let minDeadObservations: UInt64 = 30
         // Recursive generators (BST, AVL) reuse the same source-level pick at every depth, producing identical fingerprints. Without depth scoping, vocabulary elimination at the root (where "leaf" is always dead) would kill "leaf" at inner depths too — but inner depths NEED leaves for validity.
@@ -595,6 +600,13 @@ extension OnlineCGSInterpreter {
             _ = context.prng.next()
 
             var branchContext = derivativeContext
+            branchContext.descendSitePath(
+                through: .pickBranch,
+                discriminator: Xoshiro256.fold(
+                    selectedChoice.fingerprint,
+                    mixing: selectedChoice.id
+                )
+            )
             branchContext.push(.bind(continuation: { try continuation($0).erase() }))
 
             guard let result = try generateRecursive(
@@ -714,6 +726,13 @@ extension OnlineCGSInterpreter {
 
         // 4. Push frame for the selected branch's context
         var branchContext = derivativeContext
+        branchContext.descendSitePath(
+            through: .pickBranch,
+            discriminator: Xoshiro256.fold(
+                selectedChoice.fingerprint,
+                mixing: selectedChoice.id
+            )
+        )
         branchContext.push(.bind(continuation: { try continuation($0).erase() }))
 
         // 5. Recurse on selected choice's generator
@@ -854,17 +873,21 @@ extension OnlineCGSInterpreter {
         var results = [Any]()
         results.reserveCapacity(generators.count)
 
-        for (i, gen) in generators.enumerated() {
+        for (index, generator) in generators.enumerated() {
             var componentContext = derivativeContext
+            componentContext.descendSitePath(
+                through: .zipComponent,
+                discriminator: UInt64(index)
+            )
             componentContext.push(.zipComponent(
-                index: i,
+                index: index,
                 completed: results,
                 allGenerators: generators,
                 continuation: { try continuation($0).erase() }
             ))
 
             guard let result = try generateRecursive(
-                gen,
+                generator,
                 with: inputValue,
                 context: &context,
                 predicate: predicate,

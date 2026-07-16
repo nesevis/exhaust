@@ -42,10 +42,19 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         )
     }
 
+    /// Returns the PRNG seed and current state after the most recent generation step.
+    package var randomNumberGeneratorSnapshot: (
+        seed: UInt64,
+        state: Xoshiro256.StateType
+    ) {
+        (context.prng.seed, context.prng.currentState)
+    }
+
     public mutating func next() throws -> Element? {
         guard context.runs < context.maxRuns else {
             return nil
         }
+        context.beginUniqueDecisionRecording()
 
         // Per-run seed derivation: each run gets an independent PRNG
         if context.isFixed == false {
@@ -206,7 +215,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     ) throws -> Any? {
         let effectiveRange: ClosedRange<UInt64>
         if let scaling {
-            let size = consumeSize(&context)
+            let size = SharedInterpreterHelpers.currentSize(&context)
             effectiveRange = Gen.applyScaling(
                 min: min, max: max, tag: tag, scaling: scaling, size: size
             )
@@ -236,7 +245,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     private static func handleGetSize(
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> Any? {
-        let size = consumeSize(&context)
+        let size = SharedInterpreterHelpers.currentSize(&context)
         let nextGen = try continuation(size)
         if case let .pure(final) = nextGen { return final }
         return try generateRecursiveAny(nextGen, context: &context)
@@ -314,10 +323,10 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         if case let .impure(
             operation: .chooseBits(min, max, tag, _, scaling, _),
             continuation: elementContinuation
-        ) = fusedElementGen, scaling == nil || context.sizeOverride == nil {
+        ) = fusedElementGen {
             let effectiveRange: ClosedRange<UInt64>
             if let scaling {
-                let size = consumeSize(&context)
+                let size = SharedInterpreterHelpers.currentSize(&context)
                 effectiveRange = Gen.applyScaling(
                     min: min, max: max, tag: tag, scaling: scaling, size: size
                 )
@@ -400,12 +409,17 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         innerGen: AnyGenerator,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> Any? {
-        context.sizeOverride = newSize
-        defer { context.sizeOverride = nil }
-        guard let value = try generateRecursiveAny(innerGen, context: &context) else {
+        let previousSizeOverride = context.sizeOverride
+        let innerValue: Any?
+        do {
+            context.sizeOverride = newSize
+            defer { context.sizeOverride = previousSizeOverride }
+            innerValue = try generateRecursiveAny(innerGen, context: &context)
+        }
+        guard let innerValue else {
             return nil
         }
-        let nextGen = try continuation(value)
+        let nextGen = try continuation(innerValue)
         if case let .pure(final) = nextGen { return final }
         return try generateRecursiveAny(nextGen, context: &context)
     }
@@ -560,7 +574,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     return nil
                 }
                 let key = keyExtractor(candidate)
-                if context.uniqueSeenKeys[fingerprint, default: []].insert(key).inserted {
+                if context.acceptUniqueKey(key, fingerprint: fingerprint) {
                     accepted = candidate
                     break
                 }
@@ -570,10 +584,12 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     baseSeed: context.baseSeed,
                     isFixed: context.isFixed,
                     size: context.size,
+                    sizeOverride: context.sizeOverride,
                     prng: Xoshiro256(seed: 0),
                     materializePicks: context.materializePicks,
                     runs: context.runs
                 )
+                vactiContext.uniqueGenerationTrace = context.uniqueGenerationTrace
                 swap(&context.prng, &vactiContext.prng)
                 let vactiResult = try ValueAndChoiceTreeInterpreter<Any>
                     .generateRecursiveAny(uniqueGen, context: &vactiContext)
@@ -583,7 +599,10 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 }
                 swap(&context.prng, &vactiContext.prng)
                 let sequence = ChoiceSequence.flatten(tree)
-                if context.uniqueSeenSequences[fingerprint, default: []].insert(sequence).inserted {
+                if context.acceptUniqueChoiceSequence(
+                    hash: sequence.operativeHash,
+                    fingerprint: fingerprint
+                ) {
                     accepted = candidate
                     break
                 }
@@ -596,10 +615,5 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         let nextGen = try continuation(value)
         if case let .pure(final) = nextGen { return final }
         return try generateRecursiveAny(nextGen, context: &context)
-    }
-
-    @inline(__always)
-    static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
-        SharedInterpreterHelpers.consumeSize(&context)
     }
 }

@@ -149,27 +149,27 @@ func warnIfInterleavingSpaceIsLarge(
 
 // MARK: - Timeout Fraction Warning
 
-/// Emits a runtime warning when timed-out probes reach ``PreemptiveReduction/timeoutWarningFraction`` of the configured budget.
+/// Emits a runtime warning when timed-out probes reach ``PreemptiveReduction/timeoutWarningFraction`` of attempted probes.
 ///
-/// A timed-out probe counts as a pass so a contended host or a hanging system does not produce a false failure, but a high timeout rate means most of the budget produced no signal. The warning reports the rate so a silently-passing run that never actually exercised the system is still visible. Call this on the test's own thread after the pipeline returns, not from inside the dispatched work, so the issue attaches to the running test.
+/// A timed-out probe counts as a pass so a contended host or a hanging system does not produce a false failure, but a high timeout rate means most attempted probes produced no signal. The warning reports the rate so a run that never exercised the system does not pass silently. Call this on the test's own thread after the pipeline returns so the issue attaches to the running test.
 func warnIfTimeoutFractionHigh(
     timedOutProbes: Int,
-    totalBudget: Int,
+    totalProbes: Int,
     fileID: StaticString,
     filePath: StaticString,
     line: UInt,
     column: UInt
 ) {
-    guard totalBudget > 0, timedOutProbes > 0 else {
+    guard totalProbes > 0, timedOutProbes > 0 else {
         return
     }
-    let fraction = Double(timedOutProbes) / Double(totalBudget)
+    let fraction = Double(timedOutProbes) / Double(totalProbes)
     guard fraction >= PreemptiveReduction.timeoutWarningFraction else {
         return
     }
     let percentage = Int((fraction * 100).rounded())
     reportWarning(
-        "\(timedOutProbes) of \(totalBudget) budgeted probes timed out (\(percentage)%). Timed-out probes count as passes, so this run may have passed without exercising the system. A saturated machine, an idle timeout set too low, or a genuinely hanging command can cause this. Raise .idleTimeoutMs, reduce parallelism, or check for a hang.",
+        "\(timedOutProbes) of \(totalProbes) probes timed out (\(percentage)%). Timed-out probes count as passes, so this run may have passed without exercising the system. A saturated machine, an idle timeout set too low, or a genuinely hanging command can cause this. Raise .idleTimeoutMs, reduce parallelism, or check for a hang.",
         fileID: fileID,
         filePath: filePath,
         line: line,

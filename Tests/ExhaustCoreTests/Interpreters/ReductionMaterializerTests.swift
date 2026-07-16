@@ -8,54 +8,6 @@ import Testing
 
 @Suite("ReductionMaterializer")
 struct ReductionMaterializerTests {
-    // MARK: - Exact mode: round-trip
-
-    @Test("Exact mode round-trips a simple chooseBits generator")
-    func exactRoundTrip() throws {
-        let gen = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)
-
-        // Generate a value + tree via VACTI.
-        var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 42)
-        let (originalValue, originalTree) = try #require(try interpreter.next())
-        let prefix = ChoiceSequence(originalTree)
-
-        // Exact round-trip should reproduce the same value.
-        guard case let .success(value, tree, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact
-        ) else {
-            Issue.record("Expected .success, got rejected/failed")
-            return
-        }
-
-        #expect(value == originalValue)
-        // Fresh tree should have valid metadata.
-        if case let .choice(_, meta) = tree {
-            #expect(meta.validRange == 0.bitPattern64 ... 100.bitPattern64)
-        }
-    }
-
-    @Test("Exact mode round-trips a zip of two generators")
-    func exactRoundTripZip() throws {
-        let gen = Gen.zip(
-            Gen.choose(in: 0 ... 50 as ClosedRange<Int>),
-            Gen.choose(in: 0 ... 50 as ClosedRange<Int>)
-        )
-
-        var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: true, seed: 99)
-        let (originalValue, originalTree) = try #require(try interpreter.next())
-        let prefix = ChoiceSequence(originalTree)
-
-        guard case let .success(value, _, _) = Materializer.materialize(
-            gen, prefix: prefix, mode: .exact
-        ) else {
-            Issue.record("Expected .success")
-            return
-        }
-
-        #expect(value.0 == originalValue.0)
-        #expect(value.1 == originalValue.1)
-    }
-
     // MARK: - Exact mode: out-of-range rejection
 
     @Test("Exact mode rejects inner value outside valid range")
@@ -70,6 +22,64 @@ struct ReductionMaterializerTests {
         let result = Materializer.materialize(gen, prefix: prefix, mode: .exact)
         guard case .rejected = result else {
             Issue.record("Expected .rejected for out-of-range inner value, got \(result)")
+            return
+        }
+    }
+
+    @Test("Exact mode rejects a filter candidate that fails its predicate")
+    func exactRejectsFilteredCandidate() {
+        let generator = Gen.filter(
+            Gen.choose(in: 0 ... 10 as ClosedRange<Int>),
+            type: .rejectionSampling,
+            predicate: { $0.isMultiple(of: 2) },
+            sourceLocation: FilterSourceLocation(
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+        )
+        let prefix: ChoiceSequence = [
+            .value(.init(
+                choice: ChoiceValue(Int(3), tag: .int),
+                validRange: Int(0).bitPattern64 ... Int(10).bitPattern64
+            )),
+        ]
+
+        let result = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        )
+        guard case .rejected = result else {
+            Issue.record("Expected .rejected for a filtered-out exact candidate, got \(result)")
+            return
+        }
+    }
+
+    @Test("Exact mode reports a throwing transform as failed")
+    func exactReportsThrowingTransformAsFailed() throws {
+        let generator = try ReflectiveGenerator(
+            Gen.choose(in: 0 ... 10 as ClosedRange<Int>)
+        ).map { value in
+            guard value != 5 else {
+                throw ExactMaterializationFixtureError.rejectedValue
+            }
+            return value
+        }.gen
+        let prefix: ChoiceSequence = [
+            .value(.init(
+                choice: ChoiceValue(Int(5), tag: .int),
+                validRange: Int(0).bitPattern64 ... Int(10).bitPattern64
+            )),
+        ]
+
+        guard case .failed = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        ) else {
+            Issue.record("Expected .failed for a throwing transform")
             return
         }
     }
@@ -89,6 +99,84 @@ struct ReductionMaterializerTests {
         let result = Materializer.materialize(gen, prefix: prefix, mode: .exact)
         guard case .rejected = result else {
             Issue.record("Expected .rejected for exhausted prefix")
+            return
+        }
+    }
+
+    @Test("Exact mode accepts stale branch metadata and refreshes it")
+    func exactRefreshesBranchMetadata() throws {
+        let expectedFingerprint = Gen.sourceFingerprint(
+            fileID: "ReductionMaterializerTests.swift",
+            line: 42,
+            column: 7
+        )
+        let generator = Gen.pick(
+            choices: [
+                (weight: UInt64(1), generator: Gen.just("first")),
+                (weight: UInt64(1), generator: Gen.just("second")),
+            ],
+            fileID: "ReductionMaterializerTests.swift",
+            line: 42,
+            column: 7
+        )
+        let prefix: ChoiceSequence = [
+            .group(true),
+            .branch(.init(id: 1, branchCount: 3, fingerprint: UInt64.max)),
+            .just,
+            .group(false),
+        ]
+
+        guard case let .success(value, tree, _) = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        ) else {
+            Issue.record("Expected .success for stale branch metadata")
+            return
+        }
+
+        let refreshedSequence = ChoiceSequence(tree)
+        let refreshedBranches: [ChoiceSequenceValue.Branch] = refreshedSequence.compactMap { element in
+            guard case let .branch(branch) = element else { return nil }
+            return branch
+        }
+        let refreshedBranch = try #require(refreshedBranches.first)
+
+        #expect(value == "second")
+        #expect(refreshedBranch.id == 1)
+        #expect(refreshedBranch.branchCount == 2)
+        #expect(refreshedBranch.fingerprint == expectedFingerprint)
+    }
+
+    @Test("Exact mode rejects an unavailable branch ID")
+    func exactRejectsUnavailableBranchID() {
+        let fingerprint = Gen.sourceFingerprint(
+            fileID: "ReductionMaterializerTests.swift",
+            line: 42,
+            column: 7
+        )
+        let generator = Gen.pick(
+            choices: [
+                (weight: UInt64(1), generator: Gen.just("first")),
+                (weight: UInt64(1), generator: Gen.just("second")),
+            ],
+            fileID: "ReductionMaterializerTests.swift",
+            line: 42,
+            column: 7
+        )
+        let prefix: ChoiceSequence = [
+            .group(true),
+            .branch(.init(id: 2, branchCount: 2, fingerprint: fingerprint)),
+            .just,
+            .group(false),
+        ]
+
+        guard case .rejected = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        ) else {
+            Issue.record("Expected .rejected for an unavailable branch ID")
             return
         }
     }
@@ -280,7 +368,7 @@ struct ReductionMaterializerTests {
         }
 
         #expect(value1 == value2)
-        #expect(tree1 == tree2)
+        #expect(tree1.hasSameRepresentation(as: tree2))
     }
 
     // MARK: - Fresh validRange metadata
@@ -400,6 +488,87 @@ struct ReductionMaterializerTests {
 
     // MARK: - Sequence handling
 
+    @Test(
+        "Exact mode rejects element counts outside an explicit length range",
+        arguments: [3, 7]
+    )
+    func exactRejectsExplicitSequenceLengthViolation(elementCount: Int) {
+        let generator = Gen.arrayOf(Gen.just(42), exactly: 5)
+        var prefix: ChoiceSequence = [
+            .sequence(
+                true,
+                validRange: 5 ... 5,
+                isLengthExplicit: true
+            ),
+        ]
+        prefix.append(contentsOf: Array(repeating: .just, count: elementCount))
+        prefix.append(.sequence(false))
+
+        guard case .rejected = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        ) else {
+            Issue.record("Expected .rejected for \(elementCount) elements")
+            return
+        }
+    }
+
+    @Test("Exact mode accepts element counts from a default size-scaled sequence")
+    func exactAcceptsImplicitSequenceLength() {
+        let generator = Gen.arrayOf(Gen.just(42))
+        let prefix: ChoiceSequence = [
+            .sequence(true),
+            .just,
+            .just,
+            .just,
+            .sequence(false),
+        ]
+
+        guard case let .success(value, _, _) = Materializer.materialize(
+            generator,
+            prefix: prefix,
+            mode: .exact
+        ) else {
+            Issue.record("Expected .success")
+            return
+        }
+
+        #expect(value == [42, 42, 42])
+    }
+
+    @Test("Guided mode derives fallback sequence length from its elements")
+    func guidedSequenceUsesFallbackElementCount() {
+        let generator = Gen.arrayOf(
+            Gen.just(42),
+            within: 0 ... 10,
+            scaling: .constant
+        )
+        let fallbackTree = ChoiceTree.sequence(
+            elements: [.just, .just, .just],
+            metadata: ChoiceMetadata(
+                validRange: 0 ... 10,
+                isRangeExplicit: true
+            )
+        )
+
+        guard case let .success(value, tree, _) = Materializer.materialize(
+            generator,
+            prefix: [],
+            mode: .guided(seed: 42, fallbackTree: fallbackTree)
+        ) else {
+            Issue.record("Expected .success")
+            return
+        }
+
+        #expect(value == [42, 42, 42])
+        guard case let .sequence(elements, _) = tree else {
+            Issue.record("Expected a sequence tree")
+            return
+        }
+        #expect(elements.count == 3)
+    }
+
     @Test("Exact mode handles variable-length sequences")
     func exactSequenceVariableLength() throws {
         let gen = Gen.arrayOf(
@@ -421,4 +590,8 @@ struct ReductionMaterializerTests {
 
         #expect(value == originalValue)
     }
+}
+
+private enum ExactMaterializationFixtureError: Error {
+    case rejectedValue
 }

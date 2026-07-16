@@ -9,7 +9,7 @@ import ExhaustCore
 
 // MARK: - Violations
 
-/// `.exact` materialisation of a tree's own flattening failed to reproduce the value or the sequence.
+/// `.exact` materialization of a tree's own flattening failed to reproduce the value or the sequence.
 public struct ExactRoundTripViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -18,7 +18,7 @@ public struct ExactRoundTripViolation: Error, CustomStringConvertible {
     }
 }
 
-/// Guided materialisation of a mutated sequence reported an out-of-range convergence.
+/// Guided materialization of a mutated sequence reported an out-of-range convergence.
 public struct GuidedTotalityViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -27,7 +27,7 @@ public struct GuidedTotalityViolation: Error, CustomStringConvertible {
     }
 }
 
-/// Guided materialisation of the same sequence, seed, and fallback produced different outcomes.
+/// Guided materialization of the same sequence, seed, and fallback produced different outcomes.
 public struct GuidedDeterminismViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -47,6 +47,33 @@ public struct FlattenBalanceViolation: Error, CustomStringConvertible {
 
 /// The same recipe and seed produced different value streams on two runs.
 public struct DeterminismViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// Exact value-only and value-and-tree interpreters disagreed on a value, exhaustion point, or recoverable generation failure.
+public struct ExactInterpreterParityViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// Exact value-only and value-and-tree interpreters left different PRNG states after the same successful execution.
+public struct RandomProgressionParityViolation: Error, CustomStringConvertible {
+    public let description: String
+
+    package init(_ description: String) {
+        self.description = description
+    }
+}
+
+/// Replaying a tree produced by exact generation failed to reproduce that generation's value.
+public struct GeneratedWitnessReplayViolation: Error, CustomStringConvertible {
     public let description: String
 
     package init(_ description: String) {
@@ -90,7 +117,7 @@ public struct ReductionMonotonicityViolation: Error, CustomStringConvertible {
     }
 }
 
-/// Two materialisations of the same sequence produced different cluster keys.
+/// Two materializations of the same sequence produced different cluster keys.
 public struct ClusterKeyStabilityViolation: Error, CustomStringConvertible {
     public let description: String
 
@@ -127,7 +154,9 @@ public extension MetaFuzz {
     ///
     /// A throw from generation itself is treated as a vacuous pass: legitimate rejection paths (filter exhaustion, recoverable reflection failures) throw by design, and clustering them would flood the inventory with false positives. Engine defects that manifest as traps are caught by the run machinery, not here.
     static func check(_ fuzzCase: MetaFuzzCase) throws {
-        let gen = buildGenerator(from: fuzzCase.recipe)
+        try checkExactInterpreterParity(fuzzCase)
+
+        let gen = buildOracleGenerator(from: fuzzCase.recipe)
         let property = failingProperty(for: fuzzCase.recipe.outputType)
         var prng = Xoshiro256(seed: fuzzCase.perturbationSeed)
 
@@ -148,6 +177,7 @@ public extension MetaFuzz {
             }
 
             let sequence = ChoiceSequence.flatten(tree)
+            try checkGeneratedWitnessReplay(gen, tree: tree, value: value, fuzzCase)
             try checkMarkerBalance(sequence, fuzzCase)
             try checkExactRoundTrip(gen, sequence: sequence, tree: tree, value: value, fuzzCase)
             try checkCodecRoundTrip(sequence, fuzzCase)
@@ -168,11 +198,89 @@ public extension MetaFuzz {
 // MARK: - Individual Oracles
 
 extension MetaFuzz {
+    /// Exact interpreter parity: the value-only and value-and-tree interpreters must produce the same observable stream for one recipe, seed, and run budget.
+    private static func checkExactInterpreterParity(_ fuzzCase: MetaFuzzCase) throws {
+        var valueInterpreter = ValueInterpreter(
+            buildOracleGenerator(from: fuzzCase.recipe),
+            seed: fuzzCase.valueSeed,
+            maxRuns: valuesPerCase
+        )
+        var treeInterpreter = ValueAndChoiceTreeInterpreter(
+            buildOracleGenerator(from: fuzzCase.recipe),
+            seed: fuzzCase.valueSeed,
+            maxRuns: valuesPerCase
+        )
+
+        for iteration in 0 ..< valuesPerCase {
+            let valueOutcome = nextValueOutcome(&valueInterpreter)
+            let treeOutcome = nextTreeValueOutcome(&treeInterpreter)
+
+            switch (valueOutcome, treeOutcome) {
+                case let (.value(value), .value(treeValue)):
+                    guard anyEquals(value, treeValue) else {
+                        throw ExactInterpreterParityViolation(
+                            "value-only produced \(value), value-and-tree produced \(treeValue), recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed), iteration \(iteration)"
+                        )
+                    }
+                    let valueSnapshot = valueInterpreter.randomNumberGeneratorSnapshot
+                    let treeSnapshot = treeInterpreter.randomNumberGeneratorSnapshot
+                    guard randomNumberGeneratorSnapshotsEqual(
+                        valueSnapshot,
+                        treeSnapshot
+                    ) else {
+                        throw RandomProgressionParityViolation(
+                            "interpreter PRNG states differed after recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed), iteration \(iteration): value-only \(valueSnapshot), value-and-tree \(treeSnapshot)"
+                        )
+                    }
+                case (.exhausted, .exhausted):
+                    return
+                case let (.failure(valueFailure), .failure(treeFailure)):
+                    guard valueFailure == treeFailure else {
+                        throw ExactInterpreterParityViolation(
+                            "interpreter failures differed: value-only \(valueFailure), value-and-tree \(treeFailure), recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed), iteration \(iteration)"
+                        )
+                    }
+                    return
+                default:
+                    throw ExactInterpreterParityViolation(
+                        "interpreter outcomes differed: value-only \(valueOutcome), value-and-tree \(treeOutcome), recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed), iteration \(iteration)"
+                    )
+            }
+        }
+    }
+
+    /// Generated-witness replay: a tree emitted beside a value must replay to that value without requiring reflection.
+    private static func checkGeneratedWitnessReplay(
+        _ generator: AnyGenerator,
+        tree: ChoiceTree,
+        value: Any,
+        _ fuzzCase: MetaFuzzCase
+    ) throws {
+        do {
+            guard let replayed = try Interpreters.replay(generator, using: tree) else {
+                throw GeneratedWitnessReplayViolation(
+                    "replay returned nil for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)"
+                )
+            }
+            guard anyEquals(replayed, value) else {
+                throw GeneratedWitnessReplayViolation(
+                    "replay produced \(replayed), not \(value), for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)"
+                )
+            }
+        } catch let violation as GeneratedWitnessReplayViolation {
+            throw violation
+        } catch {
+            throw GeneratedWitnessReplayViolation(
+                "replay threw \(error) for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)"
+            )
+        }
+    }
+
     /// Determinism: the same recipe and seed must produce the same value stream twice.
     private static func checkDeterminism(_ fuzzCase: MetaFuzzCase) throws {
         let held = checkPairedValues(
-            buildGenerator(from: fuzzCase.recipe),
-            buildGenerator(from: fuzzCase.recipe),
+            buildOracleGenerator(from: fuzzCase.recipe),
+            buildOracleGenerator(from: fuzzCase.recipe),
             seed: fuzzCase.valueSeed,
             maxRuns: valuesPerCase,
             check: anyEquals
@@ -186,8 +294,8 @@ extension MetaFuzz {
     private static func checkFunctorIdentity(_ fuzzCase: MetaFuzzCase) throws {
         let mappedRecipe = GenRecipe.combinator(.mapped(fuzzCase.recipe, .identity))
         let held = checkPairedValues(
-            buildGenerator(from: fuzzCase.recipe),
-            buildGenerator(from: mappedRecipe),
+            buildOracleGenerator(from: fuzzCase.recipe),
+            buildOracleGenerator(from: mappedRecipe),
             seed: fuzzCase.valueSeed,
             maxRuns: valuesPerCase,
             check: anyEquals
@@ -218,7 +326,7 @@ extension MetaFuzz {
         }
     }
 
-    /// Exact round trip: `.exact` materialisation of a tree's own flattening must reproduce the value, and the fresh tree must re-flatten to the same sequence, field for field. The sequence half is the consuming check for every entry field at once — a dropped or wrong field (the flatten-fingerprint class) surfaces here even when no downstream reader exists yet.
+    /// Exact round trip: `.exact` materialization of a tree's own flattening must reproduce the value, and the fresh tree must re-flatten to the same sequence, field for field. The sequence half is the consuming check for every entry field at once — a dropped or wrong field (the flatten-fingerprint class) surfaces here even when no downstream reader exists yet.
     private static func checkExactRoundTrip(
         _ gen: AnyGenerator,
         sequence: ChoiceSequence,
@@ -229,14 +337,14 @@ extension MetaFuzz {
         switch Materializer.materialize(gen, prefix: sequence, mode: .exact, fallbackTree: tree) {
             case let .success(materialized, freshTree, _):
                 guard anyEquals(materialized, value) else {
-                    throw ExactRoundTripViolation("exact materialisation produced \(materialized), not \(value), for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                    throw ExactRoundTripViolation("exact materialization produced \(materialized), not \(value), for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
                 }
                 let reflattened = ChoiceSequence.flatten(freshTree)
                 guard reflattened == sequence else {
-                    throw ExactRoundTripViolation("re-flattening after exact materialisation changed the sequence for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                    throw ExactRoundTripViolation("re-flattening after exact materialization changed the sequence for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
                 }
             case .rejected, .failed:
-                throw ExactRoundTripViolation("exact materialisation rejected the tree's own flattening for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                throw ExactRoundTripViolation("exact materialization rejected the tree's own flattening for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
     }
 
@@ -248,7 +356,7 @@ extension MetaFuzz {
         }
     }
 
-    /// Guided totality and cluster-key stability: guided materialisation of an arbitrary mutation must complete cleanly with a sane convergence, and repeating it with the same seed and fallback must produce the same outcome and cluster key.
+    /// Guided totality and cluster-key stability: guided materialization of an arbitrary mutation must complete cleanly with a sane convergence, and repeating it with the same seed and fallback must produce the same outcome and cluster key.
     private static func checkGuidedTotality(
         _ gen: AnyGenerator,
         mutated: ChoiceSequence,
@@ -268,13 +376,13 @@ extension MetaFuzz {
                     case let .success(_, secondTree, _):
                         let secondKey = ChoiceSequence.flatten(secondTree, skipBindInners: true).clusterKey
                         guard key == secondKey else {
-                            throw ClusterKeyStabilityViolation("same guided materialisation produced different cluster keys for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                            throw ClusterKeyStabilityViolation("same guided materialization produced different cluster keys for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
                         }
                     case .rejected, .failed:
-                        throw GuidedDeterminismViolation("guided materialisation succeeded then failed on identical input for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                        throw GuidedDeterminismViolation("guided materialization succeeded then failed on identical input for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
                 }
             case .rejected, .failed:
-                // A clean discard is inside the guided contract: filters can reject the materialised value.
+                // A clean discard is inside the guided contract: filters can reject the materialized value.
                 return
         }
     }
@@ -303,10 +411,10 @@ extension MetaFuzz {
         switch Materializer.materialize(gen, prefix: reducedSequence, mode: .exact, fallbackTree: reducedTree) {
             case let .success(materialized, _, _):
                 guard anyEquals(materialized, shrunk) else {
-                    throw ReductionClosedLoopViolation("reduced sequence materialises to \(materialized), not the reported \(shrunk), for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                    throw ReductionClosedLoopViolation("reduced sequence materializes to \(materialized), not the reported \(shrunk), for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
                 }
             case .rejected, .failed:
-                throw ReductionClosedLoopViolation("reduced sequence failed to materialise for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                throw ReductionClosedLoopViolation("reduced sequence failed to materialize for recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
         let secondOutcome = try? Interpreters.choiceGraphReduce(
             gen: gen, tree: reducedTree, output: shrunk, config: .init(maxStalls: 2), property: property
@@ -322,6 +430,71 @@ extension MetaFuzz {
     private static func pickIntensity(_ prng: inout Xoshiro256) -> MutationIntensity {
         let bands = MutationIntensity.allCases
         return bands[Int(prng.next(upperBound: UInt64(bands.count)))]
+    }
+}
+
+/// Rebuilds recipes from one synthetic source location so source-fingerprinted operations denote the same generator in every oracle.
+private func buildOracleGenerator(from recipe: GenRecipe) -> AnyGenerator {
+    buildGenerator(
+        from: recipe,
+        fileID: "ExhaustMetaFuzz/OracleGenerator",
+        filePath: "ExhaustMetaFuzz/OracleGenerator.swift",
+        line: 1,
+        column: 1
+    )
+}
+
+private func randomNumberGeneratorSnapshotsEqual(
+    _ first: (seed: UInt64, state: Xoshiro256.StateType),
+    _ second: (seed: UInt64, state: Xoshiro256.StateType)
+) -> Bool {
+    first.seed == second.seed
+        && first.state.0 == second.state.0
+        && first.state.1 == second.state.1
+        && first.state.2 == second.state.2
+        && first.state.3 == second.state.3
+}
+
+private enum InterpreterGenerationOutcome: CustomStringConvertible {
+    case value(Any)
+    case exhausted
+    case failure(String)
+
+    var description: String {
+        switch self {
+            case let .value(value):
+                "value(\(value))"
+            case .exhausted:
+                "exhausted"
+            case let .failure(failure):
+                "failure(\(failure))"
+        }
+    }
+}
+
+private func nextValueOutcome(
+    _ interpreter: inout ValueInterpreter<Any>
+) -> InterpreterGenerationOutcome {
+    do {
+        guard let value = try interpreter.next() else {
+            return .exhausted
+        }
+        return .value(value)
+    } catch {
+        return .failure("\(type(of: error)): \(error)")
+    }
+}
+
+private func nextTreeValueOutcome(
+    _ interpreter: inout ValueAndChoiceTreeInterpreter<Any>
+) -> InterpreterGenerationOutcome {
+    do {
+        guard let value = try interpreter.next()?.value else {
+            return .exhausted
+        }
+        return .value(value)
+    } catch {
+        return .failure("\(type(of: error)): \(error)")
     }
 }
 

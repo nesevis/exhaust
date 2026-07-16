@@ -4,7 +4,7 @@ import ExhaustCore
 
 /// The outcome of a `#explore(time:)` coverage-guided run: a clustered fault inventory plus throughput and coverage statistics.
 ///
-/// A `time:` run catalogues failures instead of stopping at the first one, so the report carries every distinct fault cluster the run discovered. Assert on ``clusters`` when a run is expected to find bugs (combine with `.suppress(.issueReporting)`), or on ``termination`` and the attempt counts when validating search behavior.
+/// A `time:` run catalogs failures instead of stopping at the first one, so the report carries every distinct fault cluster the run discovered. Assert on ``clusters`` when a run is expected to find bugs (combine with `.suppress(.issueReporting)`), or on ``termination`` and the attempt counts when validating search behavior.
 ///
 /// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 public struct FuzzReport: Sendable {
@@ -55,6 +55,9 @@ public struct FuzzReport: Sendable {
 
         /// Necessary edges absent from the passing runs most similar to this cluster: the branches that push the SUT from "almost fails" to "fails". Empty when no passing runs exist to compare against.
         public let nearMissEdgeIndices: [Int]
+
+        /// The reduced choice sequence retained for source-located diagnostic replay. Package code uses this to materialize the counterexample without exposing the generator's internal representation publicly.
+        package let reducedSequence: ExhaustCore.ChoiceSequence
     }
 
     /// One edge that separates a cluster's failures from passing runs.
@@ -70,7 +73,7 @@ public struct FuzzReport: Sendable {
         /// The fraction of passing corpus entries that hit the edge.
         public let passingHitFraction: Double
 
-        /// The symbolised source location, like `parseHeader(_:) + 48 (Parser.swift:142)`. Nil when the build lacks a PC table or the platform cannot resolve it.
+        /// The symbolized source location, like `parseHeader(_:) + 48 (Parser.swift:142)`. Nil when the build lacks a PC table or the platform cannot resolve it.
         public let location: String?
     }
 
@@ -111,17 +114,43 @@ public struct FuzzReport: Sendable {
     /// Failures that were recorded without reduction and matched no existing cluster's symptom, keyed by symptom. Nonzero counts mean the backpressure gate declined dispatches whose cluster membership is therefore unknown.
     public let unreducedFailureCounts: [String: Int]
 
-    /// Attempts completed by Phase 1 (covering-array screening).
+    /// Candidate rows opened by Phase 1 (covering-array screening), including rows rejected before property entry.
     public let screeningAttempts: Int
 
-    /// Attempts completed by Phase 2 (random sampling).
+    /// Generated candidates opened and evaluated by Phase 2 (random sampling).
     public let samplingAttempts: Int
 
-    /// Attempts completed by Phase 3 (the mutation phase).
+    /// Candidate opportunities opened by Phase 3 (the mutation phase), including candidates rejected before property entry.
     public let mutationAttempts: Int
 
-    /// Mutated candidates the materialiser could not turn into a value. Discarded attempts cost mutation and materialisation time but never invoke the property.
+    /// Mutated candidates the materializer could not turn into a value. These attempts contribute to ``mutationAttempts`` but invoke the property zero times.
     public let discardedAttempts: Int
+
+    /// Screening rows rejected while building or materializing their candidate before property entry.
+    public let screeningRejectedAttempts: Int
+
+    /// Search attempts that reached the property and produced an attributed coverage sample.
+    ///
+    /// This is the denominator for the edge estimators and ``attemptsPerSecond``. Use ``totalAttempts`` to count opened search opportunities, including pre-property rejections.
+    public let evaluatedSearchCases: Int
+
+    /// Property invocations used to re-evaluate candidates after state-machine pruning.
+    public let pruneInvocations: Int
+
+    /// Property invocations made by counterexample reduction.
+    public let reductionInvocations: Int
+
+    /// Property invocations made while normalizing reduced counterexamples.
+    public let normalizationInvocations: Int
+
+    /// Property invocations made to capture post-reduction coverage signatures for cluster classification.
+    public let classificationInvocations: Int
+
+    /// Property invocations made while restoring coverage for persisted corpus entries whose saved signatures no longer match the build.
+    public let recoveryInvocations: Int
+
+    /// Final source-located property invocations used to report assertion-closure failures.
+    public private(set) var diagnosticInvocations: Int
 
     /// Entries accepted into the corpus across all phases.
     public let corpusEntryCount: Int
@@ -132,19 +161,19 @@ public struct FuzzReport: Sendable {
     /// Total instrumented edges across all loaded instrumented modules. A denominator for module size, not for exploration progress — the count includes code the property never calls.
     public let instrumentedEdgeCount: Int
 
-    /// Edges hit by exactly one attempt across the whole run. The raw singleton count (f₁) behind the discovery-probability and reachability estimates, exposed so downstream tooling can recompute or extrapolate.
+    /// Edges hit by exactly one evaluated search case across the whole run. The raw singleton count (f₁) behind the discovery-probability and reachability estimates, exposed so downstream tooling can recompute or extrapolate.
     public let edgeSingletonCount: Int
 
-    /// Edges hit by exactly two attempts across the whole run — the doubleton count (f₂) behind ``estimatedReachableEdgeCount``.
+    /// Edges hit by exactly two evaluated search cases across the whole run — the doubleton count (f₂) behind ``estimatedReachableEdgeCount``.
     public let edgeDoubletonCount: Int
 
-    /// The Good-Turing estimate of the probability that one more attempt covers a new edge (`f₁/n`).
+    /// The Good-Turing estimate of the probability that one more evaluated search case covers a new edge (`f₁/n`).
     ///
-    /// Use this to decide whether extending the budget buys anything: at 2×10⁻⁶, a new edge costs about 500,000 further attempts. The estimate is scoped to what this generator and property can reach and is proven consistent as attempts grow, unlike time-since-last-discovery, which swings orders of magnitude minute to minute.
+    /// Use this to decide whether extending the budget buys anything: at 2×10⁻⁶, a new edge costs about 500,000 further evaluated cases. The estimate is scoped to what this generator and property can reach and is proven consistent as the sample count grows, unlike time-since-last-discovery, which swings orders of magnitude minute to minute.
     public var estimatedNextEdgeProbability: Double {
         CoverageEstimators.goodTuringNextDiscoveryProbability(
             singletons: edgeSingletonCount,
-            attempts: totalAttempts
+            attempts: evaluatedSearchCases
         )
     }
 
@@ -156,7 +185,7 @@ public struct FuzzReport: Sendable {
             covered: coveredEdgeCount,
             singletons: edgeSingletonCount,
             doubletons: edgeDoubletonCount,
-            attempts: totalAttempts
+            attempts: evaluatedSearchCases
         )
     }
 
@@ -171,32 +200,53 @@ public struct FuzzReport: Sendable {
 
     /// Wall-clock time spent reducing, normalizing, and classifying failures, inline on the search's lane.
     ///
-    /// Reduction displaces attempts one for one, so a failure-dense run spends a visible share of its budget here. ``attemptsPerSecond`` and ``testingOverheadFraction`` are computed net of this time, so they keep describing the search pipeline rather than the failure rate.
+    /// Reduction displaces search opportunities, so a failure-dense run spends a visible share of its budget here. ``attemptsPerSecond`` and ``testingOverheadFraction`` are computed net of this time, so they keep describing the search pipeline rather than the failure rate.
     public let reductionTime: TimeBudget
 
-    /// Attempts completed across all phases. Throughput is the currency of `time:` mode — bug yield scales with attempts.
+    /// Candidate opportunities opened across all search phases, including candidates rejected before property entry.
     public var totalAttempts: Int {
         screeningAttempts + samplingAttempts + mutationAttempts
     }
 
-    /// The fraction of the run's search time spent outside the property body: generation, mutation, materialisation, coverage snapshots, and corpus bookkeeping. Time spent reducing failures is excluded (see ``reductionTime``).
+    /// Search attempts rejected before property entry.
+    public var rejectedSearchAttempts: Int {
+        screeningRejectedAttempts + discardedAttempts
+    }
+
+    /// Property invocations across search, pruning, reduction, normalization, classification, recovery, and final diagnostic replay.
+    public var totalPropertyInvocations: Int {
+        evaluatedSearchCases
+            + pruneInvocations
+            + reductionInvocations
+            + normalizationInvocations
+            + classificationInvocations
+            + recoveryInvocations
+            + diagnosticInvocations
+    }
+
+    /// The fraction of the run's search time spent outside the property body: generation, mutation, materialization, coverage snapshots, and corpus bookkeeping. Time spent reducing failures is excluded (see ``reductionTime``).
     ///
     /// Throughput is the currency of `time:` mode, and every microsecond of per-attempt testing overhead is subtracted directly from search power. A rising fraction against a baseline means the pipeline, not the property, is eating the budget. For sub-microsecond properties a high fraction is expected — there is little property time to dominate.
     public let testingOverheadFraction: Double
 
-    /// Attempts per second over the run's search time, net of ``reductionTime``. A falling number against a baseline means testing or property overhead is eating the budget.
+    /// Evaluated search cases per second over the run's search time, net of ``reductionTime``. Rejected candidates are excluded because they never reach the property or contribute an edge-incidence sample.
     public var attemptsPerSecond: Double {
         let seconds = elapsed.seconds - reductionTime.seconds
         guard seconds > 0 else {
             return 0
         }
-        return Double(totalAttempts) / seconds
+        return Double(evaluatedSearchCases) / seconds
     }
 }
 
 // MARK: - Wrapping the package-level result
 
 package extension FuzzReport {
+    /// Records one source-located diagnostic replay after a reduced counterexample was materialized successfully.
+    mutating func recordDiagnosticInvocation() {
+        diagnosticInvocations += 1
+    }
+
     /// Builds the public report from the runner's raw result. Cluster timestamps are converted from monotonic clock readings to run-relative durations.
     ///
     /// - Parameter symbolizeEdges: Whether to resolve discriminating edges to source locations through the live PC table. True only for sancov-backed runs — a synthetic source's edge indices do not address real program counters.
@@ -238,16 +288,25 @@ package extension FuzzReport {
                 lastSeen: TimeBudget(nanoseconds: cluster.lastSeenNanoseconds &- runStartNanoseconds),
                 discriminatingEdges: rankedEdges,
                 necessaryEdgeCount: discrimination?.necessaryEdges.count ?? 0,
-                nearMissEdgeIndices: discrimination?.nearMissDistinguishingEdges.indices ?? []
+                nearMissEdgeIndices: discrimination?.nearMissDistinguishingEdges.indices ?? [],
+                reducedSequence: cluster.reducedSequence
             )
         }
         unreducedFailureCounts = Dictionary(
             uniqueKeysWithValues: result.unmatchedUnreducedCounts.map { ($0.key.kind, $0.value) }
         )
-        screeningAttempts = result.screeningAttempts
-        samplingAttempts = result.samplingAttempts
-        mutationAttempts = result.mutationAttempts
-        discardedAttempts = result.discardedAttempts
+        screeningAttempts = result.counts.screeningAttempts
+        samplingAttempts = result.counts.samplingAttempts
+        mutationAttempts = result.counts.mutationAttempts
+        discardedAttempts = result.counts.discardedAttempts
+        screeningRejectedAttempts = result.counts.screeningRejectedAttempts
+        evaluatedSearchCases = result.counts.evaluatedSearchCases
+        pruneInvocations = result.counts.pruneInvocations
+        reductionInvocations = result.counts.reductionInvocations
+        normalizationInvocations = result.counts.normalizationInvocations
+        classificationInvocations = result.counts.classificationInvocations
+        recoveryInvocations = result.counts.recoveryInvocations
+        diagnosticInvocations = 0
         corpusEntryCount = result.corpusEntryCount
         coveredEdgeCount = result.coveredEdgeCount
         instrumentedEdgeCount = result.instrumentedEdgeCount
@@ -271,6 +330,14 @@ package extension FuzzReport {
             samplingAttempts: 0,
             mutationAttempts: 0,
             discardedAttempts: 0,
+            screeningRejectedAttempts: 0,
+            evaluatedSearchCases: 0,
+            pruneInvocations: 0,
+            reductionInvocations: 0,
+            normalizationInvocations: 0,
+            classificationInvocations: 0,
+            recoveryInvocations: 0,
+            diagnosticInvocations: 0,
             corpusEntryCount: 0,
             coveredEdgeCount: 0,
             instrumentedEdgeCount: 0,

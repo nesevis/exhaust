@@ -9,7 +9,7 @@ package extension ChoiceTree {
     /// Extracts the ``ChoiceMetadata`` for this tree node, falling back to the first child whose valid range is non-nil for group nodes that lack their own metadata.
     var metadata: ChoiceMetadata {
         switch self {
-            case let .choice(_, meta), let .sequence(_, _, meta):
+            case let .choice(_, meta), let .sequence(_, meta):
                 return meta
             case let .group(array, _):
                 if let meta = array.first(where: { $0.metadata.validRange != nil })?.metadata {
@@ -35,11 +35,10 @@ package extension ChoiceTree {
                 return .choice(targetValue, metadata)
             case .just, .getSize:
                 return self
-            case let .sequence(length, elements, metadata):
+            case let .sequence(elements, metadata):
                 return .sequence(
-                    length: length,
                     elements: elements.map(\.minimizingLeaves),
-                    metadata
+                    metadata: metadata
                 )
             case let .branch(b):
                 return .branch(

@@ -462,7 +462,7 @@ let etnaSTLCExprGen: ReflectiveGenerator<STLCExpr> =
 //   - genVar is a single entry picking uniformly among candidates
 //   - Expression depth capped at 10 (matching Rust's g.size().min(10))
 //   - Lazy construction: sub-generators built inside .bind, only the chosen
-//     branch materialises per sample (~depth nodes, not ~2^depth)
+//     branch materializes per sample (~depth nodes, not ~2^depth)
 //
 // These mutations require ~30K-60K samples to find reliably:
 //   shift_var_leq, subst_abs_no_shift

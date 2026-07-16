@@ -1,21 +1,164 @@
+/// Counts the mutually exclusive outcomes from one encoder pass.
+package struct ReductionProbeCounts: Sendable, Equatable {
+    package private(set) var emitted = 0
+    package private(set) var accepted = 0
+    package private(set) var rejectedByCache = 0
+    package private(set) var rejectedDuringMaterialization = 0
+    package private(set) var propertyPassed = 0
+    package private(set) var propertyFailed = 0
+    package private(set) var materializationAttempts = 0
+
+    /// Creates a count value, primarily for restoring or testing completed pass summaries.
+    package init(
+        emitted: Int = 0,
+        accepted: Int = 0,
+        rejectedByCache: Int = 0,
+        rejectedDuringMaterialization: Int = 0,
+        propertyPassed: Int = 0,
+        propertyFailed: Int = 0,
+        materializationAttempts: Int = 0
+    ) {
+        self.emitted = emitted
+        self.accepted = accepted
+        self.rejectedByCache = rejectedByCache
+        self.rejectedDuringMaterialization = rejectedDuringMaterialization
+        self.propertyPassed = propertyPassed
+        self.propertyFailed = propertyFailed
+        self.materializationAttempts = materializationAttempts
+    }
+
+    /// The number of emitted probes assigned exactly one terminal outcome.
+    package var terminalOutcomes: Int {
+        rejectedByCache + rejectedDuringMaterialization + propertyPassed + propertyFailed
+    }
+
+    /// The number of probes that entered the property.
+    package var propertyInvocations: Int {
+        propertyPassed + propertyFailed
+    }
+
+    /// The combined decoder-rejection view retained for the existing public report property.
+    package var decoderRejections: Int {
+        rejectedDuringMaterialization + propertyPassed + propertyFailed - accepted
+    }
+
+    /// Opens one encoder probe.
+    mutating func recordEmission() {
+        emitted += 1
+    }
+
+    /// Terminates the current probe before materialization.
+    mutating func recordCacheRejection() {
+        rejectedByCache += 1
+    }
+
+    /// Terminates the current probe with its decode outcome and records admission separately.
+    mutating func record(_ outcome: SequenceDecodingOutcome) {
+        materializationAttempts += outcome.materializationAttempts
+        switch outcome {
+            case .materializationRejected:
+                rejectedDuringMaterialization += 1
+            case .propertyPassed:
+                propertyPassed += 1
+            case let .propertyFailed(reduction, _):
+                propertyFailed += 1
+                if reduction != nil {
+                    accepted += 1
+                }
+        }
+    }
+
+    /// Merges another pass after both have finished.
+    mutating func merge(_ other: ReductionProbeCounts) {
+        emitted += other.emitted
+        accepted += other.accepted
+        rejectedByCache += other.rejectedByCache
+        rejectedDuringMaterialization += other.rejectedDuringMaterialization
+        propertyPassed += other.propertyPassed
+        propertyFailed += other.propertyFailed
+        materializationAttempts += other.materializationAttempts
+    }
+}
+
 /// Statistics collected from a single reduction run.
 ///
 /// Captures per-encoder probe counts, materialization attempts, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree. Accumulated monotonically by ``ReductionMachine`` during reduction and extracted at the end of the pipeline.
 public struct ReductionStats: Sendable {
+    /// Run-wide reduction probe outcomes. Encoder passes and structural relax proposals merge into this value after their local work finishes.
+    private var probeCounts = ReductionProbeCounts()
+
+    /// Reduction proposals opened across encoder passes and structural relax rounds.
+    package var reductionProbes: Int {
+        probeCounts.emitted
+    }
+
+    /// Reduction proposals admitted by the reducer after the property failed.
+    package var reductionProbesAccepted: Int {
+        probeCounts.accepted
+    }
+
+    /// Reduction proposals rejected by the cache before materialization.
+    package var reductionProbesRejectedByCache: Int {
+        probeCounts.rejectedByCache
+    }
+
+    /// Reduction proposals rejected during materialization before property entry.
+    package var reductionProbesRejectedDuringMaterialization: Int {
+        probeCounts.rejectedDuringMaterialization
+    }
+
+    /// Reduction proposals whose materialized value satisfied the property.
+    package var reductionProbesWherePropertyPassed: Int {
+        probeCounts.propertyPassed
+    }
+
+    /// Reduction proposals whose materialized value falsified the property, whether or not the reducer later admitted the proposal.
+    package var reductionProbesWherePropertyFailed: Int {
+        probeCounts.propertyFailed
+    }
+
+    /// Per-encoder probe outcome counts accumulated across all cycles.
+    package var encoderCounts: [EncoderName: ReductionProbeCounts] = [:]
+
     /// Per-encoder probe counts accumulated across all cycles. Total probes emitted by each encoder, including those that hit the reject cache.
-    package var encoderProbes: [EncoderName: Int]
+    package var encoderProbes: [EncoderName: Int] {
+        encoderCounts.mapValues(\.emitted)
+    }
 
     /// Per-encoder probe counts that were accepted (the decoder produced a valid reduction).
-    package var encoderProbesAccepted: [EncoderName: Int]
+    package var encoderProbesAccepted: [EncoderName: Int] {
+        encoderCounts.mapValues(\.accepted)
+    }
 
     /// Per-encoder probe counts that hit the reject cache before decoding (no materialization).
-    package var encoderProbesRejectedByCache: [EncoderName: Int]
+    package var encoderProbesRejectedByCache: [EncoderName: Int] {
+        encoderCounts.mapValues(\.rejectedByCache)
+    }
 
-    /// Per-encoder probe counts that were materialized but rejected by the decoder (failed shortlex check, filter rejection, range violation, decode error, or property still passes). Each such probe consumes one materialization without a property invocation.
-    package var encoderProbesRejectedByDecoder: [EncoderName: Int]
+    /// Per-encoder probes rejected during materialization before the property was invoked.
+    package var encoderProbesRejectedDuringMaterialization: [EncoderName: Int] {
+        encoderCounts.mapValues(\.rejectedDuringMaterialization)
+    }
+
+    /// Per-encoder probes whose materialized value satisfied the property.
+    package var encoderProbesWherePropertyPassed: [EncoderName: Int] {
+        encoderCounts.mapValues(\.propertyPassed)
+    }
+
+    /// Per-encoder probes whose materialized value falsified the property. Accepted probes are a subset of this count because later materialization and admission checks can still reject a proposal.
+    package var encoderProbesWherePropertyFailed: [EncoderName: Int] {
+        encoderCounts.mapValues(\.propertyFailed)
+    }
+
+    /// Combines per-encoder materialization rejection, property success, and property failure that was not admitted.
+    package var encoderProbesRejectedByDecoder: [EncoderName: Int] {
+        encoderCounts.mapValues(\.decoderRejections)
+    }
 
     /// Total materialization attempts (decoder invocations) during reduction.
-    package var totalMaterializations: Int
+    package var totalMaterializations: Int {
+        probeCounts.materializationAttempts
+    }
 
     /// Total reduction cycles completed.
     package var cycles: Int
@@ -79,11 +222,6 @@ public struct ReductionStats: Sendable {
 
     /// Creates an empty stats value.
     package init() {
-        encoderProbes = [:]
-        encoderProbesAccepted = [:]
-        encoderProbesRejectedByCache = [:]
-        encoderProbesRejectedByDecoder = [:]
-        totalMaterializations = 0
         cycles = 0
         structuralFloorMotionEvents = 0
         valueFloorMotionEvents = 0
@@ -92,19 +230,10 @@ public struct ReductionStats: Sendable {
 
     /// Merges another stats value into this one by summing counters and taking the latest graph stats.
     package mutating func merge(_ other: ReductionStats) {
-        for (key, value) in other.encoderProbes {
-            encoderProbes[key, default: 0] += value
+        for (name, counts) in other.encoderCounts {
+            encoderCounts[name, default: ReductionProbeCounts()].merge(counts)
         }
-        for (key, value) in other.encoderProbesAccepted {
-            encoderProbesAccepted[key, default: 0] += value
-        }
-        for (key, value) in other.encoderProbesRejectedByCache {
-            encoderProbesRejectedByCache[key, default: 0] += value
-        }
-        for (key, value) in other.encoderProbesRejectedByDecoder {
-            encoderProbesRejectedByDecoder[key, default: 0] += value
-        }
-        totalMaterializations += other.totalMaterializations
+        probeCounts.merge(other.probeCounts)
         cycles += other.cycles
         structuralFloorMotionEvents += other.structuralFloorMotionEvents
         valueFloorMotionEvents += other.valueFloorMotionEvents
@@ -127,6 +256,20 @@ public struct ReductionStats: Sendable {
         }
         graphStats.merge(other.graphStats)
         stepTimings.merge(other.stepTimings)
+    }
+
+    /// Accumulates a completed pass into the per-encoder totals.
+    mutating func record(
+        _ counts: ReductionProbeCounts,
+        for encoderName: EncoderName
+    ) {
+        probeCounts.merge(counts)
+        encoderCounts[encoderName, default: ReductionProbeCounts()].merge(counts)
+    }
+
+    /// Accumulates structural relax proposals, which do not belong to an encoder pass.
+    mutating func recordStructuralRelax(_ counts: ReductionProbeCounts) {
+        probeCounts.merge(counts)
     }
 }
 

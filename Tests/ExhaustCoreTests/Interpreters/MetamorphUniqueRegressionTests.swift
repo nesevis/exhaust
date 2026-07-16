@@ -29,7 +29,7 @@ struct MetamorphUniqueRegressionTests {
                 case let .success(materialized, _, _):
                     #expect(anyEquals(materialized, value), "Exact replay produced \(materialized), not \(value), seed \(seed)")
                 case .rejected, .failed:
-                    Issue.record("Exact materialisation rejected the tree's own flattening, seed \(seed)")
+                    Issue.record("Exact materialization rejected the tree's own flattening, seed \(seed)")
                     return
             }
             checked += 1

@@ -77,9 +77,8 @@ package enum SequenceCoveringArray {
         }
 
         return .sequence(
-            length: UInt64(elementTrees.count),
             elements: elementTrees,
-            ChoiceMetadata(
+            metadata: ChoiceMetadata(
                 validRange: sequenceLengthRange,
                 isRangeExplicit: true
             )
@@ -133,9 +132,8 @@ package enum SequenceCoveringArray {
         }
 
         return .sequence(
-            length: UInt64(elementTrees.count),
             elements: elementTrees,
-            ChoiceMetadata(
+            metadata: ChoiceMetadata(
                 validRange: sequenceLengthRange,
                 isRangeExplicit: true
             )
@@ -295,9 +293,8 @@ package enum SequenceCoveringArray {
         }
 
         return .sequence(
-            length: UInt64(elementTrees.count),
             elements: elementTrees,
-            ChoiceMetadata(
+            metadata: ChoiceMetadata(
                 validRange: sequenceLengthRange,
                 isRangeExplicit: true
             )

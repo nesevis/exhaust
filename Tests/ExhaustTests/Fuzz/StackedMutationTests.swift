@@ -28,7 +28,7 @@ struct StackedMutationTests {
                 )
             )
             let result = runner.run()
-            return (result.totalAttempts, Set(result.clusters.map(\.reducedDescription)))
+            return (result.counts.totalAttempts, Set(result.clusters.map(\.reducedDescription)))
         }
         let first = runOutcome(seed: 17)
         let second = runOutcome(seed: 17)

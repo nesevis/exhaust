@@ -168,8 +168,8 @@ struct ChoiceGraphClassificationTests {
         let elements5: [ChoiceTree] = (0 ..< 5).map { _ in
             ChoiceTree.choice(ChoiceValue(0 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         }
-        let seqLow = ChoiceTree.sequence(length: 2, elements: elements2, .init(validRange: nil, isRangeExplicit: false))
-        let seqHigh = ChoiceTree.sequence(length: 5, elements: elements5, .init(validRange: nil, isRangeExplicit: false))
+        let seqLow = ChoiceTree.sequence(elements: elements2, metadata: .init(validRange: nil, isRangeExplicit: false))
+        let seqHigh = ChoiceTree.sequence(elements: elements5, metadata: .init(validRange: nil, isRangeExplicit: false))
         #expect(ChoiceGraph.sameTopology(seqLow, seqHigh))
     }
 
@@ -177,9 +177,8 @@ struct ChoiceGraphClassificationTests {
     func sameTopologyKindMismatch() {
         let leaf = ChoiceTree.choice(ChoiceValue(0 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true))
         let seq = ChoiceTree.sequence(
-            length: 1,
             elements: [leaf],
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
         #expect(ChoiceGraph.sameTopology(leaf, seq) == false)
     }

@@ -36,7 +36,7 @@ struct BidirectionalResult {
     let argumentParamRefs: [String]
 
     /// If the callee is a member access (for example `Pet.cat`), the member name.
-    /// When set, the backward mapping uses pattern matching instead of Mirror.
+    /// When set, the backward mapping validates the runtime enum case through `Mirror` before extracting associated values.
     let caseName: String?
 
     /// Original argument labels from the call site, in argument order. `nil` for unlabeled arguments. Used to generate labeled pattern bindings for enum case backward mapping (for example `case let .cat(age: v0)`).
@@ -221,7 +221,10 @@ private func extractCaseName(from callee: ExprSyntax) -> String? {
     guard let memberAccess = callee.as(MemberAccessExprSyntax.self) else {
         return nil
     }
-    let member = memberAccess.declName.baseName.text
+    let rawMember = memberAccess.declName.baseName.text
+    let member = rawMember.first == "`" && rawMember.last == "`"
+        ? String(rawMember.dropFirst().dropLast())
+        : rawMember
     // Exclude explicit .init calls — those are struct/class initializers
     guard member != "init" else { return nil }
     // Uppercase members are qualified type initializers (ABI.VersionNumber(...)),

@@ -11,7 +11,7 @@
 ///
 /// ## Why not ``GraphValueEncoder``?
 ///
-/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a bound value composition, every upstream probe spawns one generator lift materialisation plus a full downstream bound subtree search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
+/// ``GraphValueEncoder`` is designed for *standalone* integer minimization: after binary search converges short of the target, it falls into an inline linear scan (up to ``GraphValueEncoder/linearScanThreshold``) to look for non-monotone gaps, then a cross-zero phase for signed types. Both are appropriate when each probe is cheap. Inside a bound value composition, every upstream probe spawns one generator lift materialization plus a full downstream bound subtree search — so 10+ extra linear-scan upstream probes per dispatch is catastrophic. This encoder strips those phases down to plain binary search.
 ///
 /// ## Lifecycle
 ///
@@ -206,7 +206,7 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
     ///   - upstream: Encoder driving the outer iteration. Started immediately on `upstreamScope`.
     ///   - upstreamScope: The scope the upstream encoder searches over. Fixed for the lifetime of this composition.
     ///   - downstream: Encoder driving the inner iteration. Receives a fresh lifted scope per upstream probe.
-    ///   - upstreamBudget: Maximum number of upstream probes pulled per ``start(scope:)`` call. Each upstream probe triggers one ``lift`` invocation (a generator materialisation) plus a downstream search, so this caps the most expensive part of the composition. Pass a larger value when the upstream domain is small relative to the budget.
+    ///   - upstreamBudget: Maximum number of upstream probes pulled per ``start(scope:)`` call. Each upstream probe triggers one ``lift`` invocation (a generator materialization) plus a downstream search, so this caps the most expensive part of the composition. Pass a larger value when the upstream domain is small relative to the budget.
     ///   - totalProbeCap: Maximum probes the composition emits per ``start(scope:)`` call, across all lifts. Zero means uncapped. Intended for a bind fingerprint's first dispatch of the run, where a fruitless multi-leaf covering enumeration would otherwise run to exhaustion before the gate can blacklist the bind.
     ///   - lift: Closure that materializes the upstream probe and constructs the downstream scope. Returns `nil` to skip the upstream probe (for example when the materialization fails).
     init(
@@ -257,7 +257,7 @@ struct GraphComposedEncoder: StatefulGraphEncoder {
             downstreamActive = false
         }
 
-        // Advance upstream until we find one whose lift produces at least one downstream probe, or until the upstream budget is exhausted. The budget caps the number of upstream probes that contributed to a *valid* lift — failed lifts (`lift` returns nil) do not count because they incur no downstream materialisation cost.
+        // Advance upstream until we find one whose lift produces at least one downstream probe, or until the upstream budget is exhausted. The budget caps the number of upstream probes that contributed to a *valid* lift — failed lifts (`lift` returns nil) do not count because they incur no downstream materialization cost.
         guard let parent = parentScope else { return nil }
         var upstreamCandidate = candidate
         while upstreamProbesUsed < upstreamBudget {

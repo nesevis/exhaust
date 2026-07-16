@@ -6,6 +6,36 @@ import Testing
 /// Smoke coverage for the self-fuzzing oracle roster: on a healthy build, no generated case may violate any oracle. A violation here is either a real engine defect or an over-strict oracle — both need a human look before the harness can trust the roster.
 @Suite("MetaFuzz oracles")
 struct MetaFuzzOracleTests {
+    @Test(
+        "Every generator operation satisfies the exact MetaFuzz laws",
+        arguments: metaFuzzOperationFixtures
+    )
+    func operationFixturesSatisfyExactLaws(
+        fixture: MetaFuzzOperationFixture
+    ) throws {
+        try MetaFuzz.checkOperationFixture(fixture)
+    }
+
+    @Test(
+        "Every generator operation remains total and well-typed under approximation",
+        arguments: metaFuzzOperationFixtures
+    )
+    func operationFixturesSatisfyApproximationSafety(
+        fixture: MetaFuzzOperationFixture
+    ) throws {
+        try MetaFuzz.checkApproximationFixture(fixture)
+    }
+
+    @Test(
+        "Every supported generator operation survives screening materialization",
+        arguments: metaFuzzOperationFixtures
+    )
+    func operationFixturesSatisfyScreeningMaterialization(
+        fixture: MetaFuzzOperationFixture
+    ) throws {
+        try MetaFuzz.checkScreeningFixture(fixture)
+    }
+
     @Test("No oracle fires on healthy code across generated cases", arguments: [1, 2])
     func oraclesHoldOnHealthyCode(maxDepth: Int) throws {
         let caseGen = MetaFuzz.caseGenerator(maxDepth: maxDepth)
@@ -21,6 +51,24 @@ struct MetaFuzzOracleTests {
             }
         }
         #expect(checked > 0, "The case generator must produce checkable cases")
+    }
+
+    @Test("Tuned filter laws compare one stable generator identity")
+    func tunedFilterLawsUseStableGeneratorIdentity() throws {
+        let recipe = GenRecipe.combinator(.filtered(
+            .combinator(.oneOf([
+                .leaf(.int(-18 ... 34)),
+                .leaf(.int(-99 ... 80)),
+                .leaf(.int(43 ... 79)),
+            ])),
+            .isEven
+        ))
+
+        try MetaFuzz.check(MetaFuzzCase(
+            recipe: recipe,
+            valueSeed: 9_223_372_036_854_775_887,
+            perturbationSeed: 8_260_363_646_961_457_174
+        ))
     }
 
     @Test("Case generation is deterministic under a pinned seed")

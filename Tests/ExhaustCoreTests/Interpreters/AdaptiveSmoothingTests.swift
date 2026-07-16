@@ -57,7 +57,7 @@ private func containsOpaqueGroup(_ tree: ChoiceTree) -> Bool {
                 return true
             }
             return children.contains(where: containsOpaqueGroup)
-        case let .sequence(_, elements, _):
+        case let .sequence(elements, _):
             return elements.contains(where: containsOpaqueGroup)
         case let .branch(branchData):
             return containsOpaqueGroup(branchData.choice)

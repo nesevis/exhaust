@@ -29,13 +29,6 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 
 - <doc:BuildingGenerators>
 - ``ExhaustCore/ReflectiveGenerator``
-- ``ExhaustCore/SizeScaling``
-- ``ExhaustCore/UnfoldStep``
-- ``ExhaustCore/FilterType``
-- ``ExhaustCore/ReplaySeed``
-- ``ExhaustCore/GeneratorError``
-- ``ExhaustCore/ReflectionError``
-- ``ExhaustCore/DateStride``
 
 ### Property Testing
 
@@ -127,6 +120,7 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 
 - ``ExhaustReport``
 - ``ExploreReport``
+- ``ExploreInvocationCounts``
 - ``ExploreTermination``
 - ``DirectionCoverage``
 - ``DirectionOutcome``
@@ -138,15 +132,6 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 - ``StateMachineDiscoveryMethod``
 - ``TraceStep``
 - ``DiagnosticSnapshot``
-- ``ExhaustCore/ReductionStats``
-- ``ExhaustCore/CouplingEdge``
-- ``ExhaustCore/ChoiceGraphStats``
-- ``ExhaustCore/EncoderName``
-- ``ExhaustCore/FilterObservation``
-- ``ExhaustCore/FilterSourceLocation``
-- ``ExhaustCore/NumericTypeCoverage``
-- ``ExhaustCore/CoOccurrenceMatrix``
-- ``ExhaustCore/OpenPBTStatsLine``
 
 ### Swift Testing Traits
 
@@ -155,12 +140,3 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 - ``ExhaustTraitConfiguration``
 - ``ExhaustSuiteTrait``
 - ``ExhaustSuiteTraitOption``
-
-### Logging
-
-- ``ExhaustCore/LogLevel``
-- ``ExhaustCore/LogFormat``
-
-### Modules
-
-- ``ExhaustCore``

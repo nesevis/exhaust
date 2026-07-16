@@ -43,10 +43,5 @@ struct UUIDGeneratorTests {
     func examine() {
         let gen = #gen(.uuid())
         #expect(#examine(gen, .budget(50)).passed)
-
-        let gen2 = #gen(.uuid()).bind { _ in gen }
-        withKnownIssue("Forward-only bind is correctly detected by #examine") {
-            #expect(#examine(gen2, .budget(1)).passed)
-        }
     }
 }

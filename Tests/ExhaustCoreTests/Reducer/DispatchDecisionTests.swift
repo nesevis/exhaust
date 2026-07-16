@@ -8,12 +8,11 @@ struct DispatchDecisionTests {
     // MARK: - Fixtures
 
     private static let sequenceTree = ChoiceTree.sequence(
-        length: 2,
         elements: [
             .choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
             .choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10, isRangeExplicit: true)),
         ],
-        .init(validRange: nil, isRangeExplicit: false)
+        metadata: .init(validRange: nil, isRangeExplicit: false)
     )
 
     private static let fixtureGraph = ChoiceGraph.build(from: sequenceTree)

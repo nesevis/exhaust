@@ -17,7 +17,7 @@ extension ChoiceGraphScheduler {
     /// - Parameters:
     ///   - bindScope: The bound value scope from the source pipeline.
     ///   - scope: The dispatched ``EncoderInput``. Used to seed the upstream encoder's one-leaf scope and to provide the parent tree as the lift's fallback.
-    ///   - gen: The generator. Captured by the lift closure for materialisation.
+    ///   - gen: The generator. Captured by the lift closure for materialization.
     ///   - upstreamBudget: Maximum number of upstream probes the composition will explore. Decayed by ``ChoiceGraphScheduler/runCore(gen:initialTree:initialOutput:config:collectStats:property:)`` based on per-bind stall counts.
     ///   - totalProbeCap: Maximum probes the composition emits across all lifts, zero meaning uncapped. The machine passes ``SchedulerTuning/composedFirstDispatchProbeCap`` for a bind fingerprint's first dispatch of the run and zero afterwards.
     static func makeBoundValueComposition(
@@ -28,7 +28,7 @@ extension ChoiceGraphScheduler {
         upstreamBudget: Int = 15,
         totalProbeCap: Int = 0
     ) -> EncoderDispatch {
-        // Synthesise the upstream scope: a one-leaf integer minimization on the bind-inner. ``mayReshapeOnAcceptance`` is false here because the composition synthesises the reshape change in ``GraphComposedEncoder/wrap``
+        // Synthesize the upstream scope: a one-leaf integer minimization on the bind-inner. ``mayReshapeOnAcceptance`` is false here because the composition synthesizes the reshape change in ``GraphComposedEncoder/wrap``
         // when wrapping each downstream probe — the upstream encoder produces a pure value-only mutation and the composition flips ``mayReshape`` on its way out.
         let upstreamLeafEntry = LeafEntry(
             nodeID: bindScope.upstreamLeafNodeID,
@@ -80,8 +80,8 @@ extension ChoiceGraphScheduler {
 
     /// Lifts an upstream probe into a downstream ``EncoderInput`` for the bound value composition.
     ///
-    /// 1. Materialises the upstream candidate through `gen` to obtain the new bound subtree's choice tree.
-    /// 2. Builds a fresh ``ChoiceGraph`` from the materialised tree. The upstream probe changes a bind-inner value, which can restructure the bound subtree — a full build is the only reliable path when the structure changes.
+    /// 1. Materializes the upstream candidate through `gen` to obtain the new bound subtree's choice tree.
+    /// 2. Builds a fresh ``ChoiceGraph`` from the materialized tree. The upstream probe changes a bind-inner value, which can restructure the bound subtree — a full build is the only reliable path when the structure changes.
     /// 3. Locates the bind's bound child in the lifted graph and collects its descendant leaves as the downstream search range.
     /// 4. Constructs an integer-leaves minimization scope on the lifted graph; the downstream encoder operates on it without knowing it is downstream.
     static func boundValueLift(
@@ -102,7 +102,7 @@ extension ChoiceGraphScheduler {
                 : nil
         }
 
-        // 1. Materialise through the generator to get the new bound subtree. Use guided mode so that downstream coordinates outside the new range get re-resolved from the fallback tree (or PRNG when the fallback has no info) instead of being rejected. The upstream candidate carries the *previous* downstream values, which are typically out-of-range for the new upstream value (Coupling: dropping `n` from 2 to 1 makes the array element value `2`
+        // 1. Materialize through the generator to get the new bound subtree. Use guided mode so that downstream coordinates outside the new range get re-resolved from the fallback tree (or PRNG when the fallback has no info) instead of being rejected. The upstream candidate carries the *previous* downstream values, which are typically out-of-range for the new upstream value (Coupling: dropping `n` from 2 to 1 makes the array element value `2`
         //    out-of-range for the new `int(in: 0...1)` element generator). Mirrors
         //    the bound-value composition's lift configuration.
         guard case let .success(_, freshTree, _) = Materializer.materializeAny(

@@ -11,11 +11,14 @@ extension MetaGeneratorPropertyTests {
         let recipe: GenRecipe = .combinator(.unique(.leaf(.int(-1_000_000 ... 1_000_000))))
         let gen = buildGenerator(from: recipe)
         var iter = ValueAndChoiceTreeInterpreter(gen, seed: 42, maxRuns: 30)
-        var seen = Set<ChoiceSequence>()
+        var seenOperativeHashes = Set<UInt64>()
         var count = 0
         while let (_, tree) = try iter.next() {
             count += 1
-            #expect(seen.insert(ChoiceSequence.flatten(tree)).inserted, "unique produced a duplicate choice sequence")
+            #expect(
+                seenOperativeHashes.insert(ChoiceSequence.flatten(tree).operativeHash).inserted,
+                "unique produced a duplicate choice sequence"
+            )
         }
         #expect(count > 0, "unique produced no values")
     }

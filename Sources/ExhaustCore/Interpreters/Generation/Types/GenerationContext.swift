@@ -5,6 +5,18 @@
 //  Created by Chris Kolbu on 28/2/2026.
 //
 
+/// Identifies the value accepted by one reached `unique` operation during a generation run.
+package enum UniqueGenerationDecision {
+    case key(fingerprint: UInt64, key: AnyHashable)
+    case choiceSequence(fingerprint: UInt64, hash: UInt64)
+}
+
+/// Records accepted `unique` decisions so failure reproduction can repeat the original retry path without mutating deduplication history.
+package final class UniqueGenerationTrace {
+    var decisions: ContiguousArray<UniqueGenerationDecision> = []
+    var replayIndex: Int?
+}
+
 /// Holds the mutable state for a single generation pass: PRNG, size parameter, filter observations, and choice tree construction metadata.
 package struct GenerationContext: ~Copyable {
     // MARK: - Constants
@@ -36,8 +48,10 @@ package struct GenerationContext: ~Copyable {
 
     /// Seen keys for `unique(by:)` deduplication, keyed by site fingerprint.
     package var uniqueSeenKeys: [UInt64: Set<AnyHashable>] = [:]
-    /// Seen choice sequences for `unique()` deduplication, keyed by site fingerprint.
-    package var uniqueSeenSequences: [UInt64: Set<ChoiceSequence>] = [:]
+    /// Seen operative choice-sequence hashes for `unique()` deduplication, keyed by site fingerprint.
+    package var uniqueSeenSequences: [UInt64: Set<UInt64>] = [:]
+    /// Accepted uniqueness decisions for the current run and the replay cursor used by failure reproduction.
+    package var uniqueGenerationTrace = UniqueGenerationTrace()
 
     /// Per-fingerprint filter predicate pass/fail observations.
     package var filterObservations: [UInt64: FilterObservation] = [:]
@@ -63,6 +77,7 @@ package struct GenerationContext: ~Copyable {
             baseSeed: baseSeed,
             isFixed: isFixed,
             size: size,
+            sizeOverride: sizeOverride,
             prng: .init(seed: seed),
             materializePicks: materializePicks,
             runs: runs
@@ -96,6 +111,85 @@ package struct GenerationContext: ~Copyable {
     /// Returns the size parameter for a given run index, cycling through 1 to 100 independently of ``maxRuns``.
     package static func scaledSize(forRun runIndex: UInt64) -> UInt64 {
         (runIndex % 100) + 1
+    }
+
+    // MARK: - Unique decision replay
+
+    /// Starts recording the accepted uniqueness decisions for a new generation run.
+    package mutating func beginUniqueDecisionRecording() {
+        uniqueGenerationTrace.decisions.removeAll(keepingCapacity: true)
+        uniqueGenerationTrace.replayIndex = nil
+    }
+
+    /// Starts a non-mutating replay of the uniqueness decisions recorded for the most recent generation run.
+    package mutating func beginUniqueDecisionReplay() {
+        uniqueGenerationTrace.replayIndex = 0
+    }
+
+    /// Ends uniqueness replay while retaining the recorded decisions for another reproduction attempt.
+    package mutating func endUniqueDecisionReplay() {
+        uniqueGenerationTrace.replayIndex = nil
+    }
+
+    /// Whether replay reached every `unique` operation accepted during the original generation run.
+    package var replayedAllUniqueDecisions: Bool {
+        uniqueGenerationTrace.replayIndex == uniqueGenerationTrace.decisions.count
+    }
+
+    /// Accepts a key during normal generation or when it matches the next decision recorded for replay.
+    ///
+    /// Replay rejects every non-matching candidate and never inserts into the seen set. This repeats the original retry count even though the accepted key is already present in the persistent history.
+    package mutating func acceptUniqueKey(
+        _ key: AnyHashable,
+        fingerprint: UInt64
+    ) -> Bool {
+        if let replayIndex = uniqueGenerationTrace.replayIndex {
+            guard replayIndex < uniqueGenerationTrace.decisions.count else {
+                return false
+            }
+            guard case let .key(expectedFingerprint, expectedKey) = uniqueGenerationTrace.decisions[replayIndex],
+                  expectedFingerprint == fingerprint,
+                  expectedKey == key
+            else {
+                return false
+            }
+            uniqueGenerationTrace.replayIndex = replayIndex + 1
+            return true
+        }
+
+        guard uniqueSeenKeys[fingerprint, default: []].insert(key).inserted else {
+            return false
+        }
+        uniqueGenerationTrace.decisions.append(.key(fingerprint: fingerprint, key: key))
+        return true
+    }
+
+    /// Accepts a choice-sequence hash during normal generation or when it matches the next decision recorded for replay.
+    ///
+    /// Replay rejects every non-matching candidate and never inserts into the seen set. This repeats the original retry count even though the accepted hash is already present in the persistent history.
+    package mutating func acceptUniqueChoiceSequence(
+        hash: UInt64,
+        fingerprint: UInt64
+    ) -> Bool {
+        if let replayIndex = uniqueGenerationTrace.replayIndex {
+            guard replayIndex < uniqueGenerationTrace.decisions.count else {
+                return false
+            }
+            guard case let .choiceSequence(expectedFingerprint, expectedHash) = uniqueGenerationTrace.decisions[replayIndex],
+                  expectedFingerprint == fingerprint,
+                  expectedHash == hash
+            else {
+                return false
+            }
+            uniqueGenerationTrace.replayIndex = replayIndex + 1
+            return true
+        }
+
+        guard uniqueSeenSequences[fingerprint, default: []].insert(hash).inserted else {
+            return false
+        }
+        uniqueGenerationTrace.decisions.append(.choiceSequence(fingerprint: fingerprint, hash: hash))
+        return true
     }
 }
 

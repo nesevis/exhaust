@@ -5,11 +5,11 @@ import Foundation
 
 /// Drives asynchronous spec tests for both `.tasks` and `.threads` modes.
 ///
-/// The `@StateMachine` macro synthesizes this conformance when any `@Command` or `@Invariant` method is `async`. For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method. Override ``failureDescription()`` to include diagnostic state in failure reports.
+/// The `@StateMachine` macro synthesizes this conformance when any `@Command` or `@Invariant` method is `async`. For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method. Override ``StateMachineSpecBase/failureDescription()`` to include diagnostic state in failure reports.
 ///
 /// ## Skip Identification
 ///
-/// Use ``skipIdentifier(specInit:)`` to obtain a synchronous closure for identifying skipped commands. The closure bridges async execution via `Task` + semaphore, matching the pattern used by the async spec runner's property closure.
+/// The internal `skipIdentifier(specInit:)` helper obtains a synchronous closure for identifying skipped commands. The closure bridges async execution via `Task` and a semaphore, matching the pattern used by the async spec runner's property closure.
 public protocol AsyncStateMachineSpec: StateMachineSpecBase, AnyObject {
     /// Executes a command against the model and SUT asynchronously, returning a ``CommandResponse`` for linearizability checking.
     ///

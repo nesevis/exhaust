@@ -94,6 +94,11 @@ struct StructuralReplacementTests {
             var buffer = fixture.sequence
             if encoder.nextProbe(into: &buffer, lastAccepted: false) != nil {
                 #expect(buffer.count <= fixture.sequence.count)
+                let branchFingerprints = buffer.compactMap { entry -> UInt64? in
+                    guard case let .branch(branch) = entry else { return nil }
+                    return branch.fingerprint
+                }
+                #expect(branchFingerprints == [42])
                 emittedCount += 1
             }
         }

@@ -62,7 +62,7 @@ package enum AdaptiveProbe {
     ///
     /// The cost is O(log(|guess − answer|)) rather than O(log(hi − lo)). If the guess is good, this approaches O(1). If the guess is maximally wrong, it costs at most 2× a standard binary search — a bounded downside for a potentially large upside.
     ///
-    /// The empirical centroid from value metadata provides the guess during value minimisation, encoding distributional knowledge into reduced property invocations.
+    /// The empirical centroid from value metadata provides the guess during value minimization, encoding distributional knowledge into reduced property invocations.
     ///
     /// - Parameters:
     ///   - low: Lower bound (inclusive). `predicate(low)` is assumed true.

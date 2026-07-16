@@ -20,7 +20,9 @@ package func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
 
     var choices: [(Int, Generator<GenRecipe>)] = [
         (3, leafGenerator(producing: type)),
+        (1, contramappedGenerator(producing: type, maxDepth: maxDepth)),
         (1, mappedGenerator(producing: type, maxDepth: maxDepth)),
+        (1, prunedGenerator(producing: type, maxDepth: maxDepth)),
         (1, arrayGenerator(producing: type, maxDepth: maxDepth)),
         (1, oneOfGenerator(producing: type, maxDepth: maxDepth)),
         (1, weightedOneOfGenerator(producing: type, maxDepth: maxDepth)),
@@ -30,6 +32,7 @@ package func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
         (1, recursiveGenerator(producing: type, maxDepth: maxDepth)),
         (1, uniqueGenerator(producing: type, maxDepth: maxDepth)),
         (1, classifiedGenerator(producing: type, maxDepth: maxDepth)),
+        (1, reifiedBindGenerator(producing: type, maxDepth: maxDepth)),
     ]
     if type == .int {
         choices.append((1, boundRangeGenerator(maxDepth: maxDepth)))
@@ -96,7 +99,7 @@ private func justIntLeaf() -> Generator<GenRecipe> {
 }
 
 private func doubleRangeLeaf() -> Generator<GenRecipe> {
-    // Generate two bounds and sort them to form a valid range. Guided materialisation deliberately lets float NaN and infinity bit patterns bypass range clamping (Materializer+Handlers), so a mutated fuzz case can deliver non-finite draws here; fold them to zero so every draw builds a valid recipe instead of trapping in the range constructor. Finite draws are unaffected.
+    // Generate two bounds and sort them to form a valid range. Guided materialization deliberately lets float NaN and infinity bit patterns bypass range clamping (Materializer+Handlers), so a mutated fuzz case can deliver non-finite draws here; fold them to zero so every draw builds a valid recipe instead of trapping in the range constructor. Finite draws are unaffected.
     Gen.choose(in: -100.0 ... 100.0 as ClosedRange<Double>).bind { a in
         Gen.choose(in: -100.0 ... 100.0 as ClosedRange<Double>).map { b in
             let first = a.isFinite ? a : 0
@@ -138,6 +141,25 @@ private func narrowingSafeInnerGenerator(
     return leafGenerator(producing: innerType)
 }
 
+private func contramappedGenerator(
+    producing type: RecipeType,
+    maxDepth: Int
+) -> Generator<GenRecipe> {
+    let transforms = InvertibleTransform.applicable(to: type)
+    guard transforms.isEmpty == false else {
+        return leafGenerator(producing: type)
+    }
+    return Gen.choose(from: transforms).bind { transform in
+        narrowingSafeInnerGenerator(
+            for: transform,
+            producing: type,
+            maxDepth: maxDepth
+        ).map { inner in
+            .combinator(.contramapped(inner, transform))
+        }
+    }
+}
+
 private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
     let transforms = InvertibleTransform.applicable(to: type)
     guard transforms.isEmpty == false else {
@@ -147,6 +169,12 @@ private func mappedGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
         narrowingSafeInnerGenerator(for: transform, producing: type, maxDepth: maxDepth).map { inner in
             .combinator(.mapped(inner, transform))
         }
+    }
+}
+
+private func prunedGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
+    recipeGenerator(producing: type, maxDepth: maxDepth - 1).map { inner in
+        .combinator(.pruned(inner))
     }
 }
 
@@ -308,6 +336,12 @@ private func unfoldedGenerator() -> Generator<GenRecipe> {
 private func boundRangeGenerator(maxDepth _: Int) -> Generator<GenRecipe> {
     leafGenerator(producing: .int).map { inner in
         .combinator(.boundRange(inner))
+    }
+}
+
+private func reifiedBindGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
+    recipeGenerator(producing: type, maxDepth: maxDepth - 1).map { inner in
+        .combinator(.reifiedBind(inner))
     }
 }
 

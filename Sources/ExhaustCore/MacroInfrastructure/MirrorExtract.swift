@@ -23,4 +23,38 @@ extension __ExhaustRuntime {
         }
         return result
     }
+
+    /// Extracts the expected number of associated values from a named enum case in declaration order.
+    ///
+    /// Mirror represents both one unlabeled tuple payload and multiple unlabeled associated values as a tuple. `associatedValueCount` comes from the macro's source-level arity and resolves that ambiguity. Non-enum values and other cases return `nil`, which lets a qualified static factory share the same macro expansion without masquerading as an enum case during reflection.
+    static func _mirrorExtractEnumCase(
+        _ value: Any,
+        caseName: String,
+        associatedValueCount: Int
+    ) -> [Any]? {
+        let mirror = Mirror(reflecting: value)
+        guard mirror.displayStyle == .enum,
+              let caseChild = mirror.children.first,
+              caseChild.label == caseName
+        else {
+            return nil
+        }
+
+        let payloadMirror = Mirror(reflecting: caseChild.value)
+        if associatedValueCount == 1 {
+            if payloadMirror.displayStyle == .tuple,
+               payloadMirror.children.count == 1,
+               let wrappedPayload = payloadMirror.children.first
+            {
+                return [wrappedPayload.value]
+            }
+            return [caseChild.value]
+        }
+        guard payloadMirror.displayStyle == .tuple,
+              payloadMirror.children.count == associatedValueCount
+        else {
+            return nil
+        }
+        return payloadMirror.children.map(\.value)
+    }
 }

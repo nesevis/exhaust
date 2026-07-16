@@ -92,7 +92,7 @@ package extension ChoiceGraph {
 package extension ChoiceGraph {
     /// Computes a structural fingerprint over the active region topology.
     ///
-    /// Hashes the multiset of `(kind, positionRange.lowerBound, positionRange.upperBound)` tuples for every active node. Per-node hashes are collected, sorted, then chained through an FNV-1a-style aggregator so the final value is independent of `nodes` array order. Does **not** include `node.id` — node identity is unstable across rebuilds (``ChoiceGraphBuilder`` assigns IDs sequentially during the tree walk, so the same logical node gets a different ID after any structural change).
+    /// Hashes the multiset of `(kind, positionRange.lowerBound, positionRange.upperBound)` tuples for every active node. Per-node hashes are collected, sorted, then chained through an FNV-1a-style aggregator so the final value is independent of `nodes` array order. Does **not** include `node.id`—``ChoiceGraphBuilder`` assigns IDs sequentially during the tree walk, so a corresponding structural position can receive a different ID after a rebuild.
     var structuralFingerprint: UInt64 {
         var nodeHashes: [UInt64] = []
         nodeHashes.reserveCapacity(liveNodeIDs.count)

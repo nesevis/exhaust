@@ -35,8 +35,8 @@ package extension __ExhaustRuntime {
     /// Represents the outcome of the screening phase: failure found, exhaustive pass, or proceed to sampling.
     enum ScreeningOutcome<Output> {
         case counterexample(Output)
-        case exhaustivePass(iterations: Int)
-        case proceed(screeningIterations: Int)
+        case exhaustivePass
+        case proceed
     }
 
     /// Represents the outcome of the reduction phase: reduced counterexample, unreduced original, or error.
@@ -68,15 +68,19 @@ package extension __ExhaustRuntime {
                 }
             }
         )
+        report.applyScreeningSummary(screeningResult.summary)
         switch screeningResult {
-            case let .failure(value, tree, iteration, strength, rows, parameters, totalSpace, kind):
+            case let .failure(value, tree, rowOrdinal, _, strength, rows, parameters, totalSpace, kind):
                 ExhaustLog.notice(
                     category: .propertyTest,
                     event: "screening_failure",
                     metadata: [
-                        "iteration": "\(iteration)",
+                        "row_ordinal": "\(rowOrdinal)",
                         "strength": "\(strength)",
                         "covering_rows": "\(rows)",
+                        "screening_rows": "\(report.screeningRows)",
+                        "property_invocations": "\(report.screeningInvocations)",
+                        "rejected_rows": "\(report.screeningRejectedRows)",
                         "parameters": "\(parameters)",
                         "total_space": "\(totalSpace)",
                         "kind": kind,
@@ -90,16 +94,15 @@ package extension __ExhaustRuntime {
                     case .rejected, .failed:
                         tree
                 }
-                let screeningReplaySeed = ReplaySeed.Resolved.screening(row: iteration - 1).encoded
+                let screeningReplaySeed = ReplaySeed.Resolved.screening(row: rowOrdinal - 1).encoded
                 report.replaySeed = screeningReplaySeed
                 let result = reduceAndReport(
                     context: context,
                     value: value,
                     tree: reductionTree,
                     seed: nil,
-                    iteration: iteration,
+                    iteration: rowOrdinal,
                     phaseBudget: screeningBudget,
-                    screeningIterations: iteration,
                     randomSamplingIterations: 0,
                     replayHint: "Reproduce: .replay(\"\(screeningReplaySeed)\")",
                     report: &report
@@ -110,49 +113,49 @@ package extension __ExhaustRuntime {
                     case let .unreduced(counterexample):
                         return .counterexample(counterexample)
                     case .reductionError:
-                        return .proceed(screeningIterations: iteration)
+                        return .proceed
                 }
 
-            case let .exhaustive(iterations):
+            case let .exhaustive(summary):
                 ExhaustLog.notice(
                     category: .propertyTest,
                     event: "tway_coverage",
                     metadata: [
                         "exhaustive": "true",
-                        "iterations": "\(iterations)",
+                        "screening_rows": "\(summary.rowAttempts)",
+                        "property_invocations": "\(summary.propertyInvocations)",
+                        "rejected_rows": "\(summary.rejectedRows)",
                     ]
                 )
                 let passMetadata = [
-                    "iterations": "\(iterations)",
-                    "property_invocations": "\(iterations)",
+                    "screening_rows": "\(summary.rowAttempts)",
+                    "property_invocations": "\(summary.propertyInvocations)",
+                    "rejected_rows": "\(summary.rejectedRows)",
                 ]
                 ExhaustLog.notice(
                     category: .propertyTest,
                     event: "property_passed",
                     metadata: passMetadata
                 )
-                report.setInvocations(
-                    screening: iterations,
-                    randomSampling: 0,
-                    reduction: 0
-                )
-                return .exhaustivePass(iterations: iterations)
+                return .exhaustivePass
 
-            case let .partial(iterations, strength, rows, parameters, totalSpace, kind):
+            case let .partial(summary, strength, rows, parameters, totalSpace, kind):
                 ExhaustLog.notice(
                     category: .propertyTest,
                     event: "tway_coverage",
                     metadata: [
                         "strength": "\(strength)",
                         "covering_rows": "\(rows)",
-                        "iterations": "\(iterations)",
+                        "screening_rows": "\(summary.rowAttempts)",
+                        "property_invocations": "\(summary.propertyInvocations)",
+                        "rejected_rows": "\(summary.rejectedRows)",
                         "total_space": "\(totalSpace)",
                         "parameters": "\(parameters)",
                         "exhaustive": "false",
                         "kind": kind,
                     ]
                 )
-                return .proceed(screeningIterations: iterations)
+                return .proceed
 
             case .notApplicable:
                 ExhaustLog.notice(
@@ -160,7 +163,7 @@ package extension __ExhaustRuntime {
                     event: "screening_not_applicable",
                     "Generator not analyzable for screening"
                 )
-                return .proceed(screeningIterations: 0)
+                return .proceed
         }
     }
 
@@ -188,7 +191,7 @@ package extension __ExhaustRuntime {
     ///   - count: Number of iterations to run in this batch.
     ///   - lane: Batch index for stats attribution, or `nil` for sequential runs.
     ///   - statsPropertyName: Property name passed to the per-batch ``OpenPBTStatsAccumulator``, or `nil` to skip stats collection.
-    ///   - cancelled: Shared flag checked before each iteration. Set to `true` by the first lane to find a failure.
+    ///   - canceled: Shared flag checked before each iteration. Set to `true` by the first lane to find a failure.
     private static func runSamplingBatch<Output>( // swiftlint:disable:this function_body_length
         gen: Generator<Output>,
         property: @Sendable (Output) -> Bool,
@@ -197,7 +200,7 @@ package extension __ExhaustRuntime {
         count: UInt64,
         lane: Int?,
         statsPropertyName: String?,
-        cancelled: some CancellationFlag
+        canceled: some CancellationFlag
     ) -> BatchResult<Output> {
         var result = BatchResult<Output>()
         let statsAccumulator: OpenPBTStatsAccumulator? = statsPropertyName.map {
@@ -214,7 +217,7 @@ package extension __ExhaustRuntime {
             if let statsAccumulator {
                 var previousTotalAttempts = 0
                 var previousTotalPasses = 0
-                while cancelled.isCancelled == false {
+                while canceled.isCancelled == false {
                     let generateStart = monotonicNanoseconds()
                     guard let (next, tree) = try interpreter.next() else { break }
                     let generateEnd = monotonicNanoseconds()
@@ -262,13 +265,13 @@ package extension __ExhaustRuntime {
                     if passed == false {
                         let absoluteIteration = Int(startIndex) + result.iterations
                         result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
-                        cancelled.isCancelled = true
+                        canceled.isCancelled = true
                         break
                     }
                 }
                 result.statsLines = statsAccumulator.finalize()
             } else {
-                while cancelled.isCancelled == false {
+                while canceled.isCancelled == false {
                     guard let next = try interpreter.nextValueOnly() else { break }
                     result.iterations += 1
 
@@ -276,7 +279,7 @@ package extension __ExhaustRuntime {
                         let absoluteIteration = Int(startIndex) + result.iterations
                         let tree = try interpreter.reproduceFailureTree()
                         result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
-                        cancelled.isCancelled = true
+                        canceled.isCancelled = true
                         break
                     }
                 }
@@ -300,7 +303,6 @@ package extension __ExhaustRuntime {
         baseSeed: UInt64,
         replayIteration: Int?,
         generationPhaseStart: UInt64,
-        screeningIterations: Int,
         report: inout ExhaustReport
     ) -> Output? {
         let startIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
@@ -330,7 +332,6 @@ package extension __ExhaustRuntime {
                         seed: baseSeed,
                         iteration: absoluteIteration,
                         phaseBudget: context.samplingBudget,
-                        screeningIterations: screeningIterations,
                         randomSamplingIterations: iterations,
                         replayHint: nil,
                         report: &report
@@ -361,8 +362,7 @@ package extension __ExhaustRuntime {
         if interpreter.uniqueExhaustionTruncatedRun {
             recordUniqueExhaustion(iterations: iterations, context: context, report: &report)
         }
-        report.setInvocations(
-            screening: screeningIterations,
+        report.applyPostScreeningInvocations(
             randomSampling: iterations,
             reduction: 0
         )
@@ -419,7 +419,6 @@ package extension __ExhaustRuntime {
         context: PipelineContext<Output>,
         seed: UInt64?,
         replayIteration: Int? = nil,
-        screeningIterations: Int,
         report: inout ExhaustReport
     ) -> Output? {
         let generationPhaseStart = monotonicNanoseconds()
@@ -435,7 +434,6 @@ package extension __ExhaustRuntime {
                 baseSeed: baseSeed,
                 replayIteration: replayIteration,
                 generationPhaseStart: generationPhaseStart,
-                screeningIterations: screeningIterations,
                 report: &report
             )
         }
@@ -457,11 +455,11 @@ package extension __ExhaustRuntime {
                 count: context.samplingBudget,
                 lane: nil,
                 statsPropertyName: statsPropertyName,
-                cancelled: UnsafeSendableBox(false)
+                canceled: UnsafeSendableBox(false)
             )
             batchResults = [singleResult]
         } else {
-            let cancelled = SendableBox(false)
+            let canceled = SendableBox(false)
             nonisolated(unsafe) let unsafeContext = context
 
             let resultStorage = SendableBox<[BatchResult<Output>?]>(
@@ -478,7 +476,7 @@ package extension __ExhaustRuntime {
                     count: iterationsForLane,
                     lane: laneIndex,
                     statsPropertyName: statsPropertyName,
-                    cancelled: cancelled
+                    canceled: canceled
                 )
                 resultStorage.withValue { $0[laneIndex] = batchResult }
             }
@@ -538,8 +536,7 @@ package extension __ExhaustRuntime {
             if batchResults.contains(where: \.uniqueExhaustionTruncatedRun) {
                 recordUniqueExhaustion(iterations: totalIterations, context: context, report: &report)
             }
-            report.setInvocations(
-                screening: screeningIterations,
+            report.applyPostScreeningInvocations(
                 randomSampling: totalIterations,
                 reduction: 0
             )
@@ -554,7 +551,6 @@ package extension __ExhaustRuntime {
             seed: baseSeed,
             iteration: failure.absoluteIteration,
             phaseBudget: context.samplingBudget,
-            screeningIterations: screeningIterations,
             randomSamplingIterations: totalIterations,
             replayHint: nil,
             report: &report
@@ -579,7 +575,6 @@ package extension __ExhaustRuntime {
         seed: UInt64?,
         iteration: Int,
         phaseBudget: UInt64,
-        screeningIterations: Int,
         randomSamplingIterations: Int,
         replayHint: String?,
         report: inout ExhaustReport
@@ -603,7 +598,10 @@ package extension __ExhaustRuntime {
             report.applyReductionStats(reduceResult.stats)
             report.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
             if case let .reduced(reducedSequence, _, reducedValue) = reduceResult.outcome {
-                let totalInvocations = screeningIterations + randomSamplingIterations + propertyInvocationCount
+                report.applyPostScreeningInvocations(
+                    randomSampling: randomSamplingIterations,
+                    reduction: propertyInvocationCount
+                )
                 var failure = PropertyTestFailure(
                     counterexample: reducedValue,
                     original: value,
@@ -612,7 +610,7 @@ package extension __ExhaustRuntime {
                     iteration: iteration,
                     phaseBudget: phaseBudget,
                     blueprint: reducedSequence.shortString,
-                    propertyInvocations: totalInvocations,
+                    propertyInvocations: report.propertyInvocations,
                     reducedSequence: reducedSequence
                 )
                 failure.replayHint = replayHint
@@ -625,11 +623,6 @@ package extension __ExhaustRuntime {
                     category: .propertyTest,
                     event: "reduced_blueprint",
                     "\(reducedSequence.shortString)"
-                )
-                report.setInvocations(
-                    screening: screeningIterations,
-                    randomSampling: randomSamplingIterations,
-                    reduction: propertyInvocationCount
                 )
                 if let statsAccumulator = context.statsAccumulator {
                     var representation = ""
@@ -659,8 +652,7 @@ package extension __ExhaustRuntime {
                 line: context.line,
                 column: context.column
             )
-            report.setInvocations(
-                screening: screeningIterations,
+            report.applyPostScreeningInvocations(
                 randomSampling: randomSamplingIterations,
                 reduction: propertyInvocationCount
             )
@@ -668,7 +660,10 @@ package extension __ExhaustRuntime {
         }
 
         // Reduction ran but could not improve
-        let totalInvocationsUnreduced = screeningIterations + randomSamplingIterations + propertyInvocationCount
+        report.applyPostScreeningInvocations(
+            randomSampling: randomSamplingIterations,
+            reduction: propertyInvocationCount
+        )
         var failure = PropertyTestFailure(
             counterexample: value,
             original: nil as Output?,
@@ -676,7 +671,7 @@ package extension __ExhaustRuntime {
             iteration: iteration,
             phaseBudget: phaseBudget,
             blueprint: nil,
-            propertyInvocations: totalInvocationsUnreduced
+            propertyInvocations: report.propertyInvocations
         )
         failure.replayHint = replayHint
         failure.reductionProducedNoImprovement = true
@@ -694,11 +689,6 @@ package extension __ExhaustRuntime {
                 column: context.column
             )
         }
-        report.setInvocations(
-            screening: screeningIterations,
-            randomSampling: randomSamplingIterations,
-            reduction: propertyInvocationCount
-        )
         return .unreduced(value)
     }
 

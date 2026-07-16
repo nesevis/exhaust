@@ -243,8 +243,15 @@ extension Interpreters {
             guard let resolved = PickBranchResolution.unpack(branch) else {
                 throw ReplayError.wrongInputChoice
             }
-            guard let chosenGen = PickBranchResolution.generator(for: resolved.id, in: pickChoices),
-                  let result = try replayWithChoices(chosenGen, choices: [resolved.choice])
+            let branchChoices = replayChoices(for: resolved.choice)
+            guard let chosenGenerator = PickBranchResolution.generator(
+                for: resolved.id,
+                in: pickChoices
+            ),
+                let result = try replayWithChoices(
+                    chosenGenerator,
+                    choices: branchChoices
+                )
             else {
                 return nil
             }
@@ -258,6 +265,19 @@ extension Interpreters {
         return try replayWithChoicesHelper(nextGen, choices: &choices)
     }
 
+    private static func replayChoices(for choice: ChoiceTree) -> [ChoiceTree] {
+        guard case let .group(children, _) = choice else {
+            return [choice]
+        }
+        let containsBranch = children.contains {
+            $0.isBranch || $0.isSelected
+        }
+        guard containsBranch == false else {
+            return [choice]
+        }
+        return children
+    }
+
     private static func replayWithChoicesSequence<Output>(
         elementGenerator: AnyGenerator,
         continuation: @escaping (Any) throws -> Generator<Output>,
@@ -267,7 +287,7 @@ extension Interpreters {
             return nil
         }
         let choice = choices.removeFirst()
-        guard case let .sequence(_, elements, _) = choice else {
+        guard case let .sequence(elements, _) = choice else {
             throw ReplayError.wrongInputChoice
         }
 
@@ -473,9 +493,8 @@ extension Interpreters {
                 )
             case let .pick(choices, _):
                 return try replayRecursivePick(choices: choices, script: script)
-            case let .sequence(lengthGen, elementGenerator):
+            case let .sequence(_, elementGenerator):
                 return try replayRecursiveSequence(
-                    lengthGen: lengthGen,
                     elementGenerator: elementGenerator,
                     script: script,
                     runContinuation: runContinuation
@@ -635,24 +654,11 @@ extension Interpreters {
     }
 
     private static func replayRecursiveSequence<Output>(
-        lengthGen: Generator<UInt64>,
         elementGenerator: AnyGenerator,
         script: ChoiceTree,
         runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
-        guard case let .sequence(length, elements, _) = script else {
-            return nil
-        }
-
-        let lengthMetadata = ChoiceMetadata(
-            validRange: lengthGen.associatedRange ?? length ... length,
-            isRangeExplicit: lengthGen.associatedRange != nil
-        )
-        let lengthChoice = ChoiceTree.choice(
-            ChoiceValue(length, tag: .uint64),
-            lengthMetadata
-        )
-        guard try replayRecursive(lengthGen, with: lengthChoice) != nil else {
+        guard case let .sequence(elements, _) = script else {
             return nil
         }
 

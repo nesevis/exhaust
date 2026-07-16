@@ -459,12 +459,6 @@ package struct ReductionMachine: ProbeSessionState {
         return monotonicNanoseconds() - startNanoseconds >= deadlineNanoseconds
     }
 
-    mutating func countMaterialization() {
-        if collectStats {
-            stats.totalMaterializations += 1
-        }
-    }
-
     func allValuesConverged() -> Bool {
         ChoiceGraphScheduler.allValuesConverged(in: sequence, graph: graph)
     }
@@ -603,7 +597,7 @@ package struct ReductionMachine: ProbeSessionState {
         newGraph.observeBindTopologies(tree: tree)
         ChoiceGraphScheduler.transferConvergence(oldConvergence, to: &newGraph)
         let diff = ChoiceGraphDiff.diff(old: graph, new: newGraph)
-        if diff.isStructurallyIdentical {
+        if diff.canReuseStructuralSources {
             newGraph.couplingDependents = graph.couplingDependents
         }
         stats.graphStats.fullGraphRebuilds += 1

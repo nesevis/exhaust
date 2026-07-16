@@ -47,8 +47,8 @@ struct ClassificationExploreRunnerTests {
         }
     }
 
-    @Test("Finds failure during tuning pass with direction-preserving reduction")
-    func findsFailureDuringTuningPass() throws {
+    @Test("Finds failure during directed sampling with direction-preserving reduction")
+    func findsFailureDuringDirectedSampling() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 1000)
         var runner = ClassificationExploreRunner(
             gen: gen,
@@ -135,7 +135,7 @@ struct ClassificationExploreRunnerTests {
         let result1 = try runner1.run()
         let result2 = try runner2.run()
 
-        #expect(result1.propertyInvocations == result2.propertyInvocations)
+        #expect(result1.invocations == result2.invocations)
         #expect(result1.counterexample == result2.counterexample)
     }
 
@@ -174,11 +174,11 @@ struct ClassificationExploreRunnerTests {
         )
         let result = try runner.run()
         #expect(result.directionCoverage[0].warmupHits >= 10)
-        #expect(result.directionCoverage[0].tuningPassSamples == 0)
+        #expect(result.directionCoverage[0].directedSamplingSamples == 0)
         #expect(result.termination == .coverageAchieved)
     }
 
-    @Test("Incidental coverage from other direction's tuning pass")
+    @Test("Incidental coverage from another direction's directed sampling")
     func incidentalCoverage() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
         var runner = ClassificationExploreRunner(

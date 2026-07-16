@@ -73,6 +73,14 @@ struct ExploreTimeRuntimeTests {
         )
         #expect(report.termination == .attemptLimitReached)
         #expect(report.totalAttempts >= 800)
+        #expect(report.totalAttempts == report.evaluatedSearchCases + report.rejectedSearchAttempts)
+        #expect(report.totalPropertyInvocations == report.evaluatedSearchCases
+            + report.pruneInvocations
+            + report.reductionInvocations
+            + report.normalizationInvocations
+            + report.classificationInvocations
+            + report.recoveryInvocations
+            + report.diagnosticInvocations)
         #expect(report.seed == 7)
         #expect(report.attemptsPerSecond > 0)
         #expect(report.coveredEdgeCount > 0)
@@ -93,6 +101,69 @@ struct ExploreTimeRuntimeTests {
             // Synthetic edge indices address no real program counters, so no location resolves.
             #expect(cluster.discriminatingEdges.allSatisfy { $0.location == nil })
         }
+    }
+
+    @Test("Timed assertion diagnostics re-materialize the reduced counterexample")
+    func timedAssertionDiagnosticReplay() {
+        let generator = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)
+        var report = __ExhaustRuntime.runExploreTimeCore(
+            gen: generator,
+            time: .seconds(60),
+            settings: [.replay(7), .suppress(.all)],
+            source: passthroughSource(),
+            configure: { configuration in
+                configuration.attemptLimit = 800
+            },
+            property: { value in
+                value == 42 ? .fail(.returnedFalse) : .pass
+            }
+        )
+        let replayedValues = UnsafeSendableBox<[Int]>([])
+        let invocationsBeforeReplay = report.totalPropertyInvocations
+
+        __ExhaustRuntime.replayFuzzDiagnostics(
+            report: &report,
+            gen: generator,
+            suppressIssueReporting: false,
+            property: { value in
+                replayedValues.value.append(value)
+            }
+        )
+
+        #expect(replayedValues.value == [42])
+        #expect(report.diagnosticInvocations == 1)
+        #expect(report.totalPropertyInvocations == invocationsBeforeReplay + 1)
+    }
+
+    @Test("Async timed assertion diagnostics await the reduced counterexample")
+    func asyncTimedAssertionDiagnosticReplay() async {
+        let generator = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)
+        var report = __ExhaustRuntime.runExploreTimeCore(
+            gen: generator,
+            time: .seconds(60),
+            settings: [.replay(7), .suppress(.all)],
+            source: passthroughSource(),
+            configure: { configuration in
+                configuration.attemptLimit = 800
+            },
+            property: { value in
+                value == 42 ? .fail(.returnedFalse) : .pass
+            }
+        )
+        let replayedValues = UnsafeSendableBox<[Int]>([])
+
+        await __ExhaustRuntime.replayFuzzDiagnosticsAsync(
+            report: &report,
+            gen: generator,
+            suppressIssueReporting: false,
+            property: { value in
+                await Task.yield()
+                replayedValues.value.append(value)
+            }
+        )
+
+        #expect(replayedValues.value == [42])
+        #expect(report.diagnosticInvocations == 1)
     }
 
     @Test("Reports are deterministic under a pinned seed, modulo task-completion timing")
@@ -323,7 +394,8 @@ private func makeCluster(discriminatingEdges: [FuzzReport.DiscriminatingEdge]) -
         lastSeen: .seconds(1),
         discriminatingEdges: discriminatingEdges,
         necessaryEdgeCount: discriminatingEdges.count,
-        nearMissEdgeIndices: []
+        nearMissEdgeIndices: [],
+        reducedSequence: []
     )
 }
 

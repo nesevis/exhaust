@@ -49,9 +49,8 @@ package extension ChoiceTree {
         in range: ClosedRange<UInt64> = 0 ... UInt64.max
     ) -> ChoiceTree {
         .sequence(
-            length: UInt64(values.count),
             elements: values.map { .uint64($0, in: range) },
-            .init(validRange: nil, isRangeExplicit: false)
+            metadata: .init(validRange: nil, isRangeExplicit: false)
         )
     }
 

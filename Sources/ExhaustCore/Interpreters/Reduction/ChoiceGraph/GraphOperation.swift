@@ -5,7 +5,7 @@
 
 // MARK: - Academic Background
 
-// The operation taxonomy, encoder/decoder split, priority-based scheduling, and relax round are informed by Sepulveda-Jimenez, "Categories of Optimization Reductions" (2026), which formalises reduce-solve-recover pipelines as morphisms in a graded category with approximation slack and resource tracking. The paper is an optimisation algebra designed for composing known reductions; Exhaust adapts it for morphism discovery, where candidates are proposed speculatively and certified by an opaque property oracle.
+// The operation taxonomy, encoder/decoder split, priority-based scheduling, and relax round are informed by Sepulveda-Jimenez, "Categories of Optimization Reductions" (2026), which formalises reduce-solve-recover pipelines as morphisms in a graded category with approximation slack and resource tracking. The paper is an optimization algebra designed for composing known reductions; Exhaust adapts it for morphism discovery, where candidates are proposed speculatively and certified by an opaque property oracle.
 
 // MARK: - Graph Operation
 

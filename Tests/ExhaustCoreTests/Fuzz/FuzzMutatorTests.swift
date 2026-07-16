@@ -37,9 +37,9 @@ struct FuzzMutatorTests {
         }
     }
 
-    // MARK: - Materialisation Round Trips
+    // MARK: - Materialization Round Trips
 
-    @Test("Every intensity band produces a sequence the materialiser accepts", arguments: [7, 99, 1234] as [UInt64])
+    @Test("Every intensity band produces a sequence the materializer accepts", arguments: [7, 99, 1234] as [UInt64])
     func mutationsMaterialise(seed: UInt64) throws {
         let gen = bindGenerator()
         let (_, tree, sequence) = try generateBindExample(seed: seed)
@@ -62,7 +62,7 @@ struct FuzzMutatorTests {
                         #expect(array.allSatisfy { $0 >= 0 && $0 <= 100 })
                         #expect(report != nil)
                     case .rejected, .failed:
-                        Issue.record("Guided materialisation of a \(intensity) mutation was not absorbed (round \(round))")
+                        Issue.record("Guided materialization of a \(intensity) mutation was not absorbed (round \(round))")
                 }
             }
         }
@@ -70,7 +70,7 @@ struct FuzzMutatorTests {
 
     // MARK: - Splice
 
-    @Test("Splice recombines two bind-bearing parents into a materialisable child")
+    @Test("Splice recombines two bind-bearing parents into a materializable child")
     func spliceMaterialises() throws {
         let gen = bindGenerator()
         let (_, recipientTree, recipient) = try generateBindExample(seed: 21)
@@ -87,7 +87,7 @@ struct FuzzMutatorTests {
             mode: .guided(seed: 1, fallbackTree: recipientTree)
         )
         guard case let .success(value, _, _) = result else {
-            Issue.record("Spliced sequence did not materialise")
+            Issue.record("Spliced sequence did not materialize")
             return
         }
         #expect(value is [Int])

@@ -18,7 +18,6 @@ protocol ProbeSessionState {
     var rejectCache: Set<UInt64> { get set }
     var collectStats: Bool { get }
     var isInstrumented: Bool { get }
-    mutating func countMaterialization()
 }
 
 // MARK: - Probe Session
@@ -61,10 +60,7 @@ struct ProbeSession {
     private var pendingProbeHash: UInt64 = 0
     private var pendingDecoderSelection: ChoiceGraphScheduler.DecoderSelection?
 
-    private(set) var probeCount: Int = 0
-    private(set) var acceptCount: Int = 0
-    private(set) var cacheHitCount: Int = 0
-    private(set) var decoderRejectCount: Int = 0
+    private(set) var counts = ReductionProbeCounts()
     private(set) var anyAccepted: Bool = false
     private(set) var anyRequiresRebuild: Bool = false
     private(set) var latestTreeIsStripped: Bool = false
@@ -114,7 +110,7 @@ struct ProbeSession {
             return .finished
         }
 
-        probeCount += 1
+        counts.recordEmission()
         lastProbeAccepted = false
 
         let probeHash = ZobristHash.incrementalHash(
@@ -123,7 +119,7 @@ struct ProbeSession {
             probe: candidateBuffer
         )
         if state.rejectCache.contains(probeHash) {
-            cacheHitCount += 1
+            counts.recordCacheRejection()
             return .encoded(encoder: encoder.name, cacheHit: true)
         }
 
@@ -158,7 +154,7 @@ struct ProbeSession {
 
         var filterObservations: [UInt64: FilterObservation] = [:]
 
-        if let result = try decoder.decodeAny(
+        let outcome = try decoder.decodeAny(
             candidate: candidateBuffer,
             gen: state.gen,
             tree: state.tree,
@@ -166,14 +162,16 @@ struct ProbeSession {
             property: state.property,
             filterObservations: &filterObservations,
             precomputedHash: pendingProbeHash
-        ) {
+        )
+        counts.record(outcome)
+
+        if let result = outcome.reduction {
             state.sequence = result.sequence
             state.tree = result.tree
             state.output = result.output
             baseHash = ZobristHash.hash(of: state.sequence)
             lastProbeAccepted = true
             anyAccepted = true
-            acceptCount += 1
 
             if case let .leafValues(changes) = mutation {
                 for change in changes {
@@ -181,7 +179,6 @@ struct ProbeSession {
                 }
             }
 
-            state.countMaterialization()
             latestTreeIsStripped = selection.materializePicks == false
 
             if encoder.isStateful {
@@ -195,8 +192,6 @@ struct ProbeSession {
                 }
             }
 
-            state.countMaterialization()
-
             if encoder.isStateful {
                 encoder.refreshState(graph: state.graph, sequence: state.sequence)
             }
@@ -206,7 +201,6 @@ struct ProbeSession {
         }
 
         state.rejectCache.insert(pendingProbeHash)
-        decoderRejectCount += 1
         if state.isInstrumented {
             ChoiceGraphScheduler.logReplacementProbeRejection(
                 mutation: mutation,
@@ -217,8 +211,6 @@ struct ProbeSession {
                 probeHash: pendingProbeHash
             )
         }
-
-        state.countMaterialization()
 
         phase = .encode
         return .decoded(encoder: encoderName, accepted: false)
@@ -235,10 +227,7 @@ struct ProbeSession {
             transformation: transformation,
             boundValueFingerprint: boundValueFingerprint,
             composedUpstreamLifts: encoder.composedUpstreamProbesUsed,
-            probeCount: probeCount,
-            acceptCount: acceptCount,
-            cacheHitCount: cacheHitCount,
-            decoderRejectCount: decoderRejectCount,
+            counts: counts,
             anyAccepted: anyAccepted,
             anyRequiresRebuild: anyRequiresRebuild,
             latestTreeIsStripped: latestTreeIsStripped,
@@ -276,10 +265,23 @@ struct PassReport {
     /// Upstream probes that produced a valid lift, for composed passes; nil for every other encoder.
     let composedUpstreamLifts: Int?
 
-    let probeCount: Int
-    let acceptCount: Int
-    let cacheHitCount: Int
-    let decoderRejectCount: Int
+    let counts: ReductionProbeCounts
+
+    var probeCount: Int {
+        counts.emitted
+    }
+
+    var acceptCount: Int {
+        counts.accepted
+    }
+
+    var cacheHitCount: Int {
+        counts.rejectedByCache
+    }
+
+    var decoderRejectCount: Int {
+        counts.decoderRejections
+    }
 
     let anyAccepted: Bool
     let anyRequiresRebuild: Bool

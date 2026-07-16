@@ -1,4 +1,5 @@
 import Exhaust
+import Foundation
 import Testing
 
 // MARK: - Generator Sharing Across Concurrent Tasks

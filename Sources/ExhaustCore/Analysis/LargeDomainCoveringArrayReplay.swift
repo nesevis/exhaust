@@ -103,7 +103,7 @@ package enum LargeDomainCoveringArrayReplay {
                 }
                 return .bind(fingerprint: fingerprint, inner: newInner, bound: bound)
 
-            case let .sequence(_, elements, metadata):
+            case let .sequence(elements, metadata):
                 guard paramIndex < profile.parameters.count else { return nil }
                 let param = profile.parameters[paramIndex]
                 let compositeIndex = row.values[paramIndex]
@@ -137,7 +137,7 @@ package enum LargeDomainCoveringArrayReplay {
                             newElements.append(element)
                         }
                     }
-                    return .sequence(length: slot.length, elements: newElements, metadata)
+                    return .sequence(elements: newElements, metadata: metadata)
                 }
 
                 // Legacy: separate length + element parameters
@@ -162,7 +162,7 @@ package enum LargeDomainCoveringArrayReplay {
                         newElements.append(element)
                     }
                 }
-                return .sequence(length: newLength, elements: newElements, metadata)
+                return .sequence(elements: newElements, metadata: metadata)
 
             case let .branch(b):
                 guard let newChoice = substituteParameters(
@@ -249,7 +249,7 @@ package enum LargeDomainCoveringArrayReplay {
                         }
                     }
                     let seqMetadata = ChoiceMetadata(validRange: lengthRange, isRangeExplicit: true)
-                    trees.append(.sequence(length: slot.length, elements: elementTrees, seqMetadata))
+                    trees.append(.sequence(elements: elementTrees, metadata: seqMetadata))
                     i += 1
 
                 case let .pick(choices):
@@ -325,7 +325,7 @@ package enum LargeDomainCoveringArrayReplay {
         }
 
         let metadata = ChoiceMetadata(validRange: lengthRange, isRangeExplicit: true)
-        let tree = ChoiceTree.sequence(length: length, elements: elementTrees, metadata)
+        let tree = ChoiceTree.sequence(elements: elementTrees, metadata: metadata)
         return (tree, elementParamCount)
     }
 

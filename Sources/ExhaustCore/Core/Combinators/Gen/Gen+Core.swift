@@ -107,6 +107,15 @@ package extension Gen {
         _ transform: @escaping (NewInput) throws -> (some Any)?,
         _ generator: Generator<Output>
     ) -> Generator<Output> {
-        contramap(transform, prune(generator))
+        let contramapped: Generator<Output> = liftF(.contramap(
+            transform: {
+                guard let input = $0 as? NewInput else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return try transform(input)
+            },
+            next: generator.erase()
+        ))
+        return prune(contramapped)
     }
 }

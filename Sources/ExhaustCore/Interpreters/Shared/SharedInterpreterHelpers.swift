@@ -5,13 +5,14 @@
 
 /// Helpers shared across multiple interpreter implementations to avoid duplicated logic.
 package enum SharedInterpreterHelpers {
-    // MARK: - Size Consumption
+    // MARK: - Size Lookup
 
-    /// Reads the active generation size in precedence order: a one-shot `.resize` override, then the persistent `context.size` baseline, then the per-run scaled size cycle.
+    /// Returns the active generation size in precedence order: the innermost `.resize` override, the persistent `context.size` baseline, then the per-run scaled size cycle.
+    ///
+    /// A resize override remains active until its interpreter frame restores the previous override. Size reads never consume it, so every read within the same lexical scope observes the same value.
     @inline(__always)
-    static func consumeSize(_ context: inout GenerationContext) -> UInt64 {
+    static func currentSize(_ context: inout GenerationContext) -> UInt64 {
         if let override = context.sizeOverride {
-            context.sizeOverride = nil
             return override
         }
         if context.size > 0 {

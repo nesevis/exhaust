@@ -47,7 +47,7 @@ struct GeneratorTuningIntegrationTests {
 
     // MARK: - ChooseBits Subdivision
 
-    @Test("ChooseBits subdivision concentrates output in favoured subrange")
+    @Test("ChooseBits subdivision concentrates output in favored subrange")
     func chooseBitsSubdivision() throws {
         let gen = #gen(.uint64(in: 1 ... 1000))
             .filter(.probeSampling) { $0 < 100 }

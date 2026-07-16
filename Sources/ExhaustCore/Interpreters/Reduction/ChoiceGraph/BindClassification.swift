@@ -44,7 +44,7 @@ package enum BindLiftability: Equatable, Hashable, Sendable {
     case neither
 }
 
-/// Snapshot of a bind site's upstream value and downstream topology at a given graph state. Compared across graph rebuilds to passively classify binds without materialisation probes.
+/// Snapshot of a bind site's upstream value and downstream topology at a given graph state. Compared across graph rebuilds to passively classify binds without materialization probes.
 package struct BindTopologyObservation: Equatable, Hashable, Sendable {
     /// Bit pattern of the upstream (inner) leaf at observation time.
     package let upstreamBitPattern: UInt64

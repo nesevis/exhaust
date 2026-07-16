@@ -1,5 +1,5 @@
 //
-//  FreerMonad.swift
+//  FreerMonadTests.swift
 //  Exhaust
 //
 //  Created by Chris Kolbu on 16/7/2025.
@@ -175,15 +175,26 @@ struct PartialMonadicProfunctorLawTests {
 
     // MARK: - Comap Law Tests
 
-    /// The comap combinator should be equivalent to `contramap(transform, prune(generator))`.
-    @Test("Comap is equivalent to contramap . prune")
-    func comapEquivalence() throws {
+    @Test("Comap is transparent during forward generation")
+    func comapIsForwardTransparent() throws {
         let generator = Gen.choose(in: -1000 ... 1000) as Generator<Int>
-        let transform: (String) -> Int? = { str in str.isEmpty ? nil : str.count }
+        let transform: (String) -> Int? = { string in string.isEmpty ? nil : string.count }
 
         let comapResult = Gen.comap(transform, generator)
-        let contramapPruneResult = Gen.contramap(transform, Gen.prune(generator))
-        try assertSameForwardOutput(comapResult, contramapPruneResult)
+        try assertSameForwardOutput(comapResult, generator)
+    }
+
+    @Test("Comap prunes a rejected reflection target")
+    func comapPrunesRejectedReflectionTarget() throws {
+        let generator = Gen.choose(in: -1000 ... 1000) as Generator<Int>
+        let transformed = Gen.comap(
+            { (value: Int) -> Int? in value >= 0 ? value : nil },
+            generator
+        )
+
+        let tree = try Interpreters.reflect(transformed, with: -1)
+
+        #expect(tree == nil)
     }
 }
 

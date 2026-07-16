@@ -202,9 +202,12 @@ package enum CGSDerivativeInterpreter {
                 min: min, max: max, tag: tag, scaling: $0, size: size
             )
         } ?? (min ... max)
-        let bits = rng.next(in: effective)
+        let rawBits = rng.next(in: effective)
+        let randomBits = tag.isFloatingPoint
+            ? tag.linearlyDistributed(rawBits: rawBits, in: effective)
+            : rawBits
         return try runContinuation(
-            bits, continuation,
+            randomBits, continuation,
             inputValue: inputValue, rng: &rng, size: size
         )
     }
@@ -223,9 +226,10 @@ package enum CGSDerivativeInterpreter {
         ) else {
             return nil
         }
+        let elementCount = try SharedInterpreterHelpers.sequenceElementCount(length)
         var results: [Any] = []
-        results.reserveCapacity(Int(length))
-        for _ in 0 ..< length {
+        results.reserveCapacity(elementCount)
+        for _ in 0 ..< elementCount {
             guard let element = try generateRecursive(
                 elementGen, with: inputValue, rng: &rng, size: size
             ) else {
@@ -398,7 +402,7 @@ package enum CGSDerivativeInterpreter {
         rng: inout Xoshiro256,
         size: UInt64
     ) throws -> Output? {
-        // Skip dedup — this is just for fitness estimation
+        // Derivative samples contribute only fitness data and are discarded. VACTI owns generation-time uniqueness state, so derivative evaluation must not consume or enforce it.
         guard let result = try generateRecursive(
             gen, with: inputValue, rng: &rng, size: size
         ) else {
@@ -422,6 +426,14 @@ package enum CGSDerivativeInterpreter {
         size: UInt64
     ) throws -> Output? {
         let nextGen = try continuation(result)
-        return try generateRecursive(nextGen, with: inputValue, rng: &rng, size: size) as? Output
+        guard let finalValue = try generateRecursive(
+            nextGen,
+            with: inputValue,
+            rng: &rng,
+            size: size
+        ) else {
+            return nil
+        }
+        return finalValue as? Output
     }
 }

@@ -144,7 +144,7 @@ public macro Invariant() = #externalMacro(module: "ExhaustMacros", type: "Invari
 
 /// Marks a method as the oracle comparison in a `@StateMachine(.threads)` class.
 ///
-/// The oracle method receives a second SUT instance (the sequential replay result) and returns whether the concurrent SUT state is equivalent. The method must take one parameter of the ``SystemUnderTest`` type and return `Bool`.
+/// The oracle method receives a second SUT instance (the sequential replay result) and returns whether the concurrent SUT state is equivalent. The method must take one parameter of the `SystemUnderTest` type and return `Bool`.
 ///
 /// ```swift
 /// @Oracle

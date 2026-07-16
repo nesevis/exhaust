@@ -4,37 +4,64 @@
 
 /// Runs the screening phase of a property test, exhausting the generator's enumerable or large domain before the random phase.
 package enum ScreeningRunner {
+    /// Separates covering-row progress from the property calls that those rows produce.
+    package struct Summary: Equatable, Sendable {
+        /// Number of covering rows considered as candidate opportunities.
+        package var rowAttempts = 0
+
+        /// Property invocations during screening.
+        package var propertyInvocations = 0
+
+        /// Number of rows rejected while building or materializing their candidate.
+        package var rejectedRows = 0
+    }
+
     /// The outcome of a screening run.
     package enum Result<Output> {
         /// Screening found a counterexample before exhausting the domain.
         case failure(
             value: Output, tree: ChoiceTree,
-            iteration: Int, strength: Int, rows: Int,
+            rowOrdinal: Int, summary: Summary,
+            strength: Int, rows: Int,
             parameters: Int, totalSpace: UInt64, kind: String
         )
         /// The entire enumerable domain was tested without finding a counterexample; the random phase can be skipped.
-        case exhaustive(iterations: Int)
+        case exhaustive(summary: Summary)
         /// Screening completed its budget without a counterexample; proceed to the random phase.
         case partial(
-            iterations: Int, strength: Int, rows: Int,
+            summary: Summary, strength: Int, rows: Int,
             parameters: Int, totalSpace: UInt64, kind: String
         )
         /// The generator has no analyzable enumerable or large domain; skip screening entirely.
         case notApplicable
+
+        /// Returns the accounting summary carried by an applicable screening result.
+        package var summary: Summary {
+            switch self {
+                case let .failure(_, _, _, summary, _, _, _, _, _),
+                     let .exhaustive(summary),
+                     let .partial(summary, _, _, _, _, _):
+                    summary
+                case .notApplicable:
+                    Summary()
+            }
+        }
     }
 
     /// Runs screening analysis and iterates through the covering array, calling `property` for each row.
     ///
     /// - Parameters:
     ///   - skipToRow: When set, skips property evaluation for all rows before this index and only tests the target row. Used for O(1) screening replay.
-    ///   - continuePastFailure: When `true`, a failing row is reported through `onExample` and iteration continues instead of returning `.failure`. `#explore(time:)` catalogues every failure; `#exhaust` keeps the default first-failure return. A run that continued past a failure never reports `.exhaustive`, because that case asserts the domain passed.
+    ///   - continuePastFailure: When `true`, a failing row is reported through `onExample` and iteration continues instead of returning `.failure`. `#explore(time:)` catalogs every failure; `#exhaust` keeps the default first-failure return. A run that continued past a failure never reports `.exhaustive`, because that case asserts the domain passed.
+    ///   - shouldTerminate: Checked each iteration. When it returns `true`, screening stops early and reports `.partial`. The `#explore(time:)` path passes its wall-clock budget check so a slow property does not consume the entire time budget before the mutation phase begins.
     package static func run<Output>(
         _ gen: Generator<Output>,
         screeningBudget: UInt64,
         skipToRow: Int? = nil,
         continuePastFailure: Bool = false,
         property: (Output) -> Bool,
-        onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil
+        onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil,
+        shouldTerminate: (() -> Bool)? = nil
     ) -> Result<Output> {
         guard var analysis = ChoiceTreeAnalysis.analyze(gen, compositeThreshold: screeningBudget) else {
             return .notApplicable
@@ -82,83 +109,107 @@ package enum ScreeningRunner {
         // Pull-based pairwise coverage for 2+ parameters.
         if paramCount >= 2 {
             let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
-            var iterations = 0
+            var summary = Summary()
             var rowIndex = 0
             var failureObserved = false
             while rowIndex < budget, let row = generator.next() {
+                if shouldTerminate?() == true {
+                    break
+                }
                 if let target = skipToRow, rowIndex < target {
                     rowIndex += 1
                     continue
                 }
+                summary.rowAttempts += 1
                 let rowResult = testRow(
                     erasedGen, row: row, rowIndex: rowIndex,
                     profile: profile, needsTree: needsTree, property: property
                 )
                 if let rowResult {
+                    summary.propertyInvocations += 1
                     onExample?(rowResult.value, rowResult.tree, rowResult.passed)
                     if rowResult.passed == false {
                         if continuePastFailure {
                             failureObserved = true
                         } else {
                             return .failure(
-                                value: rowResult.value, tree: rowResult.tree, iteration: rowIndex + 1,
+                                value: rowResult.value, tree: rowResult.tree,
+                                rowOrdinal: rowIndex + 1, summary: summary,
                                 strength: 2, rows: rowIndex + 1,
                                 parameters: paramCount, totalSpace: totalSpace, kind: kind
                             )
                         }
                     }
+                } else {
+                    summary.rejectedRows += 1
                 }
                 if skipToRow != nil { break }
                 rowIndex += 1
-                iterations += 1
             }
 
             // Only report exhaustive when every point in the full Cartesian product was tested, not just all t-tuples.
-            if isExhaustiveCandidate, failureObserved == false, UInt64(iterations) >= totalSpace {
-                return .exhaustive(iterations: iterations)
+            if isExhaustiveCandidate,
+               skipToRow == nil,
+               failureObserved == false,
+               summary.rejectedRows == 0,
+               UInt64(summary.rowAttempts) >= totalSpace
+            {
+                return .exhaustive(summary: summary)
             }
 
             return .partial(
-                iterations: iterations, strength: 2, rows: rowIndex,
+                summary: summary, strength: 2, rows: rowIndex,
                 parameters: paramCount, totalSpace: totalSpace, kind: kind
             )
         }
 
         // Single parameter: enumerate all values.
-        var iterations = 0
+        var summary = Summary()
         var rowIndex = skipToRow ?? 0
         var failureObserved = false
         while rowIndex < budget, UInt64(rowIndex) < domainSizes[0] {
+            if shouldTerminate?() == true {
+                break
+            }
             let row = CoveringArrayRow(values: [UInt64(rowIndex)])
+            summary.rowAttempts += 1
             let rowResult = testRow(
                 erasedGen, row: row, rowIndex: rowIndex,
                 profile: profile, needsTree: needsTree, property: property
             )
             if let rowResult {
+                summary.propertyInvocations += 1
                 onExample?(rowResult.value, rowResult.tree, rowResult.passed)
                 if rowResult.passed == false {
                     if continuePastFailure {
                         failureObserved = true
                     } else {
                         return .failure(
-                            value: rowResult.value, tree: rowResult.tree, iteration: rowIndex + 1,
+                            value: rowResult.value, tree: rowResult.tree,
+                            rowOrdinal: rowIndex + 1, summary: summary,
                             strength: 1, rows: rowIndex + 1,
                             parameters: paramCount, totalSpace: totalSpace, kind: kind
                         )
                     }
                 }
+            } else {
+                summary.rejectedRows += 1
             }
             if skipToRow != nil { break }
             rowIndex += 1
-            iterations += 1
         }
 
-        if isExhaustiveCandidate, failureObserved == false, UInt64(iterations) >= domainSizes[0] {
-            return .exhaustive(iterations: iterations)
+        if isExhaustiveCandidate,
+           skipToRow == nil,
+           failureObserved == false,
+           summary.rejectedRows == 0,
+           UInt64(summary.rowAttempts) >= domainSizes[0]
+        {
+            return .exhaustive(summary: summary)
         }
 
         return .partial(
-            iterations: iterations, strength: 1, rows: rowIndex,
+            summary: summary, strength: 1, rows: rowIndex,
             parameters: paramCount, totalSpace: totalSpace, kind: kind
         )
     }

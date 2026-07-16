@@ -32,6 +32,50 @@ struct ExamineTests {
         #expect(report.reflectionRoundTripSuccesses == report.valuesGenerated)
     }
 
+    @Test("Examine preserves structured forward-only transform failures")
+    func forwardOnlyTransformFailures() {
+        let testCases: [(kind: String, generator: ReflectiveGenerator<String>)] = [
+            (
+                kind: "map",
+                generator: #gen(.just(1)).map(String.init)
+            ),
+            (
+                kind: "bind",
+                generator: #gen(.just(1)).bind { value in
+                    #gen(.just(String(value)))
+                }
+            ),
+        ]
+
+        for testCase in testCases {
+            let report = #examine(
+                testCase.generator,
+                .budget(3),
+                .suppress(.issueReporting)
+            ) { firstReplay, secondReplay in
+                firstReplay == secondReplay
+            }
+
+            #expect(report.valuesGenerated == 3)
+            #expect(report.reflectionRoundTripSuccesses == 0)
+            #expect(report.replayDeterminismSuccesses == 3)
+            #expect(report.reflectionSkipped == false)
+            #expect(report.failures.count == 1)
+
+            guard let failure = report.failures.first else {
+                continue
+            }
+            guard case let .forwardOnlyTransform(inputType, outputType, kind) = failure else {
+                Issue.record("Expected structured forward-only \(testCase.kind) failure")
+                continue
+            }
+
+            #expect(inputType == "Int")
+            #expect(outputType == "String")
+            #expect(kind == testCase.kind)
+        }
+    }
+
     @Test("Examine tracks filter observations")
     func filterObservations() {
         // ~50% validity rate — should pass without warnings

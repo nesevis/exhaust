@@ -220,7 +220,7 @@ struct PrefixFirstOrderTests {
     private static let taggedCommandGen = #gen(
         .int(in: 0 ... 3),
         .element(from: [StubCommand.increment, .decrement])
-    ) { marker, command in
+    ).map { marker, command in
         (ScheduleMarker(rawValue: UInt8(marker)), command)
     }
 

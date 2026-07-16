@@ -22,6 +22,13 @@ package extension Collection<ChoiceSequenceValue> {
 // MARK: - Helper functions
 
 package extension ChoiceSequence {
+    /// Computes a deterministic identity from the choices that affect replay, excluding generator-derived metadata.
+    ///
+    /// Callers that store this value as an identity deliberately accept the possibility of a 64-bit collision. Metadata changes to ranges, explicitness, branch counts, fingerprints, and value tags do not change the result.
+    var operativeHash: UInt64 {
+        ZobristHash.operativeHash(of: self)
+    }
+
     /// Creates a flat ``ChoiceSequence`` by flattening the given ``ChoiceTree``.
     init(_ tree: ChoiceTree) {
         self = Self.flatten(tree)
@@ -59,7 +66,7 @@ package extension ChoiceSequence {
     /// Flattens the tree structure of ``ChoiceTree`` to a flat list for mutation/reduction purposes.
     ///
     /// - Parameter includingAllBranches: When `true`, includes all branches at pick sites (not just the selected branch). Used for complexity comparison in reduction passes.
-    /// - Parameter skipBindInners: When `true`, a bind's inner subtree is omitted from the flattened output, leaving `.bind(true) <bound> .bind(false)`. Used only to compute a canonical cluster identity: the inner is redundant length-or-selector bookkeeping that varies across reduction paths reaching the same value. Never use for materialisation or reduction, which need the inner.
+    /// - Parameter skipBindInners: When `true`, a bind's inner subtree is omitted from the flattened output, leaving `.bind(true) <bound> .bind(false)`. Used only to compute a canonical cluster identity: the inner is redundant length-or-selector bookkeeping that varies across reduction paths reaching the same value. Never use for materialization or reduction, which need the inner.
     static func flatten(_ tree: ChoiceTree, includingAllBranches: Bool = false, skipBindInners: Bool = false) -> ChoiceSequence {
         var result = ChoiceSequence()
         result.reserveCapacity(64)
@@ -84,7 +91,7 @@ package extension ChoiceSequence {
                 output.append(.just)
             case .getSize:
                 break
-            case let .sequence(_, elements, meta):
+            case let .sequence(elements, meta):
                 output.append(.sequence(true, validRange: meta.validRange, isLengthExplicit: meta.isRangeExplicit))
                 // while-loop: avoiding IteratorProtocol overhead in debug builds.
                 var eIdx = 0

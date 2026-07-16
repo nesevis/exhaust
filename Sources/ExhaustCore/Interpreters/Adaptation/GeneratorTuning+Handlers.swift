@@ -319,13 +319,13 @@ extension GeneratorTuning {
             )
         }
 
-        let synthesisedPick: Generator<Output> = .impure(
+        let synthesizedPick: Generator<Output> = .impure(
             operation: .pick(choices: choices, totalWeight: choices.reduce(0) { $0 &+ $1.weight }),
             continuation: continuation
         )
 
         return try measureAndTune(
-            synthesisedPick,
+            synthesizedPick,
             context: context,
             insideSubdividedChooseBits: true,
             predicate: predicate
@@ -389,13 +389,13 @@ extension GeneratorTuning {
                 ))
             }
 
-            let synthesisedPick: Generator<Output> = .impure(
+            let synthesizedPick: Generator<Output> = .impure(
                 operation: .pick(choices: subrangeChoices, totalWeight: subrangeChoices.reduce(0) { $0 &+ $1.weight }),
                 continuation: continuation
             )
 
             return try measureAndTune(
-                synthesisedPick,
+                synthesizedPick,
                 context: context,
                 insideSubdividedChooseBits: true,
                 predicate: predicate
@@ -446,13 +446,13 @@ extension GeneratorTuning {
                 ))
             }
 
-            let synthesisedPick: Generator<Output> = .impure(
+            let synthesizedPick: Generator<Output> = .impure(
                 operation: .pick(choices: subrangeChoices, totalWeight: subrangeChoices.reduce(0) { $0 &+ $1.weight }),
                 continuation: continuation
             )
 
             return try measureAndTune(
-                synthesisedPick,
+                synthesizedPick,
                 context: context,
                 insideSubdividedChooseBits: true,
                 predicate: predicate
@@ -502,13 +502,13 @@ extension GeneratorTuning {
             )
         }
 
-        let synthesisedPick: Generator<Output> = .impure(
+        let synthesizedPick: Generator<Output> = .impure(
             operation: .pick(choices: choices, totalWeight: choices.reduce(0) { $0 &+ $1.weight }),
             continuation: continuation
         )
 
         return try measureAndTune(
-            synthesisedPick,
+            synthesizedPick,
             context: context,
             insideSubdividedChooseBits: true,
             predicate: predicate

@@ -69,10 +69,6 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         failureDescription: () -> String?
     ) -> Result {
         let laneCount = laneOutcomes.count
-        guard laneCount > 0 else {
-            return .linearizable
-        }
-
         let totalCommands = laneOutcomes.reduce(0) { $0 + $1.count }
         var state = SearchState(laneCount: laneCount, totalCommands: totalCommands)
 
@@ -203,10 +199,6 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         failureDescription: () -> String?
     ) async -> Result {
         let laneCount = laneOutcomes.count
-        guard laneCount > 0 else {
-            return .linearizable
-        }
-
         let totalCommands = laneOutcomes.reduce(0) { $0 + $1.count }
         var state = SearchState(laneCount: laneCount, totalCommands: totalCommands)
 

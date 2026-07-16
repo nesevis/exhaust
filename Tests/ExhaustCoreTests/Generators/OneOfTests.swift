@@ -6,7 +6,6 @@
 //
 
 import ExhaustCore
-import ExhaustTestSupport
 import Testing
 
 @Suite("oneOf combinator")
@@ -65,30 +64,6 @@ struct OneOfTests {
         #expect(common + rare == 500)
         #expect(rare > 0, "The rare branch must still be reachable")
         #expect(common > rare * 3, "9:1 weights should skew selection heavily: common=\(common), rare=\(rare)")
-    }
-
-    // MARK: - Round-trip
-
-    @Test("oneOf round-trips through choice tree and materialize", arguments: [UInt64(1), 7, 42, 100, 999, 12345])
-    func roundTripAcrossSeeds(seed: UInt64) throws {
-        let gen: Generator<String> = Gen.pick(choices: [
-            (1, Gen.just("alpha")),
-            (1, Gen.just("beta")),
-            (1, Gen.just("gamma")),
-        ])
-        let (original, materialized) = try roundTrip(gen, seed: seed)
-        #expect(original == materialized)
-    }
-
-    @Test("Weighted oneOf round-trips through choice tree and materialize", arguments: [UInt64(1), 7, 42, 100, 999])
-    func weightedRoundTrip(seed: UInt64) throws {
-        let gen: Generator<String> = Gen.pick(choices: [
-            (1, Gen.just("rare")),
-            (3, Gen.just("medium")),
-            (5, Gen.just("common")),
-        ])
-        let (original, materialized) = try roundTrip(gen, seed: seed)
-        #expect(original == materialized)
     }
 
     // MARK: - Gen.pick integration

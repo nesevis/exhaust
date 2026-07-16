@@ -87,7 +87,7 @@ struct FuzzPersistenceTests {
         #expect(store.load(maxAgeSeconds: 86400) == nil)
     }
 
-    @Test("The async writer serialises checkpoints in submission order")
+    @Test("The async writer serializes checkpoints in submission order")
     func writerOrdering() throws {
         let store = FuzzProgressStore(directory: scratchDirectory())
         defer {

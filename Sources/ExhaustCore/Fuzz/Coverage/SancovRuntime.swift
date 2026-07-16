@@ -11,7 +11,7 @@ import Foundation
 ///
 /// The init callbacks fire once per instrumented image (the spike measured two registrations for a single statically linked test binary), so regions accumulate rather than overwrite. Registration happens during image loading, before tests run; after startup the region list is effectively immutable. Readers snapshot the region arrays once (see ``SancovCoverageSource``) and then operate lock-free on the raw pointers, which stay valid for the process lifetime because the regions live in the images' data segments.
 ///
-/// Edge indices are global: regions are concatenated in registration order, and an edge's index is its region's running offset plus its position within the region. The PC table uses the same indexing, which is what lets report-time symbolisation resolve a counter index to a source location.
+/// Edge indices are global: regions are concatenated in registration order, and an edge's index is its region's running offset plus its position within the region. The PC table uses the same indexing, which is what lets report-time symbolization resolve a counter index to a source location.
 package enum SancovRuntime {
     /// One instrumented image's inline 8-bit counter array.
     package struct CounterRegion: @unchecked Sendable {

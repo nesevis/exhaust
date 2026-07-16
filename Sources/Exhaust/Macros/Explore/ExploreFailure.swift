@@ -6,8 +6,8 @@ struct ExploreFailure<Output> {
     let counterexample: Output
     let original: Output?
     let seed: UInt64
-    let propertyInvocations: Int
-    let totalBudget: Int
+    let invocations: ExploreInvocationCounts
+    let directedSamplingBudget: Int
     let matchedDirections: [(index: Int, name: String)]
     var reducedSequence: ChoiceSequence?
     var reductionProducedNoImprovement: Bool = false
@@ -16,8 +16,8 @@ struct ExploreFailure<Output> {
     func render() -> String {
         var lines: [String] = []
 
-        let encodedSeed = ReplaySeed.Resolved.sampling(seed: seed, iteration: propertyInvocations).encoded
-        lines.append("Property failed (iteration \(propertyInvocations)/\(totalBudget), seed \(encodedSeed))")
+        let encodedSeed = ReplaySeed.Resolved.sampling(seed: seed, iteration: nil).encoded
+        lines.append("Property failed after \(invocations.total) property invocations (seed \(encodedSeed))")
 
         if matchedDirections.isEmpty == false {
             let names = matchedDirections.map { "\"\($0.name)\"" }.joined(separator: ", ")
@@ -59,10 +59,15 @@ struct ExploreFailure<Output> {
         }
 
         lines.append("")
-        lines.append("Property invoked: \(propertyInvocations) times")
+        lines.append("Property invoked: \(invocations.total) times")
+        lines.append("  Warm-up: \(invocations.warmup)")
+        lines.append("  Regression: \(invocations.regression)")
+        lines.append("  Directed sampling: \(invocations.directedSampling)/\(directedSamplingBudget)")
+        lines.append("  Reduction: \(invocations.reduction)")
+        lines.append("  Diagnostic: \(invocations.diagnostic)")
 
         lines.append("")
-        lines.append("Reproduce: .replay(\"\(ReplaySeed.Resolved.sampling(seed: seed, iteration: propertyInvocations).encoded)\")")
+        lines.append("Reproduce: .replay(\"\(encodedSeed)\")")
 
         return lines.joined(separator: "\n")
     }

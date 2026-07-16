@@ -1,4 +1,5 @@
 import Exhaust
+import Foundation
 import Testing
 
 struct SwiftTestingIntegrationTests {
@@ -53,6 +54,24 @@ struct SwiftTestingIntegrationTests {
         #expect(result != nil, "Should find a counterexample")
     }
 
+    @Test("Silent detection executes the closure without evaluating Issue.record arguments")
+    func silentDetectionReplacesIssueRecordWithoutSkippingClosure() {
+        let closureCounter = DetectionEvaluationCounter()
+        let issueArgumentCounter = DetectionEvaluationCounter()
+        let result = #exhaust(
+            #gen(.just(0)),
+            .suppress(.all),
+            .budget(.custom(screening: 0, sampling: 1))
+        ) { _ in
+            _ = closureCounter.increment()
+            Issue.record("detection evaluation \(issueArgumentCounter.increment())")
+        }
+
+        #expect(result == 0)
+        #expect(closureCounter.value == 1)
+        #expect(issueArgumentCounter.value == 0)
+    }
+
     @Test("void property with thrown error") func voidPropertyWithThrownError() {
         struct TestError: Error {}
         let result = #exhaust(
@@ -65,6 +84,19 @@ struct SwiftTestingIntegrationTests {
             }
         }
         #expect(result != nil, "Should detect thrown errors as failures")
+    }
+
+    @Test("single-call throwing Void helper uses assertion semantics")
+    func singleCallThrowingVoidHelperUsesAssertionSemantics() {
+        let result = #exhaust(
+            #gen(.just(1)),
+            .suppress(.issueReporting),
+            .budget(.custom(screening: 0, sampling: 1))
+        ) { value in
+            try validateSingleCallThrowingVoid(value)
+        }
+
+        #expect(result == 1)
     }
 
     // MARK: - Bool property unchanged
@@ -192,15 +224,18 @@ struct SwiftTestingIntegrationTests {
     }
 
     @Test("screening replay tests exactly one row")
-    func screeningReplayTestsOneRow() {
+    func screeningReplayTestsOneRow() throws {
         let generator = #gen(.int(in: 0 ... 2), .int(in: 0 ... 2))
-        var invocations = 0
+        var capturedReport: ExhaustReport?
         #exhaust(generator, .replay("U3"), .suppress(.issueReporting), .onReport { report in
-            invocations = report.screeningInvocations
+            capturedReport = report
         }) { _ in
             true
         }
-        #expect(invocations == 1)
+        let report = try #require(capturedReport)
+        #expect(report.screeningRows == 1)
+        #expect(report.screeningInvocations == 1)
+        #expect(report.screeningRejectedRows == 0)
     }
 
     @Test("replay seed invalid string returns nil") func replaySeedInvalidStringReturnsNil() {
@@ -261,6 +296,62 @@ struct SwiftTestingIntegrationTests {
         #expect(result != nil, "Regression seed should find a counterexample")
     }
 
+    @Test("Trait regression seeds apply to Bool properties", .exhaust(.regressions("1A-1")))
+    func traitRegressionSeedsApplyToBoolProperties() {
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .budget(.custom(screening: 0, sampling: 0)),
+            .suppress(.all)
+        ) { _ in
+            false
+        }
+
+        #expect(result != nil)
+    }
+
+    @Test("Trait regression replay still delivers onReport", .exhaust(.regressions("1A")))
+    func traitRegressionReplayStillDeliversOnReport() {
+        var capturedReport: ExhaustReport?
+        var reportDeliveryCount = 0
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .suppress(.all),
+            .onReport { report in
+                reportDeliveryCount += 1
+                capturedReport = report
+            }
+        ) { _ in
+            #expect(Bool(false))
+        }
+
+        #expect(result != nil)
+        #expect(capturedReport != nil)
+        #expect(reportDeliveryCount == 1)
+    }
+
+    @Test("Async regression replay reports skips from reduction", .exhaust(.regressions("1A-1")))
+    func asyncRegressionReplayReportsReductionSkips() async {
+        let invocationCounter = DetectionEvaluationCounter()
+        var capturedReport: ExhaustReport?
+        let result = await #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .suppress(.all),
+            .onReport { report in
+                capturedReport = report
+            }
+        ) { _ async throws -> Bool in
+            await Task.yield()
+            let invocation = invocationCounter.increment()
+            if invocation > 1, invocation.isMultiple(of: 2) {
+                throw PropertySkip()
+            }
+            return false
+        }
+
+        #expect(result != nil)
+        #expect(capturedReport?.skippedInvocations ?? 0 > 0)
+    }
+
     @Test("Trait with passing regression seed", .exhaust(.budget(.standard), .regressions("0")))
     func traitWithPassingRegressionSeed() {
         // Seed "0" should produce a value that passes value >= 0 on 0...100.
@@ -273,6 +364,31 @@ struct SwiftTestingIntegrationTests {
             #expect(value >= 0)
         }
         #expect(result == nil, "All values in 0...100 should pass")
+    }
+}
+
+private struct SingleCallValidationError: Error {}
+
+private func validateSingleCallThrowingVoid(_ value: Int) throws {
+    if value == 1 {
+        throw SingleCallValidationError()
+    }
+}
+
+/// Counts evaluation of expressions embedded in rewritten detection assertions.
+private final class DetectionEvaluationCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage = 0
+
+    var value: Int {
+        lock.withLock { storage }
+    }
+
+    func increment() -> Int {
+        lock.withLock {
+            storage += 1
+            return storage
+        }
     }
 }
 

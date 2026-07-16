@@ -107,7 +107,8 @@ extension __ExhaustRuntime {
         if prefixCommands.isEmpty == false {
             lines.append("Sequential prefix:")
             for (index, command) in prefixCommands.enumerated() {
-                lines.append("  \(index + 1). \(command)")
+                let entryPrefix = "  \(index + 1). "
+                lines.append(indentedEntry(prefix: entryPrefix, content: String(describing: command)))
             }
             lines.append("")
         }
@@ -128,11 +129,21 @@ extension __ExhaustRuntime {
                     }
                     let isWitness = linearizabilityWitness?.lane == laneValue && linearizabilityWitness?.index == index
                     let witnessMarker = isWitness ? linearizabilityWitnessMarker : ""
-                    lines.append("  \(index + 1)\(label). \(command)\(annotation)\(witnessMarker)")
+                    let entryPrefix = "  \(index + 1)\(label). "
+                    lines.append(indentedEntry(
+                        prefix: entryPrefix,
+                        content: String(describing: command),
+                        suffix: annotation + witnessMarker
+                    ))
                 }
                 lines.append("")
             }
         }
+    }
+
+    private static func indentedEntry(prefix: String, content: String, suffix: String = "") -> String {
+        let continuationPrefix = String(repeating: " ", count: prefix.count)
+        return prefix + content.replacingOccurrences(of: "\n", with: "\n\(continuationPrefix)") + suffix
     }
 }
 

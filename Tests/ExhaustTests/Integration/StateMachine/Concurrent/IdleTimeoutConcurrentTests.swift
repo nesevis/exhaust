@@ -40,6 +40,84 @@ struct IdleTimeoutConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Cooperative timeout cancels and releases a cancellable suspended spec")
+    func cooperativeTimeoutReleasesSuspendedSpec() {
+        let reference = WeakReference<SleepingSpec>()
+        let commands: [(ScheduleMarker, SleepingSpec.Command)] = [
+            (ScheduleMarker(rawValue: 1), .doSleep),
+        ]
+        let result = drainSchedule(
+            taggedCommands: commands,
+            specInit: {
+                let spec = SleepingSpec()
+                reference.value = spec
+                return spec
+            },
+            concurrencyLevel: 1,
+            recordTrace: false,
+            idleTimeoutMilliseconds: 10
+        )
+
+        #expect(result.timedOut)
+        #expect(reference.value == nil)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Cooperative timeout hands off cleanup when suspended work ignores cancellation")
+    func cooperativeTimeoutHandsOffCancellationIgnoringWork() {
+        let reference = WeakReference<CancellationIgnoringSpec>()
+        let idleTimeoutMilliseconds = 100
+        let commands: [(ScheduleMarker, CancellationIgnoringSpec.Command)] = [
+            (ScheduleMarker(rawValue: 1), .wait),
+        ]
+        let start = monotonicNanoseconds()
+        let result = drainSchedule(
+            taggedCommands: commands,
+            specInit: {
+                let spec = CancellationIgnoringSpec()
+                reference.value = spec
+                return spec
+            },
+            concurrencyLevel: 1,
+            recordTrace: false,
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds
+        )
+        let elapsedNanoseconds = monotonicNanoseconds() - start
+
+        #expect(result.timedOut)
+        #expect(elapsedNanoseconds < UInt64(idleTimeoutMilliseconds) * 1_800_000)
+
+        Thread.sleep(forTimeInterval: 0.4)
+        #expect(reference.value == nil)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Canceled prefix cleanup does not execute remaining commands or mutate the completed result")
+    func cooperativePrefixTimeoutStopsAfterCancellationIgnoringWork() {
+        let reference = WeakReference<CancellationIgnoringSpec>()
+        let commands: [(ScheduleMarker, CancellationIgnoringSpec.Command)] = [
+            (.prefix, .wait),
+            (.prefix, .wait),
+        ]
+        let result = drainSchedule(
+            taggedCommands: commands,
+            specInit: {
+                let spec = CancellationIgnoringSpec()
+                reference.value = spec
+                return spec
+            },
+            concurrencyLevel: 1,
+            recordTrace: true,
+            idleTimeoutMilliseconds: 100
+        )
+
+        #expect(result.timedOut)
+
+        Thread.sleep(forTimeInterval: 0.4)
+        #expect(reference.value == nil)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Async preemptive idle timeout makes a stalling command pass and warns, without reducing")
     func asyncPreemptiveIdleTimeoutSurfacesStallingCommand() async throws {
         // The stalling command always exceeds the idle bound, so every probe times out. A timed-out probe counts as a pass, so discovery runs the full sampling budget, finds no counterexample, and returns nil. No candidate means no reduction: `reductionInvocations == 0` is the regression signal — a timeout misclassified as a race would have run the three-pass reducer, leaving `reductionInvocations > 0`. Because timeouts consume the whole budget, a warning fires.
@@ -57,6 +135,8 @@ struct IdleTimeoutConcurrentTests {
         }
         #expect(result == nil)
         #expect(reporter.warnings.count == 1)
+        let warning = try #require(reporter.warnings.first)
+        #expect(warning.contains("11 of 11 probes timed out (100%)"))
 
         let report = try #require(reportBox.value)
         #expect(report.reductionInvocations == 0)
@@ -121,7 +201,7 @@ struct IdleTimeoutConcurrentTests {
         withIssueReporters([firing]) {
             warnIfTimeoutFractionHigh(
                 timedOutProbes: 25,
-                totalBudget: 100,
+                totalProbes: 100,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -134,7 +214,7 @@ struct IdleTimeoutConcurrentTests {
         withIssueReporters([silent]) {
             warnIfTimeoutFractionHigh(
                 timedOutProbes: 24,
-                totalBudget: 100,
+                totalProbes: 100,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -181,6 +261,38 @@ final class SleepingCounter: @unchecked Sendable {
     func sleepAndIncrement() async {
         try? await Task.sleep(for: .milliseconds(200))
         _value += 1
+    }
+}
+
+@StateMachine(.tasks)
+final class CancellationIgnoringSpec {
+    @SystemUnderTest
+    var counter = CancellationIgnoringSystemUnderTest()
+
+    @Invariant
+    func alwaysTrue() -> Bool {
+        true
+    }
+
+    @Command(weight: 1)
+    func wait() async throws {
+        await counter.wait()
+        throw skip()
+    }
+
+    func failureDescription() -> String? {
+        nil
+    }
+}
+
+/// Uses a continuation that does not observe task cancellation, exercising timeout cleanup after cancellation cannot wake the command immediately.
+final class CancellationIgnoringSystemUnderTest: @unchecked Sendable {
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(300)) {
+                continuation.resume()
+            }
+        }
     }
 }
 
@@ -300,4 +412,8 @@ private final class CapturingIssueReporter: IssueReporter, @unchecked Sendable {
             }
         }
     }
+}
+
+private final class WeakReference<Value: AnyObject>: @unchecked Sendable {
+    weak var value: Value?
 }

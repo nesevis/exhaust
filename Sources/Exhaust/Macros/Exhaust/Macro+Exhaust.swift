@@ -33,8 +33,8 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 /// }
 /// ```
 ///
-/// - Parameter reflecting: A concrete value to reduce. It must be reachable by `gen`. If the generator cannot reflect it, Exhaust reports an issue and returns the value unreduced.
-/// - Returns: The reduced counterexample, or `nil` if the value does not fail the property.
+/// - Parameter reflecting: A concrete value to reduce. If reflection throws an error, Exhaust reports the error and returns this value unreduced.
+/// - Returns: The reduced counterexample, or `nil` if the value passes the property or no choice tree can represent it.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<GeneratedValue, PropertyResult>(
@@ -80,8 +80,8 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 /// }
 /// ```
 ///
-/// - Parameter reflecting: A concrete value to reduce. It must be reachable by `gen`. If the generator cannot reflect it, Exhaust reports an issue and returns the value unreduced.
-/// - Returns: The reduced counterexample, or `nil` if the value does not fail the property.
+/// - Parameter reflecting: A concrete value to reduce. If reflection throws an error, Exhaust reports the error and returns this value unreduced.
+/// - Returns: The reduced counterexample, or `nil` if the value passes the property or no choice tree can represent it.
 @freestanding(expression)
 @discardableResult
 public macro exhaust<GeneratedValue, PropertyResult>(

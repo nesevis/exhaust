@@ -11,7 +11,7 @@ extension FuzzRunner {
             : legacyCandidate(from: parent)
         if experiments.swarm {
             let epoch = SwarmMask.forEpoch(
-                index: mutationAttempts / FuzzTunables.swarmEpochAttempts,
+                index: counts.mutationAttempts / FuzzTunables.swarmEpochAttempts,
                 rootSeed: configuration.seed
             )
             candidate = epoch.apply(to: candidate, prng: &prng)

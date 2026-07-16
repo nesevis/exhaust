@@ -69,14 +69,41 @@ package struct FuzzRunnerConfiguration {
     }
 }
 
+/// Groups lifecycle accounting for a `time:` run separately from its resulting corpus, coverage, and timing statistics.
+package struct FuzzRunCounts: Sendable {
+    package var screeningAttempts = 0
+    package var samplingAttempts = 0
+    package var mutationAttempts = 0
+    package var screeningRejectedAttempts = 0
+    package var discardedAttempts = 0
+    package var evaluatedSearchCases = 0
+    package var pruneInvocations = 0
+    package var reductionInvocations = 0
+    package var normalizationInvocations = 0
+    package var classificationInvocations = 0
+    package var recoveryInvocations = 0
+
+    /// Counts candidate opportunities opened across all search phases, including candidates rejected before property entry.
+    package var totalAttempts: Int {
+        screeningAttempts + samplingAttempts + mutationAttempts
+    }
+
+    /// Counts property invocations across search, pruning, reduction, normalization, classification, and recovery.
+    package var totalPropertyInvocations: Int {
+        evaluatedSearchCases
+            + pruneInvocations
+            + reductionInvocations
+            + normalizationInvocations
+            + classificationInvocations
+            + recoveryInvocations
+    }
+}
+
 /// The raw result of a `time:` run, wrapped into the public report by the macro runtime.
 package struct FuzzRunResult: Sendable {
     package var clusters: [FaultCluster]
     package var unmatchedUnreducedCounts: [FailureSymptom: Int]
-    package var screeningAttempts: Int
-    package var samplingAttempts: Int
-    package var mutationAttempts: Int
-    package var discardedAttempts: Int
+    package var counts: FuzzRunCounts
     package var corpusEntryCount: Int
     package var mutableTierCount: Int
     package var coveredEdgeCount: Int
@@ -89,15 +116,11 @@ package struct FuzzRunResult: Sendable {
     package var clusterDiscriminations: [ClusterDiscrimination]
     package var startNanoseconds: UInt64
     package var elapsedNanoseconds: UInt64
-    /// Nanoseconds spent inside the property body across all loop attempts; `searchNanoseconds` minus this is testing overhead.
+    /// Nanoseconds spent inside the property body across search attempts and prune re-evaluations; `searchNanoseconds` minus this is testing overhead.
     package var propertyNanoseconds: UInt64
     /// Nanoseconds spent reducing, normalizing, and classifying failures inline on the loop's lane.
     package var reductionNanoseconds: UInt64
     package var seed: UInt64
-
-    package var totalAttempts: Int {
-        screeningAttempts + samplingAttempts + mutationAttempts
-    }
 
     /// The elapsed time net of inline reduction — the denominator for throughput and overhead, so a failure-dense run does not read as a slow pipeline.
     package var searchNanoseconds: UInt64 {
@@ -108,6 +131,6 @@ package struct FuzzRunResult: Sendable {
         guard searchNanoseconds > 0 else {
             return 0
         }
-        return Double(totalAttempts) / (Double(searchNanoseconds) / 1_000_000_000)
+        return Double(counts.evaluatedSearchCases) / (Double(searchNanoseconds) / 1_000_000_000)
     }
 }

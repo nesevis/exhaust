@@ -125,9 +125,8 @@ struct ChoiceGraphTests {
         let elementA = ChoiceTree.choice(ChoiceValue(1 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))
         let elementB = ChoiceTree.choice(ChoiceValue(2 as UInt64, tag: .uint64), .init(validRange: 0 ... 10))
         let tree = ChoiceTree.sequence(
-            length: 2,
             elements: [elementA, elementB],
-            .init(validRange: 0 ... 5, isRangeExplicit: true)
+            metadata: .init(validRange: 0 ... 5, isRangeExplicit: true)
         )
 
         let graph = ChoiceGraph.build(from: tree)

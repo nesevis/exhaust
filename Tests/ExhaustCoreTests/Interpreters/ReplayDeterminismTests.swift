@@ -107,4 +107,25 @@ struct ReplayDeterminismTests {
             #expect(original == replayed)
         }
     }
+
+    @Test("Generated sequence with constant length replays")
+    func generatedSequenceWithConstantLengthReplays() throws {
+        let generator = Gen.arrayOf(
+            Gen.choose(in: Int(0) ... 100),
+            Gen.just(UInt64(3))
+        )
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            generator,
+            seed: 42,
+            maxRuns: 1
+        )
+
+        let generated = try #require(try interpreter.next())
+        let replayed = try #require(try Interpreters.replay(
+            generator,
+            using: generated.tree
+        ))
+
+        #expect(replayed == generated.value)
+    }
 }

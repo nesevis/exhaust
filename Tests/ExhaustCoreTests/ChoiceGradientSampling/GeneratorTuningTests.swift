@@ -49,7 +49,7 @@ struct GeneratorTuningTests {
             return
         }
 
-        // The low-range subrange should have higher weight since the filter predicate favours < 200
+        // The low-range subrange should have higher weight since the filter predicate favors < 200
         let firstWeight = choices.first?.weight ?? 0
         let lastWeight = choices.last?.weight ?? 0
         #expect(firstWeight >= lastWeight,
@@ -67,7 +67,7 @@ struct GeneratorTuningTests {
         ])
         let arrayGen = Gen.arrayOf(elementGen, within: 3 ... 3)
 
-        // Favours small elements, so CGS should weight the small branch above the large one.
+        // Favors small elements, so CGS should weight the small branch above the large one.
         let predicate: ([Int]) -> Bool = { $0.allSatisfy { $0 < 50 } }
 
         let tuned = try ChoiceGradientTuner<[Int]>.tune(
@@ -88,11 +88,11 @@ struct GeneratorTuningTests {
         }
 
         // Before the depth-alignment fix the element pick's fitness was recorded one depth deeper than it was baked at, so the lookup missed and every weight collapsed to 1 (uniform).
-        // After the fix the predicate-favoured branch carries strictly more weight.
+        // After the fix the predicate-favored branch carries strictly more weight.
         #expect(choices.count == 2)
         #expect(
             choices[0].weight > choices[1].weight,
-            "Element pick should favour the small (valid) branch, got weights \(choices.map(\.weight))"
+            "Element pick should favor the small (valid) branch, got weights \(choices.map(\.weight))"
         )
     }
 
@@ -210,9 +210,9 @@ struct GeneratorTuningTests {
 
         // Both should have the first branch weighted higher than the second
         #expect(moderateChoices[0].weight > moderateChoices[1].weight,
-                "Moderate: first branch should be favoured")
+                "Moderate: first branch should be favored")
         #expect(largeChoices[0].weight > largeChoices[1].weight,
-                "Large: first branch should be favoured")
+                "Large: first branch should be favored")
 
         // Weight ratios should be similar — convergence means the large budget
         // didn't fundamentally change the distribution

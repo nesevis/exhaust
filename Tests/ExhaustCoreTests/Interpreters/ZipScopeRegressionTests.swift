@@ -44,7 +44,7 @@ struct ZipScopeRegressionTests {
             guard case let .success(materialized, _, _) = Materializer.materialize(
                 gen, prefix: sequence, mode: .guided(seed: 99, fallbackTree: tree)
             ) else {
-                Issue.record("Guided materialisation failed on an untouched prefix, seed \(seed)")
+                Issue.record("Guided materialization failed on an untouched prefix, seed \(seed)")
                 return
             }
             #expect(materialized == value, "Guided replay drifted from \(value) to \(materialized), seed \(seed)")
@@ -107,7 +107,7 @@ private func assertExactRoundTrip<Output>(
                 #expect(equals(materialized, value), "Exact replay produced \(materialized), not \(value), seed \(seed)")
                 #expect(ChoiceSequence.flatten(freshTree) == sequence, "Re-flattening changed the sequence, seed \(seed)")
             case .rejected, .failed:
-                Issue.record("Exact materialisation rejected the tree's own flattening, seed \(seed)")
+                Issue.record("Exact materialization rejected the tree's own flattening, seed \(seed)")
                 return
         }
         checked += 1

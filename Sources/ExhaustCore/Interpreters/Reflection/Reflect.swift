@@ -41,7 +41,7 @@ extension Interpreters {
 
         switch matchingPaths.count {
             case 0:
-                throw ReflectionError.couldNotMapInputToGenerator
+                return nil
             case 1:
                 return matchingPaths[0]
             default:
@@ -55,7 +55,7 @@ extension Interpreters {
     ///
     /// Walks the ``FreerMonad`` spine in reverse: for `.pure`, returns the value directly; for `.impure`, calls ``interpretOperationBackward(_:onFinalOutput:outputType:)`` to determine which intermediate values could have produced the target, then recurses through the continuation for each candidate. The `finalOutput` is threaded unchanged through the entire recursion — each operation extracts its own intermediate from it.
     ///
-    /// - Returns: All (value, path) pairs where the generator can produce `finalOutput`. Multiple results arise from non-injective pick operations.
+    /// - Returns: The reflected value and its path when the generator can produce `finalOutput`, or an empty array when it cannot.
     private static func reflectRecursive<Output>(
         _ gen: Generator<Output>,
         onFinalOutput finalOutput: Any
@@ -185,6 +185,8 @@ extension Interpreters {
             return try reflectRecursive(nextGen, onFinalOutput: finalOutput)
                 .map { ($0.value, $0.path) }
         } catch ReflectionError.reflectedNil {
+            return []
+        } catch ReflectionError.contramapWasWrongType {
             return []
         }
     }
@@ -338,20 +340,7 @@ extension Interpreters {
         var combinedPath: [ChoiceTree] = []
         var combinedResults: [Any] = []
 
-        let validRange: ClosedRange<UInt64>
         let isLengthRangeExplicit = lengthGen.associatedRange != nil
-        if let lengthRange = lengthGen.associatedRange {
-            validRange = lengthRange
-        } else {
-            let targetLength = UInt64(targetArray.underestimatedCount)
-            let lengthReflection = try reflectRecursive(
-                lengthGen,
-                onFinalOutput: targetLength
-            )
-            validRange = lengthReflection
-                .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
-                ?? UInt64.bitPatternRange
-        }
 
         for elementTarget in targetArray {
             let elementResults = try reflectRecursive(
@@ -365,10 +354,26 @@ extension Interpreters {
             combinedPath.append(path.count == 1 ? path[0] : .group(path))
         }
 
+        let validRange: ClosedRange<UInt64>
+        if let lengthRange = lengthGen.associatedRange {
+            validRange = lengthRange
+        } else {
+            let targetLength = UInt64(combinedPath.count)
+            let lengthReflection = try reflectRecursive(
+                lengthGen,
+                onFinalOutput: targetLength
+            )
+            validRange = lengthReflection
+                .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
+                ?? UInt64.bitPatternRange
+        }
+
         let finalTree = ChoiceTree.sequence(
-            length: UInt64(targetArray.underestimatedCount),
             elements: combinedPath,
-            ChoiceMetadata(validRange: validRange, isRangeExplicit: isLengthRangeExplicit)
+            metadata: ChoiceMetadata(
+                validRange: validRange,
+                isRangeExplicit: isLengthRangeExplicit
+            )
         )
         return [(value: combinedResults, path: [finalTree])]
     }
@@ -412,7 +417,7 @@ extension Interpreters {
         switch kind {
             case let .map(forward, backward, inputType, outputType):
                 if let backward {
-                    // Bidirectional map (`mapped(forward:backward:)`): apply the user-contract inverse and reflect the inner generator against the recovered input. Forward is applied per candidate because inner reflection can return several candidates (pick branches probed against a shared target), and upstream disambiguation compares each candidate's value to the final output. Collapsing them to one shared value would make every branch look like a match.
+                    // Bidirectional map (`mapped(forward:backward:)`): apply the user-contract inverse, reflect the inner generator against the recovered input, then reconstruct the mapped value for upstream matching.
                     let innerValue = try backward(finalOutput)
                     let reflected = try reflectRecursive(inner, onFinalOutput: innerValue)
                     return try reflected.map { result in
@@ -442,7 +447,7 @@ extension Interpreters {
                     outputType: "\(outputType)"
                 )
             case let .isomorph(forward, backward, _, _):
-                // Guaranteed invertible by construction (framework-authored pairs only), so no forward-only error path exists here. Forward is applied per candidate for the same reason as the bidirectional `.map` case above.
+                // Guaranteed invertible by construction (framework-authored pairs only), so no forward-only error path exists here. Reconstruct the outer value for upstream matching after reflecting the recovered inner value.
                 let innerValue = try backward(finalOutput)
                 let reflected = try reflectRecursive(inner, onFinalOutput: innerValue)
                 return try reflected.map { result in
@@ -457,14 +462,18 @@ extension Interpreters {
                 }
                 // Xia et al.'s comap at bind sites: extract the inner value from the final output.
                 let innerValue = try backward(finalOutput)
-                // Reconstruct the bound generator from the extracted inner value.
-                let boundGen = try forward(innerValue)
-                // Reflect both: inner against the extracted value, bound against the final output.
+                // Reflect the inner generator against the extracted value. A permissive inner operation such as `just` may return a different value, so each actual reflected candidate is authoritative when reconstructing the dependent generator.
                 let innerResults = try reflectRecursive(inner, onFinalOutput: innerValue)
-                let boundResults = try reflectRecursive(boundGen, onFinalOutput: finalOutput)
-                // Combine paths: inner choices followed by bound choices.
-                return innerResults.flatMap { innerResult in
-                    boundResults.map { boundResult in
+                return try innerResults.flatMap { innerResult in
+                    let boundGenerator = try forward(innerResult.value)
+                    let boundResults = try reflectRecursive(
+                        boundGenerator,
+                        onFinalOutput: finalOutput
+                    )
+                    return boundResults.compactMap { boundResult -> (value: Any, path: [ChoiceTree])? in
+                        guard structurallyEqual(boundResult.value, finalOutput) else {
+                            return nil
+                        }
                         let innerTree = innerResult.path.count == 1
                             ? innerResult.path[0]
                             : .group(innerResult.path)
@@ -478,8 +487,13 @@ extension Interpreters {
                     }
                 }
             case .metamorphic:
-                // The contramap backward already extracted the original Value from the output tuple. Reflect on inner with that value — the transforms are deterministic and will be re-derived on the forward pass.
-                return try reflectRecursive(inner, onFinalOutput: finalOutput)
+                guard let components = finalOutput as? [Any], let original = components.first else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                let reflectedResults = try reflectRecursive(inner, onFinalOutput: original)
+                return reflectedResults.map { result in
+                    (value: components as Any, path: result.path)
+                }
         }
     }
 }

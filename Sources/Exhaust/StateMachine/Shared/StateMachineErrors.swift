@@ -2,7 +2,7 @@
 
 /// Signals that a command's precondition is not met and this step should be skipped.
 ///
-/// Thrown by ``skip()`` inside `@Command` methods when the current model state does not support the command. The spec runner catches this and skips the step.
+/// Thrown by ``StateMachineSpecBase/skip()`` inside `@Command` methods when the current model state does not support the command. The spec runner catches this and skips the step.
 public struct StateMachineSkip: Error, Sendable {
     /// Creates a new skip signal.
     public init() {}
@@ -10,7 +10,7 @@ public struct StateMachineSkip: Error, Sendable {
 
 /// Signals that a postcondition check failed inside a `@Command` method.
 ///
-/// Thrown by ``check(_:_:)`` when a condition is `false`. The spec runner treats the current command sequence as a counterexample and proceeds to test case reduction.
+/// Thrown by ``StateMachineSpecBase/check(_:_:)`` when a condition is `false`. The spec runner treats the current command sequence as a counterexample and proceeds to test case reduction.
 public struct StateMachineCheckFailure: Error, Sendable {
     /// A description of the failed check, if available.
     public let message: String?
