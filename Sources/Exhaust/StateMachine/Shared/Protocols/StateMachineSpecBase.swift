@@ -1,7 +1,7 @@
 /// Shared requirements for both synchronous and asynchronous state machine specs.
 ///
 /// Users never conform to this protocol directly. Use ``StateMachineSpec`` or ``AsyncStateMachineSpec`` instead, both synthesized by the `@StateMachine` macro.
-public protocol StateMachineSpecBase {
+public protocol StateMachineSpecBase: SendableMetatype {
     /// Creates a fresh instance with default model and SUT state.
     init()
 

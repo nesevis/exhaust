@@ -10,7 +10,7 @@ enum ProbeOutcome {
 /// Dispatches probing, reduction, and result assembly to an execution-model-specific strategy.
 ///
 /// The ``SpecMachine`` dispatches to the backend without knowing whether execution is sequential, cooperative, or preemptive.
-protocol StateMachineBackend<Spec> {
+protocol StateMachineBackend<Spec>: SendableMetatype {
     associatedtype Spec: StateMachineSpecBase
 
     /// Executes a candidate command sequence and returns whether it passed, failed, or timed out.
