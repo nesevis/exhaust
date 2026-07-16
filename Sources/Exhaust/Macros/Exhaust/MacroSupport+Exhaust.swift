@@ -348,7 +348,11 @@ public extension __ExhaustRuntime {
             let samplingBudget: UInt64 = (replayIteration != nil || screeningReplayRow != nil) ? 1 : UInt64(budget.samplingBudget)
             let screeningBudget: UInt64 = (replayIteration != nil || screeningReplayRow != nil) ? 0 : UInt64(budget.screeningBudget)
             // Deadline scales with the preset, not the phase budgets — replay collapses those to 1/0 but still reduces one counterexample, so it must keep the full reduction deadline.
-            let reductionDeadlineNanoseconds = UInt64(budget.screeningBudget + budget.samplingBudget) * 5 * 1_000_000
+            // The floor keeps small custom budgets deterministic in practice: without it, a budget of a few runs yields a deadline of tens of milliseconds, which machine load (a parallel test suite, cold caches, debug logging) can cross mid-reduction, truncating to a non-minimal counterexample. Two seconds is orders of magnitude above any healthy reduction at these budgets while still bounding a runaway one.
+            let reductionDeadlineNanoseconds = max(
+                UInt64(budget.screeningBudget + budget.samplingBudget) * 5 * 1_000_000,
+                2_000_000_000
+            )
             let reductionConfig = Interpreters.ReducerConfiguration(
                 maxStalls: 2,
                 wallClockDeadlineNanoseconds: reductionDeadlineNanoseconds
