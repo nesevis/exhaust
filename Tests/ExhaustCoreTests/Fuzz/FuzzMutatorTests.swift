@@ -37,6 +37,51 @@ struct FuzzMutatorTests {
         }
     }
 
+    @Test("Cached mutation layout preserves results and PRNG consumption")
+    func cachedLayoutParity() throws {
+        let (_, _, sequence) = try generateBindExample(seed: 11)
+        let layout = FuzzMutator.layout(of: sequence)
+
+        for intensity in MutationIntensity.allCases {
+            var uncachedPRNG = Xoshiro256(seed: 7)
+            var cachedPRNG = Xoshiro256(seed: 7)
+            for _ in 0 ..< 50 {
+                let uncached = FuzzMutator.mutate(
+                    sequence,
+                    intensity: intensity,
+                    prng: &uncachedPRNG
+                )
+                let cached = FuzzMutator.mutate(
+                    sequence,
+                    intensity: intensity,
+                    layout: layout,
+                    prng: &cachedPRNG
+                )
+                #expect(cached == uncached)
+                #expect(cachedPRNG.currentState == uncachedPRNG.currentState)
+            }
+        }
+
+        var uncachedPRNG = Xoshiro256(seed: 9)
+        var cachedPRNG = Xoshiro256(seed: 9)
+        for _ in 0 ..< 50 {
+            let uncached = FuzzMutator.splice(
+                recipient: sequence,
+                donor: sequence,
+                prng: &uncachedPRNG
+            )
+            let cached = FuzzMutator.splice(
+                recipient: sequence,
+                donor: sequence,
+                recipientLayout: layout,
+                donorLayout: layout,
+                prng: &cachedPRNG
+            )
+            #expect(cached == uncached)
+            #expect(cachedPRNG.currentState == uncachedPRNG.currentState)
+        }
+    }
+
     // MARK: - Materialization Round Trips
 
     @Test("Every intensity band produces a sequence the materializer accepts", arguments: [7, 99, 1234] as [UInt64])
@@ -104,6 +149,27 @@ struct FuzzMutatorTests {
         var prng = Xoshiro256(seed: 5)
         #expect(FuzzMutator.splice(recipient: flat, donor: withBind, prng: &prng) == nil)
         #expect(FuzzMutator.splice(recipient: withBind, donor: flat, prng: &prng) == nil)
+    }
+
+    @Test("Splice handles deeply nested bind regions deterministically")
+    func spliceDeeplyNestedBinds() throws {
+        let sequence = nestedBindSequence(depth: 128)
+        var firstPRNG = Xoshiro256(seed: 5)
+        var secondPRNG = Xoshiro256(seed: 5)
+
+        let first = try #require(FuzzMutator.splice(
+            recipient: sequence,
+            donor: sequence,
+            prng: &firstPRNG
+        ))
+        let second = try #require(FuzzMutator.splice(
+            recipient: sequence,
+            donor: sequence,
+            prng: &secondPRNG
+        ))
+
+        #expect(first == second)
+        #expect(ChoiceSequence.validate(first))
     }
 
     // MARK: - High Intensity
@@ -176,6 +242,23 @@ private func bindGenerator() -> Generator<[Int]> {
     Gen.choose(in: 1 ... 5 as ClosedRange<Int>).bindReified { length in
         Gen.arrayOf(Gen.choose(in: 0 ... 100 as ClosedRange<Int>), exactly: UInt64(length))
     }
+}
+
+private func nestedBindSequence(depth: Int) -> ChoiceSequence {
+    let value = ChoiceSequenceValue.value(.init(
+        choice: ChoiceValue(0, tag: .uint64),
+        validRange: 0 ... UInt64.max,
+        isRangeExplicit: true
+    ))
+    var sequence = ChoiceSequence()
+    sequence.reserveCapacity(depth * 3 + 1)
+    sequence.append(contentsOf: repeatElement(.bind(true), count: depth))
+    sequence.append(value)
+    for _ in 0 ..< depth {
+        sequence.append(value)
+        sequence.append(.bind(false))
+    }
+    return sequence
 }
 
 /// Generates one ([Int], tree, flattened sequence) example from the bind generator.

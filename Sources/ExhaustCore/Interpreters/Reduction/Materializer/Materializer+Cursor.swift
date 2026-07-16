@@ -30,6 +30,11 @@ extension Materializer {
             Cursor(from: ChoiceSequence())
         }
 
+        /// Whether the cursor can never produce another entry: already marked exhausted or positioned past the final entry. Spent is monotonic; the position never decreases and popping a scope cannot revive entries behind it. Zip scoping consults this to skip span computation whose only effect would be limiting reads that fail regardless.
+        var isSpent: Bool {
+            exhausted || position >= entries.count
+        }
+
         init(from sequence: consuming ChoiceSequence) {
             entries = sequence
             effectiveEnd = entries.count

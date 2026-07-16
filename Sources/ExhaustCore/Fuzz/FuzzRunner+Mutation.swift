@@ -25,7 +25,13 @@ extension FuzzRunner {
             let donorIndex = Int(prng.next(upperBound: UInt64(corpus.entries.count)))
             let donor = corpus.entries[donorIndex]
             if donor.hash != parent.hash,
-               let spliced = FuzzMutator.splice(recipient: parent.sequence, donor: donor.sequence, prng: &prng)
+               let spliced = FuzzMutator.splice(
+                   recipient: parent.sequence,
+                   donor: donor.sequence,
+                   recipientLayout: parent.mutationLayout,
+                   donorLayout: donor.mutationLayout,
+                   prng: &prng
+               )
             {
                 return (spliced, 1 << UInt8(MutationArm.splice.rawValue))
             }
@@ -33,7 +39,12 @@ extension FuzzRunner {
         let intensityDraw = prng.next(upperBound: UInt64(MutationIntensity.allCases.count))
         let intensity = MutationIntensity.allCases[Int(intensityDraw)]
         return (
-            FuzzMutator.mutate(parent.sequence, intensity: intensity, prng: &prng),
+            FuzzMutator.mutate(
+                parent.sequence,
+                intensity: intensity,
+                layout: parent.mutationLayout,
+                prng: &prng
+            ),
             1 << UInt8(intensityDraw)
         )
     }
@@ -47,14 +58,19 @@ extension FuzzRunner {
         let stackCount = experiments.stackedMutation ? stackSize : 1
         var candidate = parent.sequence
         var armsMask: UInt8 = 0
-        for _ in 0 ..< stackCount {
+        for mutationIndex in 0 ..< stackCount {
+            let layout = mutationIndex == 0 ? parent.mutationLayout : nil
             let arm = experiments.banditBands ? bandit.pick(random: randomUnit()) : fixedDistributionArm()
             armsMask |= 1 << UInt8(arm.rawValue)
             switch arm {
                 case .low:
-                    candidate = FuzzMutator.mutate(candidate, intensity: .low, prng: &prng)
+                    candidate = FuzzMutator.mutate(
+                        candidate, intensity: .low, layout: layout, prng: &prng
+                    )
                 case .medium:
-                    candidate = FuzzMutator.mutate(candidate, intensity: .medium, prng: &prng)
+                    candidate = FuzzMutator.mutate(
+                        candidate, intensity: .medium, layout: layout, prng: &prng
+                    )
                 case .high:
                     candidate = FuzzMutator.mutate(candidate, intensity: .high, prng: &prng)
                 case .splice:
@@ -65,7 +81,13 @@ extension FuzzRunner {
                     let donor = corpus.entries[donorIndex]
                     // Skip self-splices against the current candidate, not the parent as the legacy path does: mid-stack the candidate has already drifted, so a parent-donor splice is genuine recombination.
                     if donor.sequence != candidate,
-                       let spliced = FuzzMutator.splice(recipient: candidate, donor: donor.sequence, prng: &prng)
+                       let spliced = FuzzMutator.splice(
+                           recipient: candidate,
+                           donor: donor.sequence,
+                           recipientLayout: layout,
+                           donorLayout: donor.mutationLayout,
+                           prng: &prng
+                       )
                     {
                         candidate = spliced
                     }

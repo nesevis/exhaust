@@ -34,6 +34,13 @@ package extension ChoiceSequence {
         self = Self.flatten(tree)
     }
 
+    /// Creates a flattened sequence while reserving storage from a caller-provided size estimate.
+    init(_ tree: ChoiceTree, reservingCapacity capacity: Int) {
+        self.init()
+        reserveCapacity(Swift.max(64, capacity))
+        Self.flatten(tree, includingAllBranches: false, into: &self)
+    }
+
     /// Returns the index one past the single flattened subtree starting at `start`, or nil when markers are unbalanced.
     ///
     /// A flattened subtree is self-delimiting: `.value`, `.just`, and `.branch` are single elements; `.group`, `.sequence`, and `.bind` openers run to their balanced closer.

@@ -5,6 +5,9 @@ package struct CorpusEntry: Sendable {
     /// The flattened choice sequence — the mutation substrate.
     package let sequence: ChoiceSequence
 
+    /// Stable leaf, branch, and bind positions reused across this entry's children. Nil for discovery-tier entries, which are never mutation parents.
+    package let mutationLayout: FuzzMutator.Layout?
+
     /// The choice tree behind `sequence`, kept as the guided-materialization fallback for mutations of this entry.
     package let tree: ChoiceTree
 
@@ -185,6 +188,7 @@ package final class FuzzCorpus {
     ///   - phase: The phase offering the candidate.
     ///   - isBoundaryDerived: Whether the candidate came from the covering array's boundary catalogs. Grants admission even without coverage novelty (phases 1 and 2 only; the mutation phase never sets this).
     ///   - propertyFailed: Whether the property failed on this candidate, recorded for report-time discrimination.
+    ///   - precomputedHash: `ZobristHash.hash(of:)` of `sequence` when the caller already computed it (the runner hashes every fresh sequence for the crash breadcrumb); must match exactly. Nil recomputes here.
     /// - Returns: The admission verdict. On admission, seen-bucket masks and rarity counts are already updated.
     package func offer(
         sequence: ChoiceSequence,
@@ -194,9 +198,10 @@ package final class FuzzCorpus {
         generation: Int,
         phase: FuzzPhase,
         isBoundaryDerived: Bool = false,
-        propertyFailed: Bool = false
+        propertyFailed: Bool = false,
+        precomputedHash: UInt64? = nil
     ) -> CorpusAdmission {
-        let hash = ZobristHash.hash(of: sequence)
+        let hash = precomputedHash ?? ZobristHash.hash(of: sequence)
         guard seenHashes.contains(hash) == false else {
             return .rejectedDuplicate
         }
@@ -231,9 +236,14 @@ package final class FuzzCorpus {
             seenBucketMasks[edge] |= HitCountBucket.bucketMask(for: hitCount)
         }
 
+        let tier: CorpusTier = convergence >= FuzzTunables.mutableTierConvergenceThreshold
+            ? .mutable
+            : .discovery
         let index = entries.count
         let entry = CorpusEntry(
             sequence: sequence,
+            // Only mutable-tier entries become mutation parents, so only they pay for and retain the layout index.
+            mutationLayout: tier == .mutable ? FuzzMutator.layout(of: sequence) : nil,
             tree: tree,
             signature: signature,
             hits: hits,
@@ -259,9 +269,6 @@ package final class FuzzCorpus {
             coveringEntries[edge].append(index)
         }
 
-        let tier: CorpusTier = convergence >= FuzzTunables.mutableTierConvergenceThreshold
-            ? .mutable
-            : .discovery
         if tier == .mutable, quarantinedHashes.contains(hash) == false {
             if experiments.championArchive {
                 claimChampionships(for: index, signature: signature)
