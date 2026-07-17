@@ -45,7 +45,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exploreTime<Output>(
         _ refGen: ReflectiveGenerator<Output>,
-        time: TimeBudget,
+        time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -65,13 +65,13 @@ public extension __ExhaustRuntime {
         )
         reportFuzzIssues(
             report: report,
-            suppressIssueReporting: ParsedFuzzSettings(settings).suppressIssueReporting,
+            suppressIssueReporting: ParsedFuzzSettings(settings).suppress.issueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppressAttachments)
+        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
         return report
     }
 
@@ -83,7 +83,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exploreTimeExpect<Output>(
         _ refGen: ReflectiveGenerator<Output>,
-        time: TimeBudget,
+        time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -111,18 +111,18 @@ public extension __ExhaustRuntime {
         replayFuzzDiagnostics(
             report: &report,
             gen: refGen.gen,
-            suppressIssueReporting: parsedSettings.suppressIssueReporting,
+            suppressIssueReporting: parsedSettings.suppress.issueReporting,
             property: property
         )
         reportFuzzIssues(
             report: report,
-            suppressIssueReporting: parsedSettings.suppressIssueReporting,
+            suppressIssueReporting: parsedSettings.suppress.issueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppressAttachments)
+        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
         return report
     }
 
@@ -132,7 +132,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exploreTimeAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
-        time: TimeBudget,
+        time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -154,7 +154,7 @@ public extension __ExhaustRuntime {
             )
             reportFuzzIssues(
                 report: report,
-                suppressIssueReporting: ParsedFuzzSettings(settings).suppressIssueReporting,
+                suppressIssueReporting: ParsedFuzzSettings(settings).suppress.issueReporting,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -162,7 +162,7 @@ public extension __ExhaustRuntime {
             )
             return report
         }
-        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppressAttachments)
+        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
         return report
     }
 
@@ -172,7 +172,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __exploreTimeExpectAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
-        time: TimeBudget,
+        time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -215,18 +215,18 @@ public extension __ExhaustRuntime {
         await replayFuzzDiagnosticsAsync(
             report: &finalReport,
             gen: refGen.gen,
-            suppressIssueReporting: parsedSettings.suppressIssueReporting,
+            suppressIssueReporting: parsedSettings.suppress.issueReporting,
             property: property
         )
         reportFuzzIssues(
             report: finalReport,
-            suppressIssueReporting: parsedSettings.suppressIssueReporting,
+            suppressIssueReporting: parsedSettings.suppress.issueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: finalReport, suppressAttachments: ParsedFuzzSettings(settings).suppressAttachments)
+        recordFuzzAttachments(report: finalReport, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
         return finalReport
     }
 
@@ -287,7 +287,7 @@ public extension __ExhaustRuntime {
     /// The `source` and `configure` parameters are test seams: in-package tests inject a synthetic coverage source (skipping the instrumentation check) and tighten the runner configuration (attempt limits, phase skips) for deterministic termination.
     package static func runExploreTimeCore<Output>(
         gen: Generator<Output>,
-        time: TimeBudget,
+        time: TimeSpan,
         settings: [FuzzSettings],
         source injectedSource: (any CoverageSource)?,
         configure: ((inout FuzzRunnerConfiguration) -> Void)?,
@@ -312,7 +312,7 @@ public extension __ExhaustRuntime {
             )
         }
         let seed = parsed.seed ?? UInt64.random(in: UInt64.min ... UInt64.max)
-        let suppressLogs = parsed.suppressLogs
+        let suppressLogs = parsed.suppress.logs
         let logLevel = parsed.logLevel
 
         let budgetNanoseconds = time.nanoseconds

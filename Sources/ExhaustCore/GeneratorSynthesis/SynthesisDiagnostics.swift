@@ -1,6 +1,6 @@
-/// Thrown by ``ReplayDecoder`` when a generated value drives `init(from:)` to decode a key or tape position the discovery pass never recorded.
+/// Thrown by ``ExampleDecoder`` when a generated value drives `init(from:)` to decode a key or tape position the discovery pass never recorded.
 ///
-/// A synthesized generator builds its replay tape from a single example. A hand-written `init(from:)` that branches on a decoded value can, at generation time, take a branch the example did not exercise and ask for a value that was never generated. Rather than trap on an out-of-range tape read, the replay decoder throws this, and the synthesized generator's reconstruction map catches it and pins the affected value to the example (see ``SynthesisDiagnostics/recordFallback(type:codingPath:)``).
+/// A synthesized generator builds its example tape from a single example. A hand-written `init(from:)` that branches on a decoded value can, at generation time, take a branch the example did not exercise and ask for a value that was never generated. Rather than trap on an out-of-range tape read, the example decoder throws this, and the synthesized generator's reconstruction map catches it and pins the affected value to the example (see ``SynthesisDiagnostics/recordFallback(type:codingPath:)``).
 package struct GenSchemaMiss: Error {
     /// The coding path of the decode call that found no recorded value.
     package let codingPath: [any CodingKey]

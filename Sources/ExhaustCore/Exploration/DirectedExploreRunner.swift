@@ -3,12 +3,12 @@
 //
 // Hamlet and Taylor (IEEE TSE 16(12), 1990) show that passive partition testing — dividing the input domain and sampling uniformly from each class — barely outperforms random testing. The advantage only appears when partitions concentrate sampling where failures are likely. Here, the user supplies the partitions as directions based on their domain knowledge, so partition quality reflects the tester's insight rather than a systematic method trying to be exhaustive. Per-direction CGS tuning then exceeds Hamlet and Taylor's condition by actively reshaping each direction's sampling distribution (see ``ChoiceGradientTuner`` and ``OnlineCGSInterpreter`` for the CGS algorithm provenance).
 
-/// Classification-aware exploration runner that steers sampling toward each declared direction via per-direction CGS tuning.
+/// Directed exploration runner that steers sampling toward each declared direction via per-direction CGS tuning.
 ///
-/// Implements the three-stage orchestration: warm-up (untuned sampling for ordering signal), per-direction tuning followed by directed sampling (most-hit-first, with cross-direction classification and budget pooling), and direction-preserving reduction on failure.
+/// Implements the three-stage orchestration: warm-up (untuned sampling for ordering signal), per-direction tuning followed by directed sampling (most-hit-first, with cross-direction matching and budget pooling), and direction-preserving reduction on failure.
 ///
 /// The runner's per-direction hit tracking (`RunState.hits`, `warmupHits`, `directedSamplingSamples`) is the exploration-level analogue of ``FitnessAccumulator``'s per-choice fitness tracking in the CGS pipeline. Both accumulate empirical outcome counts to steer generation, but at different granularities: directions (named predicate regions) versus individual pick-site branches.
-package struct ClassificationExploreRunner<Output>: ~Copyable {
+package struct DirectedExploreRunner<Output>: ~Copyable {
     private let gen: Generator<Output>
     private let property: (Output) -> Bool
     private let directions: [(name: String, predicate: (Output) -> Bool)]
@@ -56,7 +56,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         var directedSamplingSamples: [Int]
         var directedSamplingPasses: [Int]
         var directedSamplingFailures: [Int]
-        var invocations = ClassificationExploreInvocationCounts()
+        var invocations = DirectedExploreInvocationCounts()
         var remainingPool: Int
 
         init(directionCount: Int, totalPool: Int) {
@@ -72,8 +72,8 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
 
     // MARK: - Run
 
-    /// Runs the classification-aware exploration and returns a result describing per-direction coverage, co-occurrence, and any counterexample.
-    package mutating func run() throws -> ClassificationExploreResult<Output> {
+    /// Runs the directed exploration and returns a result describing per-direction coverage, co-occurrence, and any counterexample.
+    package mutating func run() throws -> DirectedExploreResult<Output> {
         let directionCount = directions.count
         let runStopwatch = Stopwatch()
         let totalPool = directionCount * maxAttemptsPerDirection
@@ -184,7 +184,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         // MARK: Final result
 
         let allCovered = (0 ..< directionCount).allSatisfy { state.hits[$0] >= hitsPerDirection }
-        let termination: ClassificationExploreTermination = allCovered ? .coverageAchieved : .budgetExhausted
+        let termination: DirectedExploreTermination = allCovered ? .coverageAchieved : .budgetExhausted
 
         return assembleResult(
             state: state, failure: nil, matchingDirections: [],
@@ -222,7 +222,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         tunedGenerators: [Int: Generator<Output>],
         state: inout RunState,
         stopwatch: Stopwatch
-    ) throws -> ClassificationExploreResult<Output>? {
+    ) throws -> DirectedExploreResult<Output>? {
         for regressionSeed in regressionSeeds {
             for (directionIndex, tunedGen) in tunedGenerators.sorted(by: { $0.key < $1.key }) {
                 var regressionInterpreter = ValueAndChoiceTreeInterpreter(
@@ -270,7 +270,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         directionCount: Int,
         state: inout RunState,
         stopwatch: Stopwatch
-    ) throws -> ClassificationExploreResult<Output>? {
+    ) throws -> DirectedExploreResult<Output>? {
         var passSamplesDrawn = 0
         var passInterpreter = ValueAndChoiceTreeInterpreter(
             tunedGen,
@@ -418,9 +418,9 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         failure: ReducedFailure<Output>?,
         matchingDirections: [Int],
         stopwatch: Stopwatch,
-        termination: ClassificationExploreTermination
-    ) -> ClassificationExploreResult<Output> {
-        var coverageEntries = [ClassificationExploreResult<Output>.DirectionCoverageEntry]()
+        termination: DirectedExploreTermination
+    ) -> DirectedExploreResult<Output> {
+        var coverageEntries = [DirectedExploreResult<Output>.DirectionCoverageEntry]()
         for (index, direction) in directions.enumerated() {
             let hits = state.hits[index]
             let warmupHits = state.warmupHits[index]
@@ -444,7 +444,7 @@ package struct ClassificationExploreRunner<Output>: ~Copyable {
         var invocations = state.invocations
         invocations.reduction += failure?.reductionInvocations ?? 0
 
-        return ClassificationExploreResult(
+        return DirectedExploreResult(
             counterexample: failure?.counterexample,
             original: failure?.original,
             reducedSequence: failure?.reducedSequence,
@@ -470,7 +470,7 @@ private struct ReducedFailure<Output> {
 }
 
 /// Separates property invocations by lifecycle phase so every path can merge counts without maintaining an independent total.
-package struct ClassificationExploreInvocationCounts: Equatable, Sendable {
+package struct DirectedExploreInvocationCounts: Equatable, Sendable {
     package var warmup = 0
     package var regression = 0
     package var directedSampling = 0
@@ -491,22 +491,22 @@ package struct ClassificationExploreInvocationCounts: Equatable, Sendable {
     }
 }
 
-/// Result of a classification-aware exploration run.
-package struct ClassificationExploreResult<Output> {
+/// Result of a directed exploration run.
+package struct DirectedExploreResult<Output> {
     package let counterexample: Output?
     package let original: Output?
     package let reducedSequence: ChoiceSequence?
     package let counterexampleDirections: [Int]
     package let directionCoverage: [DirectionCoverageEntry]
     package let coOccurrence: CoOccurrenceMatrix
-    package let invocations: ClassificationExploreInvocationCounts
+    package let invocations: DirectedExploreInvocationCounts
     package var propertyInvocations: Int {
         invocations.total
     }
 
     package let warmupSamples: Int?
     package let totalMilliseconds: Double
-    package let termination: ClassificationExploreTermination
+    package let termination: DirectedExploreTermination
     package let seed: UInt64
 
     package init(
@@ -516,10 +516,10 @@ package struct ClassificationExploreResult<Output> {
         counterexampleDirections: [Int],
         directionCoverage: [DirectionCoverageEntry],
         coOccurrence: CoOccurrenceMatrix,
-        invocations: ClassificationExploreInvocationCounts,
+        invocations: DirectedExploreInvocationCounts,
         warmupSamples: Int?,
         totalMilliseconds: Double,
-        termination: ClassificationExploreTermination,
+        termination: DirectedExploreTermination,
         seed: UInt64
     ) {
         self.counterexample = counterexample
@@ -574,8 +574,8 @@ package struct ClassificationExploreResult<Output> {
     }
 }
 
-/// How a classification-aware exploration run terminated.
-package enum ClassificationExploreTermination {
+/// How a directed exploration run terminated.
+package enum DirectedExploreTermination {
     /// Terminated because a property violation was found and reduced.
     case propertyFailed
     /// Terminated because all requested directions were hit at least once.

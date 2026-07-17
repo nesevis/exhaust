@@ -13,7 +13,7 @@ struct PreemptiveRacyAccountTests {
                 .parallelize(lanes: .two),
                 .budget(.custom(screening: 20000, sampling: 20000)),
                 .suppress(.issueReporting),
-                .idleTimeoutMs(30000),
+                .idleTimeout(.seconds(30)),
                 .onReport { report = $0 }
             )
         )

@@ -10,7 +10,7 @@ import ExhaustCore
 ///
 /// The property closure either returns `Bool` (`true` means pass), or returns `Void` and asserts with `#expect`/`#require`, in which case any assertion failure or thrown error counts as a counterexample. Throwing ``PropertySkip`` (or `XCTSkip`) instead skips that invocation: it counts as neither pass nor failure, and skips are tallied in ``ExhaustReport/skippedInvocations``. A `Void` property is re-run once after reduction without suppression, so assertion failures record against the reduced value.
 ///
-/// Each run moves through three phases: screening tests every parameter's problematic values (range edges, NaN, DST transitions, and so on) in pairwise combination, random sampling draws from the generator's natural distribution, and the first failure from either phase is reduced to a minimal counterexample and reported with a replay seed. The full mechanism is described in docs/EXHAUST-property-testing.md.
+/// Each run moves through three phases: screening tests every parameter's problematic values (range edges, NaN, DST transitions, and so on) in pairwise combination, random sampling draws from the generator's natural distribution, and the first failure from either phase is reduced to a minimal counterexample and reported with a replay seed. The full mechanism is described in <doc:PropertyTesting>.
 ///
 /// Settings are variadic ``PropertySettings`` values controlling budgets (``ExhaustBudget``), deterministic replay, parallel sampling, output suppression, and diagnostics. Each case documents itself.
 ///
@@ -57,7 +57,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 ///
 /// The property closure either returns `Bool` (`true` means pass), or returns `Void` and asserts with `#expect`/`#require`, in which case any assertion failure or thrown error counts as a counterexample. Throwing ``PropertySkip`` (or `XCTSkip`) instead skips that invocation: it counts as neither pass nor failure, and skips are tallied in ``ExhaustReport/skippedInvocations``. A `Void` property is re-run once after reduction without suppression, so assertion failures record against the reduced value.
 ///
-/// Each run moves through three phases: screening tests every parameter's problematic values (range edges, NaN, DST transitions, and so on) in pairwise combination, random sampling draws from the generator's natural distribution, and the first failure from either phase is reduced to a minimal counterexample and reported with a replay seed. The full mechanism is described in docs/EXHAUST-property-testing.md.
+/// Each run moves through three phases: screening tests every parameter's problematic values (range edges, NaN, DST transitions, and so on) in pairwise combination, random sampling draws from the generator's natural distribution, and the first failure from either phase is reduced to a minimal counterexample and reported with a replay seed. The full mechanism is described in <doc:PropertyTesting>.
 ///
 /// Settings are variadic ``PropertySettings`` values controlling budgets (``ExhaustBudget``), deterministic replay, parallel sampling, output suppression, and diagnostics. Each case documents itself.
 ///

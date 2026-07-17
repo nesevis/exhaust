@@ -14,7 +14,7 @@ extension __ExhaustRuntime {
         var directedSamplingSamples: Int = 0
         var directedSamplingPasses: Int = 0
         var directedSamplingFailures: Int = 0
-        var invocations = ClassificationExploreInvocationCounts()
+        var invocations = DirectedExploreInvocationCounts()
         var failure: (value: Output, tree: ChoiceTree, matchingDirections: [Int])?
         var error: (any Error)?
 
@@ -34,7 +34,7 @@ extension __ExhaustRuntime {
         hitsPerDirection: Int,
         maxAttemptsPerDirection: Int,
         seed: UInt64? = nil
-    ) throws -> ClassificationExploreResult<Output> {
+    ) throws -> DirectedExploreResult<Output> {
         let directionCount = directions.count
         let runStopwatch = Stopwatch()
         let baseSeed = seed ?? Xoshiro256().seed
@@ -67,7 +67,7 @@ extension __ExhaustRuntime {
         // Merge per-lane results.
         var mergedHits = Array(repeating: 0, count: directionCount)
         var mergedCoOccurrence = CoOccurrenceMatrix(directionCount: directionCount)
-        var mergedInvocations = ClassificationExploreInvocationCounts()
+        var mergedInvocations = DirectedExploreInvocationCounts()
         var perDirectionSamples = Array(repeating: 0, count: directionCount)
         var perDirectionPasses = Array(repeating: 0, count: directionCount)
         var perDirectionFailures = Array(repeating: 0, count: directionCount)
@@ -98,7 +98,7 @@ extension __ExhaustRuntime {
 
         let elapsed = runStopwatch.elapsedMilliseconds
 
-        var coverageEntries = [ClassificationExploreResult<Output>.DirectionCoverageEntry]()
+        var coverageEntries = [DirectedExploreResult<Output>.DirectionCoverageEntry]()
         for (index, direction) in directions.enumerated() {
             let hits = mergedHits[index]
             coverageEntries.append(.init(
@@ -126,7 +126,7 @@ extension __ExhaustRuntime {
             let reducedDirections = classifyExploreValue(reducedResult.counterexample, directions: directions)
             mergedInvocations.reduction += reducedResult.reductionInvocations
 
-            return ClassificationExploreResult(
+            return DirectedExploreResult(
                 counterexample: reducedResult.counterexample,
                 original: reducedResult.original,
                 reducedSequence: reducedResult.reducedSequence,
@@ -143,7 +143,7 @@ extension __ExhaustRuntime {
 
         let allCovered = mergedHits.allSatisfy { $0 >= hitsPerDirection }
 
-        return ClassificationExploreResult(
+        return DirectedExploreResult(
             counterexample: nil,
             original: nil,
             reducedSequence: nil,

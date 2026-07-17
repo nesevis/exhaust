@@ -358,7 +358,7 @@ private func makeConfig(
 ) -> ResolvedConcurrentConfig {
     var config = ResolvedConcurrentConfig()
     config.budget = .custom(screening: 0, sampling: 10)
-    config.suppressIssueReporting = true
+    config.suppress.issueReporting = true
     config.onReportClosure = onReport
     return config
 }
@@ -391,7 +391,7 @@ private func makeMachine(
         resolvedContext = context
     } else {
         var resolved = config ?? makeConfig()
-        resolved.suppressIssueReporting = true
+        resolved.suppress.issueReporting = true
         resolvedContext = StateMachineRunContext<StubSpec>(
             config: resolved,
             sequenceGen: stubSequenceGen(),

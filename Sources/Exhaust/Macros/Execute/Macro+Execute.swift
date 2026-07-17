@@ -1,6 +1,6 @@
 // Macro declarations for running spec tests with `#execute`.
 //
-// `#execute(MySpec.self, .settings...)` runs a spec spec at the call site, dispatching to the runner selected by the spec's `ExecutionModel`. The `@StateMachine` declaration macro and its markers live in `Macro+StateMachine.swift`.
+// `#execute(MySpec.self, .settings...)` runs a spec test at the call site, dispatching to the runner selected by the spec's `ExecutionModel`. The `@StateMachine` declaration macro and its markers live in `Macro+StateMachine.swift`.
 import ExhaustCore
 
 /// Runs a synchronous spec test, dispatching to the `.sequential`, `.tasks`, or `.threads` runner based on the spec's ``ExecutionModel``.
@@ -13,7 +13,7 @@ import ExhaustCore
 /// }
 /// ```
 ///
-/// Settings are variadic ``StateMachineSettings`` values controlling command limits, budgets (``ExhaustBudget``), lane count, deterministic replay, timeouts, output suppression, and diagnostics. Each case documents itself. The full guide is docs/EXECUTE-spec-testing.md.
+/// Settings are variadic ``StateMachineSettings`` values controlling command limits, budgets (``ExhaustBudget``), lane count, deterministic replay, timeouts, output suppression, and diagnostics. Each case documents itself. The full guide is <doc:StateMachineTesting>.
 ///
 /// - Returns: A ``StateMachineResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)
@@ -44,7 +44,7 @@ public macro execute<Spec: StateMachineSpec>(
 @discardableResult
 public macro execute<Spec: StateMachineSpec>(
     _ specType: Spec.Type,
-    time: TimeBudget,
+    time: TimeSpan,
     _ settings: FuzzSettings...
 ) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExecuteTimeMacro")
 
@@ -71,7 +71,7 @@ public macro execute<Spec: StateMachineSpec>(
 @discardableResult
 public macro execute<Spec: AsyncStateMachineSpec>(
     _ specType: Spec.Type,
-    time: TimeBudget,
+    time: TimeSpan,
     _ settings: FuzzSettings...
 ) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExecuteTimeAsyncMacro")
 
@@ -85,7 +85,7 @@ public macro execute<Spec: AsyncStateMachineSpec>(
 /// }
 /// ```
 ///
-/// Settings are variadic ``StateMachineSettings`` values controlling command limits, budgets (``ExhaustBudget``), lane count, deterministic replay, timeouts, output suppression, and diagnostics. Each case documents itself. The full guide is docs/EXECUTE-spec-testing.md.
+/// Settings are variadic ``StateMachineSettings`` values controlling command limits, budgets (``ExhaustBudget``), lane count, deterministic replay, timeouts, output suppression, and diagnostics. Each case documents itself. The full guide is <doc:StateMachineTesting>.
 ///
 /// - Returns: A ``StateMachineResult`` containing the reduced command sequence, execution trace, and SUT state if a violation is found, or `nil` if all sequences pass.
 @freestanding(expression)

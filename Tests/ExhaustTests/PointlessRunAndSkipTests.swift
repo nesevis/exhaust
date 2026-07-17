@@ -219,15 +219,12 @@ struct MisuseValidationTests {
         }
     }
 
-    @Test("Non-positive idle timeout resolves to unbounded")
-    func nonPositiveIdleTimeoutIsUnbounded() {
-        let zero = ResolvedConcurrentConfig.parse([.idleTimeoutMs(0)])
+    @Test("Zero idle timeout resolves to unbounded")
+    func zeroIdleTimeoutIsUnbounded() {
+        let zero = ResolvedConcurrentConfig.parse([.idleTimeout(.zero)])
         #expect(zero.config.resolvedIdleTimeoutMilliseconds == nil)
 
-        let negative = ResolvedConcurrentConfig.parse([.idleTimeoutMs(-5)])
-        #expect(negative.config.resolvedIdleTimeoutMilliseconds == nil)
-
-        let positive = ResolvedConcurrentConfig.parse([.idleTimeoutMs(500)])
+        let positive = ResolvedConcurrentConfig.parse([.idleTimeout(.milliseconds(500))])
         #expect(positive.config.resolvedIdleTimeoutMilliseconds == 500)
     }
 }

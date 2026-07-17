@@ -42,6 +42,6 @@ struct UUIDGeneratorTests {
     @Test("UUID generator validates with #examine")
     func examine() {
         let gen = #gen(.uuid())
-        #expect(#examine(gen, .budget(50)).passed)
+        #expect(#examine(gen, .samples(50)).passed)
     }
 }

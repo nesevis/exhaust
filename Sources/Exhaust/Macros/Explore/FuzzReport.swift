@@ -37,7 +37,7 @@ public struct FuzzReport: Sendable {
         public let discoveringPhase: Phase
 
         /// Elapsed run time at the first failure attributed to this cluster.
-        public let firstSeen: TimeBudget
+        public let firstSeen: TimeSpan
 
         /// The attempt index (1-based, counted across all phases) of the first failure attributed to this cluster.
         ///
@@ -45,7 +45,7 @@ public struct FuzzReport: Sendable {
         public let firstSeenAttempt: Int
 
         /// Elapsed run time at the most recent failure attributed to this cluster.
-        public let lastSeen: TimeBudget
+        public let lastSeen: TimeSpan
 
         /// Edges ranked by discriminative power against passing runs, strongest first. The top entry is the best single lead on the fault's location.
         public let discriminatingEdges: [DiscriminatingEdge]
@@ -90,22 +90,22 @@ public struct FuzzReport: Sendable {
     /// Partitions the run's elapsed time into non-overlapping property, search-phase overhead, reduction, and residual durations.
     public struct TimingBreakdown: Sendable, Equatable {
         /// Measures wall-clock time spent inside search and prune property invocations.
-        public let property: TimeBudget
+        public let property: TimeSpan
 
         /// Measures covering-array screening work outside property invocations and inline reduction.
-        public let screeningOverhead: TimeBudget
+        public let screeningOverhead: TimeSpan
 
         /// Measures random-sampling work outside property invocations and inline reduction.
-        public let samplingOverhead: TimeBudget
+        public let samplingOverhead: TimeSpan
 
         /// Measures coverage-guided mutation work outside property invocations and inline reduction.
-        public let mutationOverhead: TimeBudget
+        public let mutationOverhead: TimeSpan
 
         /// Measures inline reduction, normalization, classification, and their property invocations.
-        public let reduction: TimeBudget
+        public let reduction: TimeSpan
 
         /// Measures setup, recovery, between-phase bookkeeping, and finalization work outside the search phases.
-        public let other: TimeBudget
+        public let other: TimeSpan
     }
 
     /// Why the run stopped.
@@ -114,7 +114,7 @@ public struct FuzzReport: Sendable {
         case budgetExhausted
 
         /// The mutation phase stopped learning — no coverage-novel corpus admission for a sustained window — so the run ended early and returned the unused budget rather than burning it. A plateau is not evidence the fault space is exhausted; failures on already-covered paths remain possible.
-        case coveragePlateau(unused: TimeBudget)
+        case coveragePlateau(unused: TimeSpan)
 
         /// The build lacks coverage instrumentation, so the run failed loudly before consuming any budget. The recorded issue carries the compiler flags to add.
         case instrumentationMissing
@@ -214,7 +214,7 @@ public struct FuzzReport: Sendable {
     public let termination: Termination
 
     /// Wall-clock time the run consumed.
-    public let elapsed: TimeBudget
+    public let elapsed: TimeSpan
 
     /// Provides a non-overlapping partition of ``elapsed`` for diagnosing where the run spends its budget.
     public let timing: TimingBreakdown
@@ -225,7 +225,7 @@ public struct FuzzReport: Sendable {
     /// Returns wall-clock time spent reducing, normalizing, and classifying failures, inline on the search's lane.
     ///
     /// Reduction displaces search opportunities, so a failure-dense run spends a visible share of its budget here. ``attemptsPerSecond`` and ``testingOverheadFraction`` are computed net of this time, so they keep describing the search pipeline rather than the failure rate.
-    public var reductionTime: TimeBudget {
+    public var reductionTime: TimeSpan {
         timing.reduction
     }
 
@@ -309,9 +309,9 @@ package extension FuzzReport {
                 unnormalizedMemberCount: cluster.unnormalizedMemberCount,
                 isLikelySplit: cluster.signatures.count > 1,
                 discoveringPhase: Phase(phase: cluster.discoveringPhase),
-                firstSeen: TimeBudget(nanoseconds: cluster.firstSeenNanoseconds &- runStartNanoseconds),
+                firstSeen: TimeSpan(nanoseconds: cluster.firstSeenNanoseconds &- runStartNanoseconds),
                 firstSeenAttempt: cluster.firstSeenAttempt,
-                lastSeen: TimeBudget(nanoseconds: cluster.lastSeenNanoseconds &- runStartNanoseconds),
+                lastSeen: TimeSpan(nanoseconds: cluster.lastSeenNanoseconds &- runStartNanoseconds),
                 discriminatingEdges: rankedEdges,
                 necessaryEdgeCount: discrimination?.necessaryEdges.count ?? 0,
                 nearMissEdgeIndices: discrimination?.nearMissDistinguishingEdges.indices ?? [],
@@ -339,14 +339,14 @@ package extension FuzzReport {
         edgeSingletonCount = result.edgeSingletonCount
         edgeDoubletonCount = result.edgeDoubletonCount
         termination = Termination(termination: result.termination)
-        elapsed = TimeBudget(nanoseconds: result.elapsedNanoseconds)
+        elapsed = TimeSpan(nanoseconds: result.elapsedNanoseconds)
         timing = TimingBreakdown(
-            property: TimeBudget(nanoseconds: result.timing.propertyNanoseconds),
-            screeningOverhead: TimeBudget(nanoseconds: result.timing.screeningOverheadNanoseconds),
-            samplingOverhead: TimeBudget(nanoseconds: result.timing.samplingOverheadNanoseconds),
-            mutationOverhead: TimeBudget(nanoseconds: result.timing.mutationOverheadNanoseconds),
-            reduction: TimeBudget(nanoseconds: result.timing.reductionNanoseconds),
-            other: TimeBudget(
+            property: TimeSpan(nanoseconds: result.timing.propertyNanoseconds),
+            screeningOverhead: TimeSpan(nanoseconds: result.timing.screeningOverheadNanoseconds),
+            samplingOverhead: TimeSpan(nanoseconds: result.timing.samplingOverheadNanoseconds),
+            mutationOverhead: TimeSpan(nanoseconds: result.timing.mutationOverheadNanoseconds),
+            reduction: TimeSpan(nanoseconds: result.timing.reductionNanoseconds),
+            other: TimeSpan(
                 nanoseconds: result.timing.otherNanoseconds(totalNanoseconds: result.elapsedNanoseconds)
             )
         )
@@ -413,7 +413,7 @@ package extension FuzzReport.Termination {
             case .budgetExhausted:
                 .budgetExhausted
             case let .plateau(unusedNanoseconds):
-                .coveragePlateau(unused: TimeBudget(nanoseconds: unusedNanoseconds))
+                .coveragePlateau(unused: TimeSpan(nanoseconds: unusedNanoseconds))
             case .attemptLimitReached:
                 .attemptLimitReached
             case let .generationError(message):

@@ -141,7 +141,7 @@ Some fields fall back to a constant from the example, pinned with `.just(decoded
 > Tip:
 > Run `#examine` on a synthesised generator to see which fields are fully generated and which are pinned:
 > ```swift
-> let report = #examine(gen, .budget(50))
+> let report = #examine(gen, .samples(50))
 > // Output includes:
 > //   Correctness: reflection skipped (synthesized generator)
 > //   Pinned fields: 1 field could not be synthesized (constant value from example JSON)

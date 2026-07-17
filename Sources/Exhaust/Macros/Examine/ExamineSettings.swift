@@ -29,7 +29,7 @@ public enum ExamineSeverity: Sendable {
 /// Controls test behavior for `#examine` validation runs, passed as variadic arguments.
 ///
 /// ```swift
-/// #examine(personGen, .reflection(.warning), .budget(500))
+/// #examine(personGen, .reflection(.warning), .samples(500))
 /// #examine(personGen, .severity(.silent), .reflection(.error))
 /// ```
 public enum ExamineSettings: Sendable {
@@ -52,7 +52,7 @@ public enum ExamineSettings: Sendable {
     case filterHealth(ExamineSeverity)
 
     /// Sets the number of values to generate and validate. Defaults to 200 when omitted.
-    case budget(Int)
+    case samples(Int)
 
     /// Sets a fixed seed for deterministic validation runs.
     ///
@@ -87,10 +87,8 @@ package struct ExamineReportingConfiguration {
     var samples: Int
     /// Replay seed for deterministic runs, or `nil` for random.
     var replaySeed: ReplaySeed?
-    /// Whether to suppress log output.
-    var suppressLogs: Bool
-    /// Whether to suppress issue reporting.
-    var suppressIssueReporting: Bool
+    /// Resolved suppression flags.
+    var suppress: SuppressFlags
 
     /// Builds a configuration by resolving an array of ``ExamineSettings``.
     ///
@@ -103,8 +101,7 @@ package struct ExamineReportingConfiguration {
         var filterHealthOverride: ExamineSeverity?
         var samples = 200
         var replaySeed: ReplaySeed?
-        var suppressLogs = false
-        var suppressIssueReporting = false
+        var suppress = SuppressFlags()
 
         for setting in settings {
             switch setting {
@@ -114,24 +111,13 @@ package struct ExamineReportingConfiguration {
                     reflectionOverride = value
                 case let .filterHealth(value):
                     filterHealthOverride = value
-                case let .budget(count):
+                case let .samples(count):
                     precondition(count >= 0, "Budget must be non-negative")
                     samples = count
                 case let .replay(seed):
                     replaySeed = seed
                 case let .suppress(option):
-                    switch option {
-                        case .issueReporting:
-                            suppressIssueReporting = true
-                        case .logs:
-                            suppressLogs = true
-                        case .attachments:
-                            // #examine records no attachments; accepted so .suppress reads the same everywhere.
-                            break
-                        case .all:
-                            suppressIssueReporting = true
-                            suppressLogs = true
-                    }
+                    suppress.apply(option)
             }
         }
 
@@ -140,7 +126,6 @@ package struct ExamineReportingConfiguration {
         filterHealthSeverity = filterHealthOverride ?? base
         self.samples = samples
         self.replaySeed = replaySeed
-        self.suppressLogs = suppressLogs
-        self.suppressIssueReporting = suppressIssueReporting
+        self.suppress = suppress
     }
 }

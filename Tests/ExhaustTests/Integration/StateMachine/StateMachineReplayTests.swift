@@ -133,7 +133,7 @@ struct ConcurrentStateMachineReplayTests {
                 ReplayableNonAtomicCounterSpec.self,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 2000)),
-                .idleTimeoutMs(5000),
+                .idleTimeout(.seconds(5)),
                 .suppress(.all)
             )
         )

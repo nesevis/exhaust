@@ -13,7 +13,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __runStateMachineTimeDispatch(
         _ specType: (some StateMachineSpec).Type,
-        time: TimeBudget,
+        time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -32,13 +32,13 @@ public extension __ExhaustRuntime {
         // Reporting runs here on the test task, after the GCD hop: issue recording and attachment association both resolve the current test from task-locals a GCD worker does not carry.
         reportFuzzIssues(
             report: report,
-            suppressIssueReporting: ParsedFuzzSettings(settings).suppressIssueReporting,
+            suppressIssueReporting: ParsedFuzzSettings(settings).suppress.issueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppressAttachments)
+        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
         return report
     }
 
@@ -74,7 +74,7 @@ public extension __ExhaustRuntime {
     /// Builds the run's report: validates settings, routes on the execution model, and runs the matching adapter. Records no issues — the dispatch reports the returned report's termination and clusters exactly once.
     private static func stateMachineTimeReport<Spec: StateMachineSpec>(
         _ specType: Spec.Type,
-        time: TimeBudget,
+        time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString,
         filePath: StaticString,
@@ -115,7 +115,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __runStateMachineTimeDispatchAsync(
         _ specType: (some AsyncStateMachineSpec).Type,
-        time: TimeBudget,
+        time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
@@ -133,20 +133,20 @@ public extension __ExhaustRuntime {
         )
         reportFuzzIssues(
             report: report,
-            suppressIssueReporting: ParsedFuzzSettings(settings).suppressIssueReporting,
+            suppressIssueReporting: ParsedFuzzSettings(settings).suppress.issueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppressAttachments)
+        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
         return report
     }
 
     /// The async twin of ``stateMachineTimeReport(_:time:settings:fileID:filePath:line:column:)``: validates settings, routes on the execution model, and runs the matching adapter.
     private static func asyncStateMachineTimeReport<Spec: AsyncStateMachineSpec>(
         _ specType: Spec.Type,
-        time: TimeBudget,
+        time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString,
         filePath: StaticString,
@@ -220,7 +220,7 @@ public extension __ExhaustRuntime {
     /// Every execution model routes through here; an arm only has to supply its adapter factory. The factory runs on the worker so the adapter's generator and closures never cross a concurrency boundary. A nil adapter means the spec's command generator is not a top-level pick — the one construction the cooperative adapter cannot marker-tag — and terminates the run as a configuration error.
     private static func runSpecFuzz(
         makeAdapter: @escaping () -> SpecFuzzAdapter<some Any>?,
-        time: TimeBudget,
+        time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString,
         filePath: StaticString,

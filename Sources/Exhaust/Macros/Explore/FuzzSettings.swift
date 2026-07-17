@@ -56,9 +56,7 @@ struct ParsedFuzzSettings {
     var seed: UInt64?
     /// The configuration error for a replay seed that carries no run seed (screening-row seeds), rendered verbatim into the run's termination.
     var invalidReplayMessage: String?
-    var suppressLogs = false
-    var suppressIssueReporting = false
-    var suppressAttachments = false
+    var suppress = SuppressFlags()
     var logLevel: LogLevel = .error
     /// The `#execute(time:)` per-sequence command cap; nil when unset. Present on the value path, it is a configuration error the caller reports.
     var commandLimit: Int?
@@ -76,15 +74,7 @@ struct ParsedFuzzSettings {
                         invalidReplayMessage = "Invalid replay seed for #explore(time:): \(replaySeed). Pass the run seed from a prior report."
                     }
                 case let .suppress(option):
-                    if option == .logs || option == .all {
-                        suppressLogs = true
-                    }
-                    if option == .issueReporting || option == .all {
-                        suppressIssueReporting = true
-                    }
-                    if option == .attachments || option == .all {
-                        suppressAttachments = true
-                    }
+                    suppress.apply(option)
                 case let .log(level):
                     logLevel = level
                 case let .commandLimit(limit):

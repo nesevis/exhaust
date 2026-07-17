@@ -266,4 +266,4 @@ If the instrumented code changed between the crash and the rerun, the saved inpu
 
 - ``FuzzSettings``
 - ``FuzzReport``
-- ``TimeBudget``
+- ``TimeSpan``

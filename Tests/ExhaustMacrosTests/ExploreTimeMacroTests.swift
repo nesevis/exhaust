@@ -103,7 +103,7 @@
                     column: #column,
                     property: { message in
                     let decoded = try Decoder.decode(message)
-                    #expect(decoded.isValid, sourceLocation: Testing.SourceLocation(fileID: "TestModule/Test.swift", filePath: "Test.swift", line: 3, column: 5))
+                    #expect(decoded.isValid)
                     },
                     detection: { message in
                     let decoded = try Decoder.decode(message)
@@ -249,7 +249,7 @@
                     column: #column,
                     property: { message in
                     let response = try await server.roundTrip(message)
-                    #expect(response.isAcknowledgement, sourceLocation: Testing.SourceLocation(fileID: "TestModule/Test.swift", filePath: "Test.swift", line: 3, column: 5))
+                    #expect(response.isAcknowledgement)
                     },
                     detection: { message in
                     let response = try await server.roundTrip(message)
