@@ -136,6 +136,7 @@ package struct FuzzRunResult: Sendable {
     package var startNanoseconds: UInt64
     package var elapsedNanoseconds: UInt64
     package var timing: FuzzRunTiming
+    package var ledger: RunLedger
     package var seed: UInt64
 
     /// The elapsed time net of inline reduction — the denominator for throughput and overhead, so a failure-dense run does not read as a slow pipeline.
