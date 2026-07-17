@@ -424,27 +424,31 @@ package final class FuzzRunner<Output> {
             recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent.hash)
         )
 
-        // Phase 2: rebuild the tree only when something downstream reads it. The gate is exact: `wouldAdmit` and offer's admission share one novelty predicate, mutation-phase offers are never boundary-derived, and the prune hook fires on the same failure-or-would-admit condition, so a candidate that fails this check can never have its placeholder tree stored or read. The rebuild is deterministic for identical candidate, seed, and fallback; the sequence comparison turns an impossible divergence into a discarded attempt instead of corrupt corpus state. Coverage from the rebuild cannot pollute the next attempt: its bracket begins with beginAttempt(), which clears attribution state (the same argument that covers inline reduction probes).
+        // Phase 2: rebuild the tree only when something downstream reads it. Admission stores the tree as the mutation fallback, and the prune hook consumes it on the same failure-or-would-admit condition it fires on, so both rebuild eagerly here (`wouldAdmit` and offer's admission share one novelty predicate, and mutation-phase offers are never boundary-derived, so a candidate that fails the check can never have its placeholder tree stored). A plain failure consumes the tree only if the failure gate dispatches a reduction — a small minority once a fault's clusters are known — so the failure path defers the rebuild to that dispatch instead of paying a second materialization for every failing candidate. Coverage from a rebuild cannot pollute the next attempt: an eager rebuild runs inside this attempt's bracket, a deferred one runs on the reduction dispatch's lane, and either way the next bracket begins with beginAttempt(), which clears attribution state (the same argument that covers inline reduction probes).
+        let admissionNovel = corpus.wouldAdmit(hits: hits)
         var tree = ChoiceTree.just
-        if verdict.isFailure || corpus.wouldAdmit(hits: hits) {
-            let rebuilt = Materializer.materializeAny(
-                erasedGen,
-                prefix: candidate,
-                mode: .guided(seed: guidedSeed, fallbackTree: parent.tree)
-            )
-            guard case let .success(_, freshTree, _) = rebuilt,
-                  ChoiceSequence.flatten(freshTree) == sequence
-            else {
-                ExhaustLog.error(
-                    category: .propertyTest,
-                    event: "flat_emission_rebuild_divergence",
-                    "guided tree rebuild diverged from the flat-emission sequence for an identical candidate, seed, and fallback"
-                )
-                assertionFailure("flat-emission parity break: guided tree rebuild diverged for identical inputs")
+        var deferredTreeRebuild: (() -> ChoiceTree?)?
+        if admissionNovel || (prune != nil && verdict.isFailure) {
+            guard let rebuilt = rebuildGuidedTree(
+                candidate: candidate,
+                seed: guidedSeed,
+                fallbackTree: parent.tree,
+                expecting: sequence
+            ) else {
                 counts.discardedAttempts += 1
                 return
             }
-            tree = freshTree
+            tree = rebuilt
+        } else if verdict.isFailure {
+            let parentTree = parent.tree
+            deferredTreeRebuild = {
+                self.rebuildGuidedTree(
+                    candidate: candidate,
+                    seed: guidedSeed,
+                    fallbackTree: parentTree,
+                    expecting: sequence
+                )
+            }
         }
 
         let admission = recordAttempt(
@@ -452,6 +456,7 @@ package final class FuzzRunner<Output> {
             tree: tree,
             sequence: sequence,
             sequenceHash: sequenceHash,
+            deferredTreeRebuild: deferredTreeRebuild,
             verdict: verdict,
             hits: hits,
             convergence: decodingReport?.convergence ?? 0,
@@ -464,6 +469,34 @@ package final class FuzzRunner<Output> {
                 bandit.reward(arm)
             }
         }
+    }
+
+    /// Re-materializes the guided tree for a flat-emission candidate and verifies it flattens to the phase-1 sequence.
+    ///
+    /// The rebuild is deterministic for identical candidate, seed, and fallback, so a nil return marks an impossible parity break; the caller decides whether that discards the attempt (eager path) or skips the consumer (deferred path).
+    private func rebuildGuidedTree(
+        candidate: ChoiceSequence,
+        seed: UInt64,
+        fallbackTree: ChoiceTree,
+        expecting sequence: ChoiceSequence
+    ) -> ChoiceTree? {
+        let rebuilt = Materializer.materializeAny(
+            erasedGen,
+            prefix: candidate,
+            mode: .guided(seed: seed, fallbackTree: fallbackTree)
+        )
+        guard case let .success(_, freshTree, _) = rebuilt,
+              ChoiceSequence.flatten(freshTree) == sequence
+        else {
+            ExhaustLog.error(
+                category: .propertyTest,
+                event: "flat_emission_rebuild_divergence",
+                "guided tree rebuild diverged from the flat-emission sequence for an identical candidate, seed, and fallback"
+            )
+            assertionFailure("flat-emission parity break: guided tree rebuild diverged for identical inputs")
+            return nil
+        }
+        return freshTree
     }
 
     // MARK: - Shared Attempt Plumbing
@@ -542,6 +575,7 @@ package final class FuzzRunner<Output> {
         tree: ChoiceTree,
         sequence: ChoiceSequence,
         sequenceHash: UInt64? = nil,
+        deferredTreeRebuild: (() -> ChoiceTree?)? = nil,
         verdict: FuzzVerdict,
         hits: [(edge: Int, hitCount: UInt8)],
         convergence: Double,
@@ -592,9 +626,11 @@ package final class FuzzRunner<Output> {
         if let failure = candidates.failure,
            case let .fail(symptom) = failure.verdict
         {
+            // A non-nil deferred rebuild implies no prune hook, so the failure candidate is always the original whose placeholder tree the rebuild replaces.
             handleFailure(
                 value: failure.value,
                 tree: failure.tree,
+                deferredTreeRebuild: deferredTreeRebuild,
                 sequence: failure.sequence,
                 symptom: symptom,
                 parentIndex: parentIndex,
@@ -677,6 +713,7 @@ package final class FuzzRunner<Output> {
     private func handleFailure(
         value: Output,
         tree: ChoiceTree,
+        deferredTreeRebuild: (() -> ChoiceTree?)? = nil,
         sequence: ChoiceSequence,
         symptom: FailureSymptom,
         parentIndex: Int?,
@@ -698,9 +735,24 @@ package final class FuzzRunner<Output> {
                     attemptIndex: attemptIndex
                 )
             case let .reduce(isEscape):
+                let reductionTree: ChoiceTree
+                if let deferredTreeRebuild {
+                    guard let rebuilt = deferredTreeRebuild() else {
+                        // Divergence on the deferred path: the attempt is already recorded, so the failure is held unreduced rather than dispatched with a placeholder tree.
+                        inventory.recordUnreduced(
+                            symptom: symptom,
+                            timestampNanoseconds: monotonicNanoseconds(),
+                            attemptIndex: attemptIndex
+                        )
+                        return
+                    }
+                    reductionTree = rebuilt
+                } else {
+                    reductionTree = tree
+                }
                 performReduction(
                     value: value,
-                    tree: tree,
+                    tree: reductionTree,
                     symptom: symptom,
                     parentIndex: parentIndex,
                     phase: phase,
