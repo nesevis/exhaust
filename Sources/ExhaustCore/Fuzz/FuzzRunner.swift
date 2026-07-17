@@ -224,24 +224,12 @@ package final class FuzzRunner<Output> {
         let elapsedNanoseconds = monotonicNanoseconds() - startNanoseconds
 
         var ledger = RunLedger()
-        for _ in 0 ..< counts.evaluatedSearchCases {
-            ledger.record(.sampling, .pass)
-        }
-        for _ in 0 ..< counts.pruneInvocations {
-            ledger.record(.pruning, .pass)
-        }
-        for _ in 0 ..< counts.reductionInvocations {
-            ledger.record(.reduction, .pass)
-        }
-        for _ in 0 ..< counts.normalizationInvocations {
-            ledger.record(.normalization, .pass)
-        }
-        for _ in 0 ..< counts.classificationInvocations {
-            ledger.record(.classification, .pass)
-        }
-        for _ in 0 ..< counts.recoveryInvocations {
-            ledger.record(.recovery, .pass)
-        }
+        ledger.record(.sampling, .pass, count: counts.evaluatedSearchCases)
+        ledger.record(.pruning, .pass, count: counts.pruneInvocations)
+        ledger.record(.reduction, .pass, count: counts.reductionInvocations)
+        ledger.record(.normalization, .pass, count: counts.normalizationInvocations)
+        ledger.record(.classification, .pass, count: counts.classificationInvocations)
+        ledger.record(.recovery, .pass, count: counts.recoveryInvocations)
         ledger.addElapsed(.screening, nanoseconds: timing.screeningOverheadNanoseconds)
         ledger.addElapsed(.sampling, nanoseconds: timing.samplingOverheadNanoseconds + timing.propertyNanoseconds)
         ledger.addElapsed(.mutation, nanoseconds: timing.mutationOverheadNanoseconds)

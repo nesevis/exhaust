@@ -99,9 +99,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
             case .screening: .screening
             case .randomSampling, .smokeTest, .replay: .sampling
         }
-        for _ in 0 ..< invocations {
-            context.state.ledger.record(phase, .pass)
-        }
+        context.state.ledger.record(phase, .pass, count: invocations)
         context.state.ledger.addElapsed(phase, nanoseconds: UInt64(elapsed * 1_000_000))
 
         switch source.discoveryMethod {
@@ -181,9 +179,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     private mutating func stepRecordStats() -> Transition {
         let reductionInvocations = context.invocationCounter.value - preReductionInvocations
-        for _ in 0 ..< reductionInvocations {
-            context.state.ledger.record(.reduction, .pass)
-        }
+        context.state.ledger.record(.reduction, .pass, count: reductionInvocations)
         let reductionElapsed = reductionStopwatch?.elapsedMilliseconds ?? 0
         context.state.ledger.addElapsed(.reduction, nanoseconds: UInt64(reductionElapsed * 1_000_000))
         context.state.report.reductionMilliseconds = reductionElapsed

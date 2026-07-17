@@ -14,7 +14,7 @@ extension __ExhaustRuntime {
         static func replayRegressionSeeds<Output>( // swiftlint:disable:this function_parameter_count
             gen: Generator<Output>,
             settings: [PropertySettings],
-            skipCounter: SkipCounter? = nil,
+            skipCounter _: SkipCounter? = nil,
             forceIssueReportingSuppression: Bool,
             fileID: StaticString,
             filePath: StaticString,
@@ -57,7 +57,6 @@ extension __ExhaustRuntime {
                     testName: "\(function)",
                     property: property
                 ).0
-                replayReport.skippedInvocations = skipCounter?.drain() ?? 0
                 if replayResult == nil {
                     // Seed now passes — the bug was fixed. The seed sits inert as a
                     // silent regression guard until the property fails again.

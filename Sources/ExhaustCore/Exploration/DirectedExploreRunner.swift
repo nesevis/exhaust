@@ -445,9 +445,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
         let elapsed = stopwatch.elapsedMilliseconds
         var ledger = state.ledger
         let reductionInvocations = failure?.reductionInvocations ?? 0
-        for _ in 0 ..< reductionInvocations {
-            ledger.record(.reduction, .pass)
-        }
+        ledger.record(.reduction, .pass, count: reductionInvocations)
 
         var invocations = DirectedExploreInvocationCounts()
         invocations.warmup = ledger.count(.warmup)

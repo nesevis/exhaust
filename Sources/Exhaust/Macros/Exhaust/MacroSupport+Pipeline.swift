@@ -58,6 +58,7 @@ package extension __ExhaustRuntime {
         report: inout ExhaustReport,
         ledger: inout RunLedger
     ) -> ScreeningOutcome<Output> {
+        let skipsBefore = context.skipCounter?.count ?? 0
         let screeningResult = ScreeningRunner.run(
             context.gen,
             screeningBudget: screeningBudget,
@@ -71,18 +72,15 @@ package extension __ExhaustRuntime {
                 }
             }
         )
-        report.applyScreeningSummary(screeningResult.summary)
+        report.applyScreeningRows(screeningResult.summary)
         let screeningPropertyCalls = screeningResult.summary.propertyInvocations
+        let screeningSkips = (context.skipCounter?.count ?? 0) - skipsBefore
         let screeningFoundFailure = if case .failure = screeningResult { true } else { false }
-        if screeningFoundFailure, screeningPropertyCalls > 0 {
-            for _ in 0 ..< screeningPropertyCalls - 1 {
-                ledger.record(.screening, .pass)
-            }
+        let screeningPasses = screeningPropertyCalls - screeningSkips - (screeningFoundFailure ? 1 : 0)
+        ledger.record(.screening, .pass, count: max(0, screeningPasses))
+        ledger.record(.screening, .skip, count: screeningSkips)
+        if screeningFoundFailure {
             ledger.record(.screening, .fail)
-        } else {
-            for _ in 0 ..< screeningPropertyCalls {
-                ledger.record(.screening, .pass)
-            }
         }
         switch screeningResult {
             case let .failure(value, tree, rowOrdinal, _, strength, rows, parameters, totalSpace, kind):
@@ -393,10 +391,6 @@ package extension __ExhaustRuntime {
         if interpreter.uniqueExhaustionTruncatedRun {
             recordUniqueExhaustion(iterations: iterations, context: context, report: &report)
         }
-        report.applyPostScreeningInvocations(
-            randomSampling: iterations,
-            reduction: 0
-        )
         return nil
     }
 
@@ -565,12 +559,8 @@ package extension __ExhaustRuntime {
         let totalSkips = batchResults.reduce(0) { $0 + $1.skips }
         let hasFailure = batchResults.contains { $0.failure != nil }
         let passes = totalIterations - totalSkips - (hasFailure ? 1 : 0)
-        for _ in 0 ..< max(0, passes) {
-            ledger.record(.sampling, .pass)
-        }
-        for _ in 0 ..< totalSkips {
-            ledger.record(.sampling, .skip)
-        }
+        ledger.record(.sampling, .pass, count: max(0, passes))
+        ledger.record(.sampling, .skip, count: totalSkips)
         if hasFailure {
             ledger.record(.sampling, .fail)
         }
@@ -583,10 +573,6 @@ package extension __ExhaustRuntime {
             if batchResults.contains(where: \.uniqueExhaustionTruncatedRun) {
                 recordUniqueExhaustion(iterations: totalIterations, context: context, report: &report)
             }
-            report.applyPostScreeningInvocations(
-                randomSampling: totalIterations,
-                reduction: 0
-            )
             return nil
         }
 
@@ -623,7 +609,7 @@ package extension __ExhaustRuntime {
         seed: UInt64?,
         iteration: Int,
         phaseBudget: UInt64,
-        randomSamplingIterations: Int,
+        randomSamplingIterations _: Int,
         replayHint: String?,
         report: inout ExhaustReport,
         ledger: inout RunLedger
@@ -633,6 +619,7 @@ package extension __ExhaustRuntime {
             propertyInvocationCount += 1
             return context.property(value)
         }
+        let reductionSkipsBefore = context.skipCounter?.count ?? 0
         let reductionStart = monotonicNanoseconds()
         do {
             var reducerConfig = context.reductionConfig
@@ -646,14 +633,11 @@ package extension __ExhaustRuntime {
             )
             report.applyReductionStats(reduceResult.stats)
             report.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
-            for _ in 0 ..< propertyInvocationCount {
-                ledger.record(.reduction, .pass)
-            }
+            let reductionSkips = (context.skipCounter?.count ?? 0) - reductionSkipsBefore
+            let reductionPasses = propertyInvocationCount - reductionSkips
+            ledger.record(.reduction, .pass, count: max(0, reductionPasses))
+            ledger.record(.reduction, .skip, count: reductionSkips)
             if case let .reduced(reducedSequence, _, reducedValue) = reduceResult.outcome {
-                report.applyPostScreeningInvocations(
-                    randomSampling: randomSamplingIterations,
-                    reduction: propertyInvocationCount
-                )
                 var failure = PropertyTestFailure(
                     counterexample: reducedValue,
                     original: value,
@@ -662,7 +646,7 @@ package extension __ExhaustRuntime {
                     iteration: iteration,
                     phaseBudget: phaseBudget,
                     blueprint: reducedSequence.shortString,
-                    propertyInvocations: report.propertyInvocations,
+                    propertyInvocations: ledger.totalInvocations,
                     reducedSequence: reducedSequence
                 )
                 failure.replayHint = replayHint
@@ -704,18 +688,10 @@ package extension __ExhaustRuntime {
                 line: context.line,
                 column: context.column
             )
-            report.applyPostScreeningInvocations(
-                randomSampling: randomSamplingIterations,
-                reduction: propertyInvocationCount
-            )
             return .reductionError
         }
 
         // Reduction ran but could not improve
-        report.applyPostScreeningInvocations(
-            randomSampling: randomSamplingIterations,
-            reduction: propertyInvocationCount
-        )
         var failure = PropertyTestFailure(
             counterexample: value,
             original: nil as Output?,
@@ -723,7 +699,7 @@ package extension __ExhaustRuntime {
             iteration: iteration,
             phaseBudget: phaseBudget,
             blueprint: nil,
-            propertyInvocations: report.propertyInvocations
+            propertyInvocations: ledger.totalInvocations
         )
         failure.replayHint = replayHint
         failure.reductionProducedNoImprovement = true
@@ -760,7 +736,8 @@ package extension __ExhaustRuntime {
         line: UInt,
         column: UInt,
         property: @Sendable (Output) -> Bool,
-        report: inout ExhaustReport
+        report: inout ExhaustReport,
+        ledger: inout RunLedger
     ) throws -> Output? {
         let reflectStart = monotonicNanoseconds()
 
@@ -775,7 +752,7 @@ package extension __ExhaustRuntime {
                     column: column
                 )
             }
-            report.setInvocations(screening: 0, randomSampling: 0, reduction: 1)
+            ledger.record(.reduction, .fail)
             return nil
         }
 
@@ -790,7 +767,7 @@ package extension __ExhaustRuntime {
                     column: column
                 )
             }
-            report.setInvocations(screening: 0, randomSampling: 0, reduction: 1)
+            ledger.record(.reduction, .fail)
             return nil
         }
 
@@ -842,11 +819,8 @@ package extension __ExhaustRuntime {
             report.reflectionMilliseconds = reflectionMs
             report.reductionMilliseconds = reductionMs
             report.totalMilliseconds = totalMs
-            report.setInvocations(
-                screening: 0,
-                randomSampling: 0,
-                reduction: 1 + propertyInvocationCount
-            )
+            ledger.record(.reduction, .fail)
+            ledger.record(.reduction, .pass, count: propertyInvocationCount)
             if suppressIssueReporting == false {
                 reportError(
                     rendered,
@@ -889,11 +863,8 @@ package extension __ExhaustRuntime {
         report.reflectionMilliseconds = reflectionMs
         report.reductionMilliseconds = reductionMs
         report.totalMilliseconds = totalMs
-        report.setInvocations(
-            screening: 0,
-            randomSampling: 0,
-            reduction: 1 + propertyInvocationCount
-        )
+        ledger.record(.reduction, .fail)
+        ledger.record(.reduction, .pass, count: propertyInvocationCount)
         if suppressIssueReporting == false {
             reportError(
                 rendered,

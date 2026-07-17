@@ -124,9 +124,7 @@ extension __ExhaustRuntime {
             )
 
             let reducedDirections = classifyExploreValue(reducedResult.counterexample, directions: directions)
-            for _ in 0 ..< reducedResult.reductionInvocations {
-                mergedLedger.record(.reduction, .pass)
-            }
+            mergedLedger.record(.reduction, .pass, count: reducedResult.reductionInvocations)
 
             var invocations = DirectedExploreInvocationCounts()
             invocations.directedSampling = mergedLedger.count(.directedSampling)

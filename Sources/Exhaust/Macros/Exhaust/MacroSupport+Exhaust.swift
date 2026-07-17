@@ -343,11 +343,8 @@ public extension __ExhaustRuntime {
 
             var report = ExhaustReport()
             var ledger = RunLedger()
-            var ledgerActive = false
             defer {
-                if ledgerActive {
-                    report.applyLedger(ledger)
-                }
+                report.applyLedger(ledger)
                 onReportClosure?(report)
             }
 
@@ -429,7 +426,8 @@ public extension __ExhaustRuntime {
                         line: line,
                         column: column,
                         property: property,
-                        report: &report
+                        report: &report,
+                        ledger: &ledger
                     )
                     return (result, nil)
                 } catch {
@@ -439,7 +437,6 @@ public extension __ExhaustRuntime {
             }
 
             let phaseTimingStart = monotonicNanoseconds()
-            ledgerActive = true
             if let screeningReplayRow {
                 let outcome: ScreeningOutcome<Output> = runScreeningPhase(
                     context: context,
@@ -480,8 +477,8 @@ public extension __ExhaustRuntime {
                         report.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
                         report.totalMilliseconds = report.screeningMilliseconds
                         reportSkipsAndPointlessRun(
-                            totalPropertyCalls: report.screeningInvocations,
-                            skipCounter: skipCounter,
+                            totalPropertyCalls: ledger.totalInvocations,
+                            ledger: ledger,
                             suppressIssueReporting: suppress.issueReporting,
                             fileID: fileID,
                             filePath: filePath,
@@ -528,8 +525,8 @@ public extension __ExhaustRuntime {
                 )
                 if replayIteration == nil {
                     reportSkipsAndPointlessRun(
-                        totalPropertyCalls: totalPropertyCalls,
-                        skipCounter: skipCounter,
+                        totalPropertyCalls: ledger.totalInvocations,
+                        ledger: ledger,
                         suppressIssueReporting: suppress.issueReporting,
                         fileID: fileID,
                         filePath: filePath,
@@ -538,8 +535,6 @@ public extension __ExhaustRuntime {
                         report: &report
                     )
                 }
-            } else {
-                report.skippedInvocations = skipCounter?.count ?? 0
             }
 
             ExhaustLog.notice(
@@ -578,7 +573,7 @@ public extension __ExhaustRuntime {
     /// The pointless-run error is deliberately not gated on `.suppress(.issueReporting)`: it signals a malfunctioning test, not the property failure suppression targets. It stays silent only when a generation error was already reported for the same root cause.
     private static func reportSkipsAndPointlessRun(
         totalPropertyCalls: Int,
-        skipCounter: SkipCounter?,
+        ledger: RunLedger,
         suppressIssueReporting: Bool,
         fileID: StaticString,
         filePath: StaticString,
@@ -586,8 +581,7 @@ public extension __ExhaustRuntime {
         column: UInt,
         report: inout ExhaustReport
     ) {
-        let skipped = skipCounter?.count ?? 0
-        report.skippedInvocations = skipped
+        let skipped = ledger.totalSkips
 
         guard report.generationErrorOccurred == false else { return }
 

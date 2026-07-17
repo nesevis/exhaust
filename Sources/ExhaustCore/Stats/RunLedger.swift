@@ -38,8 +38,8 @@ package struct RunLedger: Sendable, Equatable {
 
     // MARK: - Recording
 
-    package mutating func record(_ phase: Phase, _ outcome: Outcome) {
-        counts[phase.rawValue * Self.outcomeCount + outcome.rawValue] += 1
+    package mutating func record(_ phase: Phase, _ outcome: Outcome, count: Int = 1) {
+        counts[phase.rawValue * Self.outcomeCount + outcome.rawValue] += count
     }
 
     package mutating func addElapsed(_ phase: Phase, nanoseconds: UInt64) {

@@ -71,70 +71,19 @@ public struct ExhaustReport: Sendable {
     /// Advisory message for a run that skipped nearly every invocation, stashed so the `#expect` wrappers can re-report it outside their known-issue scope.
     package var skipRateWarning: String?
 
-    /// Sets the per-phase property invocation counts and derives the total.
-    public mutating func setInvocations(
-        screening: Int,
-        randomSampling: Int,
-        reduction: Int
-    ) {
-        screeningInvocations = screening
-        randomSamplingInvocations = randomSampling
-        reductionInvocations = reduction
-        diagnosticInvocations = 0
-        propertyInvocations = screening + randomSampling + reduction
-    }
-
     /// Records one source-located diagnostic rerun after the pipeline has produced its report.
     package mutating func recordDiagnosticInvocation() {
         diagnosticInvocations += 1
         propertyInvocations += 1
     }
 
-    /// Applies screening row and invocation counts without changing later phase buckets.
-    package mutating func applyScreeningSummary(_ summary: ScreeningRunner.Summary) {
+    /// Applies screening row counts from the screening runner's summary.
+    package mutating func applyScreeningRows(_ summary: ScreeningRunner.Summary) {
         screeningRows = summary.rowAttempts
         screeningRejectedRows = summary.rejectedRows
-        screeningInvocations = summary.propertyInvocations
-        propertyInvocations = screeningInvocations
-            + randomSamplingInvocations
-            + reductionInvocations
-            + diagnosticInvocations
     }
 
-    /// Applies sampling and reduction counts while preserving the screening summary already recorded for the run.
-    package mutating func applyPostScreeningInvocations(
-        randomSampling: Int,
-        reduction: Int
-    ) {
-        randomSamplingInvocations = randomSampling
-        reductionInvocations = reduction
-        diagnosticInvocations = 0
-        propertyInvocations = screeningInvocations + randomSampling + reduction
-    }
-
-    /// Records the three phase buckets for a concurrent runner whose reduction probes flow through the same shared invocation counter as the phase that discovered the failure.
-    ///
-    /// The concurrent runners drive a single property closure across screening, sampling, and reduction, so every reduction probe lands inside whichever phase bucket was open when reduction ran. Left uncorrected, that probe would be counted twice — once in the enclosing phase and once in reduction. This peels reduction back out of its enclosing bucket so the three buckets stay disjoint and sum to `totalInvocations`.
-    ///
-    /// - Parameters:
-    ///   - totalInvocations: The shared counter's final value, the sum the three buckets must reproduce.
-    ///   - screeningThroughReduction: The counter value captured at the end of the screening phase. It already includes screening-phase reduction when the failure was found during screening; it equals `totalInvocations` for a runner that returns immediately on a screening failure.
-    ///   - reduction: Reduction probe count, measured by snapshotting the shared counter around the reduce call.
-    ///   - discoveredDuringScreening: Whether the failure (and therefore the reduction) occurred in the screening phase. Selects which enclosing bucket the reduction is peeled from: screening when `true`, sampling otherwise.
-    package mutating func setConcurrentInvocations(
-        totalInvocations: Int,
-        screeningThroughReduction: Int,
-        reduction: Int,
-        discoveredDuringScreening: Bool
-    ) {
-        let screening = discoveredDuringScreening ? screeningThroughReduction - reduction : screeningThroughReduction
-        let sampling = totalInvocations - screeningThroughReduction - (discoveredDuringScreening ? 0 : reduction)
-        setInvocations(screening: screening, randomSampling: sampling, reduction: reduction)
-    }
-
-    /// Projects invocation counts from a ``RunLedger``, replacing the piecemeal setter methods.
-    ///
-    /// Each phase bucket reads directly from the ledger's phase counts, so reduction events recorded under their own phase never leak into the screening or sampling bucket. This eliminates the peel-back arithmetic in ``setConcurrentInvocations(totalInvocations:screeningThroughReduction:reduction:discoveredDuringScreening:)``.
+    /// Projects invocation counts from a ``RunLedger``.
     package mutating func applyLedger(_ ledger: RunLedger) {
         screeningInvocations = ledger.invocations(.screening)
         randomSamplingInvocations = ledger.invocations(.sampling)
