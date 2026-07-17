@@ -27,13 +27,26 @@ public struct PropertySkip: Error {
 package final class SkipCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var storage = 0
+    private var lastWasSkipFlag = false
 
     /// Creates a counter starting at zero.
     package init() {}
 
-    /// Records one skipped invocation.
+    /// Records one skipped invocation and sets the per-invocation flag.
     package func increment() {
-        lock.withLocking { storage += 1 }
+        lock.withLocking {
+            storage += 1
+            lastWasSkipFlag = true
+        }
+    }
+
+    /// Returns whether the most recent property invocation was a skip, resetting the flag. The sampling loop calls this after each property invocation to record the correct outcome in the ``RunLedger``.
+    package func consumeLastSkip() -> Bool {
+        lock.withLocking {
+            let was = lastWasSkipFlag
+            lastWasSkipFlag = false
+            return was
+        }
     }
 
     /// Returns the accumulated count and resets the counter for the next independent run.

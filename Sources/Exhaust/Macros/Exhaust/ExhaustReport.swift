@@ -140,6 +140,7 @@ public struct ExhaustReport: Sendable {
         randomSamplingInvocations = ledger.invocations(.sampling)
         reductionInvocations = ledger.invocations(.reduction)
         diagnosticInvocations = ledger.invocations(.diagnostic)
+        skippedInvocations = ledger.totalSkips
         propertyInvocations = screeningInvocations
             + randomSamplingInvocations
             + reductionInvocations

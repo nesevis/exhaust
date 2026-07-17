@@ -410,7 +410,8 @@ public extension __ExhaustRuntime {
                 filePath: filePath,
                 line: line,
                 column: column,
-                statsAccumulator: statsAccumulator
+                statsAccumulator: statsAccumulator,
+                skipCounter: skipCounter
             )
 
             if let reflecting {

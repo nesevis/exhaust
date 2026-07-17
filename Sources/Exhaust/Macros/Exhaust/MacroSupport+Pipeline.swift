@@ -30,6 +30,7 @@ package extension __ExhaustRuntime {
         let line: UInt
         let column: UInt
         let statsAccumulator: OpenPBTStatsAccumulator?
+        let skipCounter: SkipCounter?
         var ledger = RunLedger()
     }
 
@@ -188,6 +189,7 @@ package extension __ExhaustRuntime {
     struct BatchResult<Output> {
         var failure: (value: Output, tree: ChoiceTree, absoluteIteration: Int)?
         var iterations: Int = 0
+        var skips: Int = 0
         var filterObservations: [UInt64: FilterObservation] = [:]
         var statsLines: [OpenPBTStatsLine] = []
         var error: (any Error)?
@@ -215,6 +217,7 @@ package extension __ExhaustRuntime {
         count: UInt64,
         lane: Int?,
         statsPropertyName: String?,
+        skipCounter: SkipCounter?,
         canceled: some CancellationFlag
     ) -> BatchResult<Output> {
         var result = BatchResult<Output>()
@@ -277,6 +280,9 @@ package extension __ExhaustRuntime {
                         filterRejections: filterRejections
                     )
 
+                    if skipCounter?.consumeLastSkip() == true {
+                        result.skips += 1
+                    }
                     if passed == false {
                         let absoluteIteration = Int(startIndex) + result.iterations
                         result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
@@ -290,7 +296,11 @@ package extension __ExhaustRuntime {
                     guard let next = try interpreter.nextValueOnly() else { break }
                     result.iterations += 1
 
-                    if property(next) == false {
+                    let passed = property(next)
+                    if skipCounter?.consumeLastSkip() == true {
+                        result.skips += 1
+                    }
+                    if passed == false {
                         let absoluteIteration = Int(startIndex) + result.iterations
                         let tree = try interpreter.reproduceFailureTree()
                         result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
@@ -335,7 +345,9 @@ package extension __ExhaustRuntime {
         do {
             while let next = try interpreter.nextValueOnly() {
                 iterations += 1
-                if context.property(next) == false {
+                let passed = context.property(next)
+                let skipped = context.skipCounter?.consumeLastSkip() ?? false
+                if passed == false {
                     ledger.record(.sampling, .fail)
                     let tree = try interpreter.reproduceFailureTree()
                     report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
@@ -363,7 +375,7 @@ package extension __ExhaustRuntime {
                             return next
                     }
                 }
-                ledger.record(.sampling, .pass)
+                ledger.record(.sampling, skipped ? .skip : .pass)
             }
         } catch {
             report.generationErrorOccurred = true
@@ -476,6 +488,7 @@ package extension __ExhaustRuntime {
                 count: context.samplingBudget,
                 lane: nil,
                 statsPropertyName: statsPropertyName,
+                skipCounter: context.skipCounter,
                 canceled: UnsafeSendableBox(false)
             )
             batchResults = [singleResult]
@@ -497,6 +510,7 @@ package extension __ExhaustRuntime {
                     count: iterationsForLane,
                     lane: laneIndex,
                     statsPropertyName: statsPropertyName,
+                    skipCounter: unsafeContext.skipCounter,
                     canceled: canceled
                 )
                 resultStorage.withValue { $0[laneIndex] = batchResult }
@@ -548,16 +562,17 @@ package extension __ExhaustRuntime {
 
         // Find the failure with the lowest absolute iteration (deterministic winner).
         let totalIterations = batchResults.reduce(0) { $0 + $1.iterations }
+        let totalSkips = batchResults.reduce(0) { $0 + $1.skips }
         let hasFailure = batchResults.contains { $0.failure != nil }
-        if hasFailure, totalIterations > 0 {
-            for _ in 0 ..< totalIterations - 1 {
-                ledger.record(.sampling, .pass)
-            }
+        let passes = totalIterations - totalSkips - (hasFailure ? 1 : 0)
+        for _ in 0 ..< max(0, passes) {
+            ledger.record(.sampling, .pass)
+        }
+        for _ in 0 ..< totalSkips {
+            ledger.record(.sampling, .skip)
+        }
+        if hasFailure {
             ledger.record(.sampling, .fail)
-        } else {
-            for _ in 0 ..< totalIterations {
-                ledger.record(.sampling, .pass)
-            }
         }
         let winningFailure = batchResults
             .compactMap(\.failure)
