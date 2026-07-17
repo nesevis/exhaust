@@ -135,7 +135,13 @@ Sequences carry up to 40 commands by default. Override with `.commandLimit(n)` w
 |-------|--------|
 | `.sequential` | Supported, for both synchronous and async specs. |
 | `.tasks` | Supported for async specs. Requires macOS 15, iOS 18, tvOS 18, watchOS 11, or visionOS 2 on Apple platforms; no version requirement on Linux and Windows. The search mutates both commands and their lane assignments, and reduction minimises concurrency back toward sequential execution. `.parallelize(lanes:)` sets the lane count, defaulting to two. A `.tasks` spec with no async members runs through the sequential path. |
-| `.threads` | Permanently incompatible. Coverage-guided search needs deterministic replay of each attempt. Preemptive scheduling defeats that. The diagnostic directs `.threads` specs to plain `#execute`. |
+| `.threads` | Permanently incompatible. The search treats an attempt's coverage as determined by its command sequence, and preemptive scheduling makes it depend on an OS schedule the run can neither observe nor replay. The discussion below the table expands on this and names the alternatives. |
+
+The `.threads` exclusion is the clean-signal requirement applied from the inside. Every condition in <doc:#Getting-a-clean-signal> removes a hidden influence on what an attempt's coverage says about its input. Preemptive scheduling adds one to every attempt: the same command sequence takes different branches depending on how the OS interleaves the lanes, so the search cannot tell a sequence that reached new code from one that won an unusual schedule, and it spends the budget chasing the scheduler instead of your spec.
+
+No isolation arrangement recovers the signal. The conditions in <doc:#Getting-a-clean-signal> are fixable because the interference comes from outside the run. Here the interference is the mode's purpose: `.threads` exists so the OS is free to realise a different schedule for the same sequence on every attempt, which is the one freedom the coverage signal cannot absorb.
+
+Concurrency testing under a time budget splits by what you are hunting. To search interleavings, use `.tasks`: the lane assignment travels inside the generated input, so schedules are mutated, replayed, and reduced like any other part of the sequence. To find data races, run the spec under plain `#execute`, whose oracle checking relies on repetition rather than coverage and is built for schedules it cannot replay.
 
 ## Reading the report
 

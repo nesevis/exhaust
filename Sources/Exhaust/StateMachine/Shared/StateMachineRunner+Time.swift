@@ -103,7 +103,7 @@ public extension __ExhaustRuntime {
             case .threads:
                 // Ruled permanently out of scope (2026-07-12), not deferred: coverage novelty requires every attempt to be a deterministic function of its choice sequence, and preemptive race detection requires the opposite — the OS realizing different schedules for the same input. One degree of freedom cannot be both pinned and free.
                 return .empty(
-                    termination: .invalidConfiguration("#execute(time:) does not support .threads specs. Coverage-guided search needs each attempt to be a deterministic function of its command sequence; .threads race detection needs the OS free to realize different schedules for the same sequence. The two are incompatible, so run this spec under plain #execute."),
+                    termination: .invalidConfiguration("#execute(time:) does not support .threads specs. The search treats an attempt's coverage as determined by its command sequence, but under preemptive scheduling it also depends on an OS schedule the run can neither observe nor replay, so coverage novelty rewards scheduling luck instead of new behavior. Use .tasks to search interleavings deterministically, or run this spec under plain #execute for repetition-based race detection."),
                     seed: 0
                 )
         }
@@ -209,7 +209,7 @@ public extension __ExhaustRuntime {
             case .threads:
                 // Ruled permanently out of scope (2026-07-12), not deferred: coverage novelty requires every attempt to be a deterministic function of its choice sequence, and preemptive race detection requires the opposite — the OS realizing different schedules for the same input. One degree of freedom cannot be both pinned and free.
                 return .empty(
-                    termination: .invalidConfiguration("#execute(time:) does not support .threads specs. Coverage-guided search needs each attempt to be a deterministic function of its command sequence; .threads race detection needs the OS free to realize different schedules for the same sequence. The two are incompatible, so run this spec under plain #execute."),
+                    termination: .invalidConfiguration("#execute(time:) does not support .threads specs. The search treats an attempt's coverage as determined by its command sequence, but under preemptive scheduling it also depends on an OS schedule the run can neither observe nor replay, so coverage novelty rewards scheduling luck instead of new behavior. Use .tasks to search interleavings deterministically, or run this spec under plain #execute for repetition-based race detection."),
                     seed: 0
                 )
         }

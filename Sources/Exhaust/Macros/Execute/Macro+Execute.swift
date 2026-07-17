@@ -27,6 +27,8 @@ public macro execute<Spec: StateMachineSpec>(
 ///
 /// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. The run skips the covering-array screening phase and begins with random sampling, then spends the remaining budget in the mutation phase: exploration from corpus parents guided by branch-coverage feedback. Failures are cataloged and clustered rather than terminating the run.
 ///
+/// `.threads` specs are not supported: the search treats an attempt's coverage as determined by its command sequence, and preemptive scheduling makes it depend on an OS schedule the run can neither observe nor replay, so coverage novelty would reward scheduling luck instead of new behavior. Run `.threads` specs under plain `#execute`, whose oracle checking relies on repetition rather than coverage.
+///
 /// ```swift
 /// @Test func boundedQueueFuzz() async {
 ///     await #execute(BoundedQueueSpec.self, time: .minutes(5))
@@ -52,7 +54,7 @@ public macro execute<Spec: StateMachineSpec>(
 ///
 /// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. The run skips the covering-array screening phase and begins with random sampling, then spends the remaining budget in the mutation phase: exploration from corpus parents guided by branch-coverage feedback. Failures are cataloged and clustered rather than terminating the run.
 ///
-/// `.sequential` specs run commands one at a time, awaiting each command and invariant check. `.tasks` specs drain each sequence through the cooperative scheduler: every command carries a lane-assigning schedule marker drawn as part of the generated input, so the interleaving itself is searched, mutated, and reduced alongside the commands (``FuzzSettings/parallelize(lanes:)`` sets the lane count, defaulting to two). `.tasks` requires macOS 15, iOS 18, tvOS 18, watchOS 11, or visionOS 2. `.threads` specs are not supported: coverage-guided search needs each attempt to be a deterministic function of its command sequence, and preemptive race detection needs the OS free to realize different schedules for the same sequence.
+/// `.sequential` specs run commands one at a time, awaiting each command and invariant check. `.tasks` specs drain each sequence through the cooperative scheduler: every command carries a lane-assigning schedule marker drawn as part of the generated input, so the interleaving itself is searched, mutated, and reduced alongside the commands (``FuzzSettings/parallelize(lanes:)`` sets the lane count, defaulting to two). `.tasks` requires macOS 15, iOS 18, tvOS 18, watchOS 11, or visionOS 2. `.threads` specs are not supported: the search treats an attempt's coverage as determined by its command sequence, and preemptive scheduling makes it depend on an OS schedule the run can neither observe nor replay, so coverage novelty would reward scheduling luck instead of new behavior. Run `.threads` specs under plain `#execute`, whose oracle checking relies on repetition rather than coverage.
 ///
 /// ```swift
 /// @Test func concurrentQueueFuzz() async {
