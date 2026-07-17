@@ -56,7 +56,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
         var directedSamplingSamples: [Int]
         var directedSamplingPasses: [Int]
         var directedSamplingFailures: [Int]
-        var invocations = DirectedExploreInvocationCounts()
+        var ledger = RunLedger()
         var remainingPool: Int
 
         init(directionCount: Int, totalPool: Int) {
@@ -91,8 +91,6 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
         )
 
         while let value = try interpreter.nextValueOnly() {
-            state.invocations.warmup += 1
-
             let matching = classify(value)
             state.coOccurrence.recordSample(matchingDirections: matching)
 
@@ -102,6 +100,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
             }
 
             if property(value) == false {
+                state.ledger.record(.warmup, .fail)
                 let tree = try interpreter.reproduceFailureTree()
                 let reduced = reduce(value: value, tree: tree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)
@@ -110,6 +109,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                     stopwatch: runStopwatch, termination: .propertyFailed
                 )
             }
+            state.ledger.record(.warmup, .pass)
         }
 
         // MARK: Direction ordering
@@ -232,7 +232,6 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                     maxRuns: 1
                 )
                 guard let (value, tunedTree) = try regressionInterpreter.next() else { continue }
-                state.invocations.regression += 1
 
                 let matching = classify(value)
                 state.coOccurrence.recordSample(matchingDirections: matching)
@@ -241,6 +240,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                 }
 
                 if property(value) == false {
+                    state.ledger.record(.regression, .fail)
                     ExhaustLog.notice(
                         category: .propertyTest,
                         event: "explore_regression_failed",
@@ -256,6 +256,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                         stopwatch: stopwatch, termination: .propertyFailed
                     )
                 }
+                state.ledger.record(.regression, .pass)
             }
         }
         return nil
@@ -285,7 +286,6 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
         {
             passSamplesDrawn += 1
             state.remainingPool -= 1
-            state.invocations.directedSampling += 1
             state.directedSamplingSamples[targetDirection] += 1
 
             let matching = classify(value)
@@ -305,6 +305,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
             }
 
             if propertyHolds == false {
+                state.ledger.record(.directedSampling, .fail)
                 let tunedTree = try passInterpreter.reproduceFailureTree()
                 let reduced = reduceFromTunedTree(value: value, tunedTree: tunedTree, matchingDirections: matching)
                 let reducedDirections = classify(reduced.counterexample)
@@ -313,6 +314,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                     stopwatch: stopwatch, termination: .propertyFailed
                 )
             }
+            state.ledger.record(.directedSampling, .pass)
         }
 
         return nil
@@ -441,8 +443,17 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
         }
 
         let elapsed = stopwatch.elapsedMilliseconds
-        var invocations = state.invocations
-        invocations.reduction += failure?.reductionInvocations ?? 0
+        var ledger = state.ledger
+        let reductionInvocations = failure?.reductionInvocations ?? 0
+        for _ in 0 ..< reductionInvocations {
+            ledger.record(.reduction, .pass)
+        }
+
+        var invocations = DirectedExploreInvocationCounts()
+        invocations.warmup = ledger.count(.warmup)
+        invocations.regression = ledger.count(.regression)
+        invocations.directedSampling = ledger.count(.directedSampling)
+        invocations.reduction = reductionInvocations
 
         return DirectedExploreResult(
             counterexample: failure?.counterexample,
@@ -452,7 +463,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
             directionCoverage: coverageEntries,
             coOccurrence: state.coOccurrence,
             invocations: invocations,
-            warmupSamples: state.invocations.warmup,
+            warmupSamples: ledger.count(.warmup),
             totalMilliseconds: elapsed,
             termination: termination,
             seed: prng.seed

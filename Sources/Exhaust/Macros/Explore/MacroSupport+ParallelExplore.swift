@@ -14,7 +14,7 @@ extension __ExhaustRuntime {
         var directedSamplingSamples: Int = 0
         var directedSamplingPasses: Int = 0
         var directedSamplingFailures: Int = 0
-        var invocations = DirectedExploreInvocationCounts()
+        var ledger = RunLedger()
         var failure: (value: Output, tree: ChoiceTree, matchingDirections: [Int])?
         var error: (any Error)?
 
@@ -67,7 +67,7 @@ extension __ExhaustRuntime {
         // Merge per-lane results.
         var mergedHits = Array(repeating: 0, count: directionCount)
         var mergedCoOccurrence = CoOccurrenceMatrix(directionCount: directionCount)
-        var mergedInvocations = DirectedExploreInvocationCounts()
+        var mergedLedger = RunLedger()
         var perDirectionSamples = Array(repeating: 0, count: directionCount)
         var perDirectionPasses = Array(repeating: 0, count: directionCount)
         var perDirectionFailures = Array(repeating: 0, count: directionCount)
@@ -79,7 +79,7 @@ extension __ExhaustRuntime {
                 mergedHits[index] += laneResult.hits[index]
             }
             mergedCoOccurrence.merge(laneResult.coOccurrence)
-            mergedInvocations.merge(laneResult.invocations)
+            mergedLedger.merge(laneResult.ledger)
             let target = laneResult.targetDirection
             perDirectionSamples[target] = laneResult.directedSamplingSamples
             perDirectionPasses[target] = laneResult.directedSamplingPasses
@@ -124,7 +124,13 @@ extension __ExhaustRuntime {
             )
 
             let reducedDirections = classifyExploreValue(reducedResult.counterexample, directions: directions)
-            mergedInvocations.reduction += reducedResult.reductionInvocations
+            for _ in 0 ..< reducedResult.reductionInvocations {
+                mergedLedger.record(.reduction, .pass)
+            }
+
+            var invocations = DirectedExploreInvocationCounts()
+            invocations.directedSampling = mergedLedger.count(.directedSampling)
+            invocations.reduction = reducedResult.reductionInvocations
 
             return DirectedExploreResult(
                 counterexample: reducedResult.counterexample,
@@ -133,7 +139,7 @@ extension __ExhaustRuntime {
                 counterexampleDirections: reducedDirections,
                 directionCoverage: coverageEntries,
                 coOccurrence: mergedCoOccurrence,
-                invocations: mergedInvocations,
+                invocations: invocations,
                 warmupSamples: nil,
                 totalMilliseconds: elapsed,
                 termination: .propertyFailed,
@@ -143,6 +149,9 @@ extension __ExhaustRuntime {
 
         let allCovered = mergedHits.allSatisfy { $0 >= hitsPerDirection }
 
+        var invocations = DirectedExploreInvocationCounts()
+        invocations.directedSampling = mergedLedger.count(.directedSampling)
+
         return DirectedExploreResult(
             counterexample: nil,
             original: nil,
@@ -150,7 +159,7 @@ extension __ExhaustRuntime {
             counterexampleDirections: [],
             directionCoverage: coverageEntries,
             coOccurrence: mergedCoOccurrence,
-            invocations: mergedInvocations,
+            invocations: invocations,
             warmupSamples: nil,
             totalMilliseconds: elapsed,
             termination: allCovered ? .coverageAchieved : .budgetExhausted,
@@ -211,7 +220,6 @@ extension __ExhaustRuntime {
                 break
             }
 
-            result.invocations.directedSampling += 1
             result.directedSamplingSamples += 1
 
             let matching = classifyExploreValue(value, directions: directions)
@@ -231,6 +239,7 @@ extension __ExhaustRuntime {
             }
 
             if propertyHolds == false {
+                result.ledger.record(.directedSampling, .fail)
                 canceled.value = true
                 do {
                     let tree = try interpreter.reproduceFailureTree()
@@ -240,6 +249,7 @@ extension __ExhaustRuntime {
                 }
                 break
             }
+            result.ledger.record(.directedSampling, .pass)
         }
 
         return result
