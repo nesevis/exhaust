@@ -132,6 +132,20 @@ public struct ExhaustReport: Sendable {
         setInvocations(screening: screening, randomSampling: sampling, reduction: reduction)
     }
 
+    /// Projects invocation counts from a ``RunLedger``, replacing the piecemeal setter methods.
+    ///
+    /// Each phase bucket reads directly from the ledger's phase counts, so reduction events recorded under their own phase never leak into the screening or sampling bucket. This eliminates the peel-back arithmetic in ``setConcurrentInvocations(totalInvocations:screeningThroughReduction:reduction:discoveredDuringScreening:)``.
+    package mutating func applyLedger(_ ledger: RunLedger) {
+        screeningInvocations = ledger.invocations(.screening)
+        randomSamplingInvocations = ledger.invocations(.sampling)
+        reductionInvocations = ledger.invocations(.reduction)
+        diagnosticInvocations = ledger.invocations(.diagnostic)
+        propertyInvocations = screeningInvocations
+            + randomSamplingInvocations
+            + reductionInvocations
+            + diagnosticInvocations
+    }
+
     /// Total materialization attempts (decoder invocations) during the reduction phase.
     public var totalMaterializations: Int = 0
 

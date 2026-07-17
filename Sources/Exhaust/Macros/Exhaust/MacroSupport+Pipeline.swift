@@ -30,6 +30,7 @@ package extension __ExhaustRuntime {
         let line: UInt
         let column: UInt
         let statsAccumulator: OpenPBTStatsAccumulator?
+        var ledger = RunLedger()
     }
 
     /// Represents the outcome of the screening phase: failure found, exhaustive pass, or proceed to sampling.
@@ -53,7 +54,8 @@ package extension __ExhaustRuntime {
         context: PipelineContext<Output>,
         screeningBudget: UInt64,
         skipToRow: Int? = nil,
-        report: inout ExhaustReport
+        report: inout ExhaustReport,
+        ledger: inout RunLedger
     ) -> ScreeningOutcome<Output> {
         let screeningResult = ScreeningRunner.run(
             context.gen,
@@ -69,6 +71,18 @@ package extension __ExhaustRuntime {
             }
         )
         report.applyScreeningSummary(screeningResult.summary)
+        let screeningPropertyCalls = screeningResult.summary.propertyInvocations
+        let screeningFoundFailure = if case .failure = screeningResult { true } else { false }
+        if screeningFoundFailure, screeningPropertyCalls > 0 {
+            for _ in 0 ..< screeningPropertyCalls - 1 {
+                ledger.record(.screening, .pass)
+            }
+            ledger.record(.screening, .fail)
+        } else {
+            for _ in 0 ..< screeningPropertyCalls {
+                ledger.record(.screening, .pass)
+            }
+        }
         switch screeningResult {
             case let .failure(value, tree, rowOrdinal, _, strength, rows, parameters, totalSpace, kind):
                 ExhaustLog.notice(
@@ -105,7 +119,8 @@ package extension __ExhaustRuntime {
                     phaseBudget: screeningBudget,
                     randomSamplingIterations: 0,
                     replayHint: "Reproduce: .replay(\"\(screeningReplaySeed)\")",
-                    report: &report
+                    report: &report,
+                    ledger: &ledger
                 )
                 switch result {
                     case let .reduced(counterexample):
@@ -303,7 +318,8 @@ package extension __ExhaustRuntime {
         baseSeed: UInt64,
         replayIteration: Int?,
         generationPhaseStart: UInt64,
-        report: inout ExhaustReport
+        report: inout ExhaustReport,
+        ledger: inout RunLedger
     ) -> Output? {
         let startIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
         let maxRuns = replayIteration.map { UInt64($0) } ?? context.samplingBudget
@@ -320,6 +336,7 @@ package extension __ExhaustRuntime {
             while let next = try interpreter.nextValueOnly() {
                 iterations += 1
                 if context.property(next) == false {
+                    ledger.record(.sampling, .fail)
                     let tree = try interpreter.reproduceFailureTree()
                     report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
                     emitFilterWarnings(interpreter.filterObservations, context: context)
@@ -334,7 +351,8 @@ package extension __ExhaustRuntime {
                         phaseBudget: context.samplingBudget,
                         randomSamplingIterations: iterations,
                         replayHint: nil,
-                        report: &report
+                        report: &report,
+                        ledger: &ledger
                     )
                     switch result {
                         case let .reduced(counterexample):
@@ -345,6 +363,7 @@ package extension __ExhaustRuntime {
                             return next
                     }
                 }
+                ledger.record(.sampling, .pass)
             }
         } catch {
             report.generationErrorOccurred = true
@@ -419,7 +438,8 @@ package extension __ExhaustRuntime {
         context: PipelineContext<Output>,
         seed: UInt64?,
         replayIteration: Int? = nil,
-        report: inout ExhaustReport
+        report: inout ExhaustReport,
+        ledger: inout RunLedger
     ) -> Output? {
         let generationPhaseStart = monotonicNanoseconds()
 
@@ -434,7 +454,8 @@ package extension __ExhaustRuntime {
                 baseSeed: baseSeed,
                 replayIteration: replayIteration,
                 generationPhaseStart: generationPhaseStart,
-                report: &report
+                report: &report,
+                ledger: &ledger
             )
         }
 
@@ -527,6 +548,17 @@ package extension __ExhaustRuntime {
 
         // Find the failure with the lowest absolute iteration (deterministic winner).
         let totalIterations = batchResults.reduce(0) { $0 + $1.iterations }
+        let hasFailure = batchResults.contains { $0.failure != nil }
+        if hasFailure, totalIterations > 0 {
+            for _ in 0 ..< totalIterations - 1 {
+                ledger.record(.sampling, .pass)
+            }
+            ledger.record(.sampling, .fail)
+        } else {
+            for _ in 0 ..< totalIterations {
+                ledger.record(.sampling, .pass)
+            }
+        }
         let winningFailure = batchResults
             .compactMap(\.failure)
             .min(by: { $0.absoluteIteration < $1.absoluteIteration })
@@ -553,7 +585,8 @@ package extension __ExhaustRuntime {
             phaseBudget: context.samplingBudget,
             randomSamplingIterations: totalIterations,
             replayHint: nil,
-            report: &report
+            report: &report,
+            ledger: &ledger
         )
         switch result {
             case let .reduced(counterexample):
@@ -577,7 +610,8 @@ package extension __ExhaustRuntime {
         phaseBudget: UInt64,
         randomSamplingIterations: Int,
         replayHint: String?,
-        report: inout ExhaustReport
+        report: inout ExhaustReport,
+        ledger: inout RunLedger
     ) -> ReduceOutcome<Output> {
         var propertyInvocationCount = 0
         let countingProperty: (Output) -> Bool = { value in
@@ -597,6 +631,9 @@ package extension __ExhaustRuntime {
             )
             report.applyReductionStats(reduceResult.stats)
             report.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
+            for _ in 0 ..< propertyInvocationCount {
+                ledger.record(.reduction, .pass)
+            }
             if case let .reduced(reducedSequence, _, reducedValue) = reduceResult.outcome {
                 report.applyPostScreeningInvocations(
                     randomSampling: randomSamplingIterations,

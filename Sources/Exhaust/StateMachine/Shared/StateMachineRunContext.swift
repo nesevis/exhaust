@@ -53,6 +53,7 @@ final class StateMachineRunState<Spec: StateMachineSpecBase> {
     var sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
     let runStopwatch = Stopwatch()
     var report = ExhaustReport()
+    var ledger = RunLedger()
     var deferredIssues: [String] = []
     var failureContext = __ExhaustRuntime.FailureContext()
     var probeEvidence: __ExhaustRuntime.FailureEvidence<Spec>?

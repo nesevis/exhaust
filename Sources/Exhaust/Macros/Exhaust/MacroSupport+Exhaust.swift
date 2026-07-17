@@ -342,7 +342,14 @@ public extension __ExhaustRuntime {
             )
 
             var report = ExhaustReport()
-            defer { onReportClosure?(report) }
+            var ledger = RunLedger()
+            var ledgerActive = false
+            defer {
+                if ledgerActive {
+                    report.applyLedger(ledger)
+                }
+                onReportClosure?(report)
+            }
 
             if let invalidReplaySeed {
                 reportError(
@@ -431,12 +438,14 @@ public extension __ExhaustRuntime {
             }
 
             let phaseTimingStart = monotonicNanoseconds()
+            ledgerActive = true
             if let screeningReplayRow {
                 let outcome: ScreeningOutcome<Output> = runScreeningPhase(
                     context: context,
                     screeningBudget: UInt64(budget.screeningBudget),
                     skipToRow: screeningReplayRow,
-                    report: &report
+                    report: &report,
+                    ledger: &ledger
                 )
                 switch outcome {
                     case let .counterexample(value):
@@ -456,7 +465,8 @@ public extension __ExhaustRuntime {
                 let outcome: ScreeningOutcome<Output> = runScreeningPhase(
                     context: context,
                     screeningBudget: screeningBudget,
-                    report: &report
+                    report: &report,
+                    ledger: &ledger
                 )
                 switch outcome {
                     case let .counterexample(value):
@@ -489,7 +499,8 @@ public extension __ExhaustRuntime {
                 context: context,
                 seed: seed,
                 replayIteration: replayIteration,
-                report: &report
+                report: &report,
+                ledger: &ledger
             )
 
             let endTime = monotonicNanoseconds()

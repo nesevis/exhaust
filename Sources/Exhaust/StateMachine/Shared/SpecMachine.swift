@@ -95,14 +95,21 @@ struct SpecMachine<Backend: StateMachineBackend> {
         invocations: Int,
         elapsed: Double
     ) {
+        let phase: RunLedger.Phase = switch source.discoveryMethod {
+            case .screening: .screening
+            case .randomSampling, .smokeTest, .replay: .sampling
+        }
+        for _ in 0 ..< invocations {
+            context.state.ledger.record(phase, .pass)
+        }
+        context.state.ledger.addElapsed(phase, nanoseconds: UInt64(elapsed * 1_000_000))
+
         switch source.discoveryMethod {
             case .screening:
-                context.state.report.screeningInvocations += invocations
                 context.state.report.screeningMilliseconds += elapsed
             case .randomSampling, .smokeTest, .replay:
-                context.state.report.randomSamplingInvocations += invocations
+                break
         }
-        context.state.report.propertyInvocations += invocations
         discoveryInvocations += invocations
         if let seed = source.reportedSeed {
             reportedSeed = seed
@@ -174,9 +181,12 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     private mutating func stepRecordStats() -> Transition {
         let reductionInvocations = context.invocationCounter.value - preReductionInvocations
-        context.state.report.reductionMilliseconds = reductionStopwatch?.elapsedMilliseconds ?? 0
-        context.state.report.reductionInvocations = reductionInvocations
-        context.state.report.propertyInvocations += reductionInvocations
+        for _ in 0 ..< reductionInvocations {
+            context.state.ledger.record(.reduction, .pass)
+        }
+        let reductionElapsed = reductionStopwatch?.elapsedMilliseconds ?? 0
+        context.state.ledger.addElapsed(.reduction, nanoseconds: UInt64(reductionElapsed * 1_000_000))
+        context.state.report.reductionMilliseconds = reductionElapsed
         context.state.failureContext.reductionInvocations = reductionInvocations
         if let stats = reduction?.stats {
             context.state.report.applyReductionStats(stats)
@@ -217,6 +227,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     @discardableResult
     private mutating func stepFinalize() -> Transition? {
+        context.state.report.applyLedger(context.state.ledger)
         if let onReport = context.config.onReportClosure {
             context.state.report.seed = reportedSeed
             context.state.report.totalMilliseconds = context.state.runStopwatch.elapsedMilliseconds
