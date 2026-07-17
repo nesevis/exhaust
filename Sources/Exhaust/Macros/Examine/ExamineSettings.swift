@@ -112,7 +112,7 @@ package struct ExamineReportingConfiguration {
                 case let .filterHealth(value):
                     filterHealthOverride = value
                 case let .samples(count):
-                    precondition(count >= 0, "Budget must be non-negative")
+                    precondition(count >= 0, "Sample count must be non-negative")
                     samples = count
                 case let .replay(seed):
                     replaySeed = seed

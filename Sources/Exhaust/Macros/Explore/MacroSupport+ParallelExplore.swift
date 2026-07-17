@@ -124,11 +124,11 @@ extension __ExhaustRuntime {
             )
 
             let reducedDirections = classifyExploreValue(reducedResult.counterexample, directions: directions)
-            mergedLedger.record(.reduction, .pass, count: reducedResult.reductionInvocations)
-
-            var invocations = DirectedExploreInvocationCounts()
-            invocations.directedSampling = mergedLedger.count(.directedSampling)
-            invocations.reduction = reducedResult.reductionInvocations
+            mergedLedger.record(
+                .reduction,
+                invocations: reducedResult.reductionInvocations,
+                failures: reducedResult.reductionFailures
+            )
 
             return DirectedExploreResult(
                 counterexample: reducedResult.counterexample,
@@ -137,7 +137,7 @@ extension __ExhaustRuntime {
                 counterexampleDirections: reducedDirections,
                 directionCoverage: coverageEntries,
                 coOccurrence: mergedCoOccurrence,
-                invocations: invocations,
+                ledger: mergedLedger,
                 warmupSamples: nil,
                 totalMilliseconds: elapsed,
                 termination: .propertyFailed,
@@ -147,9 +147,6 @@ extension __ExhaustRuntime {
 
         let allCovered = mergedHits.allSatisfy { $0 >= hitsPerDirection }
 
-        var invocations = DirectedExploreInvocationCounts()
-        invocations.directedSampling = mergedLedger.count(.directedSampling)
-
         return DirectedExploreResult(
             counterexample: nil,
             original: nil,
@@ -157,7 +154,7 @@ extension __ExhaustRuntime {
             counterexampleDirections: [],
             directionCoverage: coverageEntries,
             coOccurrence: mergedCoOccurrence,
-            invocations: invocations,
+            ledger: mergedLedger,
             warmupSamples: nil,
             totalMilliseconds: elapsed,
             termination: allCovered ? .coverageAchieved : .budgetExhausted,
@@ -278,7 +275,8 @@ extension __ExhaustRuntime {
         counterexample: Output,
         original: Output,
         reducedSequence: ChoiceSequence?,
-        reductionInvocations: Int
+        reductionInvocations: Int,
+        reductionFailures: Int
     ) {
         let fullTree = Materializer.materialize(
             gen,
@@ -295,14 +293,19 @@ extension __ExhaustRuntime {
         }
 
         guard let reduceTree = reductionTree else {
-            return (failure.value, failure.value, nil, 0)
+            return (failure.value, failure.value, nil, 0, 0)
         }
 
         var reductionInvocations = 0
+        var reductionFailures = 0
         let reductionPredicate: (Output) -> Bool = failure.matchingDirections.isEmpty
             ? { output in
                 reductionInvocations += 1
-                return property(output) == false
+                let failed = property(output) == false
+                if failed {
+                    reductionFailures += 1
+                }
+                return failed
             }
             : { output in
                 for directionIndex in failure.matchingDirections
@@ -311,7 +314,11 @@ extension __ExhaustRuntime {
                     return false
                 }
                 reductionInvocations += 1
-                return property(output) == false
+                let failed = property(output) == false
+                if failed {
+                    reductionFailures += 1
+                }
+                return failed
             }
 
         do {
@@ -323,7 +330,7 @@ extension __ExhaustRuntime {
                 property: { reductionPredicate($0) == false }
             )
             if case let .reduced(reducedSequence, _, reducedValue) = outcome {
-                return (reducedValue, failure.value, reducedSequence, reductionInvocations)
+                return (reducedValue, failure.value, reducedSequence, reductionInvocations, reductionFailures)
             }
         } catch {
             ExhaustLog.error(
@@ -333,6 +340,6 @@ extension __ExhaustRuntime {
             )
         }
 
-        return (failure.value, failure.value, nil, reductionInvocations)
+        return (failure.value, failure.value, nil, reductionInvocations, reductionFailures)
     }
 }

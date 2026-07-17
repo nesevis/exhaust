@@ -223,18 +223,6 @@ package final class FuzzRunner<Output> {
         finishPersistence()
         let elapsedNanoseconds = monotonicNanoseconds() - startNanoseconds
 
-        var ledger = RunLedger()
-        ledger.record(.sampling, .pass, count: counts.evaluatedSearchCases)
-        ledger.record(.pruning, .pass, count: counts.pruneInvocations)
-        ledger.record(.reduction, .pass, count: counts.reductionInvocations)
-        ledger.record(.normalization, .pass, count: counts.normalizationInvocations)
-        ledger.record(.classification, .pass, count: counts.classificationInvocations)
-        ledger.record(.recovery, .pass, count: counts.recoveryInvocations)
-        ledger.addElapsed(.screening, nanoseconds: timing.screeningOverheadNanoseconds)
-        ledger.addElapsed(.sampling, nanoseconds: timing.samplingOverheadNanoseconds + timing.propertyNanoseconds)
-        ledger.addElapsed(.mutation, nanoseconds: timing.mutationOverheadNanoseconds)
-        ledger.addElapsed(.reduction, nanoseconds: timing.reductionNanoseconds)
-
         return FuzzRunResult(
             clusters: clusters,
             unmatchedUnreducedCounts: unmatched,
@@ -250,7 +238,6 @@ package final class FuzzRunner<Output> {
             startNanoseconds: reportEpochNanoseconds,
             elapsedNanoseconds: elapsedNanoseconds,
             timing: timing,
-            ledger: ledger,
             seed: configuration.seed
         )
     }

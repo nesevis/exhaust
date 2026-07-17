@@ -135,7 +135,7 @@ struct DirectedExploreRunnerTests {
         let result1 = try runner1.run()
         let result2 = try runner2.run()
 
-        #expect(result1.invocations == result2.invocations)
+        #expect(result1.ledger == result2.ledger)
         #expect(result1.counterexample == result2.counterexample)
     }
 

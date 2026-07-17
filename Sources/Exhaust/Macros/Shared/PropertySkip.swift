@@ -27,29 +27,18 @@ public struct PropertySkip: Error {
 package final class SkipCounter: @unchecked Sendable {
     private let lock = NSLock()
     private var storage = 0
-    private var lastWasSkipFlag = false
 
     /// Creates a counter starting at zero.
     package init() {}
 
-    /// Records one skipped invocation and sets the per-invocation flag.
+    /// Records one skipped invocation.
     package func increment() {
-        lock.withLocking {
-            storage += 1
-            lastWasSkipFlag = true
-        }
-    }
-
-    /// Returns whether the most recent property invocation was a skip, resetting the flag. The sampling loop calls this after each property invocation to record the correct outcome in the ``RunLedger``.
-    package func consumeLastSkip() -> Bool {
-        lock.withLocking {
-            let was = lastWasSkipFlag
-            lastWasSkipFlag = false
-            return was
-        }
+        lock.withLocking { storage += 1 }
     }
 
     /// The number of skipped invocations recorded so far.
+    ///
+    /// Phase loops snapshot this before and after a phase and record the delta into the ``RunLedger``. The count is exact under parallel lanes because every skip lands here regardless of which lane observed it, so deltas taken outside the concurrent section cannot lose or double-count a skip.
     package var count: Int {
         lock.withLocking { storage }
     }

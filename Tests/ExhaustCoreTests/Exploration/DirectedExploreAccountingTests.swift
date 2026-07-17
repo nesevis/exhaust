@@ -24,17 +24,17 @@ struct DirectedExploreAccountingTests {
 
         let result = try runner.run()
 
-        #expect(result.invocations.warmup == 100)
-        #expect(result.invocations.regression == 1)
-        #expect(result.invocations.directedSampling == maxAttemptsPerDirection)
-        #expect(result.invocations.reduction == 0)
-        #expect(result.invocations.total
-            == result.invocations.warmup
-            + result.invocations.regression
-            + result.invocations.directedSampling
-            + result.invocations.reduction)
-        #expect(observedPropertyInvocations == result.invocations.total)
-        #expect(result.warmupSamples == result.invocations.warmup)
+        #expect(result.ledger.count(.warmup) == 100)
+        #expect(result.ledger.count(.regression) == 1)
+        #expect(result.ledger.count(.directedSampling) == maxAttemptsPerDirection)
+        #expect(result.ledger.count(.reduction) == 0)
+        #expect(result.ledger.totalInvocations
+            == result.ledger.count(.warmup)
+            + result.ledger.count(.regression)
+            + result.ledger.count(.directedSampling)
+            + result.ledger.count(.reduction))
+        #expect(observedPropertyInvocations == result.ledger.totalInvocations)
+        #expect(result.warmupSamples == result.ledger.count(.warmup))
         #expect(result.directionCoverage[0].directedSamplingSamples == maxAttemptsPerDirection)
     }
 
@@ -58,12 +58,12 @@ struct DirectedExploreAccountingTests {
         let result = try runner.run()
 
         #expect(result.termination == .propertyFailed)
-        #expect(result.invocations.warmup == 1)
-        #expect(result.invocations.regression == 0)
-        #expect(result.invocations.directedSampling == 0)
-        #expect(result.invocations.reduction > 0)
+        #expect(result.ledger.count(.warmup) == 1)
+        #expect(result.ledger.count(.regression) == 0)
+        #expect(result.ledger.count(.directedSampling) == 0)
+        #expect(result.ledger.count(.reduction) > 0)
         #expect(result.directionCoverage[0].directedSamplingSamples == 0)
-        #expect(observedPropertyInvocations == result.invocations.total)
+        #expect(observedPropertyInvocations == result.ledger.totalInvocations)
     }
 
     @Test("Direction-rejected reducer proposals do not count as property invocations")
@@ -94,6 +94,6 @@ struct DirectedExploreAccountingTests {
         let result = try runner.run()
 
         #expect(result.counterexample == originalValue)
-        #expect(observedPropertyInvocations == result.invocations.total)
+        #expect(observedPropertyInvocations == result.ledger.totalInvocations)
     }
 }

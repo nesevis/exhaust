@@ -85,10 +85,10 @@ public struct ExhaustReport: Sendable {
 
     /// Projects invocation counts from a ``RunLedger``.
     package mutating func applyLedger(_ ledger: RunLedger) {
-        screeningInvocations = ledger.invocations(.screening)
-        randomSamplingInvocations = ledger.invocations(.sampling)
-        reductionInvocations = ledger.invocations(.reduction)
-        diagnosticInvocations = ledger.invocations(.diagnostic)
+        screeningInvocations = ledger.count(.screening)
+        randomSamplingInvocations = ledger.count(.sampling)
+        reductionInvocations = ledger.count(.reduction)
+        diagnosticInvocations = ledger.count(.diagnostic)
         skippedInvocations = ledger.totalSkips
         propertyInvocations = screeningInvocations
             + randomSamplingInvocations

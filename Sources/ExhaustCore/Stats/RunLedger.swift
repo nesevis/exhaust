@@ -1,19 +1,16 @@
-/// Records `(phase, outcome)` events and non-overlapping elapsed intervals at the invocation site.
+/// Records `(phase, outcome)` property-invocation events at the invocation site.
 ///
-/// Each mode's runner records into a ledger instead of maintaining per-mode counter structs. Concurrent paths get per-lane ledgers that merge at the boundary. Report types become projections: `ExhaustReport`, `ExploreReport`, `FuzzReport`, and `StateMachineResult` read their invocation counts from the ledger rather than receiving them as separately threaded integers.
+/// Each mode's runner records into a ledger instead of maintaining per-mode counter structs. Concurrent paths get per-lane ledgers that merge at the boundary. Report types become projections: `ExhaustReport` and `ExploreReport` read their invocation counts from the ledger rather than receiving them as separately threaded integers.
+///
+/// Outcomes are recorded honestly where the loop observes them. One runner cannot: the state machine runner counts reduction probes through a shared invocation counter that hides per-probe verdicts, so it records them under a single outcome and only the phase totals are meaningful there.
 package struct RunLedger: Sendable, Equatable {
     package enum Phase: Int, CaseIterable, Sendable {
         case screening = 0
         case sampling
-        case mutation
         case warmup
         case regression
         case directedSampling
         case reduction
-        case normalization
-        case classification
-        case recovery
-        case pruning
         case diagnostic
     }
 
@@ -21,7 +18,6 @@ package struct RunLedger: Sendable, Equatable {
         case pass = 0
         case fail
         case skip
-        case rejected
     }
 
     private static let phaseCount = Phase.allCases.count
@@ -29,11 +25,9 @@ package struct RunLedger: Sendable, Equatable {
     private static let countsSize = phaseCount * outcomeCount
 
     private var counts: [Int]
-    private var elapsed: [UInt64]
 
     package init() {
         counts = [Int](repeating: 0, count: Self.countsSize)
-        elapsed = [UInt64](repeating: 0, count: Self.phaseCount)
     }
 
     // MARK: - Recording
@@ -42,8 +36,17 @@ package struct RunLedger: Sendable, Equatable {
         counts[phase.rawValue * Self.outcomeCount + outcome.rawValue] += count
     }
 
-    package mutating func addElapsed(_ phase: Phase, nanoseconds: UInt64) {
-        elapsed[phase.rawValue] += nanoseconds
+    /// Records one phase's aggregate outcomes from an invocation total, a skip count, and a failure count.
+    ///
+    /// Phase loops that measure skips as a counter delta call this once per phase instead of recording per iteration. The pass count is derived, so the three outcome buckets always sum to `invocations`.
+    package mutating func record(_ phase: Phase, invocations: Int, skips: Int = 0, failures: Int = 0) {
+        assert(
+            invocations >= skips + failures,
+            "RunLedger accounting: \(invocations) invocations cannot contain \(skips) skips and \(failures) failures"
+        )
+        record(phase, .pass, count: max(0, invocations - skips - failures))
+        record(phase, .skip, count: skips)
+        record(phase, .fail, count: failures)
     }
 
     // MARK: - Merging
@@ -51,9 +54,6 @@ package struct RunLedger: Sendable, Equatable {
     package mutating func merge(_ other: RunLedger) {
         for index in 0 ..< Self.countsSize {
             counts[index] += other.counts[index]
-        }
-        for index in 0 ..< Self.phaseCount {
-            elapsed[index] += other.elapsed[index]
         }
     }
 
@@ -72,18 +72,10 @@ package struct RunLedger: Sendable, Equatable {
         return total
     }
 
-    package func invocations(_ phase: Phase) -> Int {
-        count(phase, .pass) + count(phase, .fail) + count(phase, .skip)
-    }
-
-    package func elapsedNanoseconds(_ phase: Phase) -> UInt64 {
-        elapsed[phase.rawValue]
-    }
-
     package var totalInvocations: Int {
         var total = 0
         for phase in Phase.allCases {
-            total += invocations(phase)
+            total += count(phase)
         }
         return total
     }

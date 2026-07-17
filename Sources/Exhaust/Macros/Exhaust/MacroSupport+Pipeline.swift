@@ -31,7 +31,11 @@ package extension __ExhaustRuntime {
         let column: UInt
         let statsAccumulator: OpenPBTStatsAccumulator?
         let skipCounter: SkipCounter?
-        var ledger = RunLedger()
+
+        /// The skip count accumulated so far, for phase-delta accounting. Skips land on the shared counter from any lane, so a delta taken outside a concurrent section is exact.
+        var skipCount: Int {
+            skipCounter?.count ?? 0
+        }
     }
 
     /// Represents the outcome of the screening phase: failure found, exhaustive pass, or proceed to sampling.
@@ -58,7 +62,7 @@ package extension __ExhaustRuntime {
         report: inout ExhaustReport,
         ledger: inout RunLedger
     ) -> ScreeningOutcome<Output> {
-        let skipsBefore = context.skipCounter?.count ?? 0
+        let skipsBefore = context.skipCount
         let screeningResult = ScreeningRunner.run(
             context.gen,
             screeningBudget: screeningBudget,
@@ -73,15 +77,13 @@ package extension __ExhaustRuntime {
             }
         )
         report.applyScreeningRows(screeningResult.summary)
-        let screeningPropertyCalls = screeningResult.summary.propertyInvocations
-        let screeningSkips = (context.skipCounter?.count ?? 0) - skipsBefore
         let screeningFoundFailure = if case .failure = screeningResult { true } else { false }
-        let screeningPasses = screeningPropertyCalls - screeningSkips - (screeningFoundFailure ? 1 : 0)
-        ledger.record(.screening, .pass, count: max(0, screeningPasses))
-        ledger.record(.screening, .skip, count: screeningSkips)
-        if screeningFoundFailure {
-            ledger.record(.screening, .fail)
-        }
+        ledger.record(
+            .screening,
+            invocations: screeningResult.summary.propertyInvocations,
+            skips: context.skipCount - skipsBefore,
+            failures: screeningFoundFailure ? 1 : 0
+        )
         switch screeningResult {
             case let .failure(value, tree, rowOrdinal, _, strength, rows, parameters, totalSpace, kind):
                 ExhaustLog.notice(
@@ -116,7 +118,6 @@ package extension __ExhaustRuntime {
                     seed: nil,
                     iteration: rowOrdinal,
                     phaseBudget: screeningBudget,
-                    randomSamplingIterations: 0,
                     replayHint: "Reproduce: .replay(\"\(screeningReplaySeed)\")",
                     report: &report,
                     ledger: &ledger
@@ -187,7 +188,6 @@ package extension __ExhaustRuntime {
     struct BatchResult<Output> {
         var failure: (value: Output, tree: ChoiceTree, absoluteIteration: Int)?
         var iterations: Int = 0
-        var skips: Int = 0
         var filterObservations: [UInt64: FilterObservation] = [:]
         var statsLines: [OpenPBTStatsLine] = []
         var error: (any Error)?
@@ -215,7 +215,6 @@ package extension __ExhaustRuntime {
         count: UInt64,
         lane: Int?,
         statsPropertyName: String?,
-        skipCounter: SkipCounter?,
         canceled: some CancellationFlag
     ) -> BatchResult<Output> {
         var result = BatchResult<Output>()
@@ -278,9 +277,6 @@ package extension __ExhaustRuntime {
                         filterRejections: filterRejections
                     )
 
-                    if skipCounter?.consumeLastSkip() == true {
-                        result.skips += 1
-                    }
                     if passed == false {
                         let absoluteIteration = Int(startIndex) + result.iterations
                         result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
@@ -294,11 +290,7 @@ package extension __ExhaustRuntime {
                     guard let next = try interpreter.nextValueOnly() else { break }
                     result.iterations += 1
 
-                    let passed = property(next)
-                    if skipCounter?.consumeLastSkip() == true {
-                        result.skips += 1
-                    }
-                    if passed == false {
+                    if property(next) == false {
                         let absoluteIteration = Int(startIndex) + result.iterations
                         let tree = try interpreter.reproduceFailureTree()
                         result.failure = (value: next, tree: tree, absoluteIteration: absoluteIteration)
@@ -339,14 +331,19 @@ package extension __ExhaustRuntime {
             initialRunIndex: startIndex
         )
         var iterations = 0
+        let skipsBefore = context.skipCount
 
         do {
             while let next = try interpreter.nextValueOnly() {
                 iterations += 1
-                let passed = context.property(next)
-                let skipped = context.skipCounter?.consumeLastSkip() ?? false
-                if passed == false {
-                    ledger.record(.sampling, .fail)
+                if context.property(next) == false {
+                    // Sampling outcomes are recorded before reduction runs so reduction-phase skips stay out of the sampling delta.
+                    ledger.record(
+                        .sampling,
+                        invocations: iterations,
+                        skips: context.skipCount - skipsBefore,
+                        failures: 1
+                    )
                     let tree = try interpreter.reproduceFailureTree()
                     report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
                     emitFilterWarnings(interpreter.filterObservations, context: context)
@@ -359,7 +356,6 @@ package extension __ExhaustRuntime {
                         seed: baseSeed,
                         iteration: absoluteIteration,
                         phaseBudget: context.samplingBudget,
-                        randomSamplingIterations: iterations,
                         replayHint: nil,
                         report: &report,
                         ledger: &ledger
@@ -373,7 +369,6 @@ package extension __ExhaustRuntime {
                             return next
                     }
                 }
-                ledger.record(.sampling, skipped ? .skip : .pass)
             }
         } catch {
             report.generationErrorOccurred = true
@@ -386,6 +381,11 @@ package extension __ExhaustRuntime {
             )
         }
 
+        ledger.record(
+            .sampling,
+            invocations: iterations,
+            skips: context.skipCount - skipsBefore
+        )
         report.generationMilliseconds = Double(monotonicNanoseconds() - generationPhaseStart) / 1_000_000
         emitFilterWarnings(interpreter.filterObservations, context: context)
         if interpreter.uniqueExhaustionTruncatedRun {
@@ -471,6 +471,7 @@ package extension __ExhaustRuntime {
             ? "\(context.fileID)"
             : nil
 
+        let skipsBefore = context.skipCount
         let batchResults: [BatchResult<Output>]
         if laneCount <= 1 {
             let replayStartIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
@@ -482,7 +483,6 @@ package extension __ExhaustRuntime {
                 count: context.samplingBudget,
                 lane: nil,
                 statsPropertyName: statsPropertyName,
-                skipCounter: context.skipCounter,
                 canceled: UnsafeSendableBox(false)
             )
             batchResults = [singleResult]
@@ -504,7 +504,6 @@ package extension __ExhaustRuntime {
                     count: iterationsForLane,
                     lane: laneIndex,
                     statsPropertyName: statsPropertyName,
-                    skipCounter: unsafeContext.skipCounter,
                     canceled: canceled
                 )
                 resultStorage.withValue { $0[laneIndex] = batchResult }
@@ -555,15 +554,14 @@ package extension __ExhaustRuntime {
         }
 
         // Find the failure with the lowest absolute iteration (deterministic winner).
+        // The skip delta is taken after all lanes have joined, so it is exact even though lanes share one counter. Each lane stops at its first failure, so failing invocations equal failing lanes.
         let totalIterations = batchResults.reduce(0) { $0 + $1.iterations }
-        let totalSkips = batchResults.reduce(0) { $0 + $1.skips }
-        let hasFailure = batchResults.contains { $0.failure != nil }
-        let passes = totalIterations - totalSkips - (hasFailure ? 1 : 0)
-        ledger.record(.sampling, .pass, count: max(0, passes))
-        ledger.record(.sampling, .skip, count: totalSkips)
-        if hasFailure {
-            ledger.record(.sampling, .fail)
-        }
+        ledger.record(
+            .sampling,
+            invocations: totalIterations,
+            skips: context.skipCount - skipsBefore,
+            failures: batchResults.count(where: { $0.failure != nil })
+        )
         let winningFailure = batchResults
             .compactMap(\.failure)
             .min(by: { $0.absoluteIteration < $1.absoluteIteration })
@@ -584,7 +582,6 @@ package extension __ExhaustRuntime {
             seed: baseSeed,
             iteration: failure.absoluteIteration,
             phaseBudget: context.samplingBudget,
-            randomSamplingIterations: totalIterations,
             replayHint: nil,
             report: &report,
             ledger: &ledger
@@ -609,17 +606,30 @@ package extension __ExhaustRuntime {
         seed: UInt64?,
         iteration: Int,
         phaseBudget: UInt64,
-        randomSamplingIterations _: Int,
         replayHint: String?,
         report: inout ExhaustReport,
         ledger: inout RunLedger
     ) -> ReduceOutcome<Output> {
         var propertyInvocationCount = 0
+        var propertyFailureCount = 0
         let countingProperty: (Output) -> Bool = { value in
             propertyInvocationCount += 1
-            return context.property(value)
+            let passed = context.property(value)
+            if passed == false {
+                propertyFailureCount += 1
+            }
+            return passed
         }
-        let reductionSkipsBefore = context.skipCounter?.count ?? 0
+        let reductionSkipsBefore = context.skipCount
+        /// Recorded before the report's failure rendering reads `ledger.totalInvocations`, and on the error path as well, so reduction probes are never dropped from the totals.
+        func recordReductionOutcomes() {
+            ledger.record(
+                .reduction,
+                invocations: propertyInvocationCount,
+                skips: context.skipCount - reductionSkipsBefore,
+                failures: propertyFailureCount
+            )
+        }
         let reductionStart = monotonicNanoseconds()
         do {
             var reducerConfig = context.reductionConfig
@@ -633,10 +643,7 @@ package extension __ExhaustRuntime {
             )
             report.applyReductionStats(reduceResult.stats)
             report.reductionMilliseconds = Double(monotonicNanoseconds() - reductionStart) / 1_000_000
-            let reductionSkips = (context.skipCounter?.count ?? 0) - reductionSkipsBefore
-            let reductionPasses = propertyInvocationCount - reductionSkips
-            ledger.record(.reduction, .pass, count: max(0, reductionPasses))
-            ledger.record(.reduction, .skip, count: reductionSkips)
+            recordReductionOutcomes()
             if case let .reduced(reducedSequence, _, reducedValue) = reduceResult.outcome {
                 var failure = PropertyTestFailure(
                     counterexample: reducedValue,
@@ -681,6 +688,7 @@ package extension __ExhaustRuntime {
                 return .reduced(reducedValue)
             }
         } catch {
+            recordReductionOutcomes()
             reportError(
                 localizedErrorMessage(error),
                 fileID: context.fileID,
@@ -736,10 +744,12 @@ package extension __ExhaustRuntime {
         line: UInt,
         column: UInt,
         property: @Sendable (Output) -> Bool,
+        skipCounter: SkipCounter?,
         report: inout ExhaustReport,
         ledger: inout RunLedger
     ) throws -> Output? {
         let reflectStart = monotonicNanoseconds()
+        let skipsBefore = skipCounter?.count ?? 0
 
         guard property(value) == false else {
             let message = "reflecting: value passes the property — reduction requires a failing value"
@@ -752,7 +762,7 @@ package extension __ExhaustRuntime {
                     column: column
                 )
             }
-            ledger.record(.reduction, .fail)
+            ledger.record(.reduction, invocations: 1, skips: (skipCounter?.count ?? 0) - skipsBefore)
             return nil
         }
 
@@ -767,16 +777,21 @@ package extension __ExhaustRuntime {
                     column: column
                 )
             }
-            ledger.record(.reduction, .fail)
+            ledger.record(.reduction, invocations: 1, failures: 1)
             return nil
         }
 
         let reflectionEnd = monotonicNanoseconds()
 
         var propertyInvocationCount = 0
+        var propertyFailureCount = 0
         let countingProperty: (Output) -> Bool = { value in
             propertyInvocationCount += 1
-            return property(value)
+            let passed = property(value)
+            if passed == false {
+                propertyFailureCount += 1
+            }
+            return passed
         }
         var reducerConfig = reductionConfig
         reducerConfig.visualize = visualize
@@ -819,8 +834,12 @@ package extension __ExhaustRuntime {
             report.reflectionMilliseconds = reflectionMs
             report.reductionMilliseconds = reductionMs
             report.totalMilliseconds = totalMs
-            ledger.record(.reduction, .fail)
-            ledger.record(.reduction, .pass, count: propertyInvocationCount)
+            ledger.record(
+                .reduction,
+                invocations: 1 + propertyInvocationCount,
+                skips: (skipCounter?.count ?? 0) - skipsBefore,
+                failures: 1 + propertyFailureCount
+            )
             if suppressIssueReporting == false {
                 reportError(
                     rendered,
@@ -863,8 +882,12 @@ package extension __ExhaustRuntime {
         report.reflectionMilliseconds = reflectionMs
         report.reductionMilliseconds = reductionMs
         report.totalMilliseconds = totalMs
-        ledger.record(.reduction, .fail)
-        ledger.record(.reduction, .pass, count: propertyInvocationCount)
+        ledger.record(
+            .reduction,
+            invocations: 1 + propertyInvocationCount,
+            skips: (skipCounter?.count ?? 0) - skipsBefore,
+            failures: 1 + propertyFailureCount
+        )
         if suppressIssueReporting == false {
             reportError(
                 rendered,

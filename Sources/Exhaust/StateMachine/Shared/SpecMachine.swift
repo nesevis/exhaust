@@ -66,7 +66,12 @@ struct SpecMachine<Backend: StateMachineBackend> {
         let stopwatch = Stopwatch()
         do {
             let found = try source.next()
-            accountSource(source, invocations: context.invocationCounter.value - invocationsBefore, elapsed: stopwatch.elapsedMilliseconds)
+            accountSource(
+                source,
+                invocations: context.invocationCounter.value - invocationsBefore,
+                elapsed: stopwatch.elapsedMilliseconds,
+                foundFailure: found != nil
+            )
             guard let found else {
                 sourceIndex += 1
                 return .sourceExhausted
@@ -79,7 +84,12 @@ struct SpecMachine<Backend: StateMachineBackend> {
                 commandCount: found.taggedCommands.count
             )
         } catch {
-            accountSource(source, invocations: context.invocationCounter.value - invocationsBefore, elapsed: stopwatch.elapsedMilliseconds)
+            accountSource(
+                source,
+                invocations: context.invocationCounter.value - invocationsBefore,
+                elapsed: stopwatch.elapsedMilliseconds,
+                foundFailure: false
+            )
             let message = source.resolvedReplaySeed.map {
                 "Generator failed during regression replay (seed \($0.encoded)): \(error)"
             } ?? "Generator failed: \(error)"
@@ -93,14 +103,16 @@ struct SpecMachine<Backend: StateMachineBackend> {
     private mutating func accountSource(
         _ source: AnyStateMachineCandidateSource<Backend.Spec.Command>,
         invocations: Int,
-        elapsed: Double
+        elapsed: Double,
+        foundFailure: Bool
     ) {
         let phase: RunLedger.Phase = switch source.discoveryMethod {
             case .screening: .screening
             case .randomSampling, .smokeTest, .replay: .sampling
         }
-        context.state.ledger.record(phase, .pass, count: invocations)
-        context.state.ledger.addElapsed(phase, nanoseconds: UInt64(elapsed * 1_000_000))
+        // A found candidate is the one failing sequence in this source's batch. A source may surface a candidate without routing probes through the shared invocation counter (stub sources do), so the failure outcome is attributed only when the batch counted invocations. Skips are pruned downstream and never reach the counter, so they carry no ledger outcome here.
+        let failureCount = foundFailure && invocations > 0 ? 1 : 0
+        context.state.ledger.record(phase, invocations: invocations, failures: failureCount)
 
         switch source.discoveryMethod {
             case .screening:
@@ -179,9 +191,9 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     private mutating func stepRecordStats() -> Transition {
         let reductionInvocations = context.invocationCounter.value - preReductionInvocations
+        // The shared invocation counter hides per-probe verdicts, so reduction probes are recorded under one outcome; only the phase total is meaningful (see ``RunLedger``).
         context.state.ledger.record(.reduction, .pass, count: reductionInvocations)
         let reductionElapsed = reductionStopwatch?.elapsedMilliseconds ?? 0
-        context.state.ledger.addElapsed(.reduction, nanoseconds: UInt64(reductionElapsed * 1_000_000))
         context.state.report.reductionMilliseconds = reductionElapsed
         context.state.failureContext.reductionInvocations = reductionInvocations
         if let stats = reduction?.stats {

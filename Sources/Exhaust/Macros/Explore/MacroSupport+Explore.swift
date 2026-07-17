@@ -191,10 +191,10 @@ public extension __ExhaustRuntime {
                 case .budgetExhausted: .budgetExhausted
             }
             let invocations = ExploreInvocationCounts(
-                warmup: result.invocations.warmup,
-                regression: result.invocations.regression,
-                directedSampling: result.invocations.directedSampling,
-                reduction: result.invocations.reduction,
+                warmup: result.ledger.count(.warmup),
+                regression: result.ledger.count(.regression),
+                directedSampling: result.ledger.count(.directedSampling),
+                reduction: result.ledger.count(.reduction),
                 diagnostic: 0
             )
 

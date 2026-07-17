@@ -139,7 +139,6 @@ public extension __ExhaustRuntime {
                 if let regression = replayRegressionSeeds(
                     gen: gen,
                     settings: reportDelivery.pipelineSettings,
-                    skipCounter: skipCounter,
                     forceIssueReportingSuppression: false,
                     fileID: fileID,
                     filePath: filePath,
@@ -426,6 +425,7 @@ public extension __ExhaustRuntime {
                         line: line,
                         column: column,
                         property: property,
+                        skipCounter: skipCounter,
                         report: &report,
                         ledger: &ledger
                     )
@@ -670,7 +670,6 @@ public extension __ExhaustRuntime {
                         if let regression = replayRegressionSeeds(
                             gen: gen,
                             settings: reportDelivery.pipelineSettings,
-                            skipCounter: skipCounter,
                             forceIssueReportingSuppression: true,
                             fileID: fileID,
                             filePath: filePath,
@@ -780,7 +779,6 @@ public extension __ExhaustRuntime {
                     if let regression = replayRegressionSeeds(
                         gen: refGen.gen,
                         settings: reportDelivery.pipelineSettings,
-                        skipCounter: skipCounter,
                         forceIssueReportingSuppression: false,
                         fileID: fileID,
                         filePath: filePath,
@@ -928,7 +926,6 @@ public extension __ExhaustRuntime {
                             if let regression = replayRegressionSeeds(
                                 gen: gen,
                                 settings: reportDelivery.pipelineSettings,
-                                skipCounter: skipCounter,
                                 forceIssueReportingSuppression: true,
                                 fileID: fileID,
                                 filePath: filePath,

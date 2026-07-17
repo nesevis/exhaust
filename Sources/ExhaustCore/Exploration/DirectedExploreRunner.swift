@@ -363,22 +363,32 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                 counterexample: value,
                 original: value,
                 reducedSequence: nil,
-                reductionInvocations: 0
+                reductionInvocations: 0,
+                reductionFailures: 0
             )
         }
 
         var reductionInvocations = 0
+        var reductionFailures = 0
         let reductionPredicate: (Output) -> Bool = matchingDirections.isEmpty
             ? { [property] output in
                 reductionInvocations += 1
-                return property(output) == false
+                let failed = property(output) == false
+                if failed {
+                    reductionFailures += 1
+                }
+                return failed
             }
             : { [property, directions] output in
                 for directionIndex in matchingDirections where directions[directionIndex].predicate(output) == false {
                     return false
                 }
                 reductionInvocations += 1
-                return property(output) == false
+                let failed = property(output) == false
+                if failed {
+                    reductionFailures += 1
+                }
+                return failed
             }
 
         do {
@@ -394,7 +404,8 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                     counterexample: reducedValue,
                     original: value,
                     reducedSequence: reducedSequence,
-                    reductionInvocations: reductionInvocations
+                    reductionInvocations: reductionInvocations,
+                    reductionFailures: reductionFailures
                 )
             }
         } catch {
@@ -409,7 +420,8 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
             counterexample: value,
             original: value,
             reducedSequence: nil,
-            reductionInvocations: reductionInvocations
+            reductionInvocations: reductionInvocations,
+            reductionFailures: reductionFailures
         )
     }
 
@@ -444,14 +456,13 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
 
         let elapsed = stopwatch.elapsedMilliseconds
         var ledger = state.ledger
-        let reductionInvocations = failure?.reductionInvocations ?? 0
-        ledger.record(.reduction, .pass, count: reductionInvocations)
-
-        var invocations = DirectedExploreInvocationCounts()
-        invocations.warmup = ledger.count(.warmup)
-        invocations.regression = ledger.count(.regression)
-        invocations.directedSampling = ledger.count(.directedSampling)
-        invocations.reduction = reductionInvocations
+        if let failure {
+            ledger.record(
+                .reduction,
+                invocations: failure.reductionInvocations,
+                failures: failure.reductionFailures
+            )
+        }
 
         return DirectedExploreResult(
             counterexample: failure?.counterexample,
@@ -460,7 +471,7 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
             counterexampleDirections: matchingDirections,
             directionCoverage: coverageEntries,
             coOccurrence: state.coOccurrence,
-            invocations: invocations,
+            ledger: ledger,
             warmupSamples: ledger.count(.warmup),
             totalMilliseconds: elapsed,
             termination: termination,
@@ -476,28 +487,8 @@ private struct ReducedFailure<Output> {
     var original: Output
     var reducedSequence: ChoiceSequence?
     var reductionInvocations: Int
-}
-
-/// Separates property invocations by lifecycle phase so every path can merge counts without maintaining an independent total.
-package struct DirectedExploreInvocationCounts: Equatable, Sendable {
-    package var warmup = 0
-    package var regression = 0
-    package var directedSampling = 0
-    package var reduction = 0
-
-    package init() {}
-
-    package var total: Int {
-        warmup + regression + directedSampling + reduction
-    }
-
-    /// Adds another completed path's phase counts to this summary. Parallel lanes remain synchronization-free because the coordinator merges them only after all lanes finish.
-    package mutating func merge(_ other: Self) {
-        warmup += other.warmup
-        regression += other.regression
-        directedSampling += other.directedSampling
-        reduction += other.reduction
-    }
+    /// Probes whose property invocation reproduced the failure, disjoint from direction-mismatched probes (which never invoke the property).
+    var reductionFailures: Int
 }
 
 /// Result of a directed exploration run.
@@ -508,9 +499,10 @@ package struct DirectedExploreResult<Output> {
     package let counterexampleDirections: [Int]
     package let directionCoverage: [DirectionCoverageEntry]
     package let coOccurrence: CoOccurrenceMatrix
-    package let invocations: DirectedExploreInvocationCounts
+    /// Per-phase invocation outcomes. The explore phases are ``RunLedger/Phase/warmup``, ``RunLedger/Phase/regression``, ``RunLedger/Phase/directedSampling``, and ``RunLedger/Phase/reduction``.
+    package let ledger: RunLedger
     package var propertyInvocations: Int {
-        invocations.total
+        ledger.totalInvocations
     }
 
     package let warmupSamples: Int?
@@ -525,7 +517,7 @@ package struct DirectedExploreResult<Output> {
         counterexampleDirections: [Int],
         directionCoverage: [DirectionCoverageEntry],
         coOccurrence: CoOccurrenceMatrix,
-        invocations: DirectedExploreInvocationCounts,
+        ledger: RunLedger,
         warmupSamples: Int?,
         totalMilliseconds: Double,
         termination: DirectedExploreTermination,
@@ -537,7 +529,7 @@ package struct DirectedExploreResult<Output> {
         self.counterexampleDirections = counterexampleDirections
         self.directionCoverage = directionCoverage
         self.coOccurrence = coOccurrence
-        self.invocations = invocations
+        self.ledger = ledger
         self.warmupSamples = warmupSamples
         self.totalMilliseconds = totalMilliseconds
         self.termination = termination

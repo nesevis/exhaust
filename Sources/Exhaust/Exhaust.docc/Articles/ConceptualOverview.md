@@ -190,12 +190,12 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 
 ### State machine specs
 
-- **Spec**: what the user authors — the `final class` or `actor` decorated with `@StateMachine` that declares commands, invariants, and optionally an oracle. The spec is the specification of a stateful system.
-- **State machine**: the concept that runs specs. `SpecMachine`, the cooperative and preemptive runners, and the reduction machinery are all state-machine infrastructure that drives a user-authored spec through generated command sequences.
+- **Spec**: what the user authors — the `final class` or `actor` decorated with `@StateMachine` that declares commands, invariants, and optionally an oracle. It describes how the stateful system should behave, in a form Exhaust can execute.
+- **State machine**: the machinery that runs specs. It generates command sequences, executes them against the SUT, checks invariants, and reduces failures.
 - **Command**: one operation Exhaust may invoke on the SUT.
 - **Cooperative / preemptive**: the two concurrent runners. Cooperative interleaves deterministically at `await` points. Preemptive uses real threads to reach races in locks and atomics.
 - **Invariant**: a property checked after every command.
-- **Lane**: a concurrent task or thread. A task in cooperative `.tasks` execution, a thread in `.threads` execution and parallel sampling.
+- **Lane**: one of the concurrent tracks a run is split across — a task in cooperative `.tasks` execution, a thread in `.threads` execution and in parallel sampling.
 - **Model**: a simpler reference implementation maintained alongside the SUT, so invariants can compare the two. This is a pattern for writing effective invariants rather than a macro.
 - **Oracle**: the trusted source of the right answer a spec checks against. For `.threads` specs, the `@Oracle` method compares the concurrent end state against a sequential replay.
 - **System under test (SUT)**: the real implementation a spec exercises.
@@ -213,7 +213,7 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 
 ### Easily confused
 
-- **"Coverage" has exactly two senses.** *Space coverage* is how much of a domain or combinatorial space has been exercised: `#examine`'s domain metrics, `#explore(directions:)`'s direction coverage, and covering-array interaction coverage. *Code coverage* is which instrumented edges a candidate reached during a `time:`-mode run. The screening phase is deliberately not described in coverage language — screening tries problematic values in pairwise combination, and was renamed away from coverage terms to keep this boundary clear.
-- **"Replay" forms a gradient across three retained senses.** At its narrowest, replay is deterministic re-execution of a recorded choice sequence (the `Replay` interpreter). A step wider, it is seed-addressed reproduction of a run (`ReplaySeed`, the `.replay(…)` setting). Wider still, it is the approximate re-run of a fuzz search (`FuzzSettings.replay`), which reruns the search, not the log. All three are legitimate uses that sit along one axis from exact to approximate.
+- **"Coverage" has exactly two senses.** *Space coverage* is how much of a domain or combinatorial space has been exercised: `#examine`'s domain metrics, `#explore(directions:)`'s direction coverage, and covering-array interaction coverage. *Code coverage* is which instrumented edges a candidate reached during a `time:`-mode run. The `#exhaust` phase that tries problematic values in pairwise combination is called **screening**, and is neither.
+- **"Replay" has three senses, from exact to approximate.** At its narrowest, replay is deterministic re-execution of a recorded choice sequence (the `Replay` interpreter). A step wider, it is seed-addressed reproduction of a run (`ReplaySeed`, the `.replay(…)` setting). At its widest, it is the re-run of a fuzz search from its seed (`FuzzSettings.replay`), which reruns the search rather than a log, so the reproduction is approximate.
 - **"Reflection" is narrower than in most languages.** In Swift and Java, "reflection" typically means examining a value's structure at runtime. In Exhaust, inspection is the word for reading a generator's structure. Reflection means running a generator backward to recover the choices behind a concrete value. `#exhaust(…, reflecting:)` uses those choices to start reduction, while `#examine` checks the generated-value round trip.
-- **"Spec" and "state machine" are two concepts, not one concept with two names.** The spec is what the user authors (the class decorated with `@StateMachine`). The state machine is the machinery that runs specs. `@StateMachine` applies the machinery's name to the user-authored thing because that is the macro's job — it marks a class as a spec for the state machine to drive.
+- **"Spec" and "state machine" name different things.** The spec is what you author: the class decorated with `@StateMachine`. The state machine is the machinery that runs specs. The macro carries the machinery's name because attaching it is what marks a class as a spec for the state machine to drive.
