@@ -35,7 +35,7 @@ struct FuzzEntryTests {
 }
 
 private func printProbeMetrics(_ report: FuzzReport) {
-    let percentage: (TimeBudget) -> String = { duration in
+    let percentage: (TimeSpan) -> String = { duration in
         guard report.elapsed.nanoseconds > 0 else {
             return "0.0"
         }
