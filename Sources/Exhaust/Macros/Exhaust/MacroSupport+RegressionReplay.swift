@@ -14,6 +14,7 @@ extension __ExhaustRuntime {
         static func replayRegressionSeeds<Output>( // swiftlint:disable:this function_parameter_count
             gen: Generator<Output>,
             settings: [PropertySettings],
+            skipCounter: SkipCounter? = nil,
             forceIssueReportingSuppression: Bool,
             fileID: StaticString,
             filePath: StaticString,
@@ -49,6 +50,7 @@ extension __ExhaustRuntime {
                     gen: gen,
                     settings: replaySettings,
                     reflecting: nil,
+                    skipCounter: skipCounter,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,

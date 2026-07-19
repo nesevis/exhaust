@@ -63,15 +63,16 @@ public extension __ExhaustRuntime {
             persistence: persistence,
             property: wrapVerdictProperty(property)
         )
+        let parsedSettings = ParsedFuzzSettings(settings)
         reportFuzzIssues(
             report: report,
-            suppressIssueReporting: ParsedFuzzSettings(settings).suppress.issueReporting,
+            suppressIssueReporting: parsedSettings.suppress.issueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
+        recordFuzzAttachments(report: report, suppressAttachments: parsedSettings.suppress.attachments)
         return report
     }
 
@@ -122,7 +123,7 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
+        recordFuzzAttachments(report: report, suppressAttachments: parsedSettings.suppress.attachments)
         return report
     }
 
@@ -141,6 +142,7 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) async throws -> Bool
     ) async -> FuzzReport {
         let verdictProperty = bridgeAsyncVerdictProperty(property)
+        let parsedSettings = ParsedFuzzSettings(settings)
         let report = await dispatchToGCD(reserving: LaneReservation.fuzz) {
             let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
             let report = runExploreTimeCore(
@@ -154,7 +156,7 @@ public extension __ExhaustRuntime {
             )
             reportFuzzIssues(
                 report: report,
-                suppressIssueReporting: ParsedFuzzSettings(settings).suppress.issueReporting,
+                suppressIssueReporting: parsedSettings.suppress.issueReporting,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -162,7 +164,7 @@ public extension __ExhaustRuntime {
             )
             return report
         }
-        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
+        recordFuzzAttachments(report: report, suppressAttachments: parsedSettings.suppress.attachments)
         return report
     }
 
@@ -226,7 +228,7 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: finalReport, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
+        recordFuzzAttachments(report: finalReport, suppressAttachments: parsedSettings.suppress.attachments)
         return finalReport
     }
 

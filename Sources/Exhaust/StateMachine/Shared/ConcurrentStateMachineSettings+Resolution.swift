@@ -80,7 +80,10 @@ struct ResolvedConcurrentConfig {
                         }
                     } ?? closure
                 case let .idleTimeout(timeout):
-                    config.idleTimeoutMilliseconds = Int(timeout.nanoseconds / 1_000_000)
+                    // The drain loop counts whole milliseconds. A nonzero span below 1 ms rounds up rather than truncating to 0, which would silently disable the timeout the caller asked for.
+                    config.idleTimeoutMilliseconds = timeout == .zero
+                        ? 0
+                        : max(1, Int(timeout.nanoseconds / 1_000_000))
                 case let .log(level):
                     config.logLevel = level
             }

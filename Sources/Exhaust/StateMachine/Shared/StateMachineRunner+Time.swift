@@ -30,15 +30,16 @@ public extension __ExhaustRuntime {
             column: column
         )
         // Reporting runs here on the test task, after the GCD hop: issue recording and attachment association both resolve the current test from task-locals a GCD worker does not carry.
+        let parsedSettings = ParsedFuzzSettings(settings)
         reportFuzzIssues(
             report: report,
-            suppressIssueReporting: ParsedFuzzSettings(settings).suppress.issueReporting,
+            suppressIssueReporting: parsedSettings.suppress.issueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
+        recordFuzzAttachments(report: report, suppressAttachments: parsedSettings.suppress.attachments)
         return report
     }
 
@@ -131,15 +132,16 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
+        let parsedSettings = ParsedFuzzSettings(settings)
         reportFuzzIssues(
             report: report,
-            suppressIssueReporting: ParsedFuzzSettings(settings).suppress.issueReporting,
+            suppressIssueReporting: parsedSettings.suppress.issueReporting,
             fileID: fileID,
             filePath: filePath,
             line: line,
             column: column
         )
-        recordFuzzAttachments(report: report, suppressAttachments: ParsedFuzzSettings(settings).suppress.attachments)
+        recordFuzzAttachments(report: report, suppressAttachments: parsedSettings.suppress.attachments)
         return report
     }
 

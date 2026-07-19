@@ -2,7 +2,7 @@
 ///
 /// Each mode's runner records into a ledger instead of maintaining per-mode counter structs. Concurrent paths get per-lane ledgers that merge at the boundary. Report types become projections: `ExhaustReport` and `ExploreReport` read their invocation counts from the ledger rather than receiving them as separately threaded integers.
 ///
-/// Outcomes are recorded honestly where the loop observes them. One runner cannot: the state machine runner counts reduction probes through a shared invocation counter that hides per-probe verdicts, so it records them under a single outcome and only the phase totals are meaningful there.
+/// Outcomes are recorded honestly where the loop observes them. One runner cannot: the state machine runner counts reduction probes through a shared invocation counter that hides per-probe verdicts, so it records them through the aggregate overload with no skip or failure breakdown and only the phase totals are meaningful there.
 package struct RunLedger: Sendable, Equatable {
     package enum Phase: Int, CaseIterable, Sendable {
         case screening = 0
@@ -11,7 +11,6 @@ package struct RunLedger: Sendable, Equatable {
         case regression
         case directedSampling
         case reduction
-        case diagnostic
     }
 
     package enum Outcome: Int, CaseIterable, Sendable {
@@ -44,7 +43,7 @@ package struct RunLedger: Sendable, Equatable {
             invocations >= skips + failures,
             "RunLedger accounting: \(invocations) invocations cannot contain \(skips) skips and \(failures) failures"
         )
-        record(phase, .pass, count: max(0, invocations - skips - failures))
+        record(phase, .pass, count: invocations - skips - failures)
         record(phase, .skip, count: skips)
         record(phase, .fail, count: failures)
     }

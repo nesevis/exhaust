@@ -368,27 +368,16 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
             )
         }
 
-        var reductionInvocations = 0
-        var reductionFailures = 0
+        let countingProperty = PropertyOutcomeCounter(property)
         let reductionPredicate: (Output) -> Bool = matchingDirections.isEmpty
-            ? { [property] output in
-                reductionInvocations += 1
-                let failed = property(output) == false
-                if failed {
-                    reductionFailures += 1
-                }
-                return failed
+            ? { output in
+                countingProperty(output) == false
             }
-            : { [property, directions] output in
+            : { [directions] output in
                 for directionIndex in matchingDirections where directions[directionIndex].predicate(output) == false {
                     return false
                 }
-                reductionInvocations += 1
-                let failed = property(output) == false
-                if failed {
-                    reductionFailures += 1
-                }
-                return failed
+                return countingProperty(output) == false
             }
 
         do {
@@ -404,8 +393,8 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
                     counterexample: reducedValue,
                     original: value,
                     reducedSequence: reducedSequence,
-                    reductionInvocations: reductionInvocations,
-                    reductionFailures: reductionFailures
+                    reductionInvocations: countingProperty.invocations,
+                    reductionFailures: countingProperty.failures
                 )
             }
         } catch {
@@ -420,8 +409,8 @@ package struct DirectedExploreRunner<Output>: ~Copyable {
             counterexample: value,
             original: value,
             reducedSequence: nil,
-            reductionInvocations: reductionInvocations,
-            reductionFailures: reductionFailures
+            reductionInvocations: countingProperty.invocations,
+            reductionFailures: countingProperty.failures
         )
     }
 

@@ -88,6 +88,32 @@ struct PointlessRunAndSkipTests {
         #expect(skipped < invocations)
     }
 
+    @Test("Parallel lanes tally skips exactly")
+    func parallelLanesTallySkipsExactly() {
+        let observedSkips = SkipCounter()
+        var skipped = -1
+        var invocations = -1
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .budget(.quick),
+            .parallelize(lanes: .four),
+            .onReport { report in
+                skipped = report.skippedInvocations
+                invocations = report.propertyInvocations
+            }
+        ) { (value: Int) -> Bool in
+            if value < 30 {
+                observedSkips.increment()
+                throw PropertySkip()
+            }
+            return true
+        }
+        #expect(result == nil)
+        #expect(skipped == observedSkips.count)
+        #expect(skipped > 0)
+        #expect(skipped < invocations)
+    }
+
     @Test("StateMachine run with zero budget reports a pointless-run error")
     func specZeroBudgetReportsError() async {
         await withKnownIssue {

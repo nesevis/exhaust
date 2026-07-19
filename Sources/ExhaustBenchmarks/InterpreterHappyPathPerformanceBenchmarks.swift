@@ -1,13 +1,9 @@
 // MARK: - Interpreter Happy-Path Performance
 
 //
-// Direct interpreter-level benchmarks for the happy path: ValueInterpreter throughput,
-// Materializer throughput (screening-row, exact-replay, and fuzz-mutator shapes, including the
-// flat-emission and skipTree variants), FuzzMutator operator cost, and the end-to-end fuzz
-// mutation loop. Each benchmark performs a fixed amount of work per iteration under a pinned
-// seed so ns/iter is directly comparable across builds. These are the fixtures behind the
-// numbers in ExhaustDocs/perf-survey-b-2026-07-16.md, which reports them under a "Survey"
-// name prefix.
+// Direct interpreter-level benchmarks for the happy path: ValueInterpreter throughput, Materializer throughput (screening-row, exact-replay, and fuzz-mutator shapes, including the flat-emission and skipTree variants), FuzzMutator operator cost, and the end-to-end fuzz mutation loop.
+// Each benchmark performs a fixed amount of work per iteration under a pinned seed so ns/iter is directly comparable across builds.
+// These are the fixtures behind the numbers in ExhaustDocs/perf-survey-b-2026-07-16.md, which reports them under a "Survey" name prefix.
 
 import Benchmark
 import Exhaust

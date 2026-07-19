@@ -84,11 +84,12 @@ public struct ExhaustReport: Sendable {
     }
 
     /// Projects invocation counts from a ``RunLedger``.
+    ///
+    /// Diagnostic reruns happen after the pipeline has finished its ledger, so ``diagnosticInvocations`` is not a ledger projection: it accumulates through ``recordDiagnosticInvocation()`` and is preserved here, which keeps this method safe to call in any order relative to diagnostic reruns.
     package mutating func applyLedger(_ ledger: RunLedger) {
         screeningInvocations = ledger.count(.screening)
         randomSamplingInvocations = ledger.count(.sampling)
         reductionInvocations = ledger.count(.reduction)
-        diagnosticInvocations = ledger.count(.diagnostic)
         skippedInvocations = ledger.totalSkips
         propertyInvocations = screeningInvocations
             + randomSamplingInvocations

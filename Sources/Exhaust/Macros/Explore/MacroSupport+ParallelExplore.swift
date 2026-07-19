@@ -296,16 +296,10 @@ extension __ExhaustRuntime {
             return (failure.value, failure.value, nil, 0, 0)
         }
 
-        var reductionInvocations = 0
-        var reductionFailures = 0
+        let countingProperty = PropertyOutcomeCounter(property)
         let reductionPredicate: (Output) -> Bool = failure.matchingDirections.isEmpty
             ? { output in
-                reductionInvocations += 1
-                let failed = property(output) == false
-                if failed {
-                    reductionFailures += 1
-                }
-                return failed
+                countingProperty(output) == false
             }
             : { output in
                 for directionIndex in failure.matchingDirections
@@ -313,12 +307,7 @@ extension __ExhaustRuntime {
                 {
                     return false
                 }
-                reductionInvocations += 1
-                let failed = property(output) == false
-                if failed {
-                    reductionFailures += 1
-                }
-                return failed
+                return countingProperty(output) == false
             }
 
         do {
@@ -330,7 +319,7 @@ extension __ExhaustRuntime {
                 property: { reductionPredicate($0) == false }
             )
             if case let .reduced(reducedSequence, _, reducedValue) = outcome {
-                return (reducedValue, failure.value, reducedSequence, reductionInvocations, reductionFailures)
+                return (reducedValue, failure.value, reducedSequence, countingProperty.invocations, countingProperty.failures)
             }
         } catch {
             ExhaustLog.error(
@@ -340,6 +329,6 @@ extension __ExhaustRuntime {
             )
         }
 
-        return (failure.value, failure.value, nil, reductionInvocations, reductionFailures)
+        return (failure.value, failure.value, nil, countingProperty.invocations, countingProperty.failures)
     }
 }

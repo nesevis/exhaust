@@ -106,20 +106,17 @@ struct SpecMachine<Backend: StateMachineBackend> {
         elapsed: Double,
         foundFailure: Bool
     ) {
-        let phase: RunLedger.Phase = switch source.discoveryMethod {
-            case .screening: .screening
-            case .randomSampling, .smokeTest, .replay: .sampling
+        let phase: RunLedger.Phase
+        switch source.discoveryMethod {
+            case .screening:
+                phase = .screening
+                context.state.report.screeningMilliseconds += elapsed
+            case .randomSampling, .smokeTest, .replay:
+                phase = .sampling
         }
         // A found candidate is the one failing sequence in this source's batch. A source may surface a candidate without routing probes through the shared invocation counter (stub sources do), so the failure outcome is attributed only when the batch counted invocations. Skips are pruned downstream and never reach the counter, so they carry no ledger outcome here.
         let failureCount = foundFailure && invocations > 0 ? 1 : 0
         context.state.ledger.record(phase, invocations: invocations, failures: failureCount)
-
-        switch source.discoveryMethod {
-            case .screening:
-                context.state.report.screeningMilliseconds += elapsed
-            case .randomSampling, .smokeTest, .replay:
-                break
-        }
         discoveryInvocations += invocations
         if let seed = source.reportedSeed {
             reportedSeed = seed
@@ -191,8 +188,8 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     private mutating func stepRecordStats() -> Transition {
         let reductionInvocations = context.invocationCounter.value - preReductionInvocations
-        // The shared invocation counter hides per-probe verdicts, so reduction probes are recorded under one outcome; only the phase total is meaningful (see ``RunLedger``).
-        context.state.ledger.record(.reduction, .pass, count: reductionInvocations)
+        // The shared invocation counter hides per-probe verdicts, so only the reduction phase total is meaningful here (see ``RunLedger``).
+        context.state.ledger.record(.reduction, invocations: reductionInvocations)
         let reductionElapsed = reductionStopwatch?.elapsedMilliseconds ?? 0
         context.state.report.reductionMilliseconds = reductionElapsed
         context.state.failureContext.reductionInvocations = reductionInvocations
