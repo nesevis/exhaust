@@ -1,4 +1,4 @@
-// Configuration options for `#explore` classification-aware property tests.
+// Configuration options for `#explore` directed property tests.
 //
 // Pass these as variadic arguments to `#explore` after the directions to control test behavior:
 // ```swift
@@ -15,7 +15,7 @@
 // ```
 import ExhaustCore
 
-/// Controls test behavior for `#explore` classification tests, passed as variadic arguments.
+/// Controls test behavior for `#explore` directed property tests, passed as variadic arguments.
 public enum ExploreSettings: Sendable {
     /// Controls the required matching samples per direction and directed sampling budgets. Defaults to `.standard` (30 matching samples per direction, 300 generated samples per direction). See ``ExhaustBudget`` for the per-preset explore interpretation.
     case budget(ExhaustBudget)

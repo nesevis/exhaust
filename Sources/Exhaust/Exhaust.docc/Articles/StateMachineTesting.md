@@ -291,7 +291,7 @@ SUTs that have races at suspension points (the `let v = state; await Task.yield(
 
 ### Idle timeout
 
-If a command body suspends to an executor outside the cooperative scheduler (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeoutMs(ms)` setting (default 2000ms) detects this and reports the stalling command sequence without attempting reduction.
+If a command body suspends to an executor outside the cooperative scheduler (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeout(.seconds(2))` setting (default) detects this and reports the stalling command sequence without attempting reduction.
 
 ## Finding concurrency bugs in threaded code
 
@@ -439,7 +439,7 @@ All settings are passed as variadic arguments to `#execute`:
 | `.commandLimit(N)` | auto-estimated (`.threads`: 10) | Maximum commands per generated sequence. Estimated from the command domain and screening budget; `.tasks` caps the estimate at 40, `.threads` defaults to a flat 10. |
 | `.parallelize(lanes:)` | 2 | Number of concurrent lanes (1 through 4). |
 | `.budget(.thorough)` | `.standard` | Controls screening rows and random sampling iterations. |
-| `.idleTimeoutMs(ms)` | 2000 | Milliseconds before a stalled run is reported without reduction: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. |
+| `.idleTimeout(.seconds(2))` | `.seconds(2)` | Wall-clock time before a stalled run is reported without reduction: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. `.zero` disables. |
 | `.replay("seed")` | — | Deterministic replay from a failure report seed. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
 | `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing, invocation counts, and reduction stats after the run. |

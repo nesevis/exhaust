@@ -50,6 +50,7 @@ extension __ExhaustRuntime {
                     gen: gen,
                     settings: replaySettings,
                     reflecting: nil,
+                    skipCounter: skipCounter,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -57,7 +58,6 @@ extension __ExhaustRuntime {
                     testName: "\(function)",
                     property: property
                 ).0
-                replayReport.skippedInvocations = skipCounter?.drain() ?? 0
                 if replayResult == nil {
                     // Seed now passes — the bug was fixed. The seed sits inert as a
                     // silent regression guard until the property fails again.

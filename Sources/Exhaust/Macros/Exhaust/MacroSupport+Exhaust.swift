@@ -256,9 +256,7 @@ public extension __ExhaustRuntime {
         var replayIteration: Int?
         var screeningReplayRow: Int?
         var invalidReplaySeed: ReplaySeed?
-        var suppressIssueReporting = false
-        var suppressLogs = false
-        var suppressAttachments = false
+        var suppress = SuppressFlags()
         var visualize = false
         var includeDiff = false
         var onReportClosure: ((ExhaustReport) -> Void)?
@@ -284,18 +282,7 @@ public extension __ExhaustRuntime {
                             screeningReplayRow = row
                     }
                 case let .suppress(option):
-                    switch option {
-                        case .issueReporting:
-                            suppressIssueReporting = true
-                        case .logs:
-                            suppressLogs = true
-                        case .attachments:
-                            suppressAttachments = true
-                        case .all:
-                            suppressIssueReporting = true
-                            suppressLogs = true
-                            suppressAttachments = true
-                    }
+                    suppress.apply(option)
                 case .visualize:
                     visualize = true
                 case let .onReport(closure):
@@ -319,11 +306,7 @@ public extension __ExhaustRuntime {
             }
         }
 
-        let logConfiguration = ExhaustLog.Configuration(
-            isEnabled: suppressLogs == false,
-            minimumLevel: logLevel,
-            format: logFormat
-        )
+        let logConfiguration = suppress.logConfiguration(minimumLevel: logLevel, format: logFormat)
         return ExhaustLog.withConfiguration(logConfiguration) {
             #if canImport(Testing)
                 if let traitConfig = ExhaustTraitConfiguration.current {
@@ -335,7 +318,7 @@ public extension __ExhaustRuntime {
             #endif
             budget.preconditionValid()
 
-            if parallelLanes > 1, seed != nil, suppressIssueReporting == false {
+            if parallelLanes > 1, seed != nil, suppress.issueReporting == false {
                 reportWarning(
                     ".parallelize has no effect with .replay: replay runs single-lane for deterministic reproduction.",
                     fileID: fileID,
@@ -359,7 +342,11 @@ public extension __ExhaustRuntime {
             )
 
             var report = ExhaustReport()
-            defer { onReportClosure?(report) }
+            var ledger = RunLedger()
+            defer {
+                report.applyLedger(ledger)
+                onReportClosure?(report)
+            }
 
             if let invalidReplaySeed {
                 reportError(
@@ -382,7 +369,7 @@ public extension __ExhaustRuntime {
                         // Suppression skips only the attachment write below; the lines still reach the report, so `.collectOpenPBTStats` with `.suppress(.attachments)` collects without attaching.
                         report.openPBTStatsLines = lines
                         let attachmentName = "\(testName)-openpbtstats.jsonl"
-                        let attachmentContext: TestContext? = suppressAttachments ? nil : TestContext.current
+                        let attachmentContext: TestContext? = suppress.attachments ? nil : TestContext.current
                         switch attachmentContext {
                             #if canImport(Testing)
                                 case .swiftTesting:
@@ -411,7 +398,7 @@ public extension __ExhaustRuntime {
                 samplingBudget: samplingBudget,
                 reductionConfig: reductionConfig,
                 visualize: visualize,
-                suppressIssueReporting: suppressIssueReporting,
+                suppressIssueReporting: suppress.issueReporting,
                 includeDiff: includeDiff,
                 parallelLanes: parallelLanes,
 
@@ -420,7 +407,8 @@ public extension __ExhaustRuntime {
                 filePath: filePath,
                 line: line,
                 column: column,
-                statsAccumulator: statsAccumulator
+                statsAccumulator: statsAccumulator,
+                skipCounter: skipCounter
             )
 
             if let reflecting {
@@ -430,7 +418,7 @@ public extension __ExhaustRuntime {
                         value: reflecting,
                         reductionConfig: reductionConfig,
                         visualize: visualize,
-                        suppressIssueReporting: suppressIssueReporting,
+                        suppressIssueReporting: suppress.issueReporting,
                         includeDiff: includeDiff,
 
                         fileID: fileID,
@@ -438,7 +426,9 @@ public extension __ExhaustRuntime {
                         line: line,
                         column: column,
                         property: property,
-                        report: &report
+                        skipCounter: skipCounter,
+                        report: &report,
+                        ledger: &ledger
                     )
                     return (result, nil)
                 } catch {
@@ -453,7 +443,8 @@ public extension __ExhaustRuntime {
                     context: context,
                     screeningBudget: UInt64(budget.screeningBudget),
                     skipToRow: screeningReplayRow,
-                    report: &report
+                    report: &report,
+                    ledger: &ledger
                 )
                 switch outcome {
                     case let .counterexample(value):
@@ -473,7 +464,8 @@ public extension __ExhaustRuntime {
                 let outcome: ScreeningOutcome<Output> = runScreeningPhase(
                     context: context,
                     screeningBudget: screeningBudget,
-                    report: &report
+                    report: &report,
+                    ledger: &ledger
                 )
                 switch outcome {
                     case let .counterexample(value):
@@ -486,9 +478,9 @@ public extension __ExhaustRuntime {
                         report.screeningMilliseconds = Double(screeningEnd - phaseTimingStart) / 1_000_000
                         report.totalMilliseconds = report.screeningMilliseconds
                         reportSkipsAndPointlessRun(
-                            totalPropertyCalls: report.screeningInvocations,
-                            skipCounter: skipCounter,
-                            suppressIssueReporting: suppressIssueReporting,
+                            totalPropertyCalls: ledger.totalInvocations,
+                            ledger: ledger,
+                            suppressIssueReporting: suppress.issueReporting,
                             fileID: fileID,
                             filePath: filePath,
                             line: line,
@@ -506,7 +498,8 @@ public extension __ExhaustRuntime {
                 context: context,
                 seed: seed,
                 replayIteration: replayIteration,
-                report: &report
+                report: &report,
+                ledger: &ledger
             )
 
             let endTime = monotonicNanoseconds()
@@ -533,9 +526,9 @@ public extension __ExhaustRuntime {
                 )
                 if replayIteration == nil {
                     reportSkipsAndPointlessRun(
-                        totalPropertyCalls: totalPropertyCalls,
-                        skipCounter: skipCounter,
-                        suppressIssueReporting: suppressIssueReporting,
+                        totalPropertyCalls: ledger.totalInvocations,
+                        ledger: ledger,
+                        suppressIssueReporting: suppress.issueReporting,
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
@@ -543,8 +536,6 @@ public extension __ExhaustRuntime {
                         report: &report
                     )
                 }
-            } else {
-                report.skippedInvocations = skipCounter?.count ?? 0
             }
 
             ExhaustLog.notice(
@@ -583,7 +574,7 @@ public extension __ExhaustRuntime {
     /// The pointless-run error is deliberately not gated on `.suppress(.issueReporting)`: it signals a malfunctioning test, not the property failure suppression targets. It stays silent only when a generation error was already reported for the same root cause.
     private static func reportSkipsAndPointlessRun(
         totalPropertyCalls: Int,
-        skipCounter: SkipCounter?,
+        ledger: RunLedger,
         suppressIssueReporting: Bool,
         fileID: StaticString,
         filePath: StaticString,
@@ -591,8 +582,7 @@ public extension __ExhaustRuntime {
         column: UInt,
         report: inout ExhaustReport
     ) {
-        let skipped = skipCounter?.count ?? 0
-        report.skippedInvocations = skipped
+        let skipped = ledger.totalSkips
 
         guard report.generationErrorOccurred == false else { return }
 

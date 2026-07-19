@@ -311,7 +311,7 @@ extension __ExhaustRuntime {
             deferredIssues.append(contentsOf: issues)
             if let result {
                 return (result, deferredIssues)
-            } else if config.suppressIssueReporting == false {
+            } else if config.suppress.issueReporting == false {
                 deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
             }
         }

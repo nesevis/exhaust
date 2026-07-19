@@ -9,7 +9,7 @@ import IssueReporting
 ///
 /// Capture the return value of `#examine` to assert on coverage quality:
 /// ```swift
-/// let report = #examine(myGen, .budget(200))
+/// let report = #examine(myGen, .samples(200))
 /// #expect(report.numericCoverage.allSatisfy { $0.decilesCovered >= 6 })
 /// #expect(report.branchCoverage == 1.0)
 /// ```
@@ -436,7 +436,7 @@ private extension Generator where Operation == ReflectiveOperation {
             representativeTree: Self.medianComplexityTree(from: storedTrees)
         )
 
-        if reporting?.suppressIssueReporting == true {
+        if reporting?.suppress.issueReporting == true {
             return report
         }
 

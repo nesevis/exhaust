@@ -11,7 +11,7 @@
 ///     try Decoder.decode(message)
 /// }
 /// ```
-public struct TimeBudget: Sendable, Hashable, Comparable {
+public struct TimeSpan: Sendable, Hashable, Comparable {
     /// The span in whole nanoseconds. The runtime works in nanoseconds throughout, so this is the native unit rather than a derived accessor.
     public let nanoseconds: UInt64
 
@@ -21,30 +21,30 @@ public struct TimeBudget: Sendable, Hashable, Comparable {
     }
 
     /// A zero-length span.
-    public static let zero = TimeBudget(nanoseconds: 0)
+    public static let zero = TimeSpan(nanoseconds: 0)
 
     /// Creates a duration from a raw nanosecond count.
-    public static func nanoseconds(_ value: UInt64) -> TimeBudget {
-        TimeBudget(nanoseconds: value)
+    public static func nanoseconds(_ value: UInt64) -> TimeSpan {
+        TimeSpan(nanoseconds: value)
     }
 
     /// Creates a duration from a whole number of milliseconds. Negative values become zero.
-    public static func milliseconds(_ value: Int) -> TimeBudget {
+    public static func milliseconds(_ value: Int) -> TimeSpan {
         scaled(value, byNanoseconds: 1_000_000)
     }
 
     /// Creates a duration from a whole number of seconds. Negative values become zero.
-    public static func seconds(_ value: Int) -> TimeBudget {
+    public static func seconds(_ value: Int) -> TimeSpan {
         scaled(value, byNanoseconds: 1_000_000_000)
     }
 
     /// Creates a duration from a whole number of minutes. Negative values become zero.
-    public static func minutes(_ value: Int) -> TimeBudget {
+    public static func minutes(_ value: Int) -> TimeSpan {
         scaled(value, byNanoseconds: 60_000_000_000)
     }
 
     /// Creates a duration from a whole number of hours. Negative values become zero.
-    public static func hours(_ value: Int) -> TimeBudget {
+    public static func hours(_ value: Int) -> TimeSpan {
         scaled(value, byNanoseconds: 3_600_000_000_000)
     }
 
@@ -53,33 +53,33 @@ public struct TimeBudget: Sendable, Hashable, Comparable {
         Double(nanoseconds) / 1_000_000_000
     }
 
-    public static func < (lhs: TimeBudget, rhs: TimeBudget) -> Bool {
+    public static func < (lhs: TimeSpan, rhs: TimeSpan) -> Bool {
         lhs.nanoseconds < rhs.nanoseconds
     }
 
     /// Scales the span by a non-negative integer factor, saturating rather than overflowing.
-    public static func * (duration: TimeBudget, factor: Int) -> TimeBudget {
+    public static func * (duration: TimeSpan, factor: Int) -> TimeSpan {
         guard factor > 0 else {
             return .zero
         }
         let (product, overflow) = duration.nanoseconds.multipliedReportingOverflow(by: UInt64(factor))
-        return TimeBudget(nanoseconds: overflow ? .max : product)
+        return TimeSpan(nanoseconds: overflow ? .max : product)
     }
 
     /// Divides the span by a positive integer divisor. A nonpositive divisor yields zero.
-    public static func / (duration: TimeBudget, divisor: Int) -> TimeBudget {
+    public static func / (duration: TimeSpan, divisor: Int) -> TimeSpan {
         guard divisor > 0 else {
             return .zero
         }
-        return TimeBudget(nanoseconds: duration.nanoseconds / UInt64(divisor))
+        return TimeSpan(nanoseconds: duration.nanoseconds / UInt64(divisor))
     }
 
     /// Multiplies a positive integer unit count by nanoseconds-per-unit, clamping negatives to zero and saturating overflow at the maximum span (585 years) rather than trapping on an absurd budget.
-    private static func scaled(_ value: Int, byNanoseconds nanosecondsPerUnit: UInt64) -> TimeBudget {
+    private static func scaled(_ value: Int, byNanoseconds nanosecondsPerUnit: UInt64) -> TimeSpan {
         guard value > 0 else {
             return .zero
         }
         let (product, overflow) = UInt64(value).multipliedReportingOverflow(by: nanosecondsPerUnit)
-        return TimeBudget(nanoseconds: overflow ? .max : product)
+        return TimeSpan(nanoseconds: overflow ? .max : product)
     }
 }

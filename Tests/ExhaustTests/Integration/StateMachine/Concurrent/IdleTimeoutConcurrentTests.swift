@@ -17,7 +17,7 @@ struct IdleTimeoutConcurrentTests {
             await #execute(
                 SleepingSpec.self,
                 .commandLimit(2),
-                .idleTimeoutMs(10),
+                .idleTimeout(.milliseconds(10)),
                 .budget(.custom(screening: 0, sampling: 10))
             )
         }
@@ -146,7 +146,7 @@ struct IdleTimeoutConcurrentTests {
                 StallingAsyncSpec.self,
                 .parallelize(lanes: .two),
                 .commandLimit(2),
-                .idleTimeoutMs(20),
+                .idleTimeout(.milliseconds(20)),
                 .budget(.custom(screening: 0, sampling: 10)),
                 .onReport { report in reportBox.value = report }
             )
@@ -169,7 +169,7 @@ struct IdleTimeoutConcurrentTests {
             DeadlockingAsyncSpec.self,
             .parallelize(lanes: .two),
             .commandLimit(2),
-            .idleTimeoutMs(50),
+            .idleTimeout(.milliseconds(50)),
             .budget(.custom(screening: 0, sampling: 50)),
             .suppress(.all)
         )
@@ -187,7 +187,7 @@ struct IdleTimeoutConcurrentTests {
 
         var config = ResolvedConcurrentConfig()
         config.budget = .custom(screening: 0, sampling: 10)
-        config.suppressIssueReporting = true
+        config.suppress.issueReporting = true
 
         let context = StateMachineRunContext<SleepingSpec>(
             config: config,

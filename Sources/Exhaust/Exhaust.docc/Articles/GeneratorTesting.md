@@ -47,7 +47,7 @@ A passing property test gives no signal about whether the generator explored its
 
 ```swift
 @Test func profileGeneratorReplaysDeterministically() {
-    #examine(profileGen, .budget(200)) { lhs, rhs in
+    #examine(profileGen, .samples(200)) { lhs, rhs in
         lhs.name == rhs.name && lhs.age == rhs.age
     }
 }
@@ -74,7 +74,7 @@ The returned `ExamineReport` exposes coverage metrics as assertable properties, 
 
 ```swift
 @Test func profileGeneratorCoversItsRange() {
-    let report = #examine(profileGen, .budget(500))
+    let report = #examine(profileGen, .samples(500))
     #expect(report.numericCoverage.allSatisfy { $0.decilesCovered >= 7 })
     #expect(report.branchCoverage >= 0.9)
 }

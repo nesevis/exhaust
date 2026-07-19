@@ -107,7 +107,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
             return "Actual state (from concurrent execution):\n  \(indented)"
         }
 
-        let issueMessage: String = context.config.suppressIssueReporting
+        let issueMessage: String = context.config.suppress.issueReporting
             ? ""
             : __ExhaustRuntime.renderFailure(
                 reduced,

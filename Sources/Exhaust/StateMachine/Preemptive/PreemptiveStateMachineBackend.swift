@@ -124,7 +124,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
             context.state.failureContext.linearizabilityWitness = evidence.witness
         }
 
-        let issueMessage: String = context.config.suppressIssueReporting
+        let issueMessage: String = context.config.suppress.issueReporting
             ? ""
             : __ExhaustRuntime.renderPreemptiveFailure(reduced, context: context.state.failureContext)
 

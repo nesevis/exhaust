@@ -169,7 +169,7 @@ func warnIfTimeoutFractionHigh(
     }
     let percentage = Int((fraction * 100).rounded())
     reportWarning(
-        "\(timedOutProbes) of \(totalProbes) probes timed out (\(percentage)%). Timed-out probes count as passes, so this run may have passed without exercising the system. A saturated machine, an idle timeout set too low, or a genuinely hanging command can cause this. Raise .idleTimeoutMs, reduce parallelism, or check for a hang.",
+        "\(timedOutProbes) of \(totalProbes) probes timed out (\(percentage)%). Timed-out probes count as passes, so this run may have passed without exercising the system. A saturated machine, an idle timeout set too low, or a genuinely hanging command can cause this. Raise .idleTimeout, reduce parallelism, or check for a hang.",
         fileID: fileID,
         filePath: filePath,
         line: line,

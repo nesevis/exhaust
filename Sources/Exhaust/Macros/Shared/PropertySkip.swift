@@ -36,16 +36,9 @@ package final class SkipCounter: @unchecked Sendable {
         lock.withLocking { storage += 1 }
     }
 
-    /// Returns the accumulated count and resets the counter for the next independent run.
-    package func drain() -> Int {
-        lock.withLocking {
-            let count = storage
-            storage = 0
-            return count
-        }
-    }
-
     /// The number of skipped invocations recorded so far.
+    ///
+    /// Phase loops snapshot this before and after a phase and record the delta into the ``RunLedger``. The count is exact under parallel lanes because every skip lands here regardless of which lane observed it, so deltas taken outside the concurrent section cannot lose or double-count a skip.
     package var count: Int {
         lock.withLocking { storage }
     }

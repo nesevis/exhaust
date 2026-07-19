@@ -16,6 +16,7 @@ let etnaSamplingBudget: Int = 200_000_000
 
 // registerShrinkingChallengeBenchmarks()
 registerECOOPBenchmarks()
+// registerInterpreterHappyPathPerformanceBenchmarks()
 // registerPreemptiveLoweHashMapBenchmarks()
 // registerComplexGrammarBenchmarks()
 // registerGenerationBenchmarks()

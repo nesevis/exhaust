@@ -46,7 +46,7 @@ For the full guide, see <doc:DirectedExploration>.
 | Parameter | Description |
 |---|---|
 | `gen` | The generator to draw inputs from. |
-| `time` | Wall-clock ``TimeBudget`` for the run (for example `.minutes(15)`). |
+| `time` | Wall-clock ``TimeSpan`` for the run (for example `.minutes(15)`). |
 | `settings` | Variadic ``FuzzSettings`` values: replay, suppression, log verbosity. |
 | `property` | Closure checked against each generated value. Async closures supported with `await`. |
 

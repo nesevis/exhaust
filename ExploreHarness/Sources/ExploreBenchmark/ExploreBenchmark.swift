@@ -60,7 +60,7 @@ struct ExploreBenchmark: AsyncParsableCommand {
     static func benchmarkRecord(
         fixture: FixtureChoice,
         seed: UInt64,
-        budget: TimeBudget,
+        budget: TimeSpan,
         budgetSeconds: Double,
         arm: String
     ) async throws -> BenchmarkRecord {
@@ -170,7 +170,7 @@ struct ExploreBenchmark: AsyncParsableCommand {
     private static func specReport(
         _ spec: (some StateMachineSpec).Type,
         seed: UInt64,
-        budget: TimeBudget
+        budget: TimeSpan
     ) async -> FuzzReport {
         await #execute(spec, time: budget, .commandLimit(40), .replay(.numeric(seed)), .suppress(.all))
     }
@@ -216,7 +216,7 @@ extension ExploreBenchmark {
         }
 
         func run() async throws {
-            let budget: TimeBudget
+            let budget: TimeSpan
             let budgetInSeconds: Double
             if let budgetMillis {
                 budget = .milliseconds(budgetMillis)
@@ -321,7 +321,7 @@ extension ExploreBenchmark {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
 
-            let budget = TimeBudget.seconds(budgetSeconds)
+            let budget = TimeSpan.seconds(budgetSeconds)
             let totalRuns = Self.matrixFixtures.count * seeds.values.count
             var completedRuns = 0
             var summaries: [FixtureSummary] = []

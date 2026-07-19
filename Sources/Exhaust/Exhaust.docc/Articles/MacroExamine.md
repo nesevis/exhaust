@@ -7,7 +7,7 @@ Validate a generator's correctness and measure how well it explores its domain.
 `#examine` generates samples, checks that each value round-trips through reflection, and reports coverage of numeric ranges, branches, sequence lengths, and character space.
 
 ```swift
-let report = #examine(personGen, .budget(500))
+let report = #examine(personGen, .samples(500))
 #expect(report.numericCoverage.allSatisfy { $0.decilesCovered >= 7 })
 ```
 

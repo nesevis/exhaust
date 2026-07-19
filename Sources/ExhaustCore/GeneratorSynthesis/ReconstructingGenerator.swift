@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Generator Construction from Discovered Shapes
 
 //
-// Both reconstruction generators zip the shape's child generators and map the result through a closure. They differ only in that closure: ``makeReconstructingGenerator(_:shape:pin:codingPath:)`` runs `init(from:)` to build the value, while ``nestedReplayValueGenerator(for:)`` stops at the `ReplayValue` sub-tree the parent decodes inline. ``zipMap(_:_:)`` is the shared plumbing.
+// Both reconstruction generators zip the shape's child generators and map the result through a closure. They differ only in that closure: ``makeReconstructingGenerator(_:shape:pin:codingPath:)`` runs `init(from:)` to build the value, while ``nestedExampleValueGenerator(for:)`` stops at the `ExampleValue` sub-tree the parent decodes inline. ``zipMap(_:_:)`` is the shared plumbing.
 
 /// Zips `generators` and maps their generated values (as `[Any]`) through `transform`, producing a single type-erased generator.
 private func zipMap(
@@ -18,12 +18,12 @@ private func zipMap(
 
 /// Builds a generator that reconstructs a value of `type` from a discovered container shape, producing the built value type-erased to `Any`.
 ///
-/// Zips the shape's child generators, reassembles their generated values into a ``ReplayValue``, and runs `type.init(from:)` against a ``ReplayDecoder``. When a generated value drives `init(from:)` to a branch the example did not cover, the reconstruction pins to `pin` and records a fallback rather than crashing; a genuine decode error still propagates. An ``ContainerShape/empty`` shape (nothing to synthesize) pins directly.
+/// Zips the shape's child generators, reassembles their generated values into a ``ExampleValue``, and runs `type.init(from:)` against a ``ExampleDecoder``. When a generated value drives `init(from:)` to a branch the example did not cover, the reconstruction pins to `pin` and records a fallback rather than crashing; a genuine decode error still propagates. An ``ContainerShape/empty`` shape (nothing to synthesize) pins directly.
 ///
 /// - Parameters:
 ///   - shape: The container shape discovered for this value.
 ///   - pin: The example value to fall back to when a generated sample reaches an uncovered branch.
-///   - codingPath: The absolute path to this value. Seeds the replay decoder so a fallback reports the full path of the missed key rather than a path relative to this value.
+///   - codingPath: The absolute path to this value. Seeds the example decoder so a fallback reports the full path of the missed key rather than a path relative to this value.
 func makeReconstructingGenerator<T: Decodable>(
     _: T.Type,
     shape: ContainerShape,
@@ -32,12 +32,12 @@ func makeReconstructingGenerator<T: Decodable>(
 ) -> AnyGenerator {
     if case let .keyed(children) = shape, children.isEmpty == false {
         let generators = ContiguousArray(children.map(\.generator))
-        let state = KeyedReplayState(
+        let state = KeyedExampleState(
             keys: children.map(\.key),
-            producesReplayValue: children.map(\.producesReplayValue),
+            producesExampleValue: children.map(\.producesExampleValue),
             isOptional: children.map(\.isOptional)
         )
-        let decoder = ReplayDecoder(reusableState: state, codingPath: codingPath)
+        let decoder = ExampleDecoder(reusableState: state, codingPath: codingPath)
 
         return zipMap(generators) { values in
             state.reset(values: values)
@@ -56,7 +56,7 @@ func makeReconstructingGenerator<T: Decodable>(
     return zipMap(generators) { values in
         let replayValue = rebuild(values)
         do {
-            return try T(from: ReplayDecoder(replayValue, codingPath: codingPath)) as Any
+            return try T(from: ExampleDecoder(replayValue, codingPath: codingPath)) as Any
         } catch let miss as GenSchemaMiss {
             SynthesisDiagnostics.recordFallback(type: T.self, codingPath: miss.codingPath)
             return pin
@@ -64,12 +64,12 @@ func makeReconstructingGenerator<T: Decodable>(
     }
 }
 
-/// Builds a generator that produces the nested ``ReplayValue`` for an inline nested container, from the shape its sub-decoder recorded.
+/// Builds a generator that produces the nested ``ExampleValue`` for an inline nested container, from the shape its sub-decoder recorded.
 ///
-/// Unlike ``makeReconstructingGenerator(_:shape:pin:codingPath:)``, this does not run `init(from:)` — the nested container is decoded inline by the parent type, so the parent's replay decoder reads this sub-tree directly through `nestedContainer(forKey:)`.
-func nestedReplayValueGenerator(for shape: ContainerShape) -> AnyGenerator {
+/// Unlike ``makeReconstructingGenerator(_:shape:pin:codingPath:)``, this does not run `init(from:)` — the nested container is decoded inline by the parent type, so the parent's example decoder reads this sub-tree directly through `nestedContainer(forKey:)`.
+func nestedExampleValueGenerator(for shape: ContainerShape) -> AnyGenerator {
     guard let (generators, rebuild) = shape.lowering() else {
-        return Gen.just(ReplayValue.keyed([:]) as Any).erase()
+        return Gen.just(ExampleValue.keyed([:]) as Any).erase()
     }
     return zipMap(generators) { rebuild($0) as Any }
 }

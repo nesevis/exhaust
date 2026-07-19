@@ -36,7 +36,7 @@ For the full guide, see <doc:StateMachineTesting>.
 | Parameter | Description |
 |---|---|
 | `specType` | The `@StateMachine` spec to run. `.sequential` and `.tasks` specs are supported. |
-| `time` | Wall-clock ``TimeBudget`` for the run (for example `.minutes(5)`). |
+| `time` | Wall-clock ``TimeSpan`` for the run (for example `.minutes(5)`). |
 | `settings` | Variadic ``FuzzSettings`` values: replay, suppression, log verbosity, `.commandLimit(n)`. |
 
 Requires coverage instrumentation on the target under test. Returns a ``FuzzReport`` with the clustered fault inventory, attempt counts, throughput, and coverage summary.

@@ -57,7 +57,7 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
             discoveryMethod: discoveryMethod
         )
 
-        let issueMessage: String = context.config.suppressIssueReporting
+        let issueMessage: String = context.config.suppress.issueReporting
             ? ""
             : __ExhaustRuntime.renderFailure(
                 result,

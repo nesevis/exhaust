@@ -11,8 +11,7 @@ struct ResolvedConcurrentConfig {
     var screeningReplayRow: Int?
     static let defaultIdleTimeout = 2000
     var idleTimeoutMilliseconds: Int = defaultIdleTimeout
-    var suppressIssueReporting: Bool = false
-    var suppressLogs: Bool = false
+    var suppress = SuppressFlags()
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
 
@@ -30,11 +29,7 @@ struct ResolvedConcurrentConfig {
 
     /// Log configuration derived from the resolved settings, shared by all concurrent entry points.
     var logConfiguration: ExhaustLog.Configuration {
-        ExhaustLog.Configuration(
-            isEnabled: suppressLogs == false,
-            minimumLevel: logLevel,
-            format: .keyValue
-        )
+        suppress.logConfiguration(minimumLevel: logLevel)
     }
 
     /// Extracts log configuration from raw settings.
@@ -43,16 +38,7 @@ struct ResolvedConcurrentConfig {
     }
 
     mutating func applySuppress(_ option: SuppressOption) {
-        switch option {
-            case .issueReporting: suppressIssueReporting = true
-            case .logs: suppressLogs = true
-            case .attachments:
-                // Plain #execute records no attachments; accepted so .suppress reads the same everywhere.
-                break
-            case .all:
-                applySuppress(.issueReporting)
-                applySuppress(.logs)
-        }
+        suppress.apply(option)
     }
 
     struct ParseResult {
@@ -93,8 +79,11 @@ struct ResolvedConcurrentConfig {
                             closure(report)
                         }
                     } ?? closure
-                case let .idleTimeoutMs(milliseconds):
-                    config.idleTimeoutMilliseconds = milliseconds
+                case let .idleTimeout(timeout):
+                    // The drain loop counts whole milliseconds. A nonzero span below 1 ms rounds up rather than truncating to 0, which would silently disable the timeout the caller asked for.
+                    config.idleTimeoutMilliseconds = timeout == .zero
+                        ? 0
+                        : max(1, Int(timeout.nanoseconds / 1_000_000))
                 case let .log(level):
                     config.logLevel = level
             }

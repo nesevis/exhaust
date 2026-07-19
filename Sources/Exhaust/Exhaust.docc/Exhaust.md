@@ -97,7 +97,7 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 
 - ``FuzzSettings``
 - ``FuzzReport``
-- ``TimeBudget``
+- ``TimeSpan``
 
 ### Examine Settings
 

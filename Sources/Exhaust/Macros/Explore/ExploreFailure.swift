@@ -1,7 +1,7 @@
 import CustomDump
 import ExhaustCore
 
-/// Formats a classification-aware test failure for reporting.
+/// Formats a directed exploration test failure for reporting.
 struct ExploreFailure<Output> {
     let counterexample: Output
     let original: Output?

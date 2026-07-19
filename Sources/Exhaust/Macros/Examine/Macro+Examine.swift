@@ -9,7 +9,7 @@ import ExhaustCore
 /// #examine(personGen)
 ///
 /// // Assert that the generator covers at least 7/10 deciles for every numeric type:
-/// let report = #examine(personGen, .budget(500))
+/// let report = #examine(personGen, .samples(500))
 /// #expect(report.numericCoverage.allSatisfy { $0.decilesCovered >= 7 })
 /// #expect(report.branchCoverage >= 0.9)
 /// ```
@@ -32,7 +32,7 @@ public macro examine<GeneratedValue>(
 /// The trailing closure receives two independently replayed values from the same choice tree. Return `true` when the values are equivalent under your domain's equality. A `false` return records a ``ExamineFailure/replayDivergence(sampleIndex:)`` failure, indicating that the generator or its output type introduces non-determinism that the framework cannot see (for example, a stored `UUID()` or a non-deterministic closure inside `.map`).
 ///
 /// ```swift
-/// #examine(personGen, .budget(200)) { lhs, rhs in
+/// #examine(personGen, .samples(200)) { lhs, rhs in
 ///     lhs.name == rhs.name && lhs.age == rhs.age
 /// }
 /// ```

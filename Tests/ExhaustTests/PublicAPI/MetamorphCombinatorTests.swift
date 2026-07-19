@@ -92,7 +92,7 @@ struct MetamorphCombinatorTests {
             pair.first + pair.second
         }
 
-        #expect(#examine(generator, .budget(50)).passed)
+        #expect(#examine(generator, .samples(50)).passed)
     }
 
     @Test("Reflection does not run transforms and replay reconstructs transformed values")

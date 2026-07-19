@@ -88,6 +88,32 @@ struct PointlessRunAndSkipTests {
         #expect(skipped < invocations)
     }
 
+    @Test("Parallel lanes tally skips exactly")
+    func parallelLanesTallySkipsExactly() {
+        let observedSkips = SkipCounter()
+        var skipped = -1
+        var invocations = -1
+        let result = #exhaust(
+            #gen(.int(in: 0 ... 100)),
+            .budget(.quick),
+            .parallelize(lanes: .four),
+            .onReport { report in
+                skipped = report.skippedInvocations
+                invocations = report.propertyInvocations
+            }
+        ) { (value: Int) -> Bool in
+            if value < 30 {
+                observedSkips.increment()
+                throw PropertySkip()
+            }
+            return true
+        }
+        #expect(result == nil)
+        #expect(skipped == observedSkips.count)
+        #expect(skipped > 0)
+        #expect(skipped < invocations)
+    }
+
     @Test("StateMachine run with zero budget reports a pointless-run error")
     func specZeroBudgetReportsError() async {
         await withKnownIssue {
@@ -219,15 +245,12 @@ struct MisuseValidationTests {
         }
     }
 
-    @Test("Non-positive idle timeout resolves to unbounded")
-    func nonPositiveIdleTimeoutIsUnbounded() {
-        let zero = ResolvedConcurrentConfig.parse([.idleTimeoutMs(0)])
+    @Test("Zero idle timeout resolves to unbounded")
+    func zeroIdleTimeoutIsUnbounded() {
+        let zero = ResolvedConcurrentConfig.parse([.idleTimeout(.zero)])
         #expect(zero.config.resolvedIdleTimeoutMilliseconds == nil)
 
-        let negative = ResolvedConcurrentConfig.parse([.idleTimeoutMs(-5)])
-        #expect(negative.config.resolvedIdleTimeoutMilliseconds == nil)
-
-        let positive = ResolvedConcurrentConfig.parse([.idleTimeoutMs(500)])
+        let positive = ResolvedConcurrentConfig.parse([.idleTimeout(.milliseconds(500))])
         #expect(positive.config.resolvedIdleTimeoutMilliseconds == 500)
     }
 }

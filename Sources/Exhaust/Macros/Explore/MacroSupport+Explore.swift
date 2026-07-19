@@ -1,4 +1,4 @@
-// Explore family: classification-aware property testing with per-direction CGS tuning.
+// Explore family: directed property testing with per-direction CGS tuning.
 
 import ExhaustCore
 import Foundation
@@ -15,7 +15,7 @@ import IssueReporting
 public extension __ExhaustRuntime {
     // MARK: - Explore (Bool)
 
-    /// Runs a classification-aware property test with per-direction CGS tuning. Runtime target of `#explore`.
+    /// Runs a directed property test with per-direction CGS tuning. Runtime target of `#explore`.
     @discardableResult
     static func __explore<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -31,8 +31,7 @@ public extension __ExhaustRuntime {
         let gen = refGen.gen
         var budget: ExhaustBudget = .standard
         var seed: UInt64?
-        var suppressIssueReporting = false
-        var suppressLogs = false
+        var suppress = SuppressFlags()
         var logLevel: LogLevel = .error
         let logFormat: LogFormat = .keyValue
         var shouldParallelize = false
@@ -69,18 +68,7 @@ public extension __ExhaustRuntime {
                     }
                     seed = resolved.seed
                 case let .suppress(option):
-                    switch option {
-                        case .issueReporting:
-                            suppressIssueReporting = true
-                        case .logs:
-                            suppressLogs = true
-                        case .attachments:
-                            // Plain #explore records no attachments; accepted so .suppress reads the same everywhere.
-                            break
-                        case .all:
-                            suppressIssueReporting = true
-                            suppressLogs = true
-                    }
+                    suppress.apply(option)
                 case let .log(level):
                     logLevel = level
                 case .parallelize:
@@ -98,7 +86,7 @@ public extension __ExhaustRuntime {
         #endif
         budget.preconditionValid()
 
-        if shouldParallelize, seed != nil, suppressIssueReporting == false {
+        if shouldParallelize, seed != nil, suppress.issueReporting == false {
             reportWarning(
                 ".parallelize has no effect with .replay: replay runs sequentially for deterministic reproduction.",
                 fileID: fileID,
@@ -128,10 +116,10 @@ public extension __ExhaustRuntime {
             }
         #endif
 
-        return ExhaustLog.withConfiguration(.init(isEnabled: suppressLogs == false, minimumLevel: logLevel, format: logFormat)) {
-            let result: ClassificationExploreResult<Output>
+        return ExhaustLog.withConfiguration(suppress.logConfiguration(minimumLevel: logLevel, format: logFormat)) {
+            let result: DirectedExploreResult<Output>
             do {
-                result = try { () throws -> ClassificationExploreResult<Output> in
+                result = try { () throws -> DirectedExploreResult<Output> in
                     if shouldParallelize, seed == nil, namedDirections.count > 1 {
                         return try runParallelExplore(
                             gen: gen,
@@ -142,7 +130,7 @@ public extension __ExhaustRuntime {
                             seed: seed
                         )
                     }
-                    var runner = ClassificationExploreRunner(
+                    var runner = DirectedExploreRunner(
                         gen: gen,
                         property: property,
                         directions: namedDirections,
@@ -203,10 +191,10 @@ public extension __ExhaustRuntime {
                 case .budgetExhausted: .budgetExhausted
             }
             let invocations = ExploreInvocationCounts(
-                warmup: result.invocations.warmup,
-                regression: result.invocations.regression,
-                directedSampling: result.invocations.directedSampling,
-                reduction: result.invocations.reduction,
+                warmup: result.ledger.count(.warmup),
+                regression: result.ledger.count(.regression),
+                directedSampling: result.ledger.count(.directedSampling),
+                reduction: result.ledger.count(.reduction),
                 diagnostic: 0
             )
 
@@ -225,7 +213,7 @@ public extension __ExhaustRuntime {
                 )
                 failure.reductionProducedNoImprovement = result.reducedSequence == nil
                 let rendered = failure.render()
-                if suppressIssueReporting == false {
+                if suppress.issueReporting == false {
                     reportError(
                         rendered,
                         fileID: fileID,
@@ -262,7 +250,7 @@ public extension __ExhaustRuntime {
             )
             reportExploreCoverageIssues(
                 report: exploreReport,
-                suppressIssueReporting: suppressIssueReporting,
+                suppressIssueReporting: suppress.issueReporting,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -329,7 +317,7 @@ public extension __ExhaustRuntime {
 
     // MARK: - Explore (Expect)
 
-    /// Runs a classification-aware property test with a Void/#expect/#require closure.
+    /// Runs a directed property test with a Void/#expect/#require closure.
     @discardableResult
     static func __exploreExpect<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -413,7 +401,7 @@ public extension __ExhaustRuntime {
 
     // MARK: - Explore (Async)
 
-    /// Runs a classification-aware property test with an async Bool-returning closure.
+    /// Runs a directed property test with an async Bool-returning closure.
     @discardableResult
     static func __exploreAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -453,7 +441,7 @@ public extension __ExhaustRuntime {
 
     // MARK: - Explore (Async Expect)
 
-    /// Runs a classification-aware property test with an async Void/#expect/#require closure.
+    /// Runs a directed property test with an async Void/#expect/#require closure.
     @discardableResult
     static func __exploreExpectAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,

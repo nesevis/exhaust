@@ -25,5 +25,7 @@ public enum ExecutionModel: Sendable {
     /// Preemptive concurrent scheduling on real OS threads.
     ///
     /// Commands run on GCD threads with non-deterministic interleaving. Use this to find data races, lock bugs, and dispatch queue issues that are invisible at `await` suspension points.
+    ///
+    /// - Note: `.threads` specs run under plain `#execute` only. `#execute(time:)` refuses them: coverage novelty assumes an attempt's coverage is determined by its command sequence, and preemptive scheduling breaks that assumption on every attempt. Use `.tasks` to search interleavings under a time budget.
     case threads
 }

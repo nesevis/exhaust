@@ -20,20 +20,20 @@ package final class DiscoveryDecoder: Decoder {
 
     /// The container shape discovered for this decoder's value.
     ///
-    /// A keyed level combines its direct field generators with the sub-shapes of any inline nested containers, each folded in under its key as a child whose generator produces a nested ``ReplayValue``. Reading this after `init(from:)` completes is what gives the nested decoders their final shape.
+    /// A keyed level combines its direct field generators with the sub-shapes of any inline nested containers, each folded in under its key as a child whose generator produces a nested ``ExampleValue``. Reading this after `init(from:)` completes is what gives the nested decoders their final shape.
     package var shape: ContainerShape {
         if let singleChild {
             return .single(singleChild)
         }
         if keyedChildren.isEmpty == false || nestedDecoders.isEmpty == false {
             var children = keyedChildren.map {
-                KeyedChild(key: $0.key, generator: $0.generator, producesReplayValue: false, isOptional: $0.isOptional)
+                KeyedChild(key: $0.key, generator: $0.generator, producesExampleValue: false, isOptional: $0.isOptional)
             }
             for (key, nestedDecoder) in nestedDecoders {
                 children.append(KeyedChild(
                     key: key,
-                    generator: nestedReplayValueGenerator(for: nestedDecoder.shape),
-                    producesReplayValue: true,
+                    generator: nestedExampleValueGenerator(for: nestedDecoder.shape),
+                    producesExampleValue: true,
                     isOptional: false
                 ))
             }
@@ -48,12 +48,12 @@ package final class DiscoveryDecoder: Decoder {
                 switch entry {
                     case let .element(elementType, generator):
                         elementTypes.insert(elementType)
-                        elements.append(UnkeyedElement(generator: generator, producesReplayValue: false))
+                        elements.append(UnkeyedElement(generator: generator, producesExampleValue: false))
                     case let .nested(decoder):
                         hasNested = true
                         elements.append(UnkeyedElement(
-                            generator: nestedReplayValueGenerator(for: decoder.shape),
-                            producesReplayValue: true
+                            generator: nestedExampleValueGenerator(for: decoder.shape),
+                            producesExampleValue: true
                         ))
                 }
             }
@@ -292,7 +292,7 @@ private struct DiscoveryKeyedContainer<Key: CodingKey>: KeyedDecodingContainerPr
         guard let nested = dictionary[key.stringValue] as? [String: Any] else {
             throw GeneratorSynthesizerError.unexpectedContainer
         }
-        // A fresh decoder keeps the nested container's recordings separate from this level's, so its shape folds in under `key` as a nested `ReplayValue` rather than flattening into this level's fields.
+        // A fresh decoder keeps the nested container's recordings separate from this level's, so its shape folds in under `key` as a nested `ExampleValue` rather than flattening into this level's fields.
         let nestedDecoder = DiscoveryDecoder(jsonValue: nested, codingPath: codingPath + [key])
         decoder.recordNested(key: key.stringValue, decoder: nestedDecoder)
         let container = DiscoveryKeyedContainer<NestedKey>(

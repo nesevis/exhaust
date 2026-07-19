@@ -308,7 +308,7 @@ extension __ExhaustRuntime {
     // MARK: - Shared Fragments
 
     /// Renders a duration as whole seconds (or minutes and seconds past 90 seconds) for report lines.
-    private static func renderDuration(_ duration: TimeBudget) -> String {
+    private static func renderDuration(_ duration: TimeSpan) -> String {
         let totalSeconds = duration.nanoseconds / 1_000_000_000
         if totalSeconds >= 90 {
             return "\(totalSeconds / 60)m \(totalSeconds % 60)s"

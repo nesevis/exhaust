@@ -1,12 +1,12 @@
 import ExhaustCore
 import Testing
 
-@Suite("ClassificationExploreRunner")
-struct ClassificationExploreRunnerTests {
+@Suite("DirectedExploreRunner")
+struct DirectedExploreRunnerTests {
     @Test("Covers all directions for a simple generator with common directions")
     func coversCommonDirections() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
-        var runner = ClassificationExploreRunner(
+        var runner = DirectedExploreRunner(
             gen: gen,
             property: { _ in true },
             directions: [
@@ -29,7 +29,7 @@ struct ClassificationExploreRunnerTests {
     @Test("Finds failure during warm-up and reduces")
     func findsFailureDuringWarmup() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
-        var runner = ClassificationExploreRunner(
+        var runner = DirectedExploreRunner(
             gen: gen,
             property: { $0 < 50 },
             directions: [
@@ -50,7 +50,7 @@ struct ClassificationExploreRunnerTests {
     @Test("Finds failure during directed sampling with direction-preserving reduction")
     func findsFailureDuringDirectedSampling() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 1000)
-        var runner = ClassificationExploreRunner(
+        var runner = DirectedExploreRunner(
             gen: gen,
             property: { $0 < 950 },
             directions: [
@@ -70,7 +70,7 @@ struct ClassificationExploreRunnerTests {
     @Test("Co-occurrence matrix records cross-direction overlap")
     func coOccurrenceTracksOverlap() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
-        var runner = ClassificationExploreRunner(
+        var runner = DirectedExploreRunner(
             gen: gen,
             property: { _ in true },
             directions: [
@@ -89,7 +89,7 @@ struct ClassificationExploreRunnerTests {
     @Test("Unmatched samples are tracked")
     func unmatchedSamplesTracked() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
-        var runner = ClassificationExploreRunner(
+        var runner = DirectedExploreRunner(
             gen: gen,
             property: { _ in true },
             directions: [
@@ -107,7 +107,7 @@ struct ClassificationExploreRunnerTests {
     func deterministicWithSameSeed() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
 
-        var runner1 = ClassificationExploreRunner(
+        var runner1 = DirectedExploreRunner(
             gen: gen,
             property: { $0 < 80 },
             directions: [
@@ -119,7 +119,7 @@ struct ClassificationExploreRunnerTests {
             maxAttemptsPerDirection: 300,
             seed: 99
         )
-        var runner2 = ClassificationExploreRunner(
+        var runner2 = DirectedExploreRunner(
             gen: gen,
             property: { $0 < 80 },
             directions: [
@@ -135,14 +135,14 @@ struct ClassificationExploreRunnerTests {
         let result1 = try runner1.run()
         let result2 = try runner2.run()
 
-        #expect(result1.invocations == result2.invocations)
+        #expect(result1.ledger == result2.ledger)
         #expect(result1.counterexample == result2.counterexample)
     }
 
     @Test("Budget exhaustion reported for unreachable direction")
     func budgetExhaustionForUnreachableDirection() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 10)
-        var runner = ClassificationExploreRunner(
+        var runner = DirectedExploreRunner(
             gen: gen,
             property: { _ in true },
             directions: [
@@ -162,7 +162,7 @@ struct ClassificationExploreRunnerTests {
     @Test("Warm-up hits count toward direction coverage")
     func warmupHitsCountTowardCoverage() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 1)
-        var runner = ClassificationExploreRunner(
+        var runner = DirectedExploreRunner(
             gen: gen,
             property: { _ in true },
             directions: [
@@ -181,7 +181,7 @@ struct ClassificationExploreRunnerTests {
     @Test("Incidental coverage from another direction's directed sampling")
     func incidentalCoverage() throws {
         let gen: Generator<Int> = Gen.choose(in: 0 ... 100)
-        var runner = ClassificationExploreRunner(
+        var runner = DirectedExploreRunner(
             gen: gen,
             property: { _ in true },
             directions: [

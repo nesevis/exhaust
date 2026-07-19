@@ -33,6 +33,9 @@
 
 // MARK: - Pull-Based Covering Array Generator
 
+//
+// This generator is NOT on a production path. Production screening uses `BalancedCoveringArrayGenerator` at strength 2 (see `ScreeningRunner.swift:111`). `PullBasedCoveringArrayGenerator` implements higher interaction strengths (3, 4) and is retained for tests, benchmarks, and future strength-3+ work.
+
 /// Pull-based covering array generator that emits one row at a time via ``next()``.
 ///
 /// Uses a one-row-at-a-time greedy algorithm with left-to-right column fill (Bryce & Colbourn, 2007/2009). All C(k, t) coverage slices are allocated once at initialization. Each ``next()`` call fills a row column-by-column, evaluating only slices whose rightmost parameter equals the current column. The caller pulls rows until a property test fails or coverage is exhausted.
