@@ -8,6 +8,7 @@
 
 import ExhaustCore
 import ExhaustTestSupport
+import Foundation
 import Testing
 
 @Suite("Reflect and Flatten Integration Tests")
@@ -323,6 +324,37 @@ struct ReflectAndFlattenTests {
 
         #expect(value != 64)
         #expect(materialized == 64)
+    }
+}
+
+// MARK: - oneOf with disjoint CharacterSet branches
+
+@Test("Reflect through oneOf when a string(from:) branch has a disjoint CharacterSet")
+func reflectOneOfWithDisjointCharacterSetBranch() throws {
+    let words = Gen.element(from: ["item", "note", "query"])
+    let digits = Gen.string(
+        from: CharacterSet(charactersIn: "0123456789"),
+        length: 1 ... 5
+    ).gen
+
+    let gen = Gen.pick(choices: [
+        (1, words),
+        (1, digits),
+    ])
+
+    for word in ["item", "note", "query"] {
+        let tree = try #require(
+            try Interpreters.reflect(gen, with: word),
+            "reflecting \"\(word)\" should succeed even though the CharacterSet branch cannot produce it"
+        )
+        let flattened = ChoiceSequence.flatten(tree)
+        guard case let .success(materialized, _, _) = Materializer.materialize(
+            gen, prefix: flattened, mode: .exact, fallbackTree: tree
+        ) else {
+            Issue.record("Materialize failed for \"\(word)\"")
+            continue
+        }
+        #expect(materialized == word)
     }
 }
 

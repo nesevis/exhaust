@@ -6,6 +6,7 @@
 //
 
 import ExhaustCore
+import Foundation
 
 // MARK: - Recipe Type (output type tracking)
 
@@ -143,6 +144,28 @@ package enum KnownPredicate: String, Equatable, Hashable, CaseIterable, Sendable
     }
 }
 
+// MARK: - Known Character Set
+
+/// A named character set for ``GenRecipe/LeafKind/stringFromSet(_:_:)`` recipes.
+///
+/// The sets are pairwise disjoint so a `oneOf` containing branches with different sets forces the reflection interpreter to skip non-matching branches gracefully.
+package enum KnownCharacterSet: String, Equatable, Hashable, CaseIterable, Sendable, Codable {
+    case digits
+    case lowercase
+    case uppercase
+
+    package var characterSet: CharacterSet {
+        switch self {
+            case .digits:
+                CharacterSet(charactersIn: "0123456789")
+            case .lowercase:
+                CharacterSet(charactersIn: "a" ... "z")
+            case .uppercase:
+                CharacterSet(charactersIn: "A" ... "Z")
+        }
+    }
+}
+
 // MARK: - GenRecipe
 
 /// A defunctionalized representation of `Free CombinatorOp LeafKind`.
@@ -162,6 +185,7 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
         case bool
         case double(ClosedRange<Double>)
         case string(ClosedRange<UInt64>)
+        case stringFromSet(KnownCharacterSet, ClosedRange<UInt64>)
         case character
         case justInt(Int)
         case justBool(Bool)
@@ -178,6 +202,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                     "double(\(range))"
                 case let .string(range):
                     "string(len: \(range))"
+                case let .stringFromSet(set, range):
+                    "string(\(set.rawValue), len: \(range))"
                 case .character:
                     "char"
                 case let .justInt(v):
@@ -199,7 +225,7 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                     .bool
                 case .double, .justDouble:
                     .double
-                case .string:
+                case .string, .stringFromSet:
                     .string
                 case .character:
                     .character

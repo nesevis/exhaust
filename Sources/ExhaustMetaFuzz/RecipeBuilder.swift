@@ -36,6 +36,8 @@ private func buildLeaf(_ kind: GenRecipe.LeafKind) -> AnyGenerator {
             Gen.choose(in: range).erase()
         case let .string(range):
             asciiStringGen(length: range).erase()
+        case let .stringFromSet(set, range):
+            stringGen(from: set.characterSet, length: range).erase()
         case .character:
             charGen(from: .decimalDigits).erase()
         case let .justInt(value):

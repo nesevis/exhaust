@@ -123,6 +123,12 @@ package struct ScalarRangeSet: @unchecked Sendable {
         return rangeScalar(at: clamped)
     }
 
+    /// Whether this range set contains the given scalar.
+    public func contains(_ scalar: Unicode.Scalar) -> Bool {
+        if let bottom = bottomCodepoint, scalar == bottom { return true }
+        return rangeSet.contains(scalar.value)
+    }
+
     /// Maps a scalar back to its flat index in `0..<scalarCount`.
     /// Uses binary search over the cached ranges for O(log n) lookup.
     public func index(of scalar: Unicode.Scalar) -> Int {

@@ -114,10 +114,26 @@ private func justDoubleLeaf() -> Generator<GenRecipe> {
 }
 
 private func stringLeaf() -> Generator<GenRecipe> {
-    // Generate a length range for an ASCII string leaf.
+    Gen.pick(choices: [
+        (2, asciiStringLeaf()),
+        (1, stringFromSetLeaf()),
+    ])
+}
+
+private func asciiStringLeaf() -> Generator<GenRecipe> {
     Gen.choose(in: 0 ... 3 as ClosedRange<UInt64>).bind { lo in
         Gen.choose(in: lo ... (lo + 5)).map { hi in
             GenRecipe.leaf(.string(lo ... hi))
+        }
+    }
+}
+
+private func stringFromSetLeaf() -> Generator<GenRecipe> {
+    Gen.choose(from: KnownCharacterSet.allCases).bind { set in
+        Gen.choose(in: 1 ... 3 as ClosedRange<UInt64>).bind { lo in
+            Gen.choose(in: lo ... (lo + 4)).map { hi in
+                GenRecipe.leaf(.stringFromSet(set, lo ... hi))
+            }
         }
     }
 }

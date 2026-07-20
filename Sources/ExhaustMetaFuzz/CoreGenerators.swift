@@ -93,6 +93,12 @@ package func charGen(from characterSet: CharacterSet) -> Generator<Character> {
                     "Character has no scalars"
                 )
             }
+            guard srs.contains(scalar) else {
+                throw ReflectionError.inputWasOutOfGeneratorRange(
+                    "U+\(String(scalar.value, radix: 16, uppercase: true))",
+                    range: "ScalarRangeSet(\(srs.scalarCount) scalars)"
+                )
+            }
             return srs.index(of: scalar)
         },
         Gen.choose(in: 0 ... srs.scalarCount - 1)
