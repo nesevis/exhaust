@@ -14,7 +14,7 @@ let isDarwinHost: Bool = {
     #endif
 }()
 
-let usePrecompiled = ProcessInfo.processInfo.environment["EXHAUST_RELEASE"] != nil
+let usePrecompiled = isDarwinHost && ProcessInfo.processInfo.environment["EXHAUST_FORCE_SOURCE"] == nil
 
 let swiftLintPlugins: [Target.PluginUsage] = []
 let swiftLintDependency: [Package.Dependency] = []
@@ -27,7 +27,7 @@ let strictConcurrencySettings: [SwiftSetting] = [
 ]
 
 let coreTarget: Target = usePrecompiled
-    ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
+    ? .binaryTarget(name: "ExhaustCore", url: "https://github.com/nesevis/exhaust/releases/download/v0.17.3/ExhaustCore.xcframework.zip", checksum: "a048036b3b452e620f25655c264fc9c9aeda6b224d63618ad252354a831447be")
     : .target(
         name: "ExhaustCore",
         dependencies: [],
