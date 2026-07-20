@@ -62,7 +62,7 @@ let package = Package(
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6"),
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "601.0.1"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", "601.0.1" ..< "603.0.0"),
         .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.5.0"),
