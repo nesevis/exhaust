@@ -48,15 +48,11 @@ package struct FuzzProgressStore: Sendable {
         return document
     }
 
-    /// Writes the document atomically: encode, write to a sibling temporary file, rename over the target.
+    /// Writes the document atomically: the `.atomic` option writes to a temporary file and renames over the target in one operation, so there is no window where the file is absent.
     package func write(_ document: FuzzProgressDocument) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(document)
-        let temporaryURL = directory.appendingPathComponent("progress.json.tmp")
-        try data.write(to: temporaryURL)
-        // replaceItemAt is unimplemented on Windows and unreliable on Linux in swift-corelibs-foundation.
-        try? FileManager.default.removeItem(at: progressFileURL)
-        try FileManager.default.moveItem(at: temporaryURL, to: progressFileURL)
+        try data.write(to: progressFileURL, options: .atomic)
     }
 
     /// Removes the whole per-test directory. Called on normal termination — a surviving log is the crash signal, so a completed run must not leave one behind.
