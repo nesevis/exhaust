@@ -109,6 +109,11 @@ public extension ReflectiveGenerator {
         length: ClosedRange<Int>? = nil,
         scaling: SizeScaling<Int> = .linear
     ) -> ReflectiveGenerator<String> {
-        Gen.string(from: characterSet, simplest: simplest, length: length.map(LengthConversion.uint64Range), scaling: LengthConversion.uint64Scaling(scaling))
+        Gen.string(
+            from: characterSet,
+            simplest: simplest,
+            length: length.map(LengthConversion.uint64Range),
+            scaling: LengthConversion.uint64Scaling(scaling)
+        )
     }
 }
