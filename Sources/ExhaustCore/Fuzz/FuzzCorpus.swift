@@ -243,7 +243,7 @@ package final class FuzzCorpus {
         let entry = CorpusEntry(
             sequence: sequence,
             // Only mutable-tier entries become mutation parents, so only they pay for and retain the layout index.
-            mutationLayout: tier == .mutable ? FuzzMutator.layout(of: sequence) : nil,
+            mutationLayout: tier == .mutable ? FuzzMutator.layout(of: sequence, tree: tree) : nil,
             tree: tree,
             signature: signature,
             hits: hits,

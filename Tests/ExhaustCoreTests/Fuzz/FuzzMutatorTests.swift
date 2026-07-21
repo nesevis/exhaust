@@ -1,4 +1,5 @@
 import ExhaustCore
+import Foundation
 import Testing
 
 @Suite("FuzzMutator tests")
@@ -39,8 +40,8 @@ struct FuzzMutatorTests {
 
     @Test("Cached mutation layout preserves results and PRNG consumption")
     func cachedLayoutParity() throws {
-        let (_, _, sequence) = try generateBindExample(seed: 11)
-        let layout = FuzzMutator.layout(of: sequence)
+        let (_, tree, sequence) = try generateBindExample(seed: 11)
+        let layout = FuzzMutator.layout(of: sequence, tree: tree)
 
         for intensity in MutationIntensity.allCases {
             var uncachedPRNG = Xoshiro256(seed: 7)
@@ -80,6 +81,28 @@ struct FuzzMutatorTests {
             #expect(cached == uncached)
             #expect(cachedPRNG.currentState == uncachedPRNG.currentState)
         }
+    }
+
+    @Test("Layout catalog carries the character payload's problematic indices")
+    func layoutCatalogUsesCharacterPayload() throws {
+        // Sequence entries do not carry the TypeTagPayload, so without the tree the character catalog degrades to the [min, max] fallback and mutation-phase boundary substitution loses the interesting in-set characters.
+        let characterSet = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: " "))
+        var interpreter = ValueAndChoiceTreeInterpreter(
+            Gen.character(from: characterSet).gen,
+            materializePicks: false,
+            seed: 1,
+            maxRuns: 1
+        )
+        guard let (_, tree) = try interpreter.next() else {
+            throw MutatorTestError.generationFailed
+        }
+
+        let expected = try #require(characterPayloadIndices(in: tree))
+        #expect(expected.isEmpty == false)
+
+        let layout = FuzzMutator.layout(of: ChoiceSequence.flatten(tree), tree: tree)
+        let catalogEntry = try #require(layout.problematicValues.first { $0.key.tag == .character })
+        #expect(catalogEntry.value == expected)
     }
 
     // MARK: - Materialization Round Trips
@@ -268,6 +291,29 @@ private func generateBindExample(seed: UInt64) throws -> ([Int], ChoiceTree, Cho
         throw MutatorTestError.generationFailed
     }
     return (value, tree, ChoiceSequence.flatten(tree))
+}
+
+/// Finds the first character choice in the tree and returns its payload's problematic indices.
+private func characterPayloadIndices(in tree: ChoiceTree) -> [UInt64]? {
+    switch tree {
+        case let .choice(_, metadata):
+            guard case let .character(problematicIndices) = metadata.typeTagPayload else {
+                return nil
+            }
+            return problematicIndices
+        case .just, .getSize:
+            return nil
+        case let .sequence(elements, _):
+            return elements.lazy.compactMap(characterPayloadIndices(in:)).first
+        case let .group(elements, _):
+            return elements.lazy.compactMap(characterPayloadIndices(in:)).first
+        case let .branch(branch):
+            return characterPayloadIndices(in: branch.choice)
+        case let .resize(_, choices):
+            return choices.lazy.compactMap(characterPayloadIndices(in:)).first
+        case let .bind(_, inner, bound):
+            return characterPayloadIndices(in: inner) ?? characterPayloadIndices(in: bound)
+    }
 }
 
 private enum MutatorTestError: Error {

@@ -26,17 +26,24 @@ package enum FuzzMutator {
         fileprivate let valueIndices: [Int]
         fileprivate let branchIndices: [Int]
         fileprivate let bindRegions: [BindRegion]
-        fileprivate let problematicValues: [CatalogKey: [UInt64]]
+        package let problematicValues: [CatalogKey: [UInt64]]
     }
 
-    fileprivate struct CatalogKey: Hashable, Sendable {
-        let min: UInt64
-        let max: UInt64
-        let tag: TypeTag
+    package struct CatalogKey: Hashable, Sendable {
+        package let min: UInt64
+        package let max: UInt64
+        package let tag: TypeTag
     }
 
     /// Indexes the mutation sites in a sequence for reuse by corpus-parent mutations.
-    package static func layout(of sequence: ChoiceSequence) -> Layout {
+    ///
+    /// The tree supplies the `TypeTagPayload` for each choice site — flattened sequence entries do not carry it. Without the payload, character and date catalogs degrade to the `[min, max]` fallback and boundary substitution loses the interesting in-set values the covering array injects during screening. Pass the tree whenever one is available; nil is for callers that only need the structural indices, such as ``splice(recipient:donor:recipientLayout:donorLayout:prng:)``.
+    package static func layout(of sequence: ChoiceSequence, tree: ChoiceTree? = nil) -> Layout {
+        var payloads: [CatalogKey: TypeTagPayload] = [:]
+        if let tree {
+            harvestPayloads(tree, into: &payloads)
+        }
+
         var valueIndices: [Int] = []
         var branchIndices: [Int] = []
         var bindOpenIndices: [Int] = []
@@ -57,7 +64,8 @@ package enum FuzzMutator {
                         problematicValues[key] = ProblematicValues.computeProblematicValues(
                             min: range.lowerBound,
                             max: range.upperBound,
-                            tag: tag
+                            tag: tag,
+                            payload: payloads[key]
                         )
                     }
                 case let .branch(branch) where branch.branchCount > 1:
@@ -100,6 +108,38 @@ package enum FuzzMutator {
             bindRegions: bindRegions,
             problematicValues: problematicValues
         )
+    }
+
+    /// Collects the `TypeTagPayload` of every choice site, keyed the same way ``layout(of:tree:)`` keys its catalogs.
+    ///
+    /// Two sites with the same `(min, max, tag)` key but different payloads share one catalog entry — last write wins. The catalog values are flat indices either way, so a shared entry can only inject in-domain values for both sites.
+    private static func harvestPayloads(_ tree: ChoiceTree, into payloads: inout [CatalogKey: TypeTagPayload]) {
+        switch tree {
+            case let .choice(value, metadata):
+                guard let payload = metadata.typeTagPayload else { return }
+                let range = metadata.validRange ?? value.tag.bitPatternRange
+                let key = CatalogKey(min: range.lowerBound, max: range.upperBound, tag: value.tag)
+                payloads[key] = payload
+            case .just, .getSize:
+                break
+            case let .sequence(elements, _):
+                for element in elements {
+                    harvestPayloads(element, into: &payloads)
+                }
+            case let .group(elements, _):
+                for element in elements {
+                    harvestPayloads(element, into: &payloads)
+                }
+            case let .branch(branch):
+                harvestPayloads(branch.choice, into: &payloads)
+            case let .resize(_, choices):
+                for choice in choices {
+                    harvestPayloads(choice, into: &payloads)
+                }
+            case let .bind(_, inner, bound):
+                harvestPayloads(inner, into: &payloads)
+                harvestPayloads(bound, into: &payloads)
+        }
     }
 
     // MARK: - Entry Point
