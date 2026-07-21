@@ -311,9 +311,9 @@ extension __ExhaustRuntime {
             deferredIssues.append(contentsOf: issues)
             if let result {
                 return (result, deferredIssues)
-            } else if config.suppress.issueReporting == false {
-                deferredIssues.append("Regression seed \"\(encodedSeed)\" now passes. Consider removing it.")
             }
+            // Seed replays clean — the bug it guards against stayed fixed. The seed
+            // sits inert as a silent regression guard until the property fails again.
         }
 
         return (nil, deferredIssues)

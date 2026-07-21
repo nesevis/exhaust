@@ -38,6 +38,22 @@ struct RegressionSeedTests {
         #expect(result != nil, "regression seed should reproduce the failure on its own")
     }
 
+    @Test(
+        "Passing regression seed stays silent",
+        .exhaust(.regressions("FZ9CGDYNJAFDV-2"))
+    )
+    func passingRegressionSeedStaysSilent() async {
+        // Issue reporting is deliberately not suppressed: a passing regression seed is the
+        // guard doing its job, so the run must not record any issue. If the runner ever
+        // reintroduces a "now passes, consider removing it" diagnostic, this test fails.
+        let result = await #execute(
+            FixedCounterSpec.self,
+            .commandLimit(8),
+            .budget(.custom(screening: 0, sampling: 0))
+        )
+        #expect(result == nil, "the seed replays against a correct SUT and should pass")
+    }
+
     @Test("Preemptive regression seed reproduces a failure through the trait")
     func preemptiveRegressionSeedReproduces() async throws {
         let initial = try #require(
@@ -119,6 +135,37 @@ private final class RegressionCounterSpec {
     }
 }
 
+/// Same command surface as ``RegressionCounterSpec`` but backed by a correct counter, so the shared "FZ9CGDYNJAFDV-2" seed replays without failing.
+@StateMachine(.sequential)
+private final class FixedCounterSpec {
+    var expected: Int = 0
+    @SystemUnderTest var counter = FixedCounter()
+
+    @Invariant
+    func valueMatches() -> Bool {
+        counter.value == expected
+    }
+
+    @Command(weight: 3)
+    func increment() throws {
+        expected += 1
+        counter.increment()
+    }
+
+    @Command(weight: 2)
+    func decrement() throws {
+        guard expected > 0 else {
+            throw skip()
+        }
+        expected -= 1
+        counter.decrement()
+    }
+
+    func failureDescription() -> String? {
+        "\(counter)"
+    }
+}
+
 @StateMachine(.tasks)
 private final class RegressionCounterCooperativeSpec {
     var expected: Int = 0
@@ -154,6 +201,18 @@ private final class RegressionCounter {
         if value != 3 {
             value -= 1
         }
+    }
+}
+
+private final class FixedCounter {
+    private(set) var value: Int = 0
+
+    func increment() {
+        value += 1
+    }
+
+    func decrement() {
+        value -= 1
     }
 }
 
