@@ -1,4 +1,5 @@
 import Exhaust
+import Foundation
 import Testing
 
 @Suite("Metamorphic Combinator")
@@ -97,18 +98,27 @@ struct MetamorphCombinatorTests {
 
     @Test("Reflection does not run transforms and replay reconstructs transformed values")
     func reflectionReconstructsTransformedValues() throws {
-        final class TransformInvocationCounter {
-            var invocations = 0
+        final class TransformInvocationCounter: @unchecked Sendable {
+            private let lock = NSLock()
+            private var storage = 0
+
+            var invocations: Int {
+                lock.withLock { storage }
+            }
+
+            func increment() {
+                lock.withLock { storage += 1 }
+            }
         }
 
         let invocationCounter = TransformInvocationCounter()
         let generator = #gen(.int(in: 1 ... 100)).metamorph(
             { value in
-                invocationCounter.invocations += 1
+                invocationCounter.increment()
                 return value * 2
             },
             { value in
-                invocationCounter.invocations += 1
+                invocationCounter.increment()
                 return String(value)
             }
         )
