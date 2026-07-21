@@ -84,7 +84,8 @@ extension GraphLockstepEncoder {
             searchUpward = targetFloat > currentFloat
             let rawDistance = abs(currentFloat - targetFloat).rounded(.down)
             guard rawDistance >= 1 else { return nil }
-            distance = UInt64(rawDistance)
+            // The operands are finite but their difference can exceed UInt64.max, or overflow to infinity outright. Clamp instead of trapping: the distance only seeds probe deltas, and the binary search narrows from wherever the cap lands.
+            distance = rawDistance < 0x1p64 ? UInt64(rawDistance) : UInt64.max
         } else {
             searchUpward = targetBitPattern > currentBitPattern
             distance = searchUpward ? targetBitPattern - currentBitPattern : currentBitPattern - targetBitPattern

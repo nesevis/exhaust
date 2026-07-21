@@ -199,6 +199,23 @@ struct GraphEncoderTests {
         #expect(encoder.convergenceRecords.isEmpty == false)
     }
 
+    // MARK: - GraphLockstepEncoder
+
+    @Test("Lockstep window plan clamps float distances beyond UInt64.max")
+    func lockstepPlanClampsHugeFloatDistance() throws {
+        // Two finite doubles whose distance to the reduction target exceeds UInt64.max. Building the plan used to trap in the UInt64 conversion instead of clamping.
+        let tree = ChoiceTree.group([
+            .choice(ChoiceValue(1e300, tag: .double), .init(validRange: nil, isRangeExplicit: false)),
+            .choice(ChoiceValue(1e300, tag: .double), .init(validRange: nil, isRangeExplicit: false)),
+        ])
+        var encoder = GraphLockstepEncoder()
+        encoder.valueState.reset(sequence: ChoiceSequence.flatten(tree))
+
+        let plan = try #require(encoder.makeLockstepWindowPlan(windowIndices: [1, 2]))
+        #expect(plan.distance == UInt64.max)
+        #expect(plan.usesFloatingSteps)
+    }
+
     // MARK: - Helpers
 
     /// Builds a scope for a removal transformation from a tree.
