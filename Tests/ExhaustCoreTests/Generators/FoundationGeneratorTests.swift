@@ -95,6 +95,89 @@ struct FoundationGeneratorTests {
         }
     }
 
+    @Test("character(in:) draws from the requested scalar range")
+    func characterInRange() throws {
+        let gen = Gen.character(in: "a" ... "z").gen
+        var iterator = ValueInterpreter(gen, seed: 42)
+
+        for _ in 0 ..< 20 {
+            let value = try #require(try iterator.next())
+            let scalar = try #require(value.unicodeScalars.first)
+            #expect(("a" ... "z").contains(value), "got \(scalar)")
+        }
+    }
+
+    @Test("character(in:) reflects every scalar in the range")
+    func characterInRangeReflects() throws {
+        let gen = Gen.character(in: "a" ... "z").gen
+        for scalar in UnicodeScalar("a").value ... UnicodeScalar("z").value {
+            let target = Character(UnicodeScalar(scalar)!)
+            let tree = try #require(try Interpreters.reflect(gen, with: target))
+            let replayed = try #require(try Interpreters.replay(gen, using: tree))
+            #expect(replayed == target)
+        }
+    }
+
+    @Test("character(in:) excludes surrogates from a spanning range")
+    func characterInRangeExcludesSurrogates() throws {
+        let gen = Gen.character(in: "\u{D7FF}" ... "\u{E000}").gen
+        var iterator = ValueInterpreter(gen, seed: 42)
+
+        for _ in 0 ..< 50 {
+            let value = try #require(try iterator.next())
+            let scalar = try #require(value.unicodeScalars.first)
+            #expect(scalar.value == 0xD7FF || scalar.value == 0xE000, "got \(scalar)")
+        }
+    }
+
+    @Test("character(in:) draws from both sides of a discontiguous range")
+    func characterInDiscontiguousRangeDrawsFromBothSides() throws {
+        let gen = Gen.character(in: "\u{D000}" ... "\u{F000}").gen
+        var iterator = ValueInterpreter(gen, seed: 42, maxRuns: 200)
+        var sawBelowHole = false
+        var sawAboveHole = false
+
+        for _ in 0 ..< 200 {
+            let value = try #require(try iterator.next())
+            let scalar = try #require(value.unicodeScalars.first)
+            #expect((0xD800 ..< 0xE000).contains(scalar.value) == false, "got surrogate \(scalar)")
+            if scalar.value < 0xD800 {
+                sawBelowHole = true
+            }
+            if scalar.value >= 0xE000 {
+                sawAboveHole = true
+            }
+        }
+
+        #expect(sawBelowHole)
+        #expect(sawAboveHole)
+    }
+
+    @Test("character(in:) reflects scalars on both sides of a discontiguous range")
+    func characterInDiscontiguousRangeReflects() throws {
+        let gen = Gen.character(in: "\u{D000}" ... "\u{F000}").gen
+        for scalarValue: UInt32 in [0xD000, 0xD7FF, 0xE000, 0xF000] {
+            let target = Character(UnicodeScalar(scalarValue)!)
+            let tree = try #require(try Interpreters.reflect(gen, with: target))
+            let replayed = try #require(try Interpreters.replay(gen, using: tree))
+            #expect(replayed == target)
+        }
+    }
+
+    @Test("string(in:) excludes surrogates from a discontiguous range")
+    func stringInDiscontiguousRangeExcludesSurrogates() throws {
+        let gen = Gen.string(in: "\u{D000}" ... "\u{F000}", length: 10 ... 10).gen
+        var iterator = ValueInterpreter(gen, seed: 42)
+
+        for _ in 0 ..< 20 {
+            let value = try #require(try iterator.next())
+            for scalar in value.unicodeScalars {
+                #expect((0xD800 ..< 0xE000).contains(scalar.value) == false, "got surrogate \(scalar)")
+                #expect((0xD000 ... 0xF000).contains(scalar.value), "got out-of-range \(scalar)")
+            }
+        }
+    }
+
     @Test("string(from:length:) honors fixed length and character set")
     func stringFromSetFixedLength() throws {
         let letters = CharacterSet(charactersIn: "a" ... "z")
@@ -105,6 +188,18 @@ struct FoundationGeneratorTests {
         #expect(value.unicodeScalars.count == 5)
         for scalar in value.unicodeScalars {
             #expect(letters.contains(scalar))
+        }
+    }
+
+    @Test("string(in:length:) honors fixed length and scalar range")
+    func stringInRangeFixedLength() throws {
+        let gen = Gen.string(in: "a" ... "z", length: 5 ... 5).gen
+        var iterator = ValueInterpreter(gen, seed: 42)
+        let value = try #require(try iterator.next())
+
+        #expect(value.unicodeScalars.count == 5)
+        for scalar in value.unicodeScalars {
+            #expect(("a" ... "z").contains(scalar))
         }
     }
 

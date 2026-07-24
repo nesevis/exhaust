@@ -9,13 +9,28 @@ import Foundation
 public extension ReflectiveGenerator {
     /// Generates a random Unicode character from all valid Unicode scalars except illegal characters and Private Use Areas.
     ///
-    /// For characters within a specific range, use ``character(from:simplest:)`` with a `CharacterSet`:
-    ///
-    /// ```swift
-    /// let gen = #gen(.character(from: CharacterSet(charactersIn: "a"..."z")))
-    /// ```
+    /// For characters within a specific scalar range, use ``character(in:simplest:)``. For arbitrary sets, use ``character(from:simplest:)`` with a `CharacterSet`.
     static func character() -> ReflectiveGenerator<Character> {
         Gen.character()
+    }
+
+    /// Generates a random character from the given range of Unicode scalars.
+    ///
+    /// Characters are drawn uniformly from the scalars in the range. Because the bounds are `Unicode.Scalar`, every generated character is a single scalar; the range cannot describe multi-scalar grapheme clusters. For sets that a contiguous range cannot express, use ``character(from:simplest:)`` with a `CharacterSet`.
+    ///
+    /// ```swift
+    /// let gen = #gen(.character(in: "a"..."z"))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - range: The inclusive range of Unicode scalars to draw from. If the range spans the surrogate block (U+D800–U+DFFF), those code points are excluded.
+    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the range contains it, otherwise the range's lower bound. Must be in the range if provided.
+    /// - Returns: A generator that produces characters from the range.
+    static func character(
+        in range: ClosedRange<Unicode.Scalar>,
+        simplest: Unicode.Scalar? = nil
+    ) -> ReflectiveGenerator<Character> {
+        Gen.character(in: range, simplest: simplest)
     }
 
     /// Generates a random Unicode string with size-scaled or fixed length.
@@ -111,6 +126,34 @@ public extension ReflectiveGenerator {
     ) -> ReflectiveGenerator<String> {
         Gen.string(
             from: characterSet,
+            simplest: simplest,
+            length: length.map(LengthConversion.uint64Range),
+            scaling: LengthConversion.uint64Scaling(scaling)
+        )
+    }
+
+    /// Generates a random string whose characters are drawn from the given range of Unicode scalars.
+    ///
+    /// Because the bounds are `Unicode.Scalar`, every generated character is a single scalar; the range cannot describe multi-scalar grapheme clusters. For sets that a contiguous range cannot express, use ``string(from:simplest:length:scaling:)`` with a `CharacterSet`.
+    ///
+    /// ```swift
+    /// let gen = #gen(.string(in: "a"..."z", length: 1...10))
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - range: The inclusive range of Unicode scalars to draw from. If the range spans the surrogate block (U+D800–U+DFFF), those code points are excluded.
+    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the range contains it, otherwise the range's lower bound. Must be in the range if provided.
+    ///   - length: The inclusive range of generated string lengths, or `nil` to scale from zero through 100 characters.
+    ///   - scaling: The distribution used to scale the generated length.
+    /// - Returns: A generator that produces strings from the range.
+    static func string(
+        in range: ClosedRange<Unicode.Scalar>,
+        simplest: Unicode.Scalar? = nil,
+        length: ClosedRange<Int>? = nil,
+        scaling: SizeScaling<Int> = .linear
+    ) -> ReflectiveGenerator<String> {
+        Gen.string(
+            in: range,
             simplest: simplest,
             length: length.map(LengthConversion.uint64Range),
             scaling: LengthConversion.uint64Scaling(scaling)

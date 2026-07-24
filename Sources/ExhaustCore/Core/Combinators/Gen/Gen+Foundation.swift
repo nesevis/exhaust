@@ -236,6 +236,16 @@ package extension Gen {
         return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)).wrapped
     }
 
+    /// Generates a character drawn uniformly from the scalars in `range`.
+    ///
+    /// If the range spans the surrogate block (U+D800–U+DFFF), those code points are excluded.
+    static func character(
+        in range: ClosedRange<Unicode.Scalar>,
+        simplest: Unicode.Scalar? = nil
+    ) -> ReflectiveGenerator<Character> {
+        character(from: CharacterSet(charactersIn: range), simplest: simplest)
+    }
+
     /// Generates a character drawn from the union of two or more character sets.
     static func character(from first: CharacterSet, _ rest: CharacterSet...) -> ReflectiveGenerator<Character> {
         let combined = rest.reduce(first) { $0.union($1) }
@@ -270,6 +280,23 @@ package extension Gen {
         let bottom = resolveSimplest(simplest, in: characterSet)
         return stringGenerator(
             from: characterSet.scalarRangeSet(bottomCodepoint: bottom),
+            length: length,
+            scaling: scaling
+        )
+    }
+
+    /// Generates a string whose characters are drawn from the scalars in `range`.
+    ///
+    /// If the range spans the surrogate block (U+D800–U+DFFF), those code points are excluded.
+    static func string(
+        in range: ClosedRange<Unicode.Scalar>,
+        simplest: Unicode.Scalar? = nil,
+        length: ClosedRange<UInt64>? = nil,
+        scaling: SizeScaling<UInt64> = .linear
+    ) -> ReflectiveGenerator<String> {
+        string(
+            from: CharacterSet(charactersIn: range),
+            simplest: simplest,
             length: length,
             scaling: scaling
         )
