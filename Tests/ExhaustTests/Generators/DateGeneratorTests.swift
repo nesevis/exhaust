@@ -97,15 +97,14 @@ struct DateGeneratorTests {
             }
         }
 
-        @Test("Month span produces valid range (30-day months)")
-        func monthSpanProducesValidRange30DayMonths() throws {
+        @Test("Month span produces valid calendar-month range")
+        func monthSpanProducesValidCalendarMonthRange() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .months(6), of: anchor, interval: .days(1)))
             let dates = try #example(gen, count: 20, seed: 42)
 
-            let offsetSeconds: TimeInterval = 6 * 2_592_000 // 6 * 30 days
-            let expectedLower = anchor.addingTimeInterval(-offsetSeconds)
-            let expectedUpper = anchor.addingTimeInterval(offsetSeconds)
+            let expectedLower = utcGregorianCalendar.date(byAdding: .month, value: -6, to: anchor)!
+            let expectedUpper = utcGregorianCalendar.date(byAdding: .month, value: 6, to: anchor)!
 
             for date in dates {
                 #expect(date >= expectedLower)
@@ -113,15 +112,14 @@ struct DateGeneratorTests {
             }
         }
 
-        @Test("Year span produces valid range (365-day years)")
-        func yearSpanProducesValidRange365DayYears() throws {
+        @Test("Year span produces valid calendar-year range")
+        func yearSpanProducesValidCalendarYearRange() throws {
             let anchor = DateGeneratorTests.jan1_2025
             let gen = #gen(.date(within: .years(1), of: anchor, interval: .days(1)))
             let dates = try #example(gen, count: 20, seed: 42)
 
-            let offsetSeconds: TimeInterval = 31_536_000 // 365 days
-            let expectedLower = anchor.addingTimeInterval(-offsetSeconds)
-            let expectedUpper = anchor.addingTimeInterval(offsetSeconds)
+            let expectedLower = utcGregorianCalendar.date(byAdding: .year, value: -1, to: anchor)!
+            let expectedUpper = utcGregorianCalendar.date(byAdding: .year, value: 1, to: anchor)!
 
             for date in dates {
                 #expect(date >= expectedLower)
@@ -238,6 +236,102 @@ struct DateGeneratorTests {
         }
     }
 
+    // MARK: - Calendar Grids
+
+    @Suite("Calendar Grids")
+    struct CalendarGridTests {
+        @Test("Monthly grid stays on the anchor's day-of-month")
+        func monthlyGridStaysOnAnchorDayOfMonth() throws {
+            let lower = date(year: 2024, month: 1, day: 15)
+            let upper = date(year: 2026, month: 1, day: 15)
+            let gen = #gen(.date(between: lower ... upper, interval: .months(1)))
+            let dates = try #example(gen, count: 30, seed: 42)
+
+            for generated in dates {
+                let components = utcGregorianCalendar.dateComponents([.day, .hour, .minute, .second], from: generated)
+                #expect(components.day == 15)
+                #expect(components.hour == 0)
+                #expect(components.minute == 0)
+                #expect(components.second == 0)
+            }
+        }
+
+        @Test("Yearly grid stays on the anchor's calendar date across leap years")
+        func yearlyGridStaysOnAnchorCalendarDateAcrossLeapYears() throws {
+            let lower = date(year: 2020, month: 1, day: 1)
+            let upper = date(year: 2030, month: 1, day: 1)
+            let gen = #gen(.date(between: lower ... upper, interval: .years(1)))
+            let dates = try #example(gen, count: 30, seed: 42)
+
+            for generated in dates {
+                let components = utcGregorianCalendar.dateComponents([.month, .day, .hour], from: generated)
+                #expect(components.month == 1)
+                #expect(components.day == 1)
+                #expect(components.hour == 0)
+            }
+        }
+
+        @Test("Daily grid keeps wall-clock time across a DST transition")
+        func dailyGridKeepsWallClockTimeAcrossDSTTransition() throws {
+            let newYork = TimeZone(identifier: "America/New_York")!
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = newYork
+
+            // March 2024 contains the US spring-forward on March 10.
+            let lower = calendar.date(from: DateComponents(year: 2024, month: 3, day: 1, hour: 9))!
+            let upper = calendar.date(from: DateComponents(year: 2024, month: 3, day: 31, hour: 9))!
+            let gen = #gen(.date(between: lower ... upper, interval: .days(1), timeZone: newYork))
+            let dates = try #example(gen, count: 30, seed: 42)
+
+            for generated in dates {
+                let components = calendar.dateComponents([.hour, .minute], from: generated)
+                #expect(components.hour == 9)
+                #expect(components.minute == 0)
+            }
+        }
+
+        @Test("Monthly grid from a month-end anchor clamps to short months")
+        func monthlyGridFromMonthEndAnchorClampsToShortMonths() throws {
+            let lower = date(year: 2025, month: 1, day: 31)
+            let upper = date(year: 2025, month: 12, day: 31)
+            let gen = #gen(.date(between: lower ... upper, interval: .months(1)))
+            let dates = try #example(gen, count: 30, seed: 42)
+
+            for generated in dates {
+                let components = utcGregorianCalendar.dateComponents([.day], from: generated)
+                let lastDayOfMonth = utcGregorianCalendar.range(of: .day, in: .month, for: generated)!.upperBound - 1
+                let day = components.day!
+                #expect(day == 31 || day == lastDayOfMonth)
+            }
+        }
+
+        @Test("Calendar grid reflection round-trips through forward")
+        func calendarGridReflectionRoundTripsThroughForward() {
+            let lower = date(year: 2024, month: 1, day: 31)
+            let upper = date(year: 2026, month: 12, day: 31)
+            let gen = #gen(.date(between: lower ... upper, interval: .months(1)))
+            #expect(#examine(gen, .samples(20), .replay(42)).passed)
+        }
+
+        @Test("Off-grid date reflection snaps to the previous month step")
+        func offGridDateReflectionSnapsToThePreviousMonthStep() throws {
+            let lower = date(year: 2025, month: 1, day: 15)
+            let upper = date(year: 2026, month: 1, day: 15)
+            let gen = #gen(.date(between: lower ... upper, interval: .months(1)))
+
+            let offGrid = date(year: 2025, month: 2, day: 20)
+            let expectedSnap = date(year: 2025, month: 2, day: 15)
+
+            let tree = try #require(try Interpreters.reflect(gen.gen, with: offGrid))
+            let replayed = try #require(try Interpreters.replay(gen.gen, using: tree))
+            #expect(replayed == expectedSnap)
+        }
+
+        private func date(year: Int, month: Int, day: Int) -> Date {
+            utcGregorianCalendar.date(from: DateComponents(year: year, month: month, day: day))!
+        }
+    }
+
     // MARK: - DateStride
 
     @Suite("DateStride")
@@ -299,3 +393,12 @@ struct DateGeneratorTests {
         }
     }
 }
+
+// MARK: - Helpers
+
+/// Gregorian calendar pinned to UTC, matching the date generator's default zone.
+private let utcGregorianCalendar: Calendar = {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    return calendar
+}()

@@ -132,14 +132,8 @@ package enum ProblematicValues {
             case _ where tag.isFloatingPoint:
                 computeFloatProblematicValues(min: min, max: max, tag: tag)
             case .date:
-                if case let .date(lowerSeconds, intervalSeconds, timeZoneID) = payload {
-                    computeDateProblematicValues(
-                        min: min,
-                        max: max,
-                        lowerSeconds: lowerSeconds,
-                        intervalSeconds: intervalSeconds,
-                        timeZoneID: timeZoneID
-                    )
+                if case let .date(grid) = payload {
+                    computeDateProblematicValues(min: min, max: max, grid: grid)
                 } else {
                     computeIntegerProblematicValues(min: min, max: max, tag: tag)
                 }
@@ -313,31 +307,30 @@ package enum ProblematicValues {
 
     /// Computes problematic values for date step indices.
     ///
-    /// `min`/`max` are step indices in `[0, numSteps]`. Each step maps to real seconds as `lowerSeconds + step * intervalSeconds`. Problematic-value computation identifies interesting real-seconds values (epochs, calendar boundaries, DST transitions), then converts them to step indices. For each interesting point the ±1 step neighbors are also included.
+    /// `min`/`max` are step indices in `[0, numSteps]`. The grid maps each step to real seconds — affinely for fixed grids, via calendar arithmetic for calendar grids. Problematic-value computation identifies interesting real-seconds values (epochs, calendar boundaries, DST transitions), then converts them to step indices with the same backward map reflection uses, so boundary instants that lie on the grid land exactly on their grid points. For each interesting point the ±1 step neighbors are also included.
     private static func computeDateProblematicValues(
         min: UInt64,
         max: UInt64,
-        lowerSeconds: Int64,
-        intervalSeconds: Int64,
-        timeZoneID: String
+        grid: DateGrid
     ) -> [UInt64] {
         let minStep = Int64(bitPattern64: min)
         let maxStep = Int64(bitPattern64: max)
-        guard maxStep > minStep, intervalSeconds > 0 else {
+        guard maxStep > minStep else {
             return min == max ? [min] : [min, max].sorted()
         }
 
-        let upperSeconds = lowerSeconds + maxStep * intervalSeconds
+        let lowerSeconds = grid.lowerSeconds
+        let timeZoneID = grid.timeZoneID
+        let upperSeconds = grid.secondsAtStep(maxStep)
 
         var values = Set<UInt64>()
 
         /// Convert a real-seconds value to a step index.
         /// Returns nil if the seconds value falls outside the range.
         func toStep(_ seconds: Int64) -> Int64? {
-            let offset = seconds - lowerSeconds
-            guard offset >= 0 else { return nil }
-            let step = offset / intervalSeconds
-            guard step <= maxStep else { return nil }
+            guard seconds >= lowerSeconds, seconds <= upperSeconds else { return nil }
+            let step = grid.stepIndex(flooring: seconds)
+            guard step >= minStep, step <= maxStep else { return nil }
             return step
         }
 
@@ -379,7 +372,7 @@ package enum ProblematicValues {
         let gregorianAdoption: Int64 = -13_197_600_000
         if gregorianAdoption >= lowerSeconds, gregorianAdoption <= upperSeconds {
             insertWithNeighbors(gregorianAdoption)
-            if intervalSeconds < 86400 {
+            if grid.form.approximateSecondsPerStep < 86400 {
                 let lastJulianDay: Int64 = -13_197_686_400
                 if lastJulianDay >= lowerSeconds {
                     insertWithNeighbors(lastJulianDay)

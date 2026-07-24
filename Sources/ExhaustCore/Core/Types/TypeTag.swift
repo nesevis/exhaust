@@ -36,7 +36,7 @@ package enum TypeTag: UInt8, Sendable, Hashable {
     case float = 11
     /// Half-precision floating point (ARM64 only).
     case float16 = 12
-    /// Date steps: the underlying integer represents step indices. The per-generator parameters (interval, lower bound, timezone) are stored in ``TypeTagPayload/date(lowerSeconds:intervalSeconds:timeZoneID:)`` on the ``ChoiceMetadata``.
+    /// Date steps: the underlying integer represents step indices. The per-generator grid (form, lower bound, timezone) is stored in ``TypeTagPayload/date(grid:)`` on the ``ChoiceMetadata``.
     case date = 13
     /// Raw bit storage used by composite generators (UUID, Int128, UInt128). Problematic-value analysis produces only all-low / all-high values.
     case bits = 14
@@ -53,8 +53,8 @@ package enum TypeTag: UInt8, Sendable, Hashable {
 /// Stored in ``ChoiceMetadata`` on ``ChoiceTree`` nodes (heap-allocated, no stride impact on the flat ``ChoiceSequence``). Consumed only by ``ProblematicValues`` during one-time screening analysis.
 @usableFromInline
 package enum TypeTagPayload: Hashable, Sendable {
-    /// Date step parameters. Used by ``ProblematicValues`` to compute calendar-meaningful problematic values (month/year boundaries, DST transitions).
-    case date(lowerSeconds: Int64, intervalSeconds: Int64, timeZoneID: String)
+    /// The date generator's grid. Used by ``ProblematicValues`` to convert calendar-meaningful instants (month/year boundaries, DST transitions) into step indices with the same forward map generation uses.
+    case date(grid: DateGrid)
     /// Pre-computed problematic character indices. Corresponds to ``ProblematicValues/interestingCharacterScalars`` in flat array index space, clamped to the valid range during construction.
     case character(problematicIndices: [UInt64])
 }

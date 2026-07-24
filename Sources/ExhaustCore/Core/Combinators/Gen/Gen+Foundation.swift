@@ -134,9 +134,9 @@ private func alphanumericString(
 // MARK: - Date
 
 package extension Gen {
-    /// Generates dates within the given range, quantized to integral multiples of `interval` relative to the lower bound.
+    /// Generates dates within the given range, quantized to the grid of `interval` steps from the lower bound.
     ///
-    /// `timeZone` selects which zone's DST transitions problematic-value analysis includes; it does not change the generated grid. The UTC default has no DST transitions, keeping screening rows identical across machines. Reflection rounds off-grid dates down to the nearest step rather than rejecting them.
+    /// Sub-day intervals produce a fixed-second grid. Calendar intervals (`.days` through `.years`) advance with calendar arithmetic in `timeZone`, so month grids stay on the lower bound's day-of-month and day grids keep the lower bound's wall-clock time across the zone's DST transitions. `timeZone` also selects which zone's DST transitions problematic-value analysis includes; the UTC default has no DST transitions and fixed-length days, keeping screening rows identical across machines. Reflection rounds off-grid dates down to the nearest step rather than rejecting them.
     static func date(
         between range: ClosedRange<Date>,
         interval: DateStride,
@@ -144,36 +144,33 @@ package extension Gen {
     ) -> ReflectiveGenerator<Date> {
         let lowerSeconds = Int64(range.lowerBound.timeIntervalSinceReferenceDate)
         let upperSeconds = Int64(range.upperBound.timeIntervalSinceReferenceDate)
-        let intervalSeconds = Int64(abs(interval.fixedSeconds))
 
-        precondition(intervalSeconds > 0, "Interval must be non-zero")
-        precondition(
-            intervalSeconds <= upperSeconds - lowerSeconds,
-            "Interval must not exceed the date range"
+        precondition(interval.fixedSeconds != 0, "Interval must be non-zero")
+
+        let grid = DateGrid(
+            stride: interval,
+            lowerSeconds: lowerSeconds,
+            upperSeconds: upperSeconds,
+            timeZone: timeZone
         )
 
-        let numSteps = (upperSeconds - lowerSeconds) / intervalSeconds
+        precondition(grid.stepCount >= 1, "Interval must not exceed the date range")
 
         return Generator<Int64>.impure(
             operation: .chooseBits(
                 min: Int64(0).bitPattern64,
-                max: numSteps.bitPattern64,
+                max: grid.stepCount.bitPattern64,
                 tag: .date,
                 isRangeExplicit: true,
-                typeTagPayload: .date(
-                    lowerSeconds: lowerSeconds,
-                    intervalSeconds: intervalSeconds,
-                    timeZoneID: timeZone.identifier
-                )
+                typeTagPayload: .date(grid: grid)
             )
         ) { try .pure(Int64(bitPattern64: chooseBitsBitPattern($0))) }
             .wrapped.mapped(
                 forward: { step in
-                    Date(timeIntervalSinceReferenceDate: Double(lowerSeconds + step * intervalSeconds))
+                    Date(timeIntervalSinceReferenceDate: Double(grid.secondsAtStep(step)))
                 },
                 backward: { date in
-                    let offset = date.timeIntervalSinceReferenceDate - Double(lowerSeconds)
-                    return Int64(floor(offset / Double(intervalSeconds)))
+                    grid.stepIndex(flooring: Int64(date.timeIntervalSinceReferenceDate.rounded(.down)))
                 }
             )
     }

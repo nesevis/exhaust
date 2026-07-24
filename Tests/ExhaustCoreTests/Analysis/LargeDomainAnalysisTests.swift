@@ -323,7 +323,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: fixedDateGridPayload(lowerSeconds: lower, intervalSeconds: interval, stepCount: numSteps, timeZoneID: "GMT")
         )
 
         // First step (0)
@@ -347,7 +347,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: fixedDateGridPayload(lowerSeconds: lower, intervalSeconds: interval, stepCount: numSteps, timeZoneID: "GMT")
         )
 
         for bp in values {
@@ -369,7 +369,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: fixedDateGridPayload(lowerSeconds: lower, intervalSeconds: interval, stepCount: numSteps, timeZoneID: "GMT")
         )
 
         // Reference date (0 seconds) is at step (0 - lower) / interval = 86400
@@ -387,7 +387,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: fixedDateGridPayload(lowerSeconds: lower, intervalSeconds: interval, stepCount: numSteps, timeZoneID: "GMT")
         )
 
         // Unix epoch is at step (unixEpoch - lower) / interval = 86400
@@ -405,7 +405,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: fixedDateGridPayload(lowerSeconds: lower, intervalSeconds: interval, stepCount: numSteps, timeZoneID: "GMT")
         )
 
         let adoptionStep = (gregorianAdoption - lower) / interval
@@ -423,7 +423,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: fixedDateGridPayload(lowerSeconds: lower, intervalSeconds: interval, stepCount: numSteps, timeZoneID: "GMT")
         )
 
         let adoptionStep = (gregorianAdoption - lower) / interval
@@ -443,7 +443,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: fixedDateGridPayload(lowerSeconds: lower, intervalSeconds: interval, stepCount: numSteps, timeZoneID: "GMT")
         )
 
         let adoptionStep = (gregorianAdoption - lower) / interval
@@ -468,7 +468,7 @@ struct DateProblematicValueTests {
         let values = ProblematicValues.computeProblematicValues(
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
-            tag: .date, payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: "GMT")
+            tag: .date, payload: fixedDateGridPayload(lowerSeconds: lower, intervalSeconds: interval, stepCount: numSteps, timeZoneID: "GMT")
         )
 
         // These epochs are outside [lower, lower + numSteps], so no valid step index exists
@@ -545,7 +545,7 @@ struct DateDSTProblematicValueTests {
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date,
-            payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID)
+            payload: fixedDateGridPayload(lowerSeconds: lower, intervalSeconds: interval, stepCount: numSteps, timeZoneID: transition.timeZoneID)
         )
 
         let expectedStep = (expectedSeconds - lower) / interval
@@ -576,7 +576,7 @@ struct DateDSTProblematicValueTests {
             min: Int64(0).bitPattern64,
             max: numSteps.bitPattern64,
             tag: .date,
-            payload: .date(lowerSeconds: lower, intervalSeconds: interval, timeZoneID: transition.timeZoneID)
+            payload: fixedDateGridPayload(lowerSeconds: lower, intervalSeconds: interval, stepCount: numSteps, timeZoneID: transition.timeZoneID)
         )
 
         // The transition step and at least one neighbor should be present
@@ -820,4 +820,19 @@ private func asciiStringGen(length: ClosedRange<Int>) -> Generator<String> {
     )
     return Gen.arrayOf(charGen, within: UInt64(length.lowerBound) ... UInt64(length.upperBound))
         .map { String($0) }
+}
+
+/// Builds the fixed-grid date payload the pre-`DateGrid` tests passed as loose parameters.
+private func fixedDateGridPayload(
+    lowerSeconds: Int64,
+    intervalSeconds: Int64,
+    stepCount: Int64,
+    timeZoneID: String
+) -> TypeTagPayload {
+    .date(grid: DateGrid(
+        form: .fixed(secondsPerStep: intervalSeconds),
+        lowerSeconds: lowerSeconds,
+        stepCount: stepCount,
+        timeZoneID: timeZoneID
+    ))
 }
