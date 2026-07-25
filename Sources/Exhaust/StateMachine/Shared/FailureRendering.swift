@@ -48,8 +48,11 @@ extension __ExhaustRuntime {
         }
         lines.append("")
 
+        // The setup step is generated and reduces alongside the commands, so it counts on both sides. Reduction never deletes it, so the same step is present before and after.
+        let setupSteps = context.setupDescription == nil ? 0 : 1
+
         if tagged.count < context.originalCount {
-            lines.append("Reduced from \(context.originalCount) to \(tagged.count) commands.")
+            lines.append("Reduced from \(context.originalCount + setupSteps) to \(stepCount(tagged.count + setupSteps)).")
             lines.append("")
         }
 
@@ -149,6 +152,11 @@ extension __ExhaustRuntime {
         }
     }
 
+    /// Renders a step count with its noun agreeing in number, so a single-step counterexample does not report "1 steps".
+    private static func stepCount(_ count: Int) -> String {
+        "\(count) step\(count == 1 ? "" : "s")"
+    }
+
     private static func indentedEntry(prefix: String, content: String, suffix: String = "") -> String {
         let continuationPrefix = String(repeating: " ", count: prefix.count)
         return prefix + content.replacingOccurrences(of: "\n", with: "\n\(continuationPrefix)") + suffix
@@ -168,12 +176,16 @@ extension __ExhaustRuntime {
         lines.append("State machine failure (found via \(failureInfo.discoveryMethod))")
         lines.append("")
 
+        // The setup step is generated and occupies the trace's first row, so it counts on both sides of the reduction. Reduction never deletes it, so the same step is present before and after.
+        let setupSteps = result.setup == nil ? 0 : 1
+        let steps = stepCount(result.commands.count + setupSteps)
+
         if let original = failureInfo.originalCommands, original.count > result.commands.count {
             let header =
-                "Command sequence (\(result.commands.count) steps, reduced from \(original.count)):"
+                "Command sequence (\(steps), reduced from \(original.count + setupSteps)):"
             lines.append(header)
         } else {
-            lines.append("Command sequence (\(result.commands.count) steps):")
+            lines.append("Command sequence (\(steps)):")
         }
 
         for step in result.trace {

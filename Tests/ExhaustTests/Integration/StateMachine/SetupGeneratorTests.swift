@@ -69,6 +69,57 @@ struct SetupGeneratorTests {
         #expect(commandSteps.isEmpty == false)
     }
 
+    @Test("The failure header counts the setup step on both sides of the reduction")
+    func failureHeaderCountsSetupStep() async throws {
+        let result = try #require(
+            await #execute(
+                AlwaysFailingSetupSpec.self,
+                .commandLimit(6),
+                .budget(.custom(screening: 0, sampling: 50)),
+                .suppress(.issueReporting)
+            )
+        )
+        let originalCommands = try #require(result.originalCommands)
+        let message = renderSequentialFailure(result)
+        #expect(message.contains("Command sequence (\(result.commands.count + 1) step"))
+        if originalCommands.count > result.commands.count {
+            #expect(message.contains("reduced from \(originalCommands.count + 1)):"))
+        }
+    }
+
+    @Test("A single-step counterexample reports one step rather than one steps")
+    func singleStepHeaderIsSingular() {
+        let result = StateMachineResult<PlainFailingSpec>(
+            commands: [.bump],
+            originalCommands: [.bump, .bump, .bump],
+            setup: nil,
+            trace: [],
+            systemUnderTest: nil,
+            seed: nil,
+            replaySeed: nil,
+            discoveryMethod: .randomSampling
+        )
+        #expect(renderSequentialFailure(result).contains("Command sequence (1 step, reduced from 3):"))
+    }
+
+    @Test("The failure header for a zero-setup spec counts commands only")
+    func failureHeaderForZeroSetupSpecCountsCommandsOnly() async throws {
+        let result = try #require(
+            await #execute(
+                PlainFailingSpec.self,
+                .commandLimit(4),
+                .budget(.custom(screening: 0, sampling: 50)),
+                .suppress(.issueReporting)
+            )
+        )
+        let originalCommands = try #require(result.originalCommands)
+        let message = renderSequentialFailure(result)
+        #expect(message.contains("Command sequence (\(result.commands.count) step"))
+        if originalCommands.count > result.commands.count {
+            #expect(message.contains("reduced from \(originalCommands.count)):"))
+        }
+    }
+
     @Test("A throwing setup fails the run and is attributed to the setup step")
     func throwingSetupFailsTheRun() async throws {
         let result = try #require(
@@ -591,4 +642,18 @@ private final class LockedCounter: @unchecked Sendable {
         defer { lock.unlock() }
         storage += amount
     }
+}
+
+// MARK: - Helpers
+
+/// Re-renders a result the way the sequential backend does, so the assembled failure report can be asserted on while issue reporting stays suppressed.
+private func renderSequentialFailure(_ result: StateMachineResult<some StateMachineSpecBase>) -> String {
+    __ExhaustRuntime.renderFailure(
+        result,
+        failureInfo: __ExhaustRuntime.StateMachineFailureInfo(
+            originalCommands: result.originalCommands,
+            discoveryMethod: result.discoveryMethod
+        ),
+        failureDescription: nil
+    )
 }

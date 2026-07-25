@@ -178,6 +178,8 @@ The setup method runs once on every fresh spec instance, before any command, on 
 2. enqueue(value: 0) ✗ invariant 'countMatchesModel'
 ```
 
+Setup consumes generated values, so it counts as a step in the report's header: the trace above is reported as two steps, not one.
+
 The rules, and how setup differs from a command:
 
 - A spec allows at most one `@Setup` method. Multi-phase setup merges into one method whose body runs the phases in order.
@@ -294,7 +296,7 @@ A typical failure report:
 ```
 Concurrent spec failure (found via random sampling)
 
-Reduced from 6 to 3 commands.
+Reduced from 6 to 3 steps.
 
 Sequential prefix:
   1. refill
@@ -387,7 +389,7 @@ When no ordering reproduces a return value, the report names the command that re
 ```
 LoweHashMapSpec failure (iteration 141/2000, found via random sampling, seed 1C3-141)
 
-Reduced from 8 to 5 commands.
+Reduced from 8 to 5 steps.
 
 Sequential prefix:
   1. update(1, 4)

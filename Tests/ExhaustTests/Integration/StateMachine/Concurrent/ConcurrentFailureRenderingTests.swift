@@ -26,13 +26,53 @@ struct ConcurrentFailureRenderingTests {
         let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
         #expect(output.contains("BankSpec failure"))
         #expect(output.contains("seed"))
-        #expect(output.contains("Reduced from 5 to 3 commands"))
+        #expect(output.contains("Reduced from 5 to 3 steps."))
         #expect(output.contains("Sequential prefix:"))
         #expect(output.contains("setup()"))
         #expect(output.contains("Lane A:"))
         #expect(output.contains("Lane B:"))
         #expect(output.contains("Command sequences tested: 50"))
         #expect(output.contains("Reproduce:"))
+    }
+
+    @Test("The reduction line counts the setup step alongside the commands")
+    func reductionLineCountsSetupStep() {
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+            return
+        }
+        let tagged: [(ScheduleMarker, String)] = [
+            (ScheduleMarker(rawValue: 1), "deposit(10)"),
+        ]
+        var context = __ExhaustRuntime.FailureContext()
+        context.specName = "BankSpec"
+        context.setupDescription = "configure(capacity: 1)"
+        context.iteration = 1
+        context.budget = 100
+        context.originalCount = 4
+        context.sequencesTested = 20
+
+        let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
+        #expect(output.contains("Reduced from 5 to 2 steps."))
+        #expect(output.contains("Setup:"))
+    }
+
+    @Test("A single-step reduction reports one step rather than one steps")
+    func singleStepReductionIsSingular() {
+        guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
+            return
+        }
+        let tagged: [(ScheduleMarker, String)] = [
+            (ScheduleMarker(rawValue: 1), "deposit(10)"),
+        ]
+        var context = __ExhaustRuntime.FailureContext()
+        context.specName = "BankSpec"
+        context.iteration = 1
+        context.budget = 100
+        context.originalCount = 4
+        context.sequencesTested = 20
+
+        let output = __ExhaustRuntime.renderFailure(tagged, trace: [], context: context)
+        #expect(output.contains("Reduced from 4 to 1 step."))
     }
 
     @Test("renderFailure without seed omits replay line")

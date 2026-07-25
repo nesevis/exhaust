@@ -45,7 +45,7 @@ Here, a concurrent spec test found a race in a non-atomic counter and reduced si
 ```
 Concurrent spec failure (found via random sampling)
 
-Reduced from 6 to 3 commands.
+Reduced from 6 to 3 steps.
 
 Sequential prefix:
   1. increment
