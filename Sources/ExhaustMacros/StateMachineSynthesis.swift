@@ -333,6 +333,16 @@ func qualifyGenExpression(_ expr: String, paramType: String) -> String {
     return expr
 }
 
+/// Rewrites an implicitly unwrapped type annotation (`Foo!`) to its optional spelling for use in a `typealias`.
+///
+/// Swift only allows the `!` suffix on variable, parameter, and return declarations — `typealias SystemUnderTest = Foo!` is rejected with "using '!' is not allowed here". The stored property keeps its implicitly unwrapped type; only the synthesized alias changes, and the `systemUnderTest` accessor returning `Foo?` from an implicitly unwrapped property compiles as-is.
+func typealiasCompatibleType(_ type: String) -> String {
+    guard type.hasSuffix("!") else {
+        return type
+    }
+    return String(type.dropLast()) + "?"
+}
+
 /// Whether an initializer's callee expression is plausibly a type name (so it can back a `typealias`), as opposed to a factory function.
 ///
 /// Array and dictionary sugar (`[Int]`, `[Key: Value]`) qualifies. Otherwise the final dot-separated component must begin with an uppercase character — `BoundedQueue<Int>` and `Module.Queue` qualify; `makeQueue` and `factory.make` do not.

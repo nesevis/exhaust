@@ -60,14 +60,15 @@ extension __ExhaustRuntime {
         return nil
     }
 
-    /// Renders a preemptive failure message with the preemptive trace format.
+    /// Renders a preemptive failure message with the preemptive trace format. `setupSteps` carries the replayed setup outcome so the message and ``StateMachineResult/trace`` cannot disagree on whether setup succeeded.
     static func renderPreemptiveFailure(
         _ input: [(ScheduleMarker, some CustomStringConvertible)],
+        setupSteps: [TraceStep],
         context: FailureContext
     ) -> String {
         let trace = buildPreemptiveTrace(
             input,
-            setupDescription: context.setupDescription,
+            setupSteps: setupSteps,
             laneResponseValues: context.laneResponseValues,
             linearizabilityWitness: context.linearizabilityWitness
         )

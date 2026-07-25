@@ -257,6 +257,22 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
             }
         }
 
+        // Marker methods must be instance methods: every synthesized dispatch goes through the spec instance.
+        let markerMethods: [(marker: String, syntax: FunctionDeclSyntax?)] =
+            commands.map { ("Command", $0.syntax) }
+                + setups.map { ("Setup", $0.syntax) }
+                + invariants.map { ("Invariant", $0.syntax) }
+                + oracles.map { ("Oracle", $0.syntax) }
+        for (marker, syntax) in markerMethods {
+            guard let syntax, hasTypeMemberModifier(syntax) else {
+                continue
+            }
+            context.diagnose(Diagnostic(
+                node: Syntax(syntax),
+                message: TypeMemberMarkerDiagnostic(marker: marker)
+            ))
+        }
+
         // Mode-specific validation
         switch mode {
             case .sequential, .tasks:
@@ -322,7 +338,7 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         decls.append(synthesizeCommandEnum(commands: commands, access: access))
 
         if let sutProp = sutProps.first, let sutType = sutProp.type {
-            decls.append("\(raw: access)typealias SystemUnderTest = \(raw: sutType)")
+            decls.append("\(raw: access)typealias SystemUnderTest = \(raw: typealiasCompatibleType(sutType))")
             decls.append("\(raw: access)var systemUnderTest: SystemUnderTest { \(raw: sutProp.name) }")
         } else if sutProps.first != nil {
             context.diagnose(Diagnostic(

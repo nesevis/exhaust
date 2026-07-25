@@ -103,7 +103,8 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
         // Reduction already orders its output prefix-first, but the timeout path skips reduction entirely, so normalize here as well. The partition is idempotent, so the reduced path is unaffected.
         let reduced = reduced.prefixFirstOrder()
         let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
-        let setupDescription = setupStep.map { "\($0)" }
+        // Replayed on a fresh spec so the trace carries the setup's real outcome: a setup throw renders as the failing step instead of a fabricated success.
+        let setupSteps = inner.setupTraceSteps(setupStep)
 
         let failureDescription = inner.sequentialReplayDescription(of: reduced, setupStep: setupStep)
 
@@ -112,7 +113,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
             setup: setupStep,
-            trace: __ExhaustRuntime.buildPreemptiveTrace(reduced, setupDescription: setupDescription),
+            trace: __ExhaustRuntime.buildPreemptiveTrace(reduced, setupSteps: setupSteps),
             systemUnderTest: context.state.probeEvidence?.outcome.concurrentSpec?.systemUnderTest,
             seed: discoveryMethod.resultSeed(seed),
             replaySeed: replaySeed,
@@ -133,7 +134,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
 
         let issueMessage: String = context.config.suppress.issueReporting
             ? ""
-            : __ExhaustRuntime.renderPreemptiveFailure(reduced, context: context.state.failureContext)
+            : __ExhaustRuntime.renderPreemptiveFailure(reduced, setupSteps: setupSteps, context: context.state.failureContext)
 
         return (result, issueMessage)
     }

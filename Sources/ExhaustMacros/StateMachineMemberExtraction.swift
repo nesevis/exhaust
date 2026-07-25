@@ -197,6 +197,16 @@ func nonVoidReturnType(of funcDecl: FunctionDeclSyntax) -> String? {
     }
 }
 
+/// Whether a method is declared `static` or `class`.
+///
+/// Every synthesized dispatch is instance dispatch (`self.method(...)`, `check(invariant())`), which Swift rejects for type members, so the macro diagnoses these modifiers rather than emitting an expansion that fails with a confusing error inside synthesized code.
+func hasTypeMemberModifier(_ funcDecl: FunctionDeclSyntax) -> Bool {
+    funcDecl.modifiers.contains { modifier in
+        let name = modifier.name.trimmedDescription
+        return name == "static" || name == "class"
+    }
+}
+
 /// Whether a method's parameters are shapes the synthesized `Command`/`SetupStep` enum cannot represent.
 ///
 /// A generic, `inout`, or variadic parameter has no stable stored form to put in an enum payload, so the macro rejects the method rather than synthesizing a case that will not compile.

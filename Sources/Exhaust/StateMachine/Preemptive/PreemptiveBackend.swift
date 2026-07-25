@@ -38,4 +38,9 @@ protocol PreemptiveBackend<Spec>: Sendable {
 
     /// Replays the reduced commands sequentially on a fresh spec (with setup applied) and returns its failure description, the expected race-free state for the report. Returns nil when the replay itself fails, because the partial state would mislead debugging.
     func sequentialReplayDescription(of reduced: [(ScheduleMarker, Spec.Command)], setupStep: Spec.SetupStep?) -> String?
+
+    /// Replays the setup step on a fresh spec and returns its trace rows, so the reported trace carries the real setup outcome. Empty for a nil step.
+    ///
+    /// Lane commands render without outcomes because preemptive scheduling leaves no deterministic per-step state, but setup runs before any lane starts, so its outcome is replayable: without this, a setup throw discovered by a concurrent probe would render as a successful setup row and the error would be lost.
+    func setupTraceSteps(_ setupStep: Spec.SetupStep?) -> [TraceStep]
 }

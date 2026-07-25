@@ -191,7 +191,7 @@ extension __ExhaustRuntime {
     /// When `linearizabilityWitness` identifies a lane command, that step is marked as the one whose response no valid ordering reproduces.
     static func buildPreemptiveTrace(
         _ reduced: [(ScheduleMarker, some CustomStringConvertible)],
-        setupDescription: String? = nil,
+        setupSteps: [TraceStep] = [],
         laneResponseValues: [UInt8: [String?]]? = nil,
         linearizabilityWitness: ResponseWitness? = nil
     ) -> [TraceStep] {
@@ -223,9 +223,6 @@ extension __ExhaustRuntime {
                 )
             }
         }
-        let setupSteps = setupDescription.map {
-            [TraceStep(index: 1, command: setupTraceDescription($0), outcome: .ok)]
-        } ?? []
         return joinTrace(setup: setupSteps, commands: commandSteps)
     }
 }
@@ -592,5 +589,9 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
             return nil
         }
         return oracleSpec.failureDescription()
+    }
+
+    func setupTraceSteps(_ setupStep: Spec.SetupStep?) -> [TraceStep] {
+        __ExhaustRuntime.makeSpecRecordingSetupTrace(Spec.self, setupStep: setupStep).steps
     }
 }

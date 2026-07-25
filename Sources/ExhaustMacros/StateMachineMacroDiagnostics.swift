@@ -54,6 +54,25 @@ enum StateMachineDiagnostic: String, DiagnosticMessage {
     }
 }
 
+/// Diagnostic for a marker method declared `static` or `class`.
+///
+/// Carries the marker name so the message names the attribute the user actually wrote, and each marker keeps its own diagnostic ID so downstream tooling can tell them apart.
+struct TypeMemberMarkerDiagnostic: DiagnosticMessage {
+    let marker: String
+
+    var message: String {
+        "@\(marker) must be applied to an instance method — the synthesized dispatch calls it on the spec instance, which Swift rejects for static and class members"
+    }
+
+    var diagnosticID: MessageID {
+        MessageID(domain: "ExhaustMacros", id: "static\(marker)Method")
+    }
+
+    var severity: DiagnosticSeverity {
+        .error
+    }
+}
+
 /// Diagnostic for a `@Command` or `@Setup` method whose generator count does not match its parameter count.
 ///
 /// Carries both counts so the message names the exact mismatch rather than a generic "wrong generators" note. The marker keeps the message and the diagnostic ID specific to the attribute the user actually wrote.

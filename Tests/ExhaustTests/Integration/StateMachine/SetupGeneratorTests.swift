@@ -87,6 +87,18 @@ struct SetupGeneratorTests {
         }
     }
 
+    @Test("An implicitly unwrapped SUT constructed in setup compiles and passes")
+    func implicitlyUnwrappedSUTConstructedInSetup() async {
+        // The synthesized `typealias SystemUnderTest` must normalize the property's `ValueBox!` to `ValueBox?`, because Swift rejects the implicitly unwrapped spelling in a typealias. Compiling this spec is the regression; the run confirms setup reaches the instance.
+        let result = await #execute(
+            ImplicitlyUnwrappedSUTSpec.self,
+            .commandLimit(4),
+            .budget(.custom(screening: 0, sampling: 30)),
+            .suppress(.issueReporting)
+        )
+        #expect(result == nil)
+    }
+
     @Test("A zero-setup spec reports nil setup")
     func zeroSetupSpecReportsNilSetup() async throws {
         let result = try #require(
@@ -286,6 +298,25 @@ struct SetupConcurrentTests {
         )
     }
 
+    @Test(".threads spec with a throwing setup attributes the failure to the setup step")
+    func threadsThrowingSetupAttributedToSetupStep() async throws {
+        let result = try #require(
+            await #execute(
+                ThrowingSetupThreadsSpec.self,
+                .commandLimit(4),
+                .budget(.custom(screening: 0, sampling: 20)),
+                .suppress(.issueReporting)
+            )
+        )
+        // The preemptive backend replays the setup when it builds the result, so the trace row carries the real thrown error rather than a fabricated success.
+        let firstStep = try #require(result.trace.first)
+        #expect(firstStep.command.hasSuffix("(setup)"))
+        guard case .checkFailed = firstStep.outcome else {
+            Issue.record("Expected the setup step to carry the failure, got \(firstStep.outcome)")
+            return
+        }
+    }
+
     @Test(".threads spec reports the setup value the oracle rejected")
     func threadsSpecReportsSetupValue() async throws {
         let result = try #require(
@@ -388,6 +419,56 @@ private final class PlainFailingSpec {
 
     func failureDescription() -> String? {
         "count: \(count)"
+    }
+}
+
+@StateMachine(.sequential)
+private final class ImplicitlyUnwrappedSUTSpec {
+    @SystemUnderTest var box: ValueBox!
+
+    @Setup(.int(in: 1 ... 8))
+    func configure(start: Int) {
+        let box = ValueBox()
+        box.value = start
+        self.box = box
+    }
+
+    @Command(weight: 1)
+    func bump() throws {
+        box.value += 1
+    }
+
+    @Invariant
+    func staysPositive() -> Bool {
+        box.value > 0
+    }
+
+    func failureDescription() -> String? {
+        "value: \(box.value)"
+    }
+}
+
+@StateMachine(.threads)
+private final class ThrowingSetupThreadsSpec {
+    @SystemUnderTest var counter = LockedCounter()
+
+    @Setup(.int(in: 0 ... 9))
+    func configure(seed _: Int) throws {
+        throw PlantedSetupError()
+    }
+
+    @Command(weight: 1)
+    func touch() {
+        _ = counter.value
+    }
+
+    @Oracle
+    func equivalent(to other: LockedCounter) -> Bool {
+        counter.value == other.value
+    }
+
+    func failureDescription() -> String? {
+        nil
     }
 }
 

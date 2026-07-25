@@ -48,7 +48,7 @@
                         }
                     }
 
-                    typealias SystemUnderTest = MyQueue!
+                    typealias SystemUnderTest = MyQueue?
 
                     var systemUnderTest: SystemUnderTest {
                         queue
@@ -240,7 +240,7 @@
                         }
                     }
 
-                    typealias SystemUnderTest = MyStore!
+                    typealias SystemUnderTest = MyStore?
 
                     var systemUnderTest: SystemUnderTest {
                         store
@@ -383,6 +383,70 @@
 
                     @Command(weight: 1)
                     func read() throws {
+                    }
+                }
+                """
+            }
+        }
+
+        @Test("A static @Setup method is an error")
+        func staticSetupDiagnostic() {
+            assertMacro {
+                """
+                @StateMachine(.sequential)
+                final class StaticSetupSpec {
+                    @SystemUnderTest var queue: MyQueue!
+
+                    @Setup(.int(in: 1 ... 32))
+                    static func configure(capacity: Int) {
+                    }
+
+                    @Command(weight: 1)
+                    func read() throws {
+                    }
+                }
+                """
+            } diagnostics: {
+                """
+                @StateMachine(.sequential)
+                final class StaticSetupSpec {
+                    @SystemUnderTest var queue: MyQueue!
+
+                    @Setup(.int(in: 1 ... 32))
+                    ╰─ 🛑 @Setup must be applied to an instance method — the synthesized dispatch calls it on the spec instance, which Swift rejects for static and class members
+                    static func configure(capacity: Int) {
+                    }
+
+                    @Command(weight: 1)
+                    func read() throws {
+                    }
+                }
+                """
+            }
+        }
+
+        @Test("A static @Command method is an error")
+        func staticCommandDiagnostic() {
+            assertMacro {
+                """
+                @StateMachine(.sequential)
+                final class StaticCommandSpec {
+                    @SystemUnderTest var queue: MyQueue!
+
+                    @Command(weight: 1)
+                    static func read() throws {
+                    }
+                }
+                """
+            } diagnostics: {
+                """
+                @StateMachine(.sequential)
+                final class StaticCommandSpec {
+                    @SystemUnderTest var queue: MyQueue!
+
+                    @Command(weight: 1)
+                    ╰─ 🛑 @Command must be applied to an instance method — the synthesized dispatch calls it on the spec instance, which Swift rejects for static and class members
+                    static func read() throws {
                     }
                 }
                 """

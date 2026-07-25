@@ -541,4 +541,17 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         }
         return oracleSpec.failureDescription()
     }
+
+    func setupTraceSteps(_ setupStep: Spec.SetupStep?) -> [TraceStep] {
+        guard let setupStep else {
+            return []
+        }
+        let spec = Spec()
+        nonisolated(unsafe) let unsafeSpec = spec
+        let steps: [TraceStep]? = awaitOrTimeout("setup-trace") {
+            await __ExhaustRuntime.applySetupRecordingTrace(unsafeSpec, setupStep: setupStep).steps
+        }
+        // On a drain timeout the outcome is unknown; keep the row without a failure claim rather than dropping it.
+        return steps ?? [__ExhaustRuntime.setupTraceStep(setupStep, setupError: nil)]
+    }
 }
