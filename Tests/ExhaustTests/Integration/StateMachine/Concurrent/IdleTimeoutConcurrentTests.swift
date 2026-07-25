@@ -48,6 +48,7 @@ struct IdleTimeoutConcurrentTests {
         ]
         let result = drainSchedule(
             taggedCommands: commands,
+            setupStep: nil,
             specInit: {
                 let spec = SleepingSpec()
                 reference.value = spec
@@ -73,6 +74,7 @@ struct IdleTimeoutConcurrentTests {
         let result = await __ExhaustRuntime.dispatchToGCD {
             drainSchedule(
                 taggedCommands: commands,
+                setupStep: nil,
                 specInit: {
                     let spec = CancellationIgnoringSpec()
                     reference.value = spec
@@ -112,6 +114,7 @@ struct IdleTimeoutConcurrentTests {
         let result = await __ExhaustRuntime.dispatchToGCD {
             drainSchedule(
                 taggedCommands: commands,
+                setupStep: nil,
                 specInit: {
                     let spec = CancellationIgnoringSpec()
                     reference.value = spec

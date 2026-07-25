@@ -75,19 +75,27 @@ extension AnyStateMachineCandidateSource {
         commandLimit: Int,
         screeningBudget: UInt64,
         concurrencyLevel: Int,
-        augmentRowFallback: ((ChoiceTree, UInt64) -> ChoiceTree)?,
+        leadingFactors: ScreeningLeadingFactors?,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .screening, resolvedReplaySeed: .screening(row: row)) {
             let result = __ExhaustRuntime.runSCAScreeningRowLoop(
-                sequenceGen: __ExhaustRuntime.specCandidateGenerator(Spec.self, sequenceGen: sequenceGen),
+                sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: screeningBudget,
                 skipToRow: row,
                 logEventPrefix: "statemachine_screening_replay",
                 concurrencyLevel: concurrencyLevel,
-                augmentRowFallback: augmentRowFallback,
+                leadingFactors: leadingFactors,
+                combine: { setupTree, taggedCommands, commandTree in
+                    __ExhaustRuntime.combineScreeningCandidate(
+                        Spec.self,
+                        setupTree: setupTree,
+                        taggedCommands: taggedCommands,
+                        commandTree: commandTree
+                    )
+                },
                 property: property
             )
 
@@ -177,22 +185,28 @@ extension AnyStateMachineCandidateSource {
         screeningBudget: UInt64,
         concurrencyLevel: Int,
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil,
-        augmentRowFallback: ((ChoiceTree, UInt64) -> ChoiceTree)?,
+        leadingFactors: ScreeningLeadingFactors?,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .screening) {
             let result = __ExhaustRuntime.runSCAScreeningRowLoop(
-                sequenceGen: __ExhaustRuntime.specCandidateGenerator(Spec.self, sequenceGen: sequenceGen),
+                sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: screeningBudget,
                 skipToRow: nil,
                 logEventPrefix: "statemachine_screening",
                 concurrencyLevel: concurrencyLevel,
-                sequenceGenForLength: sequenceGenForLength.map { makeSequenceGen in
-                    { range in __ExhaustRuntime.specCandidateGenerator(Spec.self, sequenceGen: makeSequenceGen(range)) }
+                sequenceGenForLength: sequenceGenForLength,
+                leadingFactors: leadingFactors,
+                combine: { setupTree, taggedCommands, commandTree in
+                    __ExhaustRuntime.combineScreeningCandidate(
+                        Spec.self,
+                        setupTree: setupTree,
+                        taggedCommands: taggedCommands,
+                        commandTree: commandTree
+                    )
                 },
-                augmentRowFallback: augmentRowFallback,
                 property: property
             )
 

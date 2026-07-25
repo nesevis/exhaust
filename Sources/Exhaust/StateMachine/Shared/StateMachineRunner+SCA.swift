@@ -22,16 +22,17 @@ extension __ExhaustRuntime {
     /// Builds covering arrays at multiple sequence lengths to cover both short and long command sequences. Budget is split across length tiers: 50% at `min(5, commandLimit)`, 25% at `max(5, commandLimit / 2)`, 25% at `commandLimit`, with duplicate lengths collapsed and their budgets merged. Tiers run shortest-first so minimal counterexamples are found early.
     ///
     /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:screeningInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"statemachine_screening"` for a fresh run, `"statemachine_screening_replay"` for row replay.
-    static func runSCAScreeningRowLoop<Value>(
-        sequenceGen: Generator<Value>,
+    static func runSCAScreeningRowLoop<Row, Value>(
+        sequenceGen: Generator<Row>,
         commandGen: Generator<some Any>,
         commandLimit: Int,
         screeningBudget: UInt64,
         skipToRow: Int?,
         logEventPrefix: String,
         concurrencyLevel: Int? = nil,
-        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<Value>)? = nil,
-        augmentRowFallback: ((ChoiceTree, UInt64) -> ChoiceTree)? = nil,
+        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<Row>)? = nil,
+        leadingFactors: ScreeningLeadingFactors? = nil,
+        combine: (ChoiceTree?, Row, ChoiceTree) -> (value: Value, tree: ChoiceTree)?,
         property: @escaping @Sendable (Value) -> Bool
     ) -> SCARowLoopResult<Value> {
         guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -80,12 +81,16 @@ extension __ExhaustRuntime {
                 domain = built
             }
 
-            let domainSizes = domain.profile.domainSizes
-            guard domainSizes.count >= 2 else {
+            let rowDomainSizes = domain.profile.domainSizes
+            guard rowDomainSizes.count >= 2 else {
                 continue
             }
 
-            let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
+            // The leading block's factors join the same covering array, so strength-2 coverage pairs every leading
+            // value with every per-position command value. Its slice of each row is replayed through its own
+            // generator by `combine`; it is never folded into the row's fallback tree.
+            let leadingDomainSizes = leadingFactors?.domainSizes ?? []
+            let generator = BalancedCoveringArrayGenerator(domainSizes: leadingDomainSizes + rowDomainSizes)
             var tierIterations: UInt64 = 0
             var tierAttempts: UInt64 = 0
             // A replay must land on the exact row discovery found. The global row index depends on how many rows each tier contributes, and the fractional `tier.budget` split makes that budget-dependent — so a replay under a smaller budget would cut a tier short and shift the target row into a different combination. A replay only needs to *reach* `skipToRow` (earlier rows are skipped without running the property), so cap each tier at `skipToRow + 1` instead: every tier then runs to its covering-array completion up to the target, matching the discovery run's row numbering regardless of the replay budget.
@@ -95,21 +100,30 @@ extension __ExhaustRuntime {
             let tierLengthRange = UInt64(tier.length) ... UInt64(tier.length)
             let tierGen = sequenceGenForLength?(tierLengthRange) ?? sequenceGen
 
-            while tierIterations < tierRowCap, tierAttempts < maxAttempts, let row = generator.next() {
+            while tierIterations < tierRowCap, tierAttempts < maxAttempts, let combinedRow = generator.next() {
                 tierAttempts += 1
-                guard let tree = domain.buildTree(row: row, sequenceLengthRange: tierLengthRange) else {
+                let leadingRow = CoveringArrayRow(values: Array(combinedRow.values.prefix(leadingDomainSizes.count)))
+                let rowValues = CoveringArrayRow(values: Array(combinedRow.values.dropFirst(leadingDomainSizes.count)))
+                guard let tree = domain.buildTree(row: rowValues, sequenceLengthRange: tierLengthRange) else {
+                    continue
+                }
+                let leadingTree = leadingFactors.flatMap { $0.buildTree(leadingRow) }
+                if leadingFactors != nil, leadingTree == nil {
                     continue
                 }
 
-                // With-setup specs wrap the row's bare command sequence in the candidate root shape (setup child ahead of it), with a deterministic random setup subtree per row. The seed is the same `totalIterations` counter the guided mode uses, so a `U-N` replay reaches the same row with the same setup.
-                let fallbackTree = augmentRowFallback.map { $0(tree, UInt64(totalIterations)) } ?? tree
+                // The row tree describes the row generator alone, so guided materialization sees a fallback built for
+                // exactly the generator it is materializing. Any leading block is materialized separately in `combine`.
                 let mode = Materializer.Mode.guided(
                     seed: UInt64(totalIterations),
-                    fallbackTree: fallbackTree
+                    fallbackTree: tree
                 )
-                guard case let .success(value, freshTree, _) = Materializer.materialize(
+                guard case let .success(rowValue, freshTree, _) = Materializer.materialize(
                     tierGen, prefix: ChoiceSequence(), mode: mode
                 ) else {
+                    continue
+                }
+                guard let (value, candidateTree) = combine(leadingTree, rowValue, freshTree) else {
                     continue
                 }
 
@@ -119,7 +133,7 @@ extension __ExhaustRuntime {
                     continue
                 }
                 if property(value) == false {
-                    return .failure(value: value, tree: freshTree, screeningInvocations: totalIterations)
+                    return .failure(value: value, tree: candidateTree, screeningInvocations: totalIterations)
                 }
                 if skipToRow != nil {
                     return .completed(screeningInvocations: totalIterations)
@@ -527,7 +541,7 @@ extension __ExhaustRuntime {
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil
     ) -> [AnyStateMachineCandidateSource<Spec>] {
         var sources: [AnyStateMachineCandidateSource<Spec>] = []
-        let augmentRowFallback = screeningRowFallbackAugmentation(for: Spec.self)
+        let leadingFactors = setupScreeningFactors(for: Spec.self)
 
         if let row = config.screeningReplayRow {
             sources.append(.screeningReplay(
@@ -537,7 +551,7 @@ extension __ExhaustRuntime {
                 commandLimit: commandLimit,
                 screeningBudget: max(UInt64(config.budget.screeningBudget), UInt64(row) + 1),
                 concurrencyLevel: concurrencyLevel,
-                augmentRowFallback: augmentRowFallback,
+                leadingFactors: leadingFactors,
                 property: property
             ))
         }
@@ -563,7 +577,7 @@ extension __ExhaustRuntime {
                 screeningBudget: UInt64(config.budget.screeningBudget),
                 concurrencyLevel: concurrencyLevel,
                 sequenceGenForLength: sequenceGenForLength,
-                augmentRowFallback: augmentRowFallback,
+                leadingFactors: leadingFactors,
                 property: property
             ))
         }
@@ -581,24 +595,67 @@ extension __ExhaustRuntime {
         return sources
     }
 
-    /// Builds the screening-row fallback augmentation for a with-setup spec, or `nil` for zero-setup specs.
+    /// Covering-array factors for a spec's `@Setup` generator, or `nil` for a spec without one.
     ///
-    /// A screening row's tree is a bare command `.sequence`, but a with-setup spec's candidate generator has the zip group at the root. The augmentation wraps the row tree in that root shape with a randomly materialized setup subtree, so guided materialization binds the row's command positions against the command child rather than degrading to exploration. The setup subtree's seed is the row counter, so a `U-N` replay draws the same setup.
-    static func screeningRowFallbackAugmentation<Spec: StateMachineSpecBase>(
+    /// Setup arguments become factors in the same covering array as the command positions, so strength-2 coverage pairs every setup value with every command type at every position. A setup method's arguments are worth that budget in a way a command's arguments are not: there is at most one setup method, so its factors add a fixed block rather than multiplying across positions and lanes, and its values configure the SUT for every command that follows.
+    ///
+    /// The analysis is deliberately budget-independent. Passing the screening budget as a composite threshold would make the factor domains vary with the budget, and a `U-{N}` replay runs under a different budget than discovery did — the covering array would differ and the replay would land on another row.
+    static func setupScreeningFactors<Spec: StateMachineSpecBase>(
         for _: Spec.Type
-    ) -> ((ChoiceTree, UInt64) -> ChoiceTree)? {
-        guard let setupGen = Spec.setupGenerator else {
+    ) -> ScreeningLeadingFactors? {
+        guard let setupGen = Spec.setupGenerator,
+              let analysis = ChoiceTreeAnalysis.analyze(setupGen.gen)
+        else {
             return nil
         }
-        return { rowTree, seed in
-            var interpreter = ValueAndChoiceTreeInterpreter(setupGen.gen, seed: seed, maxRuns: 1)
-            guard let (_, setupTree) = try? interpreter.next() else {
-                return rowTree
-            }
-            // Wrapper shape, not the bare zip-callee shape: the materializer's zip handler disambiguates a two-child group fallback by cursor boundaries, and a screening row has no prefix to consult, so it guesses wrapper reading. Handing it `.group([.group([setup, row]), .just])` makes the wrapper guess correct by construction, binding the setup subtree to the zip's first child and the row to the command child.
-            return .group([composeCandidateTree(setupTree: setupTree, commandTree: rowTree), .just], isOpaque: false)
+        switch analysis {
+            case let .enumerable(profile):
+                return ScreeningLeadingFactors(
+                    domainSizes: profile.parameters.map(\.domainSize),
+                    buildTree: { CoveringArrayReplay.buildTree(row: $0, profile: profile) }
+                )
+            case let .large(profile):
+                return ScreeningLeadingFactors(
+                    domainSizes: profile.parameters.map(\.domainSize),
+                    buildTree: { profile.buildTree(from: $0) }
+                )
         }
     }
+
+    /// Materializes a screening row's setup subtree and joins it to the row's command sequence.
+    ///
+    /// The two halves are materialized against their own generators and joined with ``composeCandidateTree(setupTree:commandTree:)`` — the same node `Gen.zip` produces — so the candidate tree is correct by construction rather than by a fallback-shape guess. Returns `nil` to skip a row whose setup will not materialize.
+    static func combineScreeningCandidate<Spec: StateMachineSpecBase>(
+        _: Spec.Type,
+        setupTree: ChoiceTree?,
+        taggedCommands: [(ScheduleMarker, Spec.Command)],
+        commandTree: ChoiceTree
+    ) -> (value: SpecCandidateValue<Spec>, tree: ChoiceTree)? {
+        guard let setupGen = Spec.setupGenerator, let setupTree else {
+            return (SpecCandidateValue(setupStep: nil, taggedCommands: taggedCommands), commandTree)
+        }
+        // seed 0: the covering array already pins every analyzed setup factor, so the seed only fills choices the
+        // analysis could not model, and a fixed seed keeps a `U-{N}` replay landing on the same setup value.
+        guard case let .success(step, freshSetupTree, _) = Materializer.materialize(
+            setupGen.gen,
+            prefix: ChoiceSequence(),
+            mode: .guided(seed: 0, fallbackTree: setupTree)
+        ) else {
+            return nil
+        }
+        return (
+            SpecCandidateValue(setupStep: step, taggedCommands: taggedCommands),
+            composeCandidateTree(setupTree: freshSetupTree, commandTree: commandTree)
+        )
+    }
+}
+
+/// An independent block of covering-array factors belonging to a different generator than the screening row's.
+///
+/// The factors join the row's covering array so interactions between the two blocks are covered, but the block's slice of each row is replayed through its own generator rather than folded into the row's fallback tree.
+struct ScreeningLeadingFactors {
+    let domainSizes: [UInt64]
+    let buildTree: (CoveringArrayRow) -> ChoiceTree?
 }
 
 // MARK: - Sequence Generator Construction
