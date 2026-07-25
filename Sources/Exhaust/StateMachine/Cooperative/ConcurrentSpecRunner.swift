@@ -147,6 +147,7 @@ private let cancellationDrainMilliseconds = 5
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func drainSchedule<Spec: AsyncStateMachineSpec>(
     taggedCommands: [(ScheduleMarker, Spec.Command)],
+    setupSteps: [Spec.SetupStep] = [],
     specInit: () -> Spec,
     concurrencyLevel: Int,
     recordTrace: Bool,
@@ -176,27 +177,66 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
     }
     // Before abandonment, Task closures are nonisolated with executorPreference, so box accesses run via runSynchronously on the drain thread. After abandonment, canceled continuations can resume on GCD threads; the cancellation guards above and in both command loops prevent them from touching the trace, failure, and command-index boxes. The only cleanup writes left are prefixDone (unread after return) and RunQueue.markComplete (lock-protected).
     let spec = UnsafeSendableBox(specInit())
+    // Setup steps are recorded as finished TraceSteps rather than TraceEvents: they run strictly sequentially at the head of the prefix phase, so they need none of the started/suspended post-processing, and every result construction prepends them with the command steps reindexed after.
+    let setupTrace = UnsafeSendableBox<[TraceStep]>([])
     let failed = UnsafeSendableBox<String?>(nil)
     // Travels beside `failed` rather than inside it: ScheduleDrain's failure flag is `String?`-typed and only checks nil-ness, so the symptom kind rides in its own box instead of widening that seam.
     let failedSymptomKind = UnsafeSendableBox<String?>(nil)
     let trace = UnsafeSendableBox<[TraceEvent]>([])
     let commandIndices: [UnsafeSendableBox<Int>] = (0 ..< concurrencyLevel).map { _ in UnsafeSendableBox(0) }
 
-    if prefixCommands.isEmpty == false {
+    /// Every exit path renders the same way: setup steps first, command steps reindexed after them.
+    func assembleTrace() -> [TraceStep] {
+        guard recordTrace else {
+            return []
+        }
+        let commandTrace = __ExhaustRuntime.buildTrace(trace.value)
+        return __ExhaustRuntime.joinTrace(setup: setupTrace.value, commands: commandTrace)
+    }
+
+    if setupSteps.isEmpty == false || prefixCommands.isEmpty == false {
         let prefixDone = UnsafeSendableBox(false)
-        let prefixTask = Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace] in
-            for command in prefixCommands {
+        let prefixTask = Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace, setupTrace] in
+            // Setup is the fixed-order head of the sequential prefix: it runs on every fresh spec before any command, cannot skip, and its throw fails the run with the error type as the symptom.
+            for (index, step) in setupSteps.enumerated() {
                 guard Task.isCancelled == false else { break }
-                guard failed.value == nil else { break }
-                let label = recordTrace ? "\(command)" : ""
-                let outcome = await runCommandRecordingTrace(
-                    command, on: spec, lane: .prefix, label: label,
-                    trace: trace, recordTrace: recordTrace
-                )
-                if case let .failed(message, symptomKind) = outcome {
-                    failedSymptomKind.value = symptomKind
-                    failed.value = message
+                do {
+                    try await spec.value.runSetup(step)
+                    if recordTrace {
+                        setupTrace.value.append(TraceStep(
+                            index: index + 1,
+                            command: __ExhaustRuntime.setupTraceDescription(step),
+                            outcome: .ok
+                        ))
+                    }
+                } catch {
+                    if Task.isCancelled { break }
+                    if recordTrace {
+                        setupTrace.value.append(TraceStep(
+                            index: index + 1,
+                            command: __ExhaustRuntime.setupTraceDescription(step),
+                            outcome: .checkFailed(message: "\(error)")
+                        ))
+                    }
+                    failedSymptomKind.value = String(describing: type(of: error))
+                    failed.value = "\(error)"
                     break
+                }
+            }
+            if failed.value == nil {
+                for command in prefixCommands {
+                    guard Task.isCancelled == false else { break }
+                    guard failed.value == nil else { break }
+                    let label = recordTrace ? "\(command)" : ""
+                    let outcome = await runCommandRecordingTrace(
+                        command, on: spec, lane: .prefix, label: label,
+                        trace: trace, recordTrace: recordTrace
+                    )
+                    if case let .failed(message, symptomKind) = outcome {
+                        failedSymptomKind.value = symptomKind
+                        failed.value = message
+                        break
+                    }
                 }
             }
             prefixDone.value = true
@@ -223,18 +263,14 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
             }
             return ConcurrentExecutionResult(
                 passed: false,
-                trace: recordTrace
-                    ? __ExhaustRuntime.buildTrace(trace.value)
-                    : [],
+                trace: assembleTrace(),
                 timedOut: true
             )
         }
         if failed.value != nil {
             return ConcurrentExecutionResult(
                 passed: false,
-                trace: recordTrace
-                    ? __ExhaustRuntime.buildTrace(trace.value)
-                    : [],
+                trace: assembleTrace(),
                 failureSymptomKind: failedSymptomKind.value
             )
         }
@@ -245,9 +281,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
     if hasAnyLaneCommands == false {
         return ConcurrentExecutionResult(
             passed: true,
-            trace: recordTrace
-                ? __ExhaustRuntime.buildTrace(trace.value)
-                : []
+            trace: assembleTrace()
         )
     }
 
@@ -329,15 +363,10 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                 executors: executors
             )
         }
-        let finalTrace: [TraceStep] = recordTrace
-            ? __ExhaustRuntime.buildTrace(trace.value)
-            : []
-        return ConcurrentExecutionResult(passed: false, trace: finalTrace, timedOut: true)
+        return ConcurrentExecutionResult(passed: false, trace: assembleTrace(), timedOut: true)
     }
 
-    let finalTrace: [TraceStep] = recordTrace
-        ? __ExhaustRuntime.buildTrace(trace.value)
-        : []
+    let finalTrace = assembleTrace()
     let concurrentFailed = failed.value != nil
     return ConcurrentExecutionResult(
         passed: concurrentFailed == false,

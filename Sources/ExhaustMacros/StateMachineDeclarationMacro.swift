@@ -61,9 +61,12 @@ private func specHasAsyncMember(
     mode: MacroConcurrencyMode,
     commands: [CommandInfo],
     invariants: [InvariantInfo],
-    oracles: [OracleInfo]
+    oracles: [OracleInfo],
+    setups: [SetupInfo]
 ) -> Bool {
-    let commandsOrInvariants = commands.contains(where: \.isAsync) || invariants.contains(where: \.isAsync)
+    let commandsOrInvariants = commands.contains(where: \.isAsync)
+        || invariants.contains(where: \.isAsync)
+        || setups.contains(where: \.isAsync)
     switch mode {
         case .sequential, .tasks:
             return commandsOrInvariants
@@ -97,6 +100,7 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         let commands = extractCommands(from: members)
         let invariants = extractInvariants(from: members)
         let oracles = extractOracles(from: members)
+        let setups = extractSetups(from: members)
 
         let isClassDecl = declaration.is(ClassDeclSyntax.self)
         let isActorDecl = declaration.is(ActorDeclSyntax.self)
@@ -105,7 +109,7 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
             return []
         }
 
-        let hasAnyAsync = specHasAsyncMember(mode: mode, commands: commands, invariants: invariants, oracles: oracles)
+        let hasAnyAsync = specHasAsyncMember(mode: mode, commands: commands, invariants: invariants, oracles: oracles, setups: setups)
         let needsAsyncConformance = hasAnyAsync || isActorDecl
         let preconcurrency = isActorDecl ? "@preconcurrency " : ""
 
@@ -147,6 +151,7 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         let commands = extractCommands(from: members)
         let invariants = extractInvariants(from: members)
         let oracles = extractOracles(from: members)
+        let setups = extractSetups(from: members)
 
         let isClassDecl = declaration.is(ClassDeclSyntax.self)
         let isActorDecl = declaration.is(ActorDeclSyntax.self)
@@ -230,6 +235,42 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
             ))
         }
 
+        // Setup validation
+        for setup in setups.dropFirst() {
+            context.diagnose(Diagnostic(
+                node: Syntax(setup.syntax),
+                message: StateMachineDiagnostic.multipleSetups
+            ))
+        }
+        for setup in setups {
+            let conflictingMarkers = ["Command", "Invariant", "Oracle"]
+            if conflictingMarkers.contains(where: { hasAttribute($0, on: setup.syntax) }) {
+                context.diagnose(Diagnostic(
+                    node: Syntax(setup.syntax),
+                    message: StateMachineDiagnostic.setupConflictingMarker
+                ))
+            }
+            let hasGenericParams = setup.syntax.genericParameterClause != nil
+            let hasInoutParam = setup.syntax.signature.parameterClause.parameters.contains {
+                $0.type.as(AttributedTypeSyntax.self)?.specifiers.contains { $0.trimmedDescription == "inout" } ?? false
+            }
+            let hasVariadicParam = setup.syntax.signature.parameterClause.parameters.contains {
+                $0.ellipsis != nil
+            }
+            if hasGenericParams || hasInoutParam || hasVariadicParam {
+                context.diagnose(Diagnostic(
+                    node: Syntax(setup.syntax),
+                    message: StateMachineDiagnostic.setupHasUnsupportedParameter
+                ))
+            }
+            if classIsMainActorIsolated || hasAttribute("MainActor", on: setup.syntax) {
+                context.diagnose(Diagnostic(
+                    node: Syntax(setup.syntax),
+                    message: StateMachineDiagnostic.mainActorSetup
+                ))
+            }
+        }
+
         // Mode-specific validation
         switch mode {
             case .sequential, .tasks:
@@ -285,7 +326,7 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
                 }
         }
 
-        let effectiveAsync = specHasAsyncMember(mode: mode, commands: commands, invariants: invariants, oracles: oracles)
+        let effectiveAsync = specHasAsyncMember(mode: mode, commands: commands, invariants: invariants, oracles: oracles, setups: setups)
             || isActorDecl
 
         let access = accessPrefix(for: declaration)
@@ -308,6 +349,12 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         decls.append(synthesizeCommandGenerator(commands: commands, access: access, context: context))
         decls.append(synthesizeRunMethod(commands: commands, hasAnyAsync: effectiveAsync, access: access))
         decls.append(synthesizeCheckInvariants(invariants: invariants, hasAnyAsync: effectiveAsync, access: access))
+
+        if let setup = setups.first {
+            decls.append(synthesizeSetupEnum(setup: setup, access: access))
+            decls.append(synthesizeSetupGenerator(setup: setup, access: access, context: context))
+            decls.append(synthesizeRunSetup(setup: setup, hasAnyAsync: effectiveAsync, access: access))
+        }
 
         if mode == .threads, let oracle = oracles.first {
             decls.append(synthesizeOracleCheck(oracle: oracle, hasAnyAsync: effectiveAsync, access: access))
@@ -451,6 +498,65 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
             methodName: methodName,
             parameters: parameters,
             weight: weight,
+            generatorExprs: generatorExprs,
+            isAsync: isAsync,
+            isThrows: isThrows,
+            returnType: returnType,
+            syntax: funcDecl
+        )
+    }
+}
+
+/// One `@Setup`-annotated method: the command shape minus the weight, plus the attribute's generator expressions.
+struct SetupInfo {
+    let methodName: String
+    let parameters: [CommandParameter]
+    let generatorExprs: [String]
+    let isAsync: Bool
+    let isThrows: Bool
+    /// Non-nil when the setup method declares a non-void return type. The synthesized dispatch discards the value with `_ =` so the user's build stays warning-free.
+    let returnType: String?
+    let syntax: FunctionDeclSyntax
+}
+
+func extractSetups(from members: MemberBlockItemListSyntax) -> [SetupInfo] {
+    members.compactMap { member in
+        guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
+              let setupAttr = findAttribute("Setup", on: funcDecl)
+        else { return nil }
+
+        let methodName = funcDecl.name.trimmedDescription
+        let parameters = funcDecl.signature.parameterClause.parameters.enumerated().map { index, param in
+            let firstName = param.firstName.trimmedDescription
+            let secondName = param.secondName?.trimmedDescription
+            let externalLabel = firstName == "_" ? nil : firstName
+            let rawBinding = secondName ?? firstName
+            let bindingName = rawBinding == "_" ? "arg\(index)" : rawBinding
+            return CommandParameter(
+                externalLabel: externalLabel,
+                bindingName: bindingName,
+                type: param.type.trimmedDescription
+            )
+        }
+
+        var generatorExprs: [String] = []
+        if let argList = setupAttr.arguments?.as(LabeledExprListSyntax.self) {
+            for arg in argList {
+                generatorExprs.append(arg.expression.trimmedDescription)
+            }
+        }
+
+        let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
+        let isThrows = funcDecl.signature.effectSpecifiers?.throwsClause != nil
+        let voidReturnSpellings: Set = ["Void", "()", "Swift.Void"]
+        let declaredReturnType = funcDecl.signature.returnClause?.type.trimmedDescription
+        let returnType = declaredReturnType.flatMap { spelling -> String? in
+            voidReturnSpellings.contains(spelling) ? nil : spelling
+        }
+
+        return SetupInfo(
+            methodName: methodName,
+            parameters: parameters,
             generatorExprs: generatorExprs,
             isAsync: isAsync,
             isThrows: isThrows,
@@ -692,6 +798,124 @@ func synthesizeCheckInvariants(
     """
 }
 
+// MARK: - Setup Synthesis
+
+func synthesizeSetupEnum(setup: SetupInfo, access: String) -> DeclSyntax {
+    let caseDecl: String
+    let descriptionCase: String
+
+    if setup.parameters.isEmpty {
+        caseDecl = "    case \(setup.methodName)"
+        descriptionCase = "            case .\(setup.methodName): \"\(setup.methodName)\""
+    } else {
+        let assocValues = setup.parameters.map {
+            "\($0.bindingName): \($0.type)"
+        }.joined(separator: ", ")
+        caseDecl = "    case \(setup.methodName)(\(assocValues))"
+
+        let bindings = setup.parameters.map(\.bindingName).joined(separator: ", ")
+        let formatParts = setup.parameters.map { "\($0.bindingName): \\(\($0.bindingName))" }.joined(separator: ", ")
+        descriptionCase = "            case let .\(setup.methodName)(\(bindings)): \"\(setup.methodName)(\(formatParts))\""
+    }
+
+    return """
+    \(raw: access)enum SetupStep: CustomStringConvertible, Sendable {
+    \(raw: caseDecl)
+
+        \(raw: access)var description: String {
+            switch self {
+    \(raw: descriptionCase)
+            }
+        }
+    }
+    """
+}
+
+func synthesizeSetupGenerator(setup: SetupInfo, access: String, context: some MacroExpansionContext) -> DeclSyntax {
+    let body: String
+
+    if setup.parameters.isEmpty {
+        body = "(.just(SetupStep.\(setup.methodName)) as ReflectiveGenerator<SetupStep>)"
+    } else if setup.generatorExprs.count != setup.parameters.count {
+        // A parameterized setup needs exactly one generator per parameter, exactly as commands do. Fall back to nil so the spec still compiles alongside the diagnostic.
+        let message: DiagnosticMessage = setup.generatorExprs.isEmpty
+            ? StateMachineDiagnostic.setupMissingGenerators
+            : SetupGeneratorArityDiagnostic(
+                parameterCount: setup.parameters.count,
+                generatorCount: setup.generatorExprs.count
+            )
+        context.diagnose(Diagnostic(node: Syntax(setup.syntax), message: message))
+        body = "nil"
+    } else {
+        let qualifiedGens = zip(setup.generatorExprs, setup.parameters).map {
+            qualifyGenExpression($0.0, paramType: $0.1.type)
+        }
+        let genArgs = qualifiedGens.joined(separator: ", ")
+        let closureParams = setup.parameters.map(\.bindingName).joined(separator: ", ")
+        let constructorArgs = setup.parameters.map {
+            "\($0.bindingName): \($0.bindingName)"
+        }.joined(separator: ", ")
+        body = "#gen(\(genArgs)) { \(closureParams) in SetupStep.\(setup.methodName)(\(constructorArgs)) }"
+    }
+
+    return """
+    \(raw: access)static var setupGenerator: ReflectiveGenerator<SetupStep>? {
+        \(raw: body)
+    }
+    """
+}
+
+func synthesizeRunSetup(setup: SetupInfo, hasAnyAsync: Bool, access: String) -> DeclSyntax {
+    let parameterBindingNames = Set(setup.parameters.map(\.bindingName))
+
+    func availableLocalName(preferredName: String) -> String {
+        var candidateName = preferredName
+        while parameterBindingNames.contains(candidateName) {
+            candidateName += "Value"
+        }
+        return candidateName
+    }
+
+    let stepVariableName = availableLocalName(preferredName: "step")
+
+    let effectKeywords: String
+    switch (setup.isThrows, setup.isAsync) {
+        case (true, true): effectKeywords = "try await "
+        case (true, false): effectKeywords = "try "
+        case (false, true): effectKeywords = "await "
+        case (false, false): effectKeywords = ""
+    }
+
+    let call: String
+    let pattern: String
+    if setup.parameters.isEmpty {
+        call = "\(effectKeywords)self.\(setup.methodName)()"
+        pattern = "case .\(setup.methodName)"
+    } else {
+        let bindings = setup.parameters.map(\.bindingName).joined(separator: ", ")
+        let arguments = setup.parameters.map { parameter in
+            parameter.externalLabel.map { "\($0): \(parameter.bindingName)" }
+                ?? parameter.bindingName
+        }.joined(separator: ", ")
+        call = "\(effectKeywords)self.\(setup.methodName)(\(arguments))"
+        pattern = "case let .\(setup.methodName)(\(bindings))"
+    }
+
+    let discard = setup.returnType != nil ? "_ = " : ""
+    let signature = hasAnyAsync
+        ? "\(access)func runSetup(_ \(stepVariableName): SetupStep) async throws"
+        : "\(access)func runSetup(_ \(stepVariableName): SetupStep) throws"
+
+    return """
+    \(raw: signature) {
+        switch \(raw: stepVariableName) {
+            \(raw: pattern):
+                \(raw: discard)\(raw: call)
+        }
+    }
+    """
+}
+
 /// Wraps a generator expression with a type cast to provide type context for implicit member syntax.
 ///
 /// User writes `@Command(weight: 3, .int(in: 0...9))` — the expression `.int(in: 0...9)` has no base type in the synthesized context. Casting to `ReflectiveGenerator<ParamType>` resolves the member lookup.
@@ -788,6 +1012,11 @@ enum StateMachineDiagnostic: String, DiagnosticMessage {
     case invalidCommandWeight = "@Command weight must be a positive integer literal"
     case oracleParameterCount = "@Oracle must take exactly one parameter of the SystemUnderTest type"
     case commandHasUnsupportedParameter = "@Command parameters must not be inout, variadic, or generic — the synthesized Command enum cannot represent them"
+    case multipleSetups = "@StateMachine allows only one @Setup method — merge multi-phase setup into one method whose body runs the phases in order"
+    case setupConflictingMarker = "@Setup cannot be combined with @Command, @Invariant, or @Oracle on the same method"
+    case setupMissingGenerators = "@Setup method has parameters but no generator expressions — add generators to the @Setup attribute"
+    case setupHasUnsupportedParameter = "@Setup parameters must not be inout, variadic, or generic — the synthesized SetupStep enum cannot represent them"
+    case mainActorSetup = "Setup methods isolated to @MainActor are unsupported because synthesized setup dispatch is nonisolated"
     case invariantHasParameters = "@Invariant methods must not take parameters because Exhaust calls them after every command"
     case throwingOracle = "@Oracle methods must not throw because oracle checks cannot propagate errors"
     case mainActorCommand = "Commands isolated to @MainActor are unsupported because synthesized command dispatch is nonisolated"
@@ -807,11 +1036,33 @@ enum StateMachineDiagnostic: String, DiagnosticMessage {
                  .actorRequiresSequential, .actorWithThreads,
                  .duplicateCommandName, .invalidCommandWeight, .oracleParameterCount,
                  .commandHasUnsupportedParameter, .invariantHasParameters, .throwingOracle,
-                 .mainActorCommand:
+                 .mainActorCommand,
+                 .multipleSetups, .setupConflictingMarker, .setupMissingGenerators,
+                 .setupHasUnsupportedParameter, .mainActorSetup:
                 .error
             case .oracleRequiresThreads, .invariantUnderThreads:
                 .warning
         }
+    }
+}
+
+/// Diagnostic for a `@Setup` method whose generator count does not match its parameter count.
+///
+/// Carries both counts so the message names the exact mismatch rather than a generic "wrong generators" note.
+struct SetupGeneratorArityDiagnostic: DiagnosticMessage {
+    let parameterCount: Int
+    let generatorCount: Int
+
+    var message: String {
+        "@Setup has \(parameterCount) parameter\(parameterCount == 1 ? "" : "s") but \(generatorCount) generator\(generatorCount == 1 ? "" : "s") — provide exactly one generator per parameter"
+    }
+
+    var diagnosticID: MessageID {
+        MessageID(domain: "ExhaustMacros", id: "setupGeneratorArityMismatch")
+    }
+
+    var severity: DiagnosticSeverity {
+        .error
     }
 }
 

@@ -12,17 +12,18 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
     // MARK: - Probe
 
     func probe(
-        _ candidate: [(ScheduleMarker, Spec.Command)],
+        _ candidate: SpecCandidateValue<Spec>,
         context _: StateMachineRunContext<Spec>
     ) -> ProbeOutcome {
-        let partition = LanePartition(markers: candidate.map(\.0))
-        let outcome = inner.execute(candidate, partition: partition)
+        let partition = LanePartition(markers: candidate.taggedCommands.map(\.0))
+        let outcome = inner.execute(candidate.taggedCommands, setupSteps: candidate.setupSteps, partition: partition)
         if case .timedOut = outcome {
             return .timeout
         }
         // Evidence is established only by reduction and final confirmation, which run against the reduced sequence. Pruning probes run against pre-reduction sequences, so they must not leak their evidence into the final report.
         let isFailure = __ExhaustRuntime.classifyFailure(
-            taggedCommands: candidate,
+            taggedCommands: candidate.taggedCommands,
+            setupSteps: candidate.setupSteps,
             outcome: outcome,
             backend: inner
         ) != nil
@@ -32,6 +33,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
     // MARK: - Reduce
 
     func reduce(
+        setupSteps: [Spec.SetupStep],
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         tree: ChoiceTree,
         context: StateMachineRunContext<Spec>
@@ -45,7 +47,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
             capturedContext.invocationCounter.value += 1
             let partition = LanePartition(markers: commands.map(\.0))
             for _ in 0 ..< repetitions {
-                let outcome = inner.execute(commands, partition: partition)
+                let outcome = inner.execute(commands, setupSteps: setupSteps, partition: partition)
                 if case .timedOut = outcome {
                     // A probe that times out during reduction is not a counterexample. Abort further reduction and keep the failure as-is rather than reducing toward a hang.
                     ExhaustLog.notice(category: .reducer, event: "preemptive_reduction_timeout")
@@ -53,6 +55,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
                 }
                 if let evidence = __ExhaustRuntime.classifyFailure(
                     taggedCommands: commands,
+                    setupSteps: setupSteps,
                     outcome: outcome,
                     backend: inner
                 ) {
@@ -75,6 +78,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
         let confirmed = __ExhaustRuntime.confirmRealFailure(
             backend: inner,
             input: reduced,
+            setupSteps: setupSteps,
             discoveryIterations: discoveryInvocations
         )
         if let confirmed {
@@ -88,6 +92,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
     // MARK: - Build Result
 
     func buildResult(
+        setupSteps: [Spec.SetupStep],
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,
         seed: UInt64?,
@@ -98,14 +103,16 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
         // Reduction already orders its output prefix-first, but the timeout path skips reduction entirely, so normalize here as well. The partition is idempotent, so the reduced path is unaffected.
         let reduced = reduced.prefixFirstOrder()
         let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
+        let setupDescriptions = setupSteps.map { "\($0)" }
 
-        let failureDescription = inner.sequentialReplayDescription(of: reduced)
+        let failureDescription = inner.sequentialReplayDescription(of: reduced, setupSteps: setupSteps)
 
         // The system under test reported to the user is always the concurrent spec that exhibited the failure, never the sequential confirmation replay.
         let result = StateMachineResult<Spec>(
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
-            trace: __ExhaustRuntime.buildPreemptiveTrace(reduced),
+            setup: setupSteps.first,
+            trace: __ExhaustRuntime.buildPreemptiveTrace(reduced, setupDescriptions: setupDescriptions),
             systemUnderTest: context.state.probeEvidence?.outcome.concurrentSpec?.systemUnderTest,
             seed: discoveryMethod.resultSeed(seed),
             replaySeed: replaySeed,

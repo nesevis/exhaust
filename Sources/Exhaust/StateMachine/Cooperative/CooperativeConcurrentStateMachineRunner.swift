@@ -185,14 +185,15 @@ private extension __ExhaustRuntime {
             within: 1 ... UInt64(resolvedCommandLimit),
             scaling: .constant
         )
+        let candidateGen = specCandidateGenerator(Spec.self, sequenceGen: sequenceGen)
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
         let concurrencyLevel = config.concurrencyLevel
         let idleTimeoutMilliseconds = config.idleTimeoutMilliseconds
 
         let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit, idleTimeoutMilliseconds: idleTimeoutMilliseconds)
-        let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { taggedCommands in
-            rawIdentifySkips(taggedCommands.map(\.1))
+        let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
+            rawIdentifySkips(candidate.setupSteps, candidate.taggedCommands.map(\.1))
         }
 
         let backend = CooperativeStateMachineBackend<Spec>(
@@ -202,11 +203,12 @@ private extension __ExhaustRuntime {
         )
 
         let invocationCounter = UnsafeSendableBox(0)
-        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+        let property: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
             invocationCounter.value += 1
             timeoutProbeCounts.value.attempts += 1
             let result = drainSchedule(
-                taggedCommands: taggedCommands,
+                taggedCommands: candidate.taggedCommands,
+                setupSteps: candidate.setupSteps,
                 specInit: specInit,
                 concurrencyLevel: concurrencyLevel,
                 recordTrace: false,
@@ -220,12 +222,12 @@ private extension __ExhaustRuntime {
             return result.passed
         }
 
-        var smokeSource: AnyStateMachineCandidateSource<Spec.Command>?
+        var smokeSource: AnyStateMachineCandidateSource<Spec>?
         if concurrencyLevel > 1 {
             let rawSmokeProperty = asyncSequentialProperty(specInit: specInit)
-            let smokeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
+            let smokeProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
                 invocationCounter.value += 1
-                return rawSmokeProperty(tagged)
+                return rawSmokeProperty(candidate)
             }
             // Smoke runs commands sequentially, so generate concurrency-1 (all-prefix) sequences. The candidate carries this generator and reduces sequentially even at higher lane counts.
             let smokeSequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
@@ -234,11 +236,16 @@ private extension __ExhaustRuntime {
             } else {
                 smokeSequenceGen = sequenceGen
             }
-            smokeSource = .smoke(sequenceGen: smokeSequenceGen, property: smokeProperty)
+            smokeSource = .smoke(
+                candidateGen: specCandidateGenerator(Spec.self, sequenceGen: smokeSequenceGen),
+                sequenceGen: smokeSequenceGen,
+                property: smokeProperty
+            )
         }
 
         let pipeline = SpecPipeline(
             backend: backend,
+            candidateGen: candidateGen,
             sequenceGen: sequenceGen,
             commandGen: commandGen,
             commandLimit: resolvedCommandLimit,
@@ -246,8 +253,8 @@ private extension __ExhaustRuntime {
             identifySkips: identifySkips,
             property: property,
             invocationCounter: invocationCounter,
-            sequenceGenForLength: { range in
-                Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
+            candidateGenForLength: { range in
+                specCandidateGenerator(Spec.self, sequenceGen: Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant))
             },
             fileID: fileID,
             filePath: filePath,

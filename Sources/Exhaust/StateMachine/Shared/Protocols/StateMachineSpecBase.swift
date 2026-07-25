@@ -8,6 +8,16 @@ public protocol StateMachineSpecBase: SendableMetatype {
     /// The synthesized command enum. Each case corresponds to a `@Command` method.
     associatedtype Command: CustomStringConvertible & Sendable
 
+    /// The synthesized setup step enum, with a single case for the `@Setup` method. Defaults to `Never` for specs without a `@Setup` method.
+    ///
+    /// Not intended as user-facing surface: the supported access path is ``StateMachineResult/setup``.
+    associatedtype SetupStep: Sendable = Never
+
+    /// Builds a generator for the spec's setup step, or `nil` when the spec has no `@Setup` method.
+    ///
+    /// The nil case dispatches the runtime onto the zero-setup generator path, which leaves existing specs' choice sequences byte-identical.
+    static var setupGenerator: ReflectiveGenerator<SetupStep>? { get }
+
     /// The type of the system under test, inferred from the `@SystemUnderTest` property.
     associatedtype SystemUnderTest
 
@@ -32,5 +42,10 @@ public extension StateMachineSpecBase {
     /// Default execution model for specs that do not declare one explicitly.
     static var executionModel: ExecutionModel {
         .sequential
+    }
+
+    /// Default for specs without a `@Setup` method. The `@StateMachine` macro synthesizes a real generator when one exists.
+    static var setupGenerator: ReflectiveGenerator<SetupStep>? {
+        nil
     }
 }

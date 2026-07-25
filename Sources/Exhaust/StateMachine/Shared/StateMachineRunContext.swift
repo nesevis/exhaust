@@ -7,7 +7,7 @@ struct StateMachineRunContext<Spec: StateMachineSpecBase> {
     let config: ResolvedConcurrentConfig
     let commandGen: Generator<Spec.Command>
     let commandLimit: Int
-    let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>
+    let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int>
     let invocationCounter: UnsafeSendableBox<Int>
     let fileID: StaticString
     let filePath: StaticString
@@ -25,7 +25,7 @@ struct StateMachineRunContext<Spec: StateMachineSpecBase> {
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         commandGen: Generator<Spec.Command>,
         commandLimit: Int,
-        identifySkips: @escaping @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int>,
+        identifySkips: @escaping @Sendable (SpecCandidateValue<Spec>) -> Set<Int>,
         invocationCounter: UnsafeSendableBox<Int> = UnsafeSendableBox(0),
         fileID: StaticString,
         filePath: StaticString,

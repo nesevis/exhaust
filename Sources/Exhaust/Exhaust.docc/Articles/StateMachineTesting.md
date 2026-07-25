@@ -147,6 +147,45 @@ The wrap-around (`index % userIDs.count`) means any index range works: the range
 
 Keep this state on the spec, next to the model. A command's behaviour then depends only on its arguments and the spec's own state, which is what reduction and replay rely on: remove a `createUser` from the sequence and every later `deleteUser` still resolves to *some* live user, rather than crashing or silently targeting stale storage.
 
+## Generated setup with @Setup
+
+Some specs need a generated starting configuration: a table created with generated options before any record command runs, a queue whose capacity should vary across probes. Without `@Setup`, the workarounds are duplicating the spec type per configuration, or promoting configuration to a `@Command` that every other command must `skip()` around until it lands, which wastes most of the discovery budget on sequences that never reach the interesting state.
+
+`@Setup` marks one method whose parameter values Exhaust draws from the attribute's generators, exactly like a command:
+
+```swift
+@StateMachine(.sequential)
+final class BoundedQueueSpec {
+    var model: [Int] = []
+    @SystemUnderTest var queue: BoundedQueue?
+
+    @Setup(.int(in: 1 ... 32), .int(in: 0 ... 9).array(length: 0 ... 8))
+    func configure(capacity: Int, preload: [Int]) {
+        let queue = BoundedQueue(capacity: capacity)
+        for value in preload where queue.enqueue(value) {
+            model.append(value)
+        }
+        self.queue = queue
+    }
+    // ...
+}
+```
+
+The setup method runs once on every fresh spec instance, before any command, on every execution model. Its values replay from seeds and reduce with the counterexample: reduction first minimises the setup value with the command sequence held fixed, then reduces the commands with the setup held fixed, so Exhaust reports the failure at the simplest configuration that still fails. The reduced value is available programmatically as ``StateMachineResult/setup``, and the trace renders it ahead of the commands:
+
+```
+1. configure(capacity: 1, preload: []) (setup)
+2. enqueue(value: 0) ✗ invariant 'countMatchesModel'
+```
+
+The rules, and how setup differs from a command:
+
+- A spec allows at most one `@Setup` method. Multi-phase setup merges into one method whose body runs the phases in order.
+- Setup cannot `skip()`, reduction never deletes it, and Exhaust does not check invariants after it: setup is construction, and the first command's invariant check is the first model-versus-SUT assertion. A setup throw fails the run. A setup domain that admits throwing values is a generator problem worth surfacing.
+- Setup runs on every probe: every screening row, every sampling iteration, every reduction probe, and once per spec instance that a concurrent probe constructs. Keep it cheap. Fixed, non-generated construction belongs in `init()`, and teardown belongs in `deinit`, both of which work today without `@Setup`.
+- A `@SystemUnderTest` property only needs to become `Optional` when the SUT's own construction consumes generated values, as above. A setup that mutates an already-constructed SUT keeps a non-optional property with its default initialiser.
+- Adding `@Setup` to an existing spec stops its recorded regression seeds reproducing, so they need re-recording. Specs without `@Setup` are unaffected.
+
 ## Running the test
 
 ```swift

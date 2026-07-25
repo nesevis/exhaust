@@ -26,6 +26,11 @@ public protocol AsyncStateMachineSpec: StateMachineSpecBase, AnyObject {
     /// - Throws: ``StateMachineCheckFailure`` if any invariant returns `false`.
     func checkInvariants() async throws
 
+    /// Executes the spec's `@Setup` method with the given generated step. Called once per fresh spec instance, before any command runs. No invariant check runs after setup.
+    ///
+    /// - Throws: Any error the setup method throws. A setup throw fails the run; there is no skip channel.
+    func runSetup(_ step: SetupStep) async throws
+
     /// Compares the concurrent SUT state against a sequentially-replayed reference SUT. Only called for `.threads` specs.
     ///
     /// - Parameter sequentialResult: The SUT state from a sequential (race-free) replay of the same command sequence.
@@ -54,9 +59,27 @@ public extension AsyncStateMachineSpec {
         )
     }
 
-    /// Returns a closure that re-executes a command sequence and returns the indices of skipped commands.
+    /// Default no-op for specs without a `@Setup` method. The `@StateMachine` macro synthesizes a real implementation when one exists.
+    func runSetup(_: SetupStep) async throws {}
+
+    /// Constructs a fresh spec instance and applies the setup steps in order.
     ///
-    /// Bridges async execution via ``__ExhaustRuntime/blockingAwait(idleTimeoutMilliseconds:_:)``. The returned closure is safe to call from a GCD thread. On drain-loop timeout (a command that suspends onto a foreign executor or deadlocks synchronously), returns an empty set. Skip pruning is an optimization, so degrading gracefully is safe.
+    /// The async twin of the ``StateMachineSpec`` construction funnel: once setup exists, no runner may call `Self()` directly. The instance is always returned, alongside the first setup error if one was thrown, so probe paths can report the partially set-up spec as evidence.
+    internal static func makeSpec(setupSteps: [SetupStep]) async -> (spec: Self, setupError: (any Error)?) {
+        let spec = Self()
+        for step in setupSteps {
+            do {
+                try await spec.runSetup(step)
+            } catch {
+                return (spec, error)
+            }
+        }
+        return (spec, nil)
+    }
+
+    /// Returns a closure that re-executes a command sequence (with setup applied first) and returns the indices of skipped commands.
+    ///
+    /// Bridges async execution via ``__ExhaustRuntime/blockingAwait(idleTimeoutMilliseconds:_:)``. The returned closure is safe to call from a GCD thread. On drain-loop timeout (a command that suspends onto a foreign executor or deadlocks synchronously) or a setup error, returns an empty set. Skip pruning is an optimization, so degrading gracefully is safe.
     ///
     /// - Parameters:
     ///   - specInit: A factory that creates a fresh spec instance. Must be `nonisolated(unsafe)` at the call site to satisfy `@Sendable` capture.
@@ -64,11 +87,18 @@ public extension AsyncStateMachineSpec {
     internal static func skipIdentifier(
         specInit: @escaping () -> Self,
         idleTimeoutMilliseconds: Int? = nil
-    ) -> @Sendable ([Command]) -> Set<Int> {
+    ) -> @Sendable ([SetupStep], [Command]) -> Set<Int> {
         nonisolated(unsafe) let specInit = specInit
-        return { commands in
+        return { setupSteps, commands in
             let box = UnsafeSendableBox(specInit())
             let work: @Sendable () async -> Set<Int> = {
+                for step in setupSteps {
+                    do {
+                        try await box.value.runSetup(step)
+                    } catch {
+                        return []
+                    }
+                }
                 var skips = Set<Int>()
                 for (index, command) in commands.enumerated() {
                     do {

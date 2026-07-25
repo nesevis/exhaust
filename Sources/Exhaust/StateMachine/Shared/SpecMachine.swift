@@ -14,7 +14,7 @@ import ExhaustCore
 struct SpecMachine<Backend: StateMachineBackend> {
     let backend: Backend
     let context: StateMachineRunContext<Backend.Spec>
-    var sources: [AnyStateMachineCandidateSource<Backend.Spec.Command>]
+    var sources: [AnyStateMachineCandidateSource<Backend.Spec>]
 
     // MARK: - State
 
@@ -23,12 +23,25 @@ struct SpecMachine<Backend: StateMachineBackend> {
     var discoveryInvocations: Int = 0
     var reportedSeed: UInt64?
 
-    var candidate: StateMachineCandidate<Backend.Spec.Command>?
-    var pruned: (value: [(ScheduleMarker, Backend.Spec.Command)], tree: ChoiceTree)?
+    var candidate: StateMachineCandidate<Backend.Spec>?
+    /// The single owner of the decomposed `(value, tree)` pair across the three successive reduction edits: skip pruning, the setup pass, and the backend's command passes. Each phase reads it and writes it back; nothing reads `candidate.tree` after ``stepPrune()``.
+    var reductionState: ReductionState?
+    var setupReductionStats: ReductionStats?
     var reduction: StateMachineReduction<Backend.Spec.Command>?
     var preReductionInvocations: Int = 0
     var reductionStopwatch: Stopwatch?
     var result: StateMachineResult<Backend.Spec>?
+
+    /// The candidate decomposed into its setup and command children.
+    ///
+    /// `setupTree` is nil for zero-setup specs, whose candidate tree IS the command tree. `reductionDisabled` is set when a with-setup candidate tree does not have the expected zip-group root: pruning or reducing such a tree would let structural encoders reach the setup subtree, so both are skipped and the candidate is reported unreduced.
+    struct ReductionState {
+        var setupSteps: [Backend.Spec.SetupStep]
+        var setupTree: ChoiceTree?
+        var taggedCommands: [(ScheduleMarker, Backend.Spec.Command)]
+        var commandTree: ChoiceTree
+        var reductionDisabled: Bool
+    }
 
     // MARK: - Step
 
@@ -38,6 +51,8 @@ struct SpecMachine<Backend: StateMachineBackend> {
                 return stepPullSource()
             case .prune:
                 return stepPrune()
+            case .reduceSetup:
+                return stepReduceSetup()
             case .reduce:
                 return stepReduce()
             case .recordStats:
@@ -81,7 +96,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
             phase = .prune
             return .candidateFound(
                 discoveryMethod: found.discoveryMethod,
-                commandCount: found.taggedCommands.count
+                commandCount: found.value.taggedCommands.count
             )
         } catch {
             accountSource(
@@ -101,7 +116,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     /// Attributes a source's discovery invocations and wall time to the matching report bucket. Runs for every source the machine advances through, so a phase that passes is still counted — not only the one that produces the failing candidate.
     private mutating func accountSource(
-        _ source: AnyStateMachineCandidateSource<Backend.Spec.Command>,
+        _ source: AnyStateMachineCandidateSource<Backend.Spec>,
         invocations: Int,
         elapsed: Double,
         foundFailure: Bool
@@ -123,9 +138,9 @@ struct SpecMachine<Backend: StateMachineBackend> {
         }
     }
 
-    private mutating func accountCandidate(_ candidate: StateMachineCandidate<Backend.Spec.Command>) {
+    private mutating func accountCandidate(_ candidate: StateMachineCandidate<Backend.Spec>) {
         context.state.failureContext.seed = candidate.discoveryMethod == .screening ? nil : candidate.seed
-        context.state.failureContext.originalCount = candidate.taggedCommands.count
+        context.state.failureContext.originalCount = candidate.value.taggedCommands.count
         context.state.failureContext.iteration = candidate.iteration
         context.state.failureContext.budget = candidate.discoveryMethod == .screening
             ? context.config.budget.screeningBudget
@@ -135,50 +150,172 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     // MARK: - Prune
 
-    /// Removes skipped commands from the candidate before reduction.
+    /// Decomposes the candidate into its setup and command children, then removes skipped commands from the command side before reduction.
     private mutating func stepPrune() -> Transition {
         guard let candidate else {
             phase = .pullSource
             return .sourceExhausted
         }
 
-        // Prune and reduce against the generator that produced this candidate so the choice sequence matches its tree. Smoke supplies a concurrency-1 generator, so smoke failures reduce sequentially regardless of the run's lane count.
+        // Prune and reduce against the generator that produced this candidate's command child so the choice sequence matches its tree. Smoke supplies a concurrency-1 generator, so smoke failures reduce sequentially regardless of the run's lane count.
         context.state.sequenceGen = candidate.sequenceGen
         preReductionInvocations = context.invocationCounter.value
         reductionStopwatch = Stopwatch()
 
+        let setupSteps = candidate.value.setupSteps
+        var setupTree: ChoiceTree?
+        var commandTree = candidate.tree
+        var reductionDisabled = false
+        if setupSteps.isEmpty == false {
+            if let split = __ExhaustRuntime.splitCandidateTree(candidate.tree) {
+                setupTree = split.setupTree
+                commandTree = split.commandTree
+            } else {
+                ExhaustLog.error(
+                    category: .reducer,
+                    event: "statemachine_candidate_tree_shape_mismatch",
+                    "Candidate tree root is not the expected setup/command group. Skipping pruning and reduction for this candidate."
+                )
+                reductionDisabled = true
+            }
+        }
+
+        var taggedCommands = candidate.value.taggedCommands
+        if reductionDisabled == false {
+            let pruned = pruneCommands(
+                setupSteps: setupSteps,
+                taggedCommands: taggedCommands,
+                commandTree: commandTree,
+                seed: candidate.seed
+            )
+            taggedCommands = pruned.value
+            commandTree = pruned.tree
+        }
+
+        reductionState = ReductionState(
+            setupSteps: setupSteps,
+            setupTree: setupTree,
+            taggedCommands: taggedCommands,
+            commandTree: commandTree,
+            reductionDisabled: reductionDisabled
+        )
+
+        phase = .reduceSetup
+        return .pruned
+    }
+
+    /// Runs skip pruning on the command side, with the given setup spliced into every probe and skip-identification call.
+    private func pruneCommands(
+        setupSteps: [Backend.Spec.SetupStep],
+        taggedCommands: [(ScheduleMarker, Backend.Spec.Command)],
+        commandTree: ChoiceTree,
+        seed: UInt64
+    ) -> (value: [(ScheduleMarker, Backend.Spec.Command)], tree: ChoiceTree) {
         nonisolated(unsafe) let unsafeBackend = backend
         nonisolated(unsafe) let capturedContext = context
-        let pruneResult = __ExhaustRuntime.pruneSkippedCommands(
-            value: candidate.taggedCommands,
-            tree: candidate.tree,
+        return __ExhaustRuntime.pruneSkippedCommands(
+            value: taggedCommands,
+            tree: commandTree,
             generator: context.state.sequenceGen,
-            seed: candidate.seed,
+            seed: seed,
             property: { commands in
-                unsafeBackend.countedProbe(commands, context: capturedContext) != .fail
+                unsafeBackend.countedProbe(
+                    SpecCandidateValue(setupSteps: setupSteps, taggedCommands: commands),
+                    context: capturedContext
+                ) != .fail
             },
-            identifySkips: context.identifySkips,
+            identifySkips: { commands in
+                capturedContext.identifySkips(
+                    SpecCandidateValue(setupSteps: setupSteps, taggedCommands: commands)
+                )
+            },
             logEvent: "statemachine_skip_pruning"
         )
-        pruned = (value: pruneResult.value, tree: pruneResult.tree)
+    }
 
+    // MARK: - Reduce Setup
+
+    /// Pass 0: value-reduces the setup step against the fixed command sequence, then re-runs skip pruning because a shrunk setup changes which commands skip.
+    ///
+    /// The reduction runs over the extracted setup subtree with the spec's `setupGenerator`, so commands are unreachable by construction. Deletion is enabled deliberately: the setup step itself is the subtree's zip root, not a `.sequence` element, so deletion can only shorten sequence-valued setup arguments within their declared length ranges.
+    private mutating func stepReduceSetup() -> Transition {
+        guard var reductionState, let candidate else {
+            phase = .pullSource
+            return .sourceExhausted
+        }
+        guard reductionState.reductionDisabled == false,
+              let setupTree = reductionState.setupTree,
+              let setupGen = Backend.Spec.setupGenerator,
+              let currentStep = reductionState.setupSteps.first
+        else {
+            phase = .reduce
+            return .setupReduced
+        }
+
+        nonisolated(unsafe) let unsafeBackend = backend
+        nonisolated(unsafe) let capturedContext = context
+        let fixedCommands = reductionState.taggedCommands
+        let property: @Sendable (Backend.Spec.SetupStep) -> Bool = { step in
+            unsafeBackend.countedProbe(
+                SpecCandidateValue(setupSteps: [step], taggedCommands: fixedCommands),
+                context: capturedContext
+            ) != .fail
+        }
+        let config = Interpreters.ReducerConfiguration(
+            maxStalls: 2,
+            wallClockDeadlineNanoseconds: context.reductionDeadlineNanoseconds,
+            enabledEncoders: [.valueSearch, .floatSearch, .deletion],
+            tuning: SchedulerTuning(relaxMaterializationBudget: 0)
+        )
+        if let reduced = try? Interpreters.choiceGraphReduceCollectingStats(
+            gen: setupGen.gen,
+            tree: setupTree,
+            output: currentStep,
+            config: config,
+            property: property
+        ) {
+            setupReductionStats = reduced.stats
+            if case let .reduced(_, reducedTree, reducedStep) = reduced.outcome {
+                reductionState.setupSteps = [reducedStep]
+                reductionState.setupTree = reducedTree
+                let repruned = pruneCommands(
+                    setupSteps: reductionState.setupSteps,
+                    taggedCommands: reductionState.taggedCommands,
+                    commandTree: reductionState.commandTree,
+                    seed: candidate.seed
+                )
+                reductionState.taggedCommands = repruned.value
+                reductionState.commandTree = repruned.tree
+            }
+        }
+
+        self.reductionState = reductionState
         phase = .reduce
-        return .pruned
+        return .setupReduced
     }
 
     // MARK: - Reduce
 
     private mutating func stepReduce() -> Transition {
-        guard let pruned else {
+        guard let reductionState else {
             phase = .pullSource
             return .sourceExhausted
         }
 
-        reduction = backend.reduce(
-            taggedCommands: pruned.value,
-            tree: pruned.tree,
-            context: context
-        )
+        if reductionState.reductionDisabled {
+            reduction = StateMachineReduction(
+                finalInput: reductionState.taggedCommands,
+                stats: nil,
+                timedOut: false
+            )
+        } else {
+            reduction = backend.reduce(
+                setupSteps: reductionState.setupSteps,
+                taggedCommands: reductionState.taggedCommands,
+                tree: reductionState.commandTree,
+                context: context
+            )
+        }
 
         phase = .recordStats
         return .reduced
@@ -193,8 +330,15 @@ struct SpecMachine<Backend: StateMachineBackend> {
         let reductionElapsed = reductionStopwatch?.elapsedMilliseconds ?? 0
         context.state.report.reductionMilliseconds = reductionElapsed
         context.state.failureContext.reductionInvocations = reductionInvocations
+        var mergedStats = ReductionStats()
+        if let stats = setupReductionStats {
+            mergedStats.merge(stats)
+        }
         if let stats = reduction?.stats {
-            context.state.report.applyReductionStats(stats)
+            mergedStats.merge(stats)
+        }
+        if setupReductionStats != nil || reduction?.stats != nil {
+            context.state.report.applyReductionStats(mergedStats)
         }
 
         phase = .assemble
@@ -204,13 +348,17 @@ struct SpecMachine<Backend: StateMachineBackend> {
     // MARK: - Assemble
 
     private mutating func stepAssemble() -> Transition {
-        guard let candidate, let reduction else {
+        guard let candidate, let reduction, let reductionState else {
             phase = .pullSource
             return .sourceExhausted
         }
 
-        let originalCommands = candidate.taggedCommands.map(\.1)
+        // Set here rather than in any one backend so every backend's failure rendering sees the same setup descriptions.
+        context.state.failureContext.setupDescriptions = reductionState.setupSteps.map { "\($0)" }
+
+        let originalCommands = candidate.value.taggedCommands.map(\.1)
         let (built, issueMessage) = backend.buildResult(
+            setupSteps: reductionState.setupSteps,
             reduced: reduction.finalInput,
             originalCommands: originalCommands,
             seed: candidate.seed,
@@ -250,6 +398,7 @@ extension SpecMachine {
     enum Phase {
         case pullSource
         case prune
+        case reduceSetup
         case reduce
         case recordStats
         case assemble
@@ -267,6 +416,7 @@ extension SpecMachine {
         case sourceError(String)
         case candidateFound(discoveryMethod: StateMachineDiscoveryMethod, commandCount: Int)
         case pruned
+        case setupReduced
         case reduced
         case statsRecorded
         case assembled
@@ -280,14 +430,15 @@ extension SpecMachine {
 /// Each entry point (sequential, cooperative, preemptive) constructs a pipeline once and calls ``runWithRegressions(config:regressionSeeds:mainRunSmokeSource:)`` to run the full pipeline. The pipeline drives ``SpecMachine/next()`` directly rather than using a blind loop, so each transition is available for logging and diagnostics.
 struct SpecPipeline<Backend: StateMachineBackend> {
     let backend: Backend
+    let candidateGen: Generator<SpecCandidateValue<Backend.Spec>>
     let sequenceGen: Generator<[(ScheduleMarker, Backend.Spec.Command)]>
     let commandGen: Generator<Backend.Spec.Command>
     let commandLimit: Int
     let concurrencyLevel: Int
-    let identifySkips: @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Set<Int>
-    let property: @Sendable ([(ScheduleMarker, Backend.Spec.Command)]) -> Bool
+    let identifySkips: @Sendable (SpecCandidateValue<Backend.Spec>) -> Set<Int>
+    let property: @Sendable (SpecCandidateValue<Backend.Spec>) -> Bool
     let invocationCounter: UnsafeSendableBox<Int>
-    let sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Backend.Spec.Command)]>)?
+    let candidateGenForLength: ((ClosedRange<UInt64>) -> Generator<SpecCandidateValue<Backend.Spec>>)?
     let fileID: StaticString
     let filePath: StaticString
     let line: UInt
@@ -295,7 +446,7 @@ struct SpecPipeline<Backend: StateMachineBackend> {
 
     func run(
         config: ResolvedConcurrentConfig,
-        smokeSource: AnyStateMachineCandidateSource<Backend.Spec.Command>? = nil
+        smokeSource: AnyStateMachineCandidateSource<Backend.Spec>? = nil
     ) -> (result: StateMachineResult<Backend.Spec>?, issues: [String]) {
         let runContext = StateMachineRunContext<Backend.Spec>(
             config: config,
@@ -311,13 +462,14 @@ struct SpecPipeline<Backend: StateMachineBackend> {
         )
         let sources = __ExhaustRuntime.buildStateMachineSources(
             config: config,
+            candidateGen: candidateGen,
             sequenceGen: sequenceGen,
             commandGen: commandGen,
             commandLimit: commandLimit,
             concurrencyLevel: concurrencyLevel,
             property: property,
             smokeSource: smokeSource,
-            sequenceGenForLength: sequenceGenForLength
+            candidateGenForLength: candidateGenForLength
         )
         var machine = SpecMachine(backend: backend, context: runContext, sources: sources)
         while let transition = machine.next() {
@@ -328,7 +480,7 @@ struct SpecPipeline<Backend: StateMachineBackend> {
                         event: "statemachine_candidate_found",
                         metadata: ["method": "\(discoveryMethod)", "commands": "\(commandCount)"]
                     )
-                case .sourceExhausted, .sourceError, .pruned, .reduced, .statsRecorded, .assembled:
+                case .sourceExhausted, .sourceError, .pruned, .setupReduced, .reduced, .statsRecorded, .assembled:
                     break
             }
         }
@@ -338,7 +490,7 @@ struct SpecPipeline<Backend: StateMachineBackend> {
     func runWithRegressions(
         config: ResolvedConcurrentConfig,
         regressionSeeds: [String],
-        mainRunSmokeSource: AnyStateMachineCandidateSource<Backend.Spec.Command>? = nil
+        mainRunSmokeSource: AnyStateMachineCandidateSource<Backend.Spec>? = nil
     ) -> (result: StateMachineResult<Backend.Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
 

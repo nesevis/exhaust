@@ -266,38 +266,30 @@ extension __ExhaustRuntime {
     static func buildSequentialSpecAdapter<Spec: StateMachineSpec>(
         _: Spec.Type,
         commandLimit: Int? = nil
-    ) -> SpecFuzzAdapter<[(ScheduleMarker, Spec.Command)]> {
+    ) -> SpecFuzzAdapter<SpecCandidateValue<Spec>> {
         let taggedSequenceGen = taggedSequenceGenerator(
             commandGen: Spec.commandGenerator,
             commandLimit: commandLimit ?? FuzzTunables.specDefaultCommandLimit
         )
+        let candidateGen = specCandidateGenerator(Spec.self, sequenceGen: taggedSequenceGen)
 
         // Two views of the one executor loop: the verdict property drives the runner and carries the thrown error as the failure symptom; the Bool probe derived from it serves pruning and reduction, where only pass/fail matters.
-        let verdictProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> FuzzVerdict = syncSequentialVerdictProperty(Spec.self)
-        let rawProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = syncSequentialProperty(Spec.self)
+        let verdictProperty: @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict = syncSequentialVerdictProperty(Spec.self)
+        let rawProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = syncSequentialProperty(Spec.self)
 
-        let syncSkipIdentifier = Spec.skipIdentifier
-        let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { tagged in
-            syncSkipIdentifier(tagged.map(\.1))
+        let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
+            Spec.identifySkips(setupSteps: candidate.setupSteps, commands: candidate.taggedCommands.map(\.1))
         }
 
-        let pruneHook: @Sendable ([(ScheduleMarker, Spec.Command)], ChoiceTree) -> (value: [(ScheduleMarker, Spec.Command)], tree: ChoiceTree) = { value, tree in
-            // seed 0 is safe here: skip pruning is pure element deletion into a fully populated tree, so the guided fallback tree is authoritative and the seed fills no gaps.
-            pruneSkippedCommands(
-                value: value,
-                tree: tree,
-                generator: taggedSequenceGen,
-                seed: 0,
-                property: rawProperty,
-                identifySkips: identifySkips,
-                requireFailurePreserved: false,
-                logEvent: "spec_time_prune"
-            )
-        }
+        let pruneHook = specTimePruneHook(
+            sequenceGen: taggedSequenceGen,
+            rawProperty: rawProperty,
+            identifySkips: identifySkips
+        )
 
         // The value path's reduction with the spec deadline: a spec reduction probe replays a whole command sequence against a fresh SUT, so it gets more wall clock per candidate.
         let reduceStrategy = FuzzRunner.propertyOnlyReduceStrategy(
-            gen: taggedSequenceGen,
+            gen: candidateGen,
             property: verdictProperty,
             reducerConfiguration: Interpreters.ReducerConfiguration(
                 maxStalls: 2,
@@ -306,10 +298,52 @@ extension __ExhaustRuntime {
         )
 
         return SpecFuzzAdapter(
-            generator: taggedSequenceGen,
+            generator: candidateGen,
             property: verdictProperty,
             hooks: FuzzHooks(prune: pruneHook, reduceStrategy: reduceStrategy)
         )
+    }
+
+    /// Builds the `time:` mode prune hook: decomposes the candidate, prunes skipped commands on the command child, and recomposes.
+    ///
+    /// The decomposition keeps the setup subtree out of `pruneSequenceElements`' reach: without it, a setup containing an array generator would put a `.sequence` node ahead of the command sequence and skip pruning would silently delete setup choices. seed 0 is safe here: skip pruning is pure element deletion into a fully populated tree, so the guided fallback tree is authoritative and the seed fills no gaps.
+    static func specTimePruneHook<Spec: StateMachineSpecBase>(
+        sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
+        rawProperty: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool,
+        identifySkips: @escaping @Sendable (SpecCandidateValue<Spec>) -> Set<Int>
+    ) -> @Sendable (SpecCandidateValue<Spec>, ChoiceTree) -> (value: SpecCandidateValue<Spec>, tree: ChoiceTree) {
+        { value, tree in
+            let setupTree: ChoiceTree?
+            let commandTree: ChoiceTree
+            if value.setupSteps.isEmpty {
+                setupTree = nil
+                commandTree = tree
+            } else if let split = splitCandidateTree(tree) {
+                setupTree = split.setupTree
+                commandTree = split.commandTree
+            } else {
+                return (value, tree)
+            }
+
+            let setupSteps = value.setupSteps
+            let pruned = pruneSkippedCommands(
+                value: value.taggedCommands,
+                tree: commandTree,
+                generator: sequenceGen,
+                seed: 0,
+                property: { commands in
+                    rawProperty(SpecCandidateValue(setupSteps: setupSteps, taggedCommands: commands))
+                },
+                identifySkips: { commands in
+                    identifySkips(SpecCandidateValue(setupSteps: setupSteps, taggedCommands: commands))
+                },
+                requireFailurePreserved: false,
+                logEvent: "spec_time_prune"
+            )
+            let prunedValue = SpecCandidateValue<Spec>(setupSteps: setupSteps, taggedCommands: pruned.value)
+            let prunedTree = setupTree.map { composeCandidateTree(setupTree: $0, commandTree: pruned.tree) } ?? pruned.tree
+            return (prunedValue, prunedTree)
+        }
     }
 
     /// Builds the generator, property, and seam hooks for an async `.sequential` spec under `time:` mode.
@@ -318,39 +352,32 @@ extension __ExhaustRuntime {
     static func buildAsyncSequentialSpecAdapter<Spec: AsyncStateMachineSpec>(
         _: Spec.Type,
         commandLimit: Int? = nil
-    ) -> SpecFuzzAdapter<[(ScheduleMarker, Spec.Command)]> {
+    ) -> SpecFuzzAdapter<SpecCandidateValue<Spec>> {
         let taggedSequenceGen = taggedSequenceGenerator(
             commandGen: Spec.commandGenerator,
             commandLimit: commandLimit ?? FuzzTunables.specDefaultCommandLimit
         )
+        let candidateGen = specCandidateGenerator(Spec.self, sequenceGen: taggedSequenceGen)
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
         // Two views of the one executor loop, exactly as the sync adapter: the verdict property carries the thrown error as the failure symptom; the Bool probe derived from it serves pruning and reduction.
-        let verdictProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> FuzzVerdict = asyncSequentialVerdictProperty(specInit: specInit)
-        let rawProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = asyncSequentialProperty(specInit: specInit)
+        let verdictProperty: @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict = asyncSequentialVerdictProperty(specInit: specInit)
+        let rawProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = asyncSequentialProperty(specInit: specInit)
 
         let asyncSkipIdentifier = Spec.skipIdentifier(specInit: specInit)
-        let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { tagged in
-            asyncSkipIdentifier(tagged.map(\.1))
+        let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
+            asyncSkipIdentifier(candidate.setupSteps, candidate.taggedCommands.map(\.1))
         }
 
-        let pruneHook: @Sendable ([(ScheduleMarker, Spec.Command)], ChoiceTree) -> (value: [(ScheduleMarker, Spec.Command)], tree: ChoiceTree) = { value, tree in
-            // seed 0 is safe here: skip pruning is pure element deletion into a fully populated tree, so the guided fallback tree is authoritative and the seed fills no gaps.
-            pruneSkippedCommands(
-                value: value,
-                tree: tree,
-                generator: taggedSequenceGen,
-                seed: 0,
-                property: rawProperty,
-                identifySkips: identifySkips,
-                requireFailurePreserved: false,
-                logEvent: "spec_time_prune"
-            )
-        }
+        let pruneHook = specTimePruneHook(
+            sequenceGen: taggedSequenceGen,
+            rawProperty: rawProperty,
+            identifySkips: identifySkips
+        )
 
         let reduceStrategy = FuzzRunner.propertyOnlyReduceStrategy(
-            gen: taggedSequenceGen,
+            gen: candidateGen,
             property: verdictProperty,
             reducerConfiguration: Interpreters.ReducerConfiguration(
                 maxStalls: 2,
@@ -359,7 +386,7 @@ extension __ExhaustRuntime {
         )
 
         return SpecFuzzAdapter(
-            generator: taggedSequenceGen,
+            generator: candidateGen,
             property: verdictProperty,
             hooks: FuzzHooks(prune: pruneHook, reduceStrategy: reduceStrategy)
         )
@@ -383,7 +410,7 @@ extension __ExhaustRuntime {
         commandLimit: Int? = nil,
         concurrencyLevel: Int,
         idleTimeoutMilliseconds: Int = ResolvedConcurrentConfig.defaultIdleTimeout
-    ) -> SpecFuzzAdapter<[(ScheduleMarker, Spec.Command)]>? {
+    ) -> SpecFuzzAdapter<SpecCandidateValue<Spec>>? {
         guard let taggedCommandGen = zipScheduleMarker(
             onto: Spec.commandGenerator.gen,
             concurrencyLevel: concurrencyLevel
@@ -396,12 +423,14 @@ extension __ExhaustRuntime {
             within: 1 ... UInt64(resolvedCommandLimit),
             scaling: .constant
         )
+        let candidateGen = specCandidateGenerator(Spec.self, sequenceGen: sequenceGen)
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
-        let verdictProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> FuzzVerdict = { tagged in
+        let verdictProperty: @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict = { candidate in
             let result = drainSchedule(
-                taggedCommands: tagged,
+                taggedCommands: candidate.taggedCommands,
+                setupSteps: candidate.setupSteps,
                 specInit: specInit,
                 concurrencyLevel: concurrencyLevel,
                 recordTrace: false,
@@ -416,34 +445,27 @@ extension __ExhaustRuntime {
             }
             return .fail(FailureSymptom(kind: result.failureSymptomKind ?? "returnedFalse"))
         }
-        let rawProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
-            verdictProperty(tagged).isFailure == false
+        let rawProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
+            verdictProperty(candidate).isFailure == false
         }
 
         let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit)
-        let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { tagged in
-            rawIdentifySkips(tagged.map(\.1))
+        let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
+            rawIdentifySkips(candidate.setupSteps, candidate.taggedCommands.map(\.1))
         }
 
-        let pruneHook: @Sendable ([(ScheduleMarker, Spec.Command)], ChoiceTree) -> (value: [(ScheduleMarker, Spec.Command)], tree: ChoiceTree) = { value, tree in
-            // seed 0 is safe here: skip pruning is pure element deletion into a fully populated tree, so the guided fallback tree is authoritative and the seed fills no gaps.
-            pruneSkippedCommands(
-                value: value,
-                tree: tree,
-                generator: sequenceGen,
-                seed: 0,
-                property: rawProperty,
-                identifySkips: identifySkips,
-                requireFailurePreserved: false,
-                logEvent: "spec_time_prune"
-            )
-        }
+        let pruneHook = specTimePruneHook(
+            sequenceGen: sequenceGen,
+            rawProperty: rawProperty,
+            identifySkips: identifySkips
+        )
 
-        // Two-pass reduction (lane collapse + deletion, then value minimization), run inline on the fuzz loop's GCD lane. The drain loop's spin-polling stays off the cooperative pool because the loop's lane hosts it, which is what inline reduction guarantees by construction.
-        let reduceStrategy: @Sendable (ChoiceTree, [(ScheduleMarker, Spec.Command)], FailureSymptom) -> FuzzReductionResult<[(ScheduleMarker, Spec.Command)]> = { tree, value, _ in
-            let probeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> StateMachineProbeVerdict<Void> = { tagged in
+        // Two-pass reduction (lane collapse + deletion, then value minimization), run inline on the fuzz loop's GCD lane. The drain loop's spin-polling stays off the cooperative pool because the loop's lane hosts it, which is what inline reduction guarantees by construction. Unlike the plain-#execute machine, `time:` mode reduces the whole candidate in one tree, so setup values minimize alongside the commands here rather than in a separate pass.
+        let reduceStrategy: @Sendable (ChoiceTree, SpecCandidateValue<Spec>, FailureSymptom) -> FuzzReductionResult<SpecCandidateValue<Spec>> = { tree, value, _ in
+            let probeProperty: @Sendable (SpecCandidateValue<Spec>) -> StateMachineProbeVerdict<Void> = { candidate in
                 let result = drainSchedule(
-                    taggedCommands: tagged,
+                    taggedCommands: candidate.taggedCommands,
+                    setupSteps: candidate.setupSteps,
                     specInit: specInit,
                     concurrencyLevel: concurrencyLevel,
                     recordTrace: false,
@@ -457,7 +479,7 @@ extension __ExhaustRuntime {
                 return result.passed ? .pass : .fail(())
             }
             let result = reduceConcurrentTwoPass(
-                generator: sequenceGen,
+                generator: candidateGen,
                 tree: tree,
                 output: value,
                 deadlineNanoseconds: FuzzTunables.specReductionDeadlineNanoseconds,
@@ -473,7 +495,7 @@ extension __ExhaustRuntime {
         }
 
         return SpecFuzzAdapter(
-            generator: sequenceGen,
+            generator: candidateGen,
             property: verdictProperty,
             hooks: FuzzHooks(prune: pruneHook, reduceStrategy: reduceStrategy)
         )

@@ -186,6 +186,61 @@ extension __ExhaustRuntime {
         return (trace, false)
     }
 
+    /// Renders a setup step for trace display, suffixed so the reader does not conclude it was a generated sequence member.
+    ///
+    /// The parameter is `some Any` rather than `CustomStringConvertible` because `SetupStep` defaults to `Never` for zero-setup specs, and `Never` does not conform. Synthesized setup enums are always `CustomStringConvertible`, so interpolation renders the real description at every reachable call site.
+    static func setupTraceDescription(_ step: some Any) -> String {
+        "\(step) (setup)"
+    }
+
+    /// Constructs a fresh spec and applies setup steps while recording one trace entry per step.
+    ///
+    /// The trace-recording sibling of the ``StateMachineSpec/makeSpec(setupSteps:)`` funnel: the stepwise application exists so a throwing setup is attributed to its exact step. A setup step's outcome can only be `.ok` or `.checkFailed`; no invariant check runs after setup.
+    static func makeSpecRecordingSetupTrace<Spec: StateMachineSpec>(
+        _: Spec.Type,
+        setupSteps: [Spec.SetupStep]
+    ) -> (spec: Spec, steps: [TraceStep], failed: Bool) {
+        let spec = Spec()
+        var steps: [TraceStep] = []
+        for (index, step) in setupSteps.enumerated() {
+            do {
+                try spec.runSetup(step)
+                steps.append(TraceStep(index: index + 1, command: setupTraceDescription(step), outcome: .ok))
+            } catch {
+                steps.append(TraceStep(index: index + 1, command: setupTraceDescription(step), outcome: .checkFailed(message: "\(error)")))
+                return (spec, steps, true)
+            }
+        }
+        return (spec, steps, false)
+    }
+
+    /// Applies setup steps to an already-constructed async spec while recording one trace entry per step. The async twin of ``makeSpecRecordingSetupTrace(_:setupSteps:)``, split from construction because async callers construct inside their own bridged tasks.
+    static func applySetupRecordingTrace<Spec: AsyncStateMachineSpec>(
+        _ spec: Spec,
+        setupSteps: [Spec.SetupStep]
+    ) async -> (steps: [TraceStep], failed: Bool) {
+        var steps: [TraceStep] = []
+        for (index, step) in setupSteps.enumerated() {
+            do {
+                try await spec.runSetup(step)
+                steps.append(TraceStep(index: index + 1, command: setupTraceDescription(step), outcome: .ok))
+            } catch {
+                steps.append(TraceStep(index: index + 1, command: setupTraceDescription(step), outcome: .checkFailed(message: "\(error)")))
+                return (steps, true)
+            }
+        }
+        return (steps, false)
+    }
+
+    /// Prepends setup trace entries to command trace entries, renumbering the command steps so the trace counts through the setup rows first.
+    static func joinTrace(setup: [TraceStep], commands: [TraceStep]) -> [TraceStep] {
+        guard setup.isEmpty == false else {
+            return commands
+        }
+        let offset = setup.count
+        return setup + commands.map { TraceStep(index: $0.index + offset, command: $0.command, outcome: $0.outcome) }
+    }
+
     /// Async variant of ``buildSequentialTrace(_:run:checkInvariants:)``.
     static func buildAsyncSequentialTrace<Command: CustomStringConvertible>(
         _ commands: [Command],

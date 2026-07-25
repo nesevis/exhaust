@@ -1,30 +1,32 @@
 import ExhaustCore
 
-/// Carries a failing command sequence from a source to the ``SpecMachine`` for reduction.
-struct StateMachineCandidate<Command> {
-    let taggedCommands: [(ScheduleMarker, Command)]
+/// Carries a failing candidate from a source to the ``SpecMachine`` for reduction.
+struct StateMachineCandidate<Spec: StateMachineSpecBase> {
+    /// The full generated candidate: setup steps ahead of the tagged command sequence.
+    let value: SpecCandidateValue<Spec>
+    /// The full candidate tree. For a with-setup spec the root is the zip group; the machine decomposes it before pruning and reduction.
     let tree: ChoiceTree
-    /// The generator that produced this candidate. Pruning and reduction must use it so the choice sequence stays consistent with `tree`. Smoke supplies a concurrency-1 generator, so a smoke-discovered failure reduces sequentially regardless of the run's lane count.
-    let sequenceGen: Generator<[(ScheduleMarker, Command)]>
+    /// The command-side generator that produced this candidate's command child. Pruning and reduction must use it so the choice sequence stays consistent with the command child of `tree`. Smoke supplies a concurrency-1 generator, so a smoke-discovered failure reduces sequentially regardless of the run's lane count.
+    let sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
     let seed: UInt64
     let iteration: Int
     let discoveryMethod: StateMachineDiscoveryMethod
 }
 
-/// Produces failing candidate command sequences for the ``SpecMachine``, owning its iteration state internally.
-struct AnyStateMachineCandidateSource<Command> {
+/// Produces failing candidates for the ``SpecMachine``, owning its iteration state internally.
+struct AnyStateMachineCandidateSource<Spec: StateMachineSpecBase> {
     /// Which discovery phase this source represents. The machine attributes the source's invocations and wall time to the matching report bucket whether or not the source yields a candidate, so a phase that runs and passes is still counted.
     let discoveryMethod: StateMachineDiscoveryMethod
     /// The PRNG seed to surface in ``ExhaustReport/seed``, or `nil` for phases with no replayable seed (screening, smoke).
     let reportedSeed: UInt64?
     let resolvedReplaySeed: ReplaySeed.Resolved?
-    private let produceNext: () throws -> StateMachineCandidate<Command>?
+    private let produceNext: () throws -> StateMachineCandidate<Spec>?
 
     init(
         discoveryMethod: StateMachineDiscoveryMethod = .randomSampling,
         reportedSeed: UInt64? = nil,
         resolvedReplaySeed: ReplaySeed.Resolved? = nil,
-        _ produceNext: @escaping () throws -> StateMachineCandidate<Command>?
+        _ produceNext: @escaping () throws -> StateMachineCandidate<Spec>?
     ) {
         self.discoveryMethod = discoveryMethod
         self.reportedSeed = reportedSeed
@@ -32,7 +34,7 @@ struct AnyStateMachineCandidateSource<Command> {
         self.produceNext = produceNext
     }
 
-    func next() throws -> StateMachineCandidate<Command>? {
+    func next() throws -> StateMachineCandidate<Spec>? {
         try produceNext()
     }
 }
@@ -45,7 +47,7 @@ extension AnyStateMachineCandidateSource {
         discoveryMethod: StateMachineDiscoveryMethod,
         reportedSeed: UInt64? = nil,
         resolvedReplaySeed: ReplaySeed.Resolved? = nil,
-        _ computation: @escaping () throws -> StateMachineCandidate<Command>?
+        _ computation: @escaping () throws -> StateMachineCandidate<Spec>?
     ) -> AnyStateMachineCandidateSource {
         var exhausted = false
         return AnyStateMachineCandidateSource(
@@ -68,22 +70,25 @@ extension AnyStateMachineCandidateSource {
     /// Replays a single SCA screening row from a `U-{N}` seed.
     static func screeningReplay(
         row: Int,
-        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
-        commandGen: Generator<Command>,
+        candidateGen: Generator<SpecCandidateValue<Spec>>,
+        sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
+        commandGen: Generator<Spec.Command>,
         commandLimit: Int,
         screeningBudget: UInt64,
         concurrencyLevel: Int,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
+        augmentRowFallback: ((ChoiceTree, UInt64) -> ChoiceTree)?,
+        property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .screening, resolvedReplaySeed: .screening(row: row)) {
             let result = __ExhaustRuntime.runSCAScreeningRowLoop(
-                sequenceGen: sequenceGen,
+                sequenceGen: candidateGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: screeningBudget,
                 skipToRow: row,
                 logEventPrefix: "statemachine_screening_replay",
                 concurrencyLevel: concurrencyLevel,
+                augmentRowFallback: augmentRowFallback,
                 property: property
             )
 
@@ -91,7 +96,7 @@ extension AnyStateMachineCandidateSource {
                 case let .failure(value, tree, screeningInvocations):
                     // Match the shape of a fresh screening candidate so the replayed failure round-trips to the same `U-N` seed and nils its synthetic seed.
                     return StateMachineCandidate(
-                        taggedCommands: value,
+                        value: value,
                         tree: tree,
                         sequenceGen: sequenceGen,
                         seed: UInt64(screeningInvocations),
@@ -108,8 +113,9 @@ extension AnyStateMachineCandidateSource {
     static func samplingReplay(
         replaySeed: UInt64,
         replayIteration: Int?,
-        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
+        candidateGen: Generator<SpecCandidateValue<Spec>>,
+        sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
+        property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(
             discoveryMethod: .replay,
@@ -118,7 +124,7 @@ extension AnyStateMachineCandidateSource {
         ) {
             let startIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
             var interpreter = ValueAndChoiceTreeInterpreter(
-                sequenceGen,
+                candidateGen,
                 seed: replaySeed,
                 maxRuns: startIndex + 1,
                 initialRunIndex: startIndex
@@ -130,7 +136,7 @@ extension AnyStateMachineCandidateSource {
                 return nil
             }
             return StateMachineCandidate(
-                taggedCommands: value,
+                value: value,
                 tree: tree,
                 sequenceGen: sequenceGen,
                 seed: replaySeed,
@@ -142,11 +148,12 @@ extension AnyStateMachineCandidateSource {
 
     /// Seed 0, one sequential probe to catch obvious breakage before concurrent phases.
     static func smoke(
-        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
+        candidateGen: Generator<SpecCandidateValue<Spec>>,
+        sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
+        property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .smokeTest) {
-            var interpreter = ValueAndChoiceTreeInterpreter(sequenceGen, seed: 0, maxRuns: 1)
+            var interpreter = ValueAndChoiceTreeInterpreter(candidateGen, seed: 0, maxRuns: 1)
             guard let (value, tree) = try interpreter.next() else {
                 return nil
             }
@@ -154,7 +161,7 @@ extension AnyStateMachineCandidateSource {
                 return nil
             }
             return StateMachineCandidate(
-                taggedCommands: value,
+                value: value,
                 tree: tree,
                 sequenceGen: sequenceGen,
                 seed: 0,
@@ -166,31 +173,34 @@ extension AnyStateMachineCandidateSource {
 
     /// Iterates all SCA screening tiers until a failure is found or all rows exhaust.
     static func screening(
-        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
-        commandGen: Generator<Command>,
+        candidateGen: Generator<SpecCandidateValue<Spec>>,
+        sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
+        commandGen: Generator<Spec.Command>,
         commandLimit: Int,
         screeningBudget: UInt64,
         concurrencyLevel: Int,
-        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Command)]>)? = nil,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
+        candidateGenForLength: ((ClosedRange<UInt64>) -> Generator<SpecCandidateValue<Spec>>)? = nil,
+        augmentRowFallback: ((ChoiceTree, UInt64) -> ChoiceTree)?,
+        property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .screening) {
             let result = __ExhaustRuntime.runSCAScreeningRowLoop(
-                sequenceGen: sequenceGen,
+                sequenceGen: candidateGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: screeningBudget,
                 skipToRow: nil,
                 logEventPrefix: "statemachine_screening",
                 concurrencyLevel: concurrencyLevel,
-                sequenceGenForLength: sequenceGenForLength,
+                sequenceGenForLength: candidateGenForLength,
+                augmentRowFallback: augmentRowFallback,
                 property: property
             )
 
             switch result {
                 case let .failure(value, tree, screeningInvocations):
                     return StateMachineCandidate(
-                        taggedCommands: value,
+                        value: value,
                         tree: tree,
                         sequenceGen: sequenceGen,
                         seed: UInt64(screeningInvocations),
@@ -205,13 +215,14 @@ extension AnyStateMachineCandidateSource {
 
     /// Random sampling via VACTI, budget-capped.
     static func sampling(
-        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
+        candidateGen: Generator<SpecCandidateValue<Spec>>,
+        sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         seed: UInt64,
         samplingBudget: UInt64,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool
+        property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         var interpreter = ValueAndChoiceTreeInterpreter(
-            sequenceGen,
+            candidateGen,
             seed: seed,
             maxRuns: samplingBudget
         )
@@ -222,7 +233,7 @@ extension AnyStateMachineCandidateSource {
                 if property(value) == false {
                     let tree = try interpreter.reproduceFailureTree()
                     return StateMachineCandidate(
-                        taggedCommands: value,
+                        value: value,
                         tree: tree,
                         sequenceGen: sequenceGen,
                         seed: seed,

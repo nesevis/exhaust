@@ -31,6 +31,7 @@ extension __ExhaustRuntime {
         logEventPrefix: String,
         concurrencyLevel: Int? = nil,
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<Value>)? = nil,
+        augmentRowFallback: ((ChoiceTree, UInt64) -> ChoiceTree)? = nil,
         property: @escaping @Sendable (Value) -> Bool
     ) -> SCARowLoopResult<Value> {
         guard let pickChoices = extractPickChoices(from: commandGen) else {
@@ -100,9 +101,11 @@ extension __ExhaustRuntime {
                     continue
                 }
 
+                // With-setup specs wrap the row's bare command sequence in the candidate root shape (setup child ahead of it), with a deterministic random setup subtree per row. The seed is the same `totalIterations` counter the guided mode uses, so a `U-N` replay reaches the same row with the same setup.
+                let fallbackTree = augmentRowFallback.map { $0(tree, UInt64(totalIterations)) } ?? tree
                 let mode = Materializer.Mode.guided(
                     seed: UInt64(totalIterations),
-                    fallbackTree: tree
+                    fallbackTree: fallbackTree
                 )
                 guard case let .success(value, freshTree, _) = Materializer.materialize(
                     tierGen, prefix: ChoiceSequence(), mode: mode
@@ -314,13 +317,13 @@ extension __ExhaustRuntime {
     /// Lane collapse and deletion run together in pass 1 so the scheduler can interleave them — collapsing a lane then deleting the now-prefix command in the same cycle, rather than over-collapsing before deletion gets a chance. Pass 2 runs value and float search on the structurally reduced sequence. Each pass rematerializes on success to keep the output and tree consistent. Shared by the cooperative and preemptive backends so the reduction strategy cannot drift between them.
     ///
     /// The property closure returns a ``StateMachineProbeVerdict`` so the preemptive backend can carry linearizability evidence (response witnesses, failure descriptions) through reduction without a separate side-channel. The cooperative backend returns `.fail(())`. A `.abort` verdict (a probe timed out, so further probing would reduce toward a hang) stops reduction: remaining probes in the current pass are treated as passing and the second pass is skipped, leaving the counterexample as-is.
-    static func reduceConcurrentTwoPass<Command, Evidence>(
-        generator: Generator<[(ScheduleMarker, Command)]>,
+    static func reduceConcurrentTwoPass<Value, Evidence>(
+        generator: Generator<Value>,
         tree: ChoiceTree,
-        output: [(ScheduleMarker, Command)],
+        output: Value,
         deadlineNanoseconds: UInt64,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> StateMachineProbeVerdict<Evidence>
-    ) -> ConcurrentTwoPassResult<Command, Evidence> {
+        property: @escaping @Sendable (Value) -> StateMachineProbeVerdict<Evidence>
+    ) -> ConcurrentTwoPassResult<Value, Evidence> {
         let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
         var currentOutput = output
         var currentTree = tree
@@ -331,7 +334,7 @@ extension __ExhaustRuntime {
         nonisolated(unsafe) var aborted = false
 
         // The underlying graph reducer has no abort channel, so an abort is latched here: remaining probes in the in-flight pass report passing (rejecting every candidate) without reaching the backend's property, and the next pass is skipped.
-        let boolProperty: @Sendable ([(ScheduleMarker, Command)]) -> Bool = { commands in
+        let boolProperty: @Sendable (Value) -> Bool = { commands in
             guard aborted == false else {
                 return true
             }
@@ -418,18 +421,21 @@ extension __ExhaustRuntime {
     /// Builds a sequential property for the smoke source: runs commands in order, checks invariants after each step.
     ///
     /// Shared by all spec backends. The sync variant handles `StateMachineSpec`; the async variant bridges through `_blockingAwaitSemaphore`. Both are used as the smoke source's property closure and as the sequential backend's probe property.
-    static func syncSequentialProperty<Spec: StateMachineSpec>(_ specType: Spec.Type) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
+    static func syncSequentialProperty<Spec: StateMachineSpec>(_ specType: Spec.Type) -> @Sendable (SpecCandidateValue<Spec>) -> Bool {
         let verdictProperty = syncSequentialVerdictProperty(specType)
-        return { tagged in
-            verdictProperty(tagged).isFailure == false
+        return { candidate in
+            verdictProperty(candidate).isFailure == false
         }
     }
 
-    /// The one sequential executor loop, returning a verdict: preserves the thrown error as the failure symptom, so the `time:` runner's reduction gate can tell invariant violations (`StateMachineCheckFailure`) apart from user-thrown error types instead of collapsing every spec fault into one capped symptom. ``syncSequentialProperty(_:)`` derives the Bool probe from this, so the two can never disagree on what passes.
-    static func syncSequentialVerdictProperty<Spec: StateMachineSpec>(_: Spec.Type) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> FuzzVerdict {
-        { tagged in
-            let spec = Spec()
-            for (_, command) in tagged {
+    /// The one sequential executor loop, returning a verdict: preserves the thrown error as the failure symptom, so the `time:` runner's reduction gate can tell invariant violations (`StateMachineCheckFailure`) apart from user-thrown error types instead of collapsing every spec fault into one capped symptom. ``syncSequentialProperty(_:)`` derives the Bool probe from this, so the two can never disagree on what passes. Setup steps run first as the head of the sequential prefix; a setup throw fails the run with the thrown error as the symptom.
+    static func syncSequentialVerdictProperty<Spec: StateMachineSpec>(_: Spec.Type) -> @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict {
+        { candidate in
+            let (spec, setupError) = Spec.makeSpec(setupSteps: candidate.setupSteps)
+            if let setupError {
+                return .fail(.thrown(setupError))
+            }
+            for (_, command) in candidate.taggedCommands {
                 do {
                     try spec.run(command)
                     try spec.checkInvariants()
@@ -446,12 +452,19 @@ extension __ExhaustRuntime {
     /// The one async sequential executor loop, returning a verdict: the async twin of ``syncSequentialVerdictProperty(_:)``, bridging through `_blockingAwaitSemaphore` and preserving the thrown error as the failure symptom. ``asyncSequentialProperty(specInit:)`` derives the Bool probe from this, so the two can never disagree on what passes.
     static func asyncSequentialVerdictProperty<Spec: AsyncStateMachineSpec>(
         specInit: @escaping () -> Spec
-    ) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> FuzzVerdict {
+    ) -> @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict {
         nonisolated(unsafe) let specInit = specInit
-        return { tagged in
+        return { candidate in
             let verdict: FuzzVerdict? = _blockingAwaitSemaphore(timeoutMilliseconds: nil) {
                 let spec = specInit()
-                for (_, command) in tagged {
+                for step in candidate.setupSteps {
+                    do {
+                        try await spec.runSetup(step)
+                    } catch {
+                        return FuzzVerdict.fail(.thrown(error))
+                    }
+                }
+                for (_, command) in candidate.taggedCommands {
                     do {
                         try await spec.run(command)
                         try await spec.checkInvariants()
@@ -471,10 +484,10 @@ extension __ExhaustRuntime {
     /// Async variant of the sequential smoke property, derived from ``asyncSequentialVerdictProperty(specInit:)``.
     static func asyncSequentialProperty<Spec: AsyncStateMachineSpec>(
         specInit: @escaping () -> Spec
-    ) -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool {
+    ) -> @Sendable (SpecCandidateValue<Spec>) -> Bool {
         let verdictProperty = asyncSequentialVerdictProperty(specInit: specInit)
-        return { tagged in
-            verdictProperty(tagged).isFailure == false
+        return { candidate in
+            verdictProperty(candidate).isFailure == false
         }
     }
 }
@@ -489,8 +502,8 @@ extension __ExhaustRuntime {
         case abort
     }
 
-    struct ConcurrentTwoPassResult<Command, Evidence> {
-        let value: [(ScheduleMarker, Command)]
+    struct ConcurrentTwoPassResult<Value, Evidence> {
+        let value: Value
         let tree: ChoiceTree
         /// The reducer's own choice sequence for `value` — the one that reproduces it through `.exact` materialization. `ChoiceSequence.flatten(tree)` is not guaranteed to, because the reducer canonicalizes at init; consumers on the `(sequence, tree, value)` seam must carry this instead of re-flattening.
         let sequence: ChoiceSequence
@@ -507,26 +520,30 @@ extension __ExhaustRuntime {
     /// Builds the prioritized source array for a spec machine run.
     ///
     /// Source order matches the design document: screening replay, sampling replay, smoke, screening, sampling. Each source is independently gated by the config. The smoke source is entry-point-specific (sequential has none, cooperative and preemptive construct different property closures), so it is passed in pre-built.
-    static func buildStateMachineSources<Command>(
+    static func buildStateMachineSources<Spec: StateMachineSpecBase>(
         config: ResolvedConcurrentConfig,
-        sequenceGen: Generator<[(ScheduleMarker, Command)]>,
-        commandGen: Generator<Command>,
+        candidateGen: Generator<SpecCandidateValue<Spec>>,
+        sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
+        commandGen: Generator<Spec.Command>,
         commandLimit: Int,
         concurrencyLevel: Int,
-        property: @escaping @Sendable ([(ScheduleMarker, Command)]) -> Bool,
-        smokeSource: AnyStateMachineCandidateSource<Command>? = nil,
-        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Command)]>)? = nil
-    ) -> [AnyStateMachineCandidateSource<Command>] {
-        var sources: [AnyStateMachineCandidateSource<Command>] = []
+        property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool,
+        smokeSource: AnyStateMachineCandidateSource<Spec>? = nil,
+        candidateGenForLength: ((ClosedRange<UInt64>) -> Generator<SpecCandidateValue<Spec>>)? = nil
+    ) -> [AnyStateMachineCandidateSource<Spec>] {
+        var sources: [AnyStateMachineCandidateSource<Spec>] = []
+        let augmentRowFallback = screeningRowFallbackAugmentation(for: Spec.self)
 
         if let row = config.screeningReplayRow {
             sources.append(.screeningReplay(
                 row: row,
+                candidateGen: candidateGen,
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: max(UInt64(config.budget.screeningBudget), UInt64(row) + 1),
                 concurrencyLevel: concurrencyLevel,
+                augmentRowFallback: augmentRowFallback,
                 property: property
             ))
         }
@@ -535,6 +552,7 @@ extension __ExhaustRuntime {
             sources.append(.samplingReplay(
                 replaySeed: seed,
                 replayIteration: replayIteration,
+                candidateGen: candidateGen,
                 sequenceGen: sequenceGen,
                 property: property
             ))
@@ -546,12 +564,14 @@ extension __ExhaustRuntime {
 
         if config.shouldRunScreening {
             sources.append(.screening(
+                candidateGen: candidateGen,
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: UInt64(config.budget.screeningBudget),
                 concurrencyLevel: concurrencyLevel,
-                sequenceGenForLength: sequenceGenForLength,
+                candidateGenForLength: candidateGenForLength,
+                augmentRowFallback: augmentRowFallback,
                 property: property
             ))
         }
@@ -559,6 +579,7 @@ extension __ExhaustRuntime {
         if config.replayIteration == nil, config.screeningReplayRow == nil {
             let seed = config.seed ?? Xoshiro256().seed
             sources.append(.sampling(
+                candidateGen: candidateGen,
                 sequenceGen: sequenceGen,
                 seed: seed,
                 samplingBudget: UInt64(config.budget.samplingBudget),
@@ -567,6 +588,25 @@ extension __ExhaustRuntime {
         }
 
         return sources
+    }
+
+    /// Builds the screening-row fallback augmentation for a with-setup spec, or `nil` for zero-setup specs.
+    ///
+    /// A screening row's tree is a bare command `.sequence`, but a with-setup spec's candidate generator has the zip group at the root. The augmentation wraps the row tree in that root shape with a randomly materialized setup subtree, so guided materialization binds the row's command positions against the command child rather than degrading to exploration. The setup subtree's seed is the row counter, so a `U-N` replay draws the same setup.
+    static func screeningRowFallbackAugmentation<Spec: StateMachineSpecBase>(
+        for _: Spec.Type
+    ) -> ((ChoiceTree, UInt64) -> ChoiceTree)? {
+        guard let setupGen = Spec.setupGenerator else {
+            return nil
+        }
+        return { rowTree, seed in
+            var interpreter = ValueAndChoiceTreeInterpreter(setupGen.gen, seed: seed, maxRuns: 1)
+            guard let (_, setupTree) = try? interpreter.next() else {
+                return rowTree
+            }
+            // Wrapper shape, not the bare zip-callee shape: the materializer's zip handler disambiguates a two-child group fallback by cursor boundaries, and a screening row has no prefix to consult, so it guesses wrapper reading. Handing it `.group([.group([setup, row]), .just])` makes the wrapper guess correct by construction, binding the setup subtree to the zip's first child and the row to the command child.
+            return .group([composeCandidateTree(setupTree: setupTree, commandTree: rowTree), .just], isOpaque: false)
+        }
     }
 }
 

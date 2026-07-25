@@ -16,6 +16,7 @@ extension __ExhaustRuntime {
     /// Provides the "expected" state in the failure report: what the system should have produced without the race. If the sequential replay also fails, returns nil (the bug exists even without concurrency).
     static func sequentialOracle<Spec: AsyncStateMachineSpec>(
         commands: [Spec.Command],
+        setupSteps: [Spec.SetupStep] = [],
         specInit: () -> Spec,
         idleTimeoutMilliseconds: Int = 1000
     ) -> SequentialOracleResult<Spec>? {
@@ -26,7 +27,15 @@ extension __ExhaustRuntime {
         let done = UnsafeSendableBox(false)
         let oracleResult = UnsafeSendableBox<SequentialOracleResult<Spec>?>(nil)
         Task(executorPreference: executor) { @Sendable [spec, oracleResult] in
-            for command in commands {
+            for step in setupSteps {
+                do {
+                    try await spec.value.runSetup(step)
+                } catch {
+                    passed.value = false
+                    break
+                }
+            }
+            for command in commands where passed.value {
                 do {
                     try await spec.value.run(command)
                     try await spec.value.checkInvariants()

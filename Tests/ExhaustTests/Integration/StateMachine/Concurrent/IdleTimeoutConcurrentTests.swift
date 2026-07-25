@@ -206,7 +206,7 @@ struct IdleTimeoutConcurrentTests {
             idleTimeoutMilliseconds: 10
         )
 
-        let reduction = backend.reduce(taggedCommands: commands, tree: tree, context: context)
+        let reduction = backend.reduce(setupSteps: [], taggedCommands: commands, tree: tree, context: context)
 
         // A probe that times out during reduction aborts further reduction and keeps the original failure, rather than reducing toward a hang. `reduction.timedOut` records that the abort fired.
         #expect(reduction.timedOut)
