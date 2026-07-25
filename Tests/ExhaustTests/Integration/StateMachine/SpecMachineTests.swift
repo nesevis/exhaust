@@ -64,6 +64,31 @@ struct SpecMachineTests {
         #expect(machine.result != nil)
     }
 
+    @Test("A with-setup candidate whose tree cannot be decomposed skips both reduction passes")
+    func undecomposableSetupCandidateSkipsReduction() {
+        // `.just` is not the two-child zip group a with-setup candidate tree must have, so the halves cannot be told
+        // apart. Editing it would let structural encoders reach the setup subtree, so the machine reports what
+        // discovery found instead of reducing.
+        let commands: [(ScheduleMarker, StubCommand)] = [(.prefix, .increment), (.prefix, .decrement)]
+        let candidate = makeCandidate(commands: commands, setupStep: .configure, tree: .just)
+        let source = AnyStateMachineCandidateSource<StubSpec>.once { candidate }
+        var machine = makeMachine(sources: [source])
+
+        var transitions: [String] = []
+        while let transition = machine.next() {
+            transitions.append(label(transition))
+        }
+
+        #expect(transitions.contains("pruned"))
+        #expect(transitions.contains("setupReduced") == false)
+        #expect(transitions.contains("reduced") == false)
+        #expect(transitions.contains("assembled"))
+
+        let result = machine.result
+        #expect(result?.setup == .configure)
+        #expect(result?.commands.map { "\($0)" } == commands.map { "\($0.1)" })
+    }
+
     @Test("Reduction invocations are tracked in report")
     func reductionInvocationsAreTrackedInReport() {
         let candidate = makeCandidate(commands: [(.prefix, .increment), (.prefix, .increment)])
@@ -264,8 +289,17 @@ private enum StubError: Error {
     case generatorFailed
 }
 
+private enum StubSetupStep: CustomStringConvertible, Sendable {
+    case configure
+
+    var description: String {
+        "configure"
+    }
+}
+
 private struct StubSpec: StateMachineSpecBase {
     typealias Command = StubCommand
+    typealias SetupStep = StubSetupStep
     typealias SystemUnderTest = Int
 
     static var commandGenerator: ReflectiveGenerator<StubCommand> {
@@ -343,12 +377,14 @@ private func stubSequenceGen() -> Generator<[(ScheduleMarker, StubCommand)]> {
 
 private func makeCandidate(
     commands: [(ScheduleMarker, StubCommand)],
+    setupStep: StubSetupStep? = nil,
+    tree: ChoiceTree = .just,
     discoveryMethod: StateMachineDiscoveryMethod = .screening,
     seed: UInt64 = 0
 ) -> StateMachineCandidate<StubSpec> {
     StateMachineCandidate(
-        value: SpecCandidateValue(setupStep: nil, taggedCommands: commands),
-        tree: .just,
+        value: SpecCandidateValue(setupStep: setupStep, taggedCommands: commands),
+        tree: tree,
         sequenceGen: stubSequenceGen(),
         seed: seed,
         iteration: 1,

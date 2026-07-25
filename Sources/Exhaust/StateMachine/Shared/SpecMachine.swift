@@ -24,23 +24,23 @@ struct SpecMachine<Backend: StateMachineBackend> {
     var reportedSeed: UInt64?
 
     var candidate: StateMachineCandidate<Backend.Spec>?
-    /// The single owner of the decomposed `(value, tree)` pair across the three successive reduction edits: skip pruning, the setup pass, and the backend's command passes. Each phase reads it and writes it back; nothing reads `candidate.tree` after ``stepPrune()``.
-    var reductionState: ReductionState?
+    /// The setup step as reduction left it. Seeded from the candidate and replaced by the setup pass, so it outlives ``reductionInput`` and is what the assembled result reports.
+    var reducedSetupStep: Backend.Spec.SetupStep?
+    /// The decomposed halves the reduction passes edit, or nil when the candidate tree could not be decomposed. Each pass reads it and writes it back; nothing reads `candidate.tree` after ``stepPrune()``.
+    var reductionInput: ReductionInput?
     var setupReductionStats: ReductionStats?
     var reduction: StateMachineReduction<Backend.Spec.Command>?
     var preReductionInvocations: Int = 0
     var reductionStopwatch: Stopwatch?
     var result: StateMachineResult<Backend.Spec>?
 
-    /// The candidate decomposed into its setup and command children.
+    /// The candidate decomposed into its setup and command children, which reduction is free to edit.
     ///
-    /// `setupTree` is nil for zero-setup specs, whose candidate tree IS the command tree. `reductionDisabled` is set when a with-setup candidate tree does not have the expected zip-group root: pruning or reducing such a tree would let structural encoders reach the setup subtree, so both are skipped and the candidate is reported unreduced.
-    struct ReductionState {
-        var setupStep: Backend.Spec.SetupStep?
+    /// `setupTree` is nil for zero-setup specs, whose candidate tree IS the command tree. The whole value is nil when a with-setup candidate tree does not have the expected zip-group root: reducing such a tree would let structural encoders reach the setup subtree, so ``stepPrune()`` reports the candidate unreduced instead and the reduction passes never run.
+    struct ReductionInput {
         var setupTree: ChoiceTree?
         var taggedCommands: [(ScheduleMarker, Backend.Spec.Command)]
         var commandTree: ChoiceTree
-        var reductionDisabled: Bool
     }
 
     // MARK: - Step
@@ -163,41 +163,41 @@ struct SpecMachine<Backend: StateMachineBackend> {
         reductionStopwatch = Stopwatch()
 
         let setupStep = candidate.value.setupStep
+        reducedSetupStep = setupStep
+
         var setupTree: ChoiceTree?
         var commandTree = candidate.tree
-        var reductionDisabled = false
         if setupStep != nil {
-            if let split = __ExhaustRuntime.splitCandidateTree(candidate.tree) {
-                setupTree = split.setupTree
-                commandTree = split.commandTree
-            } else {
+            guard let split = __ExhaustRuntime.splitCandidateTree(candidate.tree) else {
                 ExhaustLog.error(
                     category: .reducer,
                     event: "statemachine_candidate_tree_shape_mismatch",
                     "Candidate tree root is not the expected setup/command group. Skipping pruning and reduction for this candidate."
                 )
-                reductionDisabled = true
+                // Report what discovery found rather than editing a tree whose halves cannot be told apart.
+                reduction = StateMachineReduction(
+                    finalInput: candidate.value.taggedCommands,
+                    stats: nil,
+                    timedOut: false
+                )
+                phase = .recordStats
+                return .pruned
             }
+            setupTree = split.setupTree
+            commandTree = split.commandTree
         }
 
-        var taggedCommands = candidate.value.taggedCommands
-        if reductionDisabled == false {
-            let pruned = pruneCommands(
-                setupStep: setupStep,
-                taggedCommands: taggedCommands,
-                commandTree: commandTree,
-                seed: candidate.seed
-            )
-            taggedCommands = pruned.value
-            commandTree = pruned.tree
-        }
-
-        reductionState = ReductionState(
+        let pruned = pruneCommands(
             setupStep: setupStep,
-            setupTree: setupTree,
-            taggedCommands: taggedCommands,
+            taggedCommands: candidate.value.taggedCommands,
             commandTree: commandTree,
-            reductionDisabled: reductionDisabled
+            seed: candidate.seed
+        )
+
+        reductionInput = ReductionInput(
+            setupTree: setupTree,
+            taggedCommands: pruned.value,
+            commandTree: pruned.tree
         )
 
         phase = .reduceSetup
@@ -239,14 +239,13 @@ struct SpecMachine<Backend: StateMachineBackend> {
     ///
     /// The reduction runs over the extracted setup subtree with the spec's `setupGenerator`, so commands are unreachable by construction. Deletion is enabled deliberately: the setup step itself is the subtree's zip root, not a `.sequence` element, so deletion can only shorten sequence-valued setup arguments within their declared length ranges.
     private mutating func stepReduceSetup() -> Transition {
-        guard var reductionState, let candidate else {
+        guard var reductionInput, let candidate else {
             phase = .pullSource
             return .sourceExhausted
         }
-        guard reductionState.reductionDisabled == false,
-              let setupTree = reductionState.setupTree,
+        guard let setupTree = reductionInput.setupTree,
               let setupGen = Backend.Spec.setupGenerator,
-              let currentStep = reductionState.setupStep
+              let currentStep = reducedSetupStep
         else {
             phase = .reduce
             return .setupReduced
@@ -254,7 +253,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
         nonisolated(unsafe) let unsafeBackend = backend
         nonisolated(unsafe) let capturedContext = context
-        let fixedCommands = reductionState.taggedCommands
+        let fixedCommands = reductionInput.taggedCommands
         let property: @Sendable (Backend.Spec.SetupStep) -> Bool = { step in
             unsafeBackend.countedProbe(
                 SpecCandidateValue(setupStep: step, taggedCommands: fixedCommands),
@@ -276,20 +275,20 @@ struct SpecMachine<Backend: StateMachineBackend> {
         ) {
             setupReductionStats = reduced.stats
             if case let .reduced(_, reducedTree, reducedStep) = reduced.outcome {
-                reductionState.setupStep = reducedStep
-                reductionState.setupTree = reducedTree
+                reducedSetupStep = reducedStep
+                reductionInput.setupTree = reducedTree
                 let repruned = pruneCommands(
-                    setupStep: reductionState.setupStep,
-                    taggedCommands: reductionState.taggedCommands,
-                    commandTree: reductionState.commandTree,
+                    setupStep: reducedStep,
+                    taggedCommands: reductionInput.taggedCommands,
+                    commandTree: reductionInput.commandTree,
                     seed: candidate.seed
                 )
-                reductionState.taggedCommands = repruned.value
-                reductionState.commandTree = repruned.tree
+                reductionInput.taggedCommands = repruned.value
+                reductionInput.commandTree = repruned.tree
             }
         }
 
-        self.reductionState = reductionState
+        self.reductionInput = reductionInput
         phase = .reduce
         return .setupReduced
     }
@@ -297,25 +296,17 @@ struct SpecMachine<Backend: StateMachineBackend> {
     // MARK: - Reduce
 
     private mutating func stepReduce() -> Transition {
-        guard let reductionState else {
+        guard let reductionInput else {
             phase = .pullSource
             return .sourceExhausted
         }
 
-        if reductionState.reductionDisabled {
-            reduction = StateMachineReduction(
-                finalInput: reductionState.taggedCommands,
-                stats: nil,
-                timedOut: false
-            )
-        } else {
-            reduction = backend.reduce(
-                setupStep: reductionState.setupStep,
-                taggedCommands: reductionState.taggedCommands,
-                tree: reductionState.commandTree,
-                context: context
-            )
-        }
+        reduction = backend.reduce(
+            setupStep: reducedSetupStep,
+            taggedCommands: reductionInput.taggedCommands,
+            tree: reductionInput.commandTree,
+            context: context
+        )
 
         phase = .recordStats
         return .reduced
@@ -330,14 +321,12 @@ struct SpecMachine<Backend: StateMachineBackend> {
         let reductionElapsed = reductionStopwatch?.elapsedMilliseconds ?? 0
         context.state.report.reductionMilliseconds = reductionElapsed
         context.state.failureContext.reductionInvocations = reductionInvocations
-        var mergedStats = ReductionStats()
-        if let stats = setupReductionStats {
-            mergedStats.merge(stats)
-        }
-        if let stats = reduction?.stats {
-            mergedStats.merge(stats)
-        }
-        if setupReductionStats != nil || reduction?.stats != nil {
+        let collectedStats = [setupReductionStats, reduction?.stats].compactMap(\.self)
+        if collectedStats.isEmpty == false {
+            var mergedStats = ReductionStats()
+            for stats in collectedStats {
+                mergedStats.merge(stats)
+            }
             context.state.report.applyReductionStats(mergedStats)
         }
 
@@ -348,17 +337,17 @@ struct SpecMachine<Backend: StateMachineBackend> {
     // MARK: - Assemble
 
     private mutating func stepAssemble() -> Transition {
-        guard let candidate, let reduction, let reductionState else {
+        guard let candidate, let reduction else {
             phase = .pullSource
             return .sourceExhausted
         }
 
         // Set here rather than in any one backend so every backend's failure rendering sees the same setup descriptions.
-        context.state.failureContext.setupDescription = reductionState.setupStep.map { "\($0)" }
+        context.state.failureContext.setupDescription = reducedSetupStep.map { "\($0)" }
 
         let originalCommands = candidate.value.taggedCommands.map(\.1)
         let (built, issueMessage) = backend.buildResult(
-            setupStep: reductionState.setupStep,
+            setupStep: reducedSetupStep,
             reduced: reduction.finalInput,
             originalCommands: originalCommands,
             seed: candidate.seed,
