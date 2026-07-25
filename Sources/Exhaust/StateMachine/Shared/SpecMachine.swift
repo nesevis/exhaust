@@ -36,7 +36,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
     ///
     /// `setupTree` is nil for zero-setup specs, whose candidate tree IS the command tree. `reductionDisabled` is set when a with-setup candidate tree does not have the expected zip-group root: pruning or reducing such a tree would let structural encoders reach the setup subtree, so both are skipped and the candidate is reported unreduced.
     struct ReductionState {
-        var setupSteps: [Backend.Spec.SetupStep]
+        var setupStep: Backend.Spec.SetupStep?
         var setupTree: ChoiceTree?
         var taggedCommands: [(ScheduleMarker, Backend.Spec.Command)]
         var commandTree: ChoiceTree
@@ -162,11 +162,11 @@ struct SpecMachine<Backend: StateMachineBackend> {
         preReductionInvocations = context.invocationCounter.value
         reductionStopwatch = Stopwatch()
 
-        let setupSteps = candidate.value.setupSteps
+        let setupStep = candidate.value.setupStep
         var setupTree: ChoiceTree?
         var commandTree = candidate.tree
         var reductionDisabled = false
-        if setupSteps.isEmpty == false {
+        if setupStep != nil {
             if let split = __ExhaustRuntime.splitCandidateTree(candidate.tree) {
                 setupTree = split.setupTree
                 commandTree = split.commandTree
@@ -183,7 +183,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
         var taggedCommands = candidate.value.taggedCommands
         if reductionDisabled == false {
             let pruned = pruneCommands(
-                setupSteps: setupSteps,
+                setupStep: setupStep,
                 taggedCommands: taggedCommands,
                 commandTree: commandTree,
                 seed: candidate.seed
@@ -193,7 +193,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
         }
 
         reductionState = ReductionState(
-            setupSteps: setupSteps,
+            setupStep: setupStep,
             setupTree: setupTree,
             taggedCommands: taggedCommands,
             commandTree: commandTree,
@@ -206,7 +206,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
 
     /// Runs skip pruning on the command side, with the given setup spliced into every probe and skip-identification call.
     private func pruneCommands(
-        setupSteps: [Backend.Spec.SetupStep],
+        setupStep: Backend.Spec.SetupStep?,
         taggedCommands: [(ScheduleMarker, Backend.Spec.Command)],
         commandTree: ChoiceTree,
         seed: UInt64
@@ -220,13 +220,13 @@ struct SpecMachine<Backend: StateMachineBackend> {
             seed: seed,
             property: { commands in
                 unsafeBackend.countedProbe(
-                    SpecCandidateValue(setupSteps: setupSteps, taggedCommands: commands),
+                    SpecCandidateValue(setupStep: setupStep, taggedCommands: commands),
                     context: capturedContext
                 ) != .fail
             },
             identifySkips: { commands in
                 capturedContext.identifySkips(
-                    SpecCandidateValue(setupSteps: setupSteps, taggedCommands: commands)
+                    SpecCandidateValue(setupStep: setupStep, taggedCommands: commands)
                 )
             },
             logEvent: "statemachine_skip_pruning"
@@ -246,7 +246,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
         guard reductionState.reductionDisabled == false,
               let setupTree = reductionState.setupTree,
               let setupGen = Backend.Spec.setupGenerator,
-              let currentStep = reductionState.setupSteps.first
+              let currentStep = reductionState.setupStep
         else {
             phase = .reduce
             return .setupReduced
@@ -257,7 +257,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
         let fixedCommands = reductionState.taggedCommands
         let property: @Sendable (Backend.Spec.SetupStep) -> Bool = { step in
             unsafeBackend.countedProbe(
-                SpecCandidateValue(setupSteps: [step], taggedCommands: fixedCommands),
+                SpecCandidateValue(setupStep: step, taggedCommands: fixedCommands),
                 context: capturedContext
             ) != .fail
         }
@@ -276,10 +276,10 @@ struct SpecMachine<Backend: StateMachineBackend> {
         ) {
             setupReductionStats = reduced.stats
             if case let .reduced(_, reducedTree, reducedStep) = reduced.outcome {
-                reductionState.setupSteps = [reducedStep]
+                reductionState.setupStep = reducedStep
                 reductionState.setupTree = reducedTree
                 let repruned = pruneCommands(
-                    setupSteps: reductionState.setupSteps,
+                    setupStep: reductionState.setupStep,
                     taggedCommands: reductionState.taggedCommands,
                     commandTree: reductionState.commandTree,
                     seed: candidate.seed
@@ -310,7 +310,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
             )
         } else {
             reduction = backend.reduce(
-                setupSteps: reductionState.setupSteps,
+                setupStep: reductionState.setupStep,
                 taggedCommands: reductionState.taggedCommands,
                 tree: reductionState.commandTree,
                 context: context
@@ -354,11 +354,11 @@ struct SpecMachine<Backend: StateMachineBackend> {
         }
 
         // Set here rather than in any one backend so every backend's failure rendering sees the same setup descriptions.
-        context.state.failureContext.setupDescriptions = reductionState.setupSteps.map { "\($0)" }
+        context.state.failureContext.setupDescription = reductionState.setupStep.map { "\($0)" }
 
         let originalCommands = candidate.value.taggedCommands.map(\.1)
         let (built, issueMessage) = backend.buildResult(
-            setupSteps: reductionState.setupSteps,
+            setupStep: reductionState.setupStep,
             reduced: reduction.finalInput,
             originalCommands: originalCommands,
             seed: candidate.seed,

@@ -101,7 +101,7 @@ struct ExecuteTimeRuntimeTests {
         let tagged: [(ScheduleMarker, AlwaysPassingSpec.Command)] = [
             (.prefix, .increment),
         ]
-        let verdict = adapter.property(SpecCandidateValue(setupSteps: [], taggedCommands: tagged))
+        let verdict = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged))
         #expect(verdict.isFailure == false)
     }
 
@@ -113,7 +113,7 @@ struct ExecuteTimeRuntimeTests {
             (.prefix, .increment),
             (.prefix, .increment),
         ]
-        let verdict = adapter.property(SpecCandidateValue(setupSteps: [], taggedCommands: tagged))
+        let verdict = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged))
         #expect(verdict.isFailure)
     }
 
@@ -125,7 +125,7 @@ struct ExecuteTimeRuntimeTests {
             (.prefix, .increment),
             (.prefix, .increment),
         ]
-        guard case let .fail(symptom) = adapter.property(SpecCandidateValue(setupSteps: [], taggedCommands: tagged)) else {
+        guard case let .fail(symptom) = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged)) else {
             Issue.record("Expected a failing verdict")
             return
         }
@@ -140,7 +140,7 @@ struct ExecuteTimeRuntimeTests {
             (.prefix, .increment),
             (.prefix, .increment),
         ]
-        guard case let .fail(symptom) = adapter.property(SpecCandidateValue(setupSteps: [], taggedCommands: tagged)) else {
+        guard case let .fail(symptom) = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged)) else {
             Issue.record("Expected a failing verdict")
             return
         }
@@ -220,7 +220,7 @@ struct ExecuteTimeRuntimeTests {
             [(lane2, .increment), (lane1, .increment), (lane2, .increment), (lane1, .increment)],
         ]
         for tagged in schedules {
-            let candidate = SpecCandidateValue<NonAtomicCounterSpec>(setupSteps: [], taggedCommands: tagged)
+            let candidate = SpecCandidateValue<NonAtomicCounterSpec>(setupStep: nil, taggedCommands: tagged)
             let first = adapter.property(candidate).isFailure
             for _ in 0 ..< 10 {
                 #expect(adapter.property(candidate).isFailure == first, "Verdict flipped across repetitions of the same schedule: \(tagged.map(\.0))")
@@ -240,7 +240,7 @@ struct ExecuteTimeRuntimeTests {
         let tagged: [(ScheduleMarker, StallingSpec.Command)] = [
             (ScheduleMarker(rawValue: 1), .parkForever),
         ]
-        let verdict = adapter.property(SpecCandidateValue(setupSteps: [], taggedCommands: tagged))
+        let verdict = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged))
         #expect(verdict.isFailure == false)
     }
 
@@ -430,7 +430,7 @@ struct ExecuteTimeRuntimeTests {
                 continue
             }
             let commands = value.taggedCommands.map(\.1)
-            let skips = SkippableCounterSpec.identifySkips(setupSteps: value.setupSteps, commands: commands)
+            let skips = SkippableCounterSpec.identifySkips(setupStep: value.setupStep, commands: commands)
             #expect(skips.isEmpty, "Mutable-tier entry \(index) contains skipped commands at indices \(skips)")
         }
     }

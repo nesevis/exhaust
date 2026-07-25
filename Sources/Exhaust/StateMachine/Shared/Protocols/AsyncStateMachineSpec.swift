@@ -62,17 +62,18 @@ public extension AsyncStateMachineSpec {
     /// Default no-op for specs without a `@Setup` method. The `@StateMachine` macro synthesizes a real implementation when one exists.
     func runSetup(_: SetupStep) async throws {}
 
-    /// Constructs a fresh spec instance and applies the setup steps in order.
+    /// Constructs a fresh spec instance and applies its setup step, if it has one.
     ///
-    /// The async twin of the ``StateMachineSpec`` construction funnel: once setup exists, no runner may call `Self()` directly. The instance is always returned, alongside the first setup error if one was thrown, so probe paths can report the partially set-up spec as evidence.
-    internal static func makeSpec(setupSteps: [SetupStep]) async -> (spec: Self, setupError: (any Error)?) {
+    /// The async twin of the ``StateMachineSpec`` construction funnel: once setup exists, no runner may call `Self()` directly. The instance is always returned, alongside the setup error if one was thrown, so probe paths can report the partially set-up spec as evidence.
+    internal static func makeSpec(setupStep: SetupStep?) async -> (spec: Self, setupError: (any Error)?) {
         let spec = Self()
-        for step in setupSteps {
-            do {
-                try await spec.runSetup(step)
-            } catch {
-                return (spec, error)
-            }
+        guard let setupStep else {
+            return (spec, nil)
+        }
+        do {
+            try await spec.runSetup(setupStep)
+        } catch {
+            return (spec, error)
         }
         return (spec, nil)
     }
@@ -87,14 +88,14 @@ public extension AsyncStateMachineSpec {
     internal static func skipIdentifier(
         specInit: @escaping () -> Self,
         idleTimeoutMilliseconds: Int? = nil
-    ) -> @Sendable ([SetupStep], [Command]) -> Set<Int> {
+    ) -> @Sendable (SetupStep?, [Command]) -> Set<Int> {
         nonisolated(unsafe) let specInit = specInit
-        return { setupSteps, commands in
+        return { setupStep, commands in
             let box = UnsafeSendableBox(specInit())
             let work: @Sendable () async -> Set<Int> = {
-                for step in setupSteps {
+                if let setupStep {
                     do {
-                        try await box.value.runSetup(step)
+                        try await box.value.runSetup(setupStep)
                     } catch {
                         return []
                     }

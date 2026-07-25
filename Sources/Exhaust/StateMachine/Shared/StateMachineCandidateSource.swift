@@ -2,7 +2,7 @@ import ExhaustCore
 
 /// Carries a failing candidate from a source to the ``SpecMachine`` for reduction.
 struct StateMachineCandidate<Spec: StateMachineSpecBase> {
-    /// The full generated candidate: setup steps ahead of the tagged command sequence.
+    /// The full generated candidate: the setup step ahead of the tagged command sequence.
     let value: SpecCandidateValue<Spec>
     /// The full candidate tree. For a with-setup spec the root is the zip group; the machine decomposes it before pruning and reduction.
     let tree: ChoiceTree

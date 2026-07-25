@@ -104,14 +104,14 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
     /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
     ///
     /// The three sequential phases (prefix on the concurrent spec, prefix and concurrent commands on the sequential reference) are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], setupSteps: [Spec.SetupStep], partition: LanePartition) -> Preemptive.Outcome<Spec> {
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], setupStep: Spec.SetupStep?, partition: LanePartition) -> Preemptive.Outcome<Spec> {
         // Construction is synchronous here because both instances are needed for outcome evidence; the async setup application happens inside the sequential-phases bridge below, before any prefix command, so both instances receive the same setup ahead of the lanes.
         let concurrentSpec = Spec()
         let sequentialSpec = Spec()
 
         let sequentialPhases = runSequentialPhases(
             taggedCommands,
-            setupSteps: setupSteps,
+            setupStep: setupStep,
             partition: partition,
             concurrentSpec: concurrentSpec,
             sequentialSpec: sequentialSpec
@@ -232,7 +232,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         }
         // Try the realized completion order as a single linearization witness before the full interleaving search. The prefix array is materialized only here — the passed and no-response-info paths never need it.
         let prefixCommands = partition.prefixIndices.map { taggedCommands[$0].1 }
-        if realizedOrderIsLinearizable(prefix: prefixCommands, setupSteps: setupSteps, realizedOrder: realizedCompletionOrder(of: collectedResponses), concurrentSpec: concurrentSpec) {
+        if realizedOrderIsLinearizable(prefix: prefixCommands, setupStep: setupStep, realizedOrder: realizedCompletionOrder(of: collectedResponses), concurrentSpec: concurrentSpec) {
             return .passed
         }
         return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
@@ -243,7 +243,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
     /// Returns `true` only when that single sequential order reproduces every observed response and the oracle's final state, which makes it a concrete linearization witness and lets the ``SpecMachine`` pass without the full interleaving search. A differing response, an oracle mismatch, a replay throw, an ObjC exception, or a drain timeout all return `false`, so the ``SpecMachine`` falls through to ``checkLinearizability(taggedCommands:laneResponses:concurrentSpec:)``.
     private func realizedOrderIsLinearizable(
         prefix: [Spec.Command],
-        setupSteps: [Spec.SetupStep],
+        setupStep: Spec.SetupStep?,
         realizedOrder: [ObservedResponse<Spec.Command>],
         concurrentSpec: Spec
     ) -> Bool {
@@ -254,9 +254,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         var exception: NSException?
         let completed = exhaust_runCatchingObjCException({
             let result: Bool? = awaitOrTimeout("witness") {
-                for step in setupSteps {
+                if let setupStep {
                     do {
-                        try await unsafeWitness.runSetup(step)
+                        try await unsafeWitness.runSetup(setupStep)
                     } catch {
                         return false
                     }
@@ -303,16 +303,16 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
     ///
     /// - Returns: A ``SequentialOutcome`` whose `succeeded` is `true` when all commands succeeded or were skipped, and whose `timedOut` is `true` only when the drain loop idled out (as opposed to a command throw or NSException).
     @discardableResult
-    func runSequentially(_ commands: [Spec.Command], setupSteps: [Spec.SetupStep] = [], on spec: Spec) -> SequentialOutcome {
+    func runSequentially(_ commands: [Spec.Command], setupStep: Spec.SetupStep? = nil, on spec: Spec) -> SequentialOutcome {
         var exception: NSException?
         var failed = false
         var timedOut = false
         nonisolated(unsafe) let spec = spec
         exhaust_runCatchingObjCException({
             let succeeded: Bool? = awaitOrTimeout("sequential") {
-                for step in setupSteps {
+                if let setupStep {
                     do {
-                        try await spec.runSetup(step)
+                        try await spec.runSetup(setupStep)
                     } catch {
                         return false
                     }
@@ -343,7 +343,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
     /// One bridge replaces the three separate `blockingAwait` round-trips these phases used to pay per probe. On the drain-loop path (macOS 15 and later) the timeout semantics are unchanged, because the bound measures idle time since the last drained job and resets across phases. On the semaphore fallback, the bound is total wall-clock, so the three phases now share one window instead of getting one each; a slow-but-genuine sequential replay on an older platform trips the timeout (and counts as a pass) sooner than before.
     private func runSequentialPhases(
         _ taggedCommands: [(ScheduleMarker, Spec.Command)],
-        setupSteps: [Spec.SetupStep],
+        setupStep: Spec.SetupStep?,
         partition: LanePartition,
         concurrentSpec: Spec,
         sequentialSpec: Spec
@@ -356,12 +356,13 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         exhaust_runCatchingObjCException({
             let succeeded: Bool? = awaitOrTimeout("sequential") {
                 func applySetup(on spec: Spec) async -> Bool {
-                    for step in setupSteps {
-                        do {
-                            try await spec.runSetup(step)
-                        } catch {
-                            return false
-                        }
+                    guard let setupStep else {
+                        return true
+                    }
+                    do {
+                        try await spec.runSetup(setupStep)
+                    } catch {
+                        return false
                     }
                     return true
                 }
@@ -403,7 +404,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
 
     func checkLinearizability(
         taggedCommands: [(ScheduleMarker, Spec.Command)],
-        setupSteps: [Spec.SetupStep],
+        setupStep: Spec.SetupStep?,
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
@@ -415,7 +416,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
             return await checker.checkAsync(
                 replayPrefix: {
                     // Once per sibling retry in the DFS: every fresh replay instance receives the same setup, and a setup error fails this ordering rather than crashing into an unconfigured SUT.
-                    let (fresh, setupError) = await Spec.makeSpec(setupSteps: setupSteps)
+                    let (fresh, setupError) = await Spec.makeSpec(setupStep: setupStep)
                     guard setupError == nil else {
                         return false
                     }
@@ -475,7 +476,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
             var skipped: Set<Int> = []
             var exception: NSException?
             let completed = exhaust_runCatchingObjCException({
-                skipped = rawIdentifySkips(candidate.setupSteps, candidate.taggedCommands.map(\.1))
+                skipped = rawIdentifySkips(candidate.setupStep, candidate.taggedCommands.map(\.1))
             }, &exception)
             return completed ? skipped : []
         }
@@ -489,11 +490,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
     /// Runs the smoke commands sequentially on a fresh spec, without the sync checker's ObjC exception guard.
     ///
     /// - Important: An async spec whose command deterministically raises an NSException will abort the test process. See the implementation note above.
-    func runSmoke(_ commands: [Spec.Command], setupSteps: [Spec.SetupStep]) -> (trace: [TraceStep], failed: Bool, timedOut: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
+    func runSmoke(_ commands: [Spec.Command], setupStep: Spec.SetupStep?) -> (trace: [TraceStep], failed: Bool, timedOut: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
         let spec = Spec()
         nonisolated(unsafe) let unsafeSpec = spec
         let work: @Sendable () async -> ([TraceStep], Bool) = {
-            let (setupTrace, setupFailed) = await __ExhaustRuntime.applySetupRecordingTrace(unsafeSpec, setupSteps: setupSteps)
+            let (setupTrace, setupFailed) = await __ExhaustRuntime.applySetupRecordingTrace(unsafeSpec, setupStep: setupStep)
             if setupFailed {
                 return (setupTrace, true)
             }
@@ -516,9 +517,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         let reference = Spec()
         nonisolated(unsafe) let unsafeReference = reference
         let referenceFailed: Bool? = awaitOrTimeout("smoke-reference", timeoutMultiplier: 5) {
-            for step in setupSteps {
+            if let setupStep {
                 do {
-                    try await unsafeReference.runSetup(step)
+                    try await unsafeReference.runSetup(setupStep)
                 } catch {
                     return true
                 }
@@ -555,10 +556,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         return (trace, false, false, spec.systemUnderTest, nil)
     }
 
-    /// Replays the reduced commands sequentially on a fresh spec (with setup applied) via ``runSequentially(_:setupSteps:on:)`` and returns its failure description, the expected race-free state for the report. Returns nil when the replay itself fails or times out, because the partial state would mislead debugging.
-    func sequentialReplayDescription(of reduced: [(ScheduleMarker, Spec.Command)], setupSteps: [Spec.SetupStep]) -> String? {
+    /// Replays the reduced commands sequentially on a fresh spec (with setup applied) via ``runSequentially(_:setupStep:on:)`` and returns its failure description, the expected race-free state for the report. Returns nil when the replay itself fails or times out, because the partial state would mislead debugging.
+    func sequentialReplayDescription(of reduced: [(ScheduleMarker, Spec.Command)], setupStep: Spec.SetupStep?) -> String? {
         let oracleSpec = Spec()
-        guard runSequentially(reduced.map(\.1), setupSteps: setupSteps, on: oracleSpec).succeeded else {
+        guard runSequentially(reduced.map(\.1), setupStep: setupStep, on: oracleSpec).succeeded else {
             return nil
         }
         return oracleSpec.failureDescription()

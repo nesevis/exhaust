@@ -278,7 +278,7 @@ extension __ExhaustRuntime {
         let rawProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = syncSequentialProperty(Spec.self)
 
         let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
-            Spec.identifySkips(setupSteps: candidate.setupSteps, commands: candidate.taggedCommands.map(\.1))
+            Spec.identifySkips(setupStep: candidate.setupStep, commands: candidate.taggedCommands.map(\.1))
         }
 
         let pruneHook = specTimePruneHook(
@@ -315,7 +315,7 @@ extension __ExhaustRuntime {
         { value, tree in
             let setupTree: ChoiceTree?
             let commandTree: ChoiceTree
-            if value.setupSteps.isEmpty {
+            if value.setupStep == nil {
                 setupTree = nil
                 commandTree = tree
             } else if let split = splitCandidateTree(tree) {
@@ -325,22 +325,22 @@ extension __ExhaustRuntime {
                 return (value, tree)
             }
 
-            let setupSteps = value.setupSteps
+            let setupStep = value.setupStep
             let pruned = pruneSkippedCommands(
                 value: value.taggedCommands,
                 tree: commandTree,
                 generator: sequenceGen,
                 seed: 0,
                 property: { commands in
-                    rawProperty(SpecCandidateValue(setupSteps: setupSteps, taggedCommands: commands))
+                    rawProperty(SpecCandidateValue(setupStep: setupStep, taggedCommands: commands))
                 },
                 identifySkips: { commands in
-                    identifySkips(SpecCandidateValue(setupSteps: setupSteps, taggedCommands: commands))
+                    identifySkips(SpecCandidateValue(setupStep: setupStep, taggedCommands: commands))
                 },
                 requireFailurePreserved: false,
                 logEvent: "spec_time_prune"
             )
-            let prunedValue = SpecCandidateValue<Spec>(setupSteps: setupSteps, taggedCommands: pruned.value)
+            let prunedValue = SpecCandidateValue<Spec>(setupStep: setupStep, taggedCommands: pruned.value)
             let prunedTree = setupTree.map { composeCandidateTree(setupTree: $0, commandTree: pruned.tree) } ?? pruned.tree
             return (prunedValue, prunedTree)
         }
@@ -367,7 +367,7 @@ extension __ExhaustRuntime {
 
         let asyncSkipIdentifier = Spec.skipIdentifier(specInit: specInit)
         let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
-            asyncSkipIdentifier(candidate.setupSteps, candidate.taggedCommands.map(\.1))
+            asyncSkipIdentifier(candidate.setupStep, candidate.taggedCommands.map(\.1))
         }
 
         let pruneHook = specTimePruneHook(
@@ -430,7 +430,7 @@ extension __ExhaustRuntime {
         let verdictProperty: @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict = { candidate in
             let result = drainSchedule(
                 taggedCommands: candidate.taggedCommands,
-                setupSteps: candidate.setupSteps,
+                setupStep: candidate.setupStep,
                 specInit: specInit,
                 concurrencyLevel: concurrencyLevel,
                 recordTrace: false,
@@ -451,7 +451,7 @@ extension __ExhaustRuntime {
 
         let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit)
         let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
-            rawIdentifySkips(candidate.setupSteps, candidate.taggedCommands.map(\.1))
+            rawIdentifySkips(candidate.setupStep, candidate.taggedCommands.map(\.1))
         }
 
         let pruneHook = specTimePruneHook(
@@ -465,7 +465,7 @@ extension __ExhaustRuntime {
             let probeProperty: @Sendable (SpecCandidateValue<Spec>) -> StateMachineProbeVerdict<Void> = { candidate in
                 let result = drainSchedule(
                     taggedCommands: candidate.taggedCommands,
-                    setupSteps: candidate.setupSteps,
+                    setupStep: candidate.setupStep,
                     specInit: specInit,
                     concurrencyLevel: concurrencyLevel,
                     recordTrace: false,

@@ -141,7 +141,7 @@ struct SetupChoiceSequenceTests {
             let (rawValue, rawTree) = try #require(try rawInterpreter.next())
             let (candidate, candidateTree) = try #require(try candidateInterpreter.next())
 
-            #expect(candidate.setupSteps.isEmpty)
+            #expect(candidate.setupStep == nil)
             #expect(candidate.taggedCommands.map(\.1) == rawValue.map(\.1))
             #expect(ChoiceSequence.flatten(candidateTree) == ChoiceSequence.flatten(rawTree))
         }
@@ -169,7 +169,8 @@ struct SetupChoiceSequenceTests {
                 Issue.record("Exact materialization of the extracted setup child failed for seed \(seed)")
                 return
             }
-            #expect("\(step)" == "\(candidate.setupSteps[0])")
+            let candidateStep = try #require(candidate.setupStep)
+            #expect("\(step)" == "\(candidateStep)")
 
             // Recomposition is the inverse of the split, byte-identical as a choice sequence.
             let recomposed = __ExhaustRuntime.composeCandidateTree(setupTree: split.setupTree, commandTree: split.commandTree)

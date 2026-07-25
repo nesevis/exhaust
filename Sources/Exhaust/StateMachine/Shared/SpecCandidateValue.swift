@@ -1,10 +1,10 @@
 import ExhaustCore
 
-/// Carries one generated spec candidate through the pipeline: the setup step values ahead of the tagged command sequence.
+/// Carries one generated spec candidate through the pipeline: the setup step ahead of the tagged command sequence.
 ///
-/// `setupSteps` holds zero or one element: empty for specs without a `@Setup` method, one for specs with one. The array keeps the executor splice loop and the zero-setup path uniform, and survives a future lift of the one-method restriction unchanged. Setup steps never enter `taggedCommands`, so lane partitioning, skip indices, and per-element segments keep their command-array index bases.
+/// `setupStep` is nil for specs without a `@Setup` method, matching the at-most-one method the macro enforces and the ``StateMachineResult/setup`` the user reads. The step never enters `taggedCommands`, so lane partitioning, skip indices, and per-element segments keep their command-array index bases.
 struct SpecCandidateValue<Spec: StateMachineSpecBase>: Sendable {
-    var setupSteps: [Spec.SetupStep]
+    var setupStep: Spec.SetupStep?
     var taggedCommands: [(ScheduleMarker, Spec.Command)]
 }
 
@@ -17,10 +17,10 @@ extension __ExhaustRuntime {
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
     ) -> Generator<SpecCandidateValue<Spec>> {
         guard let setupGen = Spec.setupGenerator else {
-            return sequenceGen.map { SpecCandidateValue(setupSteps: [], taggedCommands: $0) }
+            return sequenceGen.map { SpecCandidateValue(setupStep: nil, taggedCommands: $0) }
         }
         return Gen.zip(setupGen.gen, sequenceGen).map { pair in
-            SpecCandidateValue(setupSteps: [pair.0], taggedCommands: pair.1)
+            SpecCandidateValue(setupStep: pair.0, taggedCommands: pair.1)
         }
     }
 }

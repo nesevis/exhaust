@@ -13,7 +13,7 @@ extension __ExhaustRuntime {
         var specName: String = ""
         var discoveryMethod: StateMachineDiscoveryMethod = .randomSampling
         /// Rendered setup step descriptions, shown ahead of the command partition and prepended to the trace as `(setup)` entries. Empty for zero-setup specs.
-        var setupDescriptions: [String] = []
+        var setupDescription: String?
         var seed: UInt64?
         var iteration: Int = 0
         var budget: Int = 0
@@ -53,11 +53,9 @@ extension __ExhaustRuntime {
             lines.append("")
         }
 
-        if context.setupDescriptions.isEmpty == false {
+        if let setupDescription = context.setupDescription {
             lines.append("Setup:")
-            for (index, description) in context.setupDescriptions.enumerated() {
-                lines.append("  \(index + 1). \(description)")
-            }
+            lines.append("  1. \(setupDescription)")
             lines.append("")
         }
 

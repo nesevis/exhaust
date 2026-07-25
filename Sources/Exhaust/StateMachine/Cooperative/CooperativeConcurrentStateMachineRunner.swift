@@ -192,7 +192,7 @@ private extension __ExhaustRuntime {
 
         let rawIdentifySkips = Spec.skipIdentifier(specInit: specInit, idleTimeoutMilliseconds: idleTimeoutMilliseconds)
         let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
-            rawIdentifySkips(candidate.setupSteps, candidate.taggedCommands.map(\.1))
+            rawIdentifySkips(candidate.setupStep, candidate.taggedCommands.map(\.1))
         }
 
         let backend = CooperativeStateMachineBackend<Spec>(
@@ -207,7 +207,7 @@ private extension __ExhaustRuntime {
             timeoutProbeCounts.value.attempts += 1
             let result = drainSchedule(
                 taggedCommands: candidate.taggedCommands,
-                setupSteps: candidate.setupSteps,
+                setupStep: candidate.setupStep,
                 specInit: specInit,
                 concurrencyLevel: concurrencyLevel,
                 recordTrace: false,

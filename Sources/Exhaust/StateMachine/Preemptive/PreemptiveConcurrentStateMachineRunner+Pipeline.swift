@@ -6,7 +6,7 @@ extension __ExhaustRuntime {
     /// Determines whether a failing outcome represents a confirmed linearizability violation. Returns `nil` when the execution passed, timed out, or when linearizability holds despite the oracle flag.
     static func classifyFailure<Backend: PreemptiveBackend>(
         taggedCommands: [(ScheduleMarker, Backend.Spec.Command)],
-        setupSteps: [Backend.Spec.SetupStep],
+        setupStep: Backend.Spec.SetupStep?,
         outcome: Preemptive.Outcome<Backend.Spec>,
         backend: Backend
     ) -> FailureEvidence<Backend.Spec>? {
@@ -18,7 +18,7 @@ extension __ExhaustRuntime {
             case let .oracleMismatch(laneResponses, concurrentSpec):
                 guard case let .notLinearizable(witness, failure) = backend.checkLinearizability(
                     taggedCommands: taggedCommands,
-                    setupSteps: setupSteps,
+                    setupStep: setupStep,
                     laneResponses: laneResponses,
                     concurrentSpec: concurrentSpec
                 ) else {
@@ -43,15 +43,15 @@ extension __ExhaustRuntime {
     static func confirmRealFailure<Backend: PreemptiveBackend>(
         backend: Backend,
         input: [(ScheduleMarker, Backend.Spec.Command)],
-        setupSteps: [Backend.Spec.SetupStep],
+        setupStep: Backend.Spec.SetupStep?,
         discoveryIterations: Int
     ) -> FailureEvidence<Backend.Spec>? {
         let partition = LanePartition(markers: input.map(\.0))
         for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
             if let confirmed = classifyFailure(
                 taggedCommands: input,
-                setupSteps: setupSteps,
-                outcome: backend.execute(input, setupSteps: setupSteps, partition: partition),
+                setupStep: setupStep,
+                outcome: backend.execute(input, setupStep: setupStep, partition: partition),
                 backend: backend
             ) {
                 return confirmed
@@ -67,7 +67,7 @@ extension __ExhaustRuntime {
     ) -> String {
         let trace = buildPreemptiveTrace(
             input,
-            setupDescriptions: context.setupDescriptions,
+            setupDescription: context.setupDescription,
             laneResponseValues: context.laneResponseValues,
             linearizabilityWitness: context.linearizabilityWitness
         )

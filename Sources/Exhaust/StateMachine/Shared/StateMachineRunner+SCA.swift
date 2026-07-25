@@ -428,10 +428,10 @@ extension __ExhaustRuntime {
         }
     }
 
-    /// The one sequential executor loop, returning a verdict: preserves the thrown error as the failure symptom, so the `time:` runner's reduction gate can tell invariant violations (`StateMachineCheckFailure`) apart from user-thrown error types instead of collapsing every spec fault into one capped symptom. ``syncSequentialProperty(_:)`` derives the Bool probe from this, so the two can never disagree on what passes. Setup steps run first as the head of the sequential prefix; a setup throw fails the run with the thrown error as the symptom.
+    /// The one sequential executor loop, returning a verdict: preserves the thrown error as the failure symptom, so the `time:` runner's reduction gate can tell invariant violations (`StateMachineCheckFailure`) apart from user-thrown error types instead of collapsing every spec fault into one capped symptom. ``syncSequentialProperty(_:)`` derives the Bool probe from this, so the two can never disagree on what passes. The setup step runs first as the head of the sequential prefix; a setup throw fails the run with the thrown error as the symptom.
     static func syncSequentialVerdictProperty<Spec: StateMachineSpec>(_: Spec.Type) -> @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict {
         { candidate in
-            let (spec, setupError) = Spec.makeSpec(setupSteps: candidate.setupSteps)
+            let (spec, setupError) = Spec.makeSpec(setupStep: candidate.setupStep)
             if let setupError {
                 return .fail(.thrown(setupError))
             }
@@ -457,9 +457,9 @@ extension __ExhaustRuntime {
         return { candidate in
             let verdict: FuzzVerdict? = _blockingAwaitSemaphore(timeoutMilliseconds: nil) {
                 let spec = specInit()
-                for step in candidate.setupSteps {
+                if let setupStep = candidate.setupStep {
                     do {
-                        try await spec.runSetup(step)
+                        try await spec.runSetup(setupStep)
                     } catch {
                         return FuzzVerdict.fail(.thrown(error))
                     }

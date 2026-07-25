@@ -15,7 +15,7 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
     }
 
     func reduce(
-        setupSteps: [Spec.SetupStep],
+        setupStep: Spec.SetupStep?,
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         tree: ChoiceTree,
         context: StateMachineRunContext<Spec>
@@ -27,7 +27,7 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
             tuning: SchedulerTuning(relaxMaterializationBudget: 0)
         )
         let commandProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { [property] commands in
-            property(SpecCandidateValue(setupSteps: setupSteps, taggedCommands: commands))
+            property(SpecCandidateValue(setupStep: setupStep, taggedCommands: commands))
         }
         let (reduced, stats, _) = __ExhaustRuntime.reduceStateMachineCounterexample(
             value: taggedCommands,
@@ -40,7 +40,7 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
     }
 
     func buildResult(
-        setupSteps: [Spec.SetupStep],
+        setupStep: Spec.SetupStep?,
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,
         seed: UInt64?,
@@ -48,14 +48,14 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
         discoveryMethod: StateMachineDiscoveryMethod,
         context: StateMachineRunContext<Spec>
     ) -> (result: StateMachineResult<Spec>, issueMessage: String) {
-        let outcome = finalize(SpecCandidateValue(setupSteps: setupSteps, taggedCommands: reduced))
+        let outcome = finalize(SpecCandidateValue(setupStep: setupStep, taggedCommands: reduced))
         let commands = reduced.map(\.1)
         let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
 
         let result = StateMachineResult<Spec>(
             commands: commands,
             originalCommands: originalCommands,
-            setup: setupSteps.first,
+            setup: setupStep,
             trace: outcome.trace,
             systemUnderTest: outcome.systemUnderTest,
             seed: discoveryMethod.resultSeed(seed),

@@ -300,7 +300,7 @@ private struct StubBackend: StateMachineBackend {
     }
 
     func reduce(
-        setupSteps _: [StubSpec.SetupStep],
+        setupStep _: StubSpec.SetupStep?,
         taggedCommands: [(ScheduleMarker, StubCommand)],
         tree _: ChoiceTree,
         context: StateMachineRunContext<StubSpec>
@@ -311,7 +311,7 @@ private struct StubBackend: StateMachineBackend {
     }
 
     func buildResult(
-        setupSteps: [StubSpec.SetupStep],
+        setupStep: StubSpec.SetupStep?,
         reduced: [(ScheduleMarker, StubCommand)],
         originalCommands: [StubCommand]?,
         seed: UInt64?,
@@ -322,7 +322,7 @@ private struct StubBackend: StateMachineBackend {
         let result = StateMachineResult<StubSpec>(
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
-            setup: setupSteps.first,
+            setup: setupStep,
             trace: [],
             systemUnderTest: 0,
             seed: seed,
@@ -347,7 +347,7 @@ private func makeCandidate(
     seed: UInt64 = 0
 ) -> StateMachineCandidate<StubSpec> {
     StateMachineCandidate(
-        value: SpecCandidateValue(setupSteps: [], taggedCommands: commands),
+        value: SpecCandidateValue(setupStep: nil, taggedCommands: commands),
         tree: .just,
         sequenceGen: stubSequenceGen(),
         seed: seed,

@@ -91,7 +91,7 @@ public extension __ExhaustRuntime {
             }
 
             let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
-                Spec.identifySkips(setupSteps: candidate.setupSteps, commands: candidate.taggedCommands.map(\.1))
+                Spec.identifySkips(setupStep: candidate.setupStep, commands: candidate.taggedCommands.map(\.1))
             }
 
             let backend = SequentialStateMachineBackend<Spec>(
@@ -212,17 +212,17 @@ private extension __ExhaustRuntime {
 
         let asyncSkipIdentifier = Spec.skipIdentifier(specInit: specInit)
         let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
-            asyncSkipIdentifier(candidate.setupSteps, candidate.taggedCommands.map(\.1))
+            asyncSkipIdentifier(candidate.setupStep, candidate.taggedCommands.map(\.1))
         }
 
         let backend = SequentialStateMachineBackend<Spec>(
             property: property,
             finalize: { candidate in
                 let commands = candidate.taggedCommands.map(\.1)
-                let setupSteps = candidate.setupSteps
+                let setupStep = candidate.setupStep
                 let captured = __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
                     let spec = specInit()
-                    let (setupTrace, setupFailed) = await applySetupRecordingTrace(spec, setupSteps: setupSteps)
+                    let (setupTrace, setupFailed) = await applySetupRecordingTrace(spec, setupStep: setupStep)
                     if setupFailed {
                         let snapshot = await spec.diagnosticSnapshot()
                         return (trace: setupTrace, snapshot: snapshot)
@@ -331,7 +331,7 @@ private extension __ExhaustRuntime {
         _ candidate: SpecCandidateValue<Spec>,
         specType _: Spec.Type
     ) -> ([TraceStep], Spec) {
-        let (spec, setupTrace, setupFailed) = makeSpecRecordingSetupTrace(Spec.self, setupSteps: candidate.setupSteps)
+        let (spec, setupTrace, setupFailed) = makeSpecRecordingSetupTrace(Spec.self, setupStep: candidate.setupStep)
         if setupFailed {
             return (setupTrace, spec)
         }

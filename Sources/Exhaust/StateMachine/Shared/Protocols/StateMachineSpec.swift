@@ -60,17 +60,18 @@ extension StateMachineSpec {
     /// Default no-op for specs without a `@Setup` method. The `@StateMachine` macro synthesizes a real implementation when one exists.
     public func runSetup(_: SetupStep) throws {}
 
-    /// Constructs a fresh spec instance and applies the setup steps in order.
+    /// Constructs a fresh spec instance and applies its setup step, if it has one.
     ///
-    /// The one construction funnel for runner code: once setup exists, no runner may call `Self()` directly, because with an implicitly unwrapped SUT every missed setup application is a nil-unwrap crash. The instance is always returned, alongside the first setup error if one was thrown, so probe paths can report the partially set-up spec as evidence.
-    static func makeSpec(setupSteps: [SetupStep]) -> (spec: Self, setupError: (any Error)?) {
+    /// The one construction funnel for runner code: once setup exists, no runner may call `Self()` directly, because with an implicitly unwrapped SUT every missed setup application is a nil-unwrap crash. The instance is always returned, alongside the setup error if one was thrown, so probe paths can report the partially set-up spec as evidence.
+    static func makeSpec(setupStep: SetupStep?) -> (spec: Self, setupError: (any Error)?) {
         let spec = Self()
-        for step in setupSteps {
-            do {
-                try spec.runSetup(step)
-            } catch {
-                return (spec, error)
-            }
+        guard let setupStep else {
+            return (spec, nil)
+        }
+        do {
+            try spec.runSetup(setupStep)
+        } catch {
+            return (spec, error)
         }
         return (spec, nil)
     }
@@ -78,8 +79,8 @@ extension StateMachineSpec {
     /// Replays a command sequence on a fresh spec instance (with setup applied) and collects the indices of commands that threw ``StateMachineSkip``.
     ///
     /// Used by the SCA screening phase and skip-pruning pass to identify commands whose preconditions are not met for a given sequence, so those elements can be removed from the choice tree before reduction. A setup error returns the empty set: skip pruning is an optimization, and the actual execution reports the setup failure.
-    static func identifySkips(setupSteps: [SetupStep], commands: [Command]) -> Set<Int> {
-        let (spec, setupError) = makeSpec(setupSteps: setupSteps)
+    static func identifySkips(setupStep: SetupStep?, commands: [Command]) -> Set<Int> {
+        let (spec, setupError) = makeSpec(setupStep: setupStep)
         guard setupError == nil else {
             return []
         }
