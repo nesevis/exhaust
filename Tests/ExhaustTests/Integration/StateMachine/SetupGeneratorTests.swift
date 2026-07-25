@@ -119,7 +119,7 @@ struct SetupGeneratorTests {
                 .suppress(.issueReporting)
             )
         )
-        #expect("\(replayed.setup.map { "\($0)" } ?? "nil")" == "\(first.setup.map { "\($0)" } ?? "nil")")
+        #expect(replayed.setup.map { "\($0)" } == first.setup.map { "\($0)" })
     }
 }
 
@@ -128,18 +128,25 @@ struct SetupGeneratorTests {
 @Suite("@Setup choice-sequence compatibility", .tags(.stateMachine))
 struct SetupChoiceSequenceTests {
     @Test("Zero-setup candidate generator leaves the choice sequence byte-identical")
-    func zeroSetupCandidateTreeIsByteIdentical() throws {
+    func zeroSetupCandidateTreeIsByteIdentical() {
         let sequenceGen = __ExhaustRuntime.taggedSequenceGenerator(
             commandGen: PlainFailingSpec.commandGenerator,
             commandLimit: 6
         )
-        let candidateGen = __ExhaustRuntime.specCandidateGenerator(PlainFailingSpec.self, sequenceGen: sequenceGen)
+        let candidateGen = __ExhaustRuntime.specCandidateGenerator(
+            PlainFailingSpec.self,
+            sequenceGen: sequenceGen
+        )
 
-        for seed in [0, 1, 7, 42, 1000] as [UInt64] {
+        // Every recorded regression seed for every existing spec depends on this holding at every seed, not at a
+        // handful of them, so the seed is the generated value.
+        #exhaust(.uint64()) { seed in
             var rawInterpreter = ValueAndChoiceTreeInterpreter(sequenceGen, seed: seed, maxRuns: 1)
             var candidateInterpreter = ValueAndChoiceTreeInterpreter(candidateGen, seed: seed, maxRuns: 1)
-            let (rawValue, rawTree) = try #require(try rawInterpreter.next())
-            let (candidate, candidateTree) = try #require(try candidateInterpreter.next())
+            let rawRun = try rawInterpreter.next()
+            let candidateRun = try candidateInterpreter.next()
+            let (rawValue, rawTree) = try #require(rawRun)
+            let (candidate, candidateTree) = try #require(candidateRun)
 
             #expect(candidate.setupStep == nil)
             #expect(candidate.taggedCommands.map(\.1) == rawValue.map(\.1))
@@ -154,18 +161,28 @@ struct SetupChoiceSequenceTests {
             commandGen: AlwaysFailingSetupSpec.commandGenerator,
             commandLimit: 6
         )
-        let candidateGen = __ExhaustRuntime.specCandidateGenerator(AlwaysFailingSetupSpec.self, sequenceGen: sequenceGen)
+        let candidateGen = __ExhaustRuntime.specCandidateGenerator(
+            AlwaysFailingSetupSpec.self,
+            sequenceGen: sequenceGen
+        )
 
-        for seed in [0, 1, 7, 42, 1000] as [UInt64] {
+        // Screening builds candidate trees by composition and reduction takes them apart again, so split and
+        // compose have to be inverses at every seed rather than at a sample of them.
+        #exhaust(.uint64()) { seed in
             var interpreter = ValueAndChoiceTreeInterpreter(candidateGen, seed: seed, maxRuns: 1)
-            let (candidate, tree) = try #require(try interpreter.next())
+            let run = try interpreter.next()
+            let (candidate, tree) = try #require(run)
             let split = try #require(__ExhaustRuntime.splitCandidateTree(tree))
 
             // Exact materialization of the setup generator against the extracted child must reproduce the candidate's setup step. Pass 0 collapses without this.
             let setupSequence = ChoiceSequence.flatten(split.setupTree)
-            guard case let .success(step, _, _) = Materializer.materialize(
-                setupGen.gen, prefix: setupSequence, mode: .exact, fallbackTree: split.setupTree
-            ) else {
+            let materialized = Materializer.materialize(
+                setupGen.gen,
+                prefix: setupSequence,
+                mode: .exact,
+                fallbackTree: split.setupTree
+            )
+            guard case let .success(step, _, _) = materialized else {
                 Issue.record("Exact materialization of the extracted setup child failed for seed \(seed)")
                 return
             }
@@ -173,7 +190,10 @@ struct SetupChoiceSequenceTests {
             #expect("\(step)" == "\(candidateStep)")
 
             // Recomposition is the inverse of the split, byte-identical as a choice sequence.
-            let recomposed = __ExhaustRuntime.composeCandidateTree(setupTree: split.setupTree, commandTree: split.commandTree)
+            let recomposed = __ExhaustRuntime.composeCandidateTree(
+                setupTree: split.setupTree,
+                commandTree: split.commandTree
+            )
             #expect(ChoiceSequence.flatten(recomposed) == ChoiceSequence.flatten(tree))
         }
     }
@@ -202,7 +222,7 @@ struct SetupChoiceSequenceTests {
             )
         )
         #expect(replayed.discoveryMethod == .screening)
-        #expect("\(replayed.setup.map { "\($0)" } ?? "nil")" == "\(first.setup.map { "\($0)" } ?? "nil")")
+        #expect(replayed.setup.map { "\($0)" } == first.setup.map { "\($0)" })
         // Row determinism: the replay must land on the same row with the same pre-reduction command sequence, or the U-seed is not reproducing what discovery found.
         let firstOriginal = try #require(first.originalCommands)
         let replayedOriginal = try #require(replayed.originalCommands)

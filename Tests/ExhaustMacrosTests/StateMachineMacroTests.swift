@@ -1314,6 +1314,40 @@
             }
         }
 
+        @Test("@Setup on an initializer produces diagnostic")
+        func setupOnInitializer() {
+            assertMacro {
+                """
+                @Setup(.int(in: 1 ... 8))
+                init(capacity: Int) {}
+                """
+            } diagnostics: {
+                """
+                @Setup(.int(in: 1 ... 8))
+                ┬────────────────────────
+                ╰─ 🛑 @Setup must be applied to a method
+                init(capacity: Int) {}
+                """
+            }
+        }
+
+        @Test("@Setup on a property produces diagnostic")
+        func setupOnProperty() {
+            assertMacro {
+                """
+                @Setup
+                var notAMethod: Int = 0
+                """
+            } diagnostics: {
+                """
+                @Setup
+                ┬─────
+                ╰─ 🛑 @Setup must be applied to a method
+                var notAMethod: Int = 0
+                """
+            }
+        }
+
         @Test("@Invariant on a property produces diagnostic")
         func invariantOnProperty() {
             assertMacro {
