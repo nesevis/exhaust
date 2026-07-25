@@ -134,7 +134,7 @@ public macro Command<each Generator>(weight: Int = 1, _ generators: repeat Refle
 
 /// Marks a method as the generated setup step in a spec.
 ///
-/// The setup method runs once per fresh spec instance, before any command, with values drawn from the attribute's generators. Use it when the spec's starting configuration should be generated rather than fixed: the values live in the choice sequence, so they replay from seeds and reduce with the counterexample. Fixed, non-generated construction belongs in `init()` instead, which is cheaper because setup runs on every probe.
+/// The setup method runs once per fresh spec instance, before any command, with values drawn from the attribute's generators. Use it when the spec's starting configuration should be generated rather than fixed: its values replay from seeds and reduce with the counterexample, the same way a `@Command` method's arguments do. Fixed, non-generated construction belongs in `init()` instead, which is cheaper because setup runs on every probe.
 ///
 /// A spec allows at most one `@Setup` method. Multi-phase setup merges into one method whose body runs the phases in order. Setup cannot skip, reduction never deletes it, and no invariant check runs after it; a setup throw fails the run.
 ///
