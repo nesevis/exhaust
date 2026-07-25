@@ -4,14 +4,6 @@
     import Testing
     @testable import ExhaustMacros
 
-    private nonisolated(unsafe) let testMacros: [String: any Macro.Type] = [
-        "StateMachine": StateMachineDeclarationMacro.self,
-        "SystemUnderTest": SUTMacro.self,
-        "Command": CommandMacro.self,
-        "Invariant": InvariantMacro.self,
-        "Oracle": OracleMacro.self,
-    ]
-
     @Suite(
         "@StateMachine declaration macro tests",
         .macros(testMacros, record: .failed)
@@ -1317,6 +1309,40 @@
                 @Command(weight: 1)
                 ┬──────────────────
                 ╰─ 🛑 @Command must be applied to a method
+                var notAMethod: Int = 0
+                """
+            }
+        }
+
+        @Test("@Setup on an initializer produces diagnostic")
+        func setupOnInitializer() {
+            assertMacro {
+                """
+                @Setup(.int(in: 1 ... 8))
+                init(capacity: Int) {}
+                """
+            } diagnostics: {
+                """
+                @Setup(.int(in: 1 ... 8))
+                ┬────────────────────────
+                ╰─ 🛑 @Setup must be applied to a method
+                init(capacity: Int) {}
+                """
+            }
+        }
+
+        @Test("@Setup on a property produces diagnostic")
+        func setupOnProperty() {
+            assertMacro {
+                """
+                @Setup
+                var notAMethod: Int = 0
+                """
+            } diagnostics: {
+                """
+                @Setup
+                ┬─────
+                ╰─ 🛑 @Setup must be applied to a method
                 var notAMethod: Int = 0
                 """
             }

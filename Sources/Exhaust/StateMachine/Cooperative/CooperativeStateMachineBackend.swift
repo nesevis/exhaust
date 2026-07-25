@@ -1,6 +1,6 @@
 import ExhaustCore
 
-/// Runs spec probes via cooperative concurrent execution through ``drainSchedule(taggedCommands:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``.
+/// Runs spec probes via cooperative concurrent execution through ``drainSchedule(taggedCommands:setupStep:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``.
 ///
 /// Async-only because `.tasks` requires ``AsyncStateMachineSpec``. The drain loop is synchronous on the calling GCD thread, so ``probe(_:context:)`` returns without async bridging.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -10,11 +10,12 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
     let idleTimeoutMilliseconds: Int
 
     func probe(
-        _ candidate: [(ScheduleMarker, Spec.Command)],
+        _ candidate: SpecCandidateValue<Spec>,
         context _: StateMachineRunContext<Spec>
     ) -> ProbeOutcome {
         let result = drainSchedule(
-            taggedCommands: candidate,
+            taggedCommands: candidate.taggedCommands,
+            setupStep: candidate.setupStep,
             specInit: specInit,
             concurrencyLevel: concurrencyLevel,
             recordTrace: false,
@@ -27,6 +28,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
     }
 
     func reduce(
+        setupStep: Spec.SetupStep?,
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         tree: ChoiceTree,
         context: StateMachineRunContext<Spec>
@@ -34,7 +36,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
         nonisolated(unsafe) let unsafeSelf = self
         nonisolated(unsafe) let capturedContext = context
         let oracleProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.StateMachineProbeVerdict<Void> = { commands in
-            switch unsafeSelf.countedProbe(commands, context: capturedContext) {
+            switch unsafeSelf.countedProbe(SpecCandidateValue(setupStep: setupStep, taggedCommands: commands), context: capturedContext) {
                 case .pass:
                     return .pass
                 case .timeout:
@@ -57,6 +59,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
     }
 
     func buildResult(
+        setupStep: Spec.SetupStep?,
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,
         seed: UInt64?,
@@ -68,6 +71,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
 
         let traceResult = drainSchedule(
             taggedCommands: reduced,
+            setupStep: setupStep,
             specInit: specInit,
             concurrencyLevel: concurrencyLevel,
             recordTrace: true,
@@ -76,6 +80,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
 
         let oracle = __ExhaustRuntime.sequentialOracle(
             commands: reduced.map(\.1),
+            setupStep: setupStep,
             specInit: specInit,
             idleTimeoutMilliseconds: idleTimeoutMilliseconds
         )
@@ -85,6 +90,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
         let result = StateMachineResult<Spec>(
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
+            setup: setupStep,
             trace: traceResult.trace,
             systemUnderTest: traceResult.systemUnderTest,
             seed: discoveryMethod.resultSeed(seed),

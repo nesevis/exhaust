@@ -22,6 +22,7 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
         StateMachineDeclarationMacro.self,
         SUTMacro.self,
         CommandMacro.self,
+        SetupMacro.self,
         InvariantMacro.self,
         OracleMacro.self,
     ]

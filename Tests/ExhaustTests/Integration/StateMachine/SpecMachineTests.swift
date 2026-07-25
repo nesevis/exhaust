@@ -14,9 +14,9 @@ struct SpecMachineTests {
 
     @Test("Source that returns nil advances to next source")
     func sourceReturningNilAdvancesToNextSource() {
-        let emptySource = AnyStateMachineCandidateSource<StubCommand> { nil }
+        let emptySource = AnyStateMachineCandidateSource<StubSpec> { nil }
         var hitSecond = false
-        let secondSource = AnyStateMachineCandidateSource<StubCommand> {
+        let secondSource = AnyStateMachineCandidateSource<StubSpec> {
             hitSecond = true
             return nil
         }
@@ -30,7 +30,7 @@ struct SpecMachineTests {
 
     @Test("Source error records deferred issue and advances")
     func sourceErrorRecordsDeferredIssueAndAdvances() {
-        let failingSource = AnyStateMachineCandidateSource<StubCommand> {
+        let failingSource = AnyStateMachineCandidateSource<StubSpec> {
             throw StubError.generatorFailed
         }
         let context = makeContext()
@@ -48,7 +48,7 @@ struct SpecMachineTests {
     @Test("Candidate found transitions through full pipeline to assembled")
     func candidateFoundTransitionsThroughFullPipeline() {
         let candidate = makeCandidate(commands: [(.prefix, .increment)])
-        let source = AnyStateMachineCandidateSource<StubCommand>.once { candidate }
+        let source = AnyStateMachineCandidateSource<StubSpec>.once { candidate }
         var machine = makeMachine(sources: [source])
 
         var transitions: [String] = []
@@ -64,10 +64,35 @@ struct SpecMachineTests {
         #expect(machine.result != nil)
     }
 
+    @Test("A with-setup candidate whose tree cannot be decomposed skips both reduction passes")
+    func undecomposableSetupCandidateSkipsReduction() {
+        // `.just` is not the two-child zip group a with-setup candidate tree must have, so the halves cannot be told
+        // apart. Editing it would let structural encoders reach the setup subtree, so the machine reports what
+        // discovery found instead of reducing.
+        let commands: [(ScheduleMarker, StubCommand)] = [(.prefix, .increment), (.prefix, .decrement)]
+        let candidate = makeCandidate(commands: commands, setupStep: .configure, tree: .just)
+        let source = AnyStateMachineCandidateSource<StubSpec>.once { candidate }
+        var machine = makeMachine(sources: [source])
+
+        var transitions: [String] = []
+        while let transition = machine.next() {
+            transitions.append(label(transition))
+        }
+
+        #expect(transitions.contains("pruned"))
+        #expect(transitions.contains("setupReduced") == false)
+        #expect(transitions.contains("reduced") == false)
+        #expect(transitions.contains("assembled"))
+
+        let result = machine.result
+        #expect(result?.setup == .configure)
+        #expect(result?.commands.map { "\($0)" } == commands.map { "\($0.1)" })
+    }
+
     @Test("Reduction invocations are tracked in report")
     func reductionInvocationsAreTrackedInReport() {
         let candidate = makeCandidate(commands: [(.prefix, .increment), (.prefix, .increment)])
-        let source = AnyStateMachineCandidateSource<StubCommand>.once { candidate }
+        let source = AnyStateMachineCandidateSource<StubSpec>.once { candidate }
         let context = makeContext()
         var machine = makeMachine(context: context, sources: [source])
 
@@ -79,11 +104,11 @@ struct SpecMachineTests {
     @Test("Each source's invocations are attributed to its bucket, including a passing source")
     func sourceInvocationsAttributedPerBucket() {
         let context = makeContext()
-        let screeningSource = AnyStateMachineCandidateSource<StubCommand>(discoveryMethod: .screening) {
+        let screeningSource = AnyStateMachineCandidateSource<StubSpec>(discoveryMethod: .screening) {
             context.invocationCounter.value += 5
             return nil
         }
-        let samplingSource = AnyStateMachineCandidateSource<StubCommand>(discoveryMethod: .randomSampling) {
+        let samplingSource = AnyStateMachineCandidateSource<StubSpec>(discoveryMethod: .randomSampling) {
             context.invocationCounter.value += 3
             return makeCandidate(commands: [(.prefix, .increment)], discoveryMethod: .randomSampling)
         }
@@ -101,7 +126,7 @@ struct SpecMachineTests {
     @Test("A sampling-only run attributes no wall time to the screening phase")
     func samplingOnlyRunHasNoScreeningTime() {
         let context = makeContext()
-        let samplingSource = AnyStateMachineCandidateSource<StubCommand>(discoveryMethod: .randomSampling) {
+        let samplingSource = AnyStateMachineCandidateSource<StubSpec>(discoveryMethod: .randomSampling) {
             makeCandidate(commands: [(.prefix, .increment)], discoveryMethod: .randomSampling)
         }
         var machine = makeMachine(context: context, sources: [samplingSource])
@@ -115,7 +140,7 @@ struct SpecMachineTests {
     func reportSeedComesFromSamplingSource() {
         var deliveredReport: ExhaustReport?
         let context = makeContext(config: makeConfig(onReport: { deliveredReport = $0 }))
-        let samplingSource = AnyStateMachineCandidateSource<StubCommand>(discoveryMethod: .randomSampling, reportedSeed: 99) {
+        let samplingSource = AnyStateMachineCandidateSource<StubSpec>(discoveryMethod: .randomSampling, reportedSeed: 99) {
             nil
         }
         var machine = makeMachine(context: context, sources: [samplingSource])
@@ -139,15 +164,15 @@ struct SpecMachineTests {
     @Test("Multiple sources are tried in order until one produces a candidate")
     func multipleSourcesTriedInOrder() {
         var sourceOrder: [Int] = []
-        let emptyFirst = AnyStateMachineCandidateSource<StubCommand> {
+        let emptyFirst = AnyStateMachineCandidateSource<StubSpec> {
             sourceOrder.append(1)
             return nil
         }
-        let emptySecond = AnyStateMachineCandidateSource<StubCommand> {
+        let emptySecond = AnyStateMachineCandidateSource<StubSpec> {
             sourceOrder.append(2)
             return nil
         }
-        let failingThird = AnyStateMachineCandidateSource<StubCommand>.once {
+        let failingThird = AnyStateMachineCandidateSource<StubSpec>.once {
             sourceOrder.append(3)
             return makeCandidate(commands: [(.prefix, .increment)])
         }
@@ -264,8 +289,17 @@ private enum StubError: Error {
     case generatorFailed
 }
 
+private enum StubSetupStep: CustomStringConvertible, Sendable {
+    case configure
+
+    var description: String {
+        "configure"
+    }
+}
+
 private struct StubSpec: StateMachineSpecBase {
     typealias Command = StubCommand
+    typealias SetupStep = StubSetupStep
     typealias SystemUnderTest = Int
 
     static var commandGenerator: ReflectiveGenerator<StubCommand> {
@@ -293,13 +327,14 @@ private struct StubBackend: StateMachineBackend {
     var probeResult: ProbeOutcome = .fail
 
     func probe(
-        _: [(ScheduleMarker, StubCommand)],
+        _: SpecCandidateValue<StubSpec>,
         context _: StateMachineRunContext<StubSpec>
     ) -> ProbeOutcome {
         probeResult
     }
 
     func reduce(
+        setupStep _: StubSpec.SetupStep?,
         taggedCommands: [(ScheduleMarker, StubCommand)],
         tree _: ChoiceTree,
         context: StateMachineRunContext<StubSpec>
@@ -310,6 +345,7 @@ private struct StubBackend: StateMachineBackend {
     }
 
     func buildResult(
+        setupStep: StubSpec.SetupStep?,
         reduced: [(ScheduleMarker, StubCommand)],
         originalCommands: [StubCommand]?,
         seed: UInt64?,
@@ -320,6 +356,7 @@ private struct StubBackend: StateMachineBackend {
         let result = StateMachineResult<StubSpec>(
             commands: reduced.map(\.1),
             originalCommands: originalCommands,
+            setup: setupStep,
             trace: [],
             systemUnderTest: 0,
             seed: seed,
@@ -340,12 +377,14 @@ private func stubSequenceGen() -> Generator<[(ScheduleMarker, StubCommand)]> {
 
 private func makeCandidate(
     commands: [(ScheduleMarker, StubCommand)],
+    setupStep: StubSetupStep? = nil,
+    tree: ChoiceTree = .just,
     discoveryMethod: StateMachineDiscoveryMethod = .screening,
     seed: UInt64 = 0
-) -> StateMachineCandidate<StubCommand> {
+) -> StateMachineCandidate<StubSpec> {
     StateMachineCandidate(
-        taggedCommands: commands,
-        tree: .just,
+        value: SpecCandidateValue(setupStep: setupStep, taggedCommands: commands),
+        tree: tree,
         sequenceGen: stubSequenceGen(),
         seed: seed,
         iteration: 1,
@@ -384,7 +423,7 @@ private func makeMachine(
     config: ResolvedConcurrentConfig? = nil,
     context: StateMachineRunContext<StubSpec>? = nil,
     backend: StubBackend = StubBackend(),
-    sources: [AnyStateMachineCandidateSource<StubCommand>]
+    sources: [AnyStateMachineCandidateSource<StubSpec>]
 ) -> SpecMachine<StubBackend> {
     let resolvedContext: StateMachineRunContext<StubSpec>
     if let context {
@@ -433,6 +472,7 @@ private func label(_ transition: SpecMachine<StubBackend>.Transition) -> String 
         case .sourceError: "sourceError"
         case .candidateFound: "candidateFound"
         case .pruned: "pruned"
+        case .setupReduced: "setupReduced"
         case .reduced: "reduced"
         case .statsRecorded: "statsRecorded"
         case .assembled: "assembled"
@@ -441,7 +481,7 @@ private func label(_ transition: SpecMachine<StubBackend>.Transition) -> String 
 
 private extension AnyStateMachineCandidateSource {
     static func once(
-        _ computation: @escaping () throws -> StateMachineCandidate<Command>?
+        _ computation: @escaping () throws -> StateMachineCandidate<Spec>?
     ) -> AnyStateMachineCandidateSource {
         var exhausted = false
         return AnyStateMachineCandidateSource {

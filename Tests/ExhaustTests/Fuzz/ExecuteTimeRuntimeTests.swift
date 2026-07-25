@@ -101,7 +101,7 @@ struct ExecuteTimeRuntimeTests {
         let tagged: [(ScheduleMarker, AlwaysPassingSpec.Command)] = [
             (.prefix, .increment),
         ]
-        let verdict = adapter.property(tagged)
+        let verdict = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged))
         #expect(verdict.isFailure == false)
     }
 
@@ -113,7 +113,7 @@ struct ExecuteTimeRuntimeTests {
             (.prefix, .increment),
             (.prefix, .increment),
         ]
-        let verdict = adapter.property(tagged)
+        let verdict = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged))
         #expect(verdict.isFailure)
     }
 
@@ -125,7 +125,7 @@ struct ExecuteTimeRuntimeTests {
             (.prefix, .increment),
             (.prefix, .increment),
         ]
-        guard case let .fail(symptom) = adapter.property(tagged) else {
+        guard case let .fail(symptom) = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged)) else {
             Issue.record("Expected a failing verdict")
             return
         }
@@ -140,7 +140,7 @@ struct ExecuteTimeRuntimeTests {
             (.prefix, .increment),
             (.prefix, .increment),
         ]
-        guard case let .fail(symptom) = adapter.property(tagged) else {
+        guard case let .fail(symptom) = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged)) else {
             Issue.record("Expected a failing verdict")
             return
         }
@@ -150,10 +150,10 @@ struct ExecuteTimeRuntimeTests {
     @Test("Sequential adapter runs end-to-end with synthetic coverage and finds the fault")
     func adapterEndToEnd() {
         let adapter = __ExhaustRuntime.buildSequentialSpecAdapter(FailsAtThreeSpec.self)
-        let source = SyntheticCoverageSource<[(ScheduleMarker, FailsAtThreeSpec.Command)]>(
+        let source = SyntheticCoverageSource<SpecCandidateValue<FailsAtThreeSpec>>(
             edgeCount: 16,
-            edges: { tagged in
-                [tagged.count % 8]
+            edges: { candidate in
+                [candidate.taggedCommands.count % 8]
             }
         )
         let report = __ExhaustRuntime.runExploreTimeCore(
@@ -180,10 +180,10 @@ struct ExecuteTimeRuntimeTests {
             commandLimit: 8,
             concurrencyLevel: 2
         ))
-        let source = SyntheticCoverageSource<[(ScheduleMarker, NonAtomicCounterSpec.Command)]>(
+        let source = SyntheticCoverageSource<SpecCandidateValue<NonAtomicCounterSpec>>(
             edgeCount: 16,
-            edges: { tagged in
-                [tagged.count % 8]
+            edges: { candidate in
+                [candidate.taggedCommands.count % 8]
             }
         )
         let report = __ExhaustRuntime.runExploreTimeCore(
@@ -220,9 +220,10 @@ struct ExecuteTimeRuntimeTests {
             [(lane2, .increment), (lane1, .increment), (lane2, .increment), (lane1, .increment)],
         ]
         for tagged in schedules {
-            let first = adapter.property(tagged).isFailure
+            let candidate = SpecCandidateValue<NonAtomicCounterSpec>(setupStep: nil, taggedCommands: tagged)
+            let first = adapter.property(candidate).isFailure
             for _ in 0 ..< 10 {
-                #expect(adapter.property(tagged).isFailure == first, "Verdict flipped across repetitions of the same schedule: \(tagged.map(\.0))")
+                #expect(adapter.property(candidate).isFailure == first, "Verdict flipped across repetitions of the same schedule: \(tagged.map(\.0))")
             }
         }
     }
@@ -239,7 +240,7 @@ struct ExecuteTimeRuntimeTests {
         let tagged: [(ScheduleMarker, StallingSpec.Command)] = [
             (ScheduleMarker(rawValue: 1), .parkForever),
         ]
-        let verdict = adapter.property(tagged)
+        let verdict = adapter.property(SpecCandidateValue(setupStep: nil, taggedCommands: tagged))
         #expect(verdict.isFailure == false)
     }
 
@@ -263,10 +264,10 @@ struct ExecuteTimeRuntimeTests {
     @Test("commandLimit setting caps generated sequence length")
     func commandLimitCapsLength() {
         let adapter = __ExhaustRuntime.buildSequentialSpecAdapter(SkippableCounterSpec.self, commandLimit: 5)
-        let source = SyntheticCoverageSource<[(ScheduleMarker, SkippableCounterSpec.Command)]>(
+        let source = SyntheticCoverageSource<SpecCandidateValue<SkippableCounterSpec>>(
             edgeCount: 16,
-            edges: { tagged in
-                [tagged.count % 8]
+            edges: { candidate in
+                [candidate.taggedCommands.count % 8]
             }
         )
         var configuration = FuzzRunnerConfiguration(
@@ -293,7 +294,7 @@ struct ExecuteTimeRuntimeTests {
             ) else {
                 continue
             }
-            #expect(value.count <= 5, "Corpus entry \(index) has \(value.count) commands, exceeding commandLimit 5")
+            #expect(value.taggedCommands.count <= 5, "Corpus entry \(index) has \(value.taggedCommands.count) commands, exceeding commandLimit 5")
         }
     }
 
@@ -360,10 +361,10 @@ struct ExecuteTimeRuntimeTests {
     func slowPropertyOvershootsBudget() {
         // Characterization, not aspiration (fuzzer-selftest-sut-landscape.md, item 5): the loop checks termination only between attempts, so a slow command overshoots the budget by however long its attempt takes, and a never-returning command hangs the run. This pins the current contract — the run returns and reports once the attempt completes — so any future mid-attempt abort mechanism shows up as this test getting faster.
         let adapter = __ExhaustRuntime.buildSequentialSpecAdapter(SlowCommandSpec.self, commandLimit: 2)
-        let source = SyntheticCoverageSource<[(ScheduleMarker, SlowCommandSpec.Command)]>(
+        let source = SyntheticCoverageSource<SpecCandidateValue<SlowCommandSpec>>(
             edgeCount: 8,
-            edges: { tagged in
-                [tagged.count % 4]
+            edges: { candidate in
+                [candidate.taggedCommands.count % 4]
             }
         )
         let start = ContinuousClock.now
@@ -387,9 +388,10 @@ struct ExecuteTimeRuntimeTests {
     @Test("Pruned corpus entries contain no skipped commands")
     func prunedCorpusHasNoSkips() {
         let adapter = __ExhaustRuntime.buildSequentialSpecAdapter(SkippableCounterSpec.self)
-        let source = SyntheticCoverageSource<[(ScheduleMarker, SkippableCounterSpec.Command)]>(
+        let source = SyntheticCoverageSource<SpecCandidateValue<SkippableCounterSpec>>(
             edgeCount: 16,
-            edges: { tagged in
+            edges: { candidate in
+                let tagged = candidate.taggedCommands
                 var edges = [tagged.count % 8]
                 let decrementCount = tagged.count { _, command in
                     if case .decrement = command {
@@ -420,7 +422,6 @@ struct ExecuteTimeRuntimeTests {
         let result = runner.run()
         #expect(result.corpusEntryCount > 0)
 
-        let skipIdentifier = SkippableCounterSpec.skipIdentifier
         for index in runner.corpus.mutableTierIndices {
             let entry = runner.corpus.entries[index]
             guard case let .success(value, _, _) = Materializer.materialize(
@@ -428,8 +429,8 @@ struct ExecuteTimeRuntimeTests {
             ) else {
                 continue
             }
-            let commands = value.map(\.1)
-            let skips = skipIdentifier(commands)
+            let commands = value.taggedCommands.map(\.1)
+            let skips = SkippableCounterSpec.identifySkips(setupStep: value.setupStep, commands: commands)
             #expect(skips.isEmpty, "Mutable-tier entry \(index) contains skipped commands at indices \(skips)")
         }
     }

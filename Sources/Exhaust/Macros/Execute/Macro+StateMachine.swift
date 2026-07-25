@@ -13,6 +13,8 @@ import ExhaustCore
 /// - `.tasks` runs commands concurrently with deterministic interleaving at `await` boundaries. Checks use `@Invariant`.
 /// - `.threads` dispatches commands to real OS threads via GCD. Checks use `@Oracle`, which compares the concurrent end state against a sequential replay.
 ///
+/// A spec may also declare one ``Setup(_:)`` method, whose parameters Exhaust generates, when the starting configuration should vary from run to run rather than being fixed in `init()`.
+///
 /// ## .tasks StateMachine
 ///
 /// Commands must be `async` for `.tasks` to have suspension points to interleave at. Without `await` boundaries, `.tasks` behaves identically to `.sequential`. The SUT below has a deliberate read-yield-write race: two overlapping increments read the same value, suspend, and both write `current + 1`, losing one update.
@@ -100,7 +102,10 @@ import ExhaustCore
     named(systemUnderTest),
     named(init),
     named(executionModel),
-    named(diagnosticSnapshot)
+    named(diagnosticSnapshot),
+    named(SetupStep),
+    named(setupGenerator),
+    named(runSetup)
 )
 @attached(extension, conformances: StateMachineSpec, AsyncStateMachineSpec)
 public macro StateMachine(_ mode: ExecutionModel) = #externalMacro(module: "ExhaustMacros", type: "StateMachineDeclarationMacro")
@@ -128,6 +133,26 @@ public macro SystemUnderTest() = #externalMacro(module: "ExhaustMacros", type: "
 /// ```
 @attached(peer)
 public macro Command<each Generator>(weight: Int = 1, _ generators: repeat ReflectiveGenerator<each Generator>) = #externalMacro(module: "ExhaustMacros", type: "CommandMacro")
+
+/// Marks a method as the generated setup step in a spec.
+///
+/// The setup method runs once per fresh spec instance, before any command, with values drawn from the attribute's generators. Use it when the spec's starting configuration should be generated rather than fixed: its values replay from seeds and reduce with the counterexample, the same way a `@Command` method's arguments do. Fixed, non-generated construction belongs in `init()` instead, which is cheaper because setup runs on every probe.
+///
+/// A spec allows at most one `@Setup` method. Multi-phase setup merges into one method whose body runs the phases in order. Setup cannot skip, reduction never deletes it, and no invariant check runs after it; a setup throw fails the run.
+///
+/// ```swift
+/// @Setup(.int(in: 1 ... 32), .int(in: 0 ... 9).array(length: 0 ... 8))
+/// func configure(capacity: Int, preload: [Int]) {
+///     queue = BoundedQueue(capacity: capacity)
+///     for value in preload where queue.enqueue(value) {
+///         model.append(value)
+///     }
+/// }
+/// ```
+///
+/// - Note: A `@SystemUnderTest` property only needs to be optional or implicitly unwrapped when the SUT's own construction consumes generated values. A setup that mutates an already-constructed SUT keeps a non-optional property with its default initializer.
+@attached(peer)
+public macro Setup<each Generator>(_ generators: repeat ReflectiveGenerator<each Generator>) = #externalMacro(module: "ExhaustMacros", type: "SetupMacro")
 
 /// Marks a method as a global postcondition in a spec.
 ///

@@ -113,27 +113,28 @@ extension __ExhaustRuntime {
         )
 
         let invocationCounter = UnsafeSendableBox(0)
-        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+        let property: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
             invocationCounter.value += 1
             timeoutProbeCounts.value.attempts += 1
-            let partition = LanePartition(markers: taggedCommands.map(\.0))
-            let outcome = innerBackend.execute(taggedCommands, partition: partition)
+            let partition = LanePartition(markers: candidate.taggedCommands.map(\.0))
+            let outcome = innerBackend.execute(candidate.taggedCommands, setupStep: candidate.setupStep, partition: partition)
             if case .timedOut = outcome {
                 // A timed-out probe is inconclusive, not a counterexample: under host contention the lanes simply did not finish in time. Count it as a pass so discovery keeps sampling, and tally it so the runner can warn when timeouts dominate the budget.
                 timeoutProbeCounts.value.timedOut += 1
                 return true
             }
             return classifyFailure(
-                taggedCommands: taggedCommands,
+                taggedCommands: candidate.taggedCommands,
+                setupStep: candidate.setupStep,
                 outcome: outcome,
                 backend: innerBackend
             ) == nil
         }
 
-        let smokeProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { tagged in
+        let smokeProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
             invocationCounter.value += 1
             timeoutProbeCounts.value.attempts += 1
-            let smoke = innerBackend.runSmoke(tagged.map(\.1))
+            let smoke = innerBackend.runSmoke(candidate.taggedCommands.map(\.1), setupStep: candidate.setupStep)
             if smoke.timedOut {
                 timeoutProbeCounts.value.timedOut += 1
                 return true
@@ -147,7 +148,7 @@ extension __ExhaustRuntime {
         } else {
             smokeSequenceGen = sequenceGen
         }
-        let smokeSource: AnyStateMachineCandidateSource<Spec.Command>? = .smoke(
+        let smokeSource: AnyStateMachineCandidateSource<Spec>? = .smoke(
             sequenceGen: smokeSequenceGen,
             property: smokeProperty
         )
@@ -190,11 +191,12 @@ extension __ExhaustRuntime {
     /// When `linearizabilityWitness` identifies a lane command, that step is marked as the one whose response no valid ordering reproduces.
     static func buildPreemptiveTrace(
         _ reduced: [(ScheduleMarker, some CustomStringConvertible)],
+        setupSteps: [TraceStep] = [],
         laneResponseValues: [UInt8: [String?]]? = nil,
         linearizabilityWitness: ResponseWitness? = nil
     ) -> [TraceStep] {
         var laneCounts: [UInt8: Int] = [:]
-        return reduced.enumerated().map { index, tagged in
+        let commandSteps = reduced.enumerated().map { index, tagged -> TraceStep in
             let (marker, command) = tagged
             if marker.isPrefix {
                 return TraceStep(
@@ -221,6 +223,7 @@ extension __ExhaustRuntime {
                 )
             }
         }
+        return joinTrace(setup: setupSteps, commands: commandSteps)
     }
 }
 
@@ -243,9 +246,16 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
     /// Executes a tagged command sequence with real GCD concurrency using a pre-computed lane partition.
     ///
     /// Returns ``Preemptive/Outcome/failed(concurrentSpec:)`` when a command throws, an invariant fails, or an ObjC exception is caught. Returns ``Preemptive/Outcome/timedOut(concurrentSpec:)`` when the concurrent lanes do not finish within ``idleTimeoutMilliseconds``, so the ``SpecMachine`` can skip reduction and report a hang rather than a deterministic failure.
-    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], partition: LanePartition) -> Preemptive.Outcome<Spec> {
-        let concurrentSpec = Spec()
-        let sequentialSpec = Spec()
+    func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], setupStep: Spec.SetupStep?, partition: LanePartition) -> Preemptive.Outcome<Spec> {
+        // Both instances receive the same setup ahead of the prefix commands, or the oracle comparison is meaningless. A setup throw fails the probe.
+        let (concurrentSpec, concurrentSetupError) = Spec.makeSpec(setupStep: setupStep)
+        if concurrentSetupError != nil {
+            return .failed(concurrentSpec: concurrentSpec)
+        }
+        let (sequentialSpec, sequentialSetupError) = Spec.makeSpec(setupStep: setupStep)
+        if sequentialSetupError != nil {
+            return .failed(concurrentSpec: concurrentSpec)
+        }
 
         if runCommandsCatchingObjC(at: partition.prefixIndices, in: taggedCommands, on: concurrentSpec) == false {
             return .failed(concurrentSpec: concurrentSpec)
@@ -344,7 +354,7 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         }
         // Try the realized completion order as a single linearization witness before the full interleaving search. The prefix array is materialized only here — the passed and no-response-info paths never need it.
         let prefixCommands = partition.prefixIndices.map { taggedCommands[$0].1 }
-        if realizedOrderIsLinearizable(prefix: prefixCommands, realizedOrder: realizedCompletionOrder(of: collectedResponses), concurrentSpec: concurrentSpec) {
+        if realizedOrderIsLinearizable(prefix: prefixCommands, setupStep: setupStep, realizedOrder: realizedCompletionOrder(of: collectedResponses), concurrentSpec: concurrentSpec) {
             return .passed
         }
         return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
@@ -353,14 +363,18 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
     /// Whether the realized completion order is a valid linearization: a sequential replay of the concurrent commands in the order the lanes finished, on a fresh spec, that reproduces every observed response and the oracle's final state.
     ///
     /// A match means the execution is linearizable (this order is a concrete witness), so the ``SpecMachine`` can pass without the full interleaving search.
-    /// Any divergence (a differing response, an oracle mismatch, a replay throw, or an ObjC exception) returns `false`, and the ``SpecMachine`` hands the per-lane responses to ``checkLinearizability(taggedCommands:laneResponses:concurrentSpec:)``.
+    /// Any divergence (a differing response, an oracle mismatch, a replay throw, an ObjC exception, or a setup error) returns `false`, and the ``SpecMachine`` hands the per-lane responses to ``checkLinearizability(taggedCommands:setupStep:laneResponses:concurrentSpec:)``.
     /// The check is sound: it only reports a pass when an actual sequential order reproduces the observation.
     private func realizedOrderIsLinearizable(
         prefix: [Spec.Command],
+        setupStep: Spec.SetupStep?,
         realizedOrder: [ObservedResponse<Spec.Command>],
         concurrentSpec: Spec
     ) -> Bool {
-        let witnessSpec = Spec()
+        let (witnessSpec, witnessSetupError) = Spec.makeSpec(setupStep: setupStep)
+        guard witnessSetupError == nil else {
+            return false
+        }
         var matched = false
         var exception: NSException?
         let completed = exhaust_runCatchingObjCException({
@@ -434,11 +448,13 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
 
     func checkLinearizability(
         taggedCommands: [(ScheduleMarker, Spec.Command)],
+        setupStep: Spec.SetupStep?,
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
         Self.runLinearizabilityCheck(
             taggedCommands: taggedCommands,
+            setupStep: setupStep,
             laneResponses: laneResponses,
             concurrentSpec: concurrentSpec
         )
@@ -447,6 +463,7 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
     /// Constructs the replay closures and drives the linearizability checker for a synchronous spec.
     static func runLinearizabilityCheck(
         taggedCommands: [(ScheduleMarker, Spec.Command)],
+        setupStep: Spec.SetupStep?,
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
@@ -456,7 +473,11 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
         let result = checker.check(
             replayPrefix: {
-                let fresh = Spec()
+                // Once per sibling retry in the DFS: every fresh replay instance receives the same setup, and a setup error fails this ordering rather than crashing into an unconfigured SUT.
+                let (fresh, setupError) = Spec.makeSpec(setupStep: setupStep)
+                guard setupError == nil else {
+                    return false
+                }
                 for command in prefixCommands {
                     do {
                         try fresh.run(command)
@@ -508,21 +529,23 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         }
     }
 
-    func makeIdentifySkips() -> @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> {
-        let rawIdentifySkips = Spec.skipIdentifier
-        return { taggedCommands in
+    func makeIdentifySkips() -> @Sendable (SpecCandidateValue<Spec>) -> Set<Int> {
+        { candidate in
             // Skip identification replays the commands sequentially on a fresh spec, outside the ObjC guard that wraps lane execution. Protect it so a command that throws an NSException degrades to "no skips identified" (pruning is then a no-op and the actual execution catches and reports the exception) rather than aborting the process.
             var skipped: Set<Int> = []
             let completed = runCatchingObjC {
-                skipped = rawIdentifySkips(taggedCommands.map(\.1))
+                skipped = Spec.identifySkips(setupStep: candidate.setupStep, commands: candidate.taggedCommands.map(\.1))
             }
             return completed ? skipped : []
         }
     }
 
-    func runSmoke(_ commands: [Spec.Command]) -> (trace: [TraceStep], failed: Bool, timedOut: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
-        let spec = Spec()
-        let (trace, failed) = __ExhaustRuntime.buildSequentialTrace(
+    func runSmoke(_ commands: [Spec.Command], setupStep: Spec.SetupStep?) -> (trace: [TraceStep], failed: Bool, timedOut: Bool, systemUnderTest: Spec.SystemUnderTest, failureDescription: String?) {
+        let (spec, setupTrace, setupFailed) = __ExhaustRuntime.makeSpecRecordingSetupTrace(Spec.self, setupStep: setupStep)
+        if setupFailed {
+            return (setupTrace, true, false, spec.systemUnderTest, spec.failureDescription())
+        }
+        let (commandTrace, failed) = __ExhaustRuntime.buildSequentialTrace(
             commands,
             run: { command in
                 var caughtError: (any Error)?
@@ -542,14 +565,15 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
             },
             checkInvariants: { try spec.checkInvariants() }
         )
+        let trace = __ExhaustRuntime.joinTrace(setup: setupTrace, commands: commandTrace)
         if failed {
             return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
         // A .threads spec expresses its self-consistency check through the @Oracle, because the macro rejects @Invariant under .threads, and smoke never runs the concurrent phase.
         // Replay the sequence on a fresh reference and call the oracle once at the end, so a spec that is already broken under sequential execution fails here before any concurrent probing.
         // The reference is a distinct spec so the oracle's relational comparison is between two independent runs rather than the SUT against itself.
-        let reference = Spec()
-        guard runAllCommandsCatchingObjC(commands, on: reference) else {
+        let (reference, referenceSetupError) = Spec.makeSpec(setupStep: setupStep)
+        guard referenceSetupError == nil, runAllCommandsCatchingObjC(commands, on: reference) else {
             return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
         if spec.oracleCheck(reference.systemUnderTest) == false {
@@ -558,12 +582,16 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         return (trace, false, false, spec.systemUnderTest, nil)
     }
 
-    /// Replays the reduced commands sequentially on a fresh spec and returns its failure description, the expected race-free state for the report. Returns nil when the replay itself fails, because the partial state would mislead debugging.
-    func sequentialReplayDescription(of reduced: [(ScheduleMarker, Spec.Command)]) -> String? {
-        let oracleSpec = Spec()
-        guard runAllCommandsCatchingObjC(reduced.map(\.1), on: oracleSpec) else {
+    /// Replays the reduced commands sequentially on a fresh spec (with setup applied) and returns its failure description, the expected race-free state for the report. Returns nil when the replay itself fails, because the partial state would mislead debugging.
+    func sequentialReplayDescription(of reduced: [(ScheduleMarker, Spec.Command)], setupStep: Spec.SetupStep?) -> String? {
+        let (oracleSpec, setupError) = Spec.makeSpec(setupStep: setupStep)
+        guard setupError == nil, runAllCommandsCatchingObjC(reduced.map(\.1), on: oracleSpec) else {
             return nil
         }
         return oracleSpec.failureDescription()
+    }
+
+    func setupTraceSteps(_ setupStep: Spec.SetupStep?) -> [TraceStep] {
+        __ExhaustRuntime.makeSpecRecordingSetupTrace(Spec.self, setupStep: setupStep).steps
     }
 }

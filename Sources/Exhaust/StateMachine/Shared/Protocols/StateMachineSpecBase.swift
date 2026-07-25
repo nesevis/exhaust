@@ -1,3 +1,16 @@
+import ExhaustCore
+
+public extension __ExhaustRuntime {
+    /// Stands in as ``StateMachineSpecBase/SetupStep`` for a spec that declares no `@Setup` method.
+    ///
+    /// The type has no cases, so no value of it ever exists and ``StateMachineResult/setup`` is always `nil` on such a spec. It exists so ``StateMachineSpecBase/SetupStep`` can require `CustomStringConvertible` the way ``StateMachineSpecBase/Command`` does, which the `Never` it previously defaulted to cannot satisfy.
+    enum NoSetupStep: CustomStringConvertible, Sendable {
+        public var description: String {
+            switch self {}
+        }
+    }
+}
+
 /// Shared requirements for both synchronous and asynchronous state machine specs.
 ///
 /// Users never conform to this protocol directly. Use ``StateMachineSpec`` or ``AsyncStateMachineSpec`` instead, both synthesized by the `@StateMachine` macro.
@@ -7,6 +20,14 @@ public protocol StateMachineSpecBase: SendableMetatype {
 
     /// The synthesized command enum. Each case corresponds to a `@Command` method.
     associatedtype Command: CustomStringConvertible & Sendable
+
+    /// The synthesized setup step enum, with a single case for the `@Setup` method.
+    ///
+    /// Read the value the failing run used from ``StateMachineResult/setup``.
+    associatedtype SetupStep: CustomStringConvertible & Sendable = __ExhaustRuntime.NoSetupStep
+
+    /// Builds a generator for the spec's setup step, or `nil` when the spec has no `@Setup` method.
+    static var setupGenerator: ReflectiveGenerator<SetupStep>? { get }
 
     /// The type of the system under test, inferred from the `@SystemUnderTest` property.
     associatedtype SystemUnderTest
@@ -32,5 +53,10 @@ public extension StateMachineSpecBase {
     /// Default execution model for specs that do not declare one explicitly.
     static var executionModel: ExecutionModel {
         .sequential
+    }
+
+    /// Default for specs without a `@Setup` method. The `@StateMachine` macro synthesizes a real generator when one exists.
+    static var setupGenerator: ReflectiveGenerator<SetupStep>? {
+        nil
     }
 }

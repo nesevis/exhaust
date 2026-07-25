@@ -10,6 +10,9 @@ public struct StateMachineResult<Spec: StateMachineSpecBase> {
     /// The original command sequence before reduction, or `nil` when no reduction was performed.
     public let originalCommands: [Spec.Command]?
 
+    /// The reduced setup step that configured the spec before the commands ran, or `nil` for specs without a `@Setup` method.
+    public let setup: Spec.SetupStep?
+
     /// Step-by-step execution trace of the failing sequence.
     public let trace: [TraceStep]
 

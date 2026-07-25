@@ -37,6 +37,11 @@ public protocol StateMachineSpec: StateMachineSpecBase, AnyObject {
     /// - Throws: ``StateMachineCheckFailure`` if any invariant returns `false`.
     func checkInvariants() throws
 
+    /// Executes the spec's `@Setup` method with the given generated step. Called once per fresh spec instance, before any command runs. No invariant check runs after setup.
+    ///
+    /// - Throws: Any error the setup method throws. A setup throw fails the run; there is no skip channel.
+    func runSetup(_ step: SetupStep) throws
+
     /// Compares the concurrent SUT state against a sequentially-replayed reference SUT. Only called for `.threads` specs.
     ///
     /// - Parameter sequentialResult: The SUT state from a sequential (race-free) replay of the same command sequence.
@@ -52,24 +57,51 @@ extension StateMachineSpec {
         fatalError("oracleCheck is only called for .threads specs")
     }
 
-    /// Returns a closure that replays a command sequence on a fresh spec instance and collects the indices of commands that threw ``StateMachineSkip``.
+    /// Default no-op for specs without a `@Setup` method. The `@StateMachine` macro synthesizes a real implementation when one exists.
+    public func runSetup(_: SetupStep) throws {}
+
+    /// Applies a setup step to this instance, reporting the error it threw rather than propagating it.
     ///
-    /// The returned closure is used by the SCA screening phase and skip-pruning pass to identify commands whose preconditions are not met for a given sequence, so those elements can be removed from the choice tree before reduction.
-    static var skipIdentifier: @Sendable ([Command]) -> Set<Int> {
-        { commands in
-            let spec = Self()
-            var skips: Set<Int> = []
-            for (index, command) in commands.enumerated() {
-                do {
-                    try spec.run(command)
-                    try spec.checkInvariants()
-                } catch is StateMachineSkip {
-                    skips.insert(index)
-                } catch {
-                    break
-                }
-            }
-            return skips
+    /// The one place runner code applies setup. Returning the error instead of rethrowing is what lets every call site stay a single expression: the runners each turn a setup failure into their own currency (a verdict, a `false` replay result, a trace row), and none of them wants a `do`/`catch` to do it. A nil step is a no-op, so callers never branch on whether the spec has a `@Setup` method.
+    func applySetup(_ step: SetupStep?) -> (any Error)? {
+        guard let step else {
+            return nil
         }
+        do {
+            try runSetup(step)
+        } catch {
+            return error
+        }
+        return nil
+    }
+
+    /// Constructs a fresh spec instance and applies its setup step, if it has one.
+    ///
+    /// The one construction funnel for runner code: once setup exists, no runner may call `Self()` directly, because with an implicitly unwrapped SUT every missed setup application is a nil-unwrap crash. The instance is always returned, alongside the setup error if one was thrown, so probe paths can report the partially set-up spec as evidence.
+    static func makeSpec(setupStep: SetupStep?) -> (spec: Self, setupError: (any Error)?) {
+        let spec = Self()
+        return (spec, spec.applySetup(setupStep))
+    }
+
+    /// Replays a command sequence on a fresh spec instance (with setup applied) and collects the indices of commands that threw ``StateMachineSkip``.
+    ///
+    /// Used by the SCA screening phase and skip-pruning pass to identify commands whose preconditions are not met for a given sequence, so those elements can be removed from the choice tree before reduction. A setup error returns the empty set: skip pruning is an optimization, and the actual execution reports the setup failure.
+    static func identifySkips(setupStep: SetupStep?, commands: [Command]) -> Set<Int> {
+        let (spec, setupError) = makeSpec(setupStep: setupStep)
+        guard setupError == nil else {
+            return []
+        }
+        var skips: Set<Int> = []
+        for (index, command) in commands.enumerated() {
+            do {
+                try spec.run(command)
+                try spec.checkInvariants()
+            } catch is StateMachineSkip {
+                skips.insert(index)
+            } catch {
+                break
+            }
+        }
+        return skips
     }
 }

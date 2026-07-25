@@ -14,6 +14,7 @@ struct CooperativeSchedulerTests {
         ]
         let result = drainSchedule(
             taggedCommands: commands,
+            setupStep: nil,
             specInit: { NonAtomicCounterSpec() },
             concurrencyLevel: 2,
             recordTrace: true

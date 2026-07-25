@@ -12,6 +12,8 @@ extension __ExhaustRuntime {
     struct FailureContext {
         var specName: String = ""
         var discoveryMethod: StateMachineDiscoveryMethod = .randomSampling
+        /// The rendered setup step description, shown in its own section ahead of the command partition. Nil for zero-setup specs.
+        var setupDescription: String?
         var seed: UInt64?
         var iteration: Int = 0
         var budget: Int = 0
@@ -48,6 +50,12 @@ extension __ExhaustRuntime {
 
         if tagged.count < context.originalCount {
             lines.append("Reduced from \(context.originalCount) to \(tagged.count) commands.")
+            lines.append("")
+        }
+
+        if let setupDescription = context.setupDescription {
+            lines.append("Setup:")
+            lines.append("  1. \(setupDescription)")
             lines.append("")
         }
 

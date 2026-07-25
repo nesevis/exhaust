@@ -13,16 +13,19 @@ enum ProbeOutcome {
 protocol StateMachineBackend<Spec>: SendableMetatype {
     associatedtype Spec: StateMachineSpecBase
 
-    /// Executes a candidate command sequence and returns whether it passed, failed, or timed out.
+    /// Executes a candidate (the setup step, then the tagged commands) and returns whether it passed, failed, or timed out.
     ///
-    /// Rich outcome data (per-lane responses, SUT snapshots, failure descriptions) is stashed internally for later use in ``buildResult(reduced:originalCommands:seed:iteration:discoveryMethod:context:)``.
+    /// Rich outcome data (per-lane responses, SUT snapshots, failure descriptions) is stashed internally for later use in ``buildResult(setupStep:reduced:originalCommands:seed:iteration:discoveryMethod:context:)``.
     func probe(
-        _ candidate: [(ScheduleMarker, Spec.Command)],
+        _ candidate: SpecCandidateValue<Spec>,
         context: StateMachineRunContext<Spec>
     ) -> ProbeOutcome
 
-    /// Reduces a failing command sequence to a minimal counterexample.
+    /// Reduces a failing command sequence to a minimal counterexample, with the already-reduced setup held fixed.
+    ///
+    /// `tree` is the command child of the candidate tree, so the backend's reduction runs against exactly the pre-setup generator and tree shape; every probe splices `setupStep` back in front of the candidate commands.
     func reduce(
+        setupStep: Spec.SetupStep?,
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         tree: ChoiceTree,
         context: StateMachineRunContext<Spec>
@@ -32,6 +35,7 @@ protocol StateMachineBackend<Spec>: SendableMetatype {
     ///
     /// Populates `context.state.failureContext` with backend-specific diagnostic data (response witnesses for preemptive, oracle descriptions for cooperative).
     func buildResult(
+        setupStep: Spec.SetupStep?,
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,
         seed: UInt64?,
@@ -46,7 +50,7 @@ extension StateMachineBackend {
     ///
     /// Every probe must be counted exactly once. Attribution to the screening and sampling report buckets happens by diffing the counter around each phase, so no per-invocation marking is needed. Funnel probe calls through here rather than incrementing at the call site, so the accounting invariant lives in one place.
     func countedProbe(
-        _ candidate: [(ScheduleMarker, Spec.Command)],
+        _ candidate: SpecCandidateValue<Spec>,
         context: StateMachineRunContext<Spec>
     ) -> ProbeOutcome {
         context.invocationCounter.value += 1

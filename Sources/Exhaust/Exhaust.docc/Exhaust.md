@@ -61,6 +61,7 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 - ``StateMachine(_:)``
 - ``SystemUnderTest()``
 - ``Command(weight:_:)``
+- ``Setup(_:)``
 - ``Invariant()``
 - ``Oracle()``
 - ``exhaust(_:_:property:)-8d0i6``

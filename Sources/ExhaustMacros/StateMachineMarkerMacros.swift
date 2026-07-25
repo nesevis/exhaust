@@ -36,6 +36,23 @@ public struct CommandMacro: PeerMacro {
     }
 }
 
+/// Marker macro for the setup method. Generates no code — `@StateMachine` reads this annotation.
+public struct SetupMacro: PeerMacro {
+    public static func expansion(
+        of node: AttributeSyntax,
+        providingPeersOf declaration: some DeclSyntaxProtocol,
+        in context: some MacroExpansionContext
+    ) throws -> [DeclSyntax] {
+        if declaration.is(FunctionDeclSyntax.self) == false {
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: MarkerDiagnostic.setupRequiresMethod
+            ))
+        }
+        return []
+    }
+}
+
 /// Marker macro for invariant methods. Generates no code — `@StateMachine` reads this annotation.
 public struct InvariantMacro: PeerMacro {
     public static func expansion(
@@ -75,6 +92,7 @@ public struct OracleMacro: PeerMacro {
 private enum MarkerDiagnostic: String, DiagnosticMessage {
     case sutRequiresProperty = "@SystemUnderTest must be applied to a stored property"
     case commandRequiresMethod = "@Command must be applied to a method"
+    case setupRequiresMethod = "@Setup must be applied to a method"
     case invariantRequiresMethod = "@Invariant must be applied to a method"
     case oracleRequiresMethod = "@Oracle must be applied to a method"
 

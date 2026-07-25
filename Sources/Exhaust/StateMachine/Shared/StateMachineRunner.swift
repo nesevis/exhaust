@@ -84,22 +84,20 @@ public extension __ExhaustRuntime {
             let taggedSeqGen = taggedSequenceGenerator(commandGen: commandGen, commandLimit: commandLimit)
 
             let invocationCounter = UnsafeSendableBox(0)
-            let rawProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = syncSequentialProperty(Spec.self)
-            let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+            let rawProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = syncSequentialProperty(Spec.self)
+            let property: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
                 invocationCounter.value += 1
-                return rawProperty(taggedCommands)
+                return rawProperty(candidate)
             }
 
-            let syncSkipIdentifier = Spec.skipIdentifier
-            let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { tagged in
-                syncSkipIdentifier(tagged.map(\.1))
+            let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
+                Spec.identifySkips(setupStep: candidate.setupStep, commands: candidate.taggedCommands.map(\.1))
             }
 
             let backend = SequentialStateMachineBackend<Spec>(
                 property: property,
-                finalize: { tagged in
-                    let commands = tagged.map(\.1)
-                    let (trace, spec) = buildTrace(commands, specType: specType)
+                finalize: { candidate in
+                    let (trace, spec) = buildTrace(candidate, specType: specType)
                     return (trace, spec.systemUnderTest, spec.failureDescription())
                 }
             )
@@ -206,30 +204,36 @@ private extension __ExhaustRuntime {
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
         let invocationCounter = UnsafeSendableBox(0)
-        let rawProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = asyncSequentialProperty(specInit: specInit)
-        let property: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Bool = { taggedCommands in
+        let rawProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = asyncSequentialProperty(specInit: specInit)
+        let property: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
             invocationCounter.value += 1
-            return rawProperty(taggedCommands)
+            return rawProperty(candidate)
         }
 
         let asyncSkipIdentifier = Spec.skipIdentifier(specInit: specInit)
-        let identifySkips: @Sendable ([(ScheduleMarker, Spec.Command)]) -> Set<Int> = { tagged in
-            asyncSkipIdentifier(tagged.map(\.1))
+        let identifySkips: @Sendable (SpecCandidateValue<Spec>) -> Set<Int> = { candidate in
+            asyncSkipIdentifier(candidate.setupStep, candidate.taggedCommands.map(\.1))
         }
 
         let backend = SequentialStateMachineBackend<Spec>(
             property: property,
-            finalize: { tagged in
-                let commands = tagged.map(\.1)
+            finalize: { candidate in
+                let commands = candidate.taggedCommands.map(\.1)
+                let setupStep = candidate.setupStep
                 let captured = __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
                     let spec = specInit()
+                    let (setupTrace, setupFailed) = await applySetupRecordingTrace(spec, setupStep: setupStep)
+                    if setupFailed {
+                        let snapshot = await spec.diagnosticSnapshot()
+                        return (trace: setupTrace, snapshot: snapshot)
+                    }
                     let (trace, _) = await buildAsyncSequentialTrace(
                         commands,
                         run: { try await spec.run($0) },
                         checkInvariants: { try await spec.checkInvariants() }
                     )
                     let snapshot = await spec.diagnosticSnapshot()
-                    return (trace: trace, snapshot: snapshot)
+                    return (trace: joinTrace(setup: setupTrace, commands: trace), snapshot: snapshot)
                 }!
                 return (captured.trace, captured.snapshot.systemUnderTest, captured.snapshot.failureDescription)
             }
@@ -324,15 +328,18 @@ extension __ExhaustRuntime {
 
 private extension __ExhaustRuntime {
     static func buildTrace<Spec: StateMachineSpec>(
-        _ commands: [Spec.Command],
+        _ candidate: SpecCandidateValue<Spec>,
         specType _: Spec.Type
     ) -> ([TraceStep], Spec) {
-        let spec = Spec()
+        let (spec, setupTrace, setupFailed) = makeSpecRecordingSetupTrace(Spec.self, setupStep: candidate.setupStep)
+        if setupFailed {
+            return (setupTrace, spec)
+        }
         let (trace, _) = buildSequentialTrace(
-            commands,
+            candidate.taggedCommands.map(\.1),
             run: { try spec.run($0) },
             checkInvariants: { try spec.checkInvariants() }
         )
-        return (trace, spec)
+        return (joinTrace(setup: setupTrace, commands: trace), spec)
     }
 }

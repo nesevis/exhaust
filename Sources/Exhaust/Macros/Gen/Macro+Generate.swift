@@ -59,7 +59,7 @@ public macro gen<each GeneratedValue>(
 ///
 /// ## Limitations
 ///
-/// The generator is forward-only. `#exhaust(…, reflecting:)` cannot decompose a concrete value through it. Exhaust still reduces counterexamples found during generation because the reducer operates on the recorded choice sequence.
+/// The generator is forward-only. `#exhaust(…, reflecting:)` cannot decompose a concrete value through it. Counterexamples found during generation still reduce, because reduction only ever runs the generator forward.
 ///
 /// The `ReflectiveGenerator.isSynthesized` flag is set to `true` on the returned generator. Diagnostic tools can check this flag to identify `.just` nodes that represent fields the decoder could not generate.
 ///
@@ -97,7 +97,7 @@ public macro gen<T: Decodable>(
 ///
 /// ## Limitations
 ///
-/// The generator is forward-only. `#exhaust(…, reflecting:)` cannot decompose a concrete value through it. Exhaust still reduces counterexamples found during generation because the reducer operates on the recorded choice sequence.
+/// The generator is forward-only. `#exhaust(…, reflecting:)` cannot decompose a concrete value through it. Counterexamples found during generation still reduce, because reduction only ever runs the generator forward.
 ///
 /// The `ReflectiveGenerator.isSynthesized` flag is set to `true` on the returned generator. Diagnostic tools can check this flag to identify `.just` nodes that represent fields the decoder could not generate.
 ///
@@ -133,7 +133,7 @@ public macro gen<T: Codable>(
 ///
 /// ## Limitations
 ///
-/// The generator is forward-only. `#exhaust(…, reflecting:)` cannot decompose a concrete value through it. Exhaust still reduces counterexamples found during generation because the reducer operates on the recorded choice sequence.
+/// The generator is forward-only. `#exhaust(…, reflecting:)` cannot decompose a concrete value through it. Counterexamples found during generation still reduce, because reduction only ever runs the generator forward.
 ///
 /// The `ReflectiveGenerator.isSynthesized` flag is set to `true` on the returned generator. Diagnostic tools can check this flag to identify `.just` nodes that represent fields the decoder could not generate.
 ///
