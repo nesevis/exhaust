@@ -54,39 +54,35 @@ enum StateMachineDiagnostic: String, DiagnosticMessage {
     }
 }
 
-/// Diagnostic for a `@Setup` method whose generator count does not match its parameter count.
+/// Diagnostic for a `@Command` or `@Setup` method whose generator count does not match its parameter count.
 ///
-/// Carries both counts so the message names the exact mismatch rather than a generic "wrong generators" note.
-struct SetupGeneratorArityDiagnostic: DiagnosticMessage {
+/// Carries both counts so the message names the exact mismatch rather than a generic "wrong generators" note. The marker keeps the message and the diagnostic ID specific to the attribute the user actually wrote.
+struct GeneratorArityDiagnostic: DiagnosticMessage {
+    /// The attribute the mismatch was found on. Each marker keeps its own diagnostic ID so downstream tooling can tell the two apart.
+    enum Marker: String {
+        case command = "Command"
+        case setup = "Setup"
+
+        var diagnosticIdentifier: String {
+            switch self {
+                case .command:
+                    "commandGeneratorArityMismatch"
+                case .setup:
+                    "setupGeneratorArityMismatch"
+            }
+        }
+    }
+
+    let marker: Marker
     let parameterCount: Int
     let generatorCount: Int
 
     var message: String {
-        "@Setup has \(parameterCount) parameter\(parameterCount == 1 ? "" : "s") but \(generatorCount) generator\(generatorCount == 1 ? "" : "s") — provide exactly one generator per parameter"
+        "@\(marker.rawValue) has \(parameterCount) parameter\(parameterCount == 1 ? "" : "s") but \(generatorCount) generator\(generatorCount == 1 ? "" : "s") — provide exactly one generator per parameter"
     }
 
     var diagnosticID: MessageID {
-        MessageID(domain: "ExhaustMacros", id: "setupGeneratorArityMismatch")
-    }
-
-    var severity: DiagnosticSeverity {
-        .error
-    }
-}
-
-/// Diagnostic for a `@Command` whose generator count does not match its parameter count.
-///
-/// Carries both counts so the message names the exact mismatch rather than a generic "wrong generators" note.
-struct CommandGeneratorArityDiagnostic: DiagnosticMessage {
-    let parameterCount: Int
-    let generatorCount: Int
-
-    var message: String {
-        "@Command has \(parameterCount) parameter\(parameterCount == 1 ? "" : "s") but \(generatorCount) generator\(generatorCount == 1 ? "" : "s") — provide exactly one generator per parameter"
-    }
-
-    var diagnosticID: MessageID {
-        MessageID(domain: "ExhaustMacros", id: "commandGeneratorArityMismatch")
+        MessageID(domain: "ExhaustMacros", id: marker.diagnosticIdentifier)
     }
 
     var severity: DiagnosticSeverity {

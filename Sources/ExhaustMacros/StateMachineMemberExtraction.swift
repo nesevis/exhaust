@@ -77,18 +77,7 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
         else { return nil }
 
         let methodName = funcDecl.name.trimmedDescription
-        let parameters = funcDecl.signature.parameterClause.parameters.enumerated().map { index, param in
-            let firstName = param.firstName.trimmedDescription
-            let secondName = param.secondName?.trimmedDescription
-            let externalLabel = firstName == "_" ? nil : firstName
-            let rawBinding = secondName ?? firstName
-            let bindingName = rawBinding == "_" ? "arg\(index)" : rawBinding
-            return CommandParameter(
-                externalLabel: externalLabel,
-                bindingName: bindingName,
-                type: param.type.trimmedDescription
-            )
-        }
+        let parameters = extractParameters(from: funcDecl)
 
         // Extract weight and generator expressions from @Command(weight:, #gen(...))
         var weight = "1"
@@ -106,12 +95,7 @@ func extractCommands(from members: MemberBlockItemListSyntax) -> [CommandInfo] {
 
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
         let isThrows = funcDecl.signature.effectSpecifiers?.throwsClause != nil
-        // An explicit Void return clause (-> Void, -> (), -> Swift.Void) carries no response value, so normalize it to the no-clause path. Capturing `()` as a real return value would compare two empty tuples through structurallyEqual, which rejects them and fabricates a response-level linearizability violation.
-        let voidReturnSpellings: Set = ["Void", "()", "Swift.Void"]
-        let declaredReturnType = funcDecl.signature.returnClause?.type.trimmedDescription
-        let returnType = declaredReturnType.flatMap { spelling -> String? in
-            voidReturnSpellings.contains(spelling) ? nil : spelling
-        }
+        let returnType = nonVoidReturnType(of: funcDecl)
 
         return CommandInfo(
             methodName: methodName,
@@ -145,18 +129,7 @@ func extractSetups(from members: MemberBlockItemListSyntax) -> [SetupInfo] {
         else { return nil }
 
         let methodName = funcDecl.name.trimmedDescription
-        let parameters = funcDecl.signature.parameterClause.parameters.enumerated().map { index, param in
-            let firstName = param.firstName.trimmedDescription
-            let secondName = param.secondName?.trimmedDescription
-            let externalLabel = firstName == "_" ? nil : firstName
-            let rawBinding = secondName ?? firstName
-            let bindingName = rawBinding == "_" ? "arg\(index)" : rawBinding
-            return CommandParameter(
-                externalLabel: externalLabel,
-                bindingName: bindingName,
-                type: param.type.trimmedDescription
-            )
-        }
+        let parameters = extractParameters(from: funcDecl)
 
         var generatorExprs: [String] = []
         if let argList = setupAttr.arguments?.as(LabeledExprListSyntax.self) {
@@ -167,11 +140,7 @@ func extractSetups(from members: MemberBlockItemListSyntax) -> [SetupInfo] {
 
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
         let isThrows = funcDecl.signature.effectSpecifiers?.throwsClause != nil
-        let voidReturnSpellings: Set = ["Void", "()", "Swift.Void"]
-        let declaredReturnType = funcDecl.signature.returnClause?.type.trimmedDescription
-        let returnType = declaredReturnType.flatMap { spelling -> String? in
-            voidReturnSpellings.contains(spelling) ? nil : spelling
-        }
+        let returnType = nonVoidReturnType(of: funcDecl)
 
         return SetupInfo(
             methodName: methodName,
@@ -197,6 +166,52 @@ func extractInvariants(from members: MemberBlockItemListSyntax) -> [InvariantInf
             syntax: funcDecl
         )
     }
+}
+
+/// Whether a method's parameters are shapes the synthesized `Command`/`SetupStep` enum cannot represent.
+///
+/// A generic, `inout`, or variadic parameter has no stable stored form to put in an enum payload, so the macro rejects the method rather than synthesizing a case that will not compile.
+/// Maps a method's parameter list into the binding model the synthesized enum cases and dispatch use.
+///
+/// An `_` external label becomes no label, and an `_` binding name becomes a positional `arg{n}` so the synthesized `case let` pattern still has something to bind.
+func extractParameters(from funcDecl: FunctionDeclSyntax) -> [CommandParameter] {
+    funcDecl.signature.parameterClause.parameters.enumerated().map { index, param in
+        let firstName = param.firstName.trimmedDescription
+        let secondName = param.secondName?.trimmedDescription
+        let externalLabel = firstName == "_" ? nil : firstName
+        let rawBinding = secondName ?? firstName
+        let bindingName = rawBinding == "_" ? "arg\(index)" : rawBinding
+        return CommandParameter(
+            externalLabel: externalLabel,
+            bindingName: bindingName,
+            type: param.type.trimmedDescription
+        )
+    }
+}
+
+/// The method's declared return type, or nil when it returns Void in any spelling.
+///
+/// An explicit Void return clause (-> Void, -> (), -> Swift.Void) carries no response value, so it normalizes to the no-clause path. Capturing `()` as a real return value would compare two empty tuples through structurallyEqual, which rejects them and fabricates a response-level linearizability violation.
+func nonVoidReturnType(of funcDecl: FunctionDeclSyntax) -> String? {
+    let voidReturnSpellings: Set = ["Void", "()", "Swift.Void"]
+    let declaredReturnType = funcDecl.signature.returnClause?.type.trimmedDescription
+    return declaredReturnType.flatMap { spelling -> String? in
+        voidReturnSpellings.contains(spelling) ? nil : spelling
+    }
+}
+
+func hasUnsupportedParameters(_ funcDecl: FunctionDeclSyntax) -> Bool {
+    if funcDecl.genericParameterClause != nil {
+        return true
+    }
+    let parameters = funcDecl.signature.parameterClause.parameters
+    let hasInoutParam = parameters.contains {
+        $0.type.as(AttributedTypeSyntax.self)?.specifiers.contains { $0.trimmedDescription == "inout" } ?? false
+    }
+    let hasVariadicParam = parameters.contains {
+        $0.ellipsis != nil
+    }
+    return hasInoutParam || hasVariadicParam
 }
 
 func hasAttribute(_ name: String, on decl: some WithAttributesSyntax) -> Bool {

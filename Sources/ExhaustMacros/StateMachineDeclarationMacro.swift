@@ -204,14 +204,7 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
                 ))
             }
             if let funcDecl = command.syntax {
-                let hasGenericParams = funcDecl.genericParameterClause != nil
-                let hasInoutParam = funcDecl.signature.parameterClause.parameters.contains {
-                    $0.type.as(AttributedTypeSyntax.self)?.specifiers.contains { $0.trimmedDescription == "inout" } ?? false
-                }
-                let hasVariadicParam = funcDecl.signature.parameterClause.parameters.contains {
-                    $0.ellipsis != nil
-                }
-                if hasGenericParams || hasInoutParam || hasVariadicParam {
+                if hasUnsupportedParameters(funcDecl) {
                     context.diagnose(Diagnostic(
                         node: diagnosticNode,
                         message: StateMachineDiagnostic.commandHasUnsupportedParameter
@@ -250,14 +243,7 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
                     message: StateMachineDiagnostic.setupConflictingMarker
                 ))
             }
-            let hasGenericParams = setup.syntax.genericParameterClause != nil
-            let hasInoutParam = setup.syntax.signature.parameterClause.parameters.contains {
-                $0.type.as(AttributedTypeSyntax.self)?.specifiers.contains { $0.trimmedDescription == "inout" } ?? false
-            }
-            let hasVariadicParam = setup.syntax.signature.parameterClause.parameters.contains {
-                $0.ellipsis != nil
-            }
-            if hasGenericParams || hasInoutParam || hasVariadicParam {
+            if hasUnsupportedParameters(setup.syntax) {
                 context.diagnose(Diagnostic(
                     node: Syntax(setup.syntax),
                     message: StateMachineDiagnostic.setupHasUnsupportedParameter

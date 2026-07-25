@@ -5,6 +5,52 @@ import SwiftSyntaxMacros
 
 // MARK: - Synthesis
 
+/// Returns `preferredName`, suffixed until it no longer collides with any name a synthesized `case let` pattern binds.
+///
+/// The dispatch method's subject variable is in scope alongside the case bindings, so a spec whose parameter is literally named `command` or `step` would otherwise shadow it.
+func availableLocalName(_ preferredName: String, avoiding parameterBindingNames: Set<String>) -> String {
+    var candidateName = preferredName
+    while parameterBindingNames.contains(candidateName) {
+        candidateName += "Value"
+    }
+    return candidateName
+}
+
+/// The `switch` case pattern and the call expression that dispatch one annotated method.
+///
+/// Shared by the command and setup dispatch synthesis so the two cannot drift on effect-keyword ordering or argument labelling.
+func dispatchCase(
+    methodName: String,
+    parameters: [CommandParameter],
+    isThrows: Bool,
+    isAsync: Bool
+) -> (pattern: String, call: String) {
+    let effectKeywords = switch (isThrows, isAsync) {
+        case (true, true):
+            "try await "
+        case (true, false):
+            "try "
+        case (false, true):
+            "await "
+        case (false, false):
+            ""
+    }
+
+    guard parameters.isEmpty == false else {
+        return (pattern: "case .\(methodName)", call: "\(effectKeywords)self.\(methodName)()")
+    }
+
+    let bindings = parameters.map(\.bindingName).joined(separator: ", ")
+    let arguments = parameters.map { parameter in
+        parameter.externalLabel.map { "\($0): \(parameter.bindingName)" }
+            ?? parameter.bindingName
+    }.joined(separator: ", ")
+    return (
+        pattern: "case let .\(methodName)(\(bindings))",
+        call: "\(effectKeywords)self.\(methodName)(\(arguments))"
+    )
+}
+
 func synthesizeCommandEnum(commands: [CommandInfo], access: String) -> DeclSyntax {
     var cases: [String] = []
     var descriptionCases: [String] = []
@@ -55,7 +101,8 @@ func synthesizeCommandGenerator(commands: [CommandInfo], access: String, context
             if let syntax = cmd.syntax {
                 let message: DiagnosticMessage = cmd.generatorExprs.isEmpty
                     ? StateMachineDiagnostic.commandMissingGenerators
-                    : CommandGeneratorArityDiagnostic(
+                    : GeneratorArityDiagnostic(
+                        marker: .command,
                         parameterCount: cmd.parameters.count,
                         generatorCount: cmd.generatorExprs.count
                     )
@@ -101,42 +148,17 @@ func synthesizeRunMethod(commands: [CommandInfo], hasAnyAsync: Bool, access: Str
             commandInfo.parameters.map(\.bindingName)
         }
     )
-
-    func availableLocalName(preferredName: String) -> String {
-        var candidateName = preferredName
-        while parameterBindingNames.contains(candidateName) {
-            candidateName += "Value"
-        }
-        return candidateName
-    }
-
-    let commandVariableName = availableLocalName(preferredName: "command")
-    let resultVariableName = availableLocalName(preferredName: "result")
+    let commandVariableName = availableLocalName("command", avoiding: parameterBindingNames)
+    let resultVariableName = availableLocalName("result", avoiding: parameterBindingNames)
     var cases: [String] = []
 
     for commandInfo in commands {
-        let effectKeywords: String
-        switch (commandInfo.isThrows, commandInfo.isAsync) {
-            case (true, true): effectKeywords = "try await "
-            case (true, false): effectKeywords = "try "
-            case (false, true): effectKeywords = "await "
-            case (false, false): effectKeywords = ""
-        }
-
-        let call: String
-        let pattern: String
-        if commandInfo.parameters.isEmpty {
-            call = "\(effectKeywords)self.\(commandInfo.methodName)()"
-            pattern = "case .\(commandInfo.methodName)"
-        } else {
-            let bindings = commandInfo.parameters.map(\.bindingName).joined(separator: ", ")
-            let arguments = commandInfo.parameters.map { parameter in
-                parameter.externalLabel.map { "\($0): \(parameter.bindingName)" }
-                    ?? parameter.bindingName
-            }.joined(separator: ", ")
-            call = "\(effectKeywords)self.\(commandInfo.methodName)(\(arguments))"
-            pattern = "case let .\(commandInfo.methodName)(\(bindings))"
-        }
+        let (pattern, call) = dispatchCase(
+            methodName: commandInfo.methodName,
+            parameters: commandInfo.parameters,
+            isThrows: commandInfo.isThrows,
+            isAsync: commandInfo.isAsync
+        )
 
         if let returnType = commandInfo.returnType {
             let isOptional = returnType.hasSuffix("?") || returnType.hasPrefix("Optional<")
@@ -251,7 +273,8 @@ func synthesizeSetupGenerator(setup: SetupInfo, access: String, context: some Ma
         // A parameterized setup needs exactly one generator per parameter, exactly as commands do. Fall back to nil so the spec still compiles alongside the diagnostic.
         let message: DiagnosticMessage = setup.generatorExprs.isEmpty
             ? StateMachineDiagnostic.setupMissingGenerators
-            : SetupGeneratorArityDiagnostic(
+            : GeneratorArityDiagnostic(
+                marker: .setup,
                 parameterCount: setup.parameters.count,
                 generatorCount: setup.generatorExprs.count
             )
@@ -277,40 +300,13 @@ func synthesizeSetupGenerator(setup: SetupInfo, access: String, context: some Ma
 }
 
 func synthesizeRunSetup(setup: SetupInfo, hasAnyAsync: Bool, access: String) -> DeclSyntax {
-    let parameterBindingNames = Set(setup.parameters.map(\.bindingName))
-
-    func availableLocalName(preferredName: String) -> String {
-        var candidateName = preferredName
-        while parameterBindingNames.contains(candidateName) {
-            candidateName += "Value"
-        }
-        return candidateName
-    }
-
-    let stepVariableName = availableLocalName(preferredName: "step")
-
-    let effectKeywords: String
-    switch (setup.isThrows, setup.isAsync) {
-        case (true, true): effectKeywords = "try await "
-        case (true, false): effectKeywords = "try "
-        case (false, true): effectKeywords = "await "
-        case (false, false): effectKeywords = ""
-    }
-
-    let call: String
-    let pattern: String
-    if setup.parameters.isEmpty {
-        call = "\(effectKeywords)self.\(setup.methodName)()"
-        pattern = "case .\(setup.methodName)"
-    } else {
-        let bindings = setup.parameters.map(\.bindingName).joined(separator: ", ")
-        let arguments = setup.parameters.map { parameter in
-            parameter.externalLabel.map { "\($0): \(parameter.bindingName)" }
-                ?? parameter.bindingName
-        }.joined(separator: ", ")
-        call = "\(effectKeywords)self.\(setup.methodName)(\(arguments))"
-        pattern = "case let .\(setup.methodName)(\(bindings))"
-    }
+    let stepVariableName = availableLocalName("step", avoiding: Set(setup.parameters.map(\.bindingName)))
+    let (pattern, call) = dispatchCase(
+        methodName: setup.methodName,
+        parameters: setup.parameters,
+        isThrows: setup.isThrows,
+        isAsync: setup.isAsync
+    )
 
     let discard = setup.returnType != nil ? "_ = " : ""
     let signature = hasAnyAsync
