@@ -187,14 +187,12 @@ extension __ExhaustRuntime {
     }
 
     /// Renders a setup step for trace display, suffixed so the reader does not conclude it was a generated sequence member.
-    ///
-    /// The parameter is `some Any` rather than `CustomStringConvertible` because `SetupStep` defaults to `Never` for zero-setup specs, and `Never` does not conform. Synthesized setup enums are always `CustomStringConvertible`, so interpolation renders the real description at every reachable call site.
-    static func setupTraceDescription(_ step: some Any) -> String {
+    static func setupTraceDescription(_ step: some CustomStringConvertible) -> String {
         "\(step) (setup)"
     }
 
     /// Renders the trace row for an applied setup step. A setup step's outcome can only be `.ok` or `.checkFailed`; no invariant check runs after setup.
-    static func setupTraceStep(_ step: some Any, setupError: (any Error)?) -> TraceStep {
+    static func setupTraceStep(_ step: some CustomStringConvertible, setupError: (any Error)?) -> TraceStep {
         let outcome: TraceStep.Outcome = setupError.map { .checkFailed(message: "\($0)") } ?? .ok
         return TraceStep(index: 1, command: setupTraceDescription(step), outcome: outcome)
     }

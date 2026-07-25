@@ -1,3 +1,12 @@
+/// Stands in as ``StateMachineSpecBase/SetupStep`` for a spec that declares no `@Setup` method.
+///
+/// The type has no cases, so no value of it ever exists and ``StateMachineResult/setup`` is always `nil` on such a spec. It exists so ``StateMachineSpecBase/SetupStep`` can require `CustomStringConvertible` the way ``StateMachineSpecBase/Command`` does, which the `Never` it previously defaulted to cannot satisfy.
+public enum NoSetupStep: CustomStringConvertible, Sendable {
+    public var description: String {
+        switch self {}
+    }
+}
+
 /// Shared requirements for both synchronous and asynchronous state machine specs.
 ///
 /// Users never conform to this protocol directly. Use ``StateMachineSpec`` or ``AsyncStateMachineSpec`` instead, both synthesized by the `@StateMachine` macro.
@@ -8,10 +17,10 @@ public protocol StateMachineSpecBase: SendableMetatype {
     /// The synthesized command enum. Each case corresponds to a `@Command` method.
     associatedtype Command: CustomStringConvertible & Sendable
 
-    /// The synthesized setup step enum, with a single case for the `@Setup` method. Defaults to `Never` for specs without a `@Setup` method.
+    /// The synthesized setup step enum, with a single case for the `@Setup` method. Resolves to ``NoSetupStep`` for a spec without one.
     ///
     /// Not intended as user-facing surface: the supported access path is ``StateMachineResult/setup``.
-    associatedtype SetupStep: Sendable = Never
+    associatedtype SetupStep: CustomStringConvertible & Sendable = NoSetupStep
 
     /// Builds a generator for the spec's setup step, or `nil` when the spec has no `@Setup` method.
     ///
