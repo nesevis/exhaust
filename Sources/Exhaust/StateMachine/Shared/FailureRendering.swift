@@ -12,7 +12,7 @@ extension __ExhaustRuntime {
     struct FailureContext {
         var specName: String = ""
         var discoveryMethod: StateMachineDiscoveryMethod = .randomSampling
-        /// Rendered setup step descriptions, shown ahead of the command partition and prepended to the trace as `(setup)` entries. Empty for zero-setup specs.
+        /// The rendered setup step description, shown in its own section ahead of the command partition. Nil for zero-setup specs.
         var setupDescription: String?
         var seed: UInt64?
         var iteration: Int = 0

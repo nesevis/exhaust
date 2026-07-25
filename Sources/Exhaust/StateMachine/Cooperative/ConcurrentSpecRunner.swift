@@ -121,6 +121,32 @@ private func runCommandRecordingTrace<Spec: AsyncStateMachineSpec>(
     return .ok
 }
 
+/// Applies the setup step at the head of the sequential prefix, recording it as a finished trace step.
+///
+/// Mirrors ``runCommandRecordingTrace(_:on:lane:label:trace:recordTrace:)``'s guard discipline: the cancellation state is rechecked after every resume before any box is touched, so a continuation resumed after abandonment cannot race the drain thread's trace assembly.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+private func runSetupRecordingTrace<Spec: AsyncStateMachineSpec>(
+    _ setupStep: Spec.SetupStep,
+    on spec: UnsafeSendableBox<Spec>,
+    setupTrace: UnsafeSendableBox<[TraceStep]>,
+    recordTrace: Bool
+) async -> CommandOutcome {
+    guard Task.isCancelled == false else {
+        return .skipped
+    }
+    let setupError = await spec.value.applySetup(setupStep)
+    guard Task.isCancelled == false else {
+        return .skipped
+    }
+    if recordTrace {
+        setupTrace.value.append(__ExhaustRuntime.setupTraceStep(setupStep, setupError: setupError))
+    }
+    guard let setupError else {
+        return .ok
+    }
+    return .failed(message: "\(setupError)", symptomKind: String(describing: type(of: setupError)))
+}
+
 /// Transfers pending and future continuations to direct cleanup scheduling after the bounded cancellation drain cannot establish quiescence.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 private func abandonTimedOutTasks(
@@ -198,19 +224,14 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         let prefixDone = UnsafeSendableBox(false)
         let prefixTask = Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace, setupTrace] in
             // Setup is the head of the sequential prefix: it runs on every fresh spec before any command, cannot skip, and its throw fails the run with the error type as the symptom.
-            if let setupStep, Task.isCancelled == false {
-                let setupError = await spec.value.applySetup(setupStep)
-                if let setupError {
-                    // The cancellation recheck guards the boxes on the failure path only, exactly as before: after abandonment a resumed continuation must not touch the trace or failure boxes.
-                    if Task.isCancelled == false {
-                        if recordTrace {
-                            setupTrace.value.append(__ExhaustRuntime.setupTraceStep(setupStep, setupError: setupError))
-                        }
-                        failedSymptomKind.value = String(describing: type(of: setupError))
-                        failed.value = "\(setupError)"
-                    }
-                } else if recordTrace {
-                    setupTrace.value.append(__ExhaustRuntime.setupTraceStep(setupStep, setupError: nil))
+            if let setupStep {
+                let outcome = await runSetupRecordingTrace(
+                    setupStep, on: spec,
+                    setupTrace: setupTrace, recordTrace: recordTrace
+                )
+                if case let .failed(message, symptomKind) = outcome {
+                    failedSymptomKind.value = symptomKind
+                    failed.value = message
                 }
             }
             if failed.value == nil {

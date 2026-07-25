@@ -147,15 +147,15 @@ extension __ExhaustRuntime {
     /// Setup arguments become factors in the same covering array as the command positions, so strength-2 coverage pairs every setup value with every command type at every position. A setup method's arguments are worth that budget in a way a command's arguments are not: there is at most one setup method, so its factors add a fixed block rather than multiplying across positions and lanes, and its values configure the SUT for every command that follows.
     ///
     /// The analysis is deliberately budget-independent. Passing the screening budget as a composite threshold would make the factor domains vary with the budget, and a `U-{N}` replay runs under a different budget than discovery did — the covering array would differ and the replay would land on another row.
+    ///
+    /// A deterministic setup generator (a zero-parameter `@Setup`, whose generator is a bare `.just`) has no parameters for the analysis to extract, so it contributes a zero-factor block whose `buildTree` always yields the one tree the generator materializes. The block carries no covering-array budget, but it keeps the invariant that every with-setup screening candidate receives a setup tree — without it, screening probes would run against an unconfigured spec.
     static func setupScreeningFactors<Spec: StateMachineSpecBase>(
         for _: Spec.Type
     ) -> ScreeningLeadingFactors? {
-        guard let setupGen = Spec.setupGenerator,
-              let analysis = ChoiceTreeAnalysis.analyze(setupGen.gen)
-        else {
+        guard let setupGen = Spec.setupGenerator else {
             return nil
         }
-        switch analysis {
+        switch ChoiceTreeAnalysis.analyze(setupGen.gen) {
             case let .enumerable(profile):
                 return ScreeningLeadingFactors(
                     domainSizes: profile.parameters.map(\.domainSize),
@@ -166,6 +166,13 @@ extension __ExhaustRuntime {
                     domainSizes: profile.parameters.map(\.domainSize),
                     buildTree: { profile.buildTree(from: $0) }
                 )
+            case nil:
+                // seed 0 matches the fixed seed `combineScreeningCandidate` materializes with, so discovery and a `U-{N}` replay land on the same setup value.
+                var interpreter = ValueAndChoiceTreeInterpreter(setupGen.gen, seed: 0, maxRuns: 1)
+                guard let (_, tree) = try? interpreter.next() else {
+                    return nil
+                }
+                return ScreeningLeadingFactors(domainSizes: [], buildTree: { _ in tree })
         }
     }
 
@@ -178,8 +185,12 @@ extension __ExhaustRuntime {
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         commandTree: ChoiceTree
     ) -> (value: SpecCandidateValue<Spec>, tree: ChoiceTree)? {
-        guard let setupGen = Spec.setupGenerator, let setupTree else {
+        guard let setupGen = Spec.setupGenerator else {
             return (SpecCandidateValue(setupStep: nil, taggedCommands: taggedCommands), commandTree)
+        }
+        // A with-setup candidate must carry its setup step. A missing setup tree means the leading block could not produce one, so the row is skipped rather than probed against an unconfigured spec.
+        guard let setupTree else {
+            return nil
         }
         // seed 0: the covering array already pins every analyzed setup factor, so the seed only fills choices the
         // analysis could not model, and a fixed seed keeps a `U-{N}` replay landing on the same setup value.
@@ -194,6 +205,20 @@ extension __ExhaustRuntime {
             SpecCandidateValue(setupStep: step, taggedCommands: taggedCommands),
             composeCandidateTree(setupTree: freshSetupTree, commandTree: commandTree)
         )
+    }
+
+    /// The `combine` hook for ``runSCAScreeningRowLoop(sequenceGen:commandGen:commandLimit:screeningBudget:skipToRow:logEventPrefix:concurrencyLevel:sequenceGenForLength:leadingFactors:combine:property:)``, bound to a spec. Shared by the fresh screening source and the `U-{N}` replay source so the two cannot drift on how candidates are assembled.
+    static func screeningCombine<Spec: StateMachineSpecBase>(
+        _: Spec.Type
+    ) -> (ChoiceTree?, [(ScheduleMarker, Spec.Command)], ChoiceTree) -> (value: SpecCandidateValue<Spec>, tree: ChoiceTree)? {
+        { setupTree, taggedCommands, commandTree in
+            combineScreeningCandidate(
+                Spec.self,
+                setupTree: setupTree,
+                taggedCommands: taggedCommands,
+                commandTree: commandTree
+            )
+        }
     }
 }
 

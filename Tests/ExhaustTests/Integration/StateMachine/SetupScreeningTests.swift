@@ -68,6 +68,27 @@ struct SetupScreeningTests {
         #expect(result.commands.contains { "\($0)" == "rare" })
     }
 
+    @Test("A deterministic setup is applied during screening probes")
+    func deterministicSetupAppliedDuringScreening() async {
+        // A zero-parameter @Setup synthesizes a deterministic generator, which has no parameters for the covering-array
+        // analysis to extract. Screening must still apply it: this spec only fails when a probe runs before setup.
+        let result = await #execute(
+            DeterministicSetupSpec.self,
+            .commandLimit(4),
+            .budget(.custom(screening: 40, sampling: 0)),
+            .suppress(.issueReporting)
+        )
+        #expect(result == nil, "Screening probed an unconfigured spec: \(String(describing: result?.trace))")
+    }
+
+    @Test("A deterministic setup contributes a zero-factor leading block rather than none")
+    func deterministicSetupContributesZeroFactorBlock() throws {
+        let factors = try #require(__ExhaustRuntime.setupScreeningFactors(for: DeterministicSetupSpec.self))
+        #expect(factors.domainSizes.isEmpty)
+        // The block's one tree is what keeps every screening candidate carrying a setup step.
+        #expect(factors.buildTree(CoveringArrayRow(values: [])) != nil)
+    }
+
     @Test("Setup factor domains do not depend on the screening budget")
     func setupFactorDomainsAreBudgetIndependent() throws {
         // A `U-{N}` replay runs under a different budget than discovery. Budget-dependent factor domains would build a
@@ -109,6 +130,31 @@ private final class NoSetupSpec {
 
     func failureDescription() -> String? {
         nil
+    }
+}
+
+@StateMachine(.sequential)
+private final class DeterministicSetupSpec {
+    var configured = false
+    @SystemUnderTest var box = CountingBox()
+
+    @Setup
+    func configure() {
+        configured = true
+    }
+
+    @Command(weight: 1, .int(in: 0 ... 3))
+    func poke(value _: Int) throws {
+        try check(configured, "command ran before setup was applied")
+    }
+
+    @Command(weight: 1)
+    func touch() throws {
+        try check(configured, "command ran before setup was applied")
+    }
+
+    func failureDescription() -> String? {
+        "configured: \(configured)"
     }
 }
 

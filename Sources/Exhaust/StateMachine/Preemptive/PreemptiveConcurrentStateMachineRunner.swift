@@ -196,12 +196,7 @@ extension __ExhaustRuntime {
         linearizabilityWitness: ResponseWitness? = nil
     ) -> [TraceStep] {
         var laneCounts: [UInt8: Int] = [:]
-        let setupTraceSteps = setupDescription.map {
-            [TraceStep(index: 1, command: setupTraceDescription($0), outcome: .ok)]
-        } ?? []
-        let offset = setupTraceSteps.count
-        return setupTraceSteps + reduced.enumerated().map { index, tagged in
-            let index = index + offset
+        let commandSteps = reduced.enumerated().map { index, tagged -> TraceStep in
             let (marker, command) = tagged
             if marker.isPrefix {
                 return TraceStep(
@@ -228,6 +223,10 @@ extension __ExhaustRuntime {
                 )
             }
         }
+        let setupSteps = setupDescription.map {
+            [TraceStep(index: 1, command: setupTraceDescription($0), outcome: .ok)]
+        } ?? []
+        return joinTrace(setup: setupSteps, commands: commandSteps)
     }
 }
 

@@ -88,14 +88,7 @@ extension AnyStateMachineCandidateSource {
                 logEventPrefix: "statemachine_screening_replay",
                 concurrencyLevel: concurrencyLevel,
                 leadingFactors: leadingFactors,
-                combine: { setupTree, taggedCommands, commandTree in
-                    __ExhaustRuntime.combineScreeningCandidate(
-                        Spec.self,
-                        setupTree: setupTree,
-                        taggedCommands: taggedCommands,
-                        commandTree: commandTree
-                    )
-                },
+                combine: __ExhaustRuntime.screeningCombine(Spec.self),
                 property: property
             )
 
@@ -199,14 +192,7 @@ extension AnyStateMachineCandidateSource {
                 concurrencyLevel: concurrencyLevel,
                 sequenceGenForLength: sequenceGenForLength,
                 leadingFactors: leadingFactors,
-                combine: { setupTree, taggedCommands, commandTree in
-                    __ExhaustRuntime.combineScreeningCandidate(
-                        Spec.self,
-                        setupTree: setupTree,
-                        taggedCommands: taggedCommands,
-                        commandTree: commandTree
-                    )
-                },
+                combine: __ExhaustRuntime.screeningCombine(Spec.self),
                 property: property
             )
 

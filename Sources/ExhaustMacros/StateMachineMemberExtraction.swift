@@ -168,9 +168,6 @@ func extractInvariants(from members: MemberBlockItemListSyntax) -> [InvariantInf
     }
 }
 
-/// Whether a method's parameters are shapes the synthesized `Command`/`SetupStep` enum cannot represent.
-///
-/// A generic, `inout`, or variadic parameter has no stable stored form to put in an enum payload, so the macro rejects the method rather than synthesizing a case that will not compile.
 /// Maps a method's parameter list into the binding model the synthesized enum cases and dispatch use.
 ///
 /// An `_` external label becomes no label, and an `_` binding name becomes a positional `arg{n}` so the synthesized `case let` pattern still has something to bind.
@@ -200,6 +197,9 @@ func nonVoidReturnType(of funcDecl: FunctionDeclSyntax) -> String? {
     }
 }
 
+/// Whether a method's parameters are shapes the synthesized `Command`/`SetupStep` enum cannot represent.
+///
+/// A generic, `inout`, or variadic parameter has no stable stored form to put in an enum payload, so the macro rejects the method rather than synthesizing a case that will not compile.
 func hasUnsupportedParameters(_ funcDecl: FunctionDeclSyntax) -> Bool {
     if funcDecl.genericParameterClause != nil {
         return true
