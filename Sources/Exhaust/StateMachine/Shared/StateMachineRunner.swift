@@ -82,7 +82,6 @@ public extension __ExhaustRuntime {
                 screeningBudget: UInt64(config.budget.screeningBudget)
             )
             let taggedSeqGen = taggedSequenceGenerator(commandGen: commandGen, commandLimit: commandLimit)
-            let candidateGen = specCandidateGenerator(Spec.self, sequenceGen: taggedSeqGen)
 
             let invocationCounter = UnsafeSendableBox(0)
             let rawProperty: @Sendable (SpecCandidateValue<Spec>) -> Bool = syncSequentialProperty(Spec.self)
@@ -105,7 +104,6 @@ public extension __ExhaustRuntime {
 
             let pipeline = SpecPipeline(
                 backend: backend,
-                candidateGen: candidateGen,
                 sequenceGen: taggedSeqGen,
                 commandGen: commandGen.gen,
                 commandLimit: commandLimit,
@@ -113,7 +111,7 @@ public extension __ExhaustRuntime {
                 identifySkips: identifySkips,
                 property: property,
                 invocationCounter: invocationCounter,
-                candidateGenForLength: nil,
+                sequenceGenForLength: nil,
                 fileID: fileID,
                 filePath: filePath,
                 line: line,
@@ -203,7 +201,6 @@ private extension __ExhaustRuntime {
         )
         let taggedSeqGen = taggedSequenceGenerator(commandGen: commandGen, commandLimit: commandLimit)
 
-        let candidateGen = specCandidateGenerator(Spec.self, sequenceGen: taggedSeqGen)
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
         let invocationCounter = UnsafeSendableBox(0)
@@ -244,7 +241,6 @@ private extension __ExhaustRuntime {
 
         let pipeline = SpecPipeline(
             backend: backend,
-            candidateGen: candidateGen,
             sequenceGen: taggedSeqGen,
             commandGen: commandGen.gen,
             commandLimit: commandLimit,
@@ -252,7 +248,7 @@ private extension __ExhaustRuntime {
             identifySkips: identifySkips,
             property: property,
             invocationCounter: invocationCounter,
-            candidateGenForLength: nil,
+            sequenceGenForLength: nil,
             fileID: fileID,
             filePath: filePath,
             line: line,

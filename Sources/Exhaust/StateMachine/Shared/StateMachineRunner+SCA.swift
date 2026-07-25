@@ -522,14 +522,13 @@ extension __ExhaustRuntime {
     /// Source order matches the design document: screening replay, sampling replay, smoke, screening, sampling. Each source is independently gated by the config. The smoke source is entry-point-specific (sequential has none, cooperative and preemptive construct different property closures), so it is passed in pre-built.
     static func buildStateMachineSources<Spec: StateMachineSpecBase>(
         config: ResolvedConcurrentConfig,
-        candidateGen: Generator<SpecCandidateValue<Spec>>,
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         commandGen: Generator<Spec.Command>,
         commandLimit: Int,
         concurrencyLevel: Int,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool,
         smokeSource: AnyStateMachineCandidateSource<Spec>? = nil,
-        candidateGenForLength: ((ClosedRange<UInt64>) -> Generator<SpecCandidateValue<Spec>>)? = nil
+        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil
     ) -> [AnyStateMachineCandidateSource<Spec>] {
         var sources: [AnyStateMachineCandidateSource<Spec>] = []
         let augmentRowFallback = screeningRowFallbackAugmentation(for: Spec.self)
@@ -537,7 +536,6 @@ extension __ExhaustRuntime {
         if let row = config.screeningReplayRow {
             sources.append(.screeningReplay(
                 row: row,
-                candidateGen: candidateGen,
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
@@ -552,7 +550,6 @@ extension __ExhaustRuntime {
             sources.append(.samplingReplay(
                 replaySeed: seed,
                 replayIteration: replayIteration,
-                candidateGen: candidateGen,
                 sequenceGen: sequenceGen,
                 property: property
             ))
@@ -564,13 +561,12 @@ extension __ExhaustRuntime {
 
         if config.shouldRunScreening {
             sources.append(.screening(
-                candidateGen: candidateGen,
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: UInt64(config.budget.screeningBudget),
                 concurrencyLevel: concurrencyLevel,
-                candidateGenForLength: candidateGenForLength,
+                sequenceGenForLength: sequenceGenForLength,
                 augmentRowFallback: augmentRowFallback,
                 property: property
             ))
@@ -579,7 +575,6 @@ extension __ExhaustRuntime {
         if config.replayIteration == nil, config.screeningReplayRow == nil {
             let seed = config.seed ?? Xoshiro256().seed
             sources.append(.sampling(
-                candidateGen: candidateGen,
                 sequenceGen: sequenceGen,
                 seed: seed,
                 samplingBudget: UInt64(config.budget.samplingBudget),

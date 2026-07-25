@@ -104,7 +104,6 @@ extension __ExhaustRuntime {
             within: 1 ... UInt64(commandLimit),
             scaling: .constant
         )
-        let candidateGen = specCandidateGenerator(Spec.self, sequenceGen: sequenceGen)
 
         let identifySkips = innerBackend.makeIdentifySkips()
 
@@ -150,14 +149,12 @@ extension __ExhaustRuntime {
             smokeSequenceGen = sequenceGen
         }
         let smokeSource: AnyStateMachineCandidateSource<Spec>? = .smoke(
-            candidateGen: specCandidateGenerator(Spec.self, sequenceGen: smokeSequenceGen),
             sequenceGen: smokeSequenceGen,
             property: smokeProperty
         )
 
         let pipeline = SpecPipeline(
             backend: backend,
-            candidateGen: candidateGen,
             sequenceGen: sequenceGen,
             commandGen: commandGen,
             commandLimit: commandLimit,
@@ -165,8 +162,8 @@ extension __ExhaustRuntime {
             identifySkips: identifySkips,
             property: property,
             invocationCounter: invocationCounter,
-            candidateGenForLength: { range in
-                specCandidateGenerator(Spec.self, sequenceGen: Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant))
+            sequenceGenForLength: { range in
+                Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
             },
             fileID: fileID,
             filePath: filePath,

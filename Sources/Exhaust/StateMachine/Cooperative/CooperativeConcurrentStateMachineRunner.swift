@@ -185,7 +185,6 @@ private extension __ExhaustRuntime {
             within: 1 ... UInt64(resolvedCommandLimit),
             scaling: .constant
         )
-        let candidateGen = specCandidateGenerator(Spec.self, sequenceGen: sequenceGen)
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
         let concurrencyLevel = config.concurrencyLevel
@@ -236,16 +235,11 @@ private extension __ExhaustRuntime {
             } else {
                 smokeSequenceGen = sequenceGen
             }
-            smokeSource = .smoke(
-                candidateGen: specCandidateGenerator(Spec.self, sequenceGen: smokeSequenceGen),
-                sequenceGen: smokeSequenceGen,
-                property: smokeProperty
-            )
+            smokeSource = .smoke(sequenceGen: smokeSequenceGen, property: smokeProperty)
         }
 
         let pipeline = SpecPipeline(
             backend: backend,
-            candidateGen: candidateGen,
             sequenceGen: sequenceGen,
             commandGen: commandGen,
             commandLimit: resolvedCommandLimit,
@@ -253,8 +247,8 @@ private extension __ExhaustRuntime {
             identifySkips: identifySkips,
             property: property,
             invocationCounter: invocationCounter,
-            candidateGenForLength: { range in
-                specCandidateGenerator(Spec.self, sequenceGen: Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant))
+            sequenceGenForLength: { range in
+                Gen.arrayOf(taggedCommandGen, within: range, scaling: .constant)
             },
             fileID: fileID,
             filePath: filePath,

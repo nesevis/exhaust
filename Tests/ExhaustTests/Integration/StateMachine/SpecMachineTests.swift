@@ -415,7 +415,6 @@ private func makePipeline(
 ) -> SpecPipeline<StubBackend> {
     SpecPipeline(
         backend: StubBackend(),
-        candidateGen: __ExhaustRuntime.specCandidateGenerator(StubSpec.self, sequenceGen: stubSequenceGen()),
         sequenceGen: stubSequenceGen(),
         commandGen: StubSpec.commandGenerator.gen,
         commandLimit: 5,
@@ -423,7 +422,7 @@ private func makePipeline(
         identifySkips: { _ in [] },
         property: { _ in propertyPasses },
         invocationCounter: UnsafeSendableBox(0),
-        candidateGenForLength: nil,
+        sequenceGenForLength: nil,
         fileID: #fileID,
         filePath: #filePath,
         line: #line,

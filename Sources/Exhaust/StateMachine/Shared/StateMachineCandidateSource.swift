@@ -70,7 +70,6 @@ extension AnyStateMachineCandidateSource {
     /// Replays a single SCA screening row from a `U-{N}` seed.
     static func screeningReplay(
         row: Int,
-        candidateGen: Generator<SpecCandidateValue<Spec>>,
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         commandGen: Generator<Spec.Command>,
         commandLimit: Int,
@@ -81,7 +80,7 @@ extension AnyStateMachineCandidateSource {
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .screening, resolvedReplaySeed: .screening(row: row)) {
             let result = __ExhaustRuntime.runSCAScreeningRowLoop(
-                sequenceGen: candidateGen,
+                sequenceGen: __ExhaustRuntime.specCandidateGenerator(Spec.self, sequenceGen: sequenceGen),
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: screeningBudget,
@@ -113,7 +112,6 @@ extension AnyStateMachineCandidateSource {
     static func samplingReplay(
         replaySeed: UInt64,
         replayIteration: Int?,
-        candidateGen: Generator<SpecCandidateValue<Spec>>,
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
@@ -124,7 +122,7 @@ extension AnyStateMachineCandidateSource {
         ) {
             let startIndex = replayIteration.map { UInt64($0 - 1) } ?? 0
             var interpreter = ValueAndChoiceTreeInterpreter(
-                candidateGen,
+                __ExhaustRuntime.specCandidateGenerator(Spec.self, sequenceGen: sequenceGen),
                 seed: replaySeed,
                 maxRuns: startIndex + 1,
                 initialRunIndex: startIndex
@@ -148,11 +146,11 @@ extension AnyStateMachineCandidateSource {
 
     /// Seed 0, one sequential probe to catch obvious breakage before concurrent phases.
     static func smoke(
-        candidateGen: Generator<SpecCandidateValue<Spec>>,
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .smokeTest) {
+            let candidateGen = __ExhaustRuntime.specCandidateGenerator(Spec.self, sequenceGen: sequenceGen)
             var interpreter = ValueAndChoiceTreeInterpreter(candidateGen, seed: 0, maxRuns: 1)
             guard let (value, tree) = try interpreter.next() else {
                 return nil
@@ -173,26 +171,27 @@ extension AnyStateMachineCandidateSource {
 
     /// Iterates all SCA screening tiers until a failure is found or all rows exhaust.
     static func screening(
-        candidateGen: Generator<SpecCandidateValue<Spec>>,
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         commandGen: Generator<Spec.Command>,
         commandLimit: Int,
         screeningBudget: UInt64,
         concurrencyLevel: Int,
-        candidateGenForLength: ((ClosedRange<UInt64>) -> Generator<SpecCandidateValue<Spec>>)? = nil,
+        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil,
         augmentRowFallback: ((ChoiceTree, UInt64) -> ChoiceTree)?,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .screening) {
             let result = __ExhaustRuntime.runSCAScreeningRowLoop(
-                sequenceGen: candidateGen,
+                sequenceGen: __ExhaustRuntime.specCandidateGenerator(Spec.self, sequenceGen: sequenceGen),
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: screeningBudget,
                 skipToRow: nil,
                 logEventPrefix: "statemachine_screening",
                 concurrencyLevel: concurrencyLevel,
-                sequenceGenForLength: candidateGenForLength,
+                sequenceGenForLength: sequenceGenForLength.map { makeSequenceGen in
+                    { range in __ExhaustRuntime.specCandidateGenerator(Spec.self, sequenceGen: makeSequenceGen(range)) }
+                },
                 augmentRowFallback: augmentRowFallback,
                 property: property
             )
@@ -215,14 +214,13 @@ extension AnyStateMachineCandidateSource {
 
     /// Random sampling via VACTI, budget-capped.
     static func sampling(
-        candidateGen: Generator<SpecCandidateValue<Spec>>,
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         seed: UInt64,
         samplingBudget: UInt64,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         var interpreter = ValueAndChoiceTreeInterpreter(
-            candidateGen,
+            __ExhaustRuntime.specCandidateGenerator(Spec.self, sequenceGen: sequenceGen),
             seed: seed,
             maxRuns: samplingBudget
         )

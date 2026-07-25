@@ -430,7 +430,6 @@ extension SpecMachine {
 /// Each entry point (sequential, cooperative, preemptive) constructs a pipeline once and calls ``runWithRegressions(config:regressionSeeds:mainRunSmokeSource:)`` to run the full pipeline. The pipeline drives ``SpecMachine/next()`` directly rather than using a blind loop, so each transition is available for logging and diagnostics.
 struct SpecPipeline<Backend: StateMachineBackend> {
     let backend: Backend
-    let candidateGen: Generator<SpecCandidateValue<Backend.Spec>>
     let sequenceGen: Generator<[(ScheduleMarker, Backend.Spec.Command)]>
     let commandGen: Generator<Backend.Spec.Command>
     let commandLimit: Int
@@ -438,7 +437,7 @@ struct SpecPipeline<Backend: StateMachineBackend> {
     let identifySkips: @Sendable (SpecCandidateValue<Backend.Spec>) -> Set<Int>
     let property: @Sendable (SpecCandidateValue<Backend.Spec>) -> Bool
     let invocationCounter: UnsafeSendableBox<Int>
-    let candidateGenForLength: ((ClosedRange<UInt64>) -> Generator<SpecCandidateValue<Backend.Spec>>)?
+    let sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Backend.Spec.Command)]>)?
     let fileID: StaticString
     let filePath: StaticString
     let line: UInt
@@ -462,14 +461,13 @@ struct SpecPipeline<Backend: StateMachineBackend> {
         )
         let sources = __ExhaustRuntime.buildStateMachineSources(
             config: config,
-            candidateGen: candidateGen,
             sequenceGen: sequenceGen,
             commandGen: commandGen,
             commandLimit: commandLimit,
             concurrencyLevel: concurrencyLevel,
             property: property,
             smokeSource: smokeSource,
-            candidateGenForLength: candidateGenForLength
+            sequenceGenForLength: sequenceGenForLength
         )
         var machine = SpecMachine(backend: backend, context: runContext, sources: sources)
         while let transition = machine.next() {
