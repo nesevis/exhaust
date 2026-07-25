@@ -13,6 +13,8 @@ import ExhaustCore
 /// - `.tasks` runs commands concurrently with deterministic interleaving at `await` boundaries. Checks use `@Invariant`.
 /// - `.threads` dispatches commands to real OS threads via GCD. Checks use `@Oracle`, which compares the concurrent end state against a sequential replay.
 ///
+/// A spec may also declare one ``Setup(_:)`` method, whose parameters Exhaust generates, when the starting configuration should vary from run to run rather than being fixed in `init()`.
+///
 /// ## .tasks StateMachine
 ///
 /// Commands must be `async` for `.tasks` to have suspension points to interleave at. Without `await` boundaries, `.tasks` behaves identically to `.sequential`. The SUT below has a deliberate read-yield-write race: two overlapping increments read the same value, suspend, and both write `current + 1`, losing one update.
