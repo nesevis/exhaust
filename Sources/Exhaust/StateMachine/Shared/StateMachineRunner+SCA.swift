@@ -457,12 +457,8 @@ extension __ExhaustRuntime {
         return { candidate in
             let verdict: FuzzVerdict? = _blockingAwaitSemaphore(timeoutMilliseconds: nil) {
                 let spec = specInit()
-                if let setupStep = candidate.setupStep {
-                    do {
-                        try await spec.runSetup(setupStep)
-                    } catch {
-                        return FuzzVerdict.fail(.thrown(error))
-                    }
+                if let setupError = await spec.applySetup(candidate.setupStep) {
+                    return FuzzVerdict.fail(.thrown(setupError))
                 }
                 for (_, command) in candidate.taggedCommands {
                     do {

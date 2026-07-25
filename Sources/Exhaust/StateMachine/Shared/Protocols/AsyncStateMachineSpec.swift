@@ -62,20 +62,27 @@ public extension AsyncStateMachineSpec {
     /// Default no-op for specs without a `@Setup` method. The `@StateMachine` macro synthesizes a real implementation when one exists.
     func runSetup(_: SetupStep) async throws {}
 
+    /// Applies a setup step to this instance, reporting the error it threw rather than propagating it.
+    ///
+    /// The async twin of ``StateMachineSpec/applySetup(_:)``, and the one place runner code applies setup. A nil step is a no-op, so callers never branch on whether the spec has a `@Setup` method.
+    internal func applySetup(_ step: SetupStep?) async -> (any Error)? {
+        guard let step else {
+            return nil
+        }
+        do {
+            try await runSetup(step)
+        } catch {
+            return error
+        }
+        return nil
+    }
+
     /// Constructs a fresh spec instance and applies its setup step, if it has one.
     ///
     /// The async twin of the ``StateMachineSpec`` construction funnel: once setup exists, no runner may call `Self()` directly. The instance is always returned, alongside the setup error if one was thrown, so probe paths can report the partially set-up spec as evidence.
     internal static func makeSpec(setupStep: SetupStep?) async -> (spec: Self, setupError: (any Error)?) {
         let spec = Self()
-        guard let setupStep else {
-            return (spec, nil)
-        }
-        do {
-            try await spec.runSetup(setupStep)
-        } catch {
-            return (spec, error)
-        }
-        return (spec, nil)
+        return await (spec, spec.applySetup(setupStep))
     }
 
     /// Returns a closure that re-executes a command sequence (with setup applied first) and returns the indices of skipped commands.
@@ -93,12 +100,8 @@ public extension AsyncStateMachineSpec {
         return { setupStep, commands in
             let box = UnsafeSendableBox(specInit())
             let work: @Sendable () async -> Set<Int> = {
-                if let setupStep {
-                    do {
-                        try await box.value.runSetup(setupStep)
-                    } catch {
-                        return []
-                    }
+                guard await box.value.applySetup(setupStep) == nil else {
+                    return []
                 }
                 var skips = Set<Int>()
                 for (index, command) in commands.enumerated() {

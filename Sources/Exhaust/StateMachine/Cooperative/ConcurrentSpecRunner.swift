@@ -147,7 +147,7 @@ private let cancellationDrainMilliseconds = 5
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 func drainSchedule<Spec: AsyncStateMachineSpec>(
     taggedCommands: [(ScheduleMarker, Spec.Command)],
-    setupStep: Spec.SetupStep? = nil,
+    setupStep: Spec.SetupStep?,
     specInit: () -> Spec,
     concurrencyLevel: Int,
     recordTrace: Bool,
@@ -199,27 +199,18 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         let prefixTask = Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace, setupTrace] in
             // Setup is the head of the sequential prefix: it runs on every fresh spec before any command, cannot skip, and its throw fails the run with the error type as the symptom.
             if let setupStep, Task.isCancelled == false {
-                do {
-                    try await spec.value.runSetup(setupStep)
-                    if recordTrace {
-                        setupTrace.value.append(TraceStep(
-                            index: 1,
-                            command: __ExhaustRuntime.setupTraceDescription(setupStep),
-                            outcome: .ok
-                        ))
-                    }
-                } catch {
+                let setupError = await spec.value.applySetup(setupStep)
+                if let setupError {
+                    // The cancellation recheck guards the boxes on the failure path only, exactly as before: after abandonment a resumed continuation must not touch the trace or failure boxes.
                     if Task.isCancelled == false {
                         if recordTrace {
-                            setupTrace.value.append(TraceStep(
-                                index: 1,
-                                command: __ExhaustRuntime.setupTraceDescription(setupStep),
-                                outcome: .checkFailed(message: "\(error)")
-                            ))
+                            setupTrace.value.append(__ExhaustRuntime.setupTraceStep(setupStep, setupError: setupError))
                         }
-                        failedSymptomKind.value = String(describing: type(of: error))
-                        failed.value = "\(error)"
+                        failedSymptomKind.value = String(describing: type(of: setupError))
+                        failed.value = "\(setupError)"
                     }
+                } else if recordTrace {
+                    setupTrace.value.append(__ExhaustRuntime.setupTraceStep(setupStep, setupError: nil))
                 }
             }
             if failed.value == nil {

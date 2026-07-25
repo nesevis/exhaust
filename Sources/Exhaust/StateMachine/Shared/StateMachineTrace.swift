@@ -193,24 +193,24 @@ extension __ExhaustRuntime {
         "\(step) (setup)"
     }
 
+    /// Renders the trace row for an applied setup step. A setup step's outcome can only be `.ok` or `.checkFailed`; no invariant check runs after setup.
+    static func setupTraceStep(_ step: some Any, setupError: (any Error)?) -> TraceStep {
+        let outcome: TraceStep.Outcome = setupError.map { .checkFailed(message: "\($0)") } ?? .ok
+        return TraceStep(index: 1, command: setupTraceDescription(step), outcome: outcome)
+    }
+
     /// Constructs a fresh spec and applies its setup step, recording the step as a trace entry.
     ///
-    /// The trace-recording sibling of the ``StateMachineSpec/makeSpec(setupStep:)`` funnel: it exists so a throwing setup is attributed to the setup row rather than to the first command. A setup step's outcome can only be `.ok` or `.checkFailed`; no invariant check runs after setup. `steps` is empty for a spec without a `@Setup` method, which leaves the command trace unshifted.
+    /// The trace-recording sibling of the ``StateMachineSpec/makeSpec(setupStep:)`` funnel: it exists so a throwing setup is attributed to the setup row rather than to the first command. `steps` is empty for a spec without a `@Setup` method, which leaves the command trace unshifted.
     static func makeSpecRecordingSetupTrace<Spec: StateMachineSpec>(
         _: Spec.Type,
         setupStep: Spec.SetupStep?
     ) -> (spec: Spec, steps: [TraceStep], failed: Bool) {
-        let spec = Spec()
+        let (spec, setupError) = Spec.makeSpec(setupStep: setupStep)
         guard let setupStep else {
             return (spec, [], false)
         }
-        let label = setupTraceDescription(setupStep)
-        do {
-            try spec.runSetup(setupStep)
-            return (spec, [TraceStep(index: 1, command: label, outcome: .ok)], false)
-        } catch {
-            return (spec, [TraceStep(index: 1, command: label, outcome: .checkFailed(message: "\(error)"))], true)
-        }
+        return (spec, [setupTraceStep(setupStep, setupError: setupError)], setupError != nil)
     }
 
     /// Applies a setup step to an already-constructed async spec while recording it as a trace entry. The async twin of ``makeSpecRecordingSetupTrace(_:setupStep:)``, split from construction because async callers construct inside their own bridged tasks.
@@ -221,13 +221,8 @@ extension __ExhaustRuntime {
         guard let setupStep else {
             return ([], false)
         }
-        let label = setupTraceDescription(setupStep)
-        do {
-            try await spec.runSetup(setupStep)
-            return ([TraceStep(index: 1, command: label, outcome: .ok)], false)
-        } catch {
-            return ([TraceStep(index: 1, command: label, outcome: .checkFailed(message: "\(error)"))], true)
-        }
+        let setupError = await spec.applySetup(setupStep)
+        return ([setupTraceStep(setupStep, setupError: setupError)], setupError != nil)
     }
 
     /// Prepends setup trace entries to command trace entries, renumbering the command steps so the trace counts through the setup rows first.

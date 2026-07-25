@@ -60,20 +60,27 @@ extension StateMachineSpec {
     /// Default no-op for specs without a `@Setup` method. The `@StateMachine` macro synthesizes a real implementation when one exists.
     public func runSetup(_: SetupStep) throws {}
 
+    /// Applies a setup step to this instance, reporting the error it threw rather than propagating it.
+    ///
+    /// The one place runner code applies setup. Returning the error instead of rethrowing is what lets every call site stay a single expression: the runners each turn a setup failure into their own currency (a verdict, a `false` replay result, a trace row), and none of them wants a `do`/`catch` to do it. A nil step is a no-op, so callers never branch on whether the spec has a `@Setup` method.
+    func applySetup(_ step: SetupStep?) -> (any Error)? {
+        guard let step else {
+            return nil
+        }
+        do {
+            try runSetup(step)
+        } catch {
+            return error
+        }
+        return nil
+    }
+
     /// Constructs a fresh spec instance and applies its setup step, if it has one.
     ///
     /// The one construction funnel for runner code: once setup exists, no runner may call `Self()` directly, because with an implicitly unwrapped SUT every missed setup application is a nil-unwrap crash. The instance is always returned, alongside the setup error if one was thrown, so probe paths can report the partially set-up spec as evidence.
     static func makeSpec(setupStep: SetupStep?) -> (spec: Self, setupError: (any Error)?) {
         let spec = Self()
-        guard let setupStep else {
-            return (spec, nil)
-        }
-        do {
-            try spec.runSetup(setupStep)
-        } catch {
-            return (spec, error)
-        }
-        return (spec, nil)
+        return (spec, spec.applySetup(setupStep))
     }
 
     /// Replays a command sequence on a fresh spec instance (with setup applied) and collects the indices of commands that threw ``StateMachineSkip``.

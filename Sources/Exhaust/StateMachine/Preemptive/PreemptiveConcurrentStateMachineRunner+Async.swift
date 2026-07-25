@@ -254,12 +254,8 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         var exception: NSException?
         let completed = exhaust_runCatchingObjCException({
             let result: Bool? = awaitOrTimeout("witness") {
-                if let setupStep {
-                    do {
-                        try await unsafeWitness.runSetup(setupStep)
-                    } catch {
-                        return false
-                    }
+                guard await unsafeWitness.applySetup(setupStep) == nil else {
+                    return false
                 }
                 for command in prefix {
                     do {
@@ -303,19 +299,15 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
     ///
     /// - Returns: A ``SequentialOutcome`` whose `succeeded` is `true` when all commands succeeded or were skipped, and whose `timedOut` is `true` only when the drain loop idled out (as opposed to a command throw or NSException).
     @discardableResult
-    func runSequentially(_ commands: [Spec.Command], setupStep: Spec.SetupStep? = nil, on spec: Spec) -> SequentialOutcome {
+    func runSequentially(_ commands: [Spec.Command], setupStep: Spec.SetupStep?, on spec: Spec) -> SequentialOutcome {
         var exception: NSException?
         var failed = false
         var timedOut = false
         nonisolated(unsafe) let spec = spec
         exhaust_runCatchingObjCException({
             let succeeded: Bool? = awaitOrTimeout("sequential") {
-                if let setupStep {
-                    do {
-                        try await spec.runSetup(setupStep)
-                    } catch {
-                        return false
-                    }
+                guard await spec.applySetup(setupStep) == nil else {
+                    return false
                 }
                 for command in commands {
                     do {
@@ -355,17 +347,6 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         nonisolated(unsafe) let sequentialSpec = sequentialSpec
         exhaust_runCatchingObjCException({
             let succeeded: Bool? = awaitOrTimeout("sequential") {
-                func applySetup(on spec: Spec) async -> Bool {
-                    guard let setupStep else {
-                        return true
-                    }
-                    do {
-                        try await spec.runSetup(setupStep)
-                    } catch {
-                        return false
-                    }
-                    return true
-                }
                 func run(_ indices: [Int], on spec: Spec) async -> Bool {
                     for index in indices {
                         do {
@@ -378,10 +359,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
                     }
                     return true
                 }
-                guard await applySetup(on: concurrentSpec) else {
+                guard await concurrentSpec.applySetup(setupStep) == nil else {
                     return false
                 }
-                guard await applySetup(on: sequentialSpec) else {
+                guard await sequentialSpec.applySetup(setupStep) == nil else {
                     return false
                 }
                 guard await run(partition.prefixIndices, on: concurrentSpec) else {
@@ -517,12 +498,8 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         let reference = Spec()
         nonisolated(unsafe) let unsafeReference = reference
         let referenceFailed: Bool? = awaitOrTimeout("smoke-reference", timeoutMultiplier: 5) {
-            if let setupStep {
-                do {
-                    try await unsafeReference.runSetup(setupStep)
-                } catch {
-                    return true
-                }
+            if await unsafeReference.applySetup(setupStep) != nil {
+                return true
             }
             for command in commands {
                 do {
