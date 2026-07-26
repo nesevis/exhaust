@@ -318,6 +318,14 @@ Reproduce: .replay("7MK2N9-4")
 
 The trace shows exactly where the interleaving happened. The reducer drove the first `refill` command from a concurrent lane into the sequential prefix (proving it doesn't need to be concurrent), leaving only `tryConsume` and the second `refill` as the concurrent pair that triggers the race.
 
+### The model is shared, so invariants run at quiescence
+
+Every lane runs against one spec instance, so the model is shared. A command body updates the model and then calls the system under test, and when that call suspends, the model has moved and the system under test has not. An invariant comparing them is false at that instant for a system under test with no defect at all.
+
+Exhaust therefore checks invariants only when no lane is inside a command body. A command that completes while another lane sits mid-update records as completed and defers the check; whichever command finishes last always runs it, so every probe is checked at least once with the model and the system under test back in agreement.
+
+What this buys is that a correct system under test does not produce counterexamples. What it costs is a violation that exists only while another lane is suspended and heals before that lane returns. For a model-versus-system invariant that transient state is not a defect, which is the point. For a structural invariant over the system under test alone (`count >= 0`), the window between two lanes is no longer observed, and a defect that shows up only there needs `.threads`, whose oracle compares observed responses rather than intermediate state.
+
 ### What the scheduler can and cannot find
 
 The cooperative scheduler interleaves at `await` suspension points, wherever a command body suspends via `Task.yield()`, an actor call, or any other suspension point. It cannot interleave within synchronous code. A race between two statements with no `await` between them is invisible to the scheduler.
@@ -332,7 +340,11 @@ SUTs that have races at suspension points (the `let v = state; await Task.yield(
 
 ### Idle timeout
 
-If a command body suspends to an executor outside the cooperative scheduler (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeout(.seconds(2))` setting (default) detects this and reports the stalling command sequence without attempting reduction.
+If a command body suspends to an executor outside the cooperative scheduler (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeout(.seconds(2))` setting (default) bounds that wait so a stalled probe cannot wedge the run.
+
+A timed-out probe counts as a **pass**, not a failure. The timeout cannot distinguish a hung system from a machine under load, and treating it as a counterexample would let a busy CI runner manufacture failures. What surfaces instead is a runtime warning once timed-out probes reach a quarter of those attempted, reporting the rate so a run that never exercised the system does not pass silently.
+
+The consequence is worth stating plainly: a spec that deadlocks does not fail on that account. If the deadlock is reliable, most probes time out, the warning fires, and the rate tells you. If it only happens on a few interleavings, the run can stay under the threshold and pass. A green run with a nonzero timeout count is not evidence of liveness.
 
 ## Finding concurrency bugs in threaded code
 
@@ -428,6 +440,8 @@ The oracle compares final state rather than intermediate state. That is the righ
 
 The oracle is always required for `.threads` specs and always written by hand. `@Invariant` is not available under `.threads`, because there is no deterministic per-step state to check it against.
 
+> Important: A `.threads` command body may call the system under test and must not mutate spec properties. Every lane dispatches against one spec instance on a real OS thread, so writing a model property from a command body is an unsynchronised write to a class property from several threads at once. That is undefined behaviour, not a false positive: two threads growing the same array can corrupt memory. `.threads` specs carry no model, which is why the examples above declare only a `@SystemUnderTest` property and an `@Oracle`. When porting a `.sequential` spec, deleting the `@Invariant` is not enough; the model itself has to go.
+
 Running the test:
 
 ```swift
@@ -480,7 +494,7 @@ All settings are passed as variadic arguments to `#execute`:
 | `.commandLimit(N)` | auto-estimated (`.threads`: 10) | Maximum commands per generated sequence. Estimated from the command domain and screening budget; `.tasks` caps the estimate at 40, `.threads` defaults to a flat 10. |
 | `.parallelize(lanes:)` | 2 | Number of concurrent lanes (1 through 4). |
 | `.budget(.thorough)` | `.standard` | Controls screening rows and random sampling iterations. |
-| `.idleTimeout(.seconds(2))` | `.seconds(2)` | Wall-clock time before a stalled run is reported without reduction: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. `.zero` disables. |
+| `.idleTimeout(.seconds(2))` | `.seconds(2)` | Wall-clock bound on a stalled probe: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. A timed-out probe counts as a pass; the run warns once a quarter of probes time out. `.zero` disables. |
 | `.replay("seed")` | — | Deterministic replay from a failure report seed. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
 | `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing, invocation counts, and reduction stats after the run. |

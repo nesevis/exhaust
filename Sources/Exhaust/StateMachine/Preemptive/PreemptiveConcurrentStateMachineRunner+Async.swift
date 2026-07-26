@@ -396,6 +396,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         let result: LinearizabilityChecker.Result? = awaitOrTimeout("linearizability", timeoutMultiplier: 10) {
             var replaySpec: Spec?
             return await checker.checkAsync(
+                prefixLength: prefixCommands.count,
                 replayPrefix: {
                     // Once per sibling retry in the DFS: every fresh replay instance receives the same setup, and a setup error fails this ordering rather than crashing into an unconfigured SUT.
                     let (fresh, setupError) = await Spec.makeSpec(setupStep: setupStep)

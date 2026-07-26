@@ -58,11 +58,13 @@ package struct LinearizabilityChecker: @unchecked Sendable {
     /// Folds verification into the DFS: each placed command is replayed immediately and the subtree is pruned on response mismatch.
     ///
     /// - Parameters:
+    ///   - prefixLength: How many prefix commands `replayPrefix` runs, so the search budget can charge a prefix replay for the work it actually does.
     ///   - replayPrefix: Replays all prefix commands on a fresh sequential instance. Returns `false` if any prefix command fails. The closure captures its own prefix data.
     ///   - replayCommand: Replays the concurrent command at the given `(laneIndex, commandIndex)` coordinates on the sequential instance. Returns `nil` if the command threw a non-skip error.
     ///   - checkOracle: Checks whether the sequential instance's final state matches the concurrent execution's final state.
     ///   - failureDescription: Produces a human-readable description of the expected state on failure.
     package func check(
+        prefixLength: Int,
         replayPrefix: () -> Bool,
         replayCommand: (_ laneIndex: Int, _ commandIndex: Int) -> ReplayResponse?,
         checkOracle: () -> Bool,
@@ -70,7 +72,12 @@ package struct LinearizabilityChecker: @unchecked Sendable {
     ) -> Result {
         let laneCount = laneOutcomes.count
         let totalCommands = laneOutcomes.reduce(0) { $0 + $1.count }
-        var state = SearchState(laneCount: laneCount, totalCommands: totalCommands)
+        var state = SearchState(
+            laneCount: laneCount,
+            totalCommands: totalCommands,
+            prefixLength: prefixLength,
+            replayBudget: PreemptiveReduction.linearizabilitySearchReplayBudget
+        )
 
         let found = searchIncrementally(
             totalCommands: totalCommands,
@@ -80,7 +87,13 @@ package struct LinearizabilityChecker: @unchecked Sendable {
             checkOracle: checkOracle
         )
 
-        return makeResult(found: found, closestMatchDepth: state.closestMatchDepth, closestPlaced: state.closestPlaced, failureDescription: failureDescription)
+        return makeResult(
+            found: found,
+            abandoned: state.abandoned,
+            closestMatchDepth: state.closestMatchDepth,
+            closestPlaced: state.closestPlaced,
+            failureDescription: failureDescription
+        )
     }
 
     // MARK: - Search State
@@ -90,11 +103,39 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         var currentOrdering: [Placed]
         var closestMatchDepth: Int = -1
         var closestPlaced: Placed?
+        /// Command replays left before the search abandons. See ``PreemptiveReduction/linearizabilitySearchReplayBudget``.
+        var replayBudget: Int
+        /// What one `replayPrefix` call costs against the budget, in command-replay units.
+        let prefixReplayCost: Int
+        /// Set when the budget ran out, so the verdict resolves as linearizable rather than reporting a violation the search never finished looking for.
+        var abandoned = false
 
-        init(laneCount: Int, totalCommands: Int) {
+        init(laneCount: Int, totalCommands: Int, prefixLength: Int, replayBudget: Int) {
             cursors = Array(repeating: 0, count: laneCount)
             currentOrdering = []
             currentOrdering.reserveCapacity(totalCommands)
+            self.replayBudget = replayBudget
+            // A prefix replay builds a fresh spec, applies setup, and runs every prefix command, so it costs at least one command replay even when the prefix is empty. Leaving it uncharged would let a long prefix multiply the search's real cost by a factor the budget cannot see.
+            prefixReplayCost = max(1, prefixLength)
+        }
+
+        /// Charges one command replay, reporting whether the search may continue.
+        mutating func chargeReplay() -> Bool {
+            charge(1)
+        }
+
+        /// Charges one prefix replay, reporting whether the search may continue.
+        mutating func chargePrefixReplay() -> Bool {
+            charge(prefixReplayCost)
+        }
+
+        private mutating func charge(_ cost: Int) -> Bool {
+            guard replayBudget >= cost else {
+                abandoned = true
+                return false
+            }
+            replayBudget -= cost
+            return true
         }
     }
 
@@ -102,13 +143,17 @@ package struct LinearizabilityChecker: @unchecked Sendable {
 
     private func replayToDepth(
         _ depth: Int,
-        currentOrdering: [Placed],
+        state: inout SearchState,
         replayPrefix: () -> Bool,
         replayCommand: (Int, Int) -> ReplayResponse?
     ) -> Bool {
+        guard state.chargePrefixReplay() else {
+            return false
+        }
         guard replayPrefix() else { return false }
         for index in 0 ..< depth {
-            let placed = currentOrdering[index]
+            guard state.chargeReplay() else { return false }
+            let placed = state.currentOrdering[index]
             guard replayCommand(placed.laneIndex, placed.commandIndex) != nil else { return false }
         }
         return true
@@ -121,6 +166,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         replayCommand: (Int, Int) -> ReplayResponse?,
         checkOracle: () -> Bool
     ) -> Bool {
+        guard state.abandoned == false else { return false }
         let depth = state.currentOrdering.count
 
         if depth == totalCommands {
@@ -144,7 +190,8 @@ package struct LinearizabilityChecker: @unchecked Sendable {
             let observed = laneOutcomes[laneIndex][cursor]
 
             if childrenTried > 0 || depth == 0 {
-                guard replayToDepth(depth, currentOrdering: state.currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
+                guard replayToDepth(depth, state: &state, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
+                    if state.abandoned { return false }
                     continue
                 }
             }
@@ -152,6 +199,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
 
             let placed = Placed(laneIndex: laneIndex, commandIndex: cursor)
 
+            guard state.chargeReplay() else { return false }
             guard let replay = replayCommand(laneIndex, cursor) else {
                 updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
@@ -191,8 +239,9 @@ package struct LinearizabilityChecker: @unchecked Sendable {
 
     /// Checks linearizability using asynchronous replay closures with incremental verification.
     ///
-    /// Async equivalent of ``check(replayPrefix:replayCommand:checkOracle:failureDescription:)``. Folds verification into the DFS with pruning on response mismatch.
+    /// Async equivalent of ``check(prefixLength:replayPrefix:replayCommand:checkOracle:failureDescription:)``. Folds verification into the DFS with pruning on response mismatch.
     package func checkAsync(
+        prefixLength: Int,
         replayPrefix: () async -> Bool,
         replayCommand: (_ laneIndex: Int, _ commandIndex: Int) async -> ReplayResponse?,
         checkOracle: () async -> Bool,
@@ -200,7 +249,12 @@ package struct LinearizabilityChecker: @unchecked Sendable {
     ) async -> Result {
         let laneCount = laneOutcomes.count
         let totalCommands = laneOutcomes.reduce(0) { $0 + $1.count }
-        var state = SearchState(laneCount: laneCount, totalCommands: totalCommands)
+        var state = SearchState(
+            laneCount: laneCount,
+            totalCommands: totalCommands,
+            prefixLength: prefixLength,
+            replayBudget: PreemptiveReduction.linearizabilitySearchReplayBudget
+        )
 
         let found = await searchIncrementallyAsync(
             totalCommands: totalCommands,
@@ -210,20 +264,30 @@ package struct LinearizabilityChecker: @unchecked Sendable {
             checkOracle: checkOracle
         )
 
-        return makeResult(found: found, closestMatchDepth: state.closestMatchDepth, closestPlaced: state.closestPlaced, failureDescription: failureDescription)
+        return makeResult(
+            found: found,
+            abandoned: state.abandoned,
+            closestMatchDepth: state.closestMatchDepth,
+            closestPlaced: state.closestPlaced,
+            failureDescription: failureDescription
+        )
     }
 
     // MARK: - Async Incremental Search
 
     private func replayToDepthAsync(
         _ depth: Int,
-        currentOrdering: [Placed],
+        state: inout SearchState,
         replayPrefix: () async -> Bool,
         replayCommand: (Int, Int) async -> ReplayResponse?
     ) async -> Bool {
+        guard state.chargePrefixReplay() else {
+            return false
+        }
         guard await replayPrefix() else { return false }
         for index in 0 ..< depth {
-            let placed = currentOrdering[index]
+            guard state.chargeReplay() else { return false }
+            let placed = state.currentOrdering[index]
             guard await replayCommand(placed.laneIndex, placed.commandIndex) != nil else { return false }
         }
         return true
@@ -236,6 +300,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         replayCommand: (Int, Int) async -> ReplayResponse?,
         checkOracle: () async -> Bool
     ) async -> Bool {
+        guard state.abandoned == false else { return false }
         let depth = state.currentOrdering.count
 
         if depth == totalCommands {
@@ -259,7 +324,8 @@ package struct LinearizabilityChecker: @unchecked Sendable {
             let observed = laneOutcomes[laneIndex][cursor]
 
             if childrenTried > 0 || depth == 0 {
-                guard await replayToDepthAsync(depth, currentOrdering: state.currentOrdering, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
+                guard await replayToDepthAsync(depth, state: &state, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
+                    if state.abandoned { return false }
                     continue
                 }
             }
@@ -267,6 +333,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
 
             let placed = Placed(laneIndex: laneIndex, commandIndex: cursor)
 
+            guard state.chargeReplay() else { return false }
             guard let replay = await replayCommand(laneIndex, cursor) else {
                 updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
                 continue
@@ -352,8 +419,18 @@ package struct LinearizabilityChecker: @unchecked Sendable {
     }
 
     /// Builds the verdict. When the closest divergence is at the oracle level (`closestPlaced` is `nil`), there is no command witness — the failure is visible only in the expected-versus-actual state diff.
-    private func makeResult(found: Bool, closestMatchDepth: Int, closestPlaced: Placed?, failureDescription: () -> String?) -> Result {
+    ///
+    /// An abandoned search (the replay budget ran out before every ordering was tried) resolves as linearizable. The search failed to find an explanation, but it also failed to rule one out, and reporting an unfinished search as a violation would manufacture counterexamples out of configurations that are merely too large. This matches the runner's treatment of a timed-out probe.
+    private func makeResult(found: Bool, abandoned: Bool, closestMatchDepth: Int, closestPlaced: Placed?, failureDescription: () -> String?) -> Result {
         guard found == false else {
+            return .linearizable
+        }
+        guard abandoned == false else {
+            ExhaustLog.notice(
+                category: .propertyTest,
+                event: "linearizability_search_abandoned",
+                "The interleaving search exceeded its replay budget and was abandoned; the execution is reported as linearizable. Reduce .commandLimit or .parallelize to bring the search back within budget."
+            )
             return .linearizable
         }
         guard closestMatchDepth >= 0, let placed = closestPlaced else {

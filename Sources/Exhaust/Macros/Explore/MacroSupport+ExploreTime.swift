@@ -23,6 +23,29 @@ import IssueReporting
     #endif
 #endif
 
+/// Detects the one clean-signal violation the runtime can see without guessing: two coverage-guided runs in flight at once.
+///
+/// The isolation a `time:` run needs is documented and is the caller's to arrange, because nothing in-process can tell whether another test is executing instrumented code. Two concurrent fuzz runs are different: each one zeroes the process-global counters at the start of every attempt, so they erase each other's measurements, and the runner can count itself. Left undetected the symptom is a search that wanders and a report whose numbers are fiction, with nothing a reader would recognize as wrong.
+enum FuzzRunExclusion {
+    private static let isRunInFlight = SendableBox(false)
+
+    /// Claims the process's coverage counters for one run. The caller owes a matching ``endRun()`` only when this returns true; a false return means another run holds the claim and nothing was acquired.
+    static func tryBeginRun() -> Bool {
+        isRunInFlight.withValue { isInFlight in
+            guard isInFlight == false else {
+                return false
+            }
+            isInFlight = true
+            return true
+        }
+    }
+
+    /// Releases a finished run's claim. Paired with every ``tryBeginRun()`` that returned true.
+    static func endRun() {
+        isRunInFlight.value = false
+    }
+}
+
 /// Once-per-process instrumentation presence check for `#explore(time:)`, with a test-only override.
 ///
 /// Counter regions register during image loading, before main, so the first read is already final and caching it is sound. The override exists because the test suite both lacks real instrumentation and registers synthetic regions from other suites running in the same process — a test asserting on either outcome of this check must not depend on suite ordering.
@@ -357,6 +380,22 @@ public extension __ExhaustRuntime {
             }
         }
         configure?(&configuration)
+
+        // Only the real coverage source reads the process-global counters; a synthetic source is a pure function of the value, so in-package tests can run concurrently without interfering.
+        let needsExclusiveCounters = injectedSource == nil
+        if needsExclusiveCounters, FuzzRunExclusion.tryBeginRun() == false {
+            return .empty(
+                termination: .invalidConfiguration(
+                    "Another coverage-guided run is already in flight in this process. Both zero the same instrumented counters at the start of every attempt, so neither can attribute coverage to its own inputs. Run the target with `swift test --no-parallel`, or filter the run down to a single fuzz test."
+                ),
+                seed: seed
+            )
+        }
+        defer {
+            if needsExclusiveCounters {
+                FuzzRunExclusion.endRun()
+            }
+        }
 
         let logConfiguration = ExhaustLog.Configuration(
             isEnabled: suppressLogs == false,

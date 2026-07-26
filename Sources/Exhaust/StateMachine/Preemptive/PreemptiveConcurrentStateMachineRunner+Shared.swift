@@ -119,9 +119,9 @@ extension LaneRendezvous {
 
 // MARK: - Interleaving Space Warning
 
-/// Emits a runtime warning when the worst-case linearizability search space exceeds 1 billion interleavings.
+/// Emits a runtime warning when the worst-case linearizability search space exceeds ``PreemptiveReduction/interleavingWarningThreshold``.
 ///
-/// The worst case distributes `commandLimit` commands as evenly as possible across `laneCount` lanes, giving multinomial(commandLimit; sizes) interleavings. The DFS is exhaustive, so a large search space means each linearizability check can be slow.
+/// The worst case distributes `commandLimit` commands as evenly as possible across `laneCount` lanes, giving multinomial(commandLimit; sizes) interleavings. The message reports the command-replay cost rather than the ordering count alone, because the replay figure is the one that predicts wall-clock time: the DFS replays the prefix once per complete ordering and executes every command in it, so an unpruned search costs orderings times commands.
 func warnIfInterleavingSpaceIsLarge(
     commandLimit: Int,
     laneCount: Int,
@@ -137,9 +137,19 @@ func warnIfInterleavingSpaceIsLarge(
     guard interleavings > PreemptiveReduction.interleavingWarningThreshold else {
         return
     }
-    let millions = interleavings / 1_000_000
+    let (replays, replaysOverflowed) = interleavings.multipliedReportingOverflow(by: commandLimit)
+    let replayText = replaysOverflowed ? "more than \(renderMagnitude(Int.max))" : "up to \(renderMagnitude(replays))"
+    // The abandonment sentence only appears when the worst case actually exceeds the search budget; near the threshold a check is slow but still complete, and claiming abandonment there would overstate.
+    let exceedsSearchBudget = replaysOverflowed || replays > PreemptiveReduction.linearizabilitySearchReplayBudget
+    let consequence = exceedsSearchBudget
+        ? "Searches that exceed \(PreemptiveReduction.linearizabilitySearchReplayBudget) replays are abandoned and reported as linearizable, so races may go undetected at this configuration."
+        : "Each oracle-flagged probe runs an exhaustive DFS over this space, so checks can be slow."
     reportWarning(
-        "Worst-case linearizability search space is ~\(millions)M interleavings (commandLimit=\(commandLimit), lanes=\(laneCount)). Each oracle-flagged probe runs an exhaustive DFS over this space. Reduce .commandLimit or .concurrent level to improve performance.",
+        """
+        Worst-case linearizability search space is \(renderMagnitude(interleavings)) interleavings (commandLimit=\(commandLimit), lanes=\(laneCount)), costing \(replayText) command replays per oracle-flagged probe. \
+        \(consequence) \
+        Reduce .commandLimit or .parallelize to bring the search back within budget.
+        """,
         fileID: fileID,
         filePath: filePath,
         line: line,
@@ -175,6 +185,22 @@ func warnIfTimeoutFractionHigh(
         line: line,
         column: column
     )
+}
+
+/// Renders a search-space count at the magnitude a reader can act on: exact below a million, then one significant digit and a power of ten.
+///
+/// Past a million the trailing digits name no decision the reader can make, and the configurations this warning fires on reach 17 digits, which is harder to read in a terminal than `~3e17`.
+private func renderMagnitude(_ count: Int) -> String {
+    guard count >= 1_000_000 else {
+        return "\(count)"
+    }
+    var leadingDigit = count
+    var exponent = 0
+    while leadingDigit >= 10 {
+        leadingDigit /= 10
+        exponent += 1
+    }
+    return "~\(leadingDigit)e\(exponent)"
 }
 
 /// Worst-case multinomial coefficient for `totalCommands` distributed as evenly as possible across `lanes`. Returns `Int.max` on overflow.

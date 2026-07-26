@@ -185,9 +185,13 @@ Full per-cluster detail is in the explore-time-cluster attachments.
 Reproduce: .replay(1)
 ```
 
-**Clusters group failures by their reduced form.** Two failures that look different on the surface but reduce to the same minimal counterexample are one cluster.
+**Clusters group failures by their reduced form.** Two failures that look different on the surface but reduce to the same minimal counterexample are one cluster. That is what the "reduced" number counts. The larger failure count beside it includes failures the backpressure gate declined to reduce, which are attributed to a cluster by matching error type, so read it as a rough weight rather than a membership count. When a property returns `false` instead of throwing, every failure in the run shares one symptom and the attribution carries no information at all.
 
-**The edge count is the module, not the run.** The 1171 edges include everything in the instrumented module, most of which this property and generator can never reach. The Chao1 estimate is scoped to what this run can actually reach, which is a more honest completeness measure.
+**The overhead figure is about the property, not the pipeline.** 97% here means the property is cheap enough that generation, mutation, and coverage bookkeeping dominate, which is expected for a small parser fixture and is not actionable. It is worth attention when a property that does real work still reports a high fraction: then the pipeline is genuinely eating the budget.
+
+**The edge count is the module, not the run.** The 1171 edges include everything in the instrumented module, most of which this property and generator can never reach. The Chao1 estimate is scoped to what this run can actually reach, which is a more honest denominator than module size.
+
+Read it as an estimate with a known lean rather than a measurement. Chao1 assumes one sampling frame, and a run is a mixture of three phases with different distributions; the mutation phase also concentrates on regions that already paid off, which suppresses the singleton count the estimator reads. Both effects push the same way, toward reporting the search as more complete than it is. Treat a rising estimate as evidence, and a flat one as weak evidence.
 
 **Late-discovered clusters are foregrounded.** A cluster found in the final quarter of the run with few instances is the strongest signal that extending the budget would find more.
 
@@ -230,7 +234,7 @@ Short budgets (seconds to a minute) are useful during development: confirm the i
 
 Longer budgets (five to thirty minutes) give the mutation phase time to work. A fifteen-minute run on an M-series machine completes hundreds of thousands of attempts; each attempt that reaches a new branch becomes a candidate for further modification.
 
-Overnight budgets (hours) suit nightly CI. The Chao1 estimator in the report tells you whether extending the budget further is likely to find new ground: when the estimated chance of a new branch on the next attempt drops below one in a million, the search has saturated and further time buys diminishing returns.
+Overnight budgets (hours) suit nightly CI. The report's "estimated chance the next attempt covers a new edge" line is the one to steer by: when it drops below one in a million, the search has saturated and further time buys diminishing returns. That figure is a Good-Turing estimate, whose consistency argument is the stronger of the two the report carries. The Chao1 reachable-edge line beside it is more sensitive to the search's own bias, so prefer the discovery-probability line when the two disagree.
 
 ## Early termination
 

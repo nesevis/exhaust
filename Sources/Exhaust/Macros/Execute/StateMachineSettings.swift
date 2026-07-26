@@ -36,6 +36,8 @@ public enum StateMachineSettings {
 
     /// Sets the maximum wall-clock time the drain loop waits with no pending continuations before declaring a timeout. Default is `.seconds(2)`. A value of `.zero` disables the timeout entirely, so the runner waits unbounded.
     ///
-    /// When the idle timeout fires, the test reports the current command sequence as a failure without attempting reduction (since each reduction probe would also time out).
+    /// A timed-out probe counts as a **pass**, not a failure. The timeout cannot tell a hung system apart from a contended machine, and treating it as a counterexample would let a loaded CI runner manufacture failures. The bound exists to stop a stalled probe wedging the process, not to detect hangs.
+    ///
+    /// This means a spec that deadlocks does not fail on that account alone. What surfaces instead is a runtime warning once timed-out probes reach a quarter of those attempted, reporting the rate. A system that hangs on only a few interleavings can stay under that threshold, so a green run with a nonzero timeout count is not evidence of liveness.
     case idleTimeout(TimeSpan)
 }

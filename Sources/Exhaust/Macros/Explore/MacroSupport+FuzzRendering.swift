@@ -110,14 +110,13 @@ extension __ExhaustRuntime {
             frontierSuffix = ", discovered late at \(renderDuration(cluster.firstSeen))"
         }
         let splitMarker = cluster.isLikelySplit ? " ~paths" : ""
-        let failureWord = cluster.instanceCount == 1 ? "failure" : "failures"
         let normalizedSuffix = cluster.unnormalizedMemberCount > 0
             ? " (\(cluster.unnormalizedMemberCount) normalized in)"
             : ""
         // Clusters display 1-based; `id` stays the report's zero-based array position.
         var lines = [
             "Cluster \(cluster.id + 1) \(symptoms)\(splitMarker)",
-            "  \(cluster.instanceCount) \(failureWord), \(cluster.reducedCount) reduced\(normalizedSuffix), found via \(cluster.discoveringPhase.rawValue)\(frontierSuffix)",
+            "  \(membershipPhrase(cluster))\(normalizedSuffix), found via \(cluster.discoveringPhase.rawValue)\(frontierSuffix)",
         ]
         let counterexample = collapsedCounterexample(cluster.reducedDescription)
         if counterexample.count == 1, let onlyLine = counterexample.first {
@@ -138,7 +137,7 @@ extension __ExhaustRuntime {
     static func renderCluster(_ cluster: FuzzReport.Cluster, isFrontier: Bool) -> [String] {
         var attributes = [
             cluster.discoveringPhase.rawValue,
-            "\(cluster.instanceCount) failure\(cluster.instanceCount == 1 ? "" : "s"), \(cluster.reducedCount) reduced",
+            membershipPhrase(cluster),
             "symptoms: \(cluster.symptoms.joined(separator: ", "))",
         ]
         if cluster.unnormalizedMemberCount > 0 {
@@ -190,6 +189,17 @@ extension __ExhaustRuntime {
             return blockLines
         }
         return [collapsed]
+    }
+
+    /// Renders a cluster's membership as the two numbers that mean different things.
+    ///
+    /// The reduced count is the cluster's real membership: those failures were reduced and their reduced form matched. The remainder is attributed by symptom to the most recently seen matching cluster, which cannot separate two faults that throw the same error type and carries no information at all when a property returns `false` rather than throwing. Reporting one total for both invites reading the larger number as a frequency.
+    private static func membershipPhrase(_ cluster: FuzzReport.Cluster) -> String {
+        let attributed = max(0, cluster.instanceCount - cluster.reducedCount)
+        guard attributed > 0 else {
+            return "\(cluster.reducedCount) reduced"
+        }
+        return "\(cluster.reducedCount) reduced, \(attributed) more attributed by symptom"
     }
 
     // MARK: - Suspects

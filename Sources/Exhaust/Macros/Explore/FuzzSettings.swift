@@ -18,7 +18,7 @@ public enum FuzzSettings: Sendable {
     ///
     /// Accepts a raw `UInt64` or a Crockford Base32 string. The seed pins every decision the search makes: the screening rows, the random-sampling stream, each mutation choice, and — because reduction runs inline — the point in the attempt stream where each failure's classification feeds back. What the search observes between decisions is environmental: coverage signatures are read from process-global counters, and phase transitions are wall-clock cuts. A replay therefore reruns the same search from the same starting point and, given comparable time, rediscovers the same clusters. It does not reproduce an attempt-for-attempt identical log.
     ///
-    /// - Important: Other tests running in parallel in the same process execute instrumented code during attempts and distort the coverage signal. Serialize the suite when replaying.
+    /// - Important: Other tests running in parallel in the same process execute instrumented code during attempts and distort the coverage signal, and a replay that sees different coverage takes a different path. Marking the suite `.serialized` is not sufficient, because separate suites still run concurrently with each other. Run the target with `swift test --no-parallel`, or filter the run down to the single fuzz test. See <doc:CoverageGuidedFuzzing> for the full set of conditions.
     case replay(ReplaySeed)
 
     /// Silences issue reporting, log output, attachments, or all three for this run.

@@ -472,6 +472,7 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         var replaySpec: Spec?
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
         let result = checker.check(
+            prefixLength: prefixCommands.count,
             replayPrefix: {
                 // Once per sibling retry in the DFS: every fresh replay instance receives the same setup, and a setup error fails this ordering rather than crashing into an unconfigured SUT.
                 let (fresh, setupError) = Spec.makeSpec(setupStep: setupStep)

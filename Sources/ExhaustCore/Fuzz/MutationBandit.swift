@@ -1,18 +1,12 @@
 // Adaptive mutation-arm selection for the mutation phase.
 //
-// A uniform draw over the intensity bands is the naive default the literature beats twice over:
-// stacking several operators per child outperforms one-at-a-time (Wu et al., "One Fuzzing
-// Strategy to Rule Them All", ICSE 2022), and the right operator weights vary by target, so any
-// fixed tuning loses to an adaptive one (same paper; MOpt, USENIX Security 2019). The bandit
-// here is EXP3 (exponential-weight exploration/exploitation), chosen over discounted UCB because
-// the reward signal — corpus admission — is sparse and non-stationary in exactly the way EXP3's
-// adversarial guarantees tolerate: admission rates collapse as coverage saturates, and a band
-// that stops paying should decay rather than coast on stale confidence intervals.
+// A uniform draw over the intensity bands is the naive default the literature beats twice over: stacking several operators per child outperforms one-at-a-time (Wu et al., "One Fuzzing Strategy to Rule Them All", ICSE 2022), and the right operator weights vary by target, so any fixed tuning loses to an adaptive one (same paper; MOpt, USENIX Security 2019). The bandit here is EXP3 (exponential-weight exploration/exploitation), chosen over discounted UCB because the reward signal — corpus admission — is sparse and non-stationary in exactly the way EXP3's adversarial guarantees tolerate: admission rates collapse as coverage saturates, and a band that stops paying should decay rather than coast on stale confidence intervals.
 //
-// One engineering deviation from textbook EXP3: with stacked mutations several arms contribute
-// to one child, and the reward arrives only after the child's evaluation. The update uses the
-// arm's selection probability at reward time rather than at pick time — weights move only on
-// admissions, which are rare relative to picks, so the drift between the two is negligible.
+// Two deviations from textbook EXP3, both of which weaken its regret guarantee rather than preserve it. Neither is measured, and both are reasons the `banditBands` knob has not earned its default-on gate yet.
+//
+// First, the update uses the arm's selection probability at reward time rather than at pick time. Weights move only on admissions, which are rare relative to picks, so the drift between the two should be small — but "should be small" is an argument, not a measurement.
+//
+// Second, and larger: with `stackedMutation` several arms compose one child, and on admission every contributing arm is rewarded. EXP3 is a single-arm algorithm; crediting a whole stack is a combinatorial bandit problem with different guarantees, and the arm that did the work and the arm that did nothing receive the same reward. Credit assignment across a stack is the open question here, not the exploration rate.
 
 import Foundation
 

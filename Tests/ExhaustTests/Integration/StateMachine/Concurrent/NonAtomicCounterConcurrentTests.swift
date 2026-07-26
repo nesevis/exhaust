@@ -86,15 +86,16 @@ struct NonAtomicCounterConcurrentTests {
             .onReport { deliveredReport = $0 }
         )
         let report = try #require(deliveredReport, "onReport closure should be called")
-        #expect(report.propertyInvocations == 10)
-        #expect(report.reductionInvocations == 7)
+        // Exact counts pinned to the replay seed above; the quiescence gate's check placement feeds into which sequences fail, so gate changes legitimately move these numbers.
+        #expect(report.propertyInvocations == 15)
+        #expect(report.reductionInvocations == 9)
         #expect(report.totalMilliseconds > 0)
         #expect(report.totalMaterializations == 9)
         #expect(report.cycles == 5)
-        #expect(report.encoderProbes[.laneCollapse] == 6)
+        #expect(report.encoderProbes[.laneCollapse] == 9)
         #expect(report.encoderProbesAccepted[.laneCollapse] == 0)
-        #expect(report.encoderProbes[.deletion] == 9)
-        #expect(report.encoderProbesAccepted[.deletion] == 2)
+        #expect(report.encoderProbes[.deletion] == 11)
+        #expect(report.encoderProbesAccepted[.deletion] == 1)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

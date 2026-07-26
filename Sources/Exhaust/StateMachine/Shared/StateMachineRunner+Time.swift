@@ -243,6 +243,7 @@ public extension __ExhaustRuntime {
                 source: nil,
                 configure: { configuration in
                     configuration.skipScreening = true
+                    configuration.samplingPlateauWindow = FuzzTunables.specSamplingPlateauWindow
                 },
                 hooks: adapter.hooks,
                 persistence: prepareFuzzPersistence(

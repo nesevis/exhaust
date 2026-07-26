@@ -18,9 +18,7 @@ struct LinearizabilityCheckerTests {
         // Queue starts empty (prefix was 4 dequeues on empty queue).
         // Valid ordering: A1(dequeue→nil), A2(enqueue(41)), B1(enqueue(7)), B2(enqueue(78)), B3(enqueue(96))
         //   → state [41, 7, 78, 96]
-        // The concurrent execution produced [41, 78, 96] (enqueue(7) lost),
-        // but for the false positive case, assume the concurrent state is [41, 78, 96]
-        // with only 3 items — that IS genuinely non-linearizable (lost item).
+        // The concurrent execution produced [41, 78, 96] (enqueue(7) lost), but for the false positive case, assume the concurrent state is [41, 78, 96] with only 3 items — that IS genuinely non-linearizable (lost item).
         // The actual false positive had same-multiset: expected [78, 96, 41], actual [41, 78, 96].
         // Test the same-multiset case: all 4 items present, just reordered.
         let laneA: [QueueObservation] = [dequeueReturningNil(), enqueue(41)]
@@ -174,48 +172,26 @@ struct LinearizabilityCheckerTests {
         #expect(verdict(check(lanes: lanes, finalState: [3, 1, 2])).linearizable == false)
     }
 
-    // MARK: - Prefix Cache Regression
+    // MARK: - Search Completeness
 
-    @Test("Cache does not prune the valid ordering when void commands share the same cursor state")
-    func cachePrefixHashDistinguishesOrderingsAtSameCursorState() {
-        // Regression for the identical-observation-hash false negative.
-        //
-        // Lane A: enqueue(1), enqueue(2)     Lane B: enqueue(3)
-        // Final state: [3, 1, 2] = ordering B[0], A[0], A[1]
-        //
-        // The DFS tries lane 0 (A) first at each depth:
-        //   depth 0: A[0]
-        //     depth 1: A[1] → depth 2: B[0] → [1,2,3] ≠ [3,1,2] → oracle fails
-        //     depth 1: B[0] → cursor (A=1, B=1)
-        //       depth 2: A[1] → [1,3,2] ≠ [3,1,2] → oracle fails
-        //     subtree at cursor (A=1, B=1) exhausted → CACHED
-        //   depth 0: B[0]
-        //     depth 1: A[0] → cursor (A=1, B=1) — same cursor state
-        //     cache lookup: must MISS (different prefix ordering)
-        //       depth 2: A[1] → [3,1,2] = [3,1,2] → oracle PASSES
-        //
-        // The old cache keyed on observation hashes, which are identical for void
-        // enqueue commands after value minimization. That made the prefix hash
-        // order-invariant (XOR of identical per-depth contributions), so both
-        // paths to cursor (A=1, B=1) shared the same cache key. The first path's
-        // "no valid completion" entry pruned the second path, missing the valid
-        // ordering.
-        //
-        // The fix keys on command identity (laneIndex, commandIndex), which is
-        // unique per command regardless of observation hash. Two orderings of
-        // distinct commands produce different prefix hashes.
+    // These four guard the property a memo table would be most likely to break: no search shortcut may prune a reachable ordering.
+    //
+    // The checker has no memo table. One was tried, keyed first on per-depth observation hashes, which collide for void commands after value minimization and pruned valid orderings. The fix keyed on command identity `(laneIndex, commandIndex)` instead, which makes the key order-sensitive: it identifies the path taken, not the state reached, so two different paths to the same cursor vector never share an entry and the hit rate is structurally zero. It was removed.
+    //
+    // The key a memo table actually needs is (model configuration, cursor vector), per Wing and Gong and Lowe's treatment of it. Exhaust cannot form it: the model is a user-supplied class with no equality and no way to snapshot it. Adding an optional Hashable projection of the model to the spec surface would make it expressible; until then the search visits paths rather than states, and these tests exist to catch anything that prunes a reachable ordering.
+
+    @Test("A valid ordering that is not lane-0-first is still found")
+    func validOrderingIsFoundWhenLaneZeroDoesNotComeFirst() {
+        // Lane A: enqueue(1), enqueue(2)     Lane B: enqueue(3) Final state [3, 1, 2] is produced only by B[0], A[0], A[1]. The DFS tries lane A first at every depth, so this ordering is reached only after the A-first subtree is exhausted, and both routes pass through cursor (A=1, B=1) with different prefixes.
         let laneA: [QueueObservation] = [enqueue(1), enqueue(2)]
         let laneB: [QueueObservation] = [enqueue(3)]
         let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [3, 1, 2]))
         #expect(result.linearizable)
     }
 
-    @Test("Cache does not prune valid orderings with three lanes")
-    func cachePrefixHashWorksWithThreeLanes() {
-        // Three lanes of void enqueues. The DFS explores lane 0 first, then
-        // lane 1, then lane 2. Only the ordering C[0], A[0], B[0] produces
-        // final state [3, 1, 2]. The cache must not prune it after exhausting
-        // A-first and B-first subtrees that reach the same cursor state.
+    @Test("A valid ordering is found across three lanes of indistinguishable commands")
+    func validOrderingIsFoundAcrossThreeLanes() {
+        // Only C[0], A[0], B[0] produces [3, 1, 2]. The A-first and B-first subtrees reach the same cursor states first and must not suppress it.
         let laneA: [QueueObservation] = [enqueue(1)]
         let laneB: [QueueObservation] = [enqueue(2)]
         let laneC: [QueueObservation] = [enqueue(3)]
@@ -223,22 +199,18 @@ struct LinearizabilityCheckerTests {
         #expect(result.linearizable)
     }
 
-    @Test("Genuinely non-linearizable lost enqueue is preserved with caching")
-    func genuinelyNonLinearizablePreservedWithCache() {
-        // Two enqueues, but the final state shows three items. No ordering of
-        // two enqueues can produce three items. The cache must not introduce
-        // a false positive (claiming linearizable when it is not).
+    @Test("An unreachable final state is rejected rather than explained away")
+    func unreachableFinalStateIsRejected() {
+        // Two enqueues, but the final state shows three items. No ordering of two enqueues can produce three items, so no search shortcut may report this as linearizable.
         let laneA: [QueueObservation] = [enqueue(1)]
         let laneB: [QueueObservation] = [enqueue(2)]
         let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 2, 3]))
         #expect(result.linearizable == false)
     }
 
-    @Test("Cache preserves not-linearizable verdict for wrong queue ordering")
-    func cachePreservesWrongOrderingVerdict() {
-        // Lane A: enqueue(1), enqueue(2)   Lane B: enqueue(3)
-        // Final state: [2, 1, 3] — no valid ordering produces this because
-        // A[0] must precede A[1] (per-lane order), so 1 always appears before 2.
+    @Test("A final state violating per-lane order is rejected")
+    func finalStateViolatingPerLaneOrderIsRejected() {
+        // Lane A: enqueue(1), enqueue(2)   Lane B: enqueue(3) Final state [2, 1, 3] is unreachable: A[0] must precede A[1], so 1 always appears before 2.
         let laneA: [QueueObservation] = [enqueue(1), enqueue(2)]
         let laneB: [QueueObservation] = [enqueue(3)]
         let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [2, 1, 3]))
@@ -307,6 +279,7 @@ private func check(
     let checker = LinearizabilityChecker(laneResponses: lanes)
     var replayStack: Stack?
     return checker.check(
+        prefixLength: prefix.count,
         replayPrefix: {
             let fresh = Stack()
             for command in prefix {
@@ -409,6 +382,7 @@ private func checkQueue(
     let checker = LinearizabilityChecker(laneResponses: lanes)
     var replayQueue: Queue?
     return checker.check(
+        prefixLength: prefix.count,
         replayPrefix: {
             let fresh = Queue()
             for command in prefix {

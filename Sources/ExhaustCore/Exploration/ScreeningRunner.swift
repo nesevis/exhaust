@@ -59,6 +59,7 @@ package enum ScreeningRunner {
         screeningBudget: UInt64,
         skipToRow: Int? = nil,
         continuePastFailure: Bool = false,
+        beforeRow: (() -> Void)? = nil,
         property: (Output) -> Bool,
         onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil,
         shouldTerminate: (() -> Bool)? = nil
@@ -123,7 +124,8 @@ package enum ScreeningRunner {
                 summary.rowAttempts += 1
                 let rowResult = testRow(
                     erasedGen, row: row, rowIndex: rowIndex,
-                    profile: profile, needsTree: needsTree, property: property
+                    profile: profile, needsTree: needsTree,
+                    beforeRow: beforeRow, property: property
                 )
                 if let rowResult {
                     summary.propertyInvocations += 1
@@ -175,7 +177,8 @@ package enum ScreeningRunner {
             summary.rowAttempts += 1
             let rowResult = testRow(
                 erasedGen, row: row, rowIndex: rowIndex,
-                profile: profile, needsTree: needsTree, property: property
+                profile: profile, needsTree: needsTree,
+                beforeRow: beforeRow, property: property
             )
             if let rowResult {
                 summary.propertyInvocations += 1
@@ -233,8 +236,11 @@ package enum ScreeningRunner {
         rowIndex: Int,
         profile: any ScreeningProfile,
         needsTree: Bool,
+        beforeRow: (() -> Void)?,
         property: (Output) -> Bool
     ) -> RowResult<Output>? {
+        // Fires before the row is built and materialized, not before the property runs. A caller that brackets each row for measurement (the coverage-guided loop opens a coverage attribution window here) must have generation inside the bracket: building the input executes the generator, and in an instrumented build that is code whose coverage belongs to this row.
+        beforeRow?()
         guard let tree = profile.buildTree(from: row) else { return nil }
 
         let mode = Materializer.Mode.guided(
