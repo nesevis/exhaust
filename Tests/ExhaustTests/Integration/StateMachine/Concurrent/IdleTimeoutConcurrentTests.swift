@@ -157,7 +157,8 @@ struct IdleTimeoutConcurrentTests {
         #expect(result == nil)
         #expect(reporter.warnings.count == 1)
         let warning = try #require(reporter.warnings.first)
-        #expect(warning.contains("11 of 11 probes timed out (100%)"))
+        // The probe count is pinned but the timeout rate is not: the warning fires from `timeoutWarningFraction` onwards, and a contended host can let a probe finish inside the bound.
+        #expect(warning.contains("of 11 probes timed out"))
 
         let report = try #require(reportBox.value)
         #expect(report.reductionInvocations == 0)

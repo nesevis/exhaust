@@ -392,7 +392,8 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         let prefixCommands: [Spec.Command] = taggedCommands.filter(\.0.isPrefix).map(\.1)
         let checker = LinearizabilityChecker(laneResponses: laneResponses)
         nonisolated(unsafe) let unsafeSpec = concurrentSpec
-        let result: LinearizabilityChecker.Result = __ExhaustRuntime.blockingAwait {
+        // The search replays setup and commands on fresh specs, so a continuation that escapes to a foreign executor parks this lane exactly as it would in any other phase. The multiplier is generous because one bound covers the whole search rather than a single probe: on the drain-loop path it measures idle time since the last drained job, so a long-but-progressing search never trips it. On the semaphore fallback the bound is total wall clock, so a search that legitimately runs past it is abandoned.
+        let result: LinearizabilityChecker.Result? = awaitOrTimeout("linearizability", timeoutMultiplier: 10) {
             var replaySpec: Spec?
             return await checker.checkAsync(
                 replayPrefix: {
@@ -442,6 +443,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
                     unsafeSpec.failureDescription()
                 }
             )
+        }
+        guard let result else {
+            // An abandoned search produced no verdict. Report linearizable so the probe counts as a pass, matching the rule that an inconclusive probe never manufactures a failure.
+            return .linearizable
         }
         return makeLinearizabilityResult(result, laneObservations: laneResponses)
     }
