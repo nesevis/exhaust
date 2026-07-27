@@ -141,7 +141,7 @@ private struct LaneTraceRecorder {
 
 /// Appends one lane's observed responses, stamped with monotonic call and return indices.
 ///
-/// Cooperative execution is fully serialised by the drain loop, so wall-clock timestamps say nothing the drain order does not already say, and on a fast machine two commands can share a timestamp. One counter shared by every lane and the prefix supplies the ordering instead: one tick when a command body is entered, one when it returns. Two commands overlap exactly when their call-to-return index ranges interleave, which is the relation the linearizability checker's real-time pruning reads. The indices are exact rather than measured, so that pruning is stronger here than on the thread-based path, where a measured span only contains the true one.
+/// Cooperative execution is fully serialized by the drain loop, so wall-clock timestamps say nothing the drain order does not already say, and on a fast machine two commands can share a timestamp. One counter shared by every lane and the prefix supplies the ordering instead: one tick when a command body is entered, one when it returns. Two commands overlap exactly when their call-to-return index ranges interleave, which is the relation the linearizability checker's real-time pruning reads. The indices are exact rather than measured, so that pruning is stronger here than on the thread-based path, where a measured span only contains the true one.
 ///
 /// Recording is unconditional, unlike trace recording: a response is data the verdict can rest on, so a probe must observe the same responses whether or not it is the run that reports.
 ///

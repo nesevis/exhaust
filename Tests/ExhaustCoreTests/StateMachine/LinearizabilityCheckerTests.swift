@@ -12,7 +12,7 @@ struct LinearizabilityCheckerTests {
     // MARK: - Queue False Positive Reproduction
 
     @Test("Dequeue-nil with concurrent enqueues is linearizable when a valid ordering exists")
-    func dequeueNilWithConcurrentEnqueuesIsLinearizable() {
+    func dequeueNilWithConcurrentEnqueuesIsLinearizable() async {
         // Reproduces the false positive from the Herlihy queue test:
         // Lane A: dequeue → nil, enqueue(41)
         // Lane B: enqueue(7), enqueue(78), enqueue(96)
@@ -25,36 +25,36 @@ struct LinearizabilityCheckerTests {
         let laneA: [QueueObservation] = [dequeueReturningNil(), enqueue(41)]
         let laneB: [QueueObservation] = [enqueue(7), enqueue(78), enqueue(96)]
         // State [41, 7, 78, 96] = ordering A1, A2, B1, B2, B3
-        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [41, 7, 78, 96]))
+        let result = await queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [41, 7, 78, 96]))
         #expect(result.linearizable, "Ordering (dequeue→nil, enqueue(41), enqueue(7), enqueue(78), enqueue(96)) produces this state")
     }
 
     @Test("All reorderings of enqueue-only lanes are linearizable")
-    func allEnqueueReorderingsAreLinearizable() {
+    func allEnqueueReorderingsAreLinearizable() async {
         // Lane A: enqueue(1), enqueue(2)
         // Lane B: enqueue(3)
         // Every valid ordering produces 3 items; the item positions vary.
         let laneA: [QueueObservation] = [enqueue(1), enqueue(2)]
         let laneB: [QueueObservation] = [enqueue(3)]
         // A1, A2, B1 → [1, 2, 3]
-        #expect(queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 2, 3])).linearizable)
+        #expect(await queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 2, 3])).linearizable)
         // A1, B1, A2 → [1, 3, 2]
-        #expect(queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 3, 2])).linearizable)
+        #expect(await queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 3, 2])).linearizable)
         // B1, A1, A2 → [3, 1, 2]
-        #expect(queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [3, 1, 2])).linearizable)
+        #expect(await queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [3, 1, 2])).linearizable)
     }
 
     // MARK: - Stack Tests
 
     @Test("No commands is trivially linearizable")
-    func emptyHistoryIsLinearizable() {
-        #expect(verdict(check(lanes: [], finalState: [])).linearizable)
-        #expect(verdict(check(lanes: [[]], finalState: [])).linearizable)
+    func emptyHistoryIsLinearizable() async {
+        #expect(await verdict(check(lanes: [], finalState: [])).linearizable)
+        #expect(await verdict(check(lanes: [[]], finalState: [])).linearizable)
     }
 
     @Test("A prefix-only history still checks the final-state oracle")
-    func prefixOnlyHistoryChecksFinalStateOracle() {
-        let result = verdict(
+    func prefixOnlyHistoryChecksFinalStateOracle() async {
+        let result = await verdict(
             check(
                 lanes: [],
                 prefix: [.push(1)],
@@ -67,110 +67,110 @@ struct LinearizabilityCheckerTests {
     }
 
     @Test("Either order of two overlapping pushes is accepted")
-    func eitherOrderOfConcurrentPushesIsAccepted() {
+    func eitherOrderOfConcurrentPushesIsAccepted() async {
         // Two lanes each push one value. The stack ends up in whichever order the run happened to pick; both are valid, and the checker must accept the one that matches the observed final state. This is the case a fixed-order oracle gets wrong roughly half the time.
         let lanes = [[push(1)], [push(2)]]
-        #expect(verdict(check(lanes: lanes, finalState: [1, 2])).linearizable)
-        #expect(verdict(check(lanes: lanes, finalState: [2, 1])).linearizable)
+        #expect(await verdict(check(lanes: lanes, finalState: [1, 2])).linearizable)
+        #expect(await verdict(check(lanes: lanes, finalState: [2, 1])).linearizable)
     }
 
     @Test("A pop returning a never-pushed value is not linearizable and names the pop")
-    func ghostPopValueIsNotLinearizableAndNamesIt() {
+    func ghostPopValueIsNotLinearizableAndNamesIt() async {
         // Lane A pushes 1. Lane B's pop reports 9, a value that was never pushed; only 1 was. No order reproduces that return value, so the run is not linearizable and the witness points at lane B's pop.
         let lanes = [[push(1)], [popReturning(9)]]
-        let (linearizable, witness) = verdict(check(lanes: lanes, finalState: [1]))
+        let (linearizable, witness) = await verdict(check(lanes: lanes, finalState: [1]))
         #expect(linearizable == false)
         #expect(witness?.lane == 1)
         #expect(witness?.command == 0)
     }
 
     @Test("Wrong final state with correct responses has no command witness")
-    func lostUpdateIsNotLinearizableWithNoWitness() {
+    func lostUpdateIsNotLinearizableWithNoWitness() async {
         // Two pushes, but the final state shows only one value, a lost update. Every command returned void, so no single return value is wrong; only the final state disagrees. The checker reports not-linearizable with no command witness, because the disagreement is visible in the expected-versus-actual state, not in any one command.
         let lanes = [[push(1)], [push(2)]]
-        let (linearizable, witness) = verdict(check(lanes: lanes, finalState: [1]))
+        let (linearizable, witness) = await verdict(check(lanes: lanes, finalState: [1]))
         #expect(linearizable == false)
         #expect(witness == nil)
     }
 
     @Test("Witness names the impossible command via the deepest matching prefix, not the first mismatch")
-    func witnessPicksDeepestDivergence() {
+    func witnessPicksDeepestDivergence() async {
         // Lane A pushes 1 then pops expecting 2, but 2 is never pushed, so A's pop is the one impossible command. Lane B pops expecting 1, which is fine after the push. The orderings fail at different depths: starting with B's pop hits an empty stack at the first command (a shallow mismatch on a command that is innocent — it only failed because it ran first), whereas push(1), B's pop→1, then A's pop reproduces two commands before A's pop fails on the now-empty stack. The checker keeps the command at the deepest matching prefix, so the witness is A's pop (lane 0, command 1). A shallowest-divergence policy would instead name lane B's pop (lane 1, command 0), so this history distinguishes the two.
         let lanes = [[push(1), popReturning(2)], [popReturning(1)]]
-        let (linearizable, witness) = verdict(check(lanes: lanes, finalState: []))
+        let (linearizable, witness) = await verdict(check(lanes: lanes, finalState: []))
         #expect(linearizable == false)
         #expect(witness?.lane == 0)
         #expect(witness?.command == 1)
     }
 
     @Test("Pops that skip on an empty stack in both lanes are linearizable")
-    func symmetricSkipsAreLinearizable() {
+    func symmetricSkipsAreLinearizable() async {
         // Both lanes pop an empty stack, so both skip. The replay also skips both, the final state stays empty, and the run is linearizable. This exercises the path where an observed skip matches a replayed skip.
         let lanes = [[popSkipped()], [popSkipped()]]
-        #expect(verdict(check(lanes: lanes, finalState: [])).linearizable)
+        #expect(await verdict(check(lanes: lanes, finalState: [])).linearizable)
     }
 
     @Test("A prefix runs before the lanes and is respected")
-    func prefixRunsBeforeConcurrentCommands() {
+    func prefixRunsBeforeConcurrentCommands() async {
         // The prefix pushes 1 before the lanes start, so lane A's pop sees it and returns 1, while lane B pushes 2. The order prefix, pop→1, push(2) leaves [2], which the checker accepts.
         let lanes = [[popReturning(1)], [push(2)]]
-        #expect(verdict(check(lanes: lanes, prefix: [.push(1)], finalState: [2])).linearizable)
+        #expect(await verdict(check(lanes: lanes, prefix: [.push(1)], finalState: [2])).linearizable)
     }
 
     // MARK: - Real-Time Order
 
     @Test("A stale observation after a completed command is rejected when timestamps prove the order")
-    func staleObservationIsRejectedWithTimestamps() {
+    func staleObservationIsRejectedWithTimestamps() async {
         // Lane A's push returned (at 10) before lane B's pop was even called (at 20), so real time forces push before pop, and the pop must see the pushed value. The observed skip (empty stack) is only explainable by running the pop first, which the timestamps forbid. This is the stale-read signature: without intervals the checker accepts it (see the companion test below).
         let lanes = [
             [push(1, from: 0, to: 10)],
             [popSkipped(from: 20, to: 30)],
         ]
-        let (linearizable, witness) = verdict(check(lanes: lanes, finalState: [1]))
+        let (linearizable, witness) = await verdict(check(lanes: lanes, finalState: [1]))
         #expect(linearizable == false)
         #expect(witness?.lane == 1)
         #expect(witness?.command == 0)
     }
 
     @Test("The same stale observation is accepted without timestamps")
-    func staleObservationIsAcceptedWithoutTimestamps() {
+    func staleObservationIsAcceptedWithoutTimestamps() async {
         // Identical history to the test above, minus the intervals. With no timing data every command is treated as overlapping everything, so the ordering (pop on empty, then push) is a valid witness. This documents the fallback behavior for interval-free histories, and why the runners always record intervals.
         let lanes = [[push(1)], [popSkipped()]]
-        #expect(verdict(check(lanes: lanes, finalState: [1])).linearizable)
+        #expect(await verdict(check(lanes: lanes, finalState: [1])).linearizable)
     }
 
     @Test("Overlapping intervals leave both orders available")
-    func overlappingIntervalsAcceptBothOrders() {
+    func overlappingIntervalsAcceptBothOrders() async {
         // The two pushes overlap in real time (neither returned before the other was called), so both orders remain valid witnesses, exactly as in the interval-free case.
         let lanes = [
             [push(1, from: 0, to: 20)],
             [push(2, from: 10, to: 30)],
         ]
-        #expect(verdict(check(lanes: lanes, finalState: [1, 2])).linearizable)
-        #expect(verdict(check(lanes: lanes, finalState: [2, 1])).linearizable)
+        #expect(await verdict(check(lanes: lanes, finalState: [1, 2])).linearizable)
+        #expect(await verdict(check(lanes: lanes, finalState: [2, 1])).linearizable)
     }
 
     @Test("Non-overlapping intervals force the real-time order")
-    func nonOverlappingIntervalsForceOrder() {
+    func nonOverlappingIntervalsForceOrder() async {
         // Lane A's push returned before lane B's push was called, so only the order (1, 2) is a candidate. The final state [2, 1] would require inverting real-time precedence and must be rejected even though it is a valid interleaving of the lane orders.
         let lanes = [
             [push(1, from: 0, to: 10)],
             [push(2, from: 20, to: 30)],
         ]
-        #expect(verdict(check(lanes: lanes, finalState: [1, 2])).linearizable)
-        #expect(verdict(check(lanes: lanes, finalState: [2, 1])).linearizable == false)
+        #expect(await verdict(check(lanes: lanes, finalState: [1, 2])).linearizable)
+        #expect(await verdict(check(lanes: lanes, finalState: [2, 1])).linearizable == false)
     }
 
     @Test("Real-time edges constrain commands beyond lane heads")
-    func realTimeEdgesConstrainLaterLaneCommands() {
+    func realTimeEdgesConstrainLaterLaneCommands() async {
         // Lane A: push(1) then push(2), with a gap during which lane B's push(3) ran to completion. Real time pins the order to 1, 3, 2: push(3) returned before push(2) was called, and push(1) returned before push(3) was called. The other interleavings of the lane orders ([1, 2, 3] and [3, 1, 2]) invert a proven edge and must be rejected.
         let lanes = [
             [push(1, from: 0, to: 10), push(2, from: 40, to: 50)],
             [push(3, from: 20, to: 30)],
         ]
-        #expect(verdict(check(lanes: lanes, finalState: [1, 3, 2])).linearizable)
-        #expect(verdict(check(lanes: lanes, finalState: [1, 2, 3])).linearizable == false)
-        #expect(verdict(check(lanes: lanes, finalState: [3, 1, 2])).linearizable == false)
+        #expect(await verdict(check(lanes: lanes, finalState: [1, 3, 2])).linearizable)
+        #expect(await verdict(check(lanes: lanes, finalState: [1, 2, 3])).linearizable == false)
+        #expect(await verdict(check(lanes: lanes, finalState: [3, 1, 2])).linearizable == false)
     }
 
     // MARK: - Search Completeness
@@ -182,39 +182,39 @@ struct LinearizabilityCheckerTests {
     // The key a memo table actually needs is (model configuration, cursor vector), per Wing and Gong and Lowe's treatment of it. Exhaust cannot form it: the model is a user-supplied class with no equality and no way to snapshot it. Adding an optional Hashable projection of the model to the spec surface would make it expressible; until then the search visits paths rather than states, and these tests exist to catch anything that prunes a reachable ordering.
 
     @Test("A valid ordering that is not lane-0-first is still found")
-    func validOrderingIsFoundWhenLaneZeroDoesNotComeFirst() {
+    func validOrderingIsFoundWhenLaneZeroDoesNotComeFirst() async {
         // Lane A: enqueue(1), enqueue(2)     Lane B: enqueue(3) Final state [3, 1, 2] is produced only by B[0], A[0], A[1]. The DFS tries lane A first at every depth, so this ordering is reached only after the A-first subtree is exhausted, and both routes pass through cursor (A=1, B=1) with different prefixes.
         let laneA: [QueueObservation] = [enqueue(1), enqueue(2)]
         let laneB: [QueueObservation] = [enqueue(3)]
-        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [3, 1, 2]))
+        let result = await queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [3, 1, 2]))
         #expect(result.linearizable)
     }
 
     @Test("A valid ordering is found across three lanes of indistinguishable commands")
-    func validOrderingIsFoundAcrossThreeLanes() {
+    func validOrderingIsFoundAcrossThreeLanes() async {
         // Only C[0], A[0], B[0] produces [3, 1, 2]. The A-first and B-first subtrees reach the same cursor states first and must not suppress it.
         let laneA: [QueueObservation] = [enqueue(1)]
         let laneB: [QueueObservation] = [enqueue(2)]
         let laneC: [QueueObservation] = [enqueue(3)]
-        let result = queueVerdict(checkQueue(lanes: [laneA, laneB, laneC], finalState: [3, 1, 2]))
+        let result = await queueVerdict(checkQueue(lanes: [laneA, laneB, laneC], finalState: [3, 1, 2]))
         #expect(result.linearizable)
     }
 
     @Test("An unreachable final state is rejected rather than explained away")
-    func unreachableFinalStateIsRejected() {
+    func unreachableFinalStateIsRejected() async {
         // Two enqueues, but the final state shows three items. No ordering of two enqueues can produce three items, so no search shortcut may report this as linearizable.
         let laneA: [QueueObservation] = [enqueue(1)]
         let laneB: [QueueObservation] = [enqueue(2)]
-        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 2, 3]))
+        let result = await queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [1, 2, 3]))
         #expect(result.linearizable == false)
     }
 
     @Test("A final state violating per-lane order is rejected")
-    func finalStateViolatingPerLaneOrderIsRejected() {
+    func finalStateViolatingPerLaneOrderIsRejected() async {
         // Lane A: enqueue(1), enqueue(2)   Lane B: enqueue(3) Final state [2, 1, 3] is unreachable: A[0] must precede A[1], so 1 always appears before 2.
         let laneA: [QueueObservation] = [enqueue(1), enqueue(2)]
         let laneB: [QueueObservation] = [enqueue(3)]
-        let result = queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [2, 1, 3]))
+        let result = await queueVerdict(checkQueue(lanes: [laneA, laneB], finalState: [2, 1, 3]))
         #expect(result.linearizable == false)
     }
 }
@@ -276,29 +276,27 @@ private func check(
     lanes: [[Observation]],
     prefix: [StackCommand] = [],
     finalState: [Int]
-) -> LinearizabilityChecker.Result {
-    blockingCheck {
-        let checker = LinearizabilityChecker(laneResponses: lanes)
-        var replayStack: Stack?
-        return await checker.check(
-            prefixLength: prefix.count,
-            replayPrefix: {
-                let fresh = Stack()
-                for command in prefix {
-                    fresh.apply(command)
-                }
-                replayStack = fresh
-                return true
-            },
-            replayCommand: { laneIndex, commandIndex in
-                replayStack?.replay(lanes[laneIndex][commandIndex].command)
-            },
-            checkOracle: {
-                replayStack?.elements == finalState
-            },
-            failureDescription: { nil }
-        )
-    }
+) async -> LinearizabilityChecker.Result {
+    let checker = LinearizabilityChecker(laneResponses: lanes)
+    var replayStack: Stack?
+    return await checker.check(
+        prefixLength: prefix.count,
+        replayPrefix: {
+            let fresh = Stack()
+            for command in prefix {
+                fresh.apply(command)
+            }
+            replayStack = fresh
+            return true
+        },
+        replayCommand: { laneIndex, commandIndex in
+            replayStack?.replay(lanes[laneIndex][commandIndex].command)
+        },
+        checkOracle: {
+            replayStack?.elements == finalState
+        },
+        failureDescription: { nil }
+    )
 }
 
 /// Flattens a checker result into a plain pair for assertions: whether the run was linearizable, and the witness coordinates when it was not.
@@ -385,45 +383,27 @@ private func checkQueue(
     lanes: [[QueueObservation]],
     prefix: [QueueCommand] = [],
     finalState: [Int]
-) -> LinearizabilityChecker.Result {
-    blockingCheck {
-        let checker = LinearizabilityChecker(laneResponses: lanes)
-        var replayQueue: Queue?
-        return await checker.check(
-            prefixLength: prefix.count,
-            replayPrefix: {
-                let fresh = Queue()
-                for command in prefix {
-                    fresh.apply(command)
-                }
-                replayQueue = fresh
-                return true
-            },
-            replayCommand: { laneIndex, commandIndex in
-                replayQueue?.replay(lanes[laneIndex][commandIndex].command)
-            },
-            checkOracle: {
-                replayQueue?.elements == finalState
-            },
-            failureDescription: { nil }
-        )
-    }
-}
-
-/// Parks the calling thread on a semaphore while the checker's async-only search runs on a detached task, so these synchronous helpers keep their shape. The runners bridge the same way through `__ExhaustRuntime.blockingAwait`; tests cannot reach it from this module.
-private func blockingCheck(_ work: @escaping () async -> LinearizabilityChecker.Result) -> LinearizabilityChecker.Result {
-    nonisolated(unsafe) let work = work
-    let result = UnsafeSendableBox<LinearizabilityChecker.Result?>(nil)
-    let semaphore = DispatchSemaphore(value: 0)
-    Task.detached {
-        result.value = await work()
-        semaphore.signal()
-    }
-    semaphore.wait()
-    guard let verdict = result.value else {
-        fatalError("blockingCheck signalled without producing a result")
-    }
-    return verdict
+) async -> LinearizabilityChecker.Result {
+    let checker = LinearizabilityChecker(laneResponses: lanes)
+    var replayQueue: Queue?
+    return await checker.check(
+        prefixLength: prefix.count,
+        replayPrefix: {
+            let fresh = Queue()
+            for command in prefix {
+                fresh.apply(command)
+            }
+            replayQueue = fresh
+            return true
+        },
+        replayCommand: { laneIndex, commandIndex in
+            replayQueue?.replay(lanes[laneIndex][commandIndex].command)
+        },
+        checkOracle: {
+            replayQueue?.elements == finalState
+        },
+        failureDescription: { nil }
+    )
 }
 
 private func queueVerdict(

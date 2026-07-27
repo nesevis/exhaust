@@ -14,7 +14,7 @@ Run a state machine spec against a stateful system.
 
 | Parameter | Description |
 |---|---|
-| `specType` | The `@StateMachine` spec class or actor to run. |
+| `specType` | The `@StateMachine` spec class to run. |
 | `settings` | Variadic ``StateMachineSettings`` values: command limit, budget, lanes, replay, timeout, suppression. |
 
 Returns a ``StateMachineResult`` with the reduced command sequence and trace on failure, or `nil` if all sequences pass.

@@ -74,24 +74,37 @@ func warnIfTimeoutFractionHigh(
     )
 }
 
-// MARK: - Abandoned Search Warning
+// MARK: - Unjudged Search Warning
 
-/// Emits a runtime warning when any interleaving search spent its replay budget without reaching a verdict.
+/// Emits a runtime warning when interleaving searches ended without reaching a verdict, whether they ran out of replay budget or stalled.
 ///
-/// An abandoned search passes its probe, because an unfinished search must never be reported as a counterexample. That makes it silent by construction: a run whose searches were all abandoned reports success while having judged nothing. The count is what distinguishes "no race here" from "the search never finished looking", so it is surfaced rather than logged.
-func warnIfSearchesWereAbandoned(
+/// Either way the search passes its probe, because an unfinished search must never be reported as a counterexample. That makes it silent by construction: a run whose searches all ended this way reports success while having judged nothing. The count is what distinguishes "no race here" from "the search never finished looking", so it is surfaced rather than logged.
+///
+/// Reported as counts rather than as a fraction of probes. A search runs during reduction and final confirmation as well as during discovery, and only discovery increments the run's probe tally, so a denominator drawn from that tally could be smaller than the numerator.
+func warnIfSearchesWentUnjudged(
     abandonedSearches: Int,
-    totalProbes: Int,
+    stalledSearches: Int = 0,
     fileID: StaticString,
     filePath: StaticString,
     line: UInt,
     column: UInt
 ) {
-    guard abandonedSearches > 0 else {
+    guard abandonedSearches > 0 || stalledSearches > 0 else {
         return
     }
+    var causes: [String] = []
+    if abandonedSearches > 0 {
+        causes.append("\(abandonedSearches) exceeded the \(ConcurrentSpecTunables.linearizabilitySearchReplayBudget)-replay budget")
+    }
+    if stalledSearches > 0 {
+        causes.append("\(stalledSearches) stalled waiting on a command that never returned")
+    }
     reportWarning(
-        "Abandoned the interleaving search on \(abandonedSearches) of \(totalProbes) probes after it exceeded \(ConcurrentSpecTunables.linearizabilitySearchReplayBudget) command replays. An abandoned search passes its probe, so a race in those sequences went undetected. Reduce .commandLimit or .parallelize to bring the search back within budget.",
+        """
+        \(abandonedSearches + stalledSearches) interleaving searches ended without a verdict (\(causes.joined(separator: ", "))). \
+        Such a search passes its probe, so a race in those sequences went undetected. \
+        Reduce .commandLimit or .parallelize to bring the search back within budget, and raise .idleTimeout if commands are stalling.
+        """,
         fileID: fileID,
         filePath: filePath,
         line: line,

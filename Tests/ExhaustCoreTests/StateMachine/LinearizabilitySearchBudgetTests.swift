@@ -1,4 +1,3 @@
-import Foundation
 import Testing
 @testable import ExhaustCore
 
@@ -9,17 +8,17 @@ import Testing
 @Suite("Linearizability search budget")
 struct LinearizabilitySearchBudgetTests {
     @Test("A search too large for the replay budget stops instead of running to exhaustion")
-    func oversizedSearchStopsWithinBudget() {
+    func oversizedSearchStopsWithinBudget() async {
         // Three lanes of seven void commands is multinomial(21; 7, 7, 7) orderings, hundreds of millions of them, and the oracle below rejects every one. Without the budget this call does not return in any useful time.
-        let measurement = measureVoidSearch(laneCount: 3, commandsPerLane: 7)
+        let measurement = await measureVoidSearch(laneCount: 3, commandsPerLane: 7)
 
         #expect(measurement.replayCalls <= ConcurrentSpecTunables.linearizabilitySearchReplayBudget)
     }
 
     @Test("An abandoned search passes the probe rather than manufacturing a counterexample")
-    func abandonedSearchResolvesAsAPass() {
+    func abandonedSearchResolvesAsAPass() async {
         // The oracle is unsatisfiable, so an exhaustive search would report a violation. Stopping early means the search neither found an explanation nor ruled one out, and an inconclusive result must not surface as a counterexample.
-        let measurement = measureVoidSearch(laneCount: 3, commandsPerLane: 7)
+        let measurement = await measureVoidSearch(laneCount: 3, commandsPerLane: 7)
 
         #expect(measurement.replayCalls <= ConcurrentSpecTunables.linearizabilitySearchReplayBudget)
         #expect(measurement.passesTheProbe)
@@ -28,9 +27,9 @@ struct LinearizabilitySearchBudgetTests {
     }
 
     @Test("A search small enough to finish still reaches its verdict")
-    func completableSearchIsNotAbandoned() {
+    func completableSearchIsNotAbandoned() async {
         // multinomial(6; 3, 3) is 20 orderings, far inside the budget, so the unsatisfiable oracle must produce the honest verdict rather than the abandonment fallback.
-        let measurement = measureVoidSearch(laneCount: 2, commandsPerLane: 3)
+        let measurement = await measureVoidSearch(laneCount: 2, commandsPerLane: 3)
 
         #expect(measurement.replayCalls < ConcurrentSpecTunables.linearizabilitySearchReplayBudget)
         #expect(measurement.passesTheProbe == false)
@@ -38,10 +37,10 @@ struct LinearizabilitySearchBudgetTests {
     }
 
     @Test("A prefix replay is charged for the commands it runs")
-    func prefixReplayConsumesBudget() {
+    func prefixReplayConsumesBudget() async {
         // A sibling retry rebuilds the sequential prefix on a fresh spec before re-placing the ordering. Charging only the concurrent commands would let a long prefix multiply the search's real cost by a factor the budget cannot see, so the same history with a longer prefix must exhaust the budget after fewer concurrent replays.
-        let withoutPrefix = measureVoidSearch(laneCount: 3, commandsPerLane: 7, prefixLength: 0)
-        let withPrefix = measureVoidSearch(laneCount: 3, commandsPerLane: 7, prefixLength: 100)
+        let withoutPrefix = await measureVoidSearch(laneCount: 3, commandsPerLane: 7, prefixLength: 0)
+        let withPrefix = await measureVoidSearch(laneCount: 3, commandsPerLane: 7, prefixLength: 100)
 
         #expect(withPrefix.replayCalls < withoutPrefix.replayCalls)
         // The direct evidence: each sibling retry costs the prefix's own length, so the budget affords far fewer prefix replays when the prefix is long.
@@ -72,29 +71,6 @@ private func measureVoidSearch(
     laneCount: Int,
     commandsPerLane: Int,
     prefixLength: Int = 0
-) -> SearchMeasurement {
-    // Parks the calling thread on a semaphore while the checker's async-only search runs on a detached task, so this helper keeps its synchronous shape. The runners bridge the same way through `__ExhaustRuntime.blockingAwait`; tests cannot reach it from this module.
-    let measurement = UnsafeSendableBox<SearchMeasurement?>(nil)
-    let semaphore = DispatchSemaphore(value: 0)
-    Task.detached {
-        measurement.value = await runVoidSearch(
-            laneCount: laneCount,
-            commandsPerLane: commandsPerLane,
-            prefixLength: prefixLength
-        )
-        semaphore.signal()
-    }
-    semaphore.wait()
-    guard let value = measurement.value else {
-        fatalError("measureVoidSearch signalled without producing a measurement")
-    }
-    return value
-}
-
-private func runVoidSearch(
-    laneCount: Int,
-    commandsPerLane: Int,
-    prefixLength: Int
 ) async -> SearchMeasurement {
     var lanes: [[ProbeObservation]] = []
     var nextValue = 0

@@ -472,7 +472,7 @@ A few signs you've crossed into `#explore` territory:
 
 Everything above this point has been about pure functions: feed in an input, check the output. A lot of real code isn't shaped like that, though. Some bugs only show up after a particular sequence of operations on a stateful object: you can insert fine, delete fine, lookup fine, but do `insert(x); delete(x); lookup(x)` in order and the object is left in a state that shouldn't be reachable. No single operation is buggy in isolation. The bug lives in the interaction.
 
-Exhaust has a separate facility for this kind of testing, built around a `@StateMachine` macro. You declare a `final class` (or an `actor`) that describes the system under test (`@SystemUnderTest`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two. Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks. The shape looks like this:
+Exhaust has a separate facility for this kind of testing, built around a `@StateMachine` macro. You declare a `final class` that describes the system under test (`@SystemUnderTest`), an inventory of operations Exhaust is allowed to invoke (`@Command`), and a set of invariants that must hold after every operation (`@Invariant`). Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two. Exhaust generates sequences of operations and runs them against the system, reporting when an invariant breaks. The shape looks like this:
 
 ```swift
 @Test func specHolds() async {
@@ -494,9 +494,9 @@ final class MySpec {
 }
 ```
 
-The `@StateMachine` macro takes an execution mode (`.sequential`, `.tasks`, or `.threads`) that tells Exhaust how to run the commands. `.sequential` runs commands one at a time and checks `@Invariant` after each step. `.tasks` runs commands concurrently across multiple lanes with deterministic interleaving at `await` boundaries, for finding reentrancy and ordering bugs in async code. `.threads` dispatches commands to real OS threads for finding data races in locks, dispatch queues, and atomics, checked by an `@Equivalence` that compares concurrent state against a sequential replay.
+`#execute` takes the execution mode (`.sequential`, `.tasks`, or `.threads`) that tells Exhaust how to run the commands, so one spec serves all three and switching between them needs no change to the declaration. `.sequential` runs commands one at a time and checks `@Invariant` after each step. `.tasks` runs commands concurrently across multiple lanes with deterministic interleaving at `await` boundaries, for finding reentrancy and ordering bugs in async code. `.threads` dispatches commands to real OS threads for finding data races in locks, dispatch queues, and atomics, checked by an `@Equivalence` that compares concurrent state against a sequential replay.
 
-Specs on an `actor` use `.sequential` because actor isolation serialises all dispatch, so concurrent testing has nowhere to interleave. For `final class` specs with async commands, `.tasks` tests interleaving across N lanes:
+A spec cannot be an `actor`, because actor isolation serialises every command and leaves no mode anything to interleave; an actor belongs on the other side, as the `@SystemUnderTest` of an ordinary `final class` spec. For specs with async commands, `.tasks` tests interleaving across N lanes:
 
 ```swift
 @Test func sutIsSafeUnderConcurrency() async {

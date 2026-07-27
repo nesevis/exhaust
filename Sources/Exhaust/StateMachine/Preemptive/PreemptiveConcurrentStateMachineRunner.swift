@@ -86,9 +86,8 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
-        warnIfSearchesWereAbandoned(
+        warnIfSearchesWentUnjudged(
             abandonedSearches: searchAbandonments.value,
-            totalProbes: timeoutProbeCounts.value.attempts,
             fileID: fileID,
             filePath: filePath,
             line: line,

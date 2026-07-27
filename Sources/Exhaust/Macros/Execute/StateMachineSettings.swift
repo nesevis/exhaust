@@ -3,7 +3,7 @@ import ExhaustCore
 
 /// Configuration options for `#execute` spec tests, passed as variadic arguments to control test behavior.
 public enum StateMachineSettings {
-    /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a default from the command generator's domain size and the screening budget. Defaults vary by mode: `.sequential` uses the estimate (its budget-derived ceiling tops out at 100, with a floor of three appearances per command type), `.tasks` caps the estimate at 40, and `.threads` uses a flat default of 10.
+    /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a default from the command generator's domain size and the screening budget. Defaults vary by mode: `.sequential` uses the estimate (its budget-derived ceiling tops out at 100, with a floor of three appearances per command type), `.tasks` caps the estimate at 40, and `.threads` uses a flat default of 10. A spec that declares an `@Equivalence` takes that flat 10 under `.tasks` too, because both modes then search the orders a run could have taken and that search grows multinomially in the sequence length.
     case commandLimit(Int)
 
     /// Controls iteration budgets for screening and random sampling. Defaults to `.standard` (200 screening rows, 200 random samplings).

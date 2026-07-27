@@ -11,23 +11,28 @@ import ExhaustCore
 /// ```swift
 /// @StateMachine
 /// final class CounterSpec {
-///     var expected: Int = 0
+///     var expected = LockedCount()
 ///     @SystemUnderTest
-///     var counter: NonAtomicCounter = .init()
+///     var counter: AtomicCounter = .init()
 ///
 ///     @Invariant
 ///     func matchesModel() -> Bool {
-///         counter.value == expected
+///         counter.value == expected.value
 ///     }
 ///
-///     @Command(weight: 1)
+///     @Equivalence
+///     func sameCount(as other: AtomicCounter) -> Bool {
+///         counter.value == other.value
+///     }
+///
+///     @Command
 ///     func increment() async throws {
-///         expected += 1
+///         expected.add(1)
 ///         await counter.increment()
 ///     }
 ///
 ///     func failureDescription() -> String? {
-///         "expected \(expected), counter \(counter.value)"
+///         "expected \(expected.value), counter \(counter.value)"
 ///     }
 /// }
 ///
@@ -35,6 +40,8 @@ import ExhaustCore
 /// await #execute(CounterSpec.self, mode: .tasks, .commandLimit(6))   // interleaved at every await
 /// await #execute(CounterSpec.self, mode: .threads)                   // real OS threads
 /// ```
+///
+/// The model is a synchronized `LockedCount` rather than a bare `Int`, and the spec declares an `@Equivalence`, because the last line runs the commands on real threads: every lane touches this one instance, and `mode: .threads` refuses to start without an equivalence to judge by. A spec that will only ever run under the first two lines needs neither.
 ///
 /// Which claim belongs where is the one decision worth pausing on: could a different valid order change this check's answer? Then it is not an invariant, and it belongs in the equivalence. Two increments commute, so `counter.value == expected` is a true invariant. Two writes to one register do not, so that comparison is an equivalence.
 ///

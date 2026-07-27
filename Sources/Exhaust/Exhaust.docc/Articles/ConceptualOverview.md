@@ -190,7 +190,7 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 
 ### State machine specs
 
-- **Spec**: what the user authors — the `final class` or `actor` decorated with `@StateMachine` that declares commands, invariants, and optionally an equivalence. It describes how the stateful system should behave, in a form Exhaust can execute. How its commands run is chosen at the call site, through `#execute`'s `mode:`.
+- **Spec**: what the user authors — the `final class` decorated with `@StateMachine` that declares commands, invariants, and optionally an equivalence. It describes how the stateful system should behave, in a form Exhaust can execute. How its commands run is chosen at the call site, through `#execute`'s `mode:`.
 - **State machine**: the machinery that runs specs. It generates command sequences, executes them against the SUT, checks invariants, and reduces failures.
 - **Command**: one operation Exhaust may invoke on the SUT.
 - **Task-based / thread-based**: the two concurrent modes. A task-based run (`mode: .tasks`) interleaves deterministically at `await` points. A thread-based run (`mode: .threads`) uses real OS threads to reach races in locks and atomics.

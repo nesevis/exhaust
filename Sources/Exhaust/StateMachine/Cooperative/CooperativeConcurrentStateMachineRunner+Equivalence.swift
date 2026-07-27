@@ -173,7 +173,13 @@ private func judge<Spec: AsyncStateMachineSpec>(
         }
     }
 
-    if await concurrentSpec.equivalenceCheck(referenceSpec.systemUnderTest) {
+    // The equivalence sees final state and nothing else, so accepting on it alone would pass a history where a command answered something no ordering could have produced. Two lanes that both read a stale register and write it leave a final state some valid ordering also reaches, while the values they returned belong to no ordering at all — exactly the history this mode exists to catch.
+    //
+    // So the shortcut is taken only when the commands answered nothing: no return values and no skips, which makes final state the whole of what was observed. Otherwise the search decides, because it is the only thing here that compares responses. This is the rule the thread-based runner already applies through its `hasResponseInfo` guard.
+    let hasResponseInfo = laneResponses.contains { lane in
+        lane.contains { $0.outcome.returnValue != nil || $0.outcome.isSkipped }
+    }
+    if hasResponseInfo == false, await concurrentSpec.equivalenceCheck(referenceSpec.systemUnderTest) {
         return .equivalent
     }
 

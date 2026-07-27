@@ -180,12 +180,14 @@ public extension __ExhaustRuntime {
                     )
                 }
                 let resolvedConcurrencyLevel = consumed.parallelize?.rawValue ?? 2
-                return await runSpecFuzz(
+                let searchAbandonments = UnsafeSendableBox(0)
+                let report = await runSpecFuzz(
                     makeAdapter: {
                         buildTasksSpecAdapter(
                             specType,
                             commandLimit: commandLimit,
-                            concurrencyLevel: resolvedConcurrencyLevel
+                            concurrencyLevel: resolvedConcurrencyLevel,
+                            searchAbandonments: searchAbandonments
                         )
                     },
                     time: time,
@@ -195,6 +197,15 @@ public extension __ExhaustRuntime {
                     line: line,
                     column: column
                 )
+                // An abandoned search passes its probe, so a run that keeps abandoning reports a clean inventory while having judged nothing. The plain runner warns about this and so must this one, through the same helper: a fuzz report full of zeroes means "no faults found", and without the warning there is nothing to distinguish that from "nothing was looked at".
+                warnIfSearchesWentUnjudged(
+                    abandonedSearches: searchAbandonments.value,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                return report
         }
     }
 
@@ -391,7 +402,8 @@ extension __ExhaustRuntime {
         _: Spec.Type,
         commandLimit: Int? = nil,
         concurrencyLevel: Int,
-        idleTimeoutMilliseconds: Int = ResolvedConcurrentConfig.defaultIdleTimeout
+        idleTimeoutMilliseconds: Int = ResolvedConcurrentConfig.defaultIdleTimeout,
+        searchAbandonments: UnsafeSendableBox<Int> = UnsafeSendableBox(0)
     ) -> SpecFuzzAdapter<SpecCandidateValue<Spec>>? {
         guard let taggedCommandGen = zipScheduleMarker(
             onto: Spec.commandGenerator.gen,
@@ -399,7 +411,9 @@ extension __ExhaustRuntime {
         ) else {
             return nil
         }
-        let resolvedCommandLimit = commandLimit ?? FuzzTunables.specDefaultCommandLimit
+        // A spec that declares an equivalence pays for an interleaving search on every probe the equivalence rejects, and that search grows multinomially in the sequence length. The plain runner drops to the thread-based default for exactly this reason; `FuzzTunables.specDefaultCommandLimit` is sized for accumulation faults on sequences nothing searches, and at that length an equivalence-bearing spec abandons its searches instead of judging them.
+        let resolvedCommandLimit = commandLimit
+            ?? (Spec.hasEquivalence ? ConcurrentSpecTunables.defaultCommandLimit : FuzzTunables.specDefaultCommandLimit)
         let sequenceGen = Gen.arrayOf(
             taggedCommandGen,
             within: 1 ... UInt64(resolvedCommandLimit),
@@ -409,7 +423,7 @@ extension __ExhaustRuntime {
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
-        // Abandoned interleaving searches are not tallied here: this driver reports through the fuzz report rather than the per-run warnings the plain runners emit, so the count would have nowhere to surface. A `.tasks` spec with an equivalence therefore learns about an over-large search space from plain `#execute` rather than from `time:` mode.
+        // Abandonments are tallied on the discovery path only. A run that keeps abandoning its searches passes probes it never judged, which is the one thing a green fuzz report must not hide; counting the reduction probes as well would inflate the figure with re-judgements of a sequence already counted.
         let verdictProperty: @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict = { candidate in
             let result = drainAndJudge(
                 taggedCommands: candidate.taggedCommands,
@@ -417,7 +431,8 @@ extension __ExhaustRuntime {
                 specInit: specInit,
                 concurrencyLevel: concurrencyLevel,
                 recordTrace: false,
-                idleTimeoutMilliseconds: idleTimeoutMilliseconds
+                idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+                searchAbandonments: searchAbandonments
             )
             if result.timedOut {
                 // Inconclusive, not a counterexample: pass keeps discovery sampling, exactly as plain #execute counts timed-out probes.

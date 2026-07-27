@@ -53,14 +53,16 @@ public extension __ExhaustRuntime {
         }
 
         let searchAbandonments = UnsafeSendableBox(0)
+        let searchStalls = UnsafeSendableBox(0)
+        let timeoutProbeCounts = UnsafeSendableBox((attempts: 0, timedOut: 0))
         let innerBackend = AsyncPreemptiveChecker<Spec>(
             idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds,
-            searchAbandonments: searchAbandonments
+            searchAbandonments: searchAbandonments,
+            searchStalls: searchStalls
         )
         let commandLimit = config.commandLimit ?? ConcurrentSpecTunables.defaultCommandLimit
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
-        let timeoutProbeCounts = UnsafeSendableBox((attempts: 0, timedOut: 0))
         let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.threads(config.concurrencyLevel)) {
             ExhaustLog.withConfiguration(config.logConfiguration) {
                 runPreemptiveMachine(
@@ -86,9 +88,9 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
-        warnIfSearchesWereAbandoned(
+        warnIfSearchesWentUnjudged(
             abandonedSearches: searchAbandonments.value,
-            totalProbes: timeoutProbeCounts.value.attempts,
+            stalledSearches: searchStalls.value,
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -109,6 +111,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
 
     /// Interleaving searches this run abandoned for exceeding their replay budget, counted so the runner can warn about probes it passed without judging.
     var searchAbandonments = UnsafeSendableBox(0)
+
+    /// Interleaving searches this run gave up on because their drain loop stalled, kept apart from the run's probe tally.
+    ///
+    /// A stall here happens inside failure classification, which runs during reduction and final confirmation as well as during discovery, and only discovery increments the probe tally. Counting these as timed-out probes could therefore report more timeouts than probes, so they are reported as their own count alongside the budget-exhausted searches.
+    var searchStalls = UnsafeSendableBox(0)
 
     /// Bridges async work to the calling thread, bailing with `nil` (and a log) if the drain loop idles past ``idleTimeoutMilliseconds``. Returns the work's result, or `nil` only on timeout.
     private func awaitOrTimeout<Value>(_ label: String, timeoutMultiplier: Int = 1, _ work: @Sendable @escaping () async -> Value) -> Value? {
@@ -429,7 +436,8 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
             )
         }
         guard let result else {
-            // The drain loop idled out mid-search, which is a stall rather than an exhausted budget. Report linearizable so the probe counts as a pass, matching the rule that an inconclusive probe never manufactures a failure; the timeout-fraction warning is what surfaces a run full of these.
+            // The drain loop idled out mid-search, which is a stall rather than an exhausted budget. Report linearizable so the probe counts as a pass, matching the rule that an inconclusive probe never manufactures a failure, and tally it so the unjudged-search warning can report it.
+            searchStalls.value += 1
             return .linearizable
         }
         if result.isAbandoned {

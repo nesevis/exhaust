@@ -94,6 +94,50 @@ struct TasksEquivalenceTests {
         #expect(explanation.contains("sequential replay"), "A failure that needs no interleaving should say so")
     }
 
+    /// An equivalence sees final state and nothing else, so it cannot notice a command that answered something no ordering could have produced. Both lanes here read zero and say so, which no ordering of two increments reproduces, and the equivalence accepts everything — so only a run that judges responses catches it.
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("A response no valid order produces fails even when the equivalence accepts the final state")
+    func aResponseNoValidOrderProducesFailsEvenWhenTheEquivalenceAcceptsTheFinalState() throws {
+        let taggedCommands: [(ScheduleMarker, RespondingRacyCounterSpec.Command)] = [
+            (ScheduleMarker(rawValue: 1), .increment),
+            (ScheduleMarker(rawValue: 2), .increment),
+        ]
+        let result = drainAndJudge(
+            taggedCommands: taggedCommands,
+            setupStep: nil,
+            specInit: { RespondingRacyCounterSpec() },
+            concurrencyLevel: 2,
+            recordTrace: true
+        )
+
+        #expect(
+            result.passed == false,
+            "Both increments answered 0; every ordering of two increments answers 0 then 1"
+        )
+        let explanation = try #require(result.judgementDescription)
+        #expect(explanation.contains("No valid order"))
+    }
+
+    /// The other side of that guard. With nothing returned and nothing skipped, final state is the whole of what was observed, so an accepting equivalence settles the run and no search is owed.
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("A run whose commands answer nothing is settled by the equivalence alone")
+    func aRunWhoseCommandsAnswerNothingIsSettledByTheEquivalenceAlone() {
+        let taggedCommands: [(ScheduleMarker, BlindlyJudgedCounterSpec.Command)] = [
+            (ScheduleMarker(rawValue: 1), .increment),
+            (ScheduleMarker(rawValue: 2), .increment),
+        ]
+        let result = drainAndJudge(
+            taggedCommands: taggedCommands,
+            setupStep: nil,
+            specInit: { BlindlyJudgedCounterSpec() },
+            concurrencyLevel: 2,
+            recordTrace: true
+        )
+
+        #expect(result.passed, "The same lost update, with no response that could contradict it")
+        #expect(result.judgementDescription == nil)
+    }
+
     /// A spec that defines no equivalence pays for none of this: no replay, no comparison, no search. Its invariants are the whole judgement.
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("A spec with no equivalence is never asked for one")
@@ -188,9 +232,8 @@ struct TasksEquivalenceTests {
     func theAbandonmentWarningFiresOnceASearchHasBeenAbandonedAndIsSilentOtherwise() {
         let firing = CapturingIssueReporter()
         withIssueReporters([firing]) {
-            warnIfSearchesWereAbandoned(
+            warnIfSearchesWentUnjudged(
                 abandonedSearches: 1,
-                totalProbes: 200,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -198,13 +241,12 @@ struct TasksEquivalenceTests {
             )
         }
         #expect(firing.warnings.count == 1)
-        #expect(firing.warnings.first?.contains("Abandoned the interleaving search on 1 of 200 probes") == true)
+        #expect(firing.warnings.first?.contains("1 interleaving searches ended without a verdict") == true)
 
         let silent = CapturingIssueReporter()
         withIssueReporters([silent]) {
-            warnIfSearchesWereAbandoned(
+            warnIfSearchesWentUnjudged(
                 abandonedSearches: 0,
-                totalProbes: 200,
                 fileID: #fileID,
                 filePath: #filePath,
                 line: #line,
@@ -286,6 +328,52 @@ final class AscendingLogSpec {
 
     func failureDescription() -> String? {
         "appended: \(appended)"
+    }
+}
+
+/// A counter whose increment answers with the value it read, paired with an equivalence that accepts anything.
+///
+/// The blind equivalence is what makes this isolate one thing. It stands in for any equivalence a run happens to satisfy, so whether the run is judged a failure rests entirely on whether the responses are compared against the orderings the run could have taken.
+@StateMachine
+final class RespondingRacyCounterSpec {
+    @SystemUnderTest
+    var counter = NonAtomicCounter()
+
+    @Equivalence
+    func acceptsAnything(as _: NonAtomicCounter) -> Bool {
+        true
+    }
+
+    @Command
+    func increment() async throws -> Int {
+        let observed = counter.value
+        await counter.increment()
+        return observed
+    }
+
+    func failureDescription() -> String? {
+        "counter: \(counter.value)"
+    }
+}
+
+/// ``RespondingRacyCounterSpec`` with the one difference that its command answers nothing, so the same lost update leaves no response to contradict the equivalence.
+@StateMachine
+final class BlindlyJudgedCounterSpec {
+    @SystemUnderTest
+    var counter = NonAtomicCounter()
+
+    @Equivalence
+    func acceptsAnything(as _: NonAtomicCounter) -> Bool {
+        true
+    }
+
+    @Command
+    func increment() async throws {
+        await counter.increment()
+    }
+
+    func failureDescription() -> String? {
+        "counter: \(counter.value)"
     }
 }
 

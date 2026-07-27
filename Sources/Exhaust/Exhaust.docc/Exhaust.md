@@ -70,8 +70,6 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 - ``exhaust(_:reflecting:_:property:)-2bzvp``
 - ``explore(_:directions:_:property:)-8mzym``
 - ``explore(_:directions:_:property:)-6teom``
-- ``execute(_:_:)-8h2ke``
-- ``execute(_:_:)-7m2bv``
 - ``examine(_:_:)``
 - ``examine(_:_:replayCheck:)``
 - ``example(_:seed:)``

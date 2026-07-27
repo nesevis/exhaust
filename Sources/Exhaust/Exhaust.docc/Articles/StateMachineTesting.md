@@ -62,7 +62,7 @@ final class StackSpec {
 
 Each `@Command` method is one operation Exhaust can choose to run. The `weight:` parameter controls how often it appears relative to other commands. A weight-3 command shows up roughly three times as often as a weight-1 command. After every command, all `@Invariant` methods are checked automatically.
 
-Specs must be a `final class`. `@StateMachine` takes no arguments, because how the commands run is a question for the call site: `#execute(StackSpec.self)` runs them one at a time and checks `@Invariant` after each step, `mode: .tasks` interleaves them at `await` boundaries, and `mode: .threads` dispatches them to real OS threads. The concurrency sections cover the last two. Every example until then runs one command at a time, which is the most common way to run a spec.
+Specs must be a `final class`. `@StateMachine` takes no arguments, because how the commands run is a question for the call site: `#execute(StackSpec.self, mode: .sequential)` runs them one at a time and checks `@Invariant` after each step, `mode: .tasks` interleaves them at `await` boundaries, and `mode: .threads` dispatches them to real OS threads. The concurrency sections cover the last two. Every example until then runs one command at a time, which is the most common way to run a spec.
 
 ## Models and invariants
 
