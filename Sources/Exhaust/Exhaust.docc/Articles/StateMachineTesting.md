@@ -22,7 +22,7 @@ Moving a spec from one row to the next needs no change to the spec. The rest of 
 
 ## The shape of a spec
 
-A spec has four required parts: a system under test, commands that operate on it, invariants that must always hold, and a `failureDescription()` method that supplies diagnostic state for failure reports. Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two.
+A spec has three required parts: a system under test, at least one command that operates on it, and a `failureDescription()` method that supplies diagnostic state for failure reports. It also needs a way to fail: an `@Invariant` checked after every command, a command that throws (usually through `check(_:_:)`), or an `@Equivalence`. A spec with none of the three passes whatever its commands do. Optionally, you can maintain a reference model alongside the SUT that commands update in lockstep, so invariants can compare the two.
 
 ```swift
 @Test func stackBehavesCorrectly() async {

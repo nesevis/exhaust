@@ -258,7 +258,7 @@ Once you have a property, you need a *generator*: something that produces the in
     let generator = #gen(.int(in: -1000...1000).array(length: 0...100))
 
     #exhaust(generator) { xs in
-        #expect(sort(xs).count == xs.count)
+        #expect(mySort(xs).count == xs.count)
     }
 }
 ```

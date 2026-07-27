@@ -14,7 +14,7 @@ let report = #examine(personGen, .samples(500))
 | Parameter | Description |
 |---|---|
 | `gen` | The generator to validate. |
-| `settings` | Variadic ``ExamineSettings`` values: budget, severity, replay, suppression. |
+| `settings` | Variadic ``ExamineSettings`` values: sample count, default and per-check severity, replay, suppression. |
 | `replayCheck` | Optional trailing closure comparing two replayed values for determinism. |
 
 Returns an ``ExamineReport`` with correctness results and coverage metrics.

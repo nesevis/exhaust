@@ -86,7 +86,7 @@ Correctness checks (reflection round-trip, filter health) can fail the test. Cov
 
 | Setting | Default | Effect |
 |---|---|---|
-| `.budget(N)` | 200 | Number of samples to generate and validate. Takes a plain `Int`, unlike the other macros' budgets. |
+| `.samples(N)` | 200 | Number of values to generate and validate. Takes a plain `Int`, unlike the other macros' budgets. |
 | `.replay(seed)` | — | Deterministic validation run. Accepts a raw `UInt64` or an encoded seed string. |
 | `.severity(.warning)` | `.error` | Default severity for all checks. `.error` fails the test, `.warning` reports without failing, `.silent` only populates the report. |
 | `.reflection(.warning)` | inherits | Severity override for reflection round-trip failures. |

@@ -133,7 +133,7 @@ Sequences carry up to 40 commands by default. Override with `.commandLimit(n)` w
 
 | Mode | Status |
 |-------|--------|
-| default (`mode:` omitted) | Supported, for both synchronous and async specs. |
+| `mode: .sequential` | Supported, for both synchronous and async specs. `mode:` is required, so this is the mode to pass when you want one command at a time. |
 | `mode: .tasks` | Supported for async specs. Requires macOS 15, iOS 18, tvOS 18, watchOS 11, or visionOS 2 on Apple platforms; no version requirement on Linux and Windows. The search mutates both commands and their lane assignments, and reduction minimises concurrency back toward one command at a time. `.parallelize(lanes:)` sets the lane count, defaulting to two. A spec with no async members runs one command at a time here. |
 | `mode: .threads` | Unavailable, and a compile error rather than a run that says nothing: the `mode:` here takes a ``SearchableExecutionModel``, which has no `.threads` case. The search treats an attempt's coverage as determined by its command sequence, and thread-based scheduling makes it depend on an OS schedule the run can neither observe nor replay. The discussion below the table expands on this and names the alternatives. |
 

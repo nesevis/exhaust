@@ -155,7 +155,7 @@ The macro inspects the trailing closure to decide which runtime path to use:
 - **Single-expression closures returning Bool** use the predicate path: the closure is called directly and its return value signals pass/fail.
 - **Multi-statement closures, or closures containing `#expect`/`#require`/`throw`** use the void assertion path (the dual-closure mechanism described above).
 
-A closure that returns Bool but also contains `#expect` uses the void path. The presence of assertion macros always wins. A closure with no failure mechanism (no `#expect`, no `throw`, no `try`) produces a compile-time diagnostic warning that the closure can never fail.
+A closure that returns Bool but also contains `#expect` uses the void path. The presence of assertion macros always wins. A closure with no failure mechanism (no `#expect`, no `#require`, no `throw`, no `try`, no `Issue.record`) is a compile-time error: the test would always pass.
 
 ## Issue reporting
 
