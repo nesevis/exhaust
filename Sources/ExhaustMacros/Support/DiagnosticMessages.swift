@@ -20,6 +20,8 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
     case examineMissingGenerator = "#examine requires a generator as its first argument"
     case exhaustStateMachineMissingSpec = "#execute requires a spec type argument"
     case exhaustStateMachineMissingMode = "#execute requires a 'mode:' argument (.sequential, .tasks, or .threads)"
+    case exploreStateMachineMissingSpec = "#explore requires a spec type argument"
+    case exploreStateMachineMissingMode = "#explore requires a 'mode:' argument (.sequential, .tasks, or .threads)"
     case closureCannotFail = "Closure has no failure mechanism (throw, try, #expect, #require, or Issue.record); test will always pass"
     case closureCannotFailXCTest = "Closure has no failure mechanism; return a Bool or throw an error to signal failure"
     case xcTestUnwrapInPropertyClosure = "XCTUnwrap is expensive on failure (several hundred milliseconds per call); prefer a guard or throwing an explicit error"
@@ -58,9 +60,11 @@ enum ExhaustMacroDiagnostic: String, DiagnosticMessage {
                  .executeTimeMissingTime,
                  .exploreTimeWithDirections,
                  .exhaustStateMachineMissingMode,
+                 .exploreStateMachineMissingMode,
                  .exampleMissingGenerator,
                  .examineMissingGenerator,
                  .exhaustStateMachineMissingSpec,
+                 .exploreStateMachineMissingSpec,
                  .closureCannotFail,
                  .closureCannotFailXCTest:
                 .error

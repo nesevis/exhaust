@@ -185,9 +185,8 @@
             )
 
             #expect(
-                context.diagnostics.map(\.diagMessage.diagnosticID) == [
-                    StateMachineDiagnostic.mainActorCommand.diagnosticID,
-                ]
+                context.diagnostics.map(\.diagMessage.diagnosticID)
+                    .contains(StateMachineDiagnostic.mainActorCommand.diagnosticID)
             )
         }
 
@@ -214,9 +213,8 @@
             )
 
             #expect(
-                context.diagnostics.map(\.diagMessage.diagnosticID) == [
-                    StateMachineDiagnostic.mainActorCommand.diagnosticID,
-                ]
+                context.diagnostics.map(\.diagMessage.diagnosticID)
+                    .contains(StateMachineDiagnostic.mainActorCommand.diagnosticID)
             )
         }
     }

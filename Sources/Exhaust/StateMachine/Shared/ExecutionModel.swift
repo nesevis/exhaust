@@ -34,7 +34,7 @@ public enum ExecutionModel: Sendable {
     case threads
 }
 
-/// Selects how a spec's commands run under `#execute(time:)`, where only the deterministic modes are available.
+/// Selects how a spec's commands run under a `time:` budget, where only the deterministic modes are available.
 ///
 /// Coverage-guided search assumes an attempt's coverage follows from its command sequence, so that a novel attempt means novel behavior rather than a lucky schedule. ``ExecutionModel/threads`` breaks that assumption on every attempt, and this type is why writing it here is a type error rather than something a run discovers.
 public enum SearchableExecutionModel: Sendable {
@@ -49,6 +49,6 @@ public enum SearchableExecutionModel: Sendable {
     /// The mode a coverage-guided search cannot use.
     ///
     /// Present only so that writing it here explains itself. Nothing can construct it.
-    @available(*, unavailable, message: "#execute(time:) cannot search mode: .threads. Coverage novelty assumes an attempt's coverage follows from its command sequence, and preemptive scheduling makes it follow from an OS schedule the run can neither observe nor replay, so novelty would reward scheduling luck instead of new behavior. Use mode: .tasks to search interleavings deterministically, or run this spec under plain #execute for repetition-based race detection.")
+    @available(*, unavailable, message: "A time-budgeted search cannot use mode: .threads. Coverage novelty assumes an attempt's coverage follows from its command sequence, and preemptive scheduling makes it follow from an OS schedule the run can neither observe nor replay, so novelty would reward scheduling luck instead of new behavior. Use mode: .tasks to search interleavings deterministically, or drop the time: budget and run this spec under #execute for repetition-based race detection.")
     case threads
 }
