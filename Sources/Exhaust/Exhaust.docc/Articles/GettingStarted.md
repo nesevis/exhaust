@@ -476,7 +476,7 @@ Exhaust has a separate facility for this kind of testing, built around a `@State
 
 ```swift
 @Test func specHolds() async {
-    await #execute(MySpec.self)
+    await #execute(MySpec.self, mode: .sequential)
 }
 
 @StateMachine
@@ -500,7 +500,7 @@ Specs on an `actor` use `.sequential` because actor isolation serialises all dis
 
 ```swift
 @Test func sutIsSafeUnderConcurrency() async {
-    await #execute(AsyncSpec.self, .parallelize(lanes: .two))
+    await #execute(AsyncSpec.self, mode: .tasks, .parallelize(lanes: .two))
 }
 ```
 

@@ -10,6 +10,7 @@ struct StateMachineReplayTests {
         let initial = try #require(
             await #execute(
                 BrokenModuloSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.all)
@@ -21,6 +22,7 @@ struct StateMachineReplayTests {
         let replayed = try #require(
             await #execute(
                 BrokenModuloSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.encoded(replaySeed)),
@@ -35,6 +37,7 @@ struct StateMachineReplayTests {
         let initial = try #require(
             await #execute(
                 BrokenModuloSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .suppress(.all)
             )
@@ -49,6 +52,7 @@ struct StateMachineReplayTests {
         let replayed = try #require(
             await #execute(
                 BrokenModuloSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .replay(.encoded(replaySeed)),
                 .suppress(.all)
@@ -65,6 +69,7 @@ struct StateMachineReplayTests {
         let initial = try #require(
             await #execute(
                 BrokenModuloSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.all)
@@ -75,6 +80,7 @@ struct StateMachineReplayTests {
         let replayed = try #require(
             await #execute(
                 BrokenModuloSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.numeric(seed)),
@@ -134,6 +140,7 @@ struct ConcurrentStateMachineReplayTests {
         let initial = try #require(
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 2000)),
                 .idleTimeout(.seconds(5)),
@@ -146,6 +153,7 @@ struct ConcurrentStateMachineReplayTests {
         let replayed = try #require(
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 2000)),
                 .replay(.encoded(replaySeed)),
@@ -162,6 +170,7 @@ struct ConcurrentStateMachineReplayTests {
         let initial = try #require(
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 2000, sampling: 0)),
                 .suppress(.all)
@@ -171,6 +180,7 @@ struct ConcurrentStateMachineReplayTests {
         let replayed = try #require(
             await #execute(
                 ReplayableNonAtomicCounterSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 2000, sampling: 0)),
                 .replay(.encoded(replaySeed)),

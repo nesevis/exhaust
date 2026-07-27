@@ -117,6 +117,7 @@ struct AsyncStateMachineTests {
         // Use a fixed seed that produces a failure
         let result1 = await #execute(
             BuggyCounterSpec.self,
+            mode: .sequential,
             .commandLimit(20),
             .replay(42),
             .suppress(.issueReporting)

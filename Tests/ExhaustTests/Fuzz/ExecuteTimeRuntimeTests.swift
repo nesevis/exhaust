@@ -31,6 +31,7 @@ struct ExecuteTimeRuntimeTests {
         await withKnownIssue {
             report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
                 AsyncSequentialCounterSpec.self,
+                mode: .sequential,
                 time: .seconds(60),
                 settings: []
             )
@@ -270,6 +271,7 @@ struct ExecuteTimeRuntimeTests {
         await withKnownIssue {
             report = await __ExhaustRuntime.__runStateMachineTimeDispatch(
                 SkippableCounterSpec.self,
+                mode: .sequential,
                 time: .seconds(60),
                 settings: [.commandLimit(0)]
             )

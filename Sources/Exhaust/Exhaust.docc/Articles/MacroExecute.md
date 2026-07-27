@@ -8,7 +8,7 @@ Run a state machine spec against a stateful system.
 
 ```swift
 @Test func queueBehavesCorrectly() async {
-    await #execute(QueueSpec.self, .commandLimit(15), .budget(.thorough))
+    await #execute(QueueSpec.self, mode: .sequential, .commandLimit(15), .budget(.thorough))
 }
 ```
 
@@ -29,7 +29,7 @@ For the full guide, see <doc:StateMachineTesting>.
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
-    await #execute(BoundedQueueSpec.self, time: .minutes(5))
+    await #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
 }
 ```
 

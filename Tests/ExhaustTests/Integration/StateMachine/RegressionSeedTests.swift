@@ -16,6 +16,7 @@ struct RegressionSeedTests {
     func sequentialRegressionSeedReproduces() async {
         let result = await #execute(
             RegressionCounterSpec.self,
+            mode: .sequential,
             .commandLimit(8),
             .budget(.custom(screening: 0, sampling: 0)),
             .suppress(.issueReporting)
@@ -49,6 +50,7 @@ struct RegressionSeedTests {
         // reintroduces a "now passes, consider removing it" diagnostic, this test fails.
         let result = await #execute(
             FixedCounterSpec.self,
+            mode: .sequential,
             .commandLimit(8),
             .budget(.custom(screening: 0, sampling: 0))
         )
@@ -85,6 +87,7 @@ struct RegressionSeedTests {
         let initial = try #require(
             await #execute(
                 RegressionAsyncSequentialSpec.self,
+                mode: .sequential,
                 .commandLimit(8),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.all)
@@ -97,6 +100,7 @@ struct RegressionSeedTests {
         ) {
             await #execute(
                 RegressionAsyncSequentialSpec.self,
+                mode: .sequential,
                 .commandLimit(8),
                 .budget(.custom(screening: 0, sampling: 1)),
                 .suppress(.all)

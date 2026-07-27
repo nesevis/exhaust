@@ -12,12 +12,12 @@
         func syncSpec() {
             assertMacro {
                 """
-                #execute(BoundedQueueSpec.self, time: .minutes(5))
+                #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
                 """
             } diagnostics: {
                 """
-                #execute(BoundedQueueSpec.self, time: .minutes(5))
-                ┬─────────────────────────────────────────────────
+                #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
+                ┬────────────────────────────────────────────────────────────────────
                 ╰─ ⚠️ #execute(time:) is experimental: its settings, report format, and search behavior may change in any release
                 """
             } expansion: {
@@ -52,17 +52,34 @@
             }
         }
 
+        /// Every overload declares `mode:`, so a call without one has already failed overload resolution. The expansion still names it rather than defaulting, because a silently sequential run is the one outcome a forgotten mode must never produce.
+        @Test("Missing mode: is diagnosed rather than defaulted")
+        func missingMode() {
+            assertMacro {
+                """
+                #execute(BoundedQueueSpec.self, time: .minutes(5))
+                """
+            } diagnostics: {
+                """
+                #execute(BoundedQueueSpec.self, time: .minutes(5))
+                ┬─────────────────────────────────────────────────
+                ├─ ⚠️ #execute(time:) is experimental: its settings, report format, and search behavior may change in any release
+                ╰─ 🛑 #execute requires a 'mode:' argument (.sequential, .tasks, or .threads)
+                """
+            }
+        }
+
         @Test("Async macro expands to __runStateMachineTimeDispatchAsync")
         func asyncSpec() {
             withMacroTesting(macros: ["execute": ExecuteTimeAsyncMacro.self]) {
                 assertMacro {
                     """
-                    #execute(ConcurrentQueueSpec.self, time: .minutes(5), .parallelize(lanes: .two))
+                    #execute(ConcurrentQueueSpec.self, mode: .sequential, time: .minutes(5), .parallelize(lanes: .two))
                     """
                 } diagnostics: {
                     """
-                    #execute(ConcurrentQueueSpec.self, time: .minutes(5), .parallelize(lanes: .two))
-                    ┬───────────────────────────────────────────────────────────────────────────────
+                    #execute(ConcurrentQueueSpec.self, mode: .sequential, time: .minutes(5), .parallelize(lanes: .two))
+                    ┬──────────────────────────────────────────────────────────────────────────────────────────────────
                     ╰─ ⚠️ #execute(time:) is experimental: its settings, report format, and search behavior may change in any release
                     """
                 } expansion: {
@@ -86,12 +103,12 @@
         func settingsPassThrough() {
             assertMacro {
                 """
-                #execute(BoundedQueueSpec.self, time: .seconds(30), .replay(42))
+                #execute(BoundedQueueSpec.self, mode: .sequential, time: .seconds(30), .replay(42))
                 """
             } diagnostics: {
                 """
-                #execute(BoundedQueueSpec.self, time: .seconds(30), .replay(42))
-                ┬───────────────────────────────────────────────────────────────
+                #execute(BoundedQueueSpec.self, mode: .sequential, time: .seconds(30), .replay(42))
+                ┬──────────────────────────────────────────────────────────────────────────────────
                 ╰─ ⚠️ #execute(time:) is experimental: its settings, report format, and search behavior may change in any release
                 """
             } expansion: {

@@ -55,7 +55,8 @@ struct LeakyBucketConcurrentTests {
         await withKnownIssue {
             let result = try #require(
                 await #execute(
-                    LeakyBucketSpec.self
+                    LeakyBucketSpec.self,
+                    mode: .tasks
                 )
             )
             let hasFailure = result.trace.contains { step in

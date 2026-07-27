@@ -14,7 +14,7 @@ One spec shape serves every mode. Which mode you pass to `#execute` depends on w
 
 | Your system under test | How to run it | What it finds |
 |---|---|---|
-| Synchronous class | `#execute(Spec.self)` | Logic bugs: ordering, invariant violations, state corruption |
+| Synchronous class | `#execute(Spec.self, mode: .sequential)` | Logic bugs: ordering, invariant violations, state corruption |
 | Async class with `await` boundaries | `#execute(Spec.self, mode: .tasks)` | Reentrancy and interleaving bugs at `await` boundaries |
 | Class with locks, GCD, or atomics | `#execute(Spec.self, mode: .threads)` | Data races in synchronous primitives, which a task-based run steps over |
 
@@ -26,7 +26,7 @@ A spec has four required parts: a system under test, commands that operate on it
 
 ```swift
 @Test func stackBehavesCorrectly() async {
-    await #execute(StackSpec.self, .commandLimit(15))
+    await #execute(StackSpec.self, mode: .sequential, .commandLimit(15))
 }
 
 @StateMachine
@@ -192,7 +192,7 @@ The rules, and how setup differs from a command:
 
 ```swift
 @Test func queueMaintainsFIFOOrder() async {
-    await #execute(CircularQueueSpec.self, .commandLimit(10), .budget(.thorough))
+    await #execute(CircularQueueSpec.self, mode: .sequential, .commandLimit(10), .budget(.thorough))
 }
 ```
 
@@ -259,7 +259,7 @@ The test call needs `await`:
 
 ```swift
 @Test func counterBehavesCorrectly() async {
-    await #execute(AsyncCounterSpec.self, .commandLimit(10))
+    await #execute(AsyncCounterSpec.self, mode: .sequential, .commandLimit(10))
 }
 ```
 

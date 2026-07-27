@@ -96,8 +96,8 @@ Exhaust's entry points are six macros. `#gen` builds generators; the rest consum
 | [`#exhaust(gen) {…}`](https://nesevis.github.io/exhaust/documentation/exhaust/propertytesting) | Test a property and report a minimal counterexample on failure. |
 | [`#explore(gen, directions:) {…}`](https://nesevis.github.io/exhaust/documentation/exhaust/directedexploration) | Test a property with per-direction coverage guarantees. |
 | [`#explore(gen, time:) {…}`](https://nesevis.github.io/exhaust/documentation/exhaust/coverageguidedfuzzing) | Coverage-guided fuzzing with a wall-clock time budget. |
-| [`#execute(MySpec.self, …)`](https://nesevis.github.io/exhaust/documentation/exhaust/statemachinetesting) | Run a spec test against a stateful system. |
-| [`#execute(MySpec.self, time:)`](https://nesevis.github.io/exhaust/documentation/exhaust/coverageguidedfuzzing#Fuzzing-a-state-machine-spec-with-execute(time:)) | Coverage-guided fuzzing over command sequences. |
+| [`#execute(MySpec.self, mode:, …)`](https://nesevis.github.io/exhaust/documentation/exhaust/statemachinetesting) | Run a spec test against a stateful system. |
+| [`#execute(MySpec.self, mode:, time:)`](https://nesevis.github.io/exhaust/documentation/exhaust/coverageguidedfuzzing#Fuzzing-a-state-machine-spec-with-execute(time:)) | Coverage-guided fuzzing over command sequences. |
 | [`try #example(gen)`](https://nesevis.github.io/exhaust/documentation/exhaust/buildinggenerators#Generating-test-data-with-example) | Generate test data from your generators. |
 | [`#examine(gen) {…}`](https://nesevis.github.io/exhaust/documentation/exhaust/generatortesting) | Test your generators: correctness, coverage, and distribution quality. |
 

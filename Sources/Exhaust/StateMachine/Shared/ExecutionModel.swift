@@ -3,9 +3,9 @@
 /// Pass one to `#execute`; the spec itself does not choose. One spec shape serves all three, so this is a dial rather than a rewrite:
 ///
 /// ```swift
-/// await #execute(CounterSpec.self)                  // one command at a time
-/// await #execute(CounterSpec.self, mode: .tasks)    // interleaved at every await
-/// await #execute(CounterSpec.self, mode: .threads)  // real OS threads
+/// await #execute(CounterSpec.self, mode: .sequential)  // one command at a time
+/// await #execute(CounterSpec.self, mode: .tasks)       // interleaved at every await
+/// await #execute(CounterSpec.self, mode: .threads)     // real OS threads
 /// ```
 ///
 /// What changes between them is which orders the commands can run in, and with it where a spec's claims can be judged. An `@Invariant` holds whatever order commands ran in, so it is checked wherever Exhaust has a settled state to check it against. An `@Equivalence` defines what "the same result" means when the order can vary, so a concurrent run is compared against a sequential replay and reported as a failure only when no valid order explains what the commands observed.

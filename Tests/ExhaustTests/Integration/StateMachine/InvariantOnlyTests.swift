@@ -11,6 +11,7 @@ struct InvariantOnlyTests {
         let result = try #require(
             await #execute(
                 CircularBufferSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .suppress(.issueReporting)
             )
@@ -27,6 +28,7 @@ struct InvariantOnlyTests {
         let result = try #require(
             await #execute(
                 SortedBackingSpec.self,
+                mode: .sequential,
                 .commandLimit(5),
                 .suppress(.issueReporting)
             )

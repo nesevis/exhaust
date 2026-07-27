@@ -34,6 +34,7 @@ struct ExamGraderTests {
         let result = try #require(
             await #execute(
                 ExamGraderSpec.self,
+                mode: .sequential,
                 .commandLimit(8),
                 .suppress(.issueReporting)
             )

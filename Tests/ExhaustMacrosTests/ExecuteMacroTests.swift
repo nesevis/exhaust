@@ -13,7 +13,7 @@
         func executeStateMachineWithCommandLimit() {
             assertMacro {
                 """
-                await #execute(BoundedQueueSpec.self, .commandLimit(20))
+                await #execute(BoundedQueueSpec.self, mode: .sequential, .commandLimit(20))
                 """
             } expansion: {
                 """
@@ -34,7 +34,7 @@
         func executeStateMachineWithSettings() {
             assertMacro {
                 """
-                await #execute(Spec.self, .commandLimit(20), .budget(.thorough))
+                await #execute(Spec.self, mode: .sequential, .commandLimit(20), .budget(.thorough))
                 """
             } expansion: {
                 """
@@ -55,7 +55,7 @@
         func executeStateMachineWithNoSettings() {
             assertMacro {
                 """
-                await #execute(Spec.self)
+                await #execute(Spec.self, mode: .sequential)
                 """
             } expansion: {
                 """
@@ -130,6 +130,22 @@
                 """
             }
         }
+
+        /// Every overload declares `mode:`, so a call without one has already failed overload resolution. The expansion refuses rather than defaulting, because a silently sequential run is the one outcome a forgotten mode must never produce — a spec whose commands are async would run, test strictly less than intended, and pass.
+        @Test("Missing mode produces error rather than a silent sequential run")
+        func missingMode() {
+            assertMacro {
+                """
+                await #execute(Spec.self, .commandLimit(6))
+                """
+            } diagnostics: {
+                """
+                await #execute(Spec.self, .commandLimit(6))
+                      ┬────────────────────────────────────
+                      ╰─ 🛑 #execute requires a 'mode:' argument (.sequential, .tasks, or .threads)
+                """
+            }
+        }
     }
 
     @Suite(
@@ -141,7 +157,7 @@
         func executeAsyncStateMachineWithNoSettings() {
             assertMacro {
                 """
-                await #execute(AsyncSpec.self)
+                await #execute(AsyncSpec.self, mode: .sequential)
                 """
             } expansion: {
                 """
@@ -162,7 +178,7 @@
         func executeAsyncStateMachineWithSettings() {
             assertMacro {
                 """
-                await #execute(AsyncSpec.self, .commandLimit(10), .parallelize(lanes: .three))
+                await #execute(AsyncSpec.self, mode: .sequential, .commandLimit(10), .parallelize(lanes: .three))
                 """
             } expansion: {
                 """

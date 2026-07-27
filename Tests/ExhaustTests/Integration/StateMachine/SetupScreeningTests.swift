@@ -53,6 +53,7 @@ struct SetupScreeningTests {
         let result = try #require(
             await #execute(
                 InteractionSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .budget(.custom(screening: 60, sampling: 0)),
                 .suppress(.issueReporting)
@@ -74,6 +75,7 @@ struct SetupScreeningTests {
         // analysis to extract. Screening must still apply it: this spec only fails when a probe runs before setup.
         let result = await #execute(
             DeterministicSetupSpec.self,
+            mode: .sequential,
             .commandLimit(4),
             .budget(.custom(screening: 40, sampling: 0)),
             .suppress(.issueReporting)

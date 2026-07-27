@@ -38,6 +38,7 @@ struct CircularQueueTests {
         let result = try #require(
             await #execute(
                 CircularQueueSpec.self,
+                mode: .sequential,
                 .commandLimit(10),
                 .budget(.thorough),
                 .suppress(.issueReporting),

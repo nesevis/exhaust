@@ -11,6 +11,7 @@ struct PostconditionTests {
         let result = try #require(
             await #execute(
                 SetUniquenessSpec.self,
+                mode: .sequential,
                 .commandLimit(5),
                 .suppress(.issueReporting)
             )
@@ -27,6 +28,7 @@ struct PostconditionTests {
         let result = try #require(
             await #execute(
                 StackLIFOSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .suppress(.issueReporting)
             )
@@ -43,6 +45,7 @@ struct PostconditionTests {
         let result = try #require(
             await #execute(
                 DictionaryConsistencySpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .suppress(.issueReporting)
             )

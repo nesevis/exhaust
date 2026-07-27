@@ -31,9 +31,9 @@ import ExhaustCore
 ///     }
 /// }
 ///
-/// await #execute(CounterSpec.self)                                  // one command at a time
-/// await #execute(CounterSpec.self, mode: .tasks, .commandLimit(6))  // interleaved at every await
-/// await #execute(CounterSpec.self, mode: .threads)                  // real OS threads
+/// await #execute(CounterSpec.self, mode: .sequential)                // one command at a time
+/// await #execute(CounterSpec.self, mode: .tasks, .commandLimit(6))   // interleaved at every await
+/// await #execute(CounterSpec.self, mode: .threads)                   // real OS threads
 /// ```
 ///
 /// Which claim belongs where is the one decision worth pausing on: could a different valid order change this check's answer? Then it is not an invariant, and it belongs in the equivalence. Two increments commute, so `counter.value == expected` is a true invariant. Two writes to one register do not, so that comparison is an equivalence.

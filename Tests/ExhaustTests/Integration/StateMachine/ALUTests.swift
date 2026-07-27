@@ -14,6 +14,7 @@ struct ALUTests {
         let result = try #require(
             await #execute(
                 ALUSpec.self,
+                mode: .sequential,
                 .commandLimit(8),
                 .suppress(.issueReporting)
             )

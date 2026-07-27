@@ -121,7 +121,7 @@ The same coverage-guided search works over `@StateMachine` specs. Where `#explor
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
-    await #execute(BoundedQueueSpec.self, time: .minutes(5))
+    await #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
 }
 ```
 

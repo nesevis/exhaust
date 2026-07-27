@@ -119,6 +119,7 @@ struct PointlessRunAndSkipTests {
         await withKnownIssue {
             _ = await #execute(
                 PointlessRunStackSpec.self,
+                mode: .sequential,
                 .budget(.custom(screening: 0, sampling: 0))
             )
         }

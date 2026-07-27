@@ -8,6 +8,7 @@ struct MultiModelTests {
     func specWithThreeModelPropertiesDetectsDivergence() async {
         let result = await #execute(
             MultiModelSpec.self,
+            mode: .sequential,
             .commandLimit(8),
             .suppress(.issueReporting)
         )

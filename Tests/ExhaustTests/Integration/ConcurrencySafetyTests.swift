@@ -258,6 +258,7 @@ struct ConcurrentStateMachineDrainLoopTests {
                 group.addTask {
                     _ = await #execute(
                         YieldingCounterSpec.self,
+                        mode: .tasks,
                         .commandLimit(4),
                         .budget(.custom(screening: 0, sampling: 50)),
                         .suppress(.all)

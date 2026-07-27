@@ -10,6 +10,7 @@ struct StackTests {
     func passingSpecProducesNoCounterexample() async {
         let result = await #execute(
             StackSpec.self,
+            mode: .sequential,
             .commandLimit(15),
             .budget(.custom(screening: 500, sampling: 50)),
             .suppress(.issueReporting)

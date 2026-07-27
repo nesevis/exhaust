@@ -41,7 +41,13 @@ private func expandExecuteCall(
     }
 
     let specExpr = args[0].expression.trimmedDescription
-    let modeExpr = executionModeExpression(from: args)
+    guard let modeExpr = executionModeExpression(from: args) else {
+        context.diagnose(Diagnostic(
+            node: Syntax(node),
+            message: ExhaustMacroDiagnostic.exhaustStateMachineMissingMode
+        ))
+        return "fatalError(\"#execute requires a 'mode:' argument\")"
+    }
     let settingsExprs = args.dropFirst(1)
         .filter { $0.label?.text != "mode" }
         .map(\.expression.trimmedDescription)
@@ -62,9 +68,11 @@ private func expandExecuteCall(
 
 // MARK: - Mode Argument
 
-/// The `mode:` argument as written, or the default when the call site omits it.
+/// The `mode:` argument as written, or nil when the call site omitted it.
 ///
 /// Forwarded verbatim rather than resolved to a case, so a mode computed at runtime reaches the dispatch unchanged. Nothing here reads which mode it names: what a mode requires of a spec is checked at the start of the run, where a computed mode is knowable too.
-func executionModeExpression(from arguments: [LabeledExprSyntax]) -> String {
-    arguments.first { $0.label?.text == "mode" }?.expression.trimmedDescription ?? ".sequential"
+///
+/// There is no default to fall back on. Every `#execute` overload declares `mode:`, so a call reaching expansion without one has already failed overload resolution; the nil case exists so that failure reports as a named diagnostic rather than expanding into a silently sequential run.
+func executionModeExpression(from arguments: [LabeledExprSyntax]) -> String? {
+    arguments.first { $0.label?.text == "mode" }?.expression.trimmedDescription
 }

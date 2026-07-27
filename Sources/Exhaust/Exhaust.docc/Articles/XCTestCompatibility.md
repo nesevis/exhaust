@@ -74,7 +74,7 @@ When `.collectOpenPBTStats` is enabled, Exhaust records the data as an `XCTAttac
 
 ### State machine tests
 
-`await #execute(Spec.self)` works under XCTest (in an `async` test method) with the same command generation, invariant checking, and reduction pipeline. Failures are reported via `XCTFail`.
+`await #execute(Spec.self, mode: .sequential)` works under XCTest (in an `async` test method) with the same command generation, invariant checking, and reduction pipeline. Failures are reported via `XCTFail`.
 
 ## What doesn't work
 

@@ -12,6 +12,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 AlwaysFailingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.issueReporting)
@@ -34,6 +35,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 CapacityGatedSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 300)),
                 .suppress(.issueReporting)
@@ -53,6 +55,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 AlwaysFailingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.issueReporting)
@@ -74,6 +77,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 AlwaysFailingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.issueReporting)
@@ -107,6 +111,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 PlainFailingSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.issueReporting)
@@ -125,6 +130,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 ThrowingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .budget(.custom(screening: 0, sampling: 20)),
                 .suppress(.issueReporting)
@@ -143,6 +149,7 @@ struct SetupGeneratorTests {
         // The synthesized `typealias SystemUnderTest` must normalize the property's `ValueBox!` to `ValueBox?`, because Swift rejects the implicitly unwrapped spelling in a typealias. Compiling this spec is the regression; the run confirms setup reaches the instance.
         let result = await #execute(
             ImplicitlyUnwrappedSUTSpec.self,
+            mode: .sequential,
             .commandLimit(4),
             .budget(.custom(screening: 0, sampling: 30)),
             .suppress(.issueReporting)
@@ -155,6 +162,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 PlainFailingSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.issueReporting)
@@ -168,6 +176,7 @@ struct SetupGeneratorTests {
         let first = try #require(
             await #execute(
                 CapacityGatedSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 300)),
                 .suppress(.issueReporting)
@@ -177,6 +186,7 @@ struct SetupGeneratorTests {
         let replayed = try #require(
             await #execute(
                 CapacityGatedSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .replay(ReplaySeed(stringLiteral: replaySeed)),
                 .suppress(.issueReporting)
@@ -267,6 +277,7 @@ struct SetupChoiceSequenceTests {
         let first = try #require(
             await #execute(
                 AlwaysFailingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .budget(.custom(screening: 50, sampling: 0)),
                 .suppress(.issueReporting)
@@ -279,6 +290,7 @@ struct SetupChoiceSequenceTests {
         let replayed = try #require(
             await #execute(
                 AlwaysFailingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .replay(ReplaySeed(stringLiteral: replaySeed)),
                 .suppress(.issueReporting)

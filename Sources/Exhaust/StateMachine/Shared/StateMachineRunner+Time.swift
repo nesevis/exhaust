@@ -7,13 +7,13 @@ import IssueReporting
 // MARK: - Dispatch
 
 public extension __ExhaustRuntime {
-    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(Spec.self, mode: .tasks, time:)`.
+    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(Spec.self, mode:, time:)`.
     ///
     /// Async for the same reason plain `#execute` is: the run occupies its thread for the whole time budget, so it hops to a GCD worker instead of starving the cooperative pool. Every path — configuration errors included — funnels through the shared reporting epilogue, so findings, configuration errors, and the summary attachment surface exactly as they do for `#explore(time:)`.
     @discardableResult
     static func __runStateMachineTimeDispatch(
         _ specType: (some StateMachineSpec).Type,
-        mode: SearchableExecutionModel = .sequential,
+        mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
@@ -107,13 +107,13 @@ public extension __ExhaustRuntime {
         }
     }
 
-    /// Dispatches an asynchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(AsyncSpec.self, time:)`.
+    /// Dispatches an asynchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(AsyncSpec.self, mode:, time:)`.
     ///
     /// The same shape as ``__runStateMachineTimeDispatch(_:time:settings:fileID:filePath:line:column:)``: the run occupies a GCD worker for the whole budget, and reporting happens here on the test task after the hop.
     @discardableResult
     static func __runStateMachineTimeDispatchAsync(
         _ specType: (some AsyncStateMachineSpec).Type,
-        mode: SearchableExecutionModel = .sequential,
+        mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
