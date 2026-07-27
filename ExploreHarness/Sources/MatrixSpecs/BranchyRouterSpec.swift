@@ -4,7 +4,7 @@ import Exhaust
 /// The shared spec for the `BranchyRouter` fixture (fault B — registry in `BranchyRouter.swift`).
 ///
 /// One command with a wide two-argument domain: the router's structure lives in its 16 handlers, not in the command vocabulary.
-@StateMachine(.sequential)
+@StateMachine
 public final class BranchyRouterSpec {
     @SystemUnderTest var router: BranchyRouter = .init()
 

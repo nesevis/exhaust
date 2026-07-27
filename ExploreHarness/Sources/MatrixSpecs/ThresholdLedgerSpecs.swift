@@ -4,7 +4,7 @@ import Exhaust
 // The three specs below are deliberately identical except for the SUT's init arguments: #execute instantiates through the synthesized required init(), so configuration can only enter through the type, and @StateMachine discovers commands syntactically, ruling out a shared base. Change all three together.
 
 /// The shared spec for the flat `ThresholdLedger` fixture at threshold 40 — the inside-the-command-limit configuration (fault J — registry in `ThresholdLedger.swift`).
-@StateMachine(.sequential)
+@StateMachine
 public final class ThresholdLedger40Spec {
     @SystemUnderTest var ledger: ThresholdLedger = .init(threshold: 40, laddered: false)
 
@@ -35,7 +35,7 @@ public final class ThresholdLedger40Spec {
 }
 
 /// The shared spec for the flat `ThresholdLedger` fixture at threshold 90 — the near-the-command-limit configuration where champion-archive short-parent pressure bites.
-@StateMachine(.sequential)
+@StateMachine
 public final class ThresholdLedger90Spec {
     @SystemUnderTest var ledger: ThresholdLedger = .init(threshold: 90, laddered: false)
 
@@ -66,7 +66,7 @@ public final class ThresholdLedger90Spec {
 }
 
 /// The laddered `ThresholdLedger` variant at threshold 90: identical command surface, but each sum quartile lights a distinct edge — the SF6 flat-versus-laddered contrast at the configuration where the flat variant is out of blind reach.
-@StateMachine(.sequential)
+@StateMachine
 public final class ThresholdLedger90LadderedSpec {
     @SystemUnderTest var ledger: ThresholdLedger = .init(threshold: 90, laddered: true)
 

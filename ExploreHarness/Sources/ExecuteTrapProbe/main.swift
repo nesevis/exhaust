@@ -8,7 +8,7 @@ import ExecuteFixture
 import Exhaust
 import Foundation
 
-@StateMachine(.sequential)
+@StateMachine
 final class TrapSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: TrappingCounter = .init()

@@ -4,7 +4,7 @@ import Exhaust
 /// The shared spec for the flat `PhaseSession` fixture (fault O — registry in `PhaseSession.swift`).
 ///
 /// Five uniform-weight commands. No command precondition-skips: `use` while closed must reach the SUT, because that stray call is the fault's final step.
-@StateMachine(.sequential)
+@StateMachine
 public final class PhaseProtocolFlatSpec {
     @SystemUnderTest var session: PhaseSession = .init(laddered: false)
 
@@ -45,7 +45,7 @@ public final class PhaseProtocolFlatSpec {
 }
 
 /// The laddered `PhaseSession` variant: identical command surface, but each completed-cycle rung lights a distinct edge.
-@StateMachine(.sequential)
+@StateMachine
 public final class PhaseProtocolLadderedSpec {
     @SystemUnderTest var session: PhaseSession = .init(laddered: true)
 

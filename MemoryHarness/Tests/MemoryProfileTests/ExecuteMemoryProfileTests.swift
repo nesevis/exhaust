@@ -23,7 +23,7 @@ struct ExecuteMemoryProfileTests {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 final class MemoryProfileStoreSpec {
     var expected: [Int: String] = [:]
     @SystemUnderTest var actual: [Int: String] = [:]

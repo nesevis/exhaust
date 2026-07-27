@@ -4,7 +4,7 @@ import Exhaust
 /// The shared spec for the `CoupledStore` fixture (fault C — registry in `CoupledStore.swift`).
 ///
 /// Three uniform-weight commands, no precondition skips: a probe before any setKey is a legal no-op.
-@StateMachine(.sequential)
+@StateMachine
 public final class CoupledValuesSpec {
     @SystemUnderTest var store: CoupledStore = .init()
 

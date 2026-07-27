@@ -25,6 +25,7 @@ struct TasksFuzzTests {
     func findsInterleavingFault() async {
         let report = await #execute(
             RacyLedgerSpec.self,
+            mode: .tasks,
             time: .seconds(5),
             .parallelize(lanes: .two),
             .commandLimit(20),
@@ -41,6 +42,7 @@ struct TasksFuzzTests {
         // Fault L's sequential-soundness pin: with one lane every marker is prefix, each read-modify-write runs to completion before the next command, and no schedule can realize the race. A cluster here means the fixture has a value-gated fault it must not have.
         let report = await #execute(
             RacyLedgerSpec.self,
+            mode: .tasks,
             time: .seconds(5),
             .parallelize(lanes: .one),
             .commandLimit(20),
@@ -57,6 +59,7 @@ struct TasksFuzzTests {
         // The documented replay contract for time: mode — same seed, same build, comparable budget rediscovers the same clusters, not an attempt-for-attempt identical log. This is the instrumented determinism check the synthetic-coverage tests cannot perform: it fails if the cooperative drain leaks schedule nondeterminism into the search's decisions.
         let first = await #execute(
             RacyLedgerSpec.self,
+            mode: .tasks,
             time: .seconds(5),
             .parallelize(lanes: .two),
             .commandLimit(20),
@@ -65,6 +68,7 @@ struct TasksFuzzTests {
         )
         let second = await #execute(
             RacyLedgerSpec.self,
+            mode: .tasks,
             time: .seconds(5),
             .parallelize(lanes: .two),
             .commandLimit(20),
