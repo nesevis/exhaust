@@ -24,6 +24,8 @@ extension __ExhaustRuntime {
         var replaySeed: String?
         var oracleDescription: String?
         var failureDescription: String?
+        /// Why the run was judged a failure when its own execution came back clean, shown ahead of the state comparison. Nil when the trace already shows the failing step.
+        var judgementDescription: String?
         /// Observed return values per lane (keyed by ``ScheduleMarker/rawValue``), in per-lane execution order, used to annotate each lane command with what it returned. A `nil` entry is a void command (no annotation).
         var laneResponseValues: [UInt8: [String?]]?
         /// The lane command whose observed response no valid sequential ordering reproduces, marked inline in the command partition. `nil` when the violation is only in final state (already shown by the expected-versus-actual state diff).
@@ -72,6 +74,11 @@ extension __ExhaustRuntime {
         lines.append("Execution trace:")
         for step in trace {
             lines.append("  \(step)")
+        }
+
+        if let judgementDescription = context.judgementDescription {
+            lines.append("")
+            lines.append(judgementDescription)
         }
 
         if let oracleDescription = context.oracleDescription {

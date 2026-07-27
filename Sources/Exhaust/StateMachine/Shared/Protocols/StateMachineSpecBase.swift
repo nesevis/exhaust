@@ -40,6 +40,11 @@ public protocol StateMachineSpecBase: SendableMetatype {
     /// The execution model this spec uses, synthesized by the `@StateMachine` macro.
     static var executionModel: ExecutionModel { get }
 
+    /// Whether the spec defines what "the same result" means for a concurrent run, so a runner knows to compare the run against a sequential replay.
+    ///
+    /// Synthesized by the `@StateMachine` macro, `true` exactly when the spec declares an equivalence method. A task-based run consults it to decide whether a probe that passed its invariants still owes an equivalence comparison, which is work no spec without one should pay for.
+    static var hasEquivalence: Bool { get }
+
     /// The system under test instance, for typed access in results and failure reports.
     var systemUnderTest: SystemUnderTest { get }
 
@@ -58,5 +63,10 @@ public extension StateMachineSpecBase {
     /// Default for specs without a `@Setup` method. The `@StateMachine` macro synthesizes a real generator when one exists.
     static var setupGenerator: ReflectiveGenerator<SetupStep>? {
         nil
+    }
+
+    /// Default for specs that declare no equivalence. The `@StateMachine` macro overrides it with `true` when one is present.
+    static var hasEquivalence: Bool {
+        false
     }
 }

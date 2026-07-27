@@ -428,8 +428,9 @@ extension __ExhaustRuntime {
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
+        // Abandoned interleaving searches are not tallied here: this driver reports through the fuzz report rather than the per-run warnings the plain runners emit, so the count would have nowhere to surface. A `.tasks` spec with an equivalence therefore learns about an over-large search space from plain `#execute` rather than from `time:` mode.
         let verdictProperty: @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict = { candidate in
-            let result = drainSchedule(
+            let result = drainAndJudge(
                 taggedCommands: candidate.taggedCommands,
                 setupStep: candidate.setupStep,
                 specInit: specInit,
@@ -464,7 +465,7 @@ extension __ExhaustRuntime {
         // Two-pass reduction (lane collapse + deletion, then value minimization), run inline on the fuzz loop's GCD lane. The drain loop's spin-polling stays off the cooperative pool because the loop's lane hosts it, which is what inline reduction guarantees by construction. Unlike the plain-#execute machine, `time:` mode reduces the whole candidate in one tree, so setup values minimize alongside the commands here rather than in a separate pass.
         let reduceStrategy: @Sendable (ChoiceTree, SpecCandidateValue<Spec>, FailureSymptom) -> FuzzReductionResult<SpecCandidateValue<Spec>> = { tree, value, _ in
             let probeProperty: @Sendable (SpecCandidateValue<Spec>) -> StateMachineProbeVerdict<Void> = { candidate in
-                let result = drainSchedule(
+                let result = drainAndJudge(
                     taggedCommands: candidate.taggedCommands,
                     setupStep: candidate.setupStep,
                     specInit: specInit,

@@ -3,7 +3,7 @@ import Testing
 
 // The DFS is exponential and nothing outside it bounds one check: the reduction deadline bounds the reducer and the idle timeout bounds the concurrent execution, but an oracle-flagged probe searches until it finishes. These guard the replay budget that stops it, and the direction it resolves in when it stops early.
 //
-// The unsatisfiable oracle below stands in for both truncated outcomes deliberately: abandonment reports linearizable regardless of what a longer search would have found, so a real violation cut off by the budget is indistinguishable from these histories and needs no separate test.
+// The unsatisfiable oracle below stands in for both truncated outcomes deliberately: abandonment passes the probe regardless of what a longer search would have found, so a real violation cut off by the budget is indistinguishable from these histories and needs no separate test.
 
 @Suite("Linearizability search budget")
 struct LinearizabilitySearchBudgetTests {
@@ -15,13 +15,15 @@ struct LinearizabilitySearchBudgetTests {
         #expect(measurement.replayCalls <= PreemptiveReduction.linearizabilitySearchReplayBudget)
     }
 
-    @Test("An abandoned search reports linearizable rather than manufacturing a counterexample")
-    func abandonedSearchResolvesAsLinearizable() {
+    @Test("An abandoned search passes the probe rather than manufacturing a counterexample")
+    func abandonedSearchResolvesAsAPass() {
         // The oracle is unsatisfiable, so an exhaustive search would report a violation. Stopping early means the search neither found an explanation nor ruled one out, and an inconclusive result must not surface as a counterexample.
         let measurement = measureVoidSearch(laneCount: 3, commandsPerLane: 7)
 
         #expect(measurement.replayCalls <= PreemptiveReduction.linearizabilitySearchReplayBudget)
-        #expect(measurement.linearizable)
+        #expect(measurement.passesTheProbe)
+        // The pass is reported as its own verdict rather than as linearizability, because the runner counts abandonments and warns about the probes it let stand without judging.
+        #expect(measurement.isAbandoned)
     }
 
     @Test("A search small enough to finish still reaches its verdict")
@@ -30,7 +32,8 @@ struct LinearizabilitySearchBudgetTests {
         let measurement = measureVoidSearch(laneCount: 2, commandsPerLane: 3)
 
         #expect(measurement.replayCalls < PreemptiveReduction.linearizabilitySearchReplayBudget)
-        #expect(measurement.linearizable == false)
+        #expect(measurement.passesTheProbe == false)
+        #expect(measurement.isAbandoned == false)
     }
 
     @Test("A prefix replay is charged for the commands it runs")
@@ -48,9 +51,17 @@ struct LinearizabilitySearchBudgetTests {
 // MARK: - Helpers
 
 private struct SearchMeasurement {
-    let linearizable: Bool
+    let verdict: LinearizabilityChecker.Result
     let replayCalls: Int
     let prefixCalls: Int
+
+    var passesTheProbe: Bool {
+        verdict.passesTheProbe
+    }
+
+    var isAbandoned: Bool {
+        verdict.isAbandoned
+    }
 }
 
 /// Builds a history of `laneCount` lanes of `commandsPerLane` void commands with no timing intervals, so no real-time edge prunes anything, gives it an oracle no ordering can satisfy, and counts the replay closures the DFS invokes.
@@ -103,12 +114,8 @@ private func measureVoidSearch(
         failureDescription: { nil }
     )
 
-    let linearizable = switch result {
-        case .linearizable: true
-        case .notLinearizable: false
-    }
     return SearchMeasurement(
-        linearizable: linearizable,
+        verdict: result,
         replayCalls: replayCalls,
         prefixCalls: prefixCalls
     )

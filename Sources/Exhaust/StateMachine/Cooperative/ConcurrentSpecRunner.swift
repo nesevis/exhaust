@@ -19,7 +19,7 @@ import ExhaustCore
 
 /// Outcome of draining a single tagged command sequence through the cooperative scheduler.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-struct ConcurrentExecutionResult<SystemUnderTest> {
+struct ConcurrentExecutionResult<Spec: AsyncStateMachineSpec> {
     /// Whether all invariants held throughout the interleaved execution.
     var passed: Bool
     /// The execution trace, populated only when `recordTrace` is true.
@@ -27,11 +27,21 @@ struct ConcurrentExecutionResult<SystemUnderTest> {
     /// Whether execution stalled because no continuations arrived within the idle timeout.
     var timedOut: Bool = false
     /// The SUT state after the concurrent execution, populated only when `recordTrace` is true.
-    var systemUnderTest: SystemUnderTest?
+    var systemUnderTest: Spec.SystemUnderTest?
     /// The spec's failure description after the concurrent execution, populated only when `recordTrace` is true and the execution failed.
     var failureDescription: String?
     /// The concrete type name of the error behind a failure, populated on every failed execution regardless of `recordTrace`. The `time:` mode's fault inventory keys clusters on this, so it must match what the sequential executors report via `FailureSymptom.thrown(_:)` — collapsing all cooperative failures into one string would cap unrelated fault classes against each other in the reduction gate.
     var failureSymptomKind: String?
+    /// What each lane observed, outer index being the zero-based lane index and each inner array in that lane's drain order.
+    ///
+    /// Always one entry per lane, so a lane that never ran reads as an empty array rather than a missing one. Inside a lane there is one entry per command that returned or skipped: a command that failed has no response to report, and the drain ends at the first failure. Recording is unconditional, so a probe run with `recordTrace` false carries the same responses as the final trace run.
+    var laneResponses: [[ObservedResponse<Spec.Command>]] = []
+    /// What the sequential prefix observed, in execution order. Kept apart from ``laneResponses`` because the linearizability search reorders lane commands and replays the prefix whole.
+    var prefixResponses: [ObservedResponse<Spec.Command>] = []
+    /// The lane command whose observed response no valid ordering reproduces, set by the equivalence judgement when the interleaving search names one.
+    var linearizabilityWitness: ResponseWitness?
+    /// Why the equivalence judgement rejected a run whose drain came back clean, for the report. Nil when the drain itself produced the failure, where the trace already shows the failing step.
+    var judgementDescription: String?
 }
 
 /// Outcome of running a single command and checking its invariants inside the drain loop.
@@ -45,9 +55,11 @@ private enum CommandOutcome {
 /// Outcome of one call into user spec code — a command body or an invariant check — classified without touching trace or counter state.
 ///
 /// Both calls end the same four ways, and both need their classification separated from the bookkeeping around them: the command body so the open-command counter is decremented on exactly one path, the invariant check so the straddle guard and the completion event are applied on exactly one path. Folding either into its caller's `do`/`catch` puts that bookkeeping on five exit paths, and a missed one leaves the probe permanently non-quiescent, silently disabling every later invariant check.
+///
+/// ``completed`` carries what the call returned so the command body's ``CommandResponse`` reaches the response recorder. An invariant check instantiates this at `Void`.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-private enum SpecCallOutcome {
-    case completed
+private enum SpecCallOutcome<Value> {
+    case completed(Value)
     case skipped
     case checkFailed(message: String, symptomKind: String)
     case threw(message: String, symptomKind: String)
@@ -55,9 +67,10 @@ private enum SpecCallOutcome {
 
 /// Runs one call into user spec code, classifying how it ended.
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-private func classifySpecCall(_ call: () async throws -> Void) async -> SpecCallOutcome {
+private func classifySpecCall<Value>(_ call: () async throws -> Value) async -> SpecCallOutcome<Value> {
     do {
-        try await call()
+        let value = try await call()
+        return .completed(value)
     } catch is StateMachineSkip {
         return .skipped
     } catch let failure as StateMachineCheckFailure {
@@ -68,7 +81,6 @@ private func classifySpecCall(_ call: () async throws -> Void) async -> SpecCall
     } catch {
         return .threw(message: "\(error)", symptomKind: String(describing: type(of: error)))
     }
-    return .completed
 }
 
 /// Decides when the shared spec is safe to check invariants against.
@@ -129,12 +141,51 @@ private struct LaneTraceRecorder {
     }
 }
 
-/// Runs a single command, checks invariants when the spec is quiescent, and records trace events. Returns the outcome so the caller can handle exit flow (`break` in the prefix loop, `return` in a lane Task).
+/// Appends one lane's observed responses, stamped with monotonic call and return indices.
+///
+/// Cooperative execution is fully serialised by the drain loop, so wall-clock timestamps say nothing the drain order does not already say, and on a fast machine two commands can share a timestamp. One counter shared by every lane and the prefix supplies the ordering instead: one tick when a command body is entered, one when it returns. Two commands overlap exactly when their call-to-return index ranges interleave, which is the relation the linearizability checker's real-time pruning reads. The indices are exact rather than measured, so that pruning is stronger here than on the thread-based path, where a measured span only contains the true one.
+///
+/// Recording is unconditional, unlike trace recording: a response is data the verdict can rest on, so a probe must observe the same responses whether or not it is the run that reports.
+///
+/// The boxes follow the drain loop's access discipline — touched only from the drain thread, behind the cancellation guards.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+private struct LaneResponseRecorder<Command> {
+    let responses: UnsafeSendableBox<[ObservedResponse<Command>]>
+    /// The event counter shared by every lane and the prefix. Ordering across lanes is what it exists to establish, so one counter serves them all.
+    let clock: UnsafeSendableBox<UInt64>
+    /// The ``ScheduleMarker`` raw value the recorded commands carried, so a linearizability witness resolves to the lane label the failure report prints. The prefix records under ``ScheduleMarker/prefix``.
+    let marker: UInt8
+
+    /// Advances the shared counter and returns this event's index.
+    func tick() -> UInt64 {
+        clock.value += 1
+        return clock.value
+    }
+
+    func record(
+        _ command: Command,
+        outcome: ObservedOutcome,
+        callTime: UInt64,
+        returnTime: UInt64
+    ) {
+        responses.value.append(
+            ObservedResponse(
+                lane: marker,
+                command: command,
+                outcome: outcome,
+                interval: ObservedInterval(callTime: callTime, returnTime: returnTime)
+            )
+        )
+    }
+}
+
+/// Runs a single command, checks invariants when the spec is quiescent, and records the trace event and the observed response. Returns the outcome so the caller can handle exit flow (`break` in the prefix loop, `return` in a lane Task).
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 private func runCommandRecordingTrace<Spec: AsyncStateMachineSpec>(
     _ command: Spec.Command,
     on spec: UnsafeSendableBox<Spec>,
     recorder: LaneTraceRecorder,
+    responses: LaneResponseRecorder<Spec.Command>,
     gate: QuiescenceGate
 ) async -> CommandOutcome {
     guard Task.isCancelled == false else {
@@ -142,19 +193,28 @@ private func runCommandRecordingTrace<Spec: AsyncStateMachineSpec>(
     }
     recorder.record(.started)
     gate.enterCommand()
+    let callTime = responses.tick()
     let bodyOutcome = await classifySpecCall { try await spec.value.run(command) }
-    // A continuation resumed after abandonment runs on a GCD thread, where touching a shared box races the drain thread, so the cancellation recheck must precede the gate exit like every other box access after a resume. The imbalance this leaves is harmless: a cancelled probe never checks invariants again and its boxes die with it.
+    // A continuation resumed after abandonment runs on a GCD thread, where touching a shared box races the drain thread, so the cancellation recheck must precede the gate exit and the return tick like every other box access after a resume. The imbalance this leaves is harmless: a cancelled probe never checks invariants again and its boxes die with it.
     guard Task.isCancelled == false else {
         return .skipped
     }
+    let returnTime = responses.tick()
     gate.exitCommand()
 
     let didSkip: Bool
     switch bodyOutcome {
-        case .completed:
+        case let .completed(response):
+            responses.record(
+                command,
+                outcome: response.returnValue.map(ObservedOutcome.returned) ?? .returnedVoid,
+                callTime: callTime,
+                returnTime: returnTime
+            )
             didSkip = false
         case .skipped:
             recorder.record(.skipped)
+            responses.record(command, outcome: .skipped, callTime: callTime, returnTime: returnTime)
             didSkip = true
         case let .checkFailed(message, symptomKind):
             recorder.record(.failed(message: message, source: .check))
@@ -241,6 +301,8 @@ private let cancellationDrainMilliseconds = 5
 ///
 /// The drain loop advances one continuation at a time (via `runSynchronously`), picking the lane indicated by the next schedule entry. When a command body hits an `await` (for example, `Task.yield()` inside a non-atomic read-modify-write), the task suspends and re-enqueues its continuation. The drain loop then picks another lane's continuation, producing a deterministic interleaving at that suspension point.
 ///
+/// Every command that returns or skips is recorded against its lane as an `ObservedResponse`, stamped with monotonic call and return indices drawn from one counter shared by the prefix and every lane. Recording does not depend on `recordTrace`, because a response is evidence a verdict can rest on rather than reporting detail.
+///
 /// - Parameter concurrencyLevel: The number of concurrent lanes (1...8). When 1, the generator tags every command as prefix, so the entire sequence runs in the sequential prefix phase and the lane drain never executes.
 /// - Parameter recordTrace: When false, trace recording is skipped for performance (used during generation and reduction where only pass/fail matters). When true, the full interleaving trace is captured for the final counterexample report.
 /// - Parameter idleTimeoutMilliseconds: Maximum wall-clock time (in milliseconds) the drain loop waits with no pending jobs before declaring a timeout. Prevents infinite hangs when a continuation escapes to a foreign executor. Pass `Int.max` to disable.
@@ -252,7 +314,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
     concurrencyLevel: Int,
     recordTrace: Bool,
     idleTimeoutMilliseconds: Int = 1000
-) -> ConcurrentExecutionResult<Spec.SystemUnderTest> {
+) -> ConcurrentExecutionResult<Spec> {
     // One pass replaces the per-lane filter passes: prefix commands, per-lane buckets, and the schedule all fall out of a single scan. The results are rebound as lets so the `@Sendable` lane tasks can capture them.
     var prefixBuffer: [Spec.Command] = []
     var laneBuffer: [[Spec.Command]] = Array(repeating: [], count: concurrencyLevel)
@@ -288,6 +350,10 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
     let trace = UnsafeSendableBox<[TraceEvent]>([])
     let gate = QuiescenceGate()
     let commandIndices: [UnsafeSendableBox<Int>] = (0 ..< concurrencyLevel).map { _ in UnsafeSendableBox(0) }
+    // One counter for the prefix and every lane: it exists to order events across lanes, which per-lane counters could not do.
+    let responseClock = UnsafeSendableBox<UInt64>(0)
+    let prefixResponses = UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([])
+    let laneResponses: [UnsafeSendableBox<[ObservedResponse<Spec.Command>]>] = (0 ..< concurrencyLevel).map { _ in UnsafeSendableBox([]) }
 
     /// Every exit path renders the same way: the setup step first, command steps reindexed after it.
     func assembleTrace() -> [TraceStep] {
@@ -298,9 +364,14 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         return __ExhaustRuntime.joinTrace(setup: setupTrace.value, commands: commandTrace)
     }
 
+    /// Reads the response boxes for a result construction. Safe on the abandonment paths for the same reason ``assembleTrace()`` is: a resumed continuation clears its cancellation guard before it can reach a box.
+    func collectLaneResponses() -> [[ObservedResponse<Spec.Command>]] {
+        laneResponses.map(\.value)
+    }
+
     if setupStep != nil || prefixCommands.isEmpty == false {
         let prefixDone = UnsafeSendableBox(false)
-        let prefixTask = Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace, setupTrace, gate] in
+        let prefixTask = Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace, setupTrace, gate, prefixResponses, responseClock] in
             // Setup is the head of the sequential prefix: it runs on every fresh spec before any command, cannot skip, and its throw fails the run with the error type as the symptom.
             if let setupStep {
                 let outcome = await runSetupRecordingTrace(
@@ -322,8 +393,13 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                         lane: .prefix,
                         label: recordTrace ? "\(command)" : ""
                     )
+                    let responseRecorder = LaneResponseRecorder(
+                        responses: prefixResponses,
+                        clock: responseClock,
+                        marker: ScheduleMarker.prefix.rawValue
+                    )
                     let outcome = await runCommandRecordingTrace(
-                        command, on: spec, recorder: recorder, gate: gate
+                        command, on: spec, recorder: recorder, responses: responseRecorder, gate: gate
                     )
                     if case let .failed(message, symptomKind) = outcome {
                         failedSymptomKind.value = symptomKind
@@ -357,14 +433,18 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
             return ConcurrentExecutionResult(
                 passed: false,
                 trace: assembleTrace(),
-                timedOut: true
+                timedOut: true,
+                laneResponses: collectLaneResponses(),
+                prefixResponses: prefixResponses.value
             )
         }
         if failed.value != nil {
             return ConcurrentExecutionResult(
                 passed: false,
                 trace: assembleTrace(),
-                failureSymptomKind: failedSymptomKind.value
+                failureSymptomKind: failedSymptomKind.value,
+                laneResponses: collectLaneResponses(),
+                prefixResponses: prefixResponses.value
             )
         }
     }
@@ -374,7 +454,9 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
     if hasAnyLaneCommands == false {
         return ConcurrentExecutionResult(
             passed: true,
-            trace: assembleTrace()
+            trace: assembleTrace(),
+            laneResponses: collectLaneResponses(),
+            prefixResponses: prefixResponses.value
         )
     }
 
@@ -383,13 +465,16 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         let lane = LaneID(index: UInt8(laneIndex))
         let executor = executors[laneIndex]
         let commandIndex = commandIndices[laneIndex]
+        let laneResponseBox = laneResponses[laneIndex]
+        // Responses are addressed by marker value, not lane index, so a linearizability witness resolves to the same lane label the failure report prints.
+        let laneMarker = UInt8(laneIndex) + 1
 
         if commands.isEmpty {
             runQueue.markComplete(lane: lane)
             continue
         }
 
-        let laneTask = Task(executorPreference: executor) { @Sendable [spec, failed, failedSymptomKind, runQueue, trace, commandIndex, gate] in
+        let laneTask = Task(executorPreference: executor) { @Sendable [spec, failed, failedSymptomKind, runQueue, trace, commandIndex, gate, laneResponseBox, responseClock] in
             defer { runQueue.markComplete(lane: lane) }
             let traceLane = TraceEvent.Lane.lane(lane)
             for command in commands {
@@ -409,8 +494,13 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                     lane: traceLane,
                     label: label
                 )
+                let responseRecorder = LaneResponseRecorder(
+                    responses: laneResponseBox,
+                    clock: responseClock,
+                    marker: laneMarker
+                )
                 let outcome = await runCommandRecordingTrace(
-                    command, on: spec, recorder: recorder, gate: gate
+                    command, on: spec, recorder: recorder, responses: responseRecorder, gate: gate
                 )
                 if case let .failed(message, symptomKind) = outcome {
                     failedSymptomKind.value = symptomKind
@@ -461,7 +551,13 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                 executors: executors
             )
         }
-        return ConcurrentExecutionResult(passed: false, trace: assembleTrace(), timedOut: true)
+        return ConcurrentExecutionResult(
+            passed: false,
+            trace: assembleTrace(),
+            timedOut: true,
+            laneResponses: collectLaneResponses(),
+            prefixResponses: prefixResponses.value
+        )
     }
 
     let finalTrace = assembleTrace()
@@ -471,6 +567,8 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         trace: finalTrace,
         systemUnderTest: recordTrace ? spec.value.systemUnderTest : nil,
         failureDescription: concurrentFailed && recordTrace ? spec.value.failureDescription() : nil,
-        failureSymptomKind: failedSymptomKind.value
+        failureSymptomKind: failedSymptomKind.value,
+        laneResponses: collectLaneResponses(),
+        prefixResponses: prefixResponses.value
     )
 }

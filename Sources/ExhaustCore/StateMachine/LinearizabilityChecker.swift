@@ -11,6 +11,8 @@
 /// Both synchronous and asynchronous replay are supported. The interleaving search and response comparison are shared; only the replay-and-verify step differs.
 ///
 /// The checker is deliberately non-generic: it stores per-lane ``ObservedOutcome`` arrays and addresses commands by `(laneIndex, commandIndex)` coordinates through the replay closure, so the exponential search compiles as concrete code under this module's whole-module optimization instead of an unspecialized generic. The commands themselves stay with the caller.
+///
+/// - SeeAlso: ``LinearizabilityChecker/Result/passesTheProbe``, which is the question every caller actually asks of a verdict.
 package struct LinearizabilityChecker: @unchecked Sendable {
     /// The response from replaying a single command on a fresh sequential instance.
     package struct ReplayResponse {
@@ -32,6 +34,8 @@ package struct LinearizabilityChecker: @unchecked Sendable {
     /// Result of a linearizability check.
     package enum Result {
         case linearizable
+        /// The search spent its replay budget before it could either find an explanation or rule every one out. Callers treat it as a pass, because an unfinished search must never be reported as a counterexample, and count it, because a run whose searches were all abandoned passed without judging anything.
+        case abandoned
         case notLinearizable(witness: Witness?, failureDescription: String?)
     }
 
@@ -390,6 +394,11 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         return true
     }
 
+    /// Whether the replay disagrees with the observation about *whether the command ran at all*.
+    ///
+    /// A skip is an observable response, so the two must agree: a command that skipped concurrently must skip in the replay, and one that ran must run. Disagreement rejects the placement exactly as a differing return value does, and a history no ordering can match on skips is reported as non-linearizable.
+    ///
+    /// This is what makes a skip guard that reads the model unusable under thread-based execution. Each lane runs on its own spec instance, whose model carries the prefix and nothing another lane did, so a guard like `guard model.isEmpty == false` skips on lanes that would not have skipped had the model been whole. The replay instance has the whole model, runs the command, and no ordering can explain the observed skips — a correct system under test reported as a violation. A guard that reads the system under test asks the shared object the lanes actually raced on, and the replay reproduces its answer.
     private func stepMismatches(observed: ObservedOutcome, replay: ReplayResponse) -> Bool {
         observed.isSkipped != replay.isSkipped
     }
@@ -420,22 +429,43 @@ package struct LinearizabilityChecker: @unchecked Sendable {
 
     /// Builds the verdict. When the closest divergence is at the oracle level (`closestPlaced` is `nil`), there is no command witness — the failure is visible only in the expected-versus-actual state diff.
     ///
-    /// An abandoned search (the replay budget ran out before every ordering was tried) resolves as linearizable. The search failed to find an explanation, but it also failed to rule one out, and reporting an unfinished search as a violation would manufacture counterexamples out of configurations that are merely too large. This matches the runner's treatment of a timed-out probe.
+    /// An abandoned search (the replay budget ran out before every ordering was tried) reports ``Result/abandoned`` rather than a violation: the search failed to find an explanation, but it also failed to rule one out, and reporting an unfinished search as a violation would manufacture counterexamples out of configurations that are merely too large. Callers pass the probe and tally the abandonment, so the run can warn about what it did not judge.
     private func makeResult(found: Bool, abandoned: Bool, closestMatchDepth: Int, closestPlaced: Placed?, failureDescription: () -> String?) -> Result {
         guard found == false else {
             return .linearizable
         }
         guard abandoned == false else {
-            ExhaustLog.notice(
-                category: .propertyTest,
-                event: "linearizability_search_abandoned",
-                "The interleaving search exceeded its replay budget and was abandoned; the execution is reported as linearizable. Reduce .commandLimit or .parallelize to bring the search back within budget."
-            )
-            return .linearizable
+            return .abandoned
         }
         guard closestMatchDepth >= 0, let placed = closestPlaced else {
             return .notLinearizable(witness: nil, failureDescription: failureDescription())
         }
         return .notLinearizable(witness: Witness(laneIndex: placed.laneIndex, commandIndex: placed.commandIndex), failureDescription: failureDescription())
+    }
+}
+
+// MARK: - Verdict Questions
+
+package extension LinearizabilityChecker.Result {
+    /// Whether the verdict lets the probe stand.
+    ///
+    /// Two verdicts do, for different reasons: a search that found an explaining ordering, and a search that ran out of replay budget before it could rule every ordering out. Only a completed search that rejected every ordering fails the probe. Callers ask this rather than matching cases, because treating the abandoned verdict as a failure would manufacture counterexamples out of configurations that are merely too large.
+    var passesTheProbe: Bool {
+        switch self {
+            case .linearizable, .abandoned:
+                return true
+            case .notLinearizable:
+                return false
+        }
+    }
+
+    /// Whether the search stopped for want of replay budget. Runners tally this so a run can warn about the probes it passed without judging.
+    var isAbandoned: Bool {
+        switch self {
+            case .abandoned:
+                return true
+            case .linearizable, .notLinearizable:
+                return false
+        }
     }
 }

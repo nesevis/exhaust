@@ -24,7 +24,7 @@
 public protocol StateMachineSpec: StateMachineSpecBase, AnyObject {
     /// Executes a command against the model and SUT, returning a ``CommandResponse`` for linearizability checking.
     ///
-    /// The preemptive runner captures responses per-lane for linearizability confirmation. Sequential and cooperative runners discard the return value.
+    /// `.threads` records the response against the lane that ran the command, which is what lets a return value be compared against a sequential replay. Sequential execution discards it, and a synchronous spec runs sequentially under `.tasks` as well.
     ///
     /// - Parameter command: The command to execute.
     /// - Returns: The command's description paired with its return value (or `nil` for void commands).

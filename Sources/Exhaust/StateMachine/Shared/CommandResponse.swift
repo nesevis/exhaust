@@ -1,6 +1,6 @@
 /// The return value of ``StateMachineSpec/run(_:)`` and ``AsyncStateMachineSpec/run(_:)``: a command's description paired with its return value.
 ///
-/// Void-returning commands produce `nil` as the ``returnValue``. The preemptive runner captures these per-lane for linearizability confirmation. Sequential and cooperative runners discard them.
+/// Void-returning commands produce `nil` as the ``returnValue``. Both concurrent modes record these against the lane that ran the command, so a return value can be compared against a sequential replay. Sequential execution discards them.
 ///
 /// Marked `@unchecked Sendable` because the value is consumed immediately by the caller after each command execution and never shared across isolation boundaries. Actor-isolation crossing in async spec runners is the only reason `Sendable` conformance is required.
 public struct CommandResponse: @unchecked Sendable {

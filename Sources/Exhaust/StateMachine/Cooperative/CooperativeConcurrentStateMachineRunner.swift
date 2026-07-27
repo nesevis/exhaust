@@ -119,8 +119,21 @@ public extension __ExhaustRuntime {
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
+        // Only a spec that declares an equivalence runs an interleaving search, and only its default command limit is knowable here: without one, the limit comes from an estimate over the command generator that the pipeline computes for itself. Emitted here rather than inside the pipeline for the same reason the thread-based runner does it here — on the test's own thread, before the work is dispatched, so the issue attaches to the running test.
+        if Spec.hasEquivalence {
+            warnIfInterleavingSpaceIsLarge(
+                commandLimit: config.commandLimit ?? PreemptiveReduction.defaultCommandLimit,
+                laneCount: config.concurrencyLevel,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+        }
+
         // The drain loop inside drainSchedule calls runSynchronously in a tight polling loop on whatever thread hosts it. When that thread belongs to the cooperative pool, parallel test suites each occupy a cooperative thread with a spin-wait, starving the pool and preventing the Swift runtime from scheduling the Task continuations that feed the drain loop. This deadlocks under parallel execution on machines with few cores. Dispatching the entire pipeline to a GCD thread moves all drain loops off the cooperative pool. GCD's global queue is far larger than the fixed cooperative pool, so this avoids that starvation — but it is not unbounded: a top-level concurrent queue caps at 64 threads, so aggregate lane demand is bounded by `LaneGate` (via `dispatchToGCD(reserving:)`) to keep it under that wall.
         let timeoutProbeCounts = UnsafeSendableBox((attempts: 0, timedOut: 0))
+        let searchAbandonments = UnsafeSendableBox(0)
         let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.single) {
             ExhaustLog.withConfiguration(config.logConfiguration) {
                 runCooperativeMachine(
@@ -128,6 +141,7 @@ public extension __ExhaustRuntime {
                     config: config,
                     regressionSeeds: regressionSeeds,
                     timeoutProbeCounts: timeoutProbeCounts,
+                    searchAbandonments: searchAbandonments,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -140,6 +154,14 @@ public extension __ExhaustRuntime {
         }
         warnIfTimeoutFractionHigh(
             timedOutProbes: timeoutProbeCounts.value.timedOut,
+            totalProbes: timeoutProbeCounts.value.attempts,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+        warnIfSearchesWereAbandoned(
+            abandonedSearches: searchAbandonments.value,
             totalProbes: timeoutProbeCounts.value.attempts,
             fileID: fileID,
             filePath: filePath,
@@ -159,6 +181,7 @@ private extension __ExhaustRuntime {
         config: ResolvedConcurrentConfig,
         regressionSeeds: [String],
         timeoutProbeCounts: UnsafeSendableBox<(attempts: Int, timedOut: Int)>,
+        searchAbandonments: UnsafeSendableBox<Int>,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -174,7 +197,11 @@ private extension __ExhaustRuntime {
         let commandGen = Spec.commandGenerator.gen
         let screeningBudget = config.budget.screeningBudget
         let resolvedCommandLimit = config.commandLimit
-            ?? min(estimateCommandLimit(commandGen: commandGen, screeningBudget: UInt64(screeningBudget)), 40)
+            ?? defaultTasksCommandLimit(
+                hasEquivalence: Spec.hasEquivalence,
+                commandGen: commandGen,
+                screeningBudget: screeningBudget
+            )
 
         guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
             deferredIssues.append("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure.")
@@ -198,20 +225,22 @@ private extension __ExhaustRuntime {
         let backend = CooperativeStateMachineBackend<Spec>(
             specInit: specInit,
             concurrencyLevel: concurrencyLevel,
-            idleTimeoutMilliseconds: idleTimeoutMilliseconds
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+            searchAbandonments: searchAbandonments
         )
 
         let invocationCounter = UnsafeSendableBox(0)
         let property: @Sendable (SpecCandidateValue<Spec>) -> Bool = { candidate in
             invocationCounter.value += 1
             timeoutProbeCounts.value.attempts += 1
-            let result = drainSchedule(
+            let result = drainAndJudge(
                 taggedCommands: candidate.taggedCommands,
                 setupStep: candidate.setupStep,
                 specInit: specInit,
                 concurrencyLevel: concurrencyLevel,
                 recordTrace: false,
-                idleTimeoutMilliseconds: idleTimeoutMilliseconds
+                idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+                searchAbandonments: searchAbandonments
             )
             if result.timedOut {
                 // A timed-out probe is inconclusive, not a counterexample. Count it as a pass so discovery keeps sampling, and tally it for the timeout-rate warning.
@@ -263,5 +292,26 @@ private extension __ExhaustRuntime {
         )
         deferredIssues.append(contentsOf: issues)
         return (result, deferredIssues)
+    }
+}
+
+// MARK: - Command Limit
+
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+extension __ExhaustRuntime {
+    /// The command limit a task-based run uses when the settings name none.
+    ///
+    /// A spec that declares an equivalence takes the thread-based default, because every probe its equivalence rejects pays for an interleaving search whose cost grows multinomially in the sequence length. The estimate-driven limit reaches 40, which puts that search past its replay budget on a spec whose commands answer nothing — the search is then abandoned and the probe passes without judging anything, which is the outcome the lower limit exists to avoid. The startup interleaving-space warning in ``__runStateMachineConcurrent(_:settings:fileID:filePath:line:column:)`` assumes this same default.
+    ///
+    /// Without an equivalence a probe costs one drain and nothing searches, so the estimate stands: longer sequences reach deeper states, and the drain's cost is linear in their length.
+    static func defaultTasksCommandLimit(
+        hasEquivalence: Bool,
+        commandGen: Generator<some Any>,
+        screeningBudget: Int
+    ) -> Int {
+        guard hasEquivalence == false else {
+            return PreemptiveReduction.defaultCommandLimit
+        }
+        return min(estimateCommandLimit(commandGen: commandGen, screeningBudget: UInt64(screeningBudget)), 40)
     }
 }

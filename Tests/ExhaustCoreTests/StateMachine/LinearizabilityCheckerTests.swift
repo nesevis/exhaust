@@ -305,6 +305,10 @@ private func verdict(
     switch result {
         case .linearizable:
             return (true, nil)
+        case .abandoned:
+            // Every history here is a handful of commands, so the search finishes far inside its replay budget. Reaching this case means the budget or the way replays are charged against it has changed.
+            Issue.record("The search was abandoned on a history small enough to finish")
+            return (true, nil)
         case let .notLinearizable(witness, _):
             return (false, witness.map { ($0.laneIndex, $0.commandIndex) })
     }
@@ -406,6 +410,10 @@ private func queueVerdict(
 ) -> (linearizable: Bool, witness: (lane: Int, command: Int)?) {
     switch result {
         case .linearizable:
+            return (true, nil)
+        case .abandoned:
+            // Every history here is a handful of commands, so the search finishes far inside its replay budget. Reaching this case means the budget or the way replays are charged against it has changed.
+            Issue.record("The search was abandoned on a history small enough to finish")
             return (true, nil)
         case let .notLinearizable(witness, _):
             return (false, witness.map { ($0.laneIndex, $0.commandIndex) })

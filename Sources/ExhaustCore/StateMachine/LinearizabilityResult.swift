@@ -3,7 +3,31 @@
 /// Mirrors ``LinearizabilityChecker/Result``, resolving the checker's positional witness into a renderable ``ResponseWitness`` addressed by marker value rather than lane array position.
 package enum LinearizabilityResult {
     case linearizable
+    /// The search spent its replay budget before reaching a verdict. Passes the probe and counts against the run's abandonment tally; see ``LinearizabilityChecker/Result/abandoned``.
+    case abandoned
     case notLinearizable(witness: ResponseWitness?, failureDescription: String?)
+}
+
+package extension LinearizabilityResult {
+    /// Whether the verdict lets the probe stand; see ``LinearizabilityChecker/Result/passesTheProbe``.
+    var passesTheProbe: Bool {
+        switch self {
+            case .linearizable, .abandoned:
+                return true
+            case .notLinearizable:
+                return false
+        }
+    }
+
+    /// Whether the search stopped for want of replay budget. Runners tally this so a run can warn about the probes it passed without judging.
+    var isAbandoned: Bool {
+        switch self {
+            case .abandoned:
+                return true
+            case .linearizable, .notLinearizable:
+                return false
+        }
+    }
 }
 
 /// The concurrent command whose observed response no valid sequential ordering reproduces, addressed the way the failure renderer indexes lane commands: by ``ScheduleMarker/rawValue`` and per-lane execution offset.
@@ -25,6 +49,8 @@ package func makeLinearizabilityResult(
     switch coreResult {
         case .linearizable:
             return .linearizable
+        case .abandoned:
+            return .abandoned
         case let .notLinearizable(witness, failureDescription):
             guard let witness,
                   witness.laneIndex < laneObservations.count,

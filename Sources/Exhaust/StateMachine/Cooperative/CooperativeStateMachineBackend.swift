@@ -8,18 +8,21 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
     let specInit: () -> Spec
     let concurrencyLevel: Int
     let idleTimeoutMilliseconds: Int
+    /// Interleaving searches this run abandoned for exceeding their replay budget, counted so the runner can warn about probes it passed without judging.
+    var searchAbandonments = UnsafeSendableBox(0)
 
     func probe(
         _ candidate: SpecCandidateValue<Spec>,
         context _: StateMachineRunContext<Spec>
     ) -> ProbeOutcome {
-        let result = drainSchedule(
+        let result = drainAndJudge(
             taggedCommands: candidate.taggedCommands,
             setupStep: candidate.setupStep,
             specInit: specInit,
             concurrencyLevel: concurrencyLevel,
             recordTrace: false,
-            idleTimeoutMilliseconds: idleTimeoutMilliseconds
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+            searchAbandonments: searchAbandonments
         )
         if result.timedOut {
             return .timeout
@@ -69,7 +72,8 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
     ) -> (result: StateMachineResult<Spec>, issueMessage: String) {
         let reduced = reduced.prefixFirstOrder()
 
-        let traceResult = drainSchedule(
+        // The reported run's own judgement is not tallied: this is a re-run of a sequence the pipeline has already judged, and counting it twice would overstate how much of the search budget the run spent.
+        let traceResult = drainAndJudge(
             taggedCommands: reduced,
             setupStep: setupStep,
             specInit: specInit,
@@ -112,6 +116,9 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
             let indented = $0.replacingOccurrences(of: "\n", with: "\n  ")
             return "Actual state (from concurrent execution):\n  \(indented)"
         }
+        context.state.failureContext.judgementDescription = traceResult.judgementDescription
+        context.state.failureContext.linearizabilityWitness = traceResult.linearizabilityWitness
+        context.state.failureContext.laneResponseValues = laneResponseValues(traceResult.laneResponses)
 
         let issueMessage: String = context.config.suppress.issueReporting
             ? ""
@@ -123,4 +130,21 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
 
         return (result, issueMessage)
     }
+}
+
+// MARK: - Helpers
+
+/// Groups observed responses by the lane marker the report prints, so each lane command can be annotated with what it answered.
+///
+/// Returns nil when no lane recorded anything, which keeps the annotation out of reports that have nothing to annotate. A lane's array is a prefix of its commands — the drain stops at the first failure and a failed command has no response — so positional indexing never shifts an annotation onto the wrong command.
+@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+private func laneResponseValues(
+    _ laneResponses: [[ObservedResponse<some Any>]]
+) -> [UInt8: [String?]]? {
+    let recorded = laneResponses.joined()
+    guard recorded.isEmpty == false else {
+        return nil
+    }
+    return Dictionary(grouping: recorded, by: \.lane)
+        .mapValues { $0.map(\.outcome.displayValue) }
 }

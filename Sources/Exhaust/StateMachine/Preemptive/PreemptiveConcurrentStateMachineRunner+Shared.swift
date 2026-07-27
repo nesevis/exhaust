@@ -187,6 +187,31 @@ func warnIfTimeoutFractionHigh(
     )
 }
 
+// MARK: - Abandoned Search Warning
+
+/// Emits a runtime warning when any interleaving search spent its replay budget without reaching a verdict.
+///
+/// An abandoned search passes its probe, because an unfinished search must never be reported as a counterexample. That makes it silent by construction: a run whose searches were all abandoned reports success while having judged nothing. The count is what distinguishes "no race here" from "the search never finished looking", so it is surfaced rather than logged. Shared by both concurrent modes, and called on the test's own thread after the pipeline returns so the issue attaches to the running test.
+func warnIfSearchesWereAbandoned(
+    abandonedSearches: Int,
+    totalProbes: Int,
+    fileID: StaticString,
+    filePath: StaticString,
+    line: UInt,
+    column: UInt
+) {
+    guard abandonedSearches > 0 else {
+        return
+    }
+    reportWarning(
+        "Abandoned the interleaving search on \(abandonedSearches) of \(totalProbes) probes after it exceeded \(PreemptiveReduction.linearizabilitySearchReplayBudget) command replays. An abandoned search passes its probe, so a race in those sequences went undetected. Reduce .commandLimit or .parallelize to bring the search back within budget.",
+        fileID: fileID,
+        filePath: filePath,
+        line: line,
+        column: column
+    )
+}
+
 /// Renders a search-space count at the magnitude a reader can act on: exact below a million, then one significant digit and a power of ten.
 ///
 /// Past a million the trailing digits name no decision the reader can make, and the configurations this warning fires on reach 17 digits, which is harder to read in a terminal than `~3e17`.

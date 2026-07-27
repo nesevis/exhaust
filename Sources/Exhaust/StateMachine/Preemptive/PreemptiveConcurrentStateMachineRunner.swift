@@ -41,7 +41,11 @@ public extension __ExhaustRuntime {
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
-        let innerBackend = PreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
+        let searchAbandonments = UnsafeSendableBox(0)
+        let innerBackend = PreemptiveChecker<Spec>(
+            idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds,
+            searchAbandonments: searchAbandonments
+        )
         let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
@@ -66,6 +70,14 @@ public extension __ExhaustRuntime {
         }
         warnIfTimeoutFractionHigh(
             timedOutProbes: timeoutProbeCounts.value.timedOut,
+            totalProbes: timeoutProbeCounts.value.attempts,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+        warnIfSearchesWereAbandoned(
+            abandonedSearches: searchAbandonments.value,
             totalProbes: timeoutProbeCounts.value.attempts,
             fileID: fileID,
             filePath: filePath,
@@ -239,9 +251,14 @@ private func runCatchingObjC(_ body: @convention(block) () -> Void) -> Bool {
 // MARK: - Checker
 
 /// Runs each probe directly on GCD threads and compares against a sequential oracle.
-private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
+///
+/// Internal rather than private so tests can drive one probe and read its outcome, the way the cooperative tests call `drainSchedule` directly. A thread-based probe's verdict is not recoverable from a pipeline run: the pipeline reduces, repeats, and reports, and the distinction between a sequentially-reproducible failure and an ordering violation is visible only in the outcome this type returns.
+struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
     /// Idle bound for the concurrent lanes, or `nil` to wait indefinitely. Without a bound, a synchronous SUT deadlock (the exact bug class preemptive testing targets) would wedge a lane forever and hang the test process with no diagnostic.
     let idleTimeoutMilliseconds: Int?
+
+    /// Interleaving searches this run abandoned for exceeding their replay budget, counted so the runner can warn about probes it passed without judging. Tests that drive a probe directly supply their own.
+    var searchAbandonments = UnsafeSendableBox(0)
 
     /// Executes a tagged command sequence with real GCD concurrency using a pre-computed lane partition.
     ///
@@ -260,11 +277,12 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         if runCommandsCatchingObjC(at: partition.prefixIndices, in: taggedCommands, on: concurrentSpec) == false {
             return .failed(concurrentSpec: concurrentSpec)
         }
-        if runCommandsCatchingObjC(at: partition.prefixIndices, in: taggedCommands, on: sequentialSpec) == false {
+        // The reference replay checks invariants after every command; the prefix on the concurrent instance above does not, because these same commands run here in the same order and a second pass would report the same verdict twice.
+        if runCommandsCheckingInvariants(at: partition.prefixIndices, in: taggedCommands, on: sequentialSpec) == false {
             return .failed(concurrentSpec: concurrentSpec)
         }
 
-        if runCommandsCatchingObjC(at: partition.concurrentIndices, in: taggedCommands, on: sequentialSpec) == false {
+        if runCommandsCheckingInvariants(at: partition.concurrentIndices, in: taggedCommands, on: sequentialSpec) == false {
             return .failed(concurrentSpec: concurrentSpec)
         }
 
@@ -337,12 +355,7 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
             return .failed(concurrentSpec: concurrentSpec)
         }
 
-        do {
-            try concurrentSpec.checkInvariants()
-        } catch {
-            return .failed(concurrentSpec: concurrentSpec)
-        }
-
+        // No invariant check on the concurrent instance here. After the lanes have raced, a model-versus-system comparison on that instance is order-dependent by construction, whether or not the model is synchronized: an invariant is a claim that holds whatever order the commands ran in, and this state is one particular order's outcome that nothing has established was a valid one. Invariants under thread-based execution are judged only where a single command runs at a time (ADR 0004): the reference replay above, and the replays inside the interleaving search below.
         let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
         // Void-only, no-skip commands carry no response data, so linearizability reduces to final-state equivalence.
         let hasResponseInfo = collectedResponses.contains { lane in lane.contains { $0.outcome.returnValue != nil || $0.outcome.isSkipped } }
@@ -393,6 +406,8 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
                     if preemptiveResponseMatches(observed: observed.outcome, replayValue: response.returnValue, replaySkipped: false) == false {
                         return
                     }
+                    // An invariant that fails on this order disqualifies it as an explanation of what the lanes did, the same as a response that does not match. The full search then decides whether any other order explains the run.
+                    try witnessSpec.checkInvariants()
                 } catch is StateMachineSkip {
                     if observed.outcome.isSkipped == false {
                         return
@@ -446,18 +461,49 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         return objcSucceeded && commandFailed == false
     }
 
+    /// Runs the commands at the partition-supplied positions on the sequential reference, checking invariants after each one.
+    ///
+    /// This replay has one command running at a time, so the spec is settled after every command and an invariant has a state to judge. An invariant that fails here fails without any interleaving, which makes the sequence a deterministic counterexample: the caller reports it directly, with no equivalence comparison and no interleaving search. That is what makes a thread-based run answerable to the spec's own claims rather than only to a difference between two runs.
+    ///
+    /// A command that skips runs nothing and leaves the state where the previous check found it, so its check is skipped with it.
+    private func runCommandsCheckingInvariants(
+        at indices: [Int],
+        in taggedCommands: [(ScheduleMarker, Spec.Command)],
+        on spec: Spec
+    ) -> Bool {
+        var commandFailed = false
+        let objcSucceeded = runCatchingObjC {
+            for index in indices {
+                do {
+                    try spec.run(taggedCommands[index].1)
+                    try spec.checkInvariants()
+                } catch is StateMachineSkip {
+                    continue
+                } catch {
+                    commandFailed = true
+                    return
+                }
+            }
+        }
+        return objcSucceeded && commandFailed == false
+    }
+
     func checkLinearizability(
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         setupStep: Spec.SetupStep?,
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
-        Self.runLinearizabilityCheck(
+        let result = Self.runLinearizabilityCheck(
             taggedCommands: taggedCommands,
             setupStep: setupStep,
             laneResponses: laneResponses,
             concurrentSpec: concurrentSpec
         )
+        if result.isAbandoned {
+            searchAbandonments.value += 1
+        }
+        return result
     }
 
     /// Constructs the replay closures and drives the linearizability checker for a synchronous spec.
@@ -510,12 +556,18 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         return makeLinearizabilityResult(result, laneObservations: laneResponses)
     }
 
+    /// Replays one command on the search's sequential instance, checking invariants after it.
+    ///
+    /// Returning nil rejects the candidate ordering the search is building and sends it back to try another, so an invariant that fails here prunes a subtree rather than failing the check: the ordering it was testing is not one the run could have taken. A sequence whose invariants fail under *every* ordering has already been reported by the reference replay, which runs before the search.
+    ///
+    /// The check is not charged against the search's replay budget. The budget bounds replays, and an invariant check runs no commands; charging it would shrink the search space by an amount that depends on how many invariants the spec declares.
     private static func replaySync(
         _ command: Spec.Command,
         on spec: Spec
     ) -> LinearizabilityChecker.ReplayResponse? {
         do {
             let response = try spec.run(command)
+            try spec.checkInvariants()
             return .init(
                 returnValue: response.returnValue,
                 isSkipped: false
@@ -570,8 +622,7 @@ private struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         if failed {
             return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
-        // A .threads spec expresses its self-consistency check through the @Oracle, because the macro rejects @Invariant under .threads, and smoke never runs the concurrent phase.
-        // Replay the sequence on a fresh reference and call the oracle once at the end, so a spec that is already broken under sequential execution fails here before any concurrent probing.
+        // The trace above already checked invariants after every command. The oracle is the other half of what a spec can claim, and smoke never runs the concurrent phase, so it is called here: replay the sequence on a fresh reference and compare once at the end, so a spec that is already broken under sequential execution fails before any concurrent probing.
         // The reference is a distinct spec so the oracle's relational comparison is between two independent runs rather than the SUT against itself.
         let (reference, referenceSetupError) = Spec.makeSpec(setupStep: setupStep)
         guard referenceSetupError == nil, runAllCommandsCatchingObjC(commands, on: reference) else {
