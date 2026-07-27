@@ -1,6 +1,6 @@
 /// Captures diagnostic state from a spec for failure reports.
 ///
-/// For actor specs, these properties can only be read from the actor's executor. ``AsyncStateMachineSpec/diagnosticSnapshot()`` provides an async entry point that hops correctly.
+/// Exists to carry the system under test and failure description across the runner's Task-plus-semaphore bridge. `@unchecked Sendable` is safe because the bridge hands the value to exactly one waiter after the producing Task has finished with it.
 public struct DiagnosticSnapshot<SystemUnderTest>: @unchecked Sendable {
     public let systemUnderTest: SystemUnderTest
     public let failureDescription: String?

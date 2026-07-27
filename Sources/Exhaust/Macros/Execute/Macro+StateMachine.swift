@@ -4,7 +4,7 @@
 //
 import ExhaustCore
 
-/// Marks a `final class` or `actor` as a spec, synthesizing protocol conformance, a command enum, and a command generator.
+/// Marks a `final class` as a spec, synthesizing protocol conformance, a command enum, and a command generator.
 ///
 /// One spec shape runs under every execution mode. A `@Command` body updates the model and calls the system under test together, `@Invariant` states what holds whatever order the commands ran in, and `@Equivalence` states what "the same result" means when the order can vary. The mode is a `#execute` argument, so turning the dial needs no change to the spec:
 ///
@@ -53,7 +53,6 @@ import ExhaustCore
     named(hasEquivalence),
     named(systemUnderTest),
     named(init),
-    named(diagnosticSnapshot),
     named(SetupStep),
     named(setupGenerator),
     named(runSetup)

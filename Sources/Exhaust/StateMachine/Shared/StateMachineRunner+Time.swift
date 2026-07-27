@@ -145,8 +145,8 @@ public extension __ExhaustRuntime {
     }
 
     /// The async twin of ``stateMachineTimeReport(_:time:settings:fileID:filePath:line:column:)``: validates settings, routes on the execution model, and runs the matching adapter.
-    private static func asyncStateMachineTimeReport<Spec: AsyncStateMachineSpec>(
-        _ specType: Spec.Type,
+    private static func asyncStateMachineTimeReport(
+        _ specType: (some AsyncStateMachineSpec).Type,
         mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [FuzzSettings],
@@ -179,20 +179,7 @@ public extension __ExhaustRuntime {
                         seed: 0
                     )
                 }
-                var concurrencyLevel = consumed.parallelize?.rawValue ?? 2
-                if Spec.self is any Actor.Type, concurrencyLevel > 1 {
-                    if consumed.parallelize != nil {
-                        reportWarning(
-                            "Actor isolation serializes all command dispatch. .parallelize(lanes: \(concurrencyLevel)) will be ignored.",
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column
-                        )
-                    }
-                    concurrencyLevel = 1
-                }
-                let resolvedConcurrencyLevel = concurrencyLevel
+                let resolvedConcurrencyLevel = consumed.parallelize?.rawValue ?? 2
                 return await runSpecFuzz(
                     makeAdapter: {
                         buildTasksSpecAdapter(

@@ -227,7 +227,7 @@ private extension __ExhaustRuntime {
                     let spec = specInit()
                     let (setupTrace, setupFailed) = await applySetupRecordingTrace(spec, setupStep: setupStep)
                     if setupFailed {
-                        let snapshot = await spec.diagnosticSnapshot()
+                        let snapshot = DiagnosticSnapshot(systemUnderTest: spec.systemUnderTest, failureDescription: spec.failureDescription())
                         return (trace: setupTrace, snapshot: snapshot)
                     }
                     let (trace, _) = await buildAsyncSequentialTrace(
@@ -235,7 +235,7 @@ private extension __ExhaustRuntime {
                         run: { try await spec.run($0) },
                         checkInvariants: { try await spec.checkInvariants() }
                     )
-                    let snapshot = await spec.diagnosticSnapshot()
+                    let snapshot = DiagnosticSnapshot(systemUnderTest: spec.systemUnderTest, failureDescription: spec.failureDescription())
                     return (trace: joinTrace(setup: setupTrace, commands: trace), snapshot: snapshot)
                 }!
                 return (captured.trace, captured.snapshot.systemUnderTest, captured.snapshot.failureDescription)

@@ -12,7 +12,7 @@
 public enum ExecutionModel: Sendable {
     /// One command at a time, in the order generated.
     ///
-    /// Invariants are checked after every command. The right choice for testing state-machine logic, and the only one for an `actor` spec, whose isolation serializes every command anyway. An equivalence is never consulted: with one order, "some valid order produces an equivalent result" is trivially the run itself.
+    /// Invariants are checked after every command. The right choice for testing state-machine logic. An equivalence is never consulted: with one order, "some valid order produces an equivalent result" is trivially the run itself.
     case sequential
 
     /// Concurrent Swift Tasks, interleaved deterministically at every `await` boundary.

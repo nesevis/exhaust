@@ -6,7 +6,7 @@ import IssueReporting
 
 /// Reports whether the spec can run under `mode: .threads`, emitting an error naming what is missing when it cannot.
 ///
-/// Three things are required, and none of them is expressible in the type system: an equivalence to judge by, a reference-typed system under test for the lanes to share, and a spec that is not an actor.
+/// Two things are required, and neither is expressible in the type system: an equivalence to judge by, and a reference-typed system under test for the lanes to share.
 ///
 /// - Returns: `true` when the run may proceed.
 func threadsModeIsUsable<Spec: StateMachineSpecBase>(
@@ -26,11 +26,6 @@ func threadsModeIsUsable<Spec: StateMachineSpecBase>(
     // Every lane reaches the system under test through one shared spec instance, so a value type is copied per access and defends nothing. The mode exists to test whether the system under test survives concurrent access, which a struct cannot be asked.
     if Spec.SystemUnderTest.self is AnyObject.Type == false {
         refusals.append("mode: .threads requires a reference-typed @SystemUnderTest, because every lane reaches it through one shared spec instance and a value type cannot defend itself. Make \(Spec.SystemUnderTest.self) a final class, or use mode: .sequential or mode: .tasks, where commands never overlap on it.")
-    }
-
-    // Actor isolation serializes every command, so the lanes would run one at a time and the run would report success without having tested anything.
-    if Spec.self is any Actor.Type {
-        refusals.append("mode: .threads cannot surface races in an actor spec: actor isolation serializes every command, so the lanes never overlap. Use mode: .sequential.")
     }
 
     guard refusals.isEmpty else {

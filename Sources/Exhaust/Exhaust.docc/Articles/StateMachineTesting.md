@@ -14,7 +14,7 @@ One spec shape serves every mode. Which mode you pass to `#execute` depends on w
 
 | Your system under test | How to run it | What it finds |
 |---|---|---|
-| Synchronous class or actor | `#execute(Spec.self)` | Logic bugs: ordering, invariant violations, state corruption |
+| Synchronous class | `#execute(Spec.self)` | Logic bugs: ordering, invariant violations, state corruption |
 | Async class with `await` boundaries | `#execute(Spec.self, mode: .tasks)` | Reentrancy and interleaving bugs at `await` boundaries |
 | Class with locks, GCD, or atomics | `#execute(Spec.self, mode: .threads)` | Data races in synchronous primitives, which a task-based run steps over |
 
@@ -62,7 +62,7 @@ final class StackSpec {
 
 Each `@Command` method is one operation Exhaust can choose to run. The `weight:` parameter controls how often it appears relative to other commands. A weight-3 command shows up roughly three times as often as a weight-1 command. After every command, all `@Invariant` methods are checked automatically.
 
-Specs must be a `final class` or an `actor`. `@StateMachine` takes no arguments, because how the commands run is a question for the call site: `#execute(StackSpec.self)` runs them one at a time and checks `@Invariant` after each step, `mode: .tasks` interleaves them at `await` boundaries, and `mode: .threads` dispatches them to real OS threads. The concurrency sections cover the last two. Every example until then runs one command at a time, which is the most common way to run a spec and the only one an `actor` spec can use.
+Specs must be a `final class`. `@StateMachine` takes no arguments, because how the commands run is a question for the call site: `#execute(StackSpec.self)` runs them one at a time and checks `@Invariant` after each step, `mode: .tasks` interleaves them at `await` boundaries, and `mode: .threads` dispatches them to real OS threads. The concurrency sections cover the last two. Every example until then runs one command at a time, which is the most common way to run a spec.
 
 ## Models and invariants
 
@@ -265,11 +265,9 @@ The test call needs `await`:
 
 Exhaust detects async methods and generates the correct conformance automatically.
 
-### Actors as specs
+### Actors as the system under test
 
-An `actor` spec runs one command at a time, and nothing else is available to it. Exhaust treats all its commands as async whether or not they carry the keyword, because actor isolation makes them async from outside. That isolation also serialises every command, so `mode: .tasks` has nowhere to interleave and `mode: .threads` refuses the run when it starts, rather than reporting success after testing nothing.
-
-Actors are a natural fit when the spec's own state should be isolated from other tests running in parallel, and `@TaskLocal` injection works inside command bodies. For concurrent testing, use a `final class`.
+An `actor` cannot be a spec — actor isolation serialises every command, so no mode could interleave them, and the macro rejects the declaration. What an actor can be is the `@SystemUnderTest` of an ordinary `final class` spec, and that combination is fully supported, including under `mode: .tasks`: the scheduler drives a default actor's suspensions the same way it drives any other `await`, which is exactly what reaches actor reentrancy bugs — a method that checks isolated state, suspends, and acts on the stale answer. An actor with a custom executor is the exception: its continuations leave the scheduler's control, and the run reports an idle timeout rather than an interleaving.
 
 ## Finding concurrency bugs in async code
 

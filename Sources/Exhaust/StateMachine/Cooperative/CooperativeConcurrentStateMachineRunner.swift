@@ -83,24 +83,6 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column
     ) async -> StateMachineResult<Spec>? {
-        if Spec.self is any Actor.Type {
-            let requestedLevel = settings.compactMap { setting -> Int? in
-                if case let .parallelize(level) = setting {
-                    return level.rawValue
-                }
-                return nil
-            }.last
-            if let requestedLevel, requestedLevel > 1 {
-                reportWarning(
-                    "Actor isolation serializes all command dispatch. .parallelize(lanes: \(requestedLevel)) will be ignored.",
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                )
-            }
-        }
-
         let parsed = ResolvedConcurrentConfig.parse(settings)
         if let invalidSeed = parsed.invalidReplaySeed {
             reportError(
@@ -189,11 +171,7 @@ private extension __ExhaustRuntime {
         column: UInt
     ) -> (result: StateMachineResult<Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
-        var config = config
-
-        if config.concurrencyLevel > 1, Spec.self is any Actor.Type {
-            config.concurrencyLevel = 1
-        }
+        let config = config
 
         let commandGen = Spec.commandGenerator.gen
         let screeningBudget = config.budget.screeningBudget

@@ -36,11 +36,6 @@ public protocol AsyncStateMachineSpec: StateMachineSpecBase, AnyObject {
     /// - Parameter sequentialResult: The system under test from a sequential replay of the same command sequence.
     /// - Returns: `true` when the concurrent state counts as equivalent to that replay's.
     func equivalenceCheck(_ sequentialResult: SystemUnderTest) async -> Bool
-
-    /// Captures diagnostic state for failure reports from an actor-safe async context.
-    ///
-    /// For actor conformers, this requirement is actor-isolated, so `await spec.diagnosticSnapshot()` hops to the actor's executor correctly. The macro synthesizes the implementation.
-    func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest>
 }
 
 public extension AsyncStateMachineSpec {
@@ -49,14 +44,6 @@ public extension AsyncStateMachineSpec {
     /// Reaching this trap would be a runner bug rather than user error. Two things keep it unreachable: ``StateMachineSpecBase/hasEquivalence`` is false for such a spec and every caller checks it first, and a thread-based run, which cannot proceed without an equivalence, refuses to start at all. The protocol cannot express "present only sometimes", so the guarantee lives in those two checks.
     func equivalenceCheck(_: SystemUnderTest) async -> Bool {
         fatalError("equivalenceCheck requires an @Equivalence method; hasEquivalence is false for this spec")
-    }
-
-    /// Default implementation for non-actor conformers that can access properties directly.
-    func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
-        DiagnosticSnapshot(
-            systemUnderTest: systemUnderTest,
-            failureDescription: failureDescription()
-        )
     }
 
     /// Default no-op for specs without a `@Setup` method. The `@StateMachine` macro synthesizes a real implementation when one exists.

@@ -343,7 +343,7 @@
                 """
                 @StateMachine
                 ┬────────────
-                ╰─ 🛑 State machine specs must be a 'final class' or 'actor' — structs are not supported
+                ╰─ 🛑 State machine specs must be a 'final class' — structs are not supported
                 struct Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -433,81 +433,30 @@
             }
         }
 
-        @Test("@StateMachine on actor synthesizes diagnosticSnapshot and init")
-        func specSequentialOnActorSynthesizesDiagnosticSnapshot() {
+        @Test("@StateMachine on actor produces diagnostic")
+        func specOnActorProducesDiagnostic() {
             assertMacro {
                 """
                 @StateMachine
                 actor Spec {
-                    var expected: Int = 0
                     @SystemUnderTest var sut: MySUT
-
-                    @Invariant
-                    func valueMatches() async -> Bool {
-                        true
-                    }
 
                     @Command
                     func doSomething() async throws {
                     }
                 }
                 """
-            } expansion: {
+            } diagnostics: {
                 """
+                @StateMachine
+                ┬────────────
+                ╰─ 🛑 State machine specs must be a 'final class' — actor isolation serializes every command, so no mode can interleave them. To test an actor, make it the @SystemUnderTest of a final class spec.
                 actor Spec {
-                    var expected: Int = 0
-                    var sut: MySUT
-                    func valueMatches() async -> Bool {
-                        true
-                    }
+                    @SystemUnderTest var sut: MySUT
+
+                    @Command
                     func doSomething() async throws {
                     }
-
-                    enum Command: CustomStringConvertible, Sendable {
-                            case doSomething
-
-                        var description: String {
-                            switch self {
-                                case .doSomething:
-                                "doSomething"
-                            }
-                        }
-                    }
-
-                    typealias SystemUnderTest = MySUT
-
-                    var systemUnderTest: SystemUnderTest {
-                        sut
-                    }
-
-                    static var commandGenerator: ReflectiveGenerator<Command> {
-                        .oneOf(weighted:
-                                (1, .just(Command.doSomething))
-                        )
-                    }
-
-                    @discardableResult func run(_ command: Command) async throws -> CommandResponse {
-                        switch command {
-                            case .doSomething:
-                                try await self.doSomething()
-                                return CommandResponse(commandDescription: command.description, returnValue: nil)
-                        }
-                    }
-
-                    func checkInvariants() async throws {
-                            let valueMatchesResult = await valueMatches()
-                            try check(valueMatchesResult, "valueMatches")
-                    }
-
-                    func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
-                        DiagnosticSnapshot(systemUnderTest: systemUnderTest, failureDescription: failureDescription())
-                    }
-
-                    init() {
-                    }
-                }
-
-                extension Spec: @preconcurrency AsyncStateMachineSpec {
                 }
                 """
             }

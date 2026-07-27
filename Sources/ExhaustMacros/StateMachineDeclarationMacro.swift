@@ -53,20 +53,14 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         let equivalences = extractEquivalences(from: members)
         let setups = extractSetups(from: members)
 
-        let isClassDecl = declaration.is(ClassDeclSyntax.self)
-        let isActorDecl = declaration.is(ActorDeclSyntax.self)
-        let isReferenceType = isClassDecl || isActorDecl
-        guard isReferenceType else {
+        guard declaration.is(ClassDeclSyntax.self) else {
             return []
         }
 
         let hasAnyAsync = specHasAsyncMember(commands: commands, invariants: invariants, equivalences: equivalences, setups: setups)
-        let needsAsyncConformance = hasAnyAsync || isActorDecl
-        let preconcurrency = isActorDecl ? "@preconcurrency " : ""
+        let proto = hasAnyAsync ? "AsyncStateMachineSpec" : "StateMachineSpec"
 
-        let proto = needsAsyncConformance ? "AsyncStateMachineSpec" : "StateMachineSpec"
-
-        let ext: DeclSyntax = "extension \(type.trimmed): \(raw: preconcurrency)\(raw: proto) {}"
+        let ext: DeclSyntax = "extension \(type.trimmed): \(raw: proto) {}"
         return [ext.cast(ExtensionDeclSyntax.self)]
     }
 
@@ -88,13 +82,17 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
 
         let isClassDecl = declaration.is(ClassDeclSyntax.self)
         let isActorDecl = declaration.is(ActorDeclSyntax.self)
-        let isReferenceType = isClassDecl || isActorDecl
         let classIsMainActorIsolated = declaration
             .as(ClassDeclSyntax.self)
             .map { hasAttribute("MainActor", on: $0) } ?? false
 
         // Shared validation
-        if isReferenceType == false {
+        if isActorDecl {
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: StateMachineDiagnostic.actorNotAllowed
+            ))
+        } else if isClassDecl == false {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
                 message: StateMachineDiagnostic.structNotAllowed
@@ -228,7 +226,6 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         }
 
         let effectiveAsync = specHasAsyncMember(commands: commands, invariants: invariants, equivalences: equivalences, setups: setups)
-            || isActorDecl
 
         let access = accessPrefix(for: declaration)
 
@@ -263,25 +260,13 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
             decls.append("\(raw: access)static let hasEquivalence: Bool = true")
         }
 
-        if isActorDecl {
-            decls.append("""
-            \(raw: access)func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
-                DiagnosticSnapshot(systemUnderTest: systemUnderTest, failureDescription: failureDescription())
-            }
-            """)
-        }
-
         let hasUserInit = members.contains { member in
             guard let initDecl = member.decl.as(InitializerDeclSyntax.self) else { return false }
             return initDecl.signature.parameterClause.parameters.isEmpty
                 && initDecl.optionalMark == nil
         }
-        if isReferenceType, hasUserInit == false {
-            if isClassDecl {
-                decls.append("\(raw: access)required init() {}")
-            } else if isActorDecl {
-                decls.append("\(raw: access)init() {}")
-            }
+        if isClassDecl, hasUserInit == false {
+            decls.append("\(raw: access)required init() {}")
         }
 
         return decls

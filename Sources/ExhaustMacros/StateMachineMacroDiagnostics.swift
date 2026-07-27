@@ -7,7 +7,8 @@ enum StateMachineDiagnostic: String, DiagnosticMessage {
     case multipleSUT = "@StateMachine requires exactly one @SystemUnderTest property, but multiple were found"
     case sutTypeNotInferred = "@SystemUnderTest property type could not be inferred — add an explicit type annotation"
     case commandMissingGenerators = "@Command method has parameters but no generator expressions — add generators to the @Command attribute"
-    case structNotAllowed = "State machine specs must be a 'final class' or 'actor' — structs are not supported"
+    case structNotAllowed = "State machine specs must be a 'final class' — structs are not supported"
+    case actorNotAllowed = "State machine specs must be a 'final class' — actor isolation serializes every command, so no mode can interleave them. To test an actor, make it the @SystemUnderTest of a final class spec."
     case multipleEquivalences = "@StateMachine allows only one @Equivalence method — one definition of \"the same result\" per spec"
     case duplicateCommandName = "Two @Command methods share the same base name — rename one or merge them"
     case invalidCommandWeight = "@Command weight must be a positive integer literal"
@@ -33,7 +34,7 @@ enum StateMachineDiagnostic: String, DiagnosticMessage {
     var severity: DiagnosticSeverity {
         switch self {
             case .noCommands, .noSUT, .multipleSUT, .sutTypeNotInferred, .commandMissingGenerators,
-                 .structNotAllowed, .multipleEquivalences,
+                 .structNotAllowed, .actorNotAllowed, .multipleEquivalences,
                  .duplicateCommandName, .invalidCommandWeight, .equivalenceParameterCount,
                  .commandHasUnsupportedParameter, .invariantHasParameters, .throwingEquivalence,
                  .mainActorCommand,
