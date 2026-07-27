@@ -1,4 +1,4 @@
-/// Represents the result of one step in a ``Gen/unfold(seed:maxDepth:step:fileID:line:column:)`` loop.
+/// Represents the result of one step in a ``ReflectiveGenerator/unfold(seed:depthRange:step:finish:fileID:line:column:)`` loop.
 public enum UnfoldStep<State, Value> {
     /// Produces the final output and stops iterating.
     case done(Value)

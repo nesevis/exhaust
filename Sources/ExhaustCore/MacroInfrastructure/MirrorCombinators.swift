@@ -1,7 +1,7 @@
 public extension __ExhaustRuntime {
     /// Maps a single generator with a forward transform and Mirror-based backward extraction.
     ///
-    /// This is **macro infrastructure** — it exists solely as an expansion target for the `#gen` macro when a single generator is combined with an initializer/enum-case call.
+    /// This is **macro infrastructure**: it exists solely as an expansion target for the `#gen` macro when a single generator is combined with an initializer/enum-case call.
     static func _macroMap<Input, Output>(
         _ generator: ReflectiveGenerator<Input>,
         label: String,
@@ -82,7 +82,7 @@ public extension __ExhaustRuntime {
 
     /// Zips multiple generators with a forward transform and Mirror-based backward extraction.
     ///
-    /// This is **macro infrastructure** — it exists solely as an expansion target for the `#gen` macro when multiple generators are combined with a labeled initializer call.
+    /// This is **macro infrastructure**: it exists solely as an expansion target for the `#gen` macro when multiple generators are combined with a labeled initializer call.
     static func _macroZip<each T, NewOutput>(
         _ generators: repeat ReflectiveGenerator<each T>,
         labels: [String],
@@ -216,7 +216,7 @@ public extension __ExhaustRuntime {
 
     /// Scalar conversion for `BinaryFloatingPoint` → `BinaryFloatingPoint` (for example `Double` → `Float`).
     ///
-    /// See the `BinaryInteger` overload for why the `SendableMetatype` constraints are present.
+    /// The `SendableMetatype` constraints let the reified `mapped(forward:backward:)` capture the generic metatypes in its `@Sendable` transform closures without a strict-concurrency diagnostic. Every standard numeric type satisfies them.
     static func _macroMapScalar<Input: BinaryFloatingPoint & SendableMetatype, Output: BinaryFloatingPoint & SendableMetatype>(
         _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output
@@ -224,7 +224,7 @@ public extension __ExhaustRuntime {
         generator.mapped(forward: forward, backward: { Input($0) })
     }
 
-    /// Unconstrained fallback — forward-only when no numeric protocol matches.
+    /// Unconstrained fallback: forward-only when no numeric protocol matches.
     static func _macroMapScalar<Input, Output>(
         _ generator: ReflectiveGenerator<Input>,
         forward: @Sendable @escaping (Input) -> Output

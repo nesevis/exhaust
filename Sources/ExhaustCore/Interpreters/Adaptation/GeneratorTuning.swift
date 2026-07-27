@@ -58,7 +58,7 @@ package enum GeneratorTuning {
 
     // MARK: - Public API
 
-    /// Probes a generator's structure by running it a few times and checking whether the resulting choice trees contain any pick sites. If picks are present, performs full tuning with adaptive smoothing. If not, returns the generator unchanged — tuning has nothing to attach weights to.
+    /// Probes a generator's structure by running it a few times and checking whether the resulting choice trees contain any pick sites. If picks are present, performs full tuning with adaptive smoothing. If not, returns the generator unchanged, because tuning has nothing to attach weights to.
     ///
     /// - Parameters:
     ///   - generator: The generator to probe and possibly tune.
@@ -112,7 +112,7 @@ package enum GeneratorTuning {
 
     /// Tunes a generator so that its pick weights reflect predicate satisfaction rates.
     ///
-    /// The transformation is eager — the returned generator has its structure fully tuned and can be used with any interpreter.
+    /// The transformation is eager: the returned generator has its structure fully tuned and can be used with any interpreter.
     ///
     /// - Parameters:
     ///   - generator: The generator to tune.

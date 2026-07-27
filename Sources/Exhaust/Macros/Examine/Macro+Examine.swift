@@ -5,7 +5,7 @@ import ExhaustCore
 /// Use `#examine` to verify that a generator reflects correctly and to see whether it covers its numeric ranges, branches, sequence lengths, and character space. The returned ``ExamineReport`` exposes these metrics as assertable properties.
 ///
 /// ```swift
-/// // Quick health check — prints a coverage summary, fails on correctness errors:
+/// // Quick health check: prints a coverage summary, fails on correctness errors.
 /// #examine(personGen)
 ///
 /// // Assert that the generator covers at least 7/10 deciles for every numeric type:
@@ -14,7 +14,7 @@ import ExhaustCore
 /// #expect(report.branchCoverage >= 0.9)
 /// ```
 ///
-/// Correctness checks (reflection round-trip, filter health) can fail the test. Coverage metrics never fail on their own — assert on ``ExamineReport`` properties to enforce quality thresholds. For replay determinism checking, use the overload with a trailing `replayCheck` closure.
+/// Correctness checks (reflection round-trip, filter health) can fail the test. Coverage metrics never fail on their own: assert on ``ExamineReport`` properties to enforce quality thresholds. To also check that replay is deterministic, add a trailing `replayCheck` closure that compares two replays of the same choice tree.
 ///
 /// - Parameters:
 ///   - gen: The generator to validate.

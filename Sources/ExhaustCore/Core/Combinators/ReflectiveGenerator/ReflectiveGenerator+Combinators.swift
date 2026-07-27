@@ -8,7 +8,7 @@
 public extension ReflectiveGenerator {
     /// Adapts a generator to a new output type while preserving reflection support.
     ///
-    /// Use this when the transform involves computation that ``#gen`` cannot invert automatically: arithmetic, conditional logic, lossy conversions. For struct or class initializers with labeled arguments, prefer ``#gen`` with a trailing closure — the macro synthesizes the inverse via `Mirror`.
+    /// Use this when the transform involves computation that ``#gen`` cannot invert automatically: arithmetic, conditional logic, lossy conversions. For struct or class initializers with labeled arguments, prefer ``#gen`` with a trailing closure, where the macro synthesizes the inverse via `Mirror`.
     ///
     /// ```swift
     /// let celsiusGen = #gen(.double(in: -40...100)).mapped(

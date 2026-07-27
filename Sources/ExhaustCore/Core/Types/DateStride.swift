@@ -30,7 +30,7 @@ public enum DateStride: Sendable, Comparable {
 
     /// The approximate number of seconds represented by this stride, used for ordering.
     ///
-    /// Uses fixed conversions: 1 minute = 60 seconds, 1 hour = 3600, 1 day = 86400, 1 week = 604800, 1 month = 2592000 (30 days), 1 year = 31536000 (365 days). Generation does not use this value for calendar units — `.days` through `.years` advance with true calendar arithmetic — so treat it as an ordering key, not a duration.
+    /// Uses fixed conversions: 1 minute = 60 seconds, 1 hour = 3600, 1 day = 86400, 1 week = 604800, 1 month = 2592000 (30 days), 1 year = 31536000 (365 days). Generation does not use this value for calendar units, because `.days` through `.years` advance with true calendar arithmetic. Treat it as an ordering key, not a duration.
     public var fixedSeconds: Int {
         switch self {
             case let .seconds(n): n

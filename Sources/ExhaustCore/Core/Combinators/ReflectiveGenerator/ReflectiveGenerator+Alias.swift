@@ -12,7 +12,7 @@
 public extension ReflectiveGenerator {
     /// Chains this generator with a dependent generator whose structure depends on the produced value.
     ///
-    /// This is an alias for ``bind(_:)`` using the more familiar Swift naming convention. Use `flatMap` when the next generator genuinely depends on the value from this one — for example, generating an array whose length is determined by a previously generated integer. When generators are independent, prefer `#gen(a, b) { ... }` — they compose without introducing a dependency edge in the choice graph.
+    /// This is an alias for ``bind(_:)`` using the more familiar Swift naming convention. Use `flatMap` when the next generator genuinely depends on the value from this one, for example generating an array whose length is determined by a previously generated integer. When generators are independent, prefer `#gen(a, b) { ... }`, which composes them without introducing a dependency edge in the choice graph.
     ///
     /// - Parameter transform: A function that takes the generated value and returns a new generator.
     /// - Returns: A generator that sequences the two computations.

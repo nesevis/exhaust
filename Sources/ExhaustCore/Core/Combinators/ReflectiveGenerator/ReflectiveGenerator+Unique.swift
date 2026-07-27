@@ -16,10 +16,10 @@ public extension ReflectiveGenerator {
     /// Apply `.filter` *before* `.unique` so that the choice-gradient tuner can learn the static predicate and bias pick weights toward valid outputs:
     ///
     /// ```swift
-    /// // Slow — .unique() retries blindly against a sparse validity space
+    /// // Slow: .unique() retries blindly against a sparse validity space
     /// #gen(.binaryTree()).unique()
     ///
-    /// // Fast — .filter() triggers .choiceGradientSampling, then .unique() deduplicates
+    /// // Fast: .filter() triggers .choiceGradientSampling, then .unique() deduplicates
     /// #gen(.binaryTree())
     ///     .filter { $0.isValidBST() }
     ///     .unique()

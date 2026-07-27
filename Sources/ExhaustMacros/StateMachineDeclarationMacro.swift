@@ -34,7 +34,7 @@ private func specHasAsyncMember(
 
 /// Attached macro that synthesizes spec conformance from a class annotated with `@StateMachine`.
 ///
-/// One spec shape serves every execution mode, because the mode is a `#execute` argument rather than a property of the declaration. The macro scans for `@SystemUnderTest`, `@Command`, `@Invariant`, `@Setup`, and `@Equivalence`, then synthesizes the `Command` enum, `commandGenerator`, `run(_:)`, `checkInvariants()`, and — when an equivalence is declared — `equivalenceCheck(_:)` and `hasEquivalence`.
+/// One spec shape serves every execution mode, because the mode is a `#execute` argument rather than a property of the declaration. The macro scans for `@SystemUnderTest`, `@Command`, `@Invariant`, `@Setup`, and `@Equivalence`, then synthesizes the `Command` enum, `commandGenerator`, `run(_:)`, `checkInvariants()`, and, when an equivalence is declared, `equivalenceCheck(_:)` and `hasEquivalence`.
 ///
 /// What a mode requires of a spec is therefore checked where the mode is known, at the start of a run: a thread-based run needs an equivalence and a reference-typed system under test, and says so with a runtime error naming the call site.
 public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {

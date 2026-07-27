@@ -37,7 +37,7 @@ package enum Materializer {
     public enum Result<Output> {
         /// Materialization succeeded with a value and fresh tree.
         case success(value: Output, tree: ChoiceTree, decodingReport: DecodingReport?)
-        /// Exact mode: out-of-range or structural mismatch — candidate is invalid.
+        /// Exact mode: the candidate is invalid, either out of range or a structural mismatch.
         case rejected(decodingReport: DecodingReport?)
         /// Generation or user-supplied operation failure that is not an invalid exact candidate.
         case failed(decodingReport: DecodingReport?)

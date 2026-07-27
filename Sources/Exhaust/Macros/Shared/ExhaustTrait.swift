@@ -89,7 +89,7 @@
 
         /// Registers Crockford Base32 encoded seeds to replay before the normal pipeline.
         ///
-        /// Each seed is replayed in order. Seeds that now pass sit inert as silent regression guards — the test stays green until the property fails on that seed again.
+        /// Each seed is replayed in order. Seeds that now pass sit inert as silent regression guards: the test stays green until the property fails on that seed again.
         public static func regressions(_ seeds: String...) -> ExhaustTraitOption {
             ExhaustTraitOption(kind: .regressions(seeds))
         }
@@ -119,9 +119,7 @@
 
     // MARK: - Builder API
 
-    /// Declared on TestTrait (not Trait) so it is invisible to implicit member lookup in a @Suite
-    /// (any SuiteTrait) context. Paired with the suite builder being on SuiteTrait, each context sees
-    /// exactly one `exhaust` overload, so neither `.exhaust(...)` call is ever ambiguous.
+    /// Declared on TestTrait (not Trait) so it is invisible to implicit member lookup in a @Suite (any SuiteTrait) context. Paired with the suite builder being on SuiteTrait, each context sees exactly one `exhaust` candidate, so neither `.exhaust(...)` call is ever ambiguous.
     public extension TestTrait where Self == ExhaustTrait {
         /// Configures `#exhaust` property tests and `#execute` spec tests with the given options.
         ///
@@ -202,10 +200,7 @@
         }
     }
 
-    /// Declared on SuiteTrait, not Trait: a static member of SuiteTrait is invisible to implicit member
-    /// lookup in a @Test (any TestTrait) context, so this overload never competes with the @Test builder.
-    /// Without that, because ExhaustSuiteTrait is also a TestTrait, @Test(.exhaust(.budget(...))) would be
-    /// ambiguous between ExhaustTrait and ExhaustSuiteTrait (both expose a .budget option).
+    /// Declared on SuiteTrait, not Trait: a static member of SuiteTrait is invisible to implicit member lookup in a @Test (any TestTrait) context, so this builder never competes with the @Test builder. Without that, because ExhaustSuiteTrait is also a TestTrait, @Test(.exhaust(.budget(...))) would be ambiguous between ExhaustTrait and ExhaustSuiteTrait (both expose a .budget option).
     public extension SuiteTrait where Self == ExhaustSuiteTrait {
         /// Sets a default iteration budget for all `#exhaust` and `#execute` tests in a suite.
         ///

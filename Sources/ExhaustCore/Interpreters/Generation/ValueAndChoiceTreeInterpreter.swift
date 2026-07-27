@@ -22,7 +22,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
     /// Creates an interpreter for the given generator with optional pick materialization, seed, run cap, starting run index, and size override.
     ///
-    /// - Parameter initialRunIndex: The absolute run index to start from. Defaults to 0. Use a non-zero value to partition generation into independent batches — each batch covers a disjoint run-index range with independently derived PRNG states.
+    /// - Parameter initialRunIndex: The absolute run index to start from. Defaults to 0. Use a non-zero value to partition generation into independent batches, where each batch covers a disjoint run-index range with independently derived PRNG states.
     public init(
         _ generator: Generator<FinalOutput>,
         materializePicks: Bool = false,
@@ -212,7 +212,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
     /// Re-runs the most recent generation with full ``ChoiceTree`` construction, falling back to ``ChoiceTree/just`` on a VI/VACTI parity break.
     ///
-    /// Call after ``nextValueOnly()`` returns a failing value to obtain the tree for reduction. When ``reproduceWithTree()`` returns nil, the value-only and tree-building interpreters disagreed on PRNG consumption for the same run — the parity invariant the fast sampling path depends on. The value is still a valid counterexample, so this method returns ``ChoiceTree/just`` (an unreducible tree); the log entry and assertion make the divergence observable rather than silent.
+    /// Call after ``nextValueOnly()`` returns a failing value to obtain the tree for reduction. When ``reproduceWithTree()`` returns nil, the value-only and tree-building interpreters disagreed on PRNG consumption for the same run, breaking the parity invariant the fast sampling path depends on. The value is still a valid counterexample, so this method returns ``ChoiceTree/just`` (an unreducible tree); the log entry and assertion make the divergence observable rather than silent.
     public mutating func reproduceFailureTree() throws -> ChoiceTree {
         if let (_, tree) = try reproduceWithTree() {
             return tree

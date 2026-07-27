@@ -145,7 +145,7 @@ public extension ReflectiveGenerator {
     #if canImport(CoreGraphics)
         /// Generates arbitrary `CGFloat` values within the given range.
         ///
-        /// Delegates to the `Double` generator — on 64-bit Apple platforms `CGFloat` is a typealias for `Double`.
+        /// Delegates to the `Double` generator, because on 64-bit Apple platforms `CGFloat` is a typealias for `Double`.
         ///
         /// ```swift
         /// let gen = #gen(.cgfloat(in: 0.0...320.0))

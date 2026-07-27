@@ -21,9 +21,9 @@ public macro gen<each GeneratedValue, TransformedValue>(
     transform: (repeat each GeneratedValue) -> TransformedValue
 ) -> ReflectiveGenerator<TransformedValue> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
 
-/// Wraps a single generator expression, enabling dot-syntax (for example `.int(in: 0...100)`).
+/// Builds a generator from a factory expression written in leading-dot syntax.
 ///
-/// This overload passes the generator through unchanged. Use it when implicit member syntax is more convenient than spelling out the full `Gen` type name.
+/// The expression passes through unchanged, so `#gen(.int(in: 0...100))` and `ReflectiveGenerator.int(in: 0...100)` produce the same generator. What the macro supplies is the base type for implicit member lookup: factory calls read as `.int(…)`, `.string(…)`, or `.bool()` without naming ``ReflectiveGenerator`` at every call site. Reflection support is whatever the factory itself documents: passing a factory through `#gen` neither adds nor removes it.
 ///
 /// ```swift
 /// let gen = #gen(.int(in: 0...100))
@@ -33,9 +33,9 @@ public macro gen<GeneratedValue>(
     _ generator: ReflectiveGenerator<GeneratedValue>
 ) -> ReflectiveGenerator<GeneratedValue> = #externalMacro(module: "ExhaustMacros", type: "GenerateMacro")
 
-/// Combines multiple generators into a tuple without transformation.
+/// Combines generators into one that produces their values as a tuple.
 ///
-/// Use this overload when the generated values are consumed directly as a tuple rather than mapped through a constructor. For struct or class construction, prefer the overload that accepts a `transform` closure so the macro can synthesize a backward mapping.
+/// Each generator draws independently and the values are zipped positionally, so the tuple follows argument order. The tuple packaging is invertible: reflection splits a concrete tuple back across the same positions, which keeps the combined generator bidirectional whenever every input generator is. The reducer treats each element as its own scope, so reducing one element leaves the others untouched. Adding a trailing closure maps the drawn values through it and lets the macro synthesize a backward mapping into a struct, class, or enum case rather than a tuple.
 ///
 /// ```swift
 /// let pair = #gen(.int(in: 0...10), .asciiString(length: 1...5))
@@ -47,7 +47,7 @@ public macro gen<each GeneratedValue>(
 
 /// Synthesizes a generator from a `Decodable` type and example JSON data.
 ///
-/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a `ReflectiveGenerator` that produces arbitrary values of type `T`. Generation, replay, reduction, and screening treat the result like a hand-written generator. Reflection is unavailable as described under Limitations. Use this overload when writing generators for a large number of existing types would be impractical.
+/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a `ReflectiveGenerator` that produces arbitrary values of type `T`. Generation, replay, reduction, and screening treat the result like a hand-written generator. Reflection is unavailable as described under Limitations. Use this when writing generators for a large number of existing types would be impractical.
 ///
 /// ## What Gets a Full Generator
 ///
@@ -121,7 +121,7 @@ public macro gen<T: Codable>(
 
 /// Synthesizes a generator from a `Decodable` type and an example JSON string.
 ///
-/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a `ReflectiveGenerator` that produces arbitrary values of type `T`. Generation, replay, reduction, and screening treat the result like a hand-written generator. Reflection is unavailable as described under Limitations. Use this overload when writing generators for a large number of existing types would be impractical.
+/// Runs `T.init(from:)` once against the provided JSON to discover the type's decode call pattern, then builds a `ReflectiveGenerator` that produces arbitrary values of type `T`. Generation, replay, reduction, and screening treat the result like a hand-written generator. Reflection is unavailable as described under Limitations. Use this when writing generators for a large number of existing types would be impractical.
 ///
 /// ## What Gets a Full Generator
 ///

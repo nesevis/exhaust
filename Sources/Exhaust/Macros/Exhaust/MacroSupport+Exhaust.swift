@@ -22,14 +22,14 @@ import IssueReporting
 public extension __ExhaustRuntime {
     /// Thrown by the detection closure when a rewritten `#expect`/`#require` fails.
     ///
-    /// This is a plain error — not a Swift Testing issue — so it produces no test output.
+    /// This is a plain error rather than a Swift Testing issue, so it produces no test output.
     /// The pipeline's try/catch detects it as a property failure without any console noise.
     struct DetectionFailure: Error {}
 
     /// Detection replacement for `#expect(_ condition: Bool)` and `#require(_ condition: Bool)`.
     ///
     /// Throws ``DetectionFailure`` when the condition is `false`.
-    /// Does not call `Issue.record()` — produces no Swift Testing output.
+    /// Does not call `Issue.record()`, so it produces no Swift Testing output.
     static func __detectRequire(_ condition: Bool) throws { // swiftlint:disable:this identifier_name
         if condition == false {
             throw DetectionFailure()
@@ -39,7 +39,7 @@ public extension __ExhaustRuntime {
     /// Detection replacement for `#require<T>(_ optionalValue: T?)`.
     ///
     /// Throws ``DetectionFailure`` when the value is `nil`. Returns the unwrapped value otherwise.
-    /// Does not call `Issue.record()` — produces no Swift Testing output.
+    /// Does not call `Issue.record()`, so it produces no Swift Testing output.
     static func __detectRequire<Value>(_ value: Value?) throws -> Value { // swiftlint:disable:this identifier_name
         guard let unwrapped = value else {
             throw DetectionFailure()
@@ -169,7 +169,7 @@ public extension __ExhaustRuntime {
 
     /// Runs a throwing `Bool` property selected through type-directed dispatch.
     ///
-    /// The macro uses this overload only when a single `try` expression does not reveal whether its helper returns `Bool` or `Void`.
+    /// The macro emits this entry point only when a single `try` expression does not reveal whether its helper returns `Bool` or `Void`, leaving the choice between the `Bool` and `Void` forms to the type checker.
     @discardableResult
     static func __exhaustDispatched<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
@@ -198,7 +198,7 @@ public extension __ExhaustRuntime {
 
     /// Runs a throwing `Void` property through assertion detection when Swift's type checker resolves the property result as `Void`.
     ///
-    /// This overload handles single-call properties whose source syntax does not reveal whether the called helper returns `Bool` or `Void`. Exhaust treats a thrown error as a counterexample, then re-runs the property with the reduced value so the error occurs in the original test context.
+    /// Handles single-call properties whose source syntax does not reveal whether the called helper returns `Bool` or `Void`. Exhaust treats a thrown error as a counterexample, then re-runs the property with the reduced value so the error occurs in the original test context.
     ///
     /// - Parameters:
     ///   - refGen: The generator to produce test values from.
@@ -817,7 +817,7 @@ public extension __ExhaustRuntime {
 
     /// Runs an asynchronous throwing `Bool` property selected through type-directed dispatch.
     ///
-    /// The macro uses this overload only when a single `try` expression does not reveal whether its helper returns `Bool` or `Void`.
+    /// The macro emits this entry point only when a single `try` expression does not reveal whether its helper returns `Bool` or `Void`, leaving the choice between the `Bool` and `Void` forms to the type checker.
     @discardableResult
     static func __exhaustDispatchedAsync<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
@@ -846,7 +846,7 @@ public extension __ExhaustRuntime {
 
     /// Runs an asynchronous throwing `Void` property through assertion detection when Swift's type checker resolves the property result as `Void`.
     ///
-    /// This overload handles single-call async properties whose source syntax does not reveal whether the called helper returns `Bool` or `Void`. Exhaust treats a thrown error as a counterexample, then re-runs the property with the reduced value in the original async context.
+    /// Handles single-call async properties whose source syntax does not reveal whether the called helper returns `Bool` or `Void`. Exhaust treats a thrown error as a counterexample, then re-runs the property with the reduced value in the original async context.
     ///
     /// - Parameters:
     ///   - refGen: The generator to produce test values from.

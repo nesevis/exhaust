@@ -10,7 +10,7 @@ import Foundation
 
 /// A frozen reproducer for a self-fuzzing finding.
 ///
-/// One record is one claim: this exact case once violated an oracle and never may again. Records are JSON files in the harness's `Regressions/` directory, decoded and re-run by the replay suite on every PR. The version field gates recipe-language evolution — a record that no longer decodes fails loudly with its provenance rather than silently passing. The kind discriminator exists so block-2 findings (frozen command sequences) share the corpus and replay suite instead of growing a parallel mechanism.
+/// One record is one claim: this exact case once violated an oracle and never may again. Records are JSON files in the harness's `Regressions/` directory, decoded and re-run by the replay suite on every PR. The version field gates recipe-language evolution: a record that no longer decodes fails loudly with its provenance rather than silently passing. The kind discriminator exists so block-2 findings (frozen command sequences) share the corpus and replay suite instead of growing a parallel mechanism.
 public struct MetaFuzzFrozenCase: Codable, Sendable {
     /// Record kinds the replay suite understands.
     public enum Kind: String, Codable, Sendable {
@@ -43,7 +43,7 @@ public struct MetaFuzzFrozenCase: Codable, Sendable {
     }
 }
 
-/// Thrown when a frozen record cannot be replayed as written — a stale schema version, not an oracle violation.
+/// Thrown when a frozen record cannot be replayed as written, meaning a stale schema version rather than an oracle violation.
 public struct FrozenCaseVersionMismatch: Error, CustomStringConvertible {
     public let description: String
 
@@ -56,7 +56,7 @@ public extension MetaFuzz {
     /// Freezes a fuzz case as a reproducer record, ready to commit into the harness's `Regressions/` directory.
     ///
     /// - Parameters:
-    ///   - fuzzCase: The case that violated an oracle — the original, not the reduced form, so the record does not depend on the reducer that may itself be the defect.
+    ///   - fuzzCase: The case that violated an oracle, in its original rather than reduced form, so the record does not depend on the reducer that may itself be the defect.
     ///   - violation: The oracle violation the case produced. Its type name becomes the record's provenance.
     ///   - note: Free-form provenance, for example the defect and the PR that fixed it.
     /// - Returns: Pretty-printed JSON with stable key ordering, so committed records diff cleanly.
@@ -86,9 +86,9 @@ public extension MetaFuzz {
         recordedFindingNames.value = [:]
     }
 
-    /// Writes a frozen reproducer for a violating case into `directory` and returns the file URL, or `nil` when the write fails, the oracle's cap is reached, or this case was already recorded — by this process or by an earlier run against the same directory.
+    /// Writes a frozen reproducer for a violating case into `directory` and returns the file URL, or `nil` when the write fails, the oracle's cap is reached, or this case was already recorded, either by this process or by an earlier run against the same directory.
     ///
-    /// The harness's fuzz entries call this from the property closure so findings survive the run as machine-readable freeze candidates, ready to commit into `Regressions/` alongside the fix. The filename folds in the violated oracle and a stable hash of the case, so repeat findings are recorded once, and each oracle stops recording at ``findingsPerOracleCap`` files. Write failures are swallowed deliberately — recording is a side channel and must never turn a real finding into an I/O error — and a failed write stays claimed, so a permanently unwritable directory cannot re-run the encoder on every attempt. The case is lost for the process's life; the fault inventory still counts it.
+    /// The harness's fuzz entries call this from the property closure so findings survive the run as machine-readable freeze candidates, ready to commit into `Regressions/` alongside the fix. The filename folds in the violated oracle and a stable hash of the case, so repeat findings are recorded once, and each oracle stops recording at ``findingsPerOracleCap`` files. Write failures are swallowed deliberately, because recording is a side channel and must never turn a real finding into an I/O error. A failed write stays claimed, so a permanently unwritable directory cannot re-run the encoder on every attempt. The case is lost for the process's life; the fault inventory still counts it.
     @discardableResult
     static func recordFinding(_ fuzzCase: MetaFuzzCase, violation: some Error, in directory: URL) -> URL? {
         let oracle = "\(type(of: violation))"
@@ -121,7 +121,7 @@ public extension MetaFuzz {
 
     /// Replays a frozen record: decodes it, gates on the schema version, and re-runs the oracle roster.
     ///
-    /// Throws the oracle violation if the defect has been reintroduced, a decoding error if the record no longer parses, and ``FrozenCaseVersionMismatch`` if the schema has moved on. Returns normally when every oracle holds — the frozen defect stays fixed.
+    /// Throws the oracle violation if the defect has been reintroduced, a decoding error if the record no longer parses, and ``FrozenCaseVersionMismatch`` if the schema has moved on. Returns normally when every oracle holds, meaning the frozen defect stays fixed.
     static func replay(_ data: Data) throws {
         let record = try JSONDecoder().decode(MetaFuzzFrozenCase.self, from: data)
         guard record.version == MetaFuzzFrozenCase.currentVersion else {

@@ -9,7 +9,7 @@ import ExhaustCore
 
 /// One self-fuzzing attempt: a generator recipe plus the seeds that make its pipeline evaluation deterministic.
 ///
-/// Opaque outside the package by design — the harness passes cases from ``MetaFuzz/caseGenerator(maxDepth:nodeBudget:)`` to ``MetaFuzz/check(_:)`` without inspecting them, so the recipe language stays free to evolve. The description renders the recipe and seeds, which is what fault-inventory clusters and frozen reproducers show.
+/// Opaque outside the package by design: the harness passes cases from ``MetaFuzz/caseGenerator(maxDepth:nodeBudget:)`` to ``MetaFuzz/check(_:)`` without inspecting them, so the recipe language stays free to evolve. The description renders the recipe and seeds, which is what fault-inventory clusters and frozen reproducers show.
 public struct MetaFuzzCase: Sendable, CustomStringConvertible {
     package let recipe: GenRecipe
     package let valueSeed: UInt64
@@ -33,11 +33,11 @@ public enum MetaFuzz {
 
     /// Generates fuzz cases: a well-typed recipe within the node budget, plus value and perturbation seeds.
     ///
-    /// Mutating a case's choice sequence is structural mutation of the recipe — the fuzzing mode's medium band deletes, duplicates, and replaces combinator layers directly.
+    /// Mutating a case's choice sequence is structural mutation of the recipe: the fuzzing mode's medium band deletes, duplicates, and replaces combinator layers directly.
     ///
     /// - Parameters:
     ///   - maxDepth: Combinator nesting ceiling handed to the recipe generator.
-    ///   - nodeBudget: Recipe node-count ceiling, enforced by rejection. Deep recipes overflow the 512 KiB test-thread stack in debug builds, so raise this only where the evaluating thread's stack size is known — an executable probe's main thread, for example. Calibrate raises with `ExhaustStackProbe`.
+    ///   - nodeBudget: Recipe node-count ceiling, enforced by rejection. Deep recipes overflow the 512 KiB test-thread stack in debug builds, so raise this only where the evaluating thread's stack size is known, an executable probe's main thread for example. Calibrate raises with `ExhaustStackProbe`.
     public static func caseGenerator(maxDepth: Int = 2, nodeBudget: Int = 40) -> ReflectiveGenerator<MetaFuzzCase> {
         let recipes = Gen.filter(
             Gen.pick(choices: sweptTypes.map { type in

@@ -2,7 +2,7 @@ import SwiftDiagnostics
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-/// Marker macro for the system under test property. Generates no code — `@StateMachine` reads this annotation.
+/// Marker macro for the system under test property. Generates no code; `@StateMachine` reads this annotation.
 public struct SUTMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
@@ -19,7 +19,7 @@ public struct SUTMacro: PeerMacro {
     }
 }
 
-/// Marker macro for command methods. Generates no code — `@StateMachine` reads this annotation.
+/// Marker macro for command methods. Generates no code; `@StateMachine` reads this annotation.
 public struct CommandMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
@@ -36,7 +36,7 @@ public struct CommandMacro: PeerMacro {
     }
 }
 
-/// Marker macro for the setup method. Generates no code — `@StateMachine` reads this annotation.
+/// Marker macro for the setup method. Generates no code; `@StateMachine` reads this annotation.
 public struct SetupMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
@@ -53,7 +53,7 @@ public struct SetupMacro: PeerMacro {
     }
 }
 
-/// Marker macro for invariant methods. Generates no code — `@StateMachine` reads this annotation.
+/// Marker macro for invariant methods. Generates no code; `@StateMachine` reads this annotation.
 public struct InvariantMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
@@ -70,7 +70,7 @@ public struct InvariantMacro: PeerMacro {
     }
 }
 
-/// Marker macro for equivalence comparison methods. Generates no code — `@StateMachine` reads this annotation.
+/// Marker macro for equivalence comparison methods. Generates no code; `@StateMachine` reads this annotation.
 public struct EquivalenceMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,

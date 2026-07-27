@@ -8,7 +8,7 @@
 public extension ReflectiveGenerator {
     /// Creates a recursive generator with a constant base case value.
     ///
-    /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from the drawn depth (outermost) to 1 (innermost). To terminate early, return a generator that doesn't call `recurse()` — this short-circuits the recursion since inner layers are only reachable through `recurse()`.
+    /// The `extend` closure receives a `recurse` thunk and a `remaining` depth budget that counts down from the drawn depth (outermost) to 1 (innermost). To terminate early, return a generator that does not call `recurse()`. Inner layers are only reachable through `recurse()`, so leaving it out short-circuits the recursion.
     ///
     /// ```swift
     /// let treeGen: ReflectiveGenerator<Tree> = #gen(.recursive(
@@ -22,7 +22,7 @@ public extension ReflectiveGenerator {
     /// })
     /// ```
     ///
-    /// The `baseValue` label is deliberate: with a plain `base:` label and an `Any`-typed `Output`, a generator argument can satisfy this overload too, silently capturing the generator itself as the base value. The distinct label makes that mistake unrepresentable.
+    /// The `baseValue` label is deliberate: with a plain `base:` label and an `Any`-typed `Output`, passing a generator would silently capture the generator itself as the base value instead of calling the generator-based factory. The distinct label makes that mistake unrepresentable.
     ///
     /// - Note: Each recursive layer adds stack frames during generation, so a deep `depthRange` can exhaust the stack and crash. The practical ceiling depends on the generator's structure and the build configuration: optimized ExhaustCore builds (the precompiled framework on Apple platforms) tolerate deeper ranges than from-source debug builds.
     ///

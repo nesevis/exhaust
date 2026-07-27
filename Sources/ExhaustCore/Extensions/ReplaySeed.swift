@@ -6,7 +6,7 @@
 /// - **Screening row**: `U-N` prefix (for example, `"U-3"`). Replays the Nth 1-based screening row (internally 0-indexed).
 ///
 /// ```swift
-/// .replay(42)                // UInt64 literal — full pipeline, deterministic seed
+/// .replay(42)                // UInt64 literal, runs the full pipeline
 /// .replay("3RT5GH8KM2")      // seed only, runs full budget
 /// .replay("3RT5GH8KM2-7")    // seed with iteration (reproduces in one step)
 /// .replay("U-3")              // screening row replay

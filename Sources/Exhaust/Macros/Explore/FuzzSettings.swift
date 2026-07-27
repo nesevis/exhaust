@@ -16,19 +16,19 @@ import ExhaustCore
 public enum FuzzSettings: Sendable {
     /// A fixed seed for replaying a prior run (reproduction, benchmarking, regression).
     ///
-    /// Accepts a raw `UInt64` or a Crockford Base32 string. The seed pins every decision the search makes: the screening rows, the random-sampling stream, each mutation choice, and — because reduction runs inline — the point in the attempt stream where each failure's classification feeds back. What the search observes between decisions is environmental: coverage signatures are read from process-global counters, and phase transitions are wall-clock cuts. A replay therefore reruns the same search from the same starting point and, given comparable time, rediscovers the same clusters. It does not reproduce an attempt-for-attempt identical log.
+    /// Accepts a raw `UInt64` or a Crockford Base32 string. The seed pins every decision the search makes: the screening rows, the random-sampling stream, each mutation choice, and, because reduction runs inline, the point in the attempt stream where each failure's classification feeds back. What the search observes between decisions is environmental: coverage signatures are read from process-global counters, and phase transitions are wall-clock cuts. A replay therefore reruns the same search from the same starting point and, given comparable time, rediscovers the same clusters. It does not reproduce an attempt-for-attempt identical log.
     ///
     /// - Important: Other tests running in parallel in the same process execute instrumented code during attempts and distort the coverage signal, and a replay that sees different coverage takes a different path. Marking the suite `.serialized` is not sufficient, because separate suites still run concurrently with each other. Run the target with `swift test --no-parallel`, or filter the run down to the single fuzz test. See <doc:CoverageGuidedFuzzing> for the full set of conditions.
     case replay(ReplaySeed)
 
     /// Silences issue reporting, log output, attachments, or all three for this run.
     ///
-    /// Use `.suppress(.issueReporting)` when the run is expected to find failures and the test asserts on the returned ``FuzzReport`` instead. Generation and internal errors are not suppressed — they signal a malfunction rather than the failures the caller is asserting on.
+    /// Use `.suppress(.issueReporting)` when the run is expected to find failures and the test asserts on the returned ``FuzzReport`` instead. Generation and internal errors are not suppressed, because they signal a malfunction rather than the failures the caller is asserting on.
     case suppress(SuppressOption)
 
     /// Controls log verbosity for this run.
     ///
-    /// Defaults to `.log(.error)` when omitted — only error-level messages appear.
+    /// Defaults to `.log(.error)` when omitted, so only error-level messages appear.
     case log(LogLevel)
 
     /// Limits the maximum number of commands per generated sequence in `#execute(time:)` runs.

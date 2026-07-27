@@ -8,11 +8,11 @@
 public extension ReflectiveGenerator {
     /// Generates independent copies of this generator's value and applies a different transform to each.
     ///
-    /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value — all transformed copies follow deterministically. During reflection, the original is authoritative and supplied transformed members are not validated. Replay and materialization regenerate them from the reflected original, so stale supplied members are replaced before reduction or replay.
+    /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value, and all transformed copies follow deterministically. During reflection, the original is authoritative and supplied transformed members are not validated. Replay and materialization regenerate them from the reflected original, so stale supplied members are replaced before reduction or replay.
     ///
     /// ```swift
     /// let pair = #gen(.string()).metamorph({ $0.uppercased() }, { $0.count })
-    /// // pair: Gen<(String, String, Int)>
+    /// // pair: ReflectiveGenerator<(String, String, Int)>
     /// //   .0 = original, .1 = uppercased copy, .2 = count of a copy
     /// ```
     ///
@@ -32,7 +32,7 @@ public extension ReflectiveGenerator {
 
     /// Generates an independent copy of this generator's value and applies a transform to it.
     ///
-    /// The transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value — the transformed copy follows deterministically. During reflection, the original is authoritative and a supplied transformed member is not validated. Replay and materialization regenerate it from the reflected original, so a stale supplied member is replaced before reduction or replay.
+    /// The transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value, and the transformed copy follows deterministically. During reflection, the original is authoritative and a supplied transformed member is not validated. Replay and materialization regenerate it from the reflected original, so a stale supplied member is replaced before reduction or replay.
     ///
     /// - Parameter transform: Function that derives a follow-up value from an independent copy of the source.
     /// - Returns: A generator producing `(original, transformed)` tuples.
@@ -44,7 +44,7 @@ public extension ReflectiveGenerator {
 
     /// Generates independent copies of this generator's value and applies a different transform to each.
     ///
-    /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value — all transformed copies follow deterministically. During reflection, the original is authoritative and supplied transformed members are not validated. Replay and materialization regenerate them from the reflected original, so stale supplied members are replaced before reduction or replay.
+    /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value, and all transformed copies follow deterministically. During reflection, the original is authoritative and supplied transformed members are not validated. Replay and materialization regenerate them from the reflected original, so stale supplied members are replaced before reduction or replay.
     ///
     /// - Parameters:
     ///   - firstTransform: Function that derives a follow-up value from an independent copy of the source.
@@ -59,7 +59,7 @@ public extension ReflectiveGenerator {
 
     /// Generates independent copies of this generator's value and applies a different transform to each.
     ///
-    /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value — all transformed copies follow deterministically. During reflection, the original is authoritative and supplied transformed members are not validated. Replay and materialization regenerate them from the reflected original, so stale supplied members are replaced before reduction or replay.
+    /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value, and all transformed copies follow deterministically. During reflection, the original is authoritative and supplied transformed members are not validated. Replay and materialization regenerate them from the reflected original, so stale supplied members are replaced before reduction or replay.
     ///
     /// - Parameters:
     ///   - firstTransform: Function that derives a follow-up value from an independent copy of the source.
@@ -76,7 +76,7 @@ public extension ReflectiveGenerator {
 
     /// Generates independent copies of this generator's value and applies a different transform to each.
     ///
-    /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value — all transformed copies follow deterministically. During reflection, the original is authoritative and supplied transformed members are not validated. Replay and materialization regenerate them from the reflected original, so stale supplied members are replaced before reduction or replay.
+    /// Each transform receives its own independently generated copy, making this safe for reference types. The original (untransformed) value is included at tuple position zero for the metamorphic relation check. Reduction operates only on the source value, and all transformed copies follow deterministically. During reflection, the original is authoritative and supplied transformed members are not validated. Replay and materialization regenerate them from the reflected original, so stale supplied members are replaced before reduction or replay.
     ///
     /// - Parameters:
     ///   - firstTransform: Function that derives a follow-up value from an independent copy of the source.

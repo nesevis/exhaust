@@ -52,7 +52,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
     /// All strategies use the same CGS warmup data; they differ only in how that data is converted to static pick weights.
     public enum WeightingStrategy {
         /// Niche-count fitness sharing: weight = fitness / (1 + N × share).
-        /// Discounts dominant choices proportionally — a choice with 90% of the fitness gets a heavy divisor while a 10% choice gets a light one.
+        /// Discounts dominant choices proportionally: a choice with 90% of the fitness gets a heavy divisor while a 10% choice gets a light one.
         /// Preserves the CGS ranking while redistributing weight to the tail.
         /// Benchmarked as 2–3x faster than raw totalFitness or UCB alternatives on BST and AVL time-to-unique workloads.
         case fitnessSharing
@@ -63,7 +63,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
     /// - Parameters:
     ///   - generator: The generator to tune.
     ///   - predicate: Validity condition that generated values must satisfy.
-    ///   - warmupRuns: Maximum number of warmup passes to collect fitness data. Defaults to 100. In practice, ψ-based convergence detection (5% weight-share stability threshold) stops warmup early — parameter sweeps across BST and recursive tree generators show that weights stabilize in fewer than 50 runs regardless of budget, so values above 100 are rarely reached. The default provides a 2x safety margin over observed convergence points.
+    ///   - warmupRuns: Maximum number of warmup passes to collect fitness data. Defaults to 100. In practice, ψ-based convergence detection (5% weight-share stability threshold) stops warmup early: parameter sweeps across BST and recursive tree generators show that weights stabilize in fewer than 50 runs regardless of budget, so values above 100 are rarely reached. The default provides a 2x safety margin over observed convergence points.
     ///   - sampleCount: Number of derivative samples drawn per pick site per warmup run. Defaults to 10. Each sample evaluates a residual generator via ``CGSDerivativeInterpreter`` to measure fitness, so this parameter scales tuning cost linearly. Parameter sweeps show identical generation quality (validity rate, unique count, height distribution) for values 5 through 40 on pick-heavy generators (BSTs with depth 5, values 0...9 and 0...99). The default of 10 provides a 2x margin over the minimum effective value. Goldstein (Ch. 3, Table 3.1) used N=50 for BST/SORTED and N=400–500 for AVL/STLC in the original online CGS algorithm; the lower default here reflects that Exhaust's offline pipeline with SMC-style batched resampling and convergence detection extracts equivalent signal from fewer per-site samples.
     ///   - seed: Optional seed for deterministic tuning. If nil, uses a random seed.
     ///   - weightingStrategy: How accumulated fitness data is converted to static pick weights.

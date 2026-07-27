@@ -24,7 +24,7 @@ public enum ExecutionModel: Sendable {
 
     /// Real OS threads, interleaved by the operating system.
     ///
-    /// Reaches races inside synchronous primitives — locks, queues, atomics — that a task-based run steps over. The cost is determinism: the same seed does not reproduce the same interleaving, so detection relies on repetition and a reported counterexample can take several runs to reproduce.
+    /// Reaches races inside synchronous primitives (locks, queues, atomics) that a task-based run steps over. The cost is determinism: the same seed does not reproduce the same interleaving, so detection relies on repetition and a reported counterexample can take several runs to reproduce.
     ///
     /// Every lane's commands run on one shared spec instance. The system under test is expected to defend itself, because that is the claim under test; any other spec state a command body touches must be thread-safe or absent. Invariants are judged in the sequential replays this mode already performs, not against the raced instance, whose state is one particular order's outcome and nothing has established that order was a valid one.
     ///

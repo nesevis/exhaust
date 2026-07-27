@@ -226,7 +226,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameter collection: The collection to slice.
     /// - Returns: A generator producing random sub-sequences of the collection.
-    /// - Note: `#exhaust(…, reflecting:)` can reduce a concrete sub-sequence from this overload because the captured collection supplies the source needed to recover its start and length.
+    /// - Note: `#exhaust(…, reflecting:)` can reduce a concrete sub-sequence from this factory because the captured collection supplies the source needed to recover its start and length.
     static func slice<C: Collection>(
         of collection: C
     ) -> ReflectiveGenerator<C.SubSequence> where Output == C.SubSequence {

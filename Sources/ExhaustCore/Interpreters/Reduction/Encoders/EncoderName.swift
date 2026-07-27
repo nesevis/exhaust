@@ -30,13 +30,13 @@ public enum EncoderName: String, Hashable, Sendable, CaseIterable {
     /// Wraps an upstream and downstream encoder into a single composed search. The upstream encoder proposes a value for a controlling parameter, the result is materialized to produce a fresh scope for the downstream encoder, and the downstream searches the dependent parameters. Used as the inner mechanism for bound value search.
     case composed
 
-    /// Searches pairs of values in tandem, moving them in coordinated steps. Used when two parameters are coupled and independent search on either stalls — for example, an array and its expected length.
+    /// Searches pairs of values in tandem, moving them in coordinated steps. Used when two parameters are coupled and independent search on either stalls, for example an array and its expected length.
     case lockstep
 
     /// Reduces a pair of values jointly along their inferred rational relation. Fires only when both values have converged above their targets with nothing else accepting, which is the signature of a multiplicative coupling (for example, one value always twice another) that per-value search, common-delta lockstep, and sum-conserving redistribution all break. The reduced ratio of the current values is held fixed while their shared scale factor is searched downward.
     case relationSearch
 
-    /// Sorts sibling elements into ascending numeric order as a final pass after all other reduction is complete. The reducer works in shortlex order internally, which is consistent but not intuitive — this converts to the ordering a user would expect.
+    /// Sorts sibling elements into ascending numeric order as a final pass after all other reduction is complete. The reducer works in shortlex order internally, which is consistent but not intuitive, so this pass converts to the ordering a user would expect.
     case numericReorder
 
     /// Probes each converged value one step below its floor to detect stale convergence. If a value that was previously stuck at some floor can now go lower (because other values changed around it), the floor was stale and reduction continues.

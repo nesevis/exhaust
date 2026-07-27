@@ -9,7 +9,7 @@ import IssueReporting
 public extension __ExhaustRuntime {
     /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(Spec.self, mode:, time:)`.
     ///
-    /// Async for the same reason plain `#execute` is: the run occupies its thread for the whole time budget, so it hops to a GCD worker instead of starving the cooperative pool. Every path — configuration errors included — funnels through the shared reporting epilogue, so findings, configuration errors, and the summary attachment surface exactly as they do for `#explore(time:)`.
+    /// Async for the same reason plain `#execute` is: the run occupies its thread for the whole time budget, so it hops to a GCD worker instead of starving the cooperative pool. Every path, configuration errors included, funnels through the shared reporting epilogue, so findings, configuration errors, and the summary attachment surface exactly as they do for `#explore(time:)`.
     @discardableResult
     static func __runStateMachineTimeDispatch(
         _ specType: (some StateMachineSpec).Type,
@@ -109,7 +109,7 @@ public extension __ExhaustRuntime {
 
     /// Dispatches an asynchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(AsyncSpec.self, mode:, time:)`.
     ///
-    /// The same shape as ``__runStateMachineTimeDispatch(_:time:settings:fileID:filePath:line:column:)``: the run occupies a GCD worker for the whole budget, and reporting happens here on the test task after the hop.
+    /// The same shape as ``__runStateMachineTimeDispatch(_:mode:time:settings:fileID:filePath:line:column:)``: the run occupies a GCD worker for the whole budget, and reporting happens here on the test task after the hop.
     @discardableResult
     static func __runStateMachineTimeDispatchAsync(
         _ specType: (some AsyncStateMachineSpec).Type,
@@ -394,7 +394,7 @@ extension __ExhaustRuntime {
     ///
     /// Unlike the sequential adapters, the generator draws a lane-assigning schedule marker as a choice ahead of each command (``zipScheduleMarker(onto:concurrencyLevel:)``), so the interleaving is searchable input: the byte mutators that move commands between lanes and reorder the schedule are the same ones that mutate command arguments, and reduction minimizes markers toward the sequential prefix. The property drains each sequence through the cooperative scheduler at the marker-directed interleaving.
     ///
-    /// A timed-out drain is inconclusive, not a counterexample: it counts as a pass during search (matching plain `#execute`), and aborts reduction so a shrinking counterexample never reduces toward a hang.
+    /// A timed-out drain is inconclusive, not a counterexample: it counts as a pass during search (matching plain `#execute`), and aborts reduction so a counterexample under reduction never reduces toward a hang.
     ///
     /// - Returns: Nil when the spec's command generator is not a top-level pick, which schedule-marker tagging requires.
     /// - Parameter idleTimeoutMilliseconds: The drain loop's stall bound. Defaults to the plain-`#execute` default; tests lower it so stall-path assertions do not wait out two seconds per evaluation.

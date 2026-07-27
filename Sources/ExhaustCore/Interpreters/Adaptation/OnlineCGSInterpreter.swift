@@ -92,7 +92,7 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
         ///
         /// Frames are stored in push order (oldest first). `apply` iterates in reverse (newest/innermost first) to match the closure chain's nesting: `gen.bind(innerCont).bind(outerCont).map(cast)`.
         ///
-        /// This composition defines the derivative's semantics. The hot sampling path (`rolloutSample`) interprets the frames directly instead of constructing this generator — building and re-interpreting the bind tower for every sample costs about 20% of warmup sampling throughput.
+        /// This composition defines the derivative's semantics. The hot sampling path (`rolloutSample`) interprets the frames directly instead of constructing this generator, because building and re-interpreting the bind tower for every sample costs about 20% of warmup sampling throughput.
         public func apply(
             _ gen: AnyGenerator
         ) throws -> Generator<FinalOutput> {

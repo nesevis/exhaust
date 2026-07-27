@@ -4,7 +4,7 @@ import Foundation
 public extension __ExhaustRuntime {
     /// Synthesizes a generator from a `Decodable` type and example JSON data.
     ///
-    /// Returns a `Result` so that the macro expansion can chain `.get()` — a throwing call that the user's `try` covers. This follows the same pattern as Swift Testing's `#require`, which expands to a non-throwing expression chained with a throwing method.
+    /// Returns a `Result` so that the macro expansion can chain `.get()`, a throwing call that the user's `try` covers. This follows the same pattern as Swift Testing's `#require`, which expands to a non-throwing expression chained with a throwing method.
     static func _macroGenDecodable<T: Decodable>(
         _ type: T.Type,
         from data: Data

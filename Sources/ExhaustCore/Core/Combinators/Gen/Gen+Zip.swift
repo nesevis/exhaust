@@ -11,7 +11,7 @@ package extension Gen {
     /// Use zip for fixed-arity parallel composition where the child count is known at construction time. Screening analysis enumerates parameter combinations across zip children directly — unlike ``sequence``, which must generate a length first. The reducer treats each child as an independent scope, so simplifying one child does not affect the others.
     ///
     /// ```swift
-    /// let pairGen = Gen.zip(Gen.int(in: 0...99), Gen.string())
+    /// let pairGen = Gen.zip(Gen.choose(in: 0...99), Gen.string())
     /// // produces Generator<(Int, String)>
     /// ```
     ///

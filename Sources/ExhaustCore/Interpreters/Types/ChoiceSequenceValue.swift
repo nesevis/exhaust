@@ -136,7 +136,7 @@ package enum ChoiceSequenceValue: Equatable, Sendable {
 
         /// Whether modular bit-pattern arithmetic on this value stays within the user's declared domain without encoder-level range validation.
         ///
-        /// True when the range is size-derived (``isRangeExplicit`` is `false` — the user's real domain is the natural type range and the materializer's clamp at ``Materializer`` handles any narrowing) or when an explicit range equals the natural type range. False when an explicit narrow range is in effect — the encoder must validate each candidate against ``validRange``.
+        /// True when the range is size-derived (``isRangeExplicit`` is `false`, so the user's real domain is the natural type range and the materializer's clamp at ``Materializer`` handles any narrowing) or when an explicit range equals the natural type range. False when an explicit narrow range is in effect, where the encoder must validate each candidate against ``validRange``.
         public var allowsModularArithmetic: Bool {
             if isRangeExplicit == false { return true }
             guard let validRange else { return true }

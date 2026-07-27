@@ -12,7 +12,7 @@ import ExhaustCore
 ///
 /// Pass a single option to ``PropertySettings/suppress(_:)`` to disable issue reporting, log output, attachments, or all three.
 public enum SuppressOption: Sendable, Equatable {
-    /// Suppresses `reportIssue()` calls for property failures. The test does not fail via the framework; the caller asserts on the returned value instead. Generation and internal errors are not suppressed — they signal a malfunction rather than the expected failure the caller is asserting on.
+    /// Suppresses `reportIssue()` calls for property failures. The test does not fail via the framework; the caller asserts on the returned value instead. Generation and internal errors are not suppressed, because they signal a malfunction rather than the expected failure the caller is asserting on.
     case issueReporting
     /// Suppresses all log output to the console. Overrides any `.log(_:)` setting.
     case logs
@@ -38,14 +38,14 @@ public enum PropertySettings {
 
     /// Silences issue reporting, log output, or both for this test run.
     ///
-    /// Use `.suppress(.issueReporting)` when the property test is expected to find a counterexample and the test asserts on the returned value rather than relying on the framework to record the failure. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` to silence both. Generation and internal errors are always reported regardless of suppression — they indicate a malfunction, not the property failure being suppressed.
+    /// Use `.suppress(.issueReporting)` when the property test is expected to find a counterexample and the test asserts on the returned value rather than relying on the framework to record the failure. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` to silence both. Generation and internal errors are always reported regardless of suppression, because they indicate a malfunction rather than the property failure being suppressed.
     case suppress(SuppressOption)
     /// Prints the choice tree before and after reduction as a bottom-up Unicode visualization.
     case visualize
 
     /// Registers a closure that receives an ``ExhaustReport`` with run statistics after the test completes.
     ///
-    /// The closure fires synchronously before `#exhaust` returns, on every exit path (pass, fail, error, reflecting). Not `@Sendable` — executes on the calling task.
+    /// The closure fires synchronously before `#exhaust` returns, on every exit path (pass, fail, error, reflecting). Not `@Sendable`, so it executes on the calling task.
     case onReport((ExhaustReport) -> Void)
 
     /// Collects per-example statistics in the OpenPBTStats JSON Lines format and attaches the result to the test run.
@@ -62,7 +62,7 @@ public enum PropertySettings {
 
     /// Controls log verbosity for this test run.
     ///
-    /// Defaults to `.log(.error)` when omitted — only error-level messages appear.
+    /// Defaults to `.log(.error)` when omitted, so only error-level messages appear.
     /// ```swift
     /// #exhaust(gen, .log(.debug)) { value in ... }
     /// ```

@@ -26,7 +26,7 @@ public enum StateMachineSettings {
 
     /// Controls log verbosity for this spec test run.
     ///
-    /// Defaults to `.log(.error)` when omitted — only error-level messages appear.
+    /// Defaults to `.log(.error)` when omitted, so only error-level messages appear.
     case log(LogLevel)
 
     /// Sets the number of concurrent execution lanes. Default is ``ConcurrencyLevel/two``.

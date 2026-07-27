@@ -7,7 +7,7 @@ import ExhaustCore
 
 /// Runs a synchronous spec test under the given ``ExecutionModel``.
 ///
-/// `mode: .sequential` runs the commands in the order generated, with `@Invariant` checked after each. `mode: .threads` dispatches them across real OS threads and judges the run through the spec's `@Equivalence`, comparing it against a sequential replay. `mode: .tasks` on a synchronous spec also runs one command at a time, because interleaving happens at `await` boundaries a synchronous spec does not have; use the ``AsyncStateMachineSpec`` overload for that. On failure, the sequence is reduced to a minimal counterexample.
+/// `mode: .sequential` runs the commands in the order generated, with `@Invariant` checked after each. `mode: .threads` dispatches them across real OS threads and judges the run through the spec's `@Equivalence`, comparing it against a sequential replay. `mode: .tasks` on a synchronous spec also runs one command at a time, because interleaving happens at `await` boundaries a synchronous spec does not have. Interleaving under `.tasks` requires a spec conforming to ``AsyncStateMachineSpec``. On failure, the sequence is reduced to a minimal counterexample.
 ///
 /// Always awaited: the test function must be `async` even when every command is synchronous.
 ///

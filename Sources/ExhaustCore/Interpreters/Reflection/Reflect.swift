@@ -17,7 +17,7 @@ extension Interpreters {
 
     /// Finds the choice sequence that would cause `gen` to produce `outputValue`, performing the backward pass of the generator interpretation.
     ///
-    /// Reflection is the inverse of ``generate(from:using:)``: given a concrete output value and a generator, it walks the generator structure in reverse to reconstruct the ``ChoiceTree`` whose forward interpretation would produce that value. Returns `nil` when the value cannot be decomposed through the generator's structure (for example, when a contramap backward function rejects the value or when a chooseBits value falls outside the declared range). The optional `check` closure filters results to only those whose output satisfies an additional predicate.
+    /// Reflection is the inverse of the forward generation pass: given a concrete output value and a generator, it walks the generator structure in reverse to reconstruct the ``ChoiceTree`` whose forward interpretation would produce that value. Returns `nil` when the value cannot be decomposed through the generator's structure (for example, when a contramap backward function rejects the value or when a chooseBits value falls outside the declared range). The optional `check` closure filters results to only those whose output satisfies an additional predicate.
     ///
     /// - Parameters:
     ///   - gen: The generator to reflect through.

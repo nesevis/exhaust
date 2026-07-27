@@ -1,9 +1,9 @@
 // Core fundamental operations for the generator combinators.
 // These operations form the building blocks for more complex generator behavior.
 
-/// Namespace for generator factory methods and combinators.
+/// Namespace for the factories and combinators that build ``Generator`` values.
 ///
-/// ``Gen`` provides a unified entry point to all generator construction. Import `Exhaust` and use `Gen.int(in:)`, `Gen.string()`, `Gen.pick(choices:)`, and so on, or use the ``#gen(_:transform:)`` macro for composing generators from existing ones.
+/// A caseless enum, so the factories are reachable only as static members and no instance ever exists. Everything here returns a bare ``Generator`` over the ``FreerMonad`` spine, without the ``ReflectiveGenerator`` wrapper, and every primitive bottoms out in ``Gen/liftF(_:)``. Package access keeps the namespace inside Exhaust: a factory added here stays unreachable from a test target until a ``ReflectiveGenerator`` factory in the `Exhaust` module wraps it, and that wrapper layer is what the `#gen` macro's leading-dot syntax resolves against.
 package enum Gen {
     /// Computes a process-stable per-site fingerprint from source-location components.
     ///

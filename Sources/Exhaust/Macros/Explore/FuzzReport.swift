@@ -10,7 +10,7 @@ import ExhaustCore
 public struct FuzzReport: Sendable {
     /// One distinct fault the run discovered: a unique reduced counterexample with its membership counts.
     ///
-    /// Cluster identity is a canonical structural key over the reduced counterexample, so two failures that reduce to the same minimal form are the same cluster even when their surface symptoms differ, and distinct reduced forms are distinct clusters even when their symptoms match. ``isLikelySplit`` marks the middle taxonomy tier — one reduced form observed through more than one coverage signature.
+    /// Cluster identity is a canonical structural key over the reduced counterexample, so two failures that reduce to the same minimal form are the same cluster even when their surface symptoms differ, and distinct reduced forms are distinct clusters even when their symptoms match. ``isLikelySplit`` marks the middle taxonomy tier: one reduced form observed through more than one coverage signature.
     public struct Cluster: Sendable {
         /// Stable identifier in discovery order, starting at 0.
         public let id: Int
@@ -34,7 +34,7 @@ public struct FuzzReport: Sendable {
         /// Members whose own reduced form stalled short of the canonical one (an uncleared flag bit, an unclamped byte) and joined this cluster through the normalization pass. Without normalization each distinct stall would appear as its own spurious cluster; a high count relative to ``reducedCount`` means reduction stalls often on this fault, not that more faults exist.
         public let unnormalizedMemberCount: Int
 
-        /// True when the reduced form was reached through more than one coverage signature — the same surface bug, possibly via different code paths. Worth a glance; a distinct cluster is worth an investigation.
+        /// True when the reduced form was reached through more than one coverage signature, which usually means one surface bug arrived via different code paths. Worth a glance; a distinct cluster is worth an investigation.
         public let isLikelySplit: Bool
 
         /// The phase that first created this cluster. A cluster only the mutation phase could find is evidence the coverage guidance earned its budget.
@@ -54,7 +54,7 @@ public struct FuzzReport: Sendable {
         /// Edges ranked by discriminative power against passing runs, strongest first. The top entry is the best single lead on the fault's location.
         public let discriminatingEdges: [DiscriminatingEdge]
 
-        /// The number of edges present in every reduced counterexample of this cluster — the length of the path the SUT must traverse to reach the fault.
+        /// The number of edges present in every reduced counterexample of this cluster: the length of the path the SUT must traverse to reach the fault.
         public let necessaryEdgeCount: Int
 
         /// Necessary edges absent from the passing runs most similar to this cluster: the branches that push the SUT from "almost fails" to "fails". Empty when no passing runs exist to compare against.
@@ -66,7 +66,7 @@ public struct FuzzReport: Sendable {
 
     /// One edge that separates a cluster's failures from passing runs.
     ///
-    /// Read it as "hit in \(failureHitFraction) of this cluster's failures, \(passingHitFraction) of passing runs". An edge hit in most failures but few passes is a suspect; the causal read still needs judgment — an error-handling path triggered *by* the bug discriminates just as strongly as the bug itself.
+    /// Read it as "hit in \(failureHitFraction) of this cluster's failures, \(passingHitFraction) of passing runs". An edge hit in most failures but few passes is a suspect; the causal read still needs judgment, because an error-handling path triggered *by* the bug discriminates just as strongly as the bug itself.
     public struct DiscriminatingEdge: Sendable {
         /// The global instrumented-edge index, stable within one build only.
         public let edgeIndex: Int
@@ -117,7 +117,7 @@ public struct FuzzReport: Sendable {
         /// The wall-clock budget elapsed.
         case budgetExhausted
 
-        /// The mutation phase stopped learning — no coverage-novel corpus admission for a sustained window — so the run ended early and returned the unused budget rather than burning it. A plateau is not evidence the fault space is exhausted; failures on already-covered paths remain possible.
+        /// The mutation phase stopped learning, with no coverage-novel corpus admission for a sustained window, so the run ended early and returned the unused budget rather than burning it. A plateau is not evidence the fault space is exhausted; failures on already-covered paths remain possible.
         case coveragePlateau(unused: TimeSpan)
 
         /// The build lacks coverage instrumentation, so the run failed loudly before consuming any budget. The recorded issue carries the compiler flags to add.
@@ -188,13 +188,13 @@ public struct FuzzReport: Sendable {
     /// Distinct instrumented edges the corpus covers.
     public let coveredEdgeCount: Int
 
-    /// Total instrumented edges across all loaded instrumented modules. A denominator for module size, not for exploration progress — the count includes code the property never calls.
+    /// Total instrumented edges across all loaded instrumented modules. A denominator for module size, not for exploration progress, because the count includes code the property never calls.
     public let instrumentedEdgeCount: Int
 
     /// Edges hit by exactly one evaluated search case across the whole run. The raw singleton count (f₁) behind the discovery-probability and reachability estimates, exposed so downstream tooling can recompute or extrapolate.
     public let edgeSingletonCount: Int
 
-    /// Edges hit by exactly two evaluated search cases across the whole run — the doubleton count (f₂) behind ``estimatedReachableEdgeCount``.
+    /// Edges hit by exactly two evaluated search cases across the whole run: the doubleton count (f₂) behind ``estimatedReachableEdgeCount``.
     public let edgeDoubletonCount: Int
 
     /// The Good-Turing estimate of the probability that one more evaluated search case covers a new edge (`f₁/n`).
@@ -207,7 +207,7 @@ public struct FuzzReport: Sendable {
         )
     }
 
-    /// The Chao1 estimate of how many edges this generator and property can reach in total — the asymptote ``coveredEdgeCount`` approaches.
+    /// The Chao1 estimate of how many edges this generator and property can reach in total: the asymptote ``coveredEdgeCount`` approaches.
     ///
     /// Unlike ``instrumentedEdgeCount``, which measures the module, this denominator is scoped to the run's own search space, so `coveredEdgeCount / estimatedReachableEdgeCount` is an honest completeness fraction. Treat it as an estimate: adaptive sampling bias did not break consistency in the STADS evaluation, but the guarantee is asymptotic.
     public var estimatedReachableEdgeCount: Double {
@@ -261,7 +261,7 @@ public struct FuzzReport: Sendable {
 
     /// The fraction of the run's search time spent outside the property body: generation, mutation, materialization, coverage snapshots, and corpus bookkeeping. Time spent reducing failures is excluded (see ``reductionTime``).
     ///
-    /// Throughput is the currency of `time:` mode, and every microsecond of per-attempt testing overhead is subtracted directly from search power. A rising fraction against a baseline means the pipeline, not the property, is eating the budget. For sub-microsecond properties a high fraction is expected — there is little property time to dominate.
+    /// Throughput is the currency of `time:` mode, and every microsecond of per-attempt testing overhead is subtracted directly from search power. A rising fraction against a baseline means the pipeline, not the property, is eating the budget. For sub-microsecond properties a high fraction is expected, because there is little property time to dominate.
     public let testingOverheadFraction: Double
 
     /// Evaluated search cases per second over the run's search time, net of ``reductionTime``. Rejected candidates are excluded because they never reach the property or contribute an edge-incidence sample.

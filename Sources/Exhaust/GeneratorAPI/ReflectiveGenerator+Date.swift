@@ -53,7 +53,7 @@ public extension ReflectiveGenerator {
 
     /// Generates dates within an asymmetric span around `anchor`, spaced by `interval`.
     ///
-    /// The range bounds are relative to the anchor — negative values go into the past, positive into the future. Calendar spans measure calendar distance from the anchor, so `.months(-1)` reaches the same day-of-month in the previous month rather than 30 days back.
+    /// The range bounds are relative to the anchor: negative values go into the past, positive into the future. Calendar spans measure calendar distance from the anchor, so `.months(-1)` reaches the same day-of-month in the previous month rather than 30 days back.
     ///
     /// ```swift
     /// let gen = #gen(.date(within: .days(-7) ... .days(30), of: anchor, interval: .hours(1)))

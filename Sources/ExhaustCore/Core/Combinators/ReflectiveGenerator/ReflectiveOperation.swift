@@ -121,7 +121,7 @@ package enum ReflectiveOperation {
     ///
     /// Bit-pattern-space generation is the unified primitive for all numeric, boolean, and character types because it reduces every bounded domain to a single contiguous `UInt64` range. This lets interpreters, reducers, and screening analysis share one code path regardless of the output type. The ``TypeTag`` carries enough information to convert between the bit pattern and the domain value in both directions, which is what makes reflection and problematic-value analysis work without per-type interpreter logic.
     ///
-    /// `isRangeExplicit` distinguishes user-declared ranges (for example, `Gen.int(in: 0...100)`) from ranges synthesized by size scaling. The reducer must respect explicit ranges as hard bounds — narrowing them would change the generator's contract — but may freely narrow implicit ranges because they are artifacts of the current size parameter.
+    /// `isRangeExplicit` distinguishes user-declared ranges (for example, `Gen.choose(in: 0...100)`) from ranges synthesized by size scaling. The reducer must respect explicit ranges as hard bounds, because narrowing them would change the generator's contract, but may freely narrow implicit ranges because they are artifacts of the current size parameter.
     ///
     /// - Parameters:
     ///   - min: Minimum bit pattern value (inclusive).

@@ -24,7 +24,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameters:
     ///   - range: The inclusive range of Unicode scalars to draw from. If the range spans the surrogate block (U+D800–U+DFFF), those code points are excluded.
-    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the range contains it, otherwise the range's lower bound. Must be in the range if provided.
+    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value, so the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the range contains it, otherwise the range's lower bound. Must be in the range if provided.
     /// - Returns: A generator that produces characters from the range.
     static func character(
         in range: ClosedRange<Unicode.Scalar>,
@@ -87,7 +87,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameters:
     ///   - characterSet: The set of Unicode scalars to draw from.
-    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
+    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value, so the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
     /// - Returns: A generator that produces characters from the set.
     static func character(
         from characterSet: CharacterSet,
@@ -114,7 +114,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameters:
     ///   - characterSet: The set of Unicode scalars to draw from.
-    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
+    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value, so the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
     ///   - length: The inclusive range of generated string lengths, or `nil` to scale from zero through 100 characters.
     ///   - scaling: The distribution used to scale the generated length.
     /// - Returns: A generator that produces strings from the set.
@@ -142,7 +142,7 @@ public extension ReflectiveGenerator {
     ///
     /// - Parameters:
     ///   - range: The inclusive range of Unicode scalars to draw from. If the range spans the surrogate block (U+D800–U+DFFF), those code points are excluded.
-    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value — the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the range contains it, otherwise the range's lower bound. Must be in the range if provided.
+    ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value, so the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the range contains it, otherwise the range's lower bound. Must be in the range if provided.
     ///   - length: The inclusive range of generated string lengths, or `nil` to scale from zero through 100 characters.
     ///   - scaling: The distribution used to scale the generated length.
     /// - Returns: A generator that produces strings from the range.

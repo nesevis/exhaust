@@ -25,7 +25,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 
 /// Reduces a value you already have instead of searching for one.
 ///
-/// Provide a concrete value you suspect is a counterexample, recovered from a bug report, a saved regression, or a previous failure. Exhaust reflects it back through the generator to recover the choices that produce it, then reduces it to a minimal counterexample. The screening and random-sampling phases do not run: this overload starts from `reflecting` and only reduces.
+/// Provide a concrete value you suspect is a counterexample, recovered from a bug report, a saved regression, or a previous failure. Exhaust reflects it back through the generator to recover the choices that produce it, then reduces it to a minimal counterexample. The screening and random-sampling phases do not run: the run starts from the value passed to `reflecting` and only reduces.
 ///
 /// ```swift
 /// let minimal = #exhaust(personGen, reflecting: personFromBugReport) { person in
@@ -72,7 +72,7 @@ public macro exhaust<GeneratedValue, PropertyResult>(
 
 /// Reduces a value you already have instead of searching for one, with an async property closure.
 ///
-/// Use this when you have a concrete value to investigate and the property must `await`. Exhaust reflects the value back through the generator to recover the choices that produce it, then reduces it to a minimal counterexample. The screening and random-sampling phases do not run: this overload starts from `reflecting` and only reduces.
+/// Use this when you have a concrete value to investigate and the property must `await`. Exhaust reflects the value back through the generator to recover the choices that produce it, then reduces it to a minimal counterexample. The screening and random-sampling phases do not run: the run starts from the value passed to `reflecting` and only reduces.
 ///
 /// ```swift
 /// let minimal = await #exhaust(transactionGen, reflecting: txnFromBugReport) { txn in
