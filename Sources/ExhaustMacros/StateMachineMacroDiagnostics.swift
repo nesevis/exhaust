@@ -22,6 +22,7 @@ enum StateMachineDiagnostic: String, DiagnosticMessage {
     case invariantHasParameters = "@Invariant methods must not take parameters because Exhaust calls them after every command"
     case throwingEquivalence = "@Equivalence methods must not throw because an equivalence comparison has no failure channel other than its Bool"
     case mainActorCommand = "Commands isolated to @MainActor are unsupported because synthesized command dispatch is nonisolated"
+    case specCannotFail = "This spec has no way to fail, so every generated sequence passes. Add an @Invariant, an @Equivalence, or a throwing @Command that calls check(_:_:)."
 
     var message: String {
         rawValue
@@ -41,6 +42,9 @@ enum StateMachineDiagnostic: String, DiagnosticMessage {
                  .multipleSetups, .setupConflictingMarker, .setupMissingGenerators,
                  .setupHasUnsupportedParameter, .mainActorSetup:
                 .error
+            // A warning rather than an error: a trapping command (a failed precondition, an out-of-bounds subscript) is a failure channel the macro cannot see in the syntax, so a spec written to hunt crashes is legitimate and must still compile.
+            case .specCannotFail:
+                .warning
         }
     }
 }
