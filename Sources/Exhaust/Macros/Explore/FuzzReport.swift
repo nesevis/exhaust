@@ -21,10 +21,14 @@ public struct FuzzReport: Sendable {
         /// The symptoms observed across this cluster's members: thrown error type names, or `"returnedFalse"` for properties that returned `false`.
         public let symptoms: [String]
 
-        /// Total failures attributed to this cluster, reduced or not.
+        /// Total failures attributed to this cluster, reduced and unreduced together.
+        ///
+        /// Only ``reducedCount`` of these were classified by reducing them and comparing the reduced form. The rest are failures the backpressure gate declined to reduce, attributed to the most recently seen cluster sharing their ``symptoms``. That is a weak signal: two distinct faults that throw the same error type are indistinguishable to it, and a property that returns `false` rather than throwing gives every failure in the run the same symptom, so the attribution carries no information at all.
+        ///
+        /// Read this as a rough weight, not a membership count. ``reducedCount`` is the number this cluster's identity actually rests on.
         public let instanceCount: Int
 
-        /// Members that went through reduction. Bounded by the per-cluster reduction cap, so a hot fault reads "214 instances, 5 reduced".
+        /// Members that went through reduction. Bounded by the per-cluster reduction cap, so a hot fault reads "5 reduced, 209 attributed by symptom".
         public let reducedCount: Int
 
         /// Members whose own reduced form stalled short of the canonical one (an uncleared flag bit, an unclamped byte) and joined this cluster through the normalization pass. Without normalization each distinct stall would appear as its own spurious cluster; a high count relative to ``reducedCount`` means reduction stalls often on this fault, not that more faults exist.
@@ -175,6 +179,11 @@ public struct FuzzReport: Sendable {
 
     /// Entries accepted into the corpus across all phases.
     public let corpusEntryCount: Int
+
+    /// Corpus entries eligible to be mutation parents.
+    ///
+    /// Parent selection is a weighted draw over this set and costs one score lookup per member per pick, so this is the number to watch against ``attemptsPerSecond`` when diagnosing a run whose throughput falls as the corpus grows.
+    public let mutableTierCount: Int
 
     /// Distinct instrumented edges the corpus covers.
     public let coveredEdgeCount: Int
@@ -334,6 +343,7 @@ package extension FuzzReport {
         recoveryInvocations = result.counts.recoveryInvocations
         diagnosticInvocations = 0
         corpusEntryCount = result.corpusEntryCount
+        mutableTierCount = result.mutableTierCount
         coveredEdgeCount = result.coveredEdgeCount
         instrumentedEdgeCount = result.instrumentedEdgeCount
         edgeSingletonCount = result.edgeSingletonCount
@@ -377,6 +387,7 @@ package extension FuzzReport {
             recoveryInvocations: 0,
             diagnosticInvocations: 0,
             corpusEntryCount: 0,
+            mutableTierCount: 0,
             coveredEdgeCount: 0,
             instrumentedEdgeCount: 0,
             edgeSingletonCount: 0,

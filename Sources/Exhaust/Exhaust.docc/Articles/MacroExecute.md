@@ -4,17 +4,17 @@ Run a state machine spec against a stateful system.
 
 ## Overview
 
-`#execute` generates command sequences, runs them against the system under test, checks invariants (or an oracle) after each step, and reduces failures to a minimal sequence. Always awaited.
+`#execute` generates command sequences, runs them against the system under test, checks the spec's invariants wherever the state is settled, and reduces failures to a minimal sequence. Always awaited. Pass `mode:` to run the commands concurrently instead of one at a time.
 
 ```swift
 @Test func queueBehavesCorrectly() async {
-    await #execute(QueueSpec.self, .commandLimit(15), .budget(.thorough))
+    await #execute(QueueSpec.self, mode: .sequential, .commandLimit(15), .budget(.thorough))
 }
 ```
 
 | Parameter | Description |
 |---|---|
-| `specType` | The `@StateMachine` spec class or actor to run. |
+| `specType` | The `@StateMachine` spec class to run. |
 | `settings` | Variadic ``StateMachineSettings`` values: command limit, budget, lanes, replay, timeout, suppression. |
 
 Returns a ``StateMachineResult`` with the reduced command sequence and trace on failure, or `nil` if all sequences pass.
@@ -29,13 +29,13 @@ For the full guide, see <doc:StateMachineTesting>.
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
-    await #execute(BoundedQueueSpec.self, time: .minutes(5))
+    await #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
 }
 ```
 
 | Parameter | Description |
 |---|---|
-| `specType` | The `@StateMachine` spec to run. `.sequential` and `.tasks` specs are supported. |
+| `specType` | The `@StateMachine` spec to run. |
 | `time` | Wall-clock ``TimeSpan`` for the run (for example `.minutes(5)`). |
 | `settings` | Variadic ``FuzzSettings`` values: replay, suppression, log verbosity, `.commandLimit(n)`. |
 

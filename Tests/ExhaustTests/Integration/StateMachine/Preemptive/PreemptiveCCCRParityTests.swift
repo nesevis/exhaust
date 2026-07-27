@@ -2,12 +2,12 @@ import Exhaust
 import Testing
 
 // PCCR equivalents of the CCCR test specs. Same commands, same SUTs,
-// @StateMachine(.threads) instead of @StateMachine, @Oracle added for sequential comparison.
+// @StateMachine instead of @StateMachine, @Equivalence added for sequential comparison.
 // Purpose: verify that the preemptive runner catches the same bugs the cooperative runner does.
 //
 // properties and model-comparing @Invariants are omitted because the preemptive runner
 // dispatches commands to real GCD threads — updates inside command bodies would race
-// with each other. The @Oracle handles correctness by comparing against a sequential replay.
+// with each other. The @Equivalence handles correctness by comparing against a sequential replay.
 
 // MARK: - Non-Atomic Counter
 
@@ -17,6 +17,7 @@ struct PreemptiveNonAtomicCounterParityTests {
     func detectsLostUpdateBugInNonAtomicCounter() async {
         let result = await #execute(
             PreemptiveNonAtomicCounterParitySpec.self,
+            mode: .threads,
             .suppress(.issueReporting),
             .budget(.extensive)
         )
@@ -24,12 +25,12 @@ struct PreemptiveNonAtomicCounterParityTests {
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 final class PreemptiveNonAtomicCounterParitySpec {
     @SystemUnderTest
     var counter: NonAtomicCounter = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other: NonAtomicCounter) -> Bool {
         counter.value == other.value
     }
@@ -58,6 +59,7 @@ struct PreemptiveLeakyBucketParityTests {
     func detectsCheckThenActBugThatRequiresStateBuildup() async {
         let result = await #execute(
             PreemptiveLeakyBucketParitySpec.self,
+            mode: .threads,
             .suppress(.issueReporting),
             .budget(.extensive)
         )
@@ -68,12 +70,12 @@ struct PreemptiveLeakyBucketParityTests {
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 final class PreemptiveLeakyBucketParitySpec {
     @SystemUnderTest
     var bucket: LeakyBucket = .init(capacity: 5)
 
-    @Oracle
+    @Equivalence
     func tokensMatch(other: LeakyBucket) -> Bool {
         bucket.tokens == other.tokens
     }
@@ -103,18 +105,19 @@ struct PreemptiveAtomicCounterParityTests {
     func threadSafeCounterPassesUnderPreemptiveExecution() async {
         let result = await #execute(
             PreemptiveAtomicCounterParitySpec.self,
+            mode: .threads,
             .suppress(.issueReporting)
         )
         #expect(result == nil, "Atomic counter should pass under any interleaving")
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 final class PreemptiveAtomicCounterParitySpec {
     @SystemUnderTest
     var counter: ThreadSafeCounter = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other: ThreadSafeCounter) -> Bool {
         counter.value == other.value
     }
@@ -143,6 +146,7 @@ struct PreemptiveDetectionBoundaryParityTests {
         let result = try #require(
             await #execute(
                 PreemptiveExposedRaceParitySpec.self,
+                mode: .threads,
                 .suppress(.issueReporting),
                 .budget(.extensive)
             )
@@ -155,6 +159,7 @@ struct PreemptiveDetectionBoundaryParityTests {
         let result = try #require(
             await #execute(
                 PreemptiveThreeWayRaceParitySpec.self,
+                mode: .threads,
                 .parallelize(lanes: .three),
                 .suppress(.issueReporting),
                 .budget(.extensive)
@@ -164,12 +169,12 @@ struct PreemptiveDetectionBoundaryParityTests {
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 final class PreemptiveExposedRaceParitySpec {
     @SystemUnderTest
     var counter: ExposedRacyCounter = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other: ExposedRacyCounter) -> Bool {
         counter.value == other.value
     }
@@ -184,12 +189,12 @@ final class PreemptiveExposedRaceParitySpec {
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 final class PreemptiveThreeWayRaceParitySpec {
     @SystemUnderTest
     var counter: ThreeWayRacyCounter = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other: ThreeWayRacyCounter) -> Bool {
         counter.value == other.value
     }
@@ -212,6 +217,7 @@ struct PreemptiveAllSkipParityTests {
     func fullSkipRateDoesNotHangOrCrash() async {
         let result = await #execute(
             PreemptiveAlwaysSkipParitySpec.self,
+            mode: .threads,
             .suppress(.issueReporting)
         )
         #expect(result == nil, "A spec where every command skips should produce no failure")
@@ -221,20 +227,21 @@ struct PreemptiveAllSkipParityTests {
     func fullSkipRateWithScreeningPhase() async {
         let result = await #execute(
             PreemptiveAlwaysSkipParitySpec.self,
+            mode: .threads,
             .suppress(.issueReporting)
         )
         #expect(result == nil, "Screening phase should handle 100% skip rate gracefully")
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 final class PreemptiveAlwaysSkipParitySpec {
     @SystemUnderTest
-    var value: Int = 0
+    var counter: SkipOnlyCounter = .init()
 
-    @Oracle
-    func valuesMatch(other: Int) -> Bool {
-        value == other
+    @Equivalence
+    func valuesMatch(other: SkipOnlyCounter) -> Bool {
+        counter.value == other.value
     }
 
     @Command(weight: 1)
@@ -248,6 +255,15 @@ final class PreemptiveAlwaysSkipParitySpec {
     }
 
     func failureDescription() -> String? {
-        "\(value)"
+        "\(counter.value)"
+    }
+}
+
+/// A system under test nothing ever calls, for the spec whose every command skips. A reference type because `mode: .threads` shares one system under test across its lanes, which a value type cannot be.
+final class SkipOnlyCounter: @unchecked Sendable, CustomDebugStringConvertible {
+    private(set) var value = 0
+
+    var debugDescription: String {
+        "SkipOnlyCounter(value: \(value))"
     }
 }

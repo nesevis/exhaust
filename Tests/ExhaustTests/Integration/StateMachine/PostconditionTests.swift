@@ -11,6 +11,7 @@ struct PostconditionTests {
         let result = try #require(
             await #execute(
                 SetUniquenessSpec.self,
+                mode: .sequential,
                 .commandLimit(5),
                 .suppress(.issueReporting)
             )
@@ -27,6 +28,7 @@ struct PostconditionTests {
         let result = try #require(
             await #execute(
                 StackLIFOSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .suppress(.issueReporting)
             )
@@ -43,6 +45,7 @@ struct PostconditionTests {
         let result = try #require(
             await #execute(
                 DictionaryConsistencySpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .suppress(.issueReporting)
             )
@@ -60,7 +63,7 @@ struct PostconditionTests {
 
 // MARK: - StateMachine: Set uniqueness
 
-@StateMachine(.sequential)
+@StateMachine
 final class SetUniquenessSpec {
     @SystemUnderTest var uniqueSet = BuggySet<Int>()
 
@@ -95,7 +98,7 @@ final class SetUniquenessSpec {
 
 // MARK: - StateMachine: Stack LIFO ordering
 
-@StateMachine(.sequential)
+@StateMachine
 final class StackLIFOSpec {
     @SystemUnderTest var stack = BuggyStack<Int>()
 
@@ -125,7 +128,7 @@ final class StackLIFOSpec {
 
 // MARK: - StateMachine: Dictionary consistency
 
-@StateMachine(.sequential)
+@StateMachine
 final class DictionaryConsistencySpec {
     @SystemUnderTest var dict = TrackedDictionary()
 

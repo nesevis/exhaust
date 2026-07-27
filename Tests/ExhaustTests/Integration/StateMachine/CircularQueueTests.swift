@@ -38,6 +38,7 @@ struct CircularQueueTests {
         let result = try #require(
             await #execute(
                 CircularQueueSpec.self,
+                mode: .sequential,
                 .commandLimit(10),
                 .budget(.thorough),
                 .suppress(.issueReporting),
@@ -54,7 +55,7 @@ struct CircularQueueTests {
 
 // MARK: - StateMachine
 
-@StateMachine(.sequential)
+@StateMachine
 final class CircularQueueSpec {
     var expected: [Int] = []
     @SystemUnderTest var queue = BuggyCircularQueue(capacity: 6)

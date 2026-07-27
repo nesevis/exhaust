@@ -3,7 +3,7 @@ import ExhaustCore
 
 /// Configuration options for `#execute` spec tests, passed as variadic arguments to control test behavior.
 public enum StateMachineSettings {
-    /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a default from the command generator's domain size and the screening budget. Defaults vary by mode: `.sequential` uses the estimate (its budget-derived ceiling tops out at 100, with a floor of three appearances per command type), `.tasks` caps the estimate at 40, and `.threads` uses a flat default of 10.
+    /// Limits the maximum number of commands per generated sequence. When omitted, the runner estimates a default from the command generator's domain size and the screening budget. Defaults vary by mode: `.sequential` uses the estimate (its budget-derived ceiling tops out at 100, with a floor of three appearances per command type), `.tasks` caps the estimate at 40, and `.threads` uses a flat default of 10. A spec that declares an `@Equivalence` takes that flat 10 under `.tasks` too, because both modes then search the orders a run could have taken and that search grows multinomially in the sequence length.
     case commandLimit(Int)
 
     /// Controls iteration budgets for screening and random sampling. Defaults to `.standard` (200 screening rows, 200 random samplings).
@@ -36,6 +36,8 @@ public enum StateMachineSettings {
 
     /// Sets the maximum wall-clock time the drain loop waits with no pending continuations before declaring a timeout. Default is `.seconds(2)`. A value of `.zero` disables the timeout entirely, so the runner waits unbounded.
     ///
-    /// When the idle timeout fires, the test reports the current command sequence as a failure without attempting reduction (since each reduction probe would also time out).
+    /// A timed-out probe counts as a **pass**, not a failure. The timeout cannot tell a hung system apart from a contended machine, and treating it as a counterexample would let a loaded CI runner manufacture failures. The bound exists to stop a stalled probe wedging the process, not to detect hangs.
+    ///
+    /// This means a spec that deadlocks does not fail on that account alone. What surfaces instead is a runtime warning once timed-out probes reach a quarter of those attempted, reporting the rate. A system that hangs on only a few interleavings can stay under that threshold, so a green run with a nonzero timeout count is not evidence of liveness.
     case idleTimeout(TimeSpan)
 }

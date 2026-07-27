@@ -119,6 +119,7 @@ struct PointlessRunAndSkipTests {
         await withKnownIssue {
             _ = await #execute(
                 PointlessRunStackSpec.self,
+                mode: .sequential,
                 .budget(.custom(screening: 0, sampling: 0))
             )
         }
@@ -330,7 +331,7 @@ private func containsBranchNode(_ tree: ChoiceTree) -> Bool {
 // MARK: - Fixtures
 
 /// Deliberately minimal: a single command is enough for a fixture whose tests only verify run-level reporting, never state transitions.
-@StateMachine(.sequential)
+@StateMachine
 final class PointlessRunStackSpec {
     var expected: [Int] = []
     @SystemUnderTest var stack: [Int] = []

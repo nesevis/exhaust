@@ -9,17 +9,20 @@ import IssueReporting
 // MARK: - Dispatch
 
 public extension __ExhaustRuntime {
-    /// Dispatches a synchronous spec test to the appropriate runner based on the spec's ``ExecutionModel``.
+    /// Dispatches a synchronous spec test to the runner the call site asked for.
+    ///
+    /// A synchronous spec has no suspension points to interleave at, so `.tasks` routes to the sequential runner: cooperative interleaving needs async commands, which reach the async twin instead.
     @discardableResult
     static func __runStateMachineDispatch<Spec: StateMachineSpec>(
         _ specType: Spec.Type,
+        mode: ExecutionModel,
         settings: [StateMachineSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
     ) async -> StateMachineResult<Spec>? {
-        switch Spec.executionModel {
+        switch mode {
             case .sequential, .tasks:
                 // Sequential specs run inline and spawn no GCD lanes, so no gate hop is needed.
                 return __runStateMachine(
@@ -220,22 +223,19 @@ private extension __ExhaustRuntime {
             finalize: { candidate in
                 let commands = candidate.taggedCommands.map(\.1)
                 let setupStep = candidate.setupStep
-                let captured = __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+                return __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
                     let spec = specInit()
                     let (setupTrace, setupFailed) = await applySetupRecordingTrace(spec, setupStep: setupStep)
-                    if setupFailed {
-                        let snapshot = await spec.diagnosticSnapshot()
-                        return (trace: setupTrace, snapshot: snapshot)
+                    guard setupFailed == false else {
+                        return (setupTrace, spec.systemUnderTest, spec.failureDescription())
                     }
                     let (trace, _) = await buildAsyncSequentialTrace(
                         commands,
                         run: { try await spec.run($0) },
                         checkInvariants: { try await spec.checkInvariants() }
                     )
-                    let snapshot = await spec.diagnosticSnapshot()
-                    return (trace: joinTrace(setup: setupTrace, commands: trace), snapshot: snapshot)
+                    return (joinTrace(setup: setupTrace, commands: trace), spec.systemUnderTest, spec.failureDescription())
                 }!
-                return (captured.trace, captured.snapshot.systemUnderTest, captured.snapshot.failureDescription)
             }
         )
 

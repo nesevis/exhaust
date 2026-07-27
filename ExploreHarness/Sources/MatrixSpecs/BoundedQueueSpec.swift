@@ -4,7 +4,7 @@ import Exhaust
 /// The shared spec for the `BoundedQueue` fixture (faults A, S, P, D — registry in `BoundedQueue.swift`).
 ///
 /// Lives in `MatrixSpecs` so `ExecuteTests` and `ExploreBenchmark` measure the same spec: the class is `public`, and access-level-mirroring `@StateMachine` synthesis makes the synthesized members public with it.
-@StateMachine(.sequential)
+@StateMachine
 public final class BoundedQueueSpec {
     var model: [Int] = []
     @SystemUnderTest var queue: BoundedQueue = .init(capacity: 24)

@@ -102,7 +102,7 @@
 
         @Test("An invariant with parameters is diagnosed")
         func invariantWithParametersIsDiagnosed() throws {
-            let attribute: AttributeSyntax = "@StateMachine(.sequential)"
+            let attribute: AttributeSyntax = "@StateMachine"
             let declaration: DeclSyntax = """
             final class InvalidInvariantSpec {
               @SystemUnderTest var counter: Counter
@@ -133,7 +133,7 @@
 
         @Test("A throwing oracle is diagnosed before non-throwing synthesis")
         func throwingOracleIsDiagnosed() throws {
-            let attribute: AttributeSyntax = "@StateMachine(.threads)"
+            let attribute: AttributeSyntax = "@StateMachine"
             let declaration: DeclSyntax = """
             final class ThrowingOracleSpec {
               @SystemUnderTest var counter: Counter
@@ -141,7 +141,7 @@
               @Command
               func increment() {}
 
-              @Oracle
+              @Equivalence
               func equivalent(to other: Counter) throws -> Bool { true }
             }
             """
@@ -157,14 +157,14 @@
 
             #expect(
                 context.diagnostics.map(\.diagMessage.diagnosticID) == [
-                    StateMachineDiagnostic.throwingOracle.diagnosticID,
+                    StateMachineDiagnostic.throwingEquivalence.diagnosticID,
                 ]
             )
         }
 
         @Test("A member-isolated command is diagnosed before nonisolated synthesis")
         func memberIsolatedCommandIsDiagnosed() throws {
-            let attribute: AttributeSyntax = "@StateMachine(.sequential)"
+            let attribute: AttributeSyntax = "@StateMachine"
             let declaration: DeclSyntax = """
             final class IsolatedCommandSpec {
               @SystemUnderTest var counter: Counter
@@ -193,7 +193,7 @@
 
         @Test("A type-isolated command is diagnosed before nonisolated synthesis")
         func typeIsolatedCommandIsDiagnosed() throws {
-            let attribute: AttributeSyntax = "@StateMachine(.sequential)"
+            let attribute: AttributeSyntax = "@StateMachine"
             let declaration: DeclSyntax = """
             @MainActor
             final class IsolatedCommandSpec {

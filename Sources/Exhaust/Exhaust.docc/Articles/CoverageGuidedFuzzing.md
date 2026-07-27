@@ -121,7 +121,7 @@ The same coverage-guided search works over `@StateMachine` specs. Where `#explor
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
-    await #execute(BoundedQueueSpec.self, time: .minutes(5))
+    await #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
 }
 ```
 
@@ -131,17 +131,17 @@ Sequences carry up to 40 commands by default. Override with `.commandLimit(n)` w
 
 ### Execution model support
 
-| Model | Status |
+| Mode | Status |
 |-------|--------|
-| `.sequential` | Supported, for both synchronous and async specs. |
-| `.tasks` | Supported for async specs. Requires macOS 15, iOS 18, tvOS 18, watchOS 11, or visionOS 2 on Apple platforms; no version requirement on Linux and Windows. The search mutates both commands and their lane assignments, and reduction minimises concurrency back toward sequential execution. `.parallelize(lanes:)` sets the lane count, defaulting to two. A `.tasks` spec with no async members runs through the sequential path. |
-| `.threads` | Permanently incompatible. The search treats an attempt's coverage as determined by its command sequence, and preemptive scheduling makes it depend on an OS schedule the run can neither observe nor replay. The discussion below the table expands on this and names the alternatives. |
+| default (`mode:` omitted) | Supported, for both synchronous and async specs. |
+| `mode: .tasks` | Supported for async specs. Requires macOS 15, iOS 18, tvOS 18, watchOS 11, or visionOS 2 on Apple platforms; no version requirement on Linux and Windows. The search mutates both commands and their lane assignments, and reduction minimises concurrency back toward one command at a time. `.parallelize(lanes:)` sets the lane count, defaulting to two. A spec with no async members runs one command at a time here. |
+| `mode: .threads` | Unavailable, and a compile error rather than a run that says nothing: the `mode:` here takes a ``SearchableExecutionModel``, which has no `.threads` case. The search treats an attempt's coverage as determined by its command sequence, and thread-based scheduling makes it depend on an OS schedule the run can neither observe nor replay. The discussion below the table expands on this and names the alternatives. |
 
-The `.threads` exclusion is the clean-signal requirement applied from the inside. Every condition in <doc:#Getting-a-clean-signal> removes a hidden influence on what an attempt's coverage says about its input. Preemptive scheduling adds one to every attempt: the same command sequence takes different branches depending on how the OS interleaves the lanes, so the search cannot tell a sequence that reached new code from one that won an unusual schedule, and it spends the budget chasing the scheduler instead of your spec.
+That exclusion is the clean-signal requirement applied from the inside. Every condition in <doc:#Getting-a-clean-signal> removes a hidden influence on what an attempt's coverage says about its input. Thread-based scheduling adds one to every attempt: the same command sequence takes different branches depending on how the OS interleaves the lanes, so the search cannot tell a sequence that reached new code from one that won an unusual schedule, and it spends the budget chasing the scheduler instead of your spec.
 
-No isolation arrangement recovers the signal. The conditions in <doc:#Getting-a-clean-signal> are fixable because the interference comes from outside the run. Here the interference is the mode's purpose: `.threads` exists so the OS is free to realise a different schedule for the same sequence on every attempt, which is the one freedom the coverage signal cannot absorb.
+No isolation arrangement recovers the signal. The conditions in <doc:#Getting-a-clean-signal> are fixable because the interference comes from outside the run. Here the interference is the mode's purpose: `mode: .threads` exists so the OS is free to realise a different schedule for the same sequence on every attempt, which is the one freedom the coverage signal cannot absorb.
 
-Concurrency testing under a time budget splits by what you are hunting. To search interleavings, use `.tasks`: the lane assignment travels inside the generated input, so schedules are mutated, replayed, and reduced like any other part of the sequence. To find data races, run the spec under plain `#execute`, whose oracle checking relies on repetition rather than coverage and is built for schedules it cannot replay.
+Concurrency testing under a time budget splits by what you are hunting. To search interleavings, use `mode: .tasks`: the lane assignment travels inside the generated input, so schedules are mutated, replayed, and reduced like any other part of the sequence. To find data races, run the same spec under plain `#execute` with `mode: .threads`, which judges runs through the spec's `@Equivalence` and relies on repetition rather than coverage, and is built for schedules it cannot replay.
 
 ## Reading the report
 
@@ -185,9 +185,13 @@ Full per-cluster detail is in the explore-time-cluster attachments.
 Reproduce: .replay(1)
 ```
 
-**Clusters group failures by their reduced form.** Two failures that look different on the surface but reduce to the same minimal counterexample are one cluster.
+**Clusters group failures by their reduced form.** Two failures that look different on the surface but reduce to the same minimal counterexample are one cluster. That is what the "reduced" number counts. The larger failure count beside it includes failures the backpressure gate declined to reduce, which are attributed to a cluster by matching error type, so read it as a rough weight rather than a membership count. When a property returns `false` instead of throwing, every failure in the run shares one symptom and the attribution carries no information at all.
 
-**The edge count is the module, not the run.** The 1171 edges include everything in the instrumented module, most of which this property and generator can never reach. The Chao1 estimate is scoped to what this run can actually reach, which is a more honest completeness measure.
+**The overhead figure is about the property, not the pipeline.** 97% here means the property is cheap enough that generation, mutation, and coverage bookkeeping dominate, which is expected for a small parser fixture and is not actionable. It is worth attention when a property that does real work still reports a high fraction: then the pipeline is genuinely eating the budget.
+
+**The edge count is the module, not the run.** The 1171 edges include everything in the instrumented module, most of which this property and generator can never reach. The Chao1 estimate is scoped to what this run can actually reach, which is a more honest denominator than module size.
+
+Read it as an estimate with a known lean rather than a measurement. Chao1 assumes one sampling frame, and a run is a mixture of three phases with different distributions; the mutation phase also concentrates on regions that already paid off, which suppresses the singleton count the estimator reads. Both effects push the same way, toward reporting the search as more complete than it is. Treat a rising estimate as evidence, and a flat one as weak evidence.
 
 **Late-discovered clusters are foregrounded.** A cluster found in the final quarter of the run with few instances is the strongest signal that extending the budget would find more.
 
@@ -230,7 +234,7 @@ Short budgets (seconds to a minute) are useful during development: confirm the i
 
 Longer budgets (five to thirty minutes) give the mutation phase time to work. A fifteen-minute run on an M-series machine completes hundreds of thousands of attempts; each attempt that reaches a new branch becomes a candidate for further modification.
 
-Overnight budgets (hours) suit nightly CI. The Chao1 estimator in the report tells you whether extending the budget further is likely to find new ground: when the estimated chance of a new branch on the next attempt drops below one in a million, the search has saturated and further time buys diminishing returns.
+Overnight budgets (hours) suit nightly CI. The report's "estimated chance the next attempt covers a new edge" line is the one to steer by: when it drops below one in a million, the search has saturated and further time buys diminishing returns. That figure is a Good-Turing estimate, whose consistency argument is the stronger of the two the report carries. The Chao1 reachable-edge line beside it is more sensitive to the search's own bias, so prefer the discovery-probability line when the two disagree.
 
 ## Early termination
 

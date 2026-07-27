@@ -11,6 +11,7 @@ struct AsyncStateMachineTests {
     func passingAsyncSpecProducesNoCounterexample() async {
         let result = await #execute(
             AsyncCounterSpec.self,
+            mode: .tasks,
             .parallelize(lanes: .one),
             .commandLimit(8),
             .budget(.custom(screening: 0, sampling: 100)),
@@ -24,6 +25,7 @@ struct AsyncStateMachineTests {
     func failingAsyncSpecProducesACounterexample() async {
         let result = await #execute(
             BuggyAsyncCounterSpec.self,
+            mode: .tasks,
             .commandLimit(10),
             .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.issueReporting)
@@ -44,6 +46,7 @@ struct AsyncStateMachineTests {
     func asyncStateMachineWithSkipWorksCorrectly() async {
         let result = await #execute(
             AsyncSkipSpec.self,
+            mode: .tasks,
             .parallelize(lanes: .one),
             .commandLimit(8),
             .budget(.custom(screening: 0, sampling: 100)),
@@ -57,6 +60,7 @@ struct AsyncStateMachineTests {
     func mixedSyncasyncCommandsProduceAsyncStateMachineSpecConformance() async {
         let result = await #execute(
             MixedAsyncSpec.self,
+            mode: .tasks,
             .parallelize(lanes: .one),
             .commandLimit(8),
             .budget(.custom(screening: 0, sampling: 100)),
@@ -70,6 +74,7 @@ struct AsyncStateMachineTests {
     func asyncStateMachineReplayReproducesFailureWithSeedThroughShrinking() async {
         let result1 = await #execute(
             BuggyAsyncCounterSpec.self,
+            mode: .tasks,
             .commandLimit(10),
             .replay(.numeric(42)),
             .suppress(.issueReporting)
@@ -78,6 +83,7 @@ struct AsyncStateMachineTests {
 
         let result2 = await #execute(
             BuggyAsyncCounterSpec.self,
+            mode: .tasks,
             .commandLimit(10),
             .replay(.numeric(42)),
             .suppress(.issueReporting)
@@ -93,6 +99,7 @@ struct AsyncStateMachineTests {
     func asyncStateMachineWithSCAScreeningFindsAndShrinksFailure() async {
         let result = await #execute(
             BuggyAsyncCounterSpec.self,
+            mode: .tasks,
             .commandLimit(20),
             .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.issueReporting),
@@ -110,6 +117,7 @@ struct AsyncStateMachineTests {
         // Use a fixed seed that produces a failure
         let result1 = await #execute(
             BuggyCounterSpec.self,
+            mode: .sequential,
             .commandLimit(20),
             .replay(42),
             .suppress(.issueReporting)
@@ -120,7 +128,7 @@ struct AsyncStateMachineTests {
 
 // MARK: - StateMachine: Passing async counter
 
-@StateMachine(.tasks)
+@StateMachine
 final class AsyncCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: AsyncCounter = .init()
@@ -155,7 +163,7 @@ final class AsyncCounterSpec {
 
 // MARK: - StateMachine: Failing async counter (invariant violation)
 
-@StateMachine(.tasks)
+@StateMachine
 final class BuggyAsyncCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: BuggyAsyncCounter = .init()
@@ -184,7 +192,7 @@ final class BuggyAsyncCounterSpec {
 
 // MARK: - StateMachine: Async with skip()
 
-@StateMachine(.tasks)
+@StateMachine
 final class AsyncSkipSpec {
     var expected: [Int] = []
     @SystemUnderTest var counter: AsyncCounter = .init()
@@ -214,7 +222,7 @@ final class AsyncSkipSpec {
 
 // MARK: - StateMachine: Mixed sync + async commands
 
-@StateMachine(.tasks)
+@StateMachine
 final class MixedAsyncSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: AsyncCounter = .init()

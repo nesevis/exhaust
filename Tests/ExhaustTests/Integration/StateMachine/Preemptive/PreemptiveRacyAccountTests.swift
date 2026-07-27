@@ -10,6 +10,7 @@ struct PreemptiveRacyAccountTests {
         let result = try #require(
             await #execute(
                 RacyAccountSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .budget(.custom(screening: 20000, sampling: 20000)),
                 .suppress(.issueReporting),
@@ -32,12 +33,12 @@ struct PreemptiveRacyAccountTests {
 ///
 /// The `withdraw` path does an unsynchronized read-modify-write, so two concurrent withdrawals can both read the same balance and each subtract from it, losing an update.
 /// The `deposit` path is lock-protected, so a sequence of deposits must run before any withdrawal is valid. This forces the reducer to keep some prefix commands and gives the pipeline enough depth to exercise lane-collapse before the linearizability check.
-@StateMachine(.threads)
+@StateMachine
 final class RacyAccountSpec {
     @SystemUnderTest
     var account: RacyAccount = .init()
 
-    @Oracle
+    @Equivalence
     func balanceMatches(other: RacyAccount) -> Bool {
         account.balance == other.balance
     }

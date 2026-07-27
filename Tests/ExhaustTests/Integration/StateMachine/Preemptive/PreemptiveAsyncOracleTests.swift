@@ -2,16 +2,17 @@ import Exhaust
 import Foundation
 import Testing
 
-/// Exercises an `async` `@Oracle` under the preemptive concurrent runner (PCCR).
+/// Exercises an `async` `@Equivalence` under the preemptive concurrent runner (PCCR).
 ///
-/// The oracle reads SUT state through an asynchronous accessor, so the macro must synthesize an `async oracleCheck(_:)` and the runner must `await` it. A synchronous oracle never reaches that path.
-@Suite("Preemptive concurrent spec: async @Oracle", .serialized, .tags(.stateMachine))
+/// The oracle reads SUT state through an asynchronous accessor, so the macro must synthesize an `async equivalenceCheck(_:)` and the runner must `await` it. A synchronous oracle never reaches that path.
+@Suite("Preemptive concurrent spec: async @Equivalence", .serialized, .tags(.stateMachine))
 struct PreemptiveAsyncOracleTests {
     @Test("Async oracle detects a lost-update race")
     func asyncOracleDetectsLostUpdateRace() async throws {
         let result = try #require(
             await #execute(
                 AsyncOracleRacyCounterSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .suppress(.issueReporting)
             )
@@ -23,6 +24,7 @@ struct PreemptiveAsyncOracleTests {
     func asyncOraclePassesForThreadSafeSUT() async {
         let result = await #execute(
             AsyncOracleSafeCounterSpec.self,
+            mode: .threads,
             .parallelize(lanes: .two),
             .suppress(.issueReporting)
         )
@@ -32,13 +34,13 @@ struct PreemptiveAsyncOracleTests {
 
 // MARK: - Specs
 
-@StateMachine(.threads)
+@StateMachine
 final class AsyncOracleRacyCounterSpec {
     @SystemUnderTest
     var counter: AsyncRacyReadCounter = .init()
 
-    /// Asynchronous oracle: both the concurrent SUT and the sequential reference are read through `snapshot()`, so the synthesized `oracleCheck` must `await` this method.
-    @Oracle
+    /// Asynchronous oracle: both the concurrent SUT and the sequential reference are read through `snapshot()`, so the synthesized `equivalenceCheck` must `await` this method.
+    @Equivalence
     func valuesMatch(other: AsyncRacyReadCounter) async -> Bool {
         await counter.snapshot() == other.snapshot()
     }
@@ -59,12 +61,12 @@ final class AsyncOracleRacyCounterSpec {
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 final class AsyncOracleSafeCounterSpec {
     @SystemUnderTest
     var counter: AsyncSafeCounter = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other: AsyncSafeCounter) async -> Bool {
         await counter.snapshot() == other.snapshot()
     }

@@ -3,8 +3,8 @@ import Exhaust
 
 /// The shared spec for the `RacyLedger` fixture (fault L — registry in `RacyLedger.swift`).
 ///
-/// The only `.tasks` spec in the harness: its commands are async so the cooperative scheduler can interleave them at the fixture's planted suspension point. The model updates `expected` synchronously before each await, so a completed sequential execution always matches — divergence requires an overlapping read-modify-write, which only a cross-lane schedule can realize.
-@StateMachine(.tasks)
+/// The only spec in the harness whose call sites pass `mode: .tasks`: its commands are async so the cooperative scheduler can interleave them at the fixture's planted suspension point. The model updates `expected` synchronously before each await, so a completed sequential execution always matches — divergence requires an overlapping read-modify-write, which only a cross-lane schedule can realize.
+@StateMachine
 public final class RacyLedgerSpec {
     var expected: Int = 0
     @SystemUnderTest var ledger: RacyLedger = .init()

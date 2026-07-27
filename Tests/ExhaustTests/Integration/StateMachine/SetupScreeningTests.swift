@@ -53,6 +53,7 @@ struct SetupScreeningTests {
         let result = try #require(
             await #execute(
                 InteractionSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .budget(.custom(screening: 60, sampling: 0)),
                 .suppress(.issueReporting)
@@ -74,6 +75,7 @@ struct SetupScreeningTests {
         // analysis to extract. Screening must still apply it: this spec only fails when a probe runs before setup.
         let result = await #execute(
             DeterministicSetupSpec.self,
+            mode: .sequential,
             .commandLimit(4),
             .budget(.custom(screening: 40, sampling: 0)),
             .suppress(.issueReporting)
@@ -101,7 +103,7 @@ struct SetupScreeningTests {
 
 // MARK: - Test Specs
 
-@StateMachine(.sequential)
+@StateMachine
 private final class TwoArgumentSetupSpec {
     var capacity = 0
     var preload: [Int] = []
@@ -121,7 +123,7 @@ private final class TwoArgumentSetupSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class NoSetupSpec {
     @SystemUnderTest var box = CountingBox()
 
@@ -133,7 +135,7 @@ private final class NoSetupSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class DeterministicSetupSpec {
     var configured = false
     @SystemUnderTest var box = CountingBox()
@@ -158,7 +160,7 @@ private final class DeterministicSetupSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class InteractionSpec {
     var capacity = 0
     @SystemUnderTest var box = CountingBox()

@@ -12,6 +12,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 AlwaysFailingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.issueReporting)
@@ -34,6 +35,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 CapacityGatedSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 300)),
                 .suppress(.issueReporting)
@@ -53,6 +55,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 AlwaysFailingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.issueReporting)
@@ -74,6 +77,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 AlwaysFailingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.issueReporting)
@@ -107,6 +111,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 PlainFailingSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.issueReporting)
@@ -125,6 +130,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 ThrowingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .budget(.custom(screening: 0, sampling: 20)),
                 .suppress(.issueReporting)
@@ -143,6 +149,7 @@ struct SetupGeneratorTests {
         // The synthesized `typealias SystemUnderTest` must normalize the property's `ValueBox!` to `ValueBox?`, because Swift rejects the implicitly unwrapped spelling in a typealias. Compiling this spec is the regression; the run confirms setup reaches the instance.
         let result = await #execute(
             ImplicitlyUnwrappedSUTSpec.self,
+            mode: .sequential,
             .commandLimit(4),
             .budget(.custom(screening: 0, sampling: 30)),
             .suppress(.issueReporting)
@@ -155,6 +162,7 @@ struct SetupGeneratorTests {
         let result = try #require(
             await #execute(
                 PlainFailingSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.issueReporting)
@@ -168,6 +176,7 @@ struct SetupGeneratorTests {
         let first = try #require(
             await #execute(
                 CapacityGatedSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 300)),
                 .suppress(.issueReporting)
@@ -177,6 +186,7 @@ struct SetupGeneratorTests {
         let replayed = try #require(
             await #execute(
                 CapacityGatedSpec.self,
+                mode: .sequential,
                 .commandLimit(6),
                 .replay(ReplaySeed(stringLiteral: replaySeed)),
                 .suppress(.issueReporting)
@@ -267,6 +277,7 @@ struct SetupChoiceSequenceTests {
         let first = try #require(
             await #execute(
                 AlwaysFailingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .budget(.custom(screening: 50, sampling: 0)),
                 .suppress(.issueReporting)
@@ -279,6 +290,7 @@ struct SetupChoiceSequenceTests {
         let replayed = try #require(
             await #execute(
                 AlwaysFailingSetupSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .replay(ReplaySeed(stringLiteral: replaySeed)),
                 .suppress(.issueReporting)
@@ -298,10 +310,11 @@ struct SetupChoiceSequenceTests {
 @Suite("@Setup under concurrent execution models", .serialized, .tags(.stateMachine))
 struct SetupConcurrentTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test(".tasks spec with setup passes when model and SUT are seeded identically")
+    @Test("mode: .tasks passes when the model and the system under test are seeded identically")
     func tasksSpecWithSetupPasses() async {
         let result = await #execute(
-            SeededTasksSpec.self,
+            SeededSpec.self,
+            mode: .tasks,
             .commandLimit(6),
             .budget(.custom(screening: 0, sampling: 30)),
             .suppress(.issueReporting)
@@ -310,24 +323,26 @@ struct SetupConcurrentTests {
         #expect(result == nil)
     }
 
-    @Test(".threads spec with setup passes because all replay instances share the setup")
+    @Test("mode: .threads passes because every replay instance shares the setup")
     func threadsSpecWithSetupPasses() async {
         let result = await #execute(
-            SeededThreadsSpec.self,
+            SeededSpec.self,
+            mode: .threads,
             .commandLimit(6),
             .budget(.custom(screening: 0, sampling: 30)),
             .suppress(.issueReporting)
         )
-        // The oracle compares the concurrent SUT against fresh sequential replays. A missed setup on any of the runner's instances (reference, witness, oracle, DFS replays) would diverge and fail.
+        // The equivalence compares the concurrent system under test against fresh sequential replays, and the invariant is judged along those replays. A missed setup on any instance the run constructs (reference, witness, search replays) would diverge and fail.
         #expect(result == nil)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test(".tasks spec reports the setup value the SUT was configured with")
+    @Test("mode: .tasks reports the setup value the system under test was configured with")
     func tasksSpecReportsSetupValue() async throws {
         let result = try #require(
             await #execute(
-                CapacityGatedTasksSpec.self,
+                CapacityGatedSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -349,11 +364,12 @@ struct SetupConcurrentTests {
         )
     }
 
-    @Test(".threads spec with a throwing setup attributes the failure to the setup step")
+    @Test("mode: .threads attributes a throwing setup to the setup step")
     func threadsThrowingSetupAttributedToSetupStep() async throws {
         let result = try #require(
             await #execute(
-                ThrowingSetupThreadsSpec.self,
+                ThrowingSetupSpec.self,
+                mode: .threads,
                 .commandLimit(4),
                 .budget(.custom(screening: 0, sampling: 20)),
                 .suppress(.issueReporting)
@@ -368,11 +384,12 @@ struct SetupConcurrentTests {
         }
     }
 
-    @Test(".threads spec reports the setup value the oracle rejected")
+    @Test("mode: .threads reports the setup value the run rejected")
     func threadsSpecReportsSetupValue() async throws {
         let result = try #require(
             await #execute(
-                CapacityGatedThreadsSpec.self,
+                CapacityGatedSpec.self,
+                mode: .threads,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 100)),
                 .suppress(.issueReporting)
@@ -383,7 +400,7 @@ struct SetupConcurrentTests {
             Issue.record("Expected a configure setup step, got \(setup)")
             return
         }
-        // The oracle reads the concurrent spec's own counter, which only the setup writes to, so a failure at all means setup reached the instance the preemptive lanes ran against. Asserted through the trace rather than `systemUnderTest`, which the preemptive backend leaves nil when the smoke phase is what discovers the failure.
+        // The command reads the concurrent spec's own counter, which only the setup writes to, so a failure at all means setup reached the instance this run executed against. Asserted through the trace rather than `systemUnderTest`, which the thread-based backend leaves nil when the smoke phase is what discovers the failure.
         #expect(capacity >= 10)
         let firstStep = try #require(result.trace.first)
         #expect(firstStep.command.hasSuffix("(setup)"))
@@ -396,7 +413,7 @@ struct SetupConcurrentTests {
 
 // MARK: - Test Specs
 
-@StateMachine(.sequential)
+@StateMachine
 private final class AlwaysFailingSetupSpec {
     var capacity = 0
     var preload: [Int] = []
@@ -419,30 +436,37 @@ private final class AlwaysFailingSetupSpec {
     }
 }
 
-@StateMachine(.sequential)
+/// One spec for all three modes, which is what lets the tests below check that `@Setup` reaches every instance a run constructs without a per-mode copy of the spec.
+///
+/// The command gates on the system under test rather than on a spec-side copy of the capacity, so a failure at all is proof the setup reached the instance the run executed against. No command mutates the counter, which keeps the verdict independent of the interleaving. The equivalence is there because `mode: .threads` requires one; the failure comes from the command's own check in every mode.
+@StateMachine
 private final class CapacityGatedSpec {
-    var capacity = 0
-    @SystemUnderTest var box = ValueBox()
+    @SystemUnderTest var counter = LockedCounter()
 
     @Setup(.int(in: 1 ... 32))
     func configure(capacity: Int) {
-        self.capacity = capacity
-        box.value = capacity
+        counter.add(capacity)
     }
 
     @Command(weight: 1)
-    func poke() throws {
-        try check(capacity < 10, "capacity reached the failing regime")
+    func poke() async throws {
+        try check(counter.value < 10, "capacity reached the failing regime")
+    }
+
+    @Equivalence
+    func equivalent(to other: LockedCounter) -> Bool {
+        counter.value == other.value
     }
 
     func failureDescription() -> String? {
-        "capacity: \(capacity)"
+        "counter: \(counter.value)"
     }
 }
 
-@StateMachine(.sequential)
+/// One spec for the sequential and thread-based tests. The setup throws before any command runs, so nothing downstream of it distinguishes the modes; the equivalence is there because `mode: .threads` requires one.
+@StateMachine
 private final class ThrowingSetupSpec {
-    @SystemUnderTest var box = ValueBox()
+    @SystemUnderTest var counter = LockedCounter()
 
     @Setup(.int(in: 0 ... 9))
     func configure(seed _: Int) throws {
@@ -450,14 +474,21 @@ private final class ThrowingSetupSpec {
     }
 
     @Command(weight: 1)
-    func poke() throws {}
+    func touch() {
+        _ = counter.value
+    }
+
+    @Equivalence
+    func equivalent(to other: LockedCounter) -> Bool {
+        counter.value == other.value
+    }
 
     func failureDescription() -> String? {
         nil
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class PlainFailingSpec {
     var count = 0
     @SystemUnderTest var box = ValueBox()
@@ -473,7 +504,7 @@ private final class PlainFailingSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class ImplicitlyUnwrappedSUTSpec {
     @SystemUnderTest var box: ValueBox!
 
@@ -499,123 +530,38 @@ private final class ImplicitlyUnwrappedSUTSpec {
     }
 }
 
-@StateMachine(.threads)
-private final class ThrowingSetupThreadsSpec {
-    @SystemUnderTest var counter = LockedCounter()
-
-    @Setup(.int(in: 0 ... 9))
-    func configure(seed _: Int) throws {
-        throw PlantedSetupError()
-    }
-
-    @Command(weight: 1)
-    func touch() {
-        _ = counter.value
-    }
-
-    @Oracle
-    func equivalent(to other: LockedCounter) -> Bool {
-        counter.value == other.value
-    }
-
-    func failureDescription() -> String? {
-        nil
-    }
-}
-
-@StateMachine(.tasks)
-private final class SeededTasksSpec {
-    var model = 0
+/// One spec for both concurrent modes, carrying the model and the equivalence together.
+///
+/// The model is a `LockedCounter` rather than a plain `Int`, which is what makes it shareable: `mode: .threads` runs every lane against this one instance, where an unsynchronised model write would be a data race. Its invariant is checked at quiescence under `mode: .tasks` and in the sequential replays under `mode: .threads`, and a lane that missed the setup would diverge from the model either way.
+@StateMachine
+private final class SeededSpec {
+    var model = LockedCounter()
     @SystemUnderTest var counter = LockedCounter()
 
     @Setup(.int(in: 1 ... 8))
     func seed(start: Int) {
-        model = start
+        model.add(start)
         counter.add(start)
     }
 
     @Invariant
     func matchesModel() -> Bool {
-        counter.value == model
+        counter.value == model.value
     }
 
     @Command(weight: 1)
     func increment() async throws {
-        model += 1
+        model.add(1)
         counter.add(1)
     }
 
-    func failureDescription() -> String? {
-        "model: \(model), counter: \(counter.value)"
-    }
-}
-
-@StateMachine(.threads)
-private final class SeededThreadsSpec {
-    @SystemUnderTest var counter = LockedCounter()
-
-    @Setup(.int(in: 1 ... 8))
-    func seed(start: Int) {
-        counter.add(start)
-    }
-
-    @Oracle
+    @Equivalence
     func equivalent(to other: LockedCounter) -> Bool {
         counter.value == other.value
     }
 
-    @Command(weight: 1)
-    func increment() {
-        counter.add(1)
-    }
-
     func failureDescription() -> String? {
-        "counter: \(counter.value)"
-    }
-}
-
-@StateMachine(.tasks)
-private final class CapacityGatedTasksSpec {
-    @SystemUnderTest var counter = LockedCounter()
-
-    @Setup(.int(in: 1 ... 32))
-    func configure(capacity: Int) {
-        counter.add(capacity)
-    }
-
-    /// Gates on the SUT rather than on a spec-side copy of the capacity, so the command can only fail when the setup reached the instance the lanes execute against. No command mutates the counter, which keeps the verdict independent of the interleaving.
-    @Command(weight: 1)
-    func poke() async throws {
-        try check(counter.value < 10, "capacity reached the failing regime")
-    }
-
-    func failureDescription() -> String? {
-        "counter: \(counter.value)"
-    }
-}
-
-@StateMachine(.threads)
-private final class CapacityGatedThreadsSpec {
-    @SystemUnderTest var counter = LockedCounter()
-
-    @Setup(.int(in: 1 ... 32))
-    func configure(capacity: Int) {
-        counter.add(capacity)
-    }
-
-    /// Deliberately leaves the counter alone: the oracle's verdict then depends only on the setup value, so the failure is deterministic instead of race-dependent.
-    @Command(weight: 1)
-    func touch() {
-        _ = counter.value
-    }
-
-    @Oracle
-    func equivalent(to other: LockedCounter) -> Bool {
-        counter.value < 10 && counter.value == other.value
-    }
-
-    func failureDescription() -> String? {
-        "counter: \(counter.value)"
+        "model: \(model.value), counter: \(counter.value)"
     }
 }
 

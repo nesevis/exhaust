@@ -37,6 +37,8 @@ package struct FuzzRunnerConfiguration {
     package var seed: UInt64
     /// Covering-array budget for Phase 1.
     package var screeningBudget: UInt64
+    /// Consecutive samples without a corpus admission before Phase 2 hands over to the mutation phase. Spec runs lower this because one spec attempt costs orders of magnitude more than one value attempt.
+    package var samplingPlateauWindow: Int
     /// Skips Phase 1 so mutation-phase tests are not hostage to screening heuristics.
     package var skipScreening: Bool
     /// Skips Phase 2 (with `skipScreening`, the run starts directly in the mutation phase).
@@ -52,6 +54,7 @@ package struct FuzzRunnerConfiguration {
         budgetNanoseconds: UInt64,
         seed: UInt64,
         screeningBudget: UInt64 = 10000,
+        samplingPlateauWindow: Int = FuzzTunables.samplingPlateauWindow,
         skipScreening: Bool = false,
         skipSampling: Bool = false,
         attemptLimit: Int? = nil,
@@ -61,6 +64,7 @@ package struct FuzzRunnerConfiguration {
         self.budgetNanoseconds = budgetNanoseconds
         self.seed = seed
         self.screeningBudget = screeningBudget
+        self.samplingPlateauWindow = samplingPlateauWindow
         self.skipScreening = skipScreening
         self.skipSampling = skipSampling
         self.attemptLimit = attemptLimit

@@ -58,20 +58,18 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 - <doc:MacroExecute>
 - <doc:MacroExamine>
 - <doc:MacroExample>
-- ``StateMachine(_:)``
+- ``StateMachine()``
 - ``SystemUnderTest()``
 - ``Command(weight:_:)``
 - ``Setup(_:)``
 - ``Invariant()``
-- ``Oracle()``
+- ``Equivalence()``
 - ``exhaust(_:_:property:)-8d0i6``
 - ``exhaust(_:_:property:)-4t75u``
 - ``exhaust(_:reflecting:_:property:)-78cpf``
 - ``exhaust(_:reflecting:_:property:)-2bzvp``
 - ``explore(_:directions:_:property:)-8mzym``
 - ``explore(_:directions:_:property:)-6teom``
-- ``execute(_:_:)-8h2ke``
-- ``execute(_:_:)-7m2bv``
 - ``examine(_:_:)``
 - ``examine(_:_:replayCheck:)``
 - ``example(_:seed:)``
@@ -112,6 +110,7 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 - ``StateMachineSpecBase``
 - ``StateMachineSettings``
 - ``ExecutionModel``
+- ``SearchableExecutionModel``
 - ``ConcurrencyLevel``
 - ``StateMachineSkip``
 - ``StateMachineCheckFailure``
@@ -132,7 +131,6 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 - ``StateMachineResult``
 - ``StateMachineDiscoveryMethod``
 - ``TraceStep``
-- ``DiagnosticSnapshot``
 
 ### Swift Testing Traits
 

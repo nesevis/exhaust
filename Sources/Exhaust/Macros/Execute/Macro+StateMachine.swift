@@ -1,95 +1,53 @@
 // Macro declarations for state machine spec testing.
 //
-// `@StateMachine(.tasks)` or `@StateMachine(.threads)` synthesizes protocol conformance.
-// `#execute(MySpec.self, .commandLimit(N))` runs a spec test at the call site.
+// `@StateMachine` synthesizes protocol conformance; `#execute(MySpec.self, mode:, .commandLimit(N))` runs a spec test at the call site and chooses how the commands run.
 //
 import ExhaustCore
 
-/// Marks a `final class` or `actor` as a spec, synthesizing protocol conformance, a command enum, and a command generator.
+/// Marks a `final class` as a spec, synthesizing protocol conformance, a command enum, and a command generator.
 ///
-/// The required ``ExecutionModel`` argument selects the execution model:
-///
-/// - `.sequential` runs commands one at a time. Checks use `@Invariant`.
-/// - `.tasks` runs commands concurrently with deterministic interleaving at `await` boundaries. Checks use `@Invariant`.
-/// - `.threads` dispatches commands to real OS threads via GCD. Checks use `@Oracle`, which compares the concurrent end state against a sequential replay.
-///
-/// A spec may also declare one ``Setup(_:)`` method, whose parameters Exhaust generates, when the starting configuration should vary from run to run rather than being fixed in `init()`.
-///
-/// ## .tasks StateMachine
-///
-/// Commands must be `async` for `.tasks` to have suspension points to interleave at. Without `await` boundaries, `.tasks` behaves identically to `.sequential`. The SUT below has a deliberate read-yield-write race: two overlapping increments read the same value, suspend, and both write `current + 1`, losing one update.
+/// One spec shape runs under every execution mode. A `@Command` body updates the model and calls the system under test together, `@Invariant` states what holds whatever order the commands ran in, and `@Equivalence` states what "the same result" means when the order can vary. The mode is a `#execute` argument, so turning the dial needs no change to the spec:
 ///
 /// ```swift
-/// @StateMachine(.tasks)
-/// final class NonAtomicCounterSpec {
-///     var expected: Int = 0
+/// @StateMachine
+/// final class CounterSpec {
+///     var expected = LockedCount()
 ///     @SystemUnderTest
-///     var counter: NonAtomicCounter = .init()
+///     var counter: AtomicCounter = .init()
 ///
 ///     @Invariant
 ///     func matchesModel() -> Bool {
-///         counter.value == expected
+///         counter.value == expected.value
 ///     }
 ///
-///     @Command(weight: 3)
-///     func increment() async throws {
-///         expected += 1
-///         await counter.increment()
-///     }
-///
-///     @Command(weight: 2)
-///     func decrement() async throws {
-///         guard expected > 0 else { throw skip() }
-///         expected -= 1
-///         await counter.decrement()
-///     }
-///
-///     func failureDescription() -> String? {
-///         "\(counter)"
-///     }
-/// }
-///
-/// final class NonAtomicCounter: @unchecked Sendable {
-///     private var _value: Int = 0
-///     var value: Int { _value }
-///
-///     func increment() async {
-///         let current = _value
-///         await Task.yield()
-///         _value = current + 1
-///     }
-///
-///     func decrement() async {
-///         let current = _value
-///         await Task.yield()
-///         _value = current - 1
-///     }
-/// }
-/// ```
-///
-/// ## .threads StateMachine (Oracle-Based)
-///
-/// ```swift
-/// @StateMachine(.threads)
-/// final class CounterThreadSafetyStateMachine {
-///     @SystemUnderTest var counter = Counter()
-///
-///     @Oracle
-///     func equivalent(to other: Counter) -> Bool {
+///     @Equivalence
+///     func sameCount(as other: AtomicCounter) -> Bool {
 ///         counter.value == other.value
 ///     }
 ///
-///     @Command(weight: 3)
-///     func increment() { counter.increment() }
-///
 ///     @Command
-///     func decrement() { counter.decrement() }
+///     func increment() async throws {
+///         expected.add(1)
+///         await counter.increment()
+///     }
 ///
 ///     func failureDescription() -> String? {
-///         "counter: \(counter)"
+///         "expected \(expected.value), counter \(counter.value)"
 ///     }
 /// }
+///
+/// await #execute(CounterSpec.self, mode: .sequential)                // one command at a time
+/// await #execute(CounterSpec.self, mode: .tasks, .commandLimit(6))   // interleaved at every await
+/// await #execute(CounterSpec.self, mode: .threads)                   // real OS threads
 /// ```
+///
+/// The model is a synchronized `LockedCount` rather than a bare `Int`, and the spec declares an `@Equivalence`, because the last line runs the commands on real threads: every lane touches this one instance, and `mode: .threads` refuses to start without an equivalence to judge by. A spec that will only ever run under the first two lines needs neither.
+///
+/// Which claim belongs where is the one decision worth pausing on: could a different valid order change this check's answer? Then it is not an invariant, and it belongs in the equivalence. Two increments commute, so `counter.value == expected` is a true invariant. Two writes to one register do not, so that comparison is an equivalence.
+///
+/// A spec may also declare one ``Setup(_:)`` method, whose parameters Exhaust generates, when the starting configuration should vary from run to run rather than being fixed in `init()`.
+///
+/// - Note: `mode: .threads` runs every lane's commands concurrently on one shared spec instance, so the system under test is expected to defend itself — that is the claim under test — and any other spec state a command body touches must be thread-safe or absent. It also requires an `@Equivalence` and a reference-typed system under test, both reported at the start of the run.
 @attached(
     member,
     names:
@@ -98,17 +56,16 @@ import ExhaustCore
     named(commandGenerator),
     named(run),
     named(checkInvariants),
-    named(oracleCheck),
+    named(equivalenceCheck),
+    named(hasEquivalence),
     named(systemUnderTest),
     named(init),
-    named(executionModel),
-    named(diagnosticSnapshot),
     named(SetupStep),
     named(setupGenerator),
     named(runSetup)
 )
 @attached(extension, conformances: StateMachineSpec, AsyncStateMachineSpec)
-public macro StateMachine(_ mode: ExecutionModel) = #externalMacro(module: "ExhaustMacros", type: "StateMachineDeclarationMacro")
+public macro StateMachine() = #externalMacro(module: "ExhaustMacros", type: "StateMachineDeclarationMacro")
 
 /// Marks a property as the system under test in a spec.
 ///
@@ -167,15 +124,19 @@ public macro Setup<each Generator>(_ generators: repeat ReflectiveGenerator<each
 @attached(peer)
 public macro Invariant() = #externalMacro(module: "ExhaustMacros", type: "InvariantMacro")
 
-/// Marks a method as the oracle comparison in a `@StateMachine(.threads)` class.
+/// Marks a method as the spec's definition of "the same result" for a concurrent run.
 ///
-/// The oracle method receives a second SUT instance (the sequential replay result) and returns whether the concurrent SUT state is equivalent. The method must take one parameter of the `SystemUnderTest` type and return `Bool`.
+/// Exhaust re-runs the commands sequentially and hands the method that replay's system under test; returning `true` accepts the concurrent run as equivalent to it. Use this for a claim whose answer depends on the order commands ran in, which an `@Invariant` cannot express. The method takes one parameter of the `SystemUnderTest` type and returns `Bool`.
+///
+/// A rejection is not yet a counterexample: the comparison is against one fixed order, so Exhaust then searches the orders the run could actually have taken, and reports a failure only when none of them explains what the commands observed.
+///
+/// Required under `mode: .threads`, optional under `mode: .tasks`, and never called under `mode: .sequential`, where there is only one order for the run to have taken.
 ///
 /// ```swift
-/// @Oracle
+/// @Equivalence
 /// func equivalent(to other: ConcurrentQueue<Int>) -> Bool {
 ///     queue.count == other.count && Set(queue.elements) == Set(other.elements)
 /// }
 /// ```
 @attached(peer)
-public macro Oracle() = #externalMacro(module: "ExhaustMacros", type: "OracleMacro")
+public macro Equivalence() = #externalMacro(module: "ExhaustMacros", type: "EquivalenceMacro")

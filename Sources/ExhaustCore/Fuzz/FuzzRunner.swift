@@ -268,19 +268,23 @@ package final class FuzzRunner<Output> {
         var lastHits: [(edge: Int, hitCount: UInt8)] = []
 
         let wrappedProperty: (Output) -> Bool = { [self] value in
-            // Screening evaluates before its tree reaches onExample, so the candidate cannot be identified pre-evaluation; a cleared slot beats misattributing a trap to the previous attempt.
-            breadcrumb?.clear()
-            source.beginAttempt()
             let (verdict, hits) = evaluateInBracket(value, recordingBreadcrumb: nil)
             lastVerdict = verdict
             lastHits = hits
             return verdict.isFailure == false
         }
 
+        // The bracket opens before the row is built, not before the property runs, so screening attributes generation the same way sampling and mutation do. Opening it inside the property instead would make a screening signature systematically smaller than a mutation signature over the same property path, turning corpus novelty into a response to which phase produced a candidate rather than to what it covered. The breadcrumb clears here for the same reason: screening evaluates before its tree reaches onExample, so the candidate cannot be identified pre-evaluation, and a cleared slot beats misattributing a trap to the previous attempt.
+        let beforeRow: () -> Void = { [self] in
+            breadcrumb?.clear()
+            source.beginAttempt()
+        }
+
         let result = ScreeningRunner.run(
             gen,
             screeningBudget: min(configuration.screeningBudget, remainingAttemptBudget()),
             continuePastFailure: true,
+            beforeRow: beforeRow,
             property: wrappedProperty,
             onExample: { [self] value, tree, _ in
                 checkpointIfDue()
@@ -323,7 +327,7 @@ package final class FuzzRunner<Output> {
             if let termination = terminationDue() {
                 return termination
             }
-            if samplesSinceNovelty >= FuzzTunables.samplingPlateauWindow {
+            if samplesSinceNovelty >= configuration.samplingPlateauWindow {
                 return nil
             }
             if monotonicNanoseconds() >= backstopNanoseconds {

@@ -12,6 +12,7 @@ import Testing
             let result = try #require(
                 await #execute(
                     ThrowingObjCSpec.self,
+                    mode: .threads,
                     .parallelize(lanes: .two),
                     .commandLimit(4),
                     .budget(.custom(screening: 0, sampling: 50)),
@@ -24,12 +25,12 @@ import Testing
 
     // MARK: - Spec
 
-    @StateMachine(.threads)
+    @StateMachine
     final class ThrowingObjCSpec {
         @SystemUnderTest
         var store: ObjCThrowingStore = .init()
 
-        @Oracle
+        @Equivalence
         func statesMatch(other: ObjCThrowingStore) -> Bool {
             store.value == other.value
         }

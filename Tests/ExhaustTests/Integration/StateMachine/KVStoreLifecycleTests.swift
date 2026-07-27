@@ -30,6 +30,7 @@ struct KVStoreLifecycleTests {
         let result = try #require(
             await #execute(
                 KVStoreLifecycleSpec.self,
+                mode: .sequential,
                 .commandLimit(10),
                 .suppress(.issueReporting)
             )
@@ -55,7 +56,7 @@ struct KVStoreLifecycleTests {
 // making it likely that a `get` after reopen returns a stale value that
 // the model does not expect.
 
-@StateMachine(.sequential)
+@StateMachine
 final class KVStoreLifecycleSpec {
     var isOpen = false
     var contents: [Int: Int] = [:]

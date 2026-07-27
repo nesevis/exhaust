@@ -8,6 +8,7 @@ struct MultiInvariantTests {
     func firstFailingInvariantIsReportedInTrace() async {
         let result = await #execute(
             FiveInvariantSpec.self,
+            mode: .sequential,
             .commandLimit(4),
             .suppress(.issueReporting)
         )
@@ -26,6 +27,7 @@ struct MultiInvariantTests {
     func passingSpecWithFiveInvariantsProducesNoCounterexample() async {
         let result = await #execute(
             PassingFiveInvariantSpec.self,
+            mode: .sequential,
             .commandLimit(6),
             .budget(.custom(screening: 100, sampling: 50)),
             .suppress(.issueReporting)
@@ -36,7 +38,7 @@ struct MultiInvariantTests {
 
 // MARK: - Spec: Five invariants, one fails
 
-@StateMachine(.sequential)
+@StateMachine
 final class FiveInvariantSpec {
     var expected: Int = 0
     @SystemUnderTest
@@ -75,7 +77,7 @@ final class FiveInvariantSpec {
 
 // MARK: - Spec: Five invariants, all pass
 
-@StateMachine(.sequential)
+@StateMachine
 final class PassingFiveInvariantSpec {
     var expected: Int = 0
     @SystemUnderTest

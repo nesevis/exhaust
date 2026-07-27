@@ -12,6 +12,7 @@ struct LeakyBucketConcurrentTests {
         let result = try #require(
             await #execute(
                 LeakyBucketSpec.self,
+                mode: .tasks,
                 .suppress(.issueReporting)
             )
         )
@@ -30,6 +31,7 @@ struct LeakyBucketConcurrentTests {
         var deliveredReport: ExhaustReport?
         _ = await #execute(
             LeakyBucketSpec.self,
+            mode: .tasks,
             .commandLimit(8),
             .budget(.custom(screening: 0, sampling: 500)),
             .replay(.numeric(42)),
@@ -53,7 +55,8 @@ struct LeakyBucketConcurrentTests {
         await withKnownIssue {
             let result = try #require(
                 await #execute(
-                    LeakyBucketSpec.self
+                    LeakyBucketSpec.self,
+                    mode: .tasks
                 )
             )
             let hasFailure = result.trace.contains { step in
@@ -69,7 +72,7 @@ struct LeakyBucketConcurrentTests {
 
 // MARK: - Spec
 
-@StateMachine(.tasks)
+@StateMachine
 final class LeakyBucketSpec {
     var expectedTokens: Int = 0
     @SystemUnderTest

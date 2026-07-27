@@ -16,6 +16,7 @@ struct RegressionSeedTests {
     func sequentialRegressionSeedReproduces() async {
         let result = await #execute(
             RegressionCounterSpec.self,
+            mode: .sequential,
             .commandLimit(8),
             .budget(.custom(screening: 0, sampling: 0)),
             .suppress(.issueReporting)
@@ -30,6 +31,7 @@ struct RegressionSeedTests {
     func cooperativeRegressionSeedReproduces() async {
         let result = await #execute(
             RegressionCounterCooperativeSpec.self,
+            mode: .tasks,
             .parallelize(lanes: .two),
             .commandLimit(6),
             .budget(.custom(screening: 0, sampling: 0)),
@@ -48,6 +50,7 @@ struct RegressionSeedTests {
         // reintroduces a "now passes, consider removing it" diagnostic, this test fails.
         let result = await #execute(
             FixedCounterSpec.self,
+            mode: .sequential,
             .commandLimit(8),
             .budget(.custom(screening: 0, sampling: 0))
         )
@@ -59,6 +62,7 @@ struct RegressionSeedTests {
         let initial = try #require(
             await #execute(
                 RegressionPreemptiveSpec.self,
+                mode: .threads,
                 .commandLimit(20),
                 .suppress(.all)
             )
@@ -70,6 +74,7 @@ struct RegressionSeedTests {
         ) {
             await #execute(
                 RegressionPreemptiveSpec.self,
+                mode: .threads,
                 .commandLimit(20),
                 .suppress(.all)
             )
@@ -82,6 +87,7 @@ struct RegressionSeedTests {
         let initial = try #require(
             await #execute(
                 RegressionAsyncSequentialSpec.self,
+                mode: .sequential,
                 .commandLimit(8),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.all)
@@ -94,6 +100,7 @@ struct RegressionSeedTests {
         ) {
             await #execute(
                 RegressionAsyncSequentialSpec.self,
+                mode: .sequential,
                 .commandLimit(8),
                 .budget(.custom(screening: 0, sampling: 1)),
                 .suppress(.all)
@@ -105,7 +112,7 @@ struct RegressionSeedTests {
 
 // MARK: - Specs
 
-@StateMachine(.sequential)
+@StateMachine
 private final class RegressionCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter = RegressionCounter()
@@ -136,7 +143,7 @@ private final class RegressionCounterSpec {
 }
 
 /// Same command surface as ``RegressionCounterSpec`` but backed by a correct counter, so the shared "FZ9CGDYNJAFDV-2" seed replays without failing.
-@StateMachine(.sequential)
+@StateMachine
 private final class FixedCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter = FixedCounter()
@@ -166,7 +173,7 @@ private final class FixedCounterSpec {
     }
 }
 
-@StateMachine(.tasks)
+@StateMachine
 private final class RegressionCounterCooperativeSpec {
     var expected: Int = 0
     @SystemUnderTest var counter = RegressionRacyCounter()
@@ -233,11 +240,11 @@ private final class RegressionRacyCounter: @unchecked Sendable, CustomDebugStrin
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 private final class RegressionPreemptiveSpec {
     @SystemUnderTest var counter = RegressionRacyPreemptiveCounter()
 
-    @Oracle
+    @Equivalence
     func oracleMatches(other: RegressionRacyPreemptiveCounter) -> Bool {
         counter.value == other.value
     }
@@ -260,7 +267,7 @@ private final class RegressionPreemptiveSpec {
     }
 }
 
-/// Deliberately unsynchronized: concurrent read-modify-write loses updates, so the concurrent run diverges from the sequential replay and the `@Oracle` catches it. A deterministic bug would be invisible to the oracle, which compares two runs of the same spec.
+/// Deliberately unsynchronized: concurrent read-modify-write loses updates, so the concurrent run diverges from the sequential replay and the `@Equivalence` catches it. A deterministic bug would be invisible to the oracle, which compares two runs of the same spec.
 private final class RegressionRacyPreemptiveCounter: @unchecked Sendable, CustomDebugStringConvertible {
     private var storedValue: Int = 0
 
@@ -285,7 +292,7 @@ private final class RegressionRacyPreemptiveCounter: @unchecked Sendable, Custom
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class RegressionAsyncSequentialSpec {
     var expected: Int = 0
     @SystemUnderTest var counter = RegressionAsyncCounter()

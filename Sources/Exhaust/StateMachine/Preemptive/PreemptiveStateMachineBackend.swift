@@ -39,7 +39,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
         context: StateMachineRunContext<Spec>
     ) -> StateMachineReduction<Spec.Command> {
         let discoveryInvocations = context.invocationCounter.value
-        let repetitions = PreemptiveReduction.confirmationRepetitions(discoveryIterations: discoveryInvocations)
+        let repetitions = PreemptiveConfirmation.confirmationRepetitions(discoveryIterations: discoveryInvocations)
 
         nonisolated(unsafe) let capturedContext = context
         let linearizableProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.StateMachineProbeVerdict<__ExhaustRuntime.FailureEvidence<Spec>> = { commands in
@@ -121,7 +121,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
         )
 
         context.state.failureContext.specName = "\(Spec.self)"
-        context.state.failureContext.isPreemptive = true
+        context.state.failureContext.mode = .threads
         context.state.failureContext.discoveryMethod = discoveryMethod
         context.state.failureContext.replaySeed = replaySeed
         context.state.failureContext.oracleDescription = failureDescription.map { "Expected state (from sequential replay):\n  \($0)" }

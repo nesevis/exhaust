@@ -10,6 +10,7 @@ struct ExecuteFuzzTests {
     func findsAtLeastOneFault() async {
         let report = await #execute(
             BoundedQueueSpec.self,
+            mode: .sequential,
             time: .seconds(5),
             .commandLimit(40),
             .suppress(.issueReporting)

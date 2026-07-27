@@ -45,6 +45,7 @@ struct NegativeControlTests {
         // A pre-registered differential target, not a capability claim: this test FAILING after a new feedback channel lands (spec-state feedback, value profile) is that channel's gate passing. Until then it documents that edge coverage alone does not ladder streak-gated state. The pinned seed makes the run deterministic; the unpinned miss probability is ~3.1e-9 per attempt (see the fixture header).
         let report = await #execute(
             ConsecutiveLatchSpec.self,
+            mode: .sequential,
             time: .seconds(5),
             .commandLimit(40),
             .replay(1),

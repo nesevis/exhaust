@@ -42,11 +42,27 @@ public extension __ExhaustRuntime {
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
-        let innerBackend = AsyncPreemptiveChecker<Spec>(idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds)
-        let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
+        guard threadsModeIsUsable(
+            Spec.self,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        ) else {
+            return nil
+        }
+
+        let searchAbandonments = UnsafeSendableBox(0)
+        let searchStalls = UnsafeSendableBox(0)
+        let timeoutProbeCounts = UnsafeSendableBox((attempts: 0, timedOut: 0))
+        let innerBackend = AsyncPreemptiveChecker<Spec>(
+            idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds,
+            searchAbandonments: searchAbandonments,
+            searchStalls: searchStalls
+        )
+        let commandLimit = config.commandLimit ?? ConcurrentSpecTunables.defaultCommandLimit
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
-        let timeoutProbeCounts = UnsafeSendableBox((attempts: 0, timedOut: 0))
         let (result, deferredIssues): (StateMachineResult<Spec>?, [String]) = await __ExhaustRuntime.dispatchToGCD(reserving: LaneReservation.threads(config.concurrencyLevel)) {
             ExhaustLog.withConfiguration(config.logConfiguration) {
                 runPreemptiveMachine(
@@ -72,6 +88,14 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
+        warnIfSearchesWentUnjudged(
+            abandonedSearches: searchAbandonments.value,
+            stalledSearches: searchStalls.value,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
         return result
     }
 }
@@ -84,6 +108,14 @@ public extension __ExhaustRuntime {
 private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBackend {
     /// Idle-timeout bound (milliseconds) for the blocking drain loop, or `nil` to wait unbounded. A command that suspends onto a foreign executor never returns to the drain lane; without this bound the loop spins a CPU core forever.
     let idleTimeoutMilliseconds: Int?
+
+    /// Interleaving searches this run abandoned for exceeding their replay budget, counted so the runner can warn about probes it passed without judging.
+    var searchAbandonments = UnsafeSendableBox(0)
+
+    /// Interleaving searches this run gave up on because their drain loop stalled, kept apart from the run's probe tally.
+    ///
+    /// A stall here happens inside failure classification, which runs during reduction and final confirmation as well as during discovery, and only discovery increments the probe tally. Counting these as timed-out probes could therefore report more timeouts than probes, so they are reported as their own count alongside the budget-exhausted searches.
+    var searchStalls = UnsafeSendableBox(0)
 
     /// Bridges async work to the calling thread, bailing with `nil` (and a log) if the drain loop idles past ``idleTimeoutMilliseconds``. Returns the work's result, or `nil` only on timeout.
     private func awaitOrTimeout<Value>(_ label: String, timeoutMultiplier: Int = 1, _ work: @Sendable @escaping () async -> Value) -> Value? {
@@ -101,9 +133,9 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         return result
     }
 
-    /// Executes a tagged command sequence with real GCD concurrency and checks invariants and oracle.
+    /// Executes a tagged command sequence with real GCD concurrency and checks the oracle.
     ///
-    /// The three sequential phases (prefix on the concurrent spec, prefix and concurrent commands on the sequential reference) are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads (one per lane), each bridging async execution independently.
+    /// The sequential phases (setup on both instances, the prefix on the concurrent spec, and the prefix and concurrent commands on the sequential reference with invariants checked after each command) are bridged through a single Task+semaphore. Concurrent commands are dispatched to real GCD threads, one per lane, each bridging async execution independently, and all of them run on the one concurrent instance.
     func execute(_ taggedCommands: [(ScheduleMarker, Spec.Command)], setupStep: Spec.SetupStep?, partition: LanePartition) -> Preemptive.Outcome<Spec> {
         // Construction is synchronous here because both instances are needed for outcome evidence; the async setup application happens inside the sequential-phases bridge below, before any prefix command, so both instances receive the same setup ahead of the lanes.
         let concurrentSpec = Spec()
@@ -199,29 +231,14 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
             return timedOut.value ? .timedOut(concurrentSpec: concurrentSpec) : .failed(concurrentSpec: concurrentSpec)
         }
 
-        nonisolated(unsafe) let invariantSpec = concurrentSpec
-        guard let invariantsPassed = awaitOrTimeout("invariants", {
-            do {
-                try await invariantSpec.checkInvariants()
-                return true
-            } catch {
-                return false
-            }
-        }) else {
-            return .timedOut(concurrentSpec: concurrentSpec)
-        }
-
-        if invariantsPassed == false {
-            return .failed(concurrentSpec: concurrentSpec)
-        }
-
+        // No invariant check on the concurrent instance here. After the lanes have raced, a model-versus-system comparison on that instance is order-dependent by construction, whether or not the model is synchronized: an invariant is a claim that holds whatever order the commands ran in, and this state is one particular order's outcome that nothing has established was a valid one. Invariants under thread-based execution are judged only where a single command runs at a time (ADR 0004): the reference replay in the sequential phases, and the replays inside the interleaving search below.
         let collectedResponses: [[ObservedResponse<Spec.Command>]] = perLaneResponses.map(\.value)
         // Void-only, no-skip commands carry no response data, so linearizability reduces to final-state equivalence.
         let hasResponseInfo = collectedResponses.contains { lane in lane.contains { $0.outcome.returnValue != nil || $0.outcome.isSkipped } }
         if hasResponseInfo == false {
             nonisolated(unsafe) let oracleSpec = concurrentSpec
             nonisolated(unsafe) let sequentialResult = sequentialSpec.systemUnderTest
-            switch awaitOrTimeout("oracle", { await oracleSpec.oracleCheck(sequentialResult) }) {
+            switch awaitOrTimeout("oracle", { await oracleSpec.equivalenceCheck(sequentialResult) }) {
                 case .some(true):
                     return .passed
                 case .none:
@@ -272,6 +289,8 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
                         if preemptiveResponseMatches(observed: observed.outcome, replayValue: response.returnValue, replaySkipped: false) == false {
                             return false
                         }
+                        // An invariant that fails on this order disqualifies it as an explanation of what the lanes did, the same as a response that does not match. The full search then decides whether any other order explains the run.
+                        try await unsafeWitness.checkInvariants()
                     } catch is StateMachineSkip {
                         if observed.outcome.isSkipped == false {
                             return false
@@ -280,7 +299,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
                         return false
                     }
                 }
-                return await unsafeConcurrent.oracleCheck(unsafeWitness.systemUnderTest)
+                return await unsafeConcurrent.equivalenceCheck(unsafeWitness.systemUnderTest)
             }
             matched = result ?? false
         }, &exception)
@@ -330,9 +349,11 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         return SequentialOutcome(succeeded: exception == nil && failed == false, timedOut: timedOut)
     }
 
-    /// Runs the three sequential phases of a probe — the prefix on the concurrent spec, then the prefix and the concurrent commands on the sequential reference — under a single Task+semaphore bridge.
+    /// Runs the sequential phases of a probe — setup on the concurrent and reference instances, the prefix on the concurrent spec, then the prefix and the concurrent commands on the sequential reference with invariants checked after each command — under a single Task+semaphore bridge.
     ///
-    /// One bridge replaces the three separate `blockingAwait` round-trips these phases used to pay per probe. On the drain-loop path (macOS 15 and later) the timeout semantics are unchanged, because the bound measures idle time since the last drained job and resets across phases. On the semaphore fallback, the bound is total wall-clock, so the three phases now share one window instead of getting one each; a slow-but-genuine sequential replay on an older platform trips the timeout (and counts as a pass) sooner than before.
+    /// One bridge replaces the separate `blockingAwait` round-trips these phases used to pay per probe. On the drain-loop path (macOS 15 and later) the timeout semantics are unchanged, because the bound measures idle time since the last drained job and resets across phases. On the semaphore fallback, the bound is total wall-clock, so the phases share one window instead of getting one each; a slow-but-genuine sequential replay on an older platform trips the timeout (and counts as a pass) sooner than before.
+    ///
+    /// The reference replay checks invariants after every command, and the prefix on the concurrent instance does not: the same commands run in the same order on the reference, so a second pass would reach the same verdict twice. An invariant that fails on the reference is a sequentially-reproducible failure, which the caller reports directly without an oracle comparison or an interleaving search.
     private func runSequentialPhases(
         _ taggedCommands: [(ScheduleMarker, Spec.Command)],
         setupStep: Spec.SetupStep?,
@@ -359,6 +380,19 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
                     }
                     return true
                 }
+                func runCheckingInvariants(_ indices: [Int], on spec: Spec) async -> Bool {
+                    for index in indices {
+                        do {
+                            try await spec.run(taggedCommands[index].1)
+                            try await spec.checkInvariants()
+                        } catch is StateMachineSkip {
+                            continue
+                        } catch {
+                            return false
+                        }
+                    }
+                    return true
+                }
                 guard await concurrentSpec.applySetup(setupStep) == nil else {
                     return false
                 }
@@ -368,10 +402,10 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
                 guard await run(partition.prefixIndices, on: concurrentSpec) else {
                     return false
                 }
-                guard await run(partition.prefixIndices, on: sequentialSpec) else {
+                guard await runCheckingInvariants(partition.prefixIndices, on: sequentialSpec) else {
                     return false
                 }
-                return await run(partition.concurrentIndices, on: sequentialSpec)
+                return await runCheckingInvariants(partition.concurrentIndices, on: sequentialSpec)
             }
             if let succeeded {
                 failed = succeeded == false
@@ -390,65 +424,26 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
         let prefixCommands: [Spec.Command] = taggedCommands.filter(\.0.isPrefix).map(\.1)
-        let checker = LinearizabilityChecker(laneResponses: laneResponses)
         nonisolated(unsafe) let unsafeSpec = concurrentSpec
         // The search replays setup and commands on fresh specs, so a continuation that escapes to a foreign executor parks this lane exactly as it would in any other phase. The multiplier is generous because one bound covers the whole search rather than a single probe: on the drain-loop path it measures idle time since the last drained job, so a long-but-progressing search never trips it. On the semaphore fallback the bound is total wall clock, so a search that legitimately runs past it is abandoned.
-        let result: LinearizabilityChecker.Result? = awaitOrTimeout("linearizability", timeoutMultiplier: 10) {
-            var replaySpec: Spec?
-            return await checker.checkAsync(
-                replayPrefix: {
-                    // Once per sibling retry in the DFS: every fresh replay instance receives the same setup, and a setup error fails this ordering rather than crashing into an unconfigured SUT.
-                    let (fresh, setupError) = await Spec.makeSpec(setupStep: setupStep)
-                    guard setupError == nil else {
-                        return false
-                    }
-                    for command in prefixCommands {
-                        do {
-                            try await fresh.run(command)
-                        } catch is StateMachineSkip {
-                            continue
-                        } catch {
-                            return false
-                        }
-                    }
-                    replaySpec = fresh
-                    return true
-                },
-                replayCommand: { laneIndex, commandIndex in
-                    guard let spec = replaySpec else {
-                        return nil
-                    }
-                    do {
-                        let response = try await spec.run(laneResponses[laneIndex][commandIndex].command)
-                        return .init(
-                            returnValue: response.returnValue,
-                            isSkipped: false
-                        )
-                    } catch is StateMachineSkip {
-                        return .init(
-                            returnValue: nil,
-                            isSkipped: true
-                        )
-                    } catch {
-                        return nil
-                    }
-                },
-                checkOracle: {
-                    guard let spec = replaySpec else {
-                        return false
-                    }
-                    return await unsafeSpec.oracleCheck(spec.systemUnderTest)
-                },
-                failureDescription: {
-                    unsafeSpec.failureDescription()
-                }
+        let result: LinearizabilityResult? = awaitOrTimeout("linearizability", timeoutMultiplier: 10) {
+            await searchForExplainingOrder(
+                concurrentSpec: unsafeSpec,
+                setupStep: setupStep,
+                prefixCommands: prefixCommands,
+                laneResponses: laneResponses,
+                replay: .asynchronous
             )
         }
         guard let result else {
-            // An abandoned search produced no verdict. Report linearizable so the probe counts as a pass, matching the rule that an inconclusive probe never manufactures a failure.
+            // The drain loop idled out mid-search, which is a stall rather than an exhausted budget. Report linearizable so the probe counts as a pass, matching the rule that an inconclusive probe never manufactures a failure, and tally it so the unjudged-search warning can report it.
+            searchStalls.value += 1
             return .linearizable
         }
-        return makeLinearizabilityResult(result, laneObservations: laneResponses)
+        if result.isAbandoned {
+            searchAbandonments.value += 1
+        }
+        return result
     }
 
     func makeIdentifySkips() -> @Sendable (SpecCandidateValue<Spec>) -> Set<Int> {
@@ -497,8 +492,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         if failed {
             return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
-        // A .threads spec expresses its self-consistency check through the @Oracle, because the macro rejects @Invariant under .threads, and smoke never runs the concurrent phase.
-        // Replay the sequence on a fresh reference and call the oracle once at the end, so a spec that is already broken under sequential execution fails here before any concurrent probing.
+        // The trace above already checked invariants after every command. The oracle is the other half of what a spec can claim, and smoke never runs the concurrent phase, so it is called here: replay the sequence on a fresh reference and compare once at the end, so a spec that is already broken under sequential execution fails before any concurrent probing.
         // The reference is a distinct spec so the oracle's relational comparison is between two independent runs rather than the SUT against itself.
         let reference = Spec()
         nonisolated(unsafe) let unsafeReference = reference
@@ -526,7 +520,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         nonisolated(unsafe) let referenceResult = reference.systemUnderTest
         nonisolated(unsafe) let oracleSpec = spec
         let oracleHeld = awaitOrTimeout("smoke-oracle", timeoutMultiplier: 5) {
-            await oracleSpec.oracleCheck(referenceResult)
+            await oracleSpec.equivalenceCheck(referenceResult)
         }
         // nil = timed out waiting for oracle check
         if oracleHeld == nil {

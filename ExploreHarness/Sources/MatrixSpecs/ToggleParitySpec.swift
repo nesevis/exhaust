@@ -4,7 +4,7 @@ import Exhaust
 /// The shared spec for the `ToggleCounter` fixture (fault T — registry in `ToggleCounter.swift`).
 ///
 /// Three uniform-weight commands, no precondition skips.
-@StateMachine(.sequential)
+@StateMachine
 public final class ToggleParitySpec {
     @SystemUnderTest var counter: ToggleCounter = .init()
 

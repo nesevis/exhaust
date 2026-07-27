@@ -14,6 +14,7 @@ struct ALUTests {
         let result = try #require(
             await #execute(
                 ALUSpec.self,
+                mode: .sequential,
                 .commandLimit(8),
                 .suppress(.issueReporting)
             )
@@ -28,7 +29,7 @@ struct ALUTests {
 
 // MARK: - StateMachine
 
-@StateMachine(.sequential)
+@StateMachine
 final class ALUSpec {
     var expected: Int = 0
     @SystemUnderTest var alu = FourBitALU()

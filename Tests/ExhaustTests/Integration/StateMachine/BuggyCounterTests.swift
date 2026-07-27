@@ -11,6 +11,7 @@ struct BuggyCounterTests {
         let result = try #require(
             await #execute(
                 BuggyCounterSpec.self,
+                mode: .sequential,
                 .commandLimit(10),
                 .suppress(.issueReporting)
             )
@@ -30,6 +31,7 @@ struct BuggyCounterTests {
         let result = try #require(
             await #execute(
                 BuggyCounterSpec.self,
+                mode: .sequential,
                 .commandLimit(10),
                 .suppress(.issueReporting)
             )
@@ -58,6 +60,7 @@ struct BuggyCounterTests {
         let result = try #require(
             await #execute(
                 BuggyCounterSpec.self,
+                mode: .sequential,
                 .commandLimit(10),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -73,6 +76,7 @@ struct BuggyCounterTests {
         let result = try #require(
             await #execute(
                 BuggyCounterSpec.self,
+                mode: .sequential,
                 .commandLimit(4),
                 .budget(.custom(screening: 200, sampling: 0)),
                 .suppress(.issueReporting)
@@ -91,6 +95,7 @@ struct SCAReductionScreeningTests {
         let result = try #require(
             await #execute(
                 PairwiseBugSpec.self,
+                mode: .sequential,
                 .commandLimit(3),
                 .budget(.custom(screening: 200, sampling: 0)),
                 .suppress(.issueReporting)
@@ -106,6 +111,7 @@ struct SCAReductionScreeningTests {
         let result = try #require(
             await #execute(
                 PairwiseBugSpec.self,
+                mode: .sequential,
                 .commandLimit(3),
                 .budget(.custom(screening: 200, sampling: 0)),
                 .suppress(.issueReporting),
@@ -126,6 +132,7 @@ struct SCAReductionScreeningTests {
         let result = try #require(
             await #execute(
                 PairwiseBugSpec.self,
+                mode: .sequential,
                 .commandLimit(3),
                 .budget(.custom(screening: 200, sampling: 0)),
                 .suppress(.issueReporting),
@@ -141,7 +148,7 @@ struct SCAReductionScreeningTests {
 
 // MARK: - StateMachine
 
-@StateMachine(.sequential)
+@StateMachine
 final class BuggyCounterSpec {
     var expectedValue: Int = 0
     @SystemUnderTest var counter = BuggyCounter(capacity: 3)
@@ -188,7 +195,7 @@ struct BuggyCounter {
 // MARK: - Pairwise Bug StateMachine
 
 /// A spec where any sequence containing both `setA` and `setB` triggers the invariant failure. Pairwise SCA at t=2 is guaranteed to produce such a row.
-@StateMachine(.sequential)
+@StateMachine
 final class PairwiseBugSpec {
     var modelState: Int = 0
     @SystemUnderTest var sut = PairwiseBugSUT()

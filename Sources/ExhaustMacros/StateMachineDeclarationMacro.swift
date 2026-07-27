@@ -3,43 +3,6 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-// MARK: - Concurrency Mode Parsing
-
-private enum MacroConcurrencyMode: String {
-    case sequential
-    case tasks
-    case threads
-
-    /// The `ExecutionModel` literal emitted into synthesized code (for example `".sequential"`).
-    var executionModelLiteral: String {
-        ".\(rawValue)"
-    }
-}
-
-/// Reads the `ExecutionModel` literal from the `@StateMachine` attribute argument.
-///
-/// Returns `nil` when the argument is missing or not a recognized literal.
-private enum ModeExtractionResult {
-    case mode(MacroConcurrencyMode)
-    case missing
-    case nonLiteral
-}
-
-private func extractConcurrencyMode(from node: AttributeSyntax) -> ModeExtractionResult {
-    guard let argList = node.arguments?.as(LabeledExprListSyntax.self),
-          let firstArg = argList.first
-    else {
-        return .missing
-    }
-    guard let memberAccess = firstArg.expression.as(MemberAccessExprSyntax.self) else {
-        return .nonLiteral
-    }
-    if let mode = MacroConcurrencyMode(rawValue: memberAccess.declName.baseName.trimmedDescription) {
-        return .mode(mode)
-    }
-    return .nonLiteral
-}
-
 /// The access-control prefix mirrored onto every synthesized member, derived from the spec declaration's own modifiers.
 ///
 /// A `public` (or `open`) spec gets `public` members so the spec is usable from other modules — without this, synthesized members default to internal and a spec cannot be shared between a test target and a benchmark executable. `open` maps to `public` because synthesized members are never override points. Unmodified, `internal`, `fileprivate`, and `private` specs keep the historical unprefixed emission: their members default to internal, which is already at least as visible as the type.
@@ -56,66 +19,48 @@ private func accessPrefix(for declaration: some DeclGroupSyntax) -> String {
 
 /// Determines whether the spec needs the `AsyncStateMachineSpec` surface based on its members.
 ///
-/// `.threads` also considers `@Oracle` methods, because the oracle runs inside the async preemptive runner. `.sequential` and `.tasks` only look at commands and invariants.
+/// Every marked member counts, the equivalence included: the mode is chosen at the call site now, so the macro cannot know which runner will call which member and has to serve whichever asks. A spec whose every member is synchronous keeps the synchronous surface, which is what lets the sequential runner run it without bridging.
 private func specHasAsyncMember(
-    mode: MacroConcurrencyMode,
     commands: [CommandInfo],
     invariants: [InvariantInfo],
-    oracles: [OracleInfo],
+    equivalences: [EquivalenceInfo],
     setups: [SetupInfo]
 ) -> Bool {
-    let commandsOrInvariants = commands.contains(where: \.isAsync)
+    commands.contains(where: \.isAsync)
         || invariants.contains(where: \.isAsync)
         || setups.contains(where: \.isAsync)
-    switch mode {
-        case .sequential, .tasks:
-            return commandsOrInvariants
-        case .threads:
-            return commandsOrInvariants || oracles.contains(where: \.isAsync)
-    }
+        || equivalences.contains(where: \.isAsync)
 }
 
-/// Attached macro that synthesizes spec conformance from a class annotated with `@StateMachine(.sequential)`, `@StateMachine(.tasks)`, or `@StateMachine(.threads)`.
+/// Attached macro that synthesizes spec conformance from a class annotated with `@StateMachine`.
 ///
-/// The mode argument selects the execution model:
-/// - `.tasks` — cooperative scheduling of Swift Tasks, checked by `@Invariant`.
-/// - `.threads` — preemptive scheduling on real OS threads, checked by `@Oracle`.
+/// One spec shape serves every execution mode, because the mode is a `#execute` argument rather than a property of the declaration. The macro scans for `@SystemUnderTest`, `@Command`, `@Invariant`, `@Setup`, and `@Equivalence`, then synthesizes the `Command` enum, `commandGenerator`, `run(_:)`, `checkInvariants()`, and — when an equivalence is declared — `equivalenceCheck(_:)` and `hasEquivalence`.
 ///
-/// The macro scans for `@SystemUnderTest`, `@Command`, and mode-specific markers, then synthesizes the `Command` enum, `commandGenerator`, `run(_:)`, `checkInvariants()`, and (for `.threads`) `oracleCheck(_:)`.
+/// What a mode requires of a spec is therefore checked where the mode is known, at the start of a run: a thread-based run needs an equivalence and a reference-typed system under test, and says so with a runtime error naming the call site.
 public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
     // MARK: - ExtensionMacro
 
     public static func expansion(
-        of node: AttributeSyntax,
+        of _: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,
         providingExtensionsOf type: some TypeSyntaxProtocol,
         conformingTo _: [TypeSyntax],
         in _: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
-        guard case let .mode(mode) = extractConcurrencyMode(from: node) else {
-            return []
-        }
-
         let members = declaration.memberBlock.members
         let commands = extractCommands(from: members)
         let invariants = extractInvariants(from: members)
-        let oracles = extractOracles(from: members)
+        let equivalences = extractEquivalences(from: members)
         let setups = extractSetups(from: members)
 
-        let isClassDecl = declaration.is(ClassDeclSyntax.self)
-        let isActorDecl = declaration.is(ActorDeclSyntax.self)
-        let isReferenceType = isClassDecl || isActorDecl
-        guard isReferenceType else {
+        guard declaration.is(ClassDeclSyntax.self) else {
             return []
         }
 
-        let hasAnyAsync = specHasAsyncMember(mode: mode, commands: commands, invariants: invariants, oracles: oracles, setups: setups)
-        let needsAsyncConformance = hasAnyAsync || isActorDecl
-        let preconcurrency = isActorDecl ? "@preconcurrency " : ""
+        let hasAnyAsync = specHasAsyncMember(commands: commands, invariants: invariants, equivalences: equivalences, setups: setups)
+        let proto = hasAnyAsync ? "AsyncStateMachineSpec" : "StateMachineSpec"
 
-        let proto = needsAsyncConformance ? "AsyncStateMachineSpec" : "StateMachineSpec"
-
-        let ext: DeclSyntax = "extension \(type.trimmed): \(raw: preconcurrency)\(raw: proto) {}"
+        let ext: DeclSyntax = "extension \(type.trimmed): \(raw: proto) {}"
         return [ext.cast(ExtensionDeclSyntax.self)]
     }
 
@@ -127,41 +72,27 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
         conformingTo _: [TypeSyntax],
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
-        let mode: MacroConcurrencyMode
-        switch extractConcurrencyMode(from: node) {
-            case let .mode(resolved):
-                mode = resolved
-            case .missing:
-                context.diagnose(Diagnostic(
-                    node: Syntax(node),
-                    message: StateMachineDiagnostic.missingMode
-                ))
-                return []
-            case .nonLiteral:
-                context.diagnose(Diagnostic(
-                    node: Syntax(node),
-                    message: StateMachineDiagnostic.nonLiteralMode
-                ))
-                return []
-        }
-
         let members = declaration.memberBlock.members
 
         let sutProps = extractSUTProperties(from: members)
         let commands = extractCommands(from: members)
         let invariants = extractInvariants(from: members)
-        let oracles = extractOracles(from: members)
+        let equivalences = extractEquivalences(from: members)
         let setups = extractSetups(from: members)
 
         let isClassDecl = declaration.is(ClassDeclSyntax.self)
         let isActorDecl = declaration.is(ActorDeclSyntax.self)
-        let isReferenceType = isClassDecl || isActorDecl
         let classIsMainActorIsolated = declaration
             .as(ClassDeclSyntax.self)
             .map { hasAttribute("MainActor", on: $0) } ?? false
 
         // Shared validation
-        if isReferenceType == false {
+        if isActorDecl {
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: StateMachineDiagnostic.actorNotAllowed
+            ))
+        } else if isClassDecl == false {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
                 message: StateMachineDiagnostic.structNotAllowed
@@ -236,7 +167,7 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
             ))
         }
         for setup in setups {
-            let conflictingMarkers = ["Command", "Invariant", "Oracle"]
+            let conflictingMarkers = ["Command", "Invariant", "Equivalence"]
             if conflictingMarkers.contains(where: { hasAttribute($0, on: setup.syntax) }) {
                 context.diagnose(Diagnostic(
                     node: Syntax(setup.syntax),
@@ -262,7 +193,7 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
             commands.map { ("Command", $0.syntax) }
                 + setups.map { ("Setup", $0.syntax) }
                 + invariants.map { ("Invariant", $0.syntax) }
-                + oracles.map { ("Oracle", $0.syntax) }
+                + equivalences.map { ("Equivalence", $0.syntax) }
         for (marker, syntax) in markerMethods {
             guard let syntax, hasTypeMemberModifier(syntax) else {
                 continue
@@ -273,63 +204,28 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
             ))
         }
 
-        // Mode-specific validation
-        switch mode {
-            case .sequential, .tasks:
-                if oracles.isEmpty == false {
-                    context.diagnose(Diagnostic(
-                        node: Syntax(node),
-                        message: StateMachineDiagnostic.oracleRequiresThreads
-                    ))
-                }
-                if case .tasks = mode, isActorDecl {
-                    context.diagnose(Diagnostic(
-                        node: Syntax(node),
-                        message: StateMachineDiagnostic.actorRequiresSequential
-                    ))
-                }
-            case .threads:
-                if invariants.isEmpty == false {
-                    context.diagnose(Diagnostic(
-                        node: Syntax(node),
-                        message: StateMachineDiagnostic.invariantUnderThreads
-                    ))
-                }
-                let badOracles = oracleMethodsWithWrongParameterCount(from: members)
-                for badOracle in badOracles {
-                    context.diagnose(Diagnostic(
-                        node: Syntax(badOracle),
-                        message: StateMachineDiagnostic.oracleParameterCount
-                    ))
-                }
-                if oracles.isEmpty, badOracles.isEmpty {
-                    context.diagnose(Diagnostic(
-                        node: Syntax(node),
-                        message: StateMachineDiagnostic.noOracle
-                    ))
-                }
-                if oracles.count > 1 {
-                    context.diagnose(Diagnostic(
-                        node: Syntax(node),
-                        message: StateMachineDiagnostic.multipleOracles
-                    ))
-                }
-                if isActorDecl {
-                    context.diagnose(Diagnostic(
-                        node: Syntax(node),
-                        message: StateMachineDiagnostic.actorWithThreads
-                    ))
-                }
-                for oracle in oracles where oracle.isThrows {
-                    context.diagnose(Diagnostic(
-                        node: Syntax(oracle.syntax),
-                        message: StateMachineDiagnostic.throwingOracle
-                    ))
-                }
+        // Equivalence validation. What a mode demands of a spec is checked at the start of a run, where the mode is known; what the method itself must look like is checked here, where the method is.
+        let badEquivalences = equivalenceMethodsWithWrongParameterCount(from: members)
+        for badEquivalence in badEquivalences {
+            context.diagnose(Diagnostic(
+                node: Syntax(badEquivalence),
+                message: StateMachineDiagnostic.equivalenceParameterCount
+            ))
+        }
+        if equivalences.count > 1 {
+            context.diagnose(Diagnostic(
+                node: Syntax(node),
+                message: StateMachineDiagnostic.multipleEquivalences
+            ))
+        }
+        for equivalence in equivalences where equivalence.isThrows {
+            context.diagnose(Diagnostic(
+                node: Syntax(equivalence.syntax),
+                message: StateMachineDiagnostic.throwingEquivalence
+            ))
         }
 
-        let effectiveAsync = specHasAsyncMember(mode: mode, commands: commands, invariants: invariants, oracles: oracles, setups: setups)
-            || isActorDecl
+        let effectiveAsync = specHasAsyncMember(commands: commands, invariants: invariants, equivalences: equivalences, setups: setups)
 
         let access = accessPrefix(for: declaration)
 
@@ -358,18 +254,10 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
             decls.append(synthesizeRunSetup(setup: setup, hasAnyAsync: effectiveAsync, access: access))
         }
 
-        if mode == .threads, let oracle = oracles.first {
-            decls.append(synthesizeOracleCheck(oracle: oracle, hasAnyAsync: effectiveAsync, access: access))
-        }
-
-        decls.append("\(raw: access)static let executionModel: ExecutionModel = \(raw: mode.executionModelLiteral)")
-
-        if isActorDecl {
-            decls.append("""
-            \(raw: access)func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
-                DiagnosticSnapshot(systemUnderTest: systemUnderTest, failureDescription: failureDescription())
-            }
-            """)
+        if let equivalence = equivalences.first {
+            decls.append(synthesizeEquivalenceCheck(equivalence: equivalence, hasAnyAsync: effectiveAsync, access: access))
+            // Announced rather than inferred: a runner cannot ask a spec whether it declared one, and the default `equivalenceCheck` traps, so the flag is what keeps a concurrent run from calling into it.
+            decls.append("\(raw: access)static let hasEquivalence: Bool = true")
         }
 
         let hasUserInit = members.contains { member in
@@ -377,12 +265,8 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
             return initDecl.signature.parameterClause.parameters.isEmpty
                 && initDecl.optionalMark == nil
         }
-        if isReferenceType, hasUserInit == false {
-            if isClassDecl {
-                decls.append("\(raw: access)required init() {}")
-            } else if isActorDecl {
-                decls.append("\(raw: access)init() {}")
-            }
+        if isClassDecl, hasUserInit == false {
+            decls.append("\(raw: access)required init() {}")
         }
 
         return decls

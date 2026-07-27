@@ -39,7 +39,7 @@ public enum HandleTableSkipCounters {
 /// The shared spec for the `HandleTable` fixture (fault E — registry in `HandleTable.swift`).
 ///
 /// Skip-heavy by construction: `create` skips when the table is full, `write` and `destroy` skip while the client holds no handles. The spec's handle list models what a client believes is live; compaction silently invalidates it, which is the fault vector.
-@StateMachine(.sequential)
+@StateMachine
 public final class HandleTableSpec {
     var handles: [HandleTable.Handle] = []
     @SystemUnderTest var table: HandleTable = .init()

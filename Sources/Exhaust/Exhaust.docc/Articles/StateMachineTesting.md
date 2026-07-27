@@ -10,15 +10,15 @@ Unit tests for stateful systems tend to be manually-scripted scenarios: set up s
 
 ## Quick reference
 
-Which `@StateMachine` mode you need depends on what your system under test is built on:
+One spec shape serves every mode. Which mode you pass to `#execute` depends on what your system under test is built on:
 
-| Your SUT | Mode | What it finds |
+| Your system under test | How to run it | What it finds |
 |---|---|---|
-| Synchronous class or actor | `@StateMachine(.sequential)` | Logic bugs: ordering, invariant violations, state corruption |
-| Async class with `await` boundaries | `@StateMachine(.tasks)` | Reentrancy and interleaving bugs at `await` boundaries |
-| Class with locks, GCD, or atomics | `@StateMachine(.threads)` | Data races in synchronous primitives, invisible to cooperative scheduling |
+| Synchronous class | `#execute(Spec.self, mode: .sequential)` | Logic bugs: ordering, invariant violations, state corruption |
+| Async class with `await` boundaries | `#execute(Spec.self, mode: .tasks)` | Reentrancy and interleaving bugs at `await` boundaries |
+| Class with locks, GCD, or atomics | `#execute(Spec.self, mode: .threads)` | Data races in synchronous primitives, which a task-based run steps over |
 
-The rest of this guide walks through each case.
+Moving a spec from one row to the next needs no change to the spec. The rest of this guide walks through each case.
 
 ## The shape of a spec
 
@@ -26,10 +26,10 @@ A spec has four required parts: a system under test, commands that operate on it
 
 ```swift
 @Test func stackBehavesCorrectly() async {
-    await #execute(StackSpec.self, .commandLimit(15))
+    await #execute(StackSpec.self, mode: .sequential, .commandLimit(15))
 }
 
-@StateMachine(.sequential)
+@StateMachine
 final class StackSpec {
     var expected: [Int] = []
     @SystemUnderTest
@@ -62,7 +62,7 @@ final class StackSpec {
 
 Each `@Command` method is one operation Exhaust can choose to run. The `weight:` parameter controls how often it appears relative to other commands. A weight-3 command shows up roughly three times as often as a weight-1 command. After every command, all `@Invariant` methods are checked automatically.
 
-Specs must be a `final class` or an `actor`. The `@StateMachine` macro takes a required execution mode. `.sequential` runs commands one at a time and checks `@Invariant` after each step. It is the most common mode, and the one this guide uses until the concurrency sections. `.tasks` runs commands concurrently with deterministic interleaving at `await` boundaries. `.threads` dispatches commands to real OS threads and confirms each failure by checking the run against every valid sequential ordering (linearizability), comparing the result through an `@Oracle`.
+Specs must be a `final class`. `@StateMachine` takes no arguments, because how the commands run is a question for the call site: `#execute(StackSpec.self, mode: .sequential)` runs them one at a time and checks `@Invariant` after each step, `mode: .tasks` interleaves them at `await` boundaries, and `mode: .threads` dispatches them to real OS threads. The concurrency sections cover the last two. Every example until then runs one command at a time, which is the most common way to run a spec.
 
 ## Models and invariants
 
@@ -120,7 +120,7 @@ Some commands operate on things a previous command created: delete a user that `
 The pattern is to take a plain generated index and resolve it against spec-owned state inside the command:
 
 ```swift
-@StateMachine(.sequential)
+@StateMachine
 final class DatabaseSpec {
     var userIDs: [UserID] = []
     @SystemUnderTest var db = Database()
@@ -154,7 +154,7 @@ Some specs need a generated starting configuration: a table created with generat
 `@Setup` marks one method whose parameter values Exhaust draws from the attribute's generators, exactly like a command:
 
 ```swift
-@StateMachine(.sequential)
+@StateMachine
 final class BoundedQueueSpec {
     var model: [Int] = []
     @SystemUnderTest var queue: BoundedQueue?
@@ -192,11 +192,11 @@ The rules, and how setup differs from a command:
 
 ```swift
 @Test func queueMaintainsFIFOOrder() async {
-    await #execute(CircularQueueSpec.self, .commandLimit(10), .budget(.thorough))
+    await #execute(CircularQueueSpec.self, mode: .sequential, .commandLimit(10), .budget(.thorough))
 }
 ```
 
-`#execute` is always awaited, so the test function must be `async`. This holds for every execution mode, including `.sequential` specs whose commands are all synchronous.
+`#execute` is always awaited, so the test function must be `async`. This holds for every mode, including a run whose commands are all synchronous.
 
 Exhaust first runs a screening phase that systematically covers command-type orderings (every pairwise combination of command types at each position), then switches to random sampling. If a failure is found in either phase, the reducer reduces the command sequence to a minimal counterexample.
 
@@ -218,14 +218,14 @@ Reproduce: .replay("3JK4M2-5")
 
 The replay seed lets you re-run the exact same sequence deterministically for debugging.
 
-`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the screening budget: the estimate's budget-derived ceiling tops out at 100, with a floor of three appearances per command type. `.tasks` specs cap the estimate at 40; `.threads` specs instead default to a flat 10, because each sequence is re-run many times to reproduce the race. Longer sequences explore deeper states but take longer to test and to reduce. For `.threads` specs, linearizability checking cost explodes with longer sequences because the checker must try all valid orderings. Specs with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every screening row and every reduction probe.
+`.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the screening budget: the estimate's budget-derived ceiling tops out at 100, with a floor of three appearances per command type. `mode: .tasks` caps the estimate at 40. A spec that declares an `@Equivalence` gets a flat 10 under either concurrent mode, the same default `mode: .threads` uses, because both then search the orders a run could have taken and that search grows multinomially in the sequence length. Longer sequences explore deeper states but take longer to test and to reduce. Specs with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every screening row and every reduction probe.
 
 ## Your SUT uses async/await
 
-When the system under test has async methods (actors, network services, databases), make the commands `async`. A `.sequential` spec with async commands runs them one at a time, the same as a sync spec:
+When the system under test has async methods (actors, network services, databases), make the commands `async`. Async commands run one at a time in the default mode, exactly as synchronous ones do:
 
 ```swift
-@StateMachine(.sequential)
+@StateMachine
 final class AsyncCounterSpec {
     var expected: Int = 0
     @SystemUnderTest
@@ -259,26 +259,25 @@ The test call needs `await`:
 
 ```swift
 @Test func counterBehavesCorrectly() async {
-    await #execute(AsyncCounterSpec.self, .commandLimit(10))
+    await #execute(AsyncCounterSpec.self, mode: .sequential, .commandLimit(10))
 }
 ```
 
 Exhaust detects async methods and generates the correct conformance automatically.
 
-### Actors as specs
+### Actors as the system under test
 
-When the spec is an `actor`, it must use `.sequential`. Exhaust treats all commands as async regardless of whether they carry an explicit `async` keyword, because actor isolation makes them implicitly async from outside, and serialises all dispatch, so there's nowhere to interleave.
-
-Actors are a natural fit when the spec's own state should be isolated from other tests running in parallel, and `@TaskLocal` injection works inside command bodies. For concurrent testing, use a `final class`.
+An `actor` cannot be a spec — actor isolation serialises every command, so no mode could interleave them, and the macro rejects the declaration. What an actor can be is the `@SystemUnderTest` of an ordinary `final class` spec, and that combination is fully supported, including under `mode: .tasks`: the scheduler drives a default actor's suspensions the same way it drives any other `await`, which is exactly what reaches actor reentrancy bugs — a method that checks isolated state, suspends, and acts on the stale answer. An actor with a custom executor is the exception: its continuations leave the scheduler's control, and the run reports an idle timeout rather than an interleaving.
 
 ## Finding concurrency bugs in async code
 
-The `.sequential` specs shown above run each command one at a time. Some bugs only show up when two operations overlap. `@StateMachine(.tasks)` runs commands concurrently across multiple execution lanes, and Exhaust's cooperative scheduler controls the interleaving deterministically at every `await` suspension point.
+The runs shown above take one command at a time. Some bugs only show up when two operations overlap. Under `mode: .tasks`, Exhaust runs the commands concurrently across lanes and controls the interleaving itself, deterministically, at every `await` suspension point.
 
 ```swift
 @Test func counterIsSafeUnderConcurrency() async {
     await #execute(
         NonAtomicCounterSpec.self,
+        mode: .tasks,
         .parallelize(lanes: .two),
         .commandLimit(6),
         .budget(.thorough)
@@ -289,7 +288,7 @@ The `.sequential` specs shown above run each command one at a time. Some bugs on
 The same seed always produces the same interleaving, and the reducer reduces both the command sequence and the lane assignments, discovering the minimal concurrency needed to trigger the bug.
 
 > Note:
-> Mark test suites that run `.tasks` specs as `.serialized`. The cooperative drain loop occupies threads while it runs, and several such suites running in parallel can starve the shared thread pool.
+> Mark test suites that use `mode: .tasks` as `.serialized`. The drain loop that interleaves the lanes occupies a thread while it runs, and several such suites running in parallel can starve the shared thread pool.
 
 A typical failure report:
 
@@ -318,11 +317,31 @@ Reproduce: .replay("7MK2N9-4")
 
 The trace shows exactly where the interleaving happened. The reducer drove the first `refill` command from a concurrent lane into the sequential prefix (proving it doesn't need to be concurrent), leaving only `tryConsume` and the second `refill` as the concurrent pair that triggers the race.
 
+### Which claims survive a change of order
+
+Concurrency brings in an order the default mode never has to think about. Once the commands could have run in more than one order, some of a spec's claims stop making sense.
+
+An `@Invariant` is a claim that holds whatever order the commands ran in. Exhaust checks it wherever it has a settled state to check against — after each command in the default mode, at every point where no lane sits mid-command under `mode: .tasks`, and along the sequential replays under `mode: .threads`.
+
+Not every claim is like that. Two increments commute, so `counter.value == expected` holds however they interleave, and it is a true invariant. Two writes to the same register do not commute, so which value survives depends on which write landed last, and a comparison against one fixed expectation would fail for a register with nothing wrong with it. A claim of that shape belongs in an `@Equivalence`. Exhaust judges one by re-running the commands sequentially and accepting the concurrent run when some valid order produces an equivalent result. The `mode: .threads` section below covers how to write one.
+
+One question sorts them. Could a different valid order change this check's answer? If it could, the check is an equivalence rather than an invariant.
+
+### Invariants run when no lane is mid-command
+
+Every lane runs against one spec instance, so the model is shared. A command body updates the model and then calls the system under test, and when that call suspends, the model has moved and the system under test has not. An invariant comparing them is false at that instant for a system under test with no defect at all.
+
+Exhaust therefore checks invariants only when no lane is inside a command body. A command that completes while another lane sits mid-update records as completed and defers the check. Whichever command finishes last always runs it, so every probe is checked at least once with the model and the system under test back in agreement.
+
+What that costs is a violation that exists only while another lane is suspended and heals before that lane returns. For a model-versus-system invariant, that transient state is not a defect. For a structural invariant over the system under test alone (`count >= 0`), the window between two lanes goes unobserved.
+
+Settling the state before comparing does not rescue a claim whose answer depends on the order. That claim is still wrong under some of the orders the scheduler can produce, and it wants an `@Equivalence` instead. Declaring one here is optional, and it adds the linearizability check the next section describes, run against an interleaving a seed reproduces rather than whatever the OS chose.
+
 ### What the scheduler can and cannot find
 
-The cooperative scheduler interleaves at `await` suspension points, wherever a command body suspends via `Task.yield()`, an actor call, or any other suspension point. It cannot interleave within synchronous code. A race between two statements with no `await` between them is invisible to the scheduler.
+A task-based run interleaves at `await` suspension points, wherever a command body suspends via `Task.yield()`, an actor call, or anything else that suspends. It cannot interleave within synchronous code. A race between two statements with no `await` between them is invisible to it.
 
-SUTs that have races at suspension points (the `let v = state; await Task.yield(); state = v + 1` pattern) are exactly what `.tasks` concurrent testing finds well. SUTs whose races are in synchronous code behind an async facade (locks, dispatch queues, atomics) need `.threads` instead.
+A system under test whose race sits at a suspension point (the `let v = state; await Task.yield(); state = v + 1` pattern) is exactly what `mode: .tasks` finds well. One whose race is in synchronous code behind an async facade (locks, dispatch queues, atomics) needs `mode: .threads`.
 
 ### Lane count
 
@@ -332,31 +351,35 @@ SUTs that have races at suspension points (the `let v = state; await Task.yield(
 
 ### Idle timeout
 
-If a command body suspends to an executor outside the cooperative scheduler (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeout(.seconds(2))` setting (default) detects this and reports the stalling command sequence without attempting reduction.
+If a command body suspends onto an executor Exhaust does not drive (a custom-executor actor, `Task.sleep`, blocking I/O), the drain loop stalls because the continuation never arrives back. The `.idleTimeout(.seconds(2))` setting (default) bounds that wait so a stalled probe cannot wedge the run.
+
+A timed-out probe counts as a **pass**, not a failure. The timeout cannot distinguish a hung system from a machine under load, and treating it as a counterexample would let a busy CI runner manufacture failures. What surfaces instead is a runtime warning once timed-out probes reach a quarter of those attempted, reporting the rate so a run that never exercised the system does not pass silently.
+
+The consequence is worth stating plainly: a spec that deadlocks does not fail on that account. If the deadlock is reliable, most probes time out, the warning fires, and the rate tells you. If it only happens on a few interleavings, the run can stay under the threshold and pass. A green run with a nonzero timeout count is not evidence of liveness.
 
 ## Finding concurrency bugs in threaded code
 
-Some systems use synchronous concurrency primitives internally (`os_unfair_lock`, `DispatchQueue`, atomics, `NSLock`), with or without an async facade on top. The cooperative scheduler treats the code between two `await`s as atomic, so it steps straight over these races.
+Some systems use synchronous concurrency primitives internally (`os_unfair_lock`, `DispatchQueue`, atomics, `NSLock`), with or without an async facade on top. A task-based run treats the code between two `await`s as atomic, so it steps straight over these races.
 
-`@StateMachine(.threads)` dispatches commands to real GCD threads, letting the OS scheduler interleave at any instruction. This reaches races inside the synchronous primitives that `.tasks` cannot see.
+`mode: .threads` dispatches the commands to real OS threads and lets the operating system interleave them at any instruction. That reaches races inside the synchronous primitives a task-based run cannot see.
 
-The tradeoff is determinism. The OS chooses the interleaving, so the same seed no longer reproduces the same run. Exhaust compensates with repetition: during reduction it runs each candidate sequence many times to keep the race reproducing, and it confirms every reported failure by replaying it across all valid orderings before believing it.
+The trade-off is determinism. The OS chooses the interleaving, so the same seed no longer reproduces the same run. Exhaust compensates with repetition: during reduction it runs each candidate sequence many times to keep the race reproducing, and it confirms every reported failure by replaying it across the valid orders before believing it.
 
-That confirmation is what stands in for the per-step `@Invariant` checking of `.sequential`. Real-thread scheduling leaves no deterministic intermediate state to check, so `.threads` specs check a weaker but well-defined property instead: linearizability.
+Real-thread scheduling leaves no settled intermediate state for an invariant to be checked against, so Exhaust checks invariants where one command runs at a time. Every probe replays the same commands sequentially and checks invariants after each of them, and the linearizability search checks them again along each order it tries. A failure in that first replay is a bug needing no interleaving at all, and the report says so.
 
-### Oracles and linearizability
+### Equivalence and linearizability
 
-A concurrent run is correct when everything it observed could have come from running the same commands one at a time, in some order that keeps each lane's own commands in the order that lane issued them and never reorders two commands when one had observably returned before the other began. That property is called linearizability, and it is what `.threads` checks. Exhaust timestamps every command's call and return, so an ordering that inverts observed real-time precedence is never accepted as an explanation, and a command that reads stale state after another lane's write has provably completed is caught rather than explained away.
+A concurrent run is correct when everything it observed could have come from running the same commands one at a time, in some order that keeps each lane's own commands in the order that lane issued them and never reorders two commands when one had observably returned before the other began. That property is called linearizability, and it is what a thread-based run checks. Exhaust timestamps every command's call and return, so an order that inverts observed real-time precedence is never accepted as an explanation, and a command that reads stale state after another lane's write has provably completed is caught rather than explained away.
 
-Two things get compared against each candidate ordering: what every command returned, and the final state. Exhaust captures the return values for you — a `@Command` that returns a value (`func getOrElse(key:) -> Int`) has its result recorded per lane during the concurrent run. The final state is compared through an `@Oracle` you write:
+Two things get compared against each candidate order: what every command returned, and the final state. Exhaust captures the return values for you — a `@Command` that returns a value (`func getOrElse(key:) -> Int`) has its result recorded per lane during the concurrent run. The final state is compared through an `@Equivalence` you write:
 
 ```swift
-@StateMachine(.threads)
+@StateMachine
 final class RacyCounterSpec {
     @SystemUnderTest
     var counter: RacyCounter = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other: RacyCounter) -> Bool {
         counter.value == other.value
     }
@@ -378,9 +401,9 @@ final class RacyCounterSpec {
 }
 ```
 
-An `@Oracle` method defines what "equal final state" means for the SUT. To confirm a suspected failure, Exhaust enumerates the valid sequential orderings, replays the commands on a fresh instance for each one, and checks both the recorded return values and — through the oracle — the final state. If any ordering reproduces what the concurrent run observed, that run was linearizable and Exhaust discards it. If none does, the bug is real.
+An `@Equivalence` method defines what "the same result" means for your system under test. To confirm a suspected failure, Exhaust enumerates the valid sequential orders, replays the commands on a fresh instance for each one, and checks the recorded return values and the equivalence's verdict on the final state. If any order reproduces what the concurrent run observed, that run was linearizable and Exhaust discards it. If none does, the bug is real.
 
-Checking every ordering, instead of one fixed order, is what keeps order-independent operations from reporting false positives. Two `set("key", to:)` commands on a lock-synchronised store can land in either order. Both are valid while the two overlap in time, so whichever the threads chose, some ordering reproduces it; once one has observably returned before the other starts, only the real order counts. A check that only compared against array order would flag the other half of the overlapping runs as failures.
+Checking every order, instead of one fixed order, is what keeps order-independent operations from reporting false positives. Two `set("key", to:)` commands on a lock-synchronised store can land in either order. Both are valid while the two overlap in time, so whichever the threads chose, some ordering reproduces it; once one has observably returned before the other starts, only the real order counts. A check that only compared against array order would flag the other half of the overlapping runs as failures.
 
 Capturing return values is what catches bugs the final state hides. A hash map whose buggy `delete` resurrects a key can settle into a final state that coincidentally matches a valid ordering, while a `getOrElse` caught mid-race returns a value no ordering would ever produce. The final-state comparison alone passes that run. The recorded response does not.
 
@@ -424,9 +447,15 @@ Reproduce: .replay("1C3-141")
 
 The `→` annotation on each lane command shows what it returned during the concurrent run. The marked command is the one whose response no valid ordering reproduces: `getOrElse(1)` returned `-1` (not found) because it ran while the racing `update(1, 0)` had left key 1's slot mid-write, and no sequential ordering of these commands ever loses key 1. When the divergence is only in the final state, with no single command to blame, there is no marker and only the expected-versus-actual block appears.
 
-The oracle compares final state rather than intermediate state. That is the right tradeoff for non-deterministic scheduling: intermediate invariants would fail spuriously whenever the OS interleaved in a valid but unexpected order, whereas a command's return value is a real observation that some valid ordering has to be able to explain.
+The equivalence compares final state rather than intermediate state. That is the right trade-off for non-deterministic scheduling: a comparison against intermediate state would fail whenever the OS interleaved in a valid but unexpected order, whereas a command's return value is a real observation that some valid order has to be able to explain.
 
-The oracle is always required for `.threads` specs and always written by hand. `@Invariant` is not available under `.threads`, because there is no deterministic per-step state to check it against.
+An `@Equivalence` is required under `mode: .threads`, and Exhaust says so at the start of the run rather than part-way through it. Invariants are welcome alongside it, judged in the sequential replays described above.
+
+> Important: Under `mode: .threads`, every lane's commands run against one shared spec instance on real OS threads. The system under test is expected to defend itself, because that is the claim under test. Anything else a command body touches has to be thread-safe or absent.
+>
+> An unsynchronised model property written from two lanes at once is a data race, which is undefined behaviour rather than a false positive: two threads growing the same array can corrupt memory. ThreadSanitizer reports that case, and it is the quickest way to tell it apart from a real race in the system under test. A model built to take concurrent access — a collection behind a `Mutex`, an atomic counter — is genuinely shared and works as written.
+>
+> The system under test must also be a reference type. A value type reached through the shared spec has nothing to defend. Exhaust reports both requirements when the run starts, before any command executes.
 
 Running the test:
 
@@ -434,6 +463,7 @@ Running the test:
 @Test func counterIsThreadSafe() async {
     await #execute(
         RacyCounterSpec.self,
+        mode: .threads,
         .parallelize(lanes: .two),
         .commandLimit(6),
         .budget(.thorough)
@@ -441,17 +471,17 @@ Running the test:
 }
 ```
 
-### Async commands with .threads
+### Async commands under mode: .threads
 
-`.threads` also works when command bodies are `async`. Each lane gets a real OS thread, and async execution is bridged via `Task` + semaphore. This catches races in synchronous primitives hidden behind an async facade:
+`mode: .threads` also works when command bodies are `async`. Each lane gets a real OS thread, and Exhaust bridges the async execution onto it. That catches races in synchronous primitives hidden behind an async facade:
 
 ```swift
-@StateMachine(.threads)
+@StateMachine
 final class AsyncRacyCounterSpec {
     @SystemUnderTest
     var counter: AsyncRacyCounter = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other: AsyncRacyCounter) -> Bool {
         counter.value == other.value
     }
@@ -467,9 +497,9 @@ final class AsyncRacyCounterSpec {
 }
 ```
 
-### .tasks or .threads?
+### Which concurrent mode?
 
-When both could find the bug, prefer `.tasks`. Deterministic interleaving means faster reduction and reproducible seeds. Reach for `.threads` when the race is inside synchronous primitives that the cooperative scheduler cannot see.
+When both could find the bug, prefer `mode: .tasks`. Deterministic interleaving means faster reduction and reproducible seeds, and an `@Equivalence` works there too: the same linearizability check runs against an interleaving a seed reproduces, so a counterexample comes back on every run rather than on some of them. Reach for `mode: .threads` when the race is inside synchronous primitives a task-based run cannot see.
 
 ## Settings reference
 
@@ -477,10 +507,10 @@ All settings are passed as variadic arguments to `#execute`:
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `.commandLimit(N)` | auto-estimated (`.threads`: 10) | Maximum commands per generated sequence. Estimated from the command domain and screening budget; `.tasks` caps the estimate at 40, `.threads` defaults to a flat 10. |
+| `.commandLimit(N)` | auto-estimated (10 with an `@Equivalence`) | Maximum commands per generated sequence. Estimated from the command domain and screening budget. `mode: .tasks` caps the estimate at 40, and a spec that declares an `@Equivalence` gets a flat 10 under either concurrent mode. |
 | `.parallelize(lanes:)` | 2 | Number of concurrent lanes (1 through 4). |
 | `.budget(.thorough)` | `.standard` | Controls screening rows and random sampling iterations. |
-| `.idleTimeout(.seconds(2))` | `.seconds(2)` | Wall-clock time before a stalled run is reported without reduction: a drain-loop stall under `.tasks`, a wedged lane or SUT deadlock under `.threads`. `.zero` disables. |
+| `.idleTimeout(.seconds(2))` | `.seconds(2)` | Wall-clock bound on a stalled probe: a drain-loop stall under `mode: .tasks`, a wedged lane or a deadlocked system under test under `mode: .threads`. A timed-out probe counts as a pass; the run warns once a quarter of probes time out. `.zero` disables. |
 | `.replay("seed")` | — | Deterministic replay from a failure report seed. |
 | `.suppress(.issueReporting)` | — | Suppresses issue reporting (useful when asserting on the result directly). |
 | `.onReport { report in }` | — | Delivers an `ExhaustReport` with per-phase timing, invocation counts, and reduction stats after the run. |
@@ -513,7 +543,7 @@ protocol Queue<Element> {
     var elements: [Element] { get }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 final class QueueSpec {
     var fake = ListQueue<Int>()
     @SystemUnderTest var queue = CircularBufferQueue<Int>(capacity: 8)
@@ -552,10 +582,10 @@ The idea of using spec-tested fakes for compositional integration testing comes 
 
 ## Replay determinism
 
-The `.tasks` cooperative runner is fully deterministic when the system under test is async-native: all suspension points are explicit `await`s on actors, `Task.yield()`, or other Swift Concurrency primitives. Same seed, same interleaving, every time.
+A task-based run is fully deterministic when the system under test is async-native: every suspension point is an explicit `await` on an actor, `Task.yield()`, or another Swift Concurrency primitive. Same seed, same interleaving, every time.
 
 One thing can break that guarantee:
 
-**Foreign executors.** When the system under test bridges to GCD internally (for example, `withCheckedContinuation` wrapping a `DispatchQueue` callback), the continuation arrives on an OS thread outside the cooperative scheduler. Whether it is visible at the next scheduling step depends on OS thread timing, so the same seed can produce a different interleaving on different runs. If you observe the same seed passing on one run and failing on another, a foreign executor bridge is the most likely cause. For systems built on GCD, locks, or atomics, use `@StateMachine(.threads)` instead.
+**Foreign executors.** When the system under test bridges to GCD internally (for example, `withCheckedContinuation` wrapping a `DispatchQueue` callback), the continuation arrives on an OS thread Exhaust does not drive. Whether it is visible at the next scheduling step depends on OS thread timing, so the same seed can produce a different interleaving on different runs. If you see the same seed passing on one run and failing on another, a bridge like that is the most likely cause. For systems built on GCD, locks, or atomics, use `mode: .threads` instead.
 
-The `.threads` preemptive runner is never deterministic. OS thread scheduling is unpredictable, so the same seed does not guarantee the same interleaving. The runner compensates with repetition during reduction, running each candidate sequence multiple times to confirm the failure is reproducible.
+A thread-based run is never deterministic. OS thread scheduling is unpredictable, so the same seed does not guarantee the same interleaving. Exhaust compensates with repetition during reduction, running each candidate sequence several times to confirm the failure still reproduces.

@@ -47,7 +47,7 @@ extension __ExhaustRuntime {
         discoveryIterations: Int
     ) -> FailureEvidence<Backend.Spec>? {
         let partition = LanePartition(markers: input.map(\.0))
-        for _ in 0 ..< PreemptiveReduction.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
+        for _ in 0 ..< PreemptiveConfirmation.finalConfirmationRepetitions(discoveryIterations: discoveryIterations) {
             if let confirmed = classifyFailure(
                 taggedCommands: input,
                 setupStep: setupStep,

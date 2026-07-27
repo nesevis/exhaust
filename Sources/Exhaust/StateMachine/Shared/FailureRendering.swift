@@ -20,10 +20,13 @@ extension __ExhaustRuntime {
         var originalCount: Int = 0
         var sequencesTested: Int = 0
         var reductionInvocations: Int = 0
-        var isPreemptive: Bool = false
+        /// The mode the run used, which decides both how the reproduce line spells itself and whether the report warns that a counterexample may not come back. A seed recorded under one mode means nothing under another, and `.sequential` needs no spelling because it is the default.
+        var mode: ExecutionModel = .sequential
         var replaySeed: String?
         var oracleDescription: String?
         var failureDescription: String?
+        /// Why the run was judged a failure when its own execution came back clean, shown ahead of the state comparison. Nil when the trace already shows the failing step.
+        var judgementDescription: String?
         /// Observed return values per lane (keyed by ``ScheduleMarker/rawValue``), in per-lane execution order, used to annotate each lane command with what it returned. A `nil` entry is a void command (no annotation).
         var laneResponseValues: [UInt8: [String?]]?
         /// The lane command whose observed response no valid sequential ordering reproduces, marked inline in the command partition. `nil` when the violation is only in final state (already shown by the expected-versus-actual state diff).
@@ -74,6 +77,11 @@ extension __ExhaustRuntime {
             lines.append("  \(step)")
         }
 
+        if let judgementDescription = context.judgementDescription {
+            lines.append("")
+            lines.append(judgementDescription)
+        }
+
         if let oracleDescription = context.oracleDescription {
             lines.append("")
             lines.append(oracleDescription)
@@ -94,10 +102,10 @@ extension __ExhaustRuntime {
 
         if let replaySeed = context.replaySeed {
             lines.append("")
-            lines.append("Reproduce: .replay(\"\(replaySeed)\")")
+            lines.append("Reproduce: \(reproduceModePrefix(context.mode)).replay(\"\(replaySeed)\")")
         }
 
-        if context.isPreemptive {
+        if case .threads = context.mode {
             lines.append("")
             lines.append("* Preemptive scheduling depends on OS thread timing and may not reproduce on every run. Run the test repeatedly to reproduce.")
         }
@@ -149,6 +157,18 @@ extension __ExhaustRuntime {
                 }
                 lines.append("")
             }
+        }
+    }
+
+    /// The `mode:` argument a reproduction needs, or nothing when the run used the default.
+    private static func reproduceModePrefix(_ mode: ExecutionModel) -> String {
+        switch mode {
+            case .sequential:
+                ""
+            case .tasks:
+                "mode: .tasks, "
+            case .threads:
+                "mode: .threads, "
         }
     }
 

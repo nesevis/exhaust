@@ -1,4 +1,4 @@
-// The spec adapter and dispatch for coverage-guided execution: `#execute(Spec.self, time:)`.
+// The spec adapter and dispatch for coverage-guided execution: `#execute(Spec.self, mode: .tasks, time:)`.
 
 import ExhaustCore
 import Foundation
@@ -7,12 +7,13 @@ import IssueReporting
 // MARK: - Dispatch
 
 public extension __ExhaustRuntime {
-    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(Spec.self, time:)`.
+    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(Spec.self, mode:, time:)`.
     ///
     /// Async for the same reason plain `#execute` is: the run occupies its thread for the whole time budget, so it hops to a GCD worker instead of starving the cooperative pool. Every path — configuration errors included — funnels through the shared reporting epilogue, so findings, configuration errors, and the summary attachment surface exactly as they do for `#explore(time:)`.
     @discardableResult
     static func __runStateMachineTimeDispatch(
         _ specType: (some StateMachineSpec).Type,
+        mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
@@ -22,6 +23,7 @@ public extension __ExhaustRuntime {
     ) async -> FuzzReport {
         let report = await stateMachineTimeReport(
             specType,
+            mode: mode,
             time: time,
             settings: settings,
             fileID: fileID,
@@ -73,8 +75,9 @@ public extension __ExhaustRuntime {
     }
 
     /// Builds the run's report: validates settings, routes on the execution model, and runs the matching adapter. Records no issues — the dispatch reports the returned report's termination and clusters exactly once.
-    private static func stateMachineTimeReport<Spec: StateMachineSpec>(
-        _ specType: Spec.Type,
+    private static func stateMachineTimeReport(
+        _ specType: (some StateMachineSpec).Type,
+        mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString,
@@ -89,7 +92,7 @@ public extension __ExhaustRuntime {
         let commandLimit = consumed.commandLimit
         let coreSettings = consumed.coreSettings
 
-        switch Spec.executionModel {
+        switch mode {
             case .sequential, .tasks:
                 // A synchronous `.tasks` spec has no suspension points to interleave at, so it runs through the sequential adapter — the same routing plain `#execute` applies. Cooperative interleaving requires async commands, which dispatch through the async twin.
                 return await runSpecFuzz(
@@ -101,21 +104,16 @@ public extension __ExhaustRuntime {
                     line: line,
                     column: column
                 )
-            case .threads:
-                // Ruled permanently out of scope (2026-07-12), not deferred: coverage novelty requires every attempt to be a deterministic function of its choice sequence, and preemptive race detection requires the opposite — the OS realizing different schedules for the same input. One degree of freedom cannot be both pinned and free.
-                return .empty(
-                    termination: .invalidConfiguration("#execute(time:) does not support .threads specs. The search treats an attempt's coverage as determined by its command sequence, but under preemptive scheduling it also depends on an OS schedule the run can neither observe nor replay, so coverage novelty rewards scheduling luck instead of new behavior. Use .tasks to search interleavings deterministically, or run this spec under plain #execute for repetition-based race detection."),
-                    seed: 0
-                )
         }
     }
 
-    /// Dispatches an asynchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(AsyncSpec.self, time:)`.
+    /// Dispatches an asynchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(AsyncSpec.self, mode:, time:)`.
     ///
     /// The same shape as ``__runStateMachineTimeDispatch(_:time:settings:fileID:filePath:line:column:)``: the run occupies a GCD worker for the whole budget, and reporting happens here on the test task after the hop.
     @discardableResult
     static func __runStateMachineTimeDispatchAsync(
         _ specType: (some AsyncStateMachineSpec).Type,
+        mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
@@ -125,6 +123,7 @@ public extension __ExhaustRuntime {
     ) async -> FuzzReport {
         let report = await asyncStateMachineTimeReport(
             specType,
+            mode: mode,
             time: time,
             settings: settings,
             fileID: fileID,
@@ -146,8 +145,9 @@ public extension __ExhaustRuntime {
     }
 
     /// The async twin of ``stateMachineTimeReport(_:time:settings:fileID:filePath:line:column:)``: validates settings, routes on the execution model, and runs the matching adapter.
-    private static func asyncStateMachineTimeReport<Spec: AsyncStateMachineSpec>(
-        _ specType: Spec.Type,
+    private static func asyncStateMachineTimeReport(
+        _ specType: (some AsyncStateMachineSpec).Type,
+        mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString,
@@ -161,7 +161,7 @@ public extension __ExhaustRuntime {
         }
         let commandLimit = consumed.commandLimit
 
-        switch Spec.executionModel {
+        switch mode {
             case .sequential:
                 return await runSpecFuzz(
                     makeAdapter: { buildAsyncSequentialSpecAdapter(specType, commandLimit: commandLimit) },
@@ -179,26 +179,15 @@ public extension __ExhaustRuntime {
                         seed: 0
                     )
                 }
-                var concurrencyLevel = consumed.parallelize?.rawValue ?? 2
-                if Spec.self is any Actor.Type, concurrencyLevel > 1 {
-                    if consumed.parallelize != nil {
-                        reportWarning(
-                            "Actor isolation serializes all command dispatch. .parallelize(lanes: \(concurrencyLevel)) will be ignored.",
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column
-                        )
-                    }
-                    concurrencyLevel = 1
-                }
-                let resolvedConcurrencyLevel = concurrencyLevel
-                return await runSpecFuzz(
+                let resolvedConcurrencyLevel = consumed.parallelize?.rawValue ?? 2
+                let searchAbandonments = UnsafeSendableBox(0)
+                let report = await runSpecFuzz(
                     makeAdapter: {
                         buildTasksSpecAdapter(
                             specType,
                             commandLimit: commandLimit,
-                            concurrencyLevel: resolvedConcurrencyLevel
+                            concurrencyLevel: resolvedConcurrencyLevel,
+                            searchAbandonments: searchAbandonments
                         )
                     },
                     time: time,
@@ -208,12 +197,15 @@ public extension __ExhaustRuntime {
                     line: line,
                     column: column
                 )
-            case .threads:
-                // Ruled permanently out of scope (2026-07-12), not deferred: coverage novelty requires every attempt to be a deterministic function of its choice sequence, and preemptive race detection requires the opposite — the OS realizing different schedules for the same input. One degree of freedom cannot be both pinned and free.
-                return .empty(
-                    termination: .invalidConfiguration("#execute(time:) does not support .threads specs. The search treats an attempt's coverage as determined by its command sequence, but under preemptive scheduling it also depends on an OS schedule the run can neither observe nor replay, so coverage novelty rewards scheduling luck instead of new behavior. Use .tasks to search interleavings deterministically, or run this spec under plain #execute for repetition-based race detection."),
-                    seed: 0
+                // An abandoned search passes its probe, so a run that keeps abandoning reports a clean inventory while having judged nothing. The plain runner warns about this and so must this one, through the same helper: a fuzz report full of zeroes means "no faults found", and without the warning there is nothing to distinguish that from "nothing was looked at".
+                warnIfSearchesWentUnjudged(
+                    abandonedSearches: searchAbandonments.value,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
                 )
+                return report
         }
     }
 
@@ -243,6 +235,7 @@ public extension __ExhaustRuntime {
                 source: nil,
                 configure: { configuration in
                     configuration.skipScreening = true
+                    configuration.samplingPlateauWindow = FuzzTunables.specSamplingPlateauWindow
                 },
                 hooks: adapter.hooks,
                 persistence: prepareFuzzPersistence(
@@ -409,7 +402,8 @@ extension __ExhaustRuntime {
         _: Spec.Type,
         commandLimit: Int? = nil,
         concurrencyLevel: Int,
-        idleTimeoutMilliseconds: Int = ResolvedConcurrentConfig.defaultIdleTimeout
+        idleTimeoutMilliseconds: Int = ResolvedConcurrentConfig.defaultIdleTimeout,
+        searchAbandonments: UnsafeSendableBox<Int> = UnsafeSendableBox(0)
     ) -> SpecFuzzAdapter<SpecCandidateValue<Spec>>? {
         guard let taggedCommandGen = zipScheduleMarker(
             onto: Spec.commandGenerator.gen,
@@ -417,7 +411,9 @@ extension __ExhaustRuntime {
         ) else {
             return nil
         }
-        let resolvedCommandLimit = commandLimit ?? FuzzTunables.specDefaultCommandLimit
+        // A spec that declares an equivalence pays for an interleaving search on every probe the equivalence rejects, and that search grows multinomially in the sequence length. The plain runner drops to the thread-based default for exactly this reason; `FuzzTunables.specDefaultCommandLimit` is sized for accumulation faults on sequences nothing searches, and at that length an equivalence-bearing spec abandons its searches instead of judging them.
+        let resolvedCommandLimit = commandLimit
+            ?? (Spec.hasEquivalence ? ConcurrentSpecTunables.defaultCommandLimit : FuzzTunables.specDefaultCommandLimit)
         let sequenceGen = Gen.arrayOf(
             taggedCommandGen,
             within: 1 ... UInt64(resolvedCommandLimit),
@@ -427,14 +423,16 @@ extension __ExhaustRuntime {
 
         nonisolated(unsafe) let specInit: () -> Spec = { Spec() }
 
+        // Abandonments are tallied on the discovery path only. A run that keeps abandoning its searches passes probes it never judged, which is the one thing a green fuzz report must not hide; counting the reduction probes as well would inflate the figure with re-judgements of a sequence already counted.
         let verdictProperty: @Sendable (SpecCandidateValue<Spec>) -> FuzzVerdict = { candidate in
-            let result = drainSchedule(
+            let result = drainAndJudge(
                 taggedCommands: candidate.taggedCommands,
                 setupStep: candidate.setupStep,
                 specInit: specInit,
                 concurrencyLevel: concurrencyLevel,
                 recordTrace: false,
-                idleTimeoutMilliseconds: idleTimeoutMilliseconds
+                idleTimeoutMilliseconds: idleTimeoutMilliseconds,
+                searchAbandonments: searchAbandonments
             )
             if result.timedOut {
                 // Inconclusive, not a counterexample: pass keeps discovery sampling, exactly as plain #execute counts timed-out probes.
@@ -463,7 +461,7 @@ extension __ExhaustRuntime {
         // Two-pass reduction (lane collapse + deletion, then value minimization), run inline on the fuzz loop's GCD lane. The drain loop's spin-polling stays off the cooperative pool because the loop's lane hosts it, which is what inline reduction guarantees by construction. Unlike the plain-#execute machine, `time:` mode reduces the whole candidate in one tree, so setup values minimize alongside the commands here rather than in a separate pass.
         let reduceStrategy: @Sendable (ChoiceTree, SpecCandidateValue<Spec>, FailureSymptom) -> FuzzReductionResult<SpecCandidateValue<Spec>> = { tree, value, _ in
             let probeProperty: @Sendable (SpecCandidateValue<Spec>) -> StateMachineProbeVerdict<Void> = { candidate in
-                let result = drainSchedule(
+                let result = drainAndJudge(
                     taggedCommands: candidate.taggedCommands,
                     setupStep: candidate.setupStep,
                     specInit: specInit,

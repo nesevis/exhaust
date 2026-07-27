@@ -70,8 +70,8 @@ public struct InvariantMacro: PeerMacro {
     }
 }
 
-/// Marker macro for oracle comparison methods. Generates no code — `@StateMachine(.threads)` reads this annotation.
-public struct OracleMacro: PeerMacro {
+/// Marker macro for equivalence comparison methods. Generates no code — `@StateMachine` reads this annotation.
+public struct EquivalenceMacro: PeerMacro {
     public static func expansion(
         of node: AttributeSyntax,
         providingPeersOf declaration: some DeclSyntaxProtocol,
@@ -80,7 +80,7 @@ public struct OracleMacro: PeerMacro {
         if declaration.is(FunctionDeclSyntax.self) == false {
             context.diagnose(Diagnostic(
                 node: Syntax(node),
-                message: MarkerDiagnostic.oracleRequiresMethod
+                message: MarkerDiagnostic.equivalenceRequiresMethod
             ))
         }
         return []
@@ -94,7 +94,7 @@ private enum MarkerDiagnostic: String, DiagnosticMessage {
     case commandRequiresMethod = "@Command must be applied to a method"
     case setupRequiresMethod = "@Setup must be applied to a method"
     case invariantRequiresMethod = "@Invariant must be applied to a method"
-    case oracleRequiresMethod = "@Oracle must be applied to a method"
+    case equivalenceRequiresMethod = "@Equivalence must be applied to a method"
 
     var message: String {
         rawValue

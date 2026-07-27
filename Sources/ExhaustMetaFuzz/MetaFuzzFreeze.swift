@@ -74,23 +74,44 @@ public extension MetaFuzz {
     /// How many freeze candidates one oracle may accumulate per findings directory. A single engine defect can violate its oracle on thousands of cases per run; a handful of reproducers is what a human freezes, and the fault inventory holds the full accounting.
     package static let findingsPerOracleCap = 25
 
-    /// Writes a frozen reproducer for a violating case into `directory` and returns the file URL, or `nil` when the write fails or the oracle's cap is reached.
+    /// Recorded filenames per findings directory, seeded from one disk listing on the directory's first finding and extended as this process writes.
     ///
-    /// The harness's fuzz entries call this from the property closure so findings survive the run as machine-readable freeze candidates, ready to commit into `Regressions/` alongside the fix. The filename folds in the violated oracle and a stable hash of the case, so repeat findings overwrite rather than accumulate, and each oracle stops recording at ``findingsPerOracleCap`` files. Write failures are swallowed deliberately — recording is a side channel and must never turn a real finding into an I/O error.
+    /// The harness calls ``recordFinding(_:violation:in:)`` from inside the property closure, which runs inside the fuzz loop's coverage-attribution bracket. Anything expensive there lands in the run's property-time bucket and, in a whole-graph-instrumented build like this harness's, in the attempt's coverage signature as well. A hot oracle violation fires on a large fraction of attempts, so a repeat finding must cost a set lookup, not a directory scan and a rewrite. Seeding from disk keeps ``findingsPerOracleCap`` a bound on the directory rather than on the process, so repeated harness runs against the same directory cannot accumulate past it.
+    private static let recordedFindingNames = SendableBox<[String: Set<String>]>([:])
+
+    /// Forgets every recorded name, so the next finding in any directory re-seeds from disk.
+    ///
+    /// The cache is keyed by directory path and never evicted, which is right for a harness process that writes into a handful of directories and wrong for a test that wants to observe seeding twice against the same one. Exposed so those tests can target the mechanism instead of minting a fresh directory to escape it.
+    package static func forgetRecordedFindings() {
+        recordedFindingNames.value = [:]
+    }
+
+    /// Writes a frozen reproducer for a violating case into `directory` and returns the file URL, or `nil` when the write fails, the oracle's cap is reached, or this case was already recorded — by this process or by an earlier run against the same directory.
+    ///
+    /// The harness's fuzz entries call this from the property closure so findings survive the run as machine-readable freeze candidates, ready to commit into `Regressions/` alongside the fix. The filename folds in the violated oracle and a stable hash of the case, so repeat findings are recorded once, and each oracle stops recording at ``findingsPerOracleCap`` files. Write failures are swallowed deliberately — recording is a side channel and must never turn a real finding into an I/O error — and a failed write stays claimed, so a permanently unwritable directory cannot re-run the encoder on every attempt. The case is lost for the process's life; the fault inventory still counts it.
     @discardableResult
     static func recordFinding(_ fuzzCase: MetaFuzzCase, violation: some Error, in directory: URL) -> URL? {
-        guard let data = try? freeze(fuzzCase, violation: violation) else {
+        let oracle = "\(type(of: violation))"
+        let name = "\(oracle)-\(stableHash(of: fuzzCase.description)).json"
+        let directoryKey = directory.standardizedFileURL.path
+        let shouldWrite = recordedFindingNames.withValue { namesByDirectory -> Bool in
+            var names = namesByDirectory[directoryKey]
+                ?? Set((try? FileManager.default.contentsOfDirectory(atPath: directoryKey)) ?? [])
+            let canRecord = names.contains(name) == false
+                && names.count(where: { $0.hasPrefix("\(oracle)-") }) < findingsPerOracleCap
+            if canRecord {
+                names.insert(name)
+            }
+            // Written back on both paths: a directory whose cap is already full still owes its seeded listing to the next call.
+            namesByDirectory[directoryKey] = names
+            return canRecord
+        }
+        guard shouldWrite, let data = try? freeze(fuzzCase, violation: violation) else {
             return nil
         }
-        let oracle = "\(type(of: violation))"
-        let file = directory.appendingPathComponent("\(oracle)-\(stableHash(of: fuzzCase.description)).json")
+        let file = directory.appendingPathComponent(name)
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let existing = try FileManager.default.contentsOfDirectory(atPath: directory.path)
-                .filter { $0.hasPrefix("\(oracle)-") }
-            guard existing.count < findingsPerOracleCap || existing.contains(file.lastPathComponent) else {
-                return nil
-            }
             try data.write(to: file, options: .atomic)
             return file
         } catch {

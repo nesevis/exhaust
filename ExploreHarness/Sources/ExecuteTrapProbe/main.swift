@@ -8,7 +8,7 @@ import ExecuteFixture
 import Exhaust
 import Foundation
 
-@StateMachine(.sequential)
+@StateMachine
 final class TrapSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: TrappingCounter = .init()
@@ -31,7 +31,7 @@ final class TrapSpec {
 
 // The trap fires at value 3, which is three increment commands. A generous budget the probe
 // never spends: the trap fires within milliseconds.
-_ = await #execute(TrapSpec.self, time: .seconds(120))
+_ = await #execute(TrapSpec.self, mode: .sequential, time: .seconds(120))
 
 // Only reachable if the trap never fired.
 FileHandle.standardError.write(Data("ExecuteTrapProbe completed without trapping\n".utf8))

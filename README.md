@@ -96,8 +96,8 @@ Exhaust's entry points are six macros. `#gen` builds generators; the rest consum
 | [`#exhaust(gen) {…}`](https://nesevis.github.io/exhaust/documentation/exhaust/propertytesting) | Test a property and report a minimal counterexample on failure. |
 | [`#explore(gen, directions:) {…}`](https://nesevis.github.io/exhaust/documentation/exhaust/directedexploration) | Test a property with per-direction coverage guarantees. |
 | [`#explore(gen, time:) {…}`](https://nesevis.github.io/exhaust/documentation/exhaust/coverageguidedfuzzing) | Coverage-guided fuzzing with a wall-clock time budget. |
-| [`#execute(MySpec.self, …)`](https://nesevis.github.io/exhaust/documentation/exhaust/statemachinetesting) | Run a spec test against a stateful system. |
-| [`#execute(MySpec.self, time:)`](https://nesevis.github.io/exhaust/documentation/exhaust/coverageguidedfuzzing#Fuzzing-a-state-machine-spec-with-execute(time:)) | Coverage-guided fuzzing over command sequences. |
+| [`#execute(MySpec.self, mode:, …)`](https://nesevis.github.io/exhaust/documentation/exhaust/statemachinetesting) | Run a spec test against a stateful system. |
+| [`#execute(MySpec.self, mode:, time:)`](https://nesevis.github.io/exhaust/documentation/exhaust/coverageguidedfuzzing#Fuzzing-a-state-machine-spec-with-execute(time:)) | Coverage-guided fuzzing over command sequences. |
 | [`try #example(gen)`](https://nesevis.github.io/exhaust/documentation/exhaust/buildinggenerators#Generating-test-data-with-example) | Generate test data from your generators. |
 | [`#examine(gen) {…}`](https://nesevis.github.io/exhaust/documentation/exhaust/generatortesting) | Test your generators: correctness, coverage, and distribution quality. |
 
@@ -124,8 +124,8 @@ Then add it as a dependency of your test target:
 
 - Swift 6.3+ (Xcode 26+)
 - macOS 10.15+, iOS 13+, Mac Catalyst 13+, tvOS 13+, watchOS 6+, visionOS 1+, Linux, Windows
-- Cooperative concurrent spec testing (`@StateMachine(.tasks)`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+ (no version requirement on Linux and Windows)
-- Sequential and preemptive spec testing (`@StateMachine(.sequential)`, `@StateMachine(.threads)`) have no additional availability requirements
+- Cooperative concurrent spec testing (`#execute(Spec.self, mode: .tasks)`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+ (no version requirement on Linux and Windows)
+- Sequential and preemptive spec testing (`#execute(Spec.self, mode: .sequential)`, `#execute(Spec.self, mode: .threads)`) have no additional availability requirements
 
 > [!NOTE]
 > Exhaust is under active development. Some APIs may change before the 1.0 release.

@@ -24,6 +24,7 @@ struct BudgetAffordabilityTests {
     func canAffordAgreesWithBruteForceReferenceForAllGeneratedBills() async {
         let result = await #execute(
             BudgetAffordabilitySpec.self,
+            mode: .sequential,
             .suppress(.issueReporting)
         )
         #expect(result == nil, "correct canAfford must agree with brute-force for all inputs")
@@ -34,6 +35,7 @@ struct BudgetAffordabilityTests {
         let result = try #require(
             await #execute(
                 BuggyBudgetAffordabilitySpec.self,
+                mode: .sequential,
                 .commandLimit(8),
                 .suppress(.issueReporting),
                 .budget(.extensive)
@@ -48,7 +50,7 @@ struct BudgetAffordabilityTests {
 
 // MARK: - StateMachine: Correct implementation
 
-@StateMachine(.sequential)
+@StateMachine
 final class BudgetAffordabilitySpec {
     var wasUnaffordable = false
     @SystemUnderTest var items: [BillItem] = []
@@ -84,7 +86,7 @@ final class BudgetAffordabilitySpec {
 
 // MARK: - StateMachine: Buggy greedy implementation
 
-@StateMachine(.sequential)
+@StateMachine
 final class BuggyBudgetAffordabilitySpec {
     @SystemUnderTest var items: [BillItem] = []
 

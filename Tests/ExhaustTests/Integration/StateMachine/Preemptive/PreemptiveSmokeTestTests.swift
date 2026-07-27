@@ -9,6 +9,7 @@ struct PreemptiveSmokeTestTests {
     func smokeTestCatchesSequentialBugBeforeConcurrentPhase() async {
         let result = await #execute(
             SequentiallyBrokenSpec.self,
+            mode: .threads,
             .parallelize(lanes: .two),
             .commandLimit(10),
             .budget(.custom(screening: 0, sampling: 0)),
@@ -22,6 +23,7 @@ struct PreemptiveSmokeTestTests {
         let result = try #require(
             await #execute(
                 SequentiallyBrokenSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .commandLimit(10),
                 .budget(.custom(screening: 0, sampling: 0)),
@@ -35,12 +37,12 @@ struct PreemptiveSmokeTestTests {
 
 // MARK: - Spec
 
-@StateMachine(.threads)
+@StateMachine
 final class SequentiallyBrokenSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: BrokenCounter = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other: BrokenCounter) -> Bool {
         counter.value == other.value && counter.value == expected
     }

@@ -12,6 +12,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(4),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -35,6 +36,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -49,6 +51,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 500, sampling: 0)),
                 .suppress(.issueReporting)
@@ -64,6 +67,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -79,6 +83,7 @@ struct NonAtomicCounterConcurrentTests {
         var deliveredReport: ExhaustReport?
         _ = await #execute(
             NonAtomicCounterSpec.self,
+            mode: .tasks,
             .commandLimit(4),
             .budget(.custom(screening: 0, sampling: 50)),
             .replay(.numeric(42)),
@@ -86,15 +91,16 @@ struct NonAtomicCounterConcurrentTests {
             .onReport { deliveredReport = $0 }
         )
         let report = try #require(deliveredReport, "onReport closure should be called")
-        #expect(report.propertyInvocations == 10)
-        #expect(report.reductionInvocations == 7)
+        // Exact counts pinned to the replay seed above; the quiescence gate's check placement feeds into which sequences fail, so gate changes legitimately move these numbers.
+        #expect(report.propertyInvocations == 15)
+        #expect(report.reductionInvocations == 9)
         #expect(report.totalMilliseconds > 0)
         #expect(report.totalMaterializations == 9)
         #expect(report.cycles == 5)
-        #expect(report.encoderProbes[.laneCollapse] == 6)
+        #expect(report.encoderProbes[.laneCollapse] == 9)
         #expect(report.encoderProbesAccepted[.laneCollapse] == 0)
-        #expect(report.encoderProbes[.deletion] == 9)
-        #expect(report.encoderProbesAccepted[.deletion] == 2)
+        #expect(report.encoderProbes[.deletion] == 11)
+        #expect(report.encoderProbesAccepted[.deletion] == 1)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
@@ -103,6 +109,7 @@ struct NonAtomicCounterConcurrentTests {
         let result1 = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(10),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.numeric(42)),
@@ -112,6 +119,7 @@ struct NonAtomicCounterConcurrentTests {
         let result2 = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(10),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.numeric(42)),
@@ -127,6 +135,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(8),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -142,6 +151,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -157,6 +167,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 500, sampling: 0)),
                 .suppress(.issueReporting)
@@ -169,7 +180,7 @@ struct NonAtomicCounterConcurrentTests {
 
 // MARK: - Spec
 
-@StateMachine(.tasks)
+@StateMachine
 final class NonAtomicCounterSpec {
     var expected: Int = 0
     @SystemUnderTest

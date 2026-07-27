@@ -22,6 +22,7 @@ struct PreemptiveLoweHashMapTests {
             var report: ExhaustReport?
             let result = await #execute(
                 LoweHashMapSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .replay(.numeric(seed)),
                 .commandLimit(20),
@@ -42,6 +43,7 @@ struct PreemptiveLoweHashMapTests {
     func detectsGhostEntryFromBuggyDeleteWithSeed() async {
         let result = await #execute(
             LoweHashMapSpec.self,
+            mode: .threads,
             .parallelize(lanes: .two),
             .commandLimit(20),
             .budget(.custom(screening: 100_000, sampling: 100_000)),
@@ -54,12 +56,12 @@ struct PreemptiveLoweHashMapTests {
 
 // MARK: - Spec
 
-@StateMachine(.threads)
+@StateMachine
 final class LoweHashMapSpec {
     @SystemUnderTest
     var map: BuggyHashMap = .init(capacity: 4)
 
-    @Oracle
+    @Equivalence
     func stateMatches(other: BuggyHashMap) -> Bool {
         map.snapshot == other.snapshot
     }

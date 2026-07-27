@@ -9,6 +9,7 @@ struct AllSkipConcurrentTests {
     func fullSkipRateDoesNotHangOrCrash() async {
         let result = await #execute(
             AlwaysSkipSpec.self,
+            mode: .tasks,
             .commandLimit(6),
             .budget(.custom(screening: 0, sampling: 50)),
             .suppress(.issueReporting)
@@ -21,6 +22,7 @@ struct AllSkipConcurrentTests {
     func fullSkipRateWithScreeningPhase() async {
         let result = await #execute(
             AlwaysSkipSpec.self,
+            mode: .tasks,
             .commandLimit(4),
             .budget(.custom(screening: 100, sampling: 50)),
             .suppress(.issueReporting)
@@ -31,7 +33,7 @@ struct AllSkipConcurrentTests {
 
 // MARK: - Spec
 
-@StateMachine(.tasks)
+@StateMachine
 final class AlwaysSkipSpec {
     var count: Int = 0
     @SystemUnderTest

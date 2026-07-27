@@ -20,6 +20,7 @@ struct PreemptiveHerlihyQueueTests {
             var report: ExhaustReport?
             let result = await #execute(
                 HerlihyQueueSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .budget(.custom(screening: 0, sampling: 500_000)),
 //                .log(.debug),
@@ -40,12 +41,12 @@ struct PreemptiveHerlihyQueueTests {
 
 // MARK: - Spec
 
-@StateMachine(.threads)
+@StateMachine
 final class HerlihyQueueSpec {
     @SystemUnderTest
     var queue: BuggyHerlihyQueue = .init(capacity: 32)
 
-    @Oracle
+    @Equivalence
     func contentsMatch(other: BuggyHerlihyQueue) -> Bool {
         queue.snapshot == other.snapshot
     }

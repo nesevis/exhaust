@@ -1,7 +1,7 @@
-/// Provides the tuning constants for preemptive concurrent spec testing.
+/// Provides the confirmation-repetition policy for the preemptive spec runners.
 ///
-/// The two preemptive backends (synchronous and async) differ only in how a single probe runs; the repetition scaling, command limit, and warning thresholds they share are backend-independent and live here.
-package enum PreemptiveReduction {
+/// Preemptive scheduling is nondeterministic, so a discovered race is confirmed by repetition; the two preemptive backends (synchronous and async) share this scaling. Scheduler-independent tuning — the linearizability search budget, warning thresholds, and the default command limit — lives in ``ConcurrentSpecTunables``.
+package enum PreemptiveConfirmation {
     /// Maximum confirmation repetitions, used for failures discovered within 1,000 iterations.
     package static let confirmationRepetitionsCeiling = 100
 
@@ -29,13 +29,4 @@ package enum PreemptiveReduction {
     package static func finalConfirmationRepetitions(discoveryIterations: Int) -> Int {
         max(150, confirmationRepetitions(discoveryIterations: discoveryIterations) * 3)
     }
-
-    /// Default command limit for `.threads` specs.
-    package static let defaultCommandLimit = 10
-
-    /// Worst-case interleaving count above which the runner emits a warning before starting the pipeline. The DFS is exhaustive, so configurations that exceed this threshold can make each linearizability check very slow.
-    package static let interleavingWarningThreshold = 1_000_000_000
-
-    /// Fraction of the configured budget that, once reached as timed-out probes, triggers a runtime warning. A probe that times out counts as a pass so discovery stays resilient under host contention, but a high timeout rate means most of the budget produced no useful signal — a saturated machine or a genuinely hanging system — so the runner surfaces it rather than passing silently.
-    package static let timeoutWarningFraction = 0.25
 }

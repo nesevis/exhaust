@@ -10,6 +10,7 @@ struct PreemptiveAsyncFacadeTests {
         let result = try #require(
             await #execute(
                 AsyncRacyCounterSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
@@ -24,6 +25,7 @@ struct PreemptiveAsyncFacadeTests {
         var capturedReport: ExhaustReport?
         _ = await #execute(
             AsyncRacyCounterSpec.self,
+            mode: .threads,
             .parallelize(lanes: .two),
             .commandLimit(6),
             .budget(.custom(screening: 0, sampling: 200)),
@@ -42,6 +44,7 @@ struct PreemptiveAsyncFacadeTests {
             _ = try #require(
                 await #execute(
                     AsyncRacyCounterSpec.self,
+                    mode: .threads,
                     .parallelize(lanes: .two),
                     .commandLimit(6),
                     .budget(.custom(screening: 0, sampling: 200))
@@ -53,12 +56,12 @@ struct PreemptiveAsyncFacadeTests {
 
 // MARK: - Spec
 
-@StateMachine(.threads)
+@StateMachine
 final class AsyncRacyCounterSpec {
     @SystemUnderTest
     var counter: AsyncRacyCounter = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other: AsyncRacyCounter) -> Bool {
         counter.value == other.value
     }

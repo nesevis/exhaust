@@ -1,24 +1,8 @@
 // Post-reduction cluster normalization for `#explore(time:)`.
 //
-// Reduction on a real SUT is not guaranteed canonical: a masked-bit gate can stall at
-// `flags: 171` when `flags: 3` suffices, and every distinct stall the frontier heuristic then
-// mints as a first-class cluster — the inflated-bug-count failure mode users punish hardest.
-// The pass here is the Exhaust translation of test-case normalization (Groce, Holmes, Kellar,
-// "One Test to Rule Them All", ISSTA 2017): a rewrite pass distinct from and after reduction
-// that re-drives each value of the reduced form toward its minimal still-failing bit pattern,
-// so every member of one fault converges on one canonical form before cluster identity is
-// computed. Their measured slippage for normalization (19.3%/12.5%) was lower than the ~30%
-// of property-only reduction itself, so the pass adds no categorically new risk; the post-hoc
-// coverage signature and the "likely same" tier remain the safety net for a genuine merge of
-// distinct faults.
+// Reduction on a real SUT is not guaranteed canonical: a masked-bit gate can stall at `flags: 171` when `flags: 3` suffices, and every distinct stall the frontier heuristic then mints as a first-class cluster — the inflated-bug-count failure mode users punish hardest. The pass here is the Exhaust translation of test-case normalization (Groce, Holmes, Kellar, "One Test to Rule Them All", ISSTA 2017): a rewrite pass distinct from and after reduction that re-drives each value of the reduced form toward its minimal still-failing bit pattern, so every member of one fault converges on one canonical form before cluster identity is computed. Their measured slippage for normalization (19.3%/12.5%) was lower than the ~30% of property-only reduction itself, so the pass adds no categorically new risk; the post-hoc coverage signature and the "likely same" tier remain the safety net for a genuine merge of distinct faults.
 //
-// Per-value minimization is a semantic-simplest probe followed by a greedy bit-clear loop to
-// fixpoint. Clearing a set bit always lowers the unsigned pattern, so the loop is monotone and
-// needs no backtracking; for mask gates (`flags & 0b11 != 0`) and threshold gates (`> 240`,
-// `< 16`) it lands exactly on the shortlex-minimal still-failing value, which is where the
-// reducer's own canonical forms already sit. Every probe re-materializes in `.exact` mode —
-// a value rewrite that would change structure (a bind input, a coupled length) is rejected by
-// the materializer before the property ever runs — and must fail with the original symptom.
+// Per-value minimization is a semantic-simplest probe followed by a greedy bit-clear loop to fixpoint. Clearing a set bit always lowers the unsigned pattern, so the loop is monotone and needs no backtracking; for mask gates (`flags & 0b11 != 0`) and threshold gates (`> 240`, `< 16`) it lands exactly on the shortlex-minimal still-failing value, which is where the reducer's own canonical forms already sit. Every probe re-materializes in `.exact` mode — a value rewrite that would change structure (a bind input, a coupled length) is rejected by the materializer before the property ever runs — and must fail with the original symptom.
 
 import Foundation
 
@@ -33,6 +17,13 @@ package enum FuzzNormalizer {
 
     /// Bounds the per-field probe count. A 64-bit pattern admits at most 64 clears per pass and the fixpoint loop rarely needs more than two passes; the cap exists so a pathological property cannot turn one normalization into thousands of evaluations.
     package static let maxProbesPerField = 128
+
+    /// Bounds the probe count across every field of one normalization.
+    ///
+    /// The per-field cap alone bounds nothing useful, because it multiplies by the field count: a reduced counterexample carrying 20 value entries admits 20 times that budget. On the value path each probe is cheap and the product goes unnoticed. Under `#execute(time:)` a probe replays a whole command sequence against a fresh system under test, so the same counterexample permits thousands of sequence replays inline on the search lane, for one new cluster.
+    ///
+    /// Fields are normalized in sequence order, so exhausting this budget keeps whatever earlier fields were minimized and leaves later ones as reduction left them. The result stays a valid still-failing form; it is simply less canonical, which costs at worst an extra cluster.
+    package static let maxProbesPerNormalization = 512
 
     /// Re-drives each `.value` entry of `reducedSequence` toward its minimal still-failing bit pattern, one field at a time in sequence order.
     ///
@@ -62,19 +53,29 @@ package enum FuzzNormalizer {
 
         var current = reducedSequence
         var acceptedForm: NormalizedForm<Output>?
+        var totalProbesRemaining = maxProbesPerNormalization
         for index in current.indices {
             guard case let .value(entry) = current[index] else {
                 continue
             }
+            guard totalProbesRemaining > 0 else {
+                break
+            }
             var pattern = entry.choice.bitPattern64
             let range = entry.validRange ?? entry.choice.tag.bitPatternRange
-            var probesRemaining = maxProbesPerField
+            var fieldProbesUsed = 0
+
+            /// Whether another probe of this field is affordable under both caps. Kept as one question so an exhausted budget stays attributable to the cap that stopped it.
+            func hasProbeBudget() -> Bool {
+                fieldProbesUsed < maxProbesPerField && totalProbesRemaining > 0
+            }
 
             func probe(_ candidatePattern: UInt64) -> NormalizedForm<Output>? {
-                guard probesRemaining > 0, candidatePattern != pattern, range.contains(candidatePattern) else {
+                guard hasProbeBudget(), candidatePattern != pattern, range.contains(candidatePattern) else {
                     return nil
                 }
-                probesRemaining -= 1
+                fieldProbesUsed += 1
+                totalProbesRemaining -= 1
                 var candidate = current
                 candidate[index] = .value(ChoiceSequenceValue.Value(
                     choice: ChoiceValue(candidatePattern, tag: entry.choice.tag),
@@ -98,10 +99,9 @@ package enum FuzzNormalizer {
                 continue
             }
 
-            // Greedy bit-clear to fixpoint: retry every set bit after each acceptance, since a
-            // higher bit can become clearable only once a lower one is gone (and vice versa).
+            // Greedy bit-clear to fixpoint: retry every set bit after each acceptance, since a higher bit can become clearable only once a lower one is gone (and vice versa).
             var clearedAny = true
-            while clearedAny, probesRemaining > 0 {
+            while clearedAny, hasProbeBudget() {
                 clearedAny = false
                 for bit in (0 ..< 64).reversed() where pattern & (1 << bit) != 0 {
                     let candidatePattern = pattern & ~(UInt64(1) << bit)
