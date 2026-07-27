@@ -28,7 +28,7 @@ struct ALUTests {
 
 // MARK: - StateMachine
 
-@StateMachine(.sequential)
+@StateMachine
 final class ALUSpec {
     var expected: Int = 0
     @SystemUnderTest var alu = FourBitALU()

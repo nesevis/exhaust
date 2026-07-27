@@ -20,7 +20,7 @@ struct StackTests {
 
 // MARK: - StateMachine
 
-@StateMachine(.sequential)
+@StateMachine
 final class StackSpec {
     var expected: [Int] = []
     @SystemUnderTest var stack: [Int] = []

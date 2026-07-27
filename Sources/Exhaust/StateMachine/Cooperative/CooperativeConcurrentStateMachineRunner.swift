@@ -12,17 +12,18 @@ import IssueReporting
 // MARK: - Async Dispatch
 
 public extension __ExhaustRuntime {
-    /// Dispatches an asynchronous spec test to the appropriate runner based on the spec's ``ExecutionModel``.
+    /// Dispatches an asynchronous spec test to the runner the call site asked for.
     @discardableResult
     static func __runStateMachineDispatchAsync<Spec: AsyncStateMachineSpec>(
         _ specType: Spec.Type,
+        mode: ExecutionModel,
         settings: [StateMachineSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
     ) async -> StateMachineResult<Spec>? {
-        switch Spec.executionModel {
+        switch mode {
             case .sequential:
                 return await __runStateMachineAsync(
                     specType,
@@ -35,7 +36,7 @@ public extension __ExhaustRuntime {
             case .tasks:
                 guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
                     reportError(
-                        "@StateMachine(.tasks) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, or visionOS 2+",
+                        "mode: .tasks requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, or visionOS 2+",
                         fileID: fileID,
                         filePath: filePath,
                         line: line,

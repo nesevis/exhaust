@@ -110,7 +110,7 @@ The tools so far test pure functions: one input, one output. Stateful systems fa
 
 `@StateMachine` searches over sequences. You declare a **system under test** (the real implementation), a set of **commands** Exhaust may call on it, and **invariants** that must hold after every command. Exhaust generates command sequences, runs them, checks the invariants after each step, and when one breaks it reduces the sequence to the few commands that still reproduce the failure.
 
-Invariants get much simpler if you maintain a **model**: a simpler reference implementation that the commands update in lockstep, so an invariant becomes "the system agrees with the model." The model is acting as an **oracle**, the trusted source of what the right answer is. For systems whose races hide in real threads rather than at `await` points, a separate **`@Oracle`** compares the concurrent result against a race-free sequential replay.
+Invariants get much simpler if you maintain a **model**: a simpler reference implementation that the commands update in lockstep, so an invariant becomes "the system agrees with the model." The model is acting as an **oracle**, the trusted source of what the right answer is. For a claim whose answer depends on the order the commands ran in, a separate **`@Equivalence`** says what "the same result" means, and Exhaust compares a concurrent run against a sequential replay to judge it.
 
 The execution mode (`.sequential`, `.tasks`, or `.threads`) tells Exhaust how to run the commands. `.sequential` runs commands one at a time: the right choice for testing logic. `.tasks` runs commands concurrently with deterministic interleaving at every `await`, so the same seed reproduces the same run. `.threads` hands off to real OS threads to reach races inside locks and atomics, trading reproducibility for that reach. <doc:StateMachineTesting> covers all three.
 
@@ -190,14 +190,14 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 
 ### State machine specs
 
-- **Spec**: what the user authors — the `final class` or `actor` decorated with `@StateMachine` that declares commands, invariants, and optionally an oracle. It describes how the stateful system should behave, in a form Exhaust can execute.
+- **Spec**: what the user authors — the `final class` or `actor` decorated with `@StateMachine` that declares commands, invariants, and optionally an equivalence. It describes how the stateful system should behave, in a form Exhaust can execute. How its commands run is chosen at the call site, through `#execute`'s `mode:`.
 - **State machine**: the machinery that runs specs. It generates command sequences, executes them against the SUT, checks invariants, and reduces failures.
 - **Command**: one operation Exhaust may invoke on the SUT.
-- **Cooperative / preemptive**: the two concurrent runners. Cooperative interleaves deterministically at `await` points. Preemptive uses real threads to reach races in locks and atomics.
+- **Task-based / thread-based**: the two concurrent modes. A task-based run (`mode: .tasks`) interleaves deterministically at `await` points. A thread-based run (`mode: .threads`) uses real OS threads to reach races in locks and atomics.
 - **Invariant**: a property checked after every command.
-- **Lane**: one of the concurrent tracks a run is split across — a task in cooperative `.tasks` execution, a thread in `.threads` execution and in parallel sampling.
+- **Lane**: one of the concurrent tracks a run is split across — a task under `mode: .tasks`, a thread under `mode: .threads` and in parallel sampling.
 - **Model**: a simpler reference implementation maintained alongside the SUT, so invariants can compare the two. This is a pattern for writing effective invariants rather than a macro.
-- **Oracle**: the trusted source of the right answer a spec checks against. For `.threads` specs, the `@Oracle` method compares the concurrent end state against a sequential replay.
+- **Oracle**: the general term for a trusted source of the right answer. A model is one. An `@Equivalence` is another, comparing a concurrent run's end state against a sequential replay's.
 - **System under test (SUT)**: the real implementation a spec exercises.
 
 ### Reproduction

@@ -3,7 +3,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expands `#execute(Spec.self, time: .minutes(5), .settings...)` into a call to `__ExhaustRuntime.__runStateMachineTimeDispatch(...)`.
+/// Expands `#execute(Spec.self, mode: .tasks, time: .minutes(5), .settings...)` into a call to `__ExhaustRuntime.__runStateMachineTimeDispatch(...)`.
 public struct ExecuteTimeMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
@@ -58,13 +58,14 @@ private func expandExecuteTimeCall(
     let timeExpression = timeArgument.expression.trimmedDescription
 
     let settingsExpressions = arguments.dropFirst()
-        .filter { $0.label?.text != "time" }
+        .filter { $0.label?.text != "time" && $0.label?.text != "mode" }
         .map(\.expression.trimmedDescription)
     let settingsArray = settingsExpressions.isEmpty ? "[]" : "[\(settingsExpressions.joined(separator: ", "))]"
 
     return """
     __ExhaustRuntime.\(raw: dispatchFunction)(
         \(raw: specExpression),
+        mode: \(raw: executionModeExpression(from: arguments)),
         time: \(raw: timeExpression),
         settings: \(raw: settingsArray),
         fileID: #fileID,

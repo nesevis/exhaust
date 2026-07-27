@@ -236,7 +236,7 @@ func findAttribute(_ name: String, on decl: some WithAttributesSyntax) -> Attrib
     }.first { $0.attributeName.trimmedDescription == name }
 }
 
-struct OracleInfo {
+struct EquivalenceInfo {
     let methodName: String
     let parameterLabel: String
     let parameterType: String
@@ -245,16 +245,16 @@ struct OracleInfo {
     let syntax: FunctionDeclSyntax
 }
 
-func extractOracles(from members: MemberBlockItemListSyntax) -> [OracleInfo] {
+func extractEquivalences(from members: MemberBlockItemListSyntax) -> [EquivalenceInfo] {
     members.compactMap { member in
         guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
-              hasAttribute("Oracle", on: funcDecl)
+              hasAttribute("Equivalence", on: funcDecl)
         else { return nil }
         let params = funcDecl.signature.parameterClause.parameters
         guard params.count == 1, let firstParam = params.first else { return nil }
         let isAsync = funcDecl.signature.effectSpecifiers?.asyncSpecifier != nil
         let isThrows = funcDecl.signature.effectSpecifiers?.throwsClause != nil
-        return OracleInfo(
+        return EquivalenceInfo(
             methodName: funcDecl.name.trimmedDescription,
             parameterLabel: firstParam.firstName.trimmedDescription,
             parameterType: firstParam.type.trimmedDescription,
@@ -265,10 +265,10 @@ func extractOracles(from members: MemberBlockItemListSyntax) -> [OracleInfo] {
     }
 }
 
-func oracleMethodsWithWrongParameterCount(from members: MemberBlockItemListSyntax) -> [FunctionDeclSyntax] {
+func equivalenceMethodsWithWrongParameterCount(from members: MemberBlockItemListSyntax) -> [FunctionDeclSyntax] {
     members.compactMap { member in
         guard let funcDecl = member.decl.as(FunctionDeclSyntax.self),
-              hasAttribute("Oracle", on: funcDecl)
+              hasAttribute("Equivalence", on: funcDecl)
         else { return nil }
         let paramCount = funcDecl.signature.parameterClause.parameters.count
         return paramCount == 1 ? nil : funcDecl

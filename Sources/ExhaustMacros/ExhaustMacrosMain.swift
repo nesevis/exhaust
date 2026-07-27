@@ -24,6 +24,6 @@ struct ExhaustMacrosPlugin: CompilerPlugin {
         CommandMacro.self,
         SetupMacro.self,
         InvariantMacro.self,
-        OracleMacro.self,
+        EquivalenceMacro.self,
     ]
 }

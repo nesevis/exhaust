@@ -16,6 +16,7 @@ struct IdleTimeoutConcurrentTests {
         let result = await withIssueReporters([reporter]) {
             await #execute(
                 SleepingSpec.self,
+                mode: .tasks,
                 .commandLimit(2),
                 .idleTimeout(.milliseconds(10)),
                 .budget(.custom(screening: 0, sampling: 10))
@@ -147,6 +148,7 @@ struct IdleTimeoutConcurrentTests {
         let result = await withIssueReporters([reporter]) {
             await #execute(
                 StallingAsyncSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .commandLimit(2),
                 .idleTimeout(.milliseconds(20)),
@@ -171,6 +173,7 @@ struct IdleTimeoutConcurrentTests {
     func asyncPreemptiveGroupWaitBoundPreventsHangOnSynchronousSUTDeadlock() async {
         _ = await #execute(
             DeadlockingAsyncSpec.self,
+            mode: .threads,
             .parallelize(lanes: .two),
             .commandLimit(2),
             .idleTimeout(.milliseconds(50)),
@@ -249,7 +252,7 @@ struct IdleTimeoutConcurrentTests {
 
 // MARK: - Spec
 
-@StateMachine(.tasks)
+@StateMachine
 final class SleepingSpec {
     var count: Int = 0
     @SystemUnderTest
@@ -286,7 +289,7 @@ final class SleepingCounter: @unchecked Sendable {
     }
 }
 
-@StateMachine(.tasks)
+@StateMachine
 final class CancellationIgnoringSpec {
     @SystemUnderTest
     var counter = CancellationIgnoringSystemUnderTest()
@@ -355,12 +358,12 @@ final class CancellationIgnoringSystemUnderTest: @unchecked Sendable {
 // MARK: - Async Preemptive Spec
 
 /// A command that sleeps far longer than the idle bound — its drain lane goes quiet, so the preemptive runner's idle timeout must fire and surface it rather than hang. The oracle always agrees; the failure comes purely from the timeout.
-@StateMachine(.threads)
+@StateMachine
 final class StallingAsyncSpec {
     @SystemUnderTest
     var counter: SleepingAsyncCounter = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other _: SleepingAsyncCounter) -> Bool {
         true
     }
@@ -386,12 +389,12 @@ final class SleepingAsyncCounter: @unchecked Sendable {
 
 // MARK: - Deadlocking Async Spec
 
-@StateMachine(.threads)
+@StateMachine
 final class DeadlockingAsyncSpec {
     @SystemUnderTest
     var sut: DeadlockingSUT = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other _: DeadlockingSUT) -> Bool {
         true
     }

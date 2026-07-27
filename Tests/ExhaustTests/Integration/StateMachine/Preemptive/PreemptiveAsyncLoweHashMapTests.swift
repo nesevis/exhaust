@@ -9,6 +9,7 @@ struct PreemptiveAsyncLoweHashMapTests {
     func asyncDetectsGhostEntryFromBuggyDelete() async {
         let result = await #execute(
             AsyncLoweHashMapSpec.self,
+            mode: .threads,
             .parallelize(lanes: .two),
             .replay(.numeric(1337)),
             .commandLimit(20),
@@ -24,12 +25,12 @@ struct PreemptiveAsyncLoweHashMapTests {
 
 // MARK: - Spec
 
-@StateMachine(.threads)
+@StateMachine
 final class AsyncLoweHashMapSpec {
     @SystemUnderTest
     var map: BuggyHashMap = .init(capacity: 4)
 
-    @Oracle
+    @Equivalence
     func stateMatches(other: BuggyHashMap) -> Bool {
         map.snapshot == other.snapshot
     }

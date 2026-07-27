@@ -6,24 +6,6 @@ import Testing
 
 @Suite("#execute(time:) runtime dispatch and adapter")
 struct ExecuteTimeRuntimeTests {
-    @Test(".threads spec produces a diagnostic and zero attempts")
-    func threadsSpecDiagnostic() async throws {
-        nonisolated(unsafe) var report: FuzzReport?
-        await withKnownIssue {
-            report = await __ExhaustRuntime.__runStateMachineTimeDispatch(
-                ThreadsCounterSpec.self,
-                time: .seconds(60),
-                settings: []
-            )
-        }
-        let resolved = try #require(report)
-        #expect(resolved.totalAttempts == 0)
-        guard case .invalidConfiguration = resolved.termination else {
-            Issue.record("Expected invalidConfiguration, got \(resolved.termination)")
-            return
-        }
-    }
-
     @Test(".tasks spec with no async members routes to the sequential runner")
     func syncTasksSpecRoutesSequentially() async throws {
         // TasksCounterSpec has only synchronous members, so it conforms to plain StateMachineSpec and has no suspension points to interleave at. The dispatch routes it through the sequential adapter, mirroring plain #execute — the run reaches the instrumentation check instead of terminating on a configuration diagnostic.
@@ -31,6 +13,7 @@ struct ExecuteTimeRuntimeTests {
         await withKnownIssue {
             report = await __ExhaustRuntime.__runStateMachineTimeDispatch(
                 TasksCounterSpec.self,
+                mode: .tasks,
                 time: .seconds(60),
                 settings: []
             )
@@ -66,6 +49,7 @@ struct ExecuteTimeRuntimeTests {
         await withKnownIssue {
             report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 time: .seconds(60),
                 settings: [.parallelize(lanes: .two)]
             )
@@ -73,24 +57,6 @@ struct ExecuteTimeRuntimeTests {
         let resolved = try #require(report)
         guard case .instrumentationMissing = resolved.termination else {
             Issue.record("Expected instrumentationMissing (the cooperative runner path), got \(resolved.termination)")
-            return
-        }
-    }
-
-    @Test("Async .threads spec produces a diagnostic and zero attempts")
-    func asyncThreadsSpecDiagnostic() async throws {
-        nonisolated(unsafe) var report: FuzzReport?
-        await withKnownIssue {
-            report = await __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
-                AsyncThreadsCounterSpec.self,
-                time: .seconds(60),
-                settings: []
-            )
-        }
-        let resolved = try #require(report)
-        #expect(resolved.totalAttempts == 0)
-        guard case .invalidConfiguration = resolved.termination else {
-            Issue.record("Expected invalidConfiguration, got \(resolved.termination)")
             return
         }
     }
@@ -452,13 +418,6 @@ struct BoundedCounter {
     }
 }
 
-struct ThreadsCounter {
-    var value: Int = 0
-    mutating func increment() {
-        value += 1
-    }
-}
-
 struct TasksCounter {
     var value: Int = 0
     mutating func increment() {
@@ -466,7 +425,7 @@ struct TasksCounter {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 final class AlwaysPassingSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: PassingCounter = .init()
@@ -487,7 +446,7 @@ final class AlwaysPassingSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 final class FailsAtThreeSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: BoundedCounter = .init()
@@ -508,28 +467,7 @@ final class FailsAtThreeSpec {
     }
 }
 
-@StateMachine(.threads)
-final class ThreadsCounterSpec {
-    var expected: Int = 0
-    @SystemUnderTest var counter: ThreadsCounter = .init()
-
-    @Oracle
-    func oracleMatches(other: ThreadsCounter) -> Bool {
-        counter.value == other.value
-    }
-
-    @Command
-    func increment() throws {
-        expected += 1
-        counter.increment()
-    }
-
-    func failureDescription() -> String? {
-        "\(counter)"
-    }
-}
-
-@StateMachine(.tasks)
+@StateMachine
 final class TasksCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: TasksCounter = .init()
@@ -550,7 +488,7 @@ final class TasksCounterSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 final class AsyncSequentialCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: PassingCounter = .init()
@@ -571,28 +509,7 @@ final class AsyncSequentialCounterSpec {
     }
 }
 
-@StateMachine(.threads)
-final class AsyncThreadsCounterSpec {
-    var expected: Int = 0
-    @SystemUnderTest var counter: ThreadsCounter = .init()
-
-    @Oracle
-    func oracleMatches(other: ThreadsCounter) -> Bool {
-        counter.value == other.value
-    }
-
-    @Command
-    func increment() async throws {
-        expected += 1
-        counter.increment()
-    }
-
-    func failureDescription() -> String? {
-        "\(counter)"
-    }
-}
-
-@StateMachine(.tasks)
+@StateMachine
 final class StallingSpec {
     @SystemUnderTest var counter: PassingCounter = .init()
 
@@ -612,7 +529,7 @@ final class StallingSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 final class SlowCommandSpec {
     @SystemUnderTest var counter: PassingCounter = .init()
 
@@ -634,7 +551,7 @@ final class SlowCommandSpec {
 
 struct PlantedSpecError: Error {}
 
-@StateMachine(.sequential)
+@StateMachine
 final class ThrowingAtThreeSpec {
     var count: Int = 0
     @SystemUnderTest var counter: PassingCounter = .init()
@@ -669,7 +586,7 @@ struct SkippableCounter {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 final class SkippableCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: SkippableCounter = .init()

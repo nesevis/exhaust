@@ -12,6 +12,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(4),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -35,6 +36,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -49,6 +51,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 500, sampling: 0)),
                 .suppress(.issueReporting)
@@ -64,6 +67,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -79,6 +83,7 @@ struct NonAtomicCounterConcurrentTests {
         var deliveredReport: ExhaustReport?
         _ = await #execute(
             NonAtomicCounterSpec.self,
+            mode: .tasks,
             .commandLimit(4),
             .budget(.custom(screening: 0, sampling: 50)),
             .replay(.numeric(42)),
@@ -104,6 +109,7 @@ struct NonAtomicCounterConcurrentTests {
         let result1 = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(10),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.numeric(42)),
@@ -113,6 +119,7 @@ struct NonAtomicCounterConcurrentTests {
         let result2 = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(10),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.numeric(42)),
@@ -128,6 +135,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(8),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -143,6 +151,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -158,6 +167,7 @@ struct NonAtomicCounterConcurrentTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 500, sampling: 0)),
                 .suppress(.issueReporting)
@@ -170,7 +180,7 @@ struct NonAtomicCounterConcurrentTests {
 
 // MARK: - Spec
 
-@StateMachine(.tasks)
+@StateMachine
 final class NonAtomicCounterSpec {
     var expected: Int = 0
     @SystemUnderTest

@@ -21,6 +21,8 @@ extension __ExhaustRuntime {
         var sequencesTested: Int = 0
         var reductionInvocations: Int = 0
         var isPreemptive: Bool = false
+        /// The mode the run used, so the reproduce line names it. A seed recorded under one mode means nothing under another, and `.sequential` needs no spelling because it is the default.
+        var mode: ExecutionModel = .sequential
         var replaySeed: String?
         var oracleDescription: String?
         var failureDescription: String?
@@ -101,7 +103,7 @@ extension __ExhaustRuntime {
 
         if let replaySeed = context.replaySeed {
             lines.append("")
-            lines.append("Reproduce: .replay(\"\(replaySeed)\")")
+            lines.append("Reproduce: \(reproduceModePrefix(context.mode)).replay(\"\(replaySeed)\")")
         }
 
         if context.isPreemptive {
@@ -156,6 +158,18 @@ extension __ExhaustRuntime {
                 }
                 lines.append("")
             }
+        }
+    }
+
+    /// The `mode:` argument a reproduction needs, or nothing when the run used the default.
+    private static func reproduceModePrefix(_ mode: ExecutionModel) -> String {
+        switch mode {
+            case .sequential:
+                ""
+            case .tasks:
+                "mode: .tasks, "
+            case .threads:
+                "mode: .threads, "
         }
     }
 

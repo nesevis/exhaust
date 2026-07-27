@@ -1,9 +1,9 @@
-/// Drives synchronous spec tests for `.sequential` and `.threads` modes.
+/// Drives spec tests whose every command, invariant, and equivalence is synchronous.
 ///
-/// The `@StateMachine` macro synthesizes this conformance when all commands and invariants are synchronous. A synchronous `.tasks` spec also conforms to `StateMachineSpec` and runs sequentially; interleaving requires async commands and the ``AsyncStateMachineSpec`` conformance. For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method.
+/// The `@StateMachine` macro synthesizes this conformance in that case, and the ``AsyncStateMachineSpec`` one otherwise. A synchronous spec has no suspension points to interleave at, so `mode: .tasks` runs it one command at a time; interleaving needs async commands. `mode: .threads` still reaches real threads, because the lanes are OS threads rather than suspension points.
 ///
 /// ```swift
-/// @StateMachine(.sequential)
+/// @StateMachine
 /// final class BoundedQueueSpec {
 ///     var contents: [Int] = []
 ///     @SystemUnderTest
@@ -24,7 +24,7 @@
 public protocol StateMachineSpec: StateMachineSpecBase, AnyObject {
     /// Executes a command against the model and SUT, returning a ``CommandResponse`` for linearizability checking.
     ///
-    /// `.threads` records the response against the lane that ran the command, which is what lets a return value be compared against a sequential replay. Sequential execution discards it, and a synchronous spec runs sequentially under `.tasks` as well.
+    /// `mode: .threads` records the response against the lane that ran the command, which is what lets a return value be compared against a sequential replay. Sequential execution discards it, and a synchronous spec runs sequentially under `mode: .tasks` as well.
     ///
     /// - Parameter command: The command to execute.
     /// - Returns: The command's description paired with its return value (or `nil` for void commands).
@@ -42,19 +42,19 @@ public protocol StateMachineSpec: StateMachineSpecBase, AnyObject {
     /// - Throws: Any error the setup method throws. A setup throw fails the run; there is no skip channel.
     func runSetup(_ step: SetupStep) throws
 
-    /// Compares the concurrent SUT state against a sequentially-replayed reference SUT. Only called for `.threads` specs.
+    /// Answers whether a concurrent run produced the same result as a sequential replay of the same commands. Synthesized from the spec's `@Equivalence` method.
     ///
-    /// - Parameter sequentialResult: The SUT state from a sequential (race-free) replay of the same command sequence.
-    /// - Returns: `true` if the concurrent SUT state matches the expected sequential state.
-    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool
+    /// - Parameter sequentialResult: The system under test from a sequential replay of the same command sequence.
+    /// - Returns: `true` when the concurrent state counts as equivalent to that replay's.
+    func equivalenceCheck(_ sequentialResult: SystemUnderTest) -> Bool
 }
 
 extension StateMachineSpec {
-    /// Default oracle that traps. Overridden by the `@StateMachine(.threads)` macro's synthesized `oracleCheck`.
+    /// Default that traps, for a spec that declares no `@Equivalence`. The macro synthesizes a real one when the method is present.
     ///
-    /// Reaching this trap would be a dispatch bug, not user error. The invariant that keeps it unreachable lives in ``__ExhaustRuntime/__runStateMachineDispatch(_:settings:fileID:filePath:line:column:)``: only `.threads` specs are routed to the preemptive runner that calls `oracleCheck`, and only `@StateMachine(.threads)` synthesizes a real implementation. `.sequential` and `.tasks` never call it. The safety rests on that dispatch, not on the type system, because the unified protocol cannot express "oracle only when `.threads`".
-    public func oracleCheck(_: SystemUnderTest) -> Bool {
-        fatalError("oracleCheck is only called for .threads specs")
+    /// Reaching this trap would be a runner bug rather than user error. Two things keep it unreachable: ``StateMachineSpecBase/hasEquivalence`` is false for such a spec and every caller checks it first, and a thread-based run, which cannot proceed without an equivalence, refuses to start at all. The protocol cannot express "present only sometimes", so the guarantee lives in those two checks.
+    public func equivalenceCheck(_: SystemUnderTest) -> Bool {
+        fatalError("equivalenceCheck requires an @Equivalence method; hasEquivalence is false for this spec")
     }
 
     /// Default no-op for specs without a `@Setup` method. The `@StateMachine` macro synthesizes a real implementation when one exists.

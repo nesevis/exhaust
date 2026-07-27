@@ -218,7 +218,7 @@ private final class JudgedRegisterSpec: AsyncStateMachineSpec {
 
     func checkInvariants() async throws {}
 
-    func oracleCheck(_ sequentialResult: SuspendingRegister) async -> Bool {
+    func equivalenceCheck(_ sequentialResult: SuspendingRegister) async -> Bool {
         register.value == sequentialResult.value
     }
 
@@ -253,7 +253,7 @@ private final class UnjudgedRegisterSpec: AsyncStateMachineSpec {
 
     func checkInvariants() async throws {}
 
-    func oracleCheck(_ sequentialResult: SuspendingRegister) async -> Bool {
+    func equivalenceCheck(_ sequentialResult: SuspendingRegister) async -> Bool {
         register.value == sequentialResult.value
     }
 
@@ -292,7 +292,7 @@ private final class VoidRegisterSpec: AsyncStateMachineSpec {
 
     func checkInvariants() async throws {}
 
-    func oracleCheck(_ sequentialResult: SuspendingRegister) async -> Bool {
+    func equivalenceCheck(_ sequentialResult: SuspendingRegister) async -> Bool {
         register.value == sequentialResult.value
     }
 

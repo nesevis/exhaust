@@ -13,7 +13,7 @@
         func missingGeneratorExpressionsDiagnostic() {
             assertMacro {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class QueueSpec {
                     var contents: [Int] = []
                     @SystemUnderTest var queue: MyQueue
@@ -34,7 +34,7 @@
                 """
             } diagnostics: {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class QueueSpec {
                     var contents: [Int] = []
                     @SystemUnderTest var queue: MyQueue
@@ -61,7 +61,7 @@
         func allSyncCommandsProduceStateMachineSpecConformance() {
             assertMacro {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class SyncSpec {
                     @SystemUnderTest var counter: MyCounter
 
@@ -111,8 +111,6 @@
                     func checkInvariants() throws {
                     }
 
-                    static let executionModel: ExecutionModel = .tasks
-
                     required init() {
                     }
                 }
@@ -127,7 +125,7 @@
         func publicSpecMirrorsAccessLevel() {
             assertMacro {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 public final class SharedSpec {
                     @SystemUnderTest var counter: MyCounter
 
@@ -188,8 +186,6 @@
                             try check(nonNegative(), "nonNegative")
                     }
 
-                    public static let executionModel: ExecutionModel = .sequential
-
                     public required init() {
                     }
                 }
@@ -204,7 +200,7 @@
         func explicitVoidReturnNormalizesToNilResponse() {
             assertMacro {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class VoidReturnSpec {
                     @SystemUnderTest var counter: MyCounter
 
@@ -254,8 +250,6 @@
                     func checkInvariants() throws {
                     }
 
-                    static let executionModel: ExecutionModel = .tasks
-
                     required init() {
                     }
                 }
@@ -270,7 +264,7 @@
         func commandWithGeneratorExpressionProducesGenInCommandGenerator() {
             assertMacro {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class InsertSpec {
                     @SystemUnderTest var items: [Int]
 
@@ -322,8 +316,6 @@
                     func checkInvariants() throws {
                     }
 
-                    static let executionModel: ExecutionModel = .tasks
-
                     required init() {
                     }
                 }
@@ -334,12 +326,12 @@
             }
         }
 
-        @Test("Bare @StateMachine without mode produces diagnostic")
-        func bareStateMachineWithoutModeProducesDiagnostic() {
+        @Test("@StateMachine on struct produces diagnostic")
+        func specTasksOnStructProducesDiagnostic() {
             assertMacro {
                 """
                 @StateMachine
-                final class Spec {
+                struct Spec {
                     @SystemUnderTest var sut: MySUT
 
                     @Command
@@ -351,35 +343,6 @@
                 """
                 @StateMachine
                 ┬────────────
-                ╰─ 🛑 @StateMachine requires an execution mode: @StateMachine(.sequential|.tasks|.threads)
-                final class Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-                }
-                """
-            }
-        }
-
-        @Test("@StateMachine(.tasks) on struct produces diagnostic")
-        func specTasksOnStructProducesDiagnostic() {
-            assertMacro {
-                """
-                @StateMachine(.tasks)
-                struct Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-                }
-                """
-            } diagnostics: {
-                """
-                @StateMachine(.tasks)
-                ┬────────────────────
                 ╰─ 🛑 State machine specs must be a 'final class' or 'actor' — structs are not supported
                 struct Spec {
                     @SystemUnderTest var sut: MySUT
@@ -392,11 +355,11 @@
             }
         }
 
-        @Test("@StateMachine(.threads) on final class with @Oracle produces StateMachineSpec conformance with oracleCheck")
+        @Test("@StateMachine on final class with @Equivalence produces StateMachineSpec conformance with equivalenceCheck")
         func specThreadsWithOracleProducesConcurrentConformance() {
             assertMacro {
                 """
-                @StateMachine(.threads)
+                @StateMachine
                 final class CounterSpec {
                     @SystemUnderTest var counter: MyCounter
 
@@ -404,7 +367,7 @@
                     func increment() throws {
                     }
 
-                    @Oracle
+                    @Equivalence
                     func equivalent(to other: MyCounter) -> Bool {
                         counter.value == other.value
                     }
@@ -454,11 +417,11 @@
                     func checkInvariants() throws {
                     }
 
-                    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool {
+                    func equivalenceCheck(_ sequentialResult: SystemUnderTest) -> Bool {
                         equivalent(to: sequentialResult)
                     }
 
-                    static let executionModel: ExecutionModel = .threads
+                    static let hasEquivalence: Bool = true
 
                     required init() {
                     }
@@ -470,374 +433,11 @@
             }
         }
 
-        @Test("@StateMachine(.threads) without @Oracle produces diagnostic")
-        func specThreadsWithoutOracleProducesDiagnostic() {
-            assertMacro {
-                """
-                @StateMachine(.threads)
-                final class Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-                }
-                """
-            } diagnostics: {
-                """
-                @StateMachine(.threads)
-                ┬──────────────────────
-                ╰─ 🛑 @StateMachine(.threads) requires exactly one @Oracle method
-                final class Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-                }
-                """
-            }
-        }
-
-        @Test("@StateMachine(.tasks) with @Oracle produces warning")
-        func specTasksWithOracleProducesWarning() {
-            assertMacro {
-                """
-                @StateMachine(.tasks)
-                final class Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-
-                    @Oracle
-                    func equiv(to other: MySUT) -> Bool { true }
-                }
-                """
-            } diagnostics: {
-                """
-                @StateMachine(.tasks)
-                ┬────────────────────
-                ╰─ ⚠️ @Oracle is only used with @StateMachine(.threads). For @StateMachine(.sequential) or @StateMachine(.tasks), use @Invariant instead
-                final class Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-
-                    @Oracle
-                    func equiv(to other: MySUT) -> Bool { true }
-                }
-                """
-            } expansion: {
-                """
-                final class Spec {
-                    var sut: MySUT
-                    func doSomething() throws {
-                    }
-                    func equiv(to other: MySUT) -> Bool { true }
-
-                    enum Command: CustomStringConvertible, Sendable {
-                            case doSomething
-
-                        var description: String {
-                            switch self {
-                                case .doSomething:
-                                "doSomething"
-                            }
-                        }
-                    }
-
-                    typealias SystemUnderTest = MySUT
-
-                    var systemUnderTest: SystemUnderTest {
-                        sut
-                    }
-
-                    static var commandGenerator: ReflectiveGenerator<Command> {
-                        .oneOf(weighted:
-                                (1, .just(Command.doSomething))
-                        )
-                    }
-
-                    @discardableResult func run(_ command: Command) throws -> CommandResponse {
-                        switch command {
-                            case .doSomething:
-                                try self.doSomething()
-                                return CommandResponse(commandDescription: command.description, returnValue: nil)
-                        }
-                    }
-
-                    func checkInvariants() throws {
-                    }
-
-                    static let executionModel: ExecutionModel = .tasks
-
-                    required init() {
-                    }
-                }
-
-                extension Spec: StateMachineSpec {
-                }
-                """
-            }
-        }
-
-        @Test("@StateMachine(.threads) with @Invariant produces warning")
-        func specThreadsWithInvariantProducesWarning() {
-            assertMacro {
-                """
-                @StateMachine(.threads)
-                final class Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-
-                    @Oracle
-                    func equiv(to other: MySUT) -> Bool { true }
-
-                    @Invariant
-                    func valid() -> Bool { true }
-                }
-                """
-            } diagnostics: {
-                """
-                @StateMachine(.threads)
-                ┬──────────────────────
-                ╰─ ⚠️ @Invariant requires deterministic per-step state, which a preemptive run does not have. Use @StateMachine(.tasks)
-                final class Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-
-                    @Oracle
-                    func equiv(to other: MySUT) -> Bool { true }
-
-                    @Invariant
-                    func valid() -> Bool { true }
-                }
-                """
-            } expansion: {
-                """
-                final class Spec {
-                    var sut: MySUT
-                    func doSomething() throws {
-                    }
-                    func equiv(to other: MySUT) -> Bool { true }
-                    func valid() -> Bool { true }
-
-                    enum Command: CustomStringConvertible, Sendable {
-                            case doSomething
-
-                        var description: String {
-                            switch self {
-                                case .doSomething:
-                                "doSomething"
-                            }
-                        }
-                    }
-
-                    typealias SystemUnderTest = MySUT
-
-                    var systemUnderTest: SystemUnderTest {
-                        sut
-                    }
-
-                    static var commandGenerator: ReflectiveGenerator<Command> {
-                        .oneOf(weighted:
-                                (1, .just(Command.doSomething))
-                        )
-                    }
-
-                    @discardableResult func run(_ command: Command) throws -> CommandResponse {
-                        switch command {
-                            case .doSomething:
-                                try self.doSomething()
-                                return CommandResponse(commandDescription: command.description, returnValue: nil)
-                        }
-                    }
-
-                    func checkInvariants() throws {
-                            try check(valid(), "valid")
-                    }
-
-                    func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool {
-                        equiv(to: sequentialResult)
-                    }
-
-                    static let executionModel: ExecutionModel = .threads
-
-                    required init() {
-                    }
-                }
-
-                extension Spec: StateMachineSpec {
-                }
-                """
-            }
-        }
-
-        @Test("@StateMachine(.threads) on actor produces error")
-        func specThreadsOnActorProducesError() {
-            assertMacro {
-                """
-                @StateMachine(.threads)
-                actor Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-
-                    @Oracle
-                    func equiv(to other: MySUT) -> Bool { true }
-                }
-                """
-            } diagnostics: {
-                """
-                @StateMachine(.threads)
-                ┬──────────────────────
-                ╰─ 🛑 Actor specs must use @StateMachine(.sequential). Actors are data-race-free, so .threads cannot surface races in them
-                actor Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-
-                    @Oracle
-                    func equiv(to other: MySUT) -> Bool { true }
-                }
-                """
-            }
-        }
-
-        @Test("@StateMachine(.tasks) on actor produces error")
-        func specTasksOnActorProducesError() {
-            assertMacro {
-                """
-                @StateMachine(.tasks)
-                actor Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() async throws {
-                    }
-                }
-                """
-            } diagnostics: {
-                """
-                @StateMachine(.tasks)
-                ┬────────────────────
-                ╰─ 🛑 Actor specs must use @StateMachine(.sequential). Actor isolation serializes all dispatch, so concurrent testing has nowhere to interleave
-                actor Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() async throws {
-                    }
-                }
-                """
-            }
-        }
-
-        @Test("@StateMachine(.sequential) with @Oracle produces warning")
-        func specSequentialWithOracleProducesWarning() {
-            assertMacro {
-                """
-                @StateMachine(.sequential)
-                final class Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-
-                    @Oracle
-                    func equiv(to other: MySUT) -> Bool { true }
-                }
-                """
-            } diagnostics: {
-                """
-                @StateMachine(.sequential)
-                ┬─────────────────────────
-                ╰─ ⚠️ @Oracle is only used with @StateMachine(.threads). For @StateMachine(.sequential) or @StateMachine(.tasks), use @Invariant instead
-                final class Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command
-                    func doSomething() throws {
-                    }
-
-                    @Oracle
-                    func equiv(to other: MySUT) -> Bool { true }
-                }
-                """
-            } expansion: {
-                """
-                final class Spec {
-                    var sut: MySUT
-                    func doSomething() throws {
-                    }
-                    func equiv(to other: MySUT) -> Bool { true }
-
-                    enum Command: CustomStringConvertible, Sendable {
-                            case doSomething
-
-                        var description: String {
-                            switch self {
-                                case .doSomething:
-                                "doSomething"
-                            }
-                        }
-                    }
-
-                    typealias SystemUnderTest = MySUT
-
-                    var systemUnderTest: SystemUnderTest {
-                        sut
-                    }
-
-                    static var commandGenerator: ReflectiveGenerator<Command> {
-                        .oneOf(weighted:
-                                (1, .just(Command.doSomething))
-                        )
-                    }
-
-                    @discardableResult func run(_ command: Command) throws -> CommandResponse {
-                        switch command {
-                            case .doSomething:
-                                try self.doSomething()
-                                return CommandResponse(commandDescription: command.description, returnValue: nil)
-                        }
-                    }
-
-                    func checkInvariants() throws {
-                    }
-
-                    static let executionModel: ExecutionModel = .sequential
-
-                    required init() {
-                    }
-                }
-
-                extension Spec: StateMachineSpec {
-                }
-                """
-            }
-        }
-
-        @Test("@StateMachine(.sequential) on actor synthesizes diagnosticSnapshot and init")
+        @Test("@StateMachine on actor synthesizes diagnosticSnapshot and init")
         func specSequentialOnActorSynthesizesDiagnosticSnapshot() {
             assertMacro {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 actor Spec {
                     var expected: Int = 0
                     @SystemUnderTest var sut: MySUT
@@ -899,8 +499,6 @@
                             try check(valueMatchesResult, "valueMatches")
                     }
 
-                    static let executionModel: ExecutionModel = .sequential
-
                     func diagnosticSnapshot() async -> DiagnosticSnapshot<SystemUnderTest> {
                         DiagnosticSnapshot(systemUnderTest: systemUnderTest, failureDescription: failureDescription())
                     }
@@ -921,11 +519,11 @@
         .macros(testMacros, indentationWidth: .tabs(1), record: .failed)
     )
     struct StateMachineTabIndentationTests {
-        @Test("@StateMachine(.tasks) with tab indentation and generator expressions")
+        @Test("@StateMachine with tab indentation and generator expressions")
         func specWithTabIndentationAndGeneratorExpressions() {
             assertMacro {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class InsertSpec {
                 \t@SystemUnderTest var items: [Int]
 
@@ -977,8 +575,6 @@
                 	func checkInvariants() throws {
                 	}
 
-                	static let executionModel: ExecutionModel = .tasks
-
                 	required init() {
                 	}
                 }
@@ -989,11 +585,11 @@
             }
         }
 
-        @Test("@StateMachine(.tasks) with tab indentation and non-model properties")
+        @Test("@StateMachine with tab indentation and non-model properties")
         func specWithTabIndentationAndNonModelProperties() {
             assertMacro {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class Spec {
                 \tvar count: Int = 0
                 \tvar name: String = ""
@@ -1047,8 +643,6 @@
                 	func checkInvariants() throws {
                 	}
 
-                	static let executionModel: ExecutionModel = .tasks
-
                 	required init() {
                 	}
                 }
@@ -1063,7 +657,7 @@
         func duplicateCommandBaseNamesProduceDiagnostic() {
             assertMacro {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class QueueSpec {
                     @SystemUnderTest var queue: MyQueue
 
@@ -1081,7 +675,7 @@
                 """
             } diagnostics: {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class QueueSpec {
                     @SystemUnderTest var queue: MyQueue
 
@@ -1105,7 +699,7 @@
         func zeroCommandWeightProducesDiagnostic() {
             assertMacro {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -1119,7 +713,7 @@
                 """
             } diagnostics: {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -1135,11 +729,11 @@
             }
         }
 
-        @Test("Parameterless @Oracle produces targeted diagnostic instead of noOracle")
+        @Test("Parameterless @Equivalence produces targeted diagnostic instead of noOracle")
         func parameterlessOracleProducesTargetedDiagnostic() {
             assertMacro {
                 """
-                @StateMachine(.threads)
+                @StateMachine
                 final class Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -1147,13 +741,13 @@
                     func action() throws {
                     }
 
-                    @Oracle
+                    @Equivalence
                     func isConsistent() -> Bool { true }
                 }
                 """
             } diagnostics: {
                 """
-                @StateMachine(.threads)
+                @StateMachine
                 final class Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -1161,44 +755,9 @@
                     func action() throws {
                     }
 
-                    @Oracle
-                    ╰─ 🛑 @Oracle must take exactly one parameter of the SystemUnderTest type
+                    @Equivalence
+                    ╰─ 🛑 @Equivalence must take exactly one parameter of the SystemUnderTest type
                     func isConsistent() -> Bool { true }
-                }
-                """
-            }
-        }
-
-        @Test("@StateMachine(.typo) produces nonLiteralMode, not missingMode")
-        func specWithTypoProducesNonLiteralMode() {
-            assertMacro {
-                """
-                @StateMachine(.task)
-                final class Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command(weight: 1)
-                    func action() throws {
-                    }
-
-                    @Invariant
-                    func valid() -> Bool { true }
-                }
-                """
-            } diagnostics: {
-                """
-                @StateMachine(.task)
-                ┬───────────────────
-                ╰─ 🛑 The execution mode must be a literal ExecutionModel case (.sequential|.tasks|.threads)
-                final class Spec {
-                    @SystemUnderTest var sut: MySUT
-
-                    @Command(weight: 1)
-                    func action() throws {
-                    }
-
-                    @Invariant
-                    func valid() -> Bool { true }
                 }
                 """
             }
@@ -1208,7 +767,7 @@
         func variadicCommandParameterProducesDiagnostic() {
             assertMacro {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -1222,7 +781,7 @@
                 """
             } diagnostics: {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class Spec {
                     @SystemUnderTest var sut: MySUT
 
@@ -1242,7 +801,7 @@
         func multiBindingSUTTriggersMultipleSUT() {
             assertMacro {
                 """
-                @StateMachine(.tasks)
+                @StateMachine
                 final class Spec {
                     @SystemUnderTest var a: MySUT, b: MySUT
 
@@ -1256,8 +815,8 @@
                 """
             } diagnostics: {
                 """
-                @StateMachine(.tasks)
-                ┬────────────────────
+                @StateMachine
+                ┬────────────
                 ╰─ 🛑 @StateMachine requires exactly one @SystemUnderTest property, but multiple were found
                 final class Spec {
                     @SystemUnderTest var a: MySUT, b: MySUT
@@ -1365,18 +924,18 @@
             }
         }
 
-        @Test("@Oracle on a property produces diagnostic")
+        @Test("@Equivalence on a property produces diagnostic")
         func oracleOnProperty() {
             assertMacro {
                 """
-                @Oracle
+                @Equivalence
                 var notAMethod: Bool = true
                 """
             } diagnostics: {
                 """
-                @Oracle
-                ┬──────
-                ╰─ 🛑 @Oracle must be applied to a method
+                @Equivalence
+                ┬───────────
+                ╰─ 🛑 @Equivalence must be applied to a method
                 var notAMethod: Bool = true
                 """
             }
@@ -1424,11 +983,11 @@
             }
         }
 
-        @Test("@Oracle on a method produces no diagnostic")
+        @Test("@Equivalence on a method produces no diagnostic")
         func oracleOnMethod() {
             assertMacro {
                 """
-                @Oracle
+                @Equivalence
                 func matches(other: MyType) -> Bool { true }
                 """
             } expansion: {

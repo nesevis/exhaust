@@ -10,6 +10,7 @@ struct PreemptiveResponseOnlyGhostTests {
     func responseOnlyViolationShouldBeDetected() async {
         let result = await #execute(
             RacySetSpec.self,
+            mode: .threads,
             .parallelize(lanes: .two),
             .idleTimeout(.seconds(5)),
             .suppress(.all)
@@ -18,13 +19,13 @@ struct PreemptiveResponseOnlyGhostTests {
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 final class RacySetSpec {
     @SystemUnderTest
     var system = RacySet()
 
     /// Final-state only, and set union is interleaving-independent, so this oracle passes for every interleaving and can never witness the race. That is deliberate.
-    @Oracle
+    @Equivalence
     func contentsMatch(other: RacySet) -> Bool {
         system.snapshot == other.snapshot
     }

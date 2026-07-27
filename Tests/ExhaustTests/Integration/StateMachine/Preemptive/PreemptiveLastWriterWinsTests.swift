@@ -9,6 +9,7 @@ struct PreemptiveLastWriterWinsTests {
         var report: ExhaustReport?
         let result = await #execute(
             AtomicLastWriterWinsSpec.self,
+            mode: .threads,
             .parallelize(lanes: .two),
             .idleTimeout(.seconds(30)),
             .suppress(.issueReporting),
@@ -27,12 +28,12 @@ struct PreemptiveLastWriterWinsTests {
 /// Two concurrent `setValue` commands on the same key with different values.
 ///
 /// The SUT is correctly synchronized (NSLock). Either ordering is valid, but the fixed-ordering oracle compares against array order, which may differ from the GCD execution order. Without linearizability confirmation, this produces a false positive roughly 50% of the time.
-@StateMachine(.threads)
+@StateMachine
 final class AtomicLastWriterWinsSpec {
     @SystemUnderTest
     var store: AtomicKeyValueStore = .init()
 
-    @Oracle
+    @Equivalence
     func stateMatches(other: AtomicKeyValueStore) -> Bool {
         store.snapshot == other.snapshot
     }

@@ -11,6 +11,7 @@ struct DetectionBoundaryTests {
     func raceWithoutSuspensionPointIsNOTDetectedDemonstratesToolLimitation() async {
         let result = await #execute(
             SilentRaceSpec.self,
+            mode: .tasks,
             .commandLimit(6),
             .budget(.custom(screening: 0, sampling: 500)),
             .suppress(.issueReporting)
@@ -24,6 +25,7 @@ struct DetectionBoundaryTests {
         let result = try #require(
             await #execute(
                 ExposedRaceSpec.self,
+                mode: .tasks,
                 .commandLimit(4),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -42,6 +44,7 @@ struct DetectionBoundaryTests {
         let result = try #require(
             await #execute(
                 ThreeWayRaceSpec.self,
+                mode: .tasks,
                 .parallelize(lanes: .three),
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 500)),
@@ -61,6 +64,7 @@ struct DetectionBoundaryTests {
         let result = try #require(
             await #execute(
                 ThreeWayRaceSpec.self,
+                mode: .tasks,
                 .parallelize(lanes: .four),
                 .commandLimit(8),
                 .budget(.custom(screening: 0, sampling: 500)),
@@ -77,7 +81,7 @@ struct DetectionBoundaryTests {
 
 // MARK: - Spec: Silent race (no suspension point at the race)
 
-@StateMachine(.tasks)
+@StateMachine
 final class SilentRaceSpec {
     var expected: Int = 0
     @SystemUnderTest
@@ -101,7 +105,7 @@ final class SilentRaceSpec {
 
 // MARK: - Spec: Exposed race (yield at the race point)
 
-@StateMachine(.tasks)
+@StateMachine
 final class ExposedRaceSpec {
     var expected: Int = 0
     @SystemUnderTest
@@ -125,7 +129,7 @@ final class ExposedRaceSpec {
 
 // MARK: - Spec: Three-way race (requires 3 lanes)
 
-@StateMachine(.tasks)
+@StateMachine
 final class ThreeWayRaceSpec {
     var expected: Int = 0
     @SystemUnderTest

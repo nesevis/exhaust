@@ -148,6 +148,10 @@ private final class SharedModelSpec: StateMachineSpec {
     var expected = LockedTotal()
     var total = LockedTotal()
 
+    static var hasEquivalence: Bool {
+        true
+    }
+
     static var commandGenerator: ReflectiveGenerator<Command> {
         .just(Command.record(amount: 1))
     }
@@ -168,7 +172,7 @@ private final class SharedModelSpec: StateMachineSpec {
 
     func checkInvariants() throws {}
 
-    func oracleCheck(_ sequentialResult: LockedTotal) -> Bool {
+    func equivalenceCheck(_ sequentialResult: LockedTotal) -> Bool {
         total.value == sequentialResult.value && expected.value == total.value
     }
 
@@ -196,6 +200,10 @@ private final class BoundedTotalSpec: StateMachineSpec {
     var expected = 0
     var total = LockedTotal()
 
+    static var hasEquivalence: Bool {
+        true
+    }
+
     static var commandGenerator: ReflectiveGenerator<Command> {
         .just(Command.add)
     }
@@ -218,7 +226,7 @@ private final class BoundedTotalSpec: StateMachineSpec {
         try check(total.value <= 1, "total \(total.value) passed its cap of 1")
     }
 
-    func oracleCheck(_ sequentialResult: LockedTotal) -> Bool {
+    func equivalenceCheck(_ sequentialResult: LockedTotal) -> Bool {
         total.value == sequentialResult.value
     }
 
@@ -236,6 +244,10 @@ private final class SentinelFreePushSpec: StateMachineSpec {
 
     var pushed: [Int] = []
     var log = ModelValueLog()
+
+    static var hasEquivalence: Bool {
+        true
+    }
 
     static var commandGenerator: ReflectiveGenerator<Command> {
         .just(Command.push(value: 1))
@@ -259,7 +271,7 @@ private final class SentinelFreePushSpec: StateMachineSpec {
         try check(pushed.contains(sentinelValue) == false, "the log holds the sentinel \(sentinelValue)")
     }
 
-    func oracleCheck(_ sequentialResult: ModelValueLog) -> Bool {
+    func equivalenceCheck(_ sequentialResult: ModelValueLog) -> Bool {
         log.values.sorted() == sequentialResult.values.sorted()
     }
 
@@ -277,6 +289,10 @@ private final class AscendingPushSpec: StateMachineSpec {
 
     var pushed: [Int] = []
     var log = ModelValueLog()
+
+    static var hasEquivalence: Bool {
+        true
+    }
 
     static var commandGenerator: ReflectiveGenerator<Command> {
         .just(Command.push(value: 1))
@@ -300,7 +316,7 @@ private final class AscendingPushSpec: StateMachineSpec {
         try check(pushed == pushed.sorted(), "pushed \(pushed) is not ascending")
     }
 
-    func oracleCheck(_ sequentialResult: ModelValueLog) -> Bool {
+    func equivalenceCheck(_ sequentialResult: ModelValueLog) -> Bool {
         log.values.sorted() == sequentialResult.values.sorted()
     }
 

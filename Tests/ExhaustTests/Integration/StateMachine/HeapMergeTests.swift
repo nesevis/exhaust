@@ -106,7 +106,7 @@ struct HeapAliasingTests {
 // it) and keeps the target handle, mirroring the Hypothesis tutorial's use
 // of bundle consumption for exclusive ownership.
 
-@StateMachine(.sequential)
+@StateMachine
 final class HeapMergeSpec {
     var expectedContents: [[Int]] = []
     @SystemUnderTest var heaps: [BuggyHeap] = []
@@ -167,7 +167,7 @@ final class HeapMergeSpec {
 // structurally (parent ≤ children at every index), and the pop
 // postcondition verifies that the returned value is the minimum.
 
-@StateMachine(.sequential)
+@StateMachine
 final class HeapAliasingSpec {
     @SystemUnderTest var allHeaps: [SpliceHeap] = []
 

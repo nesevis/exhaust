@@ -30,6 +30,7 @@ struct CooperativeSchedulerTests {
             let result = try #require(
                 await #execute(
                     NonAtomicCounterSpec.self,
+                    mode: .tasks,
                     .commandLimit(6),
                     .budget(.custom(screening: 0, sampling: 200)),
                     .replay(.numeric(12345)),
@@ -52,6 +53,7 @@ struct CooperativeSchedulerTests {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(8),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -60,6 +62,7 @@ struct CooperativeSchedulerTests {
         let replayResult = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(8),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .replay(.numeric(result.seed!)),
@@ -74,6 +77,7 @@ struct CooperativeSchedulerTests {
     func concurrencyLevel1RunsEverythingSequentiallyAndFindsNoConcurrencyBugs() async {
         let result = await #execute(
             NonAtomicCounterSpec.self,
+            mode: .tasks,
             .parallelize(lanes: .one),
             .commandLimit(8),
             .budget(.custom(screening: 0, sampling: 200)),

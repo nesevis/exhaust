@@ -4,7 +4,7 @@ Run a state machine spec against a stateful system.
 
 ## Overview
 
-`#execute` generates command sequences, runs them against the system under test, checks invariants (or an oracle) after each step, and reduces failures to a minimal sequence. Always awaited.
+`#execute` generates command sequences, runs them against the system under test, checks the spec's invariants wherever the state is settled, and reduces failures to a minimal sequence. Always awaited. Pass `mode:` to run the commands concurrently instead of one at a time.
 
 ```swift
 @Test func queueBehavesCorrectly() async {
@@ -35,7 +35,7 @@ For the full guide, see <doc:StateMachineTesting>.
 
 | Parameter | Description |
 |---|---|
-| `specType` | The `@StateMachine` spec to run. `.sequential` and `.tasks` specs are supported. |
+| `specType` | The `@StateMachine` spec to run. |
 | `time` | Wall-clock ``TimeSpan`` for the run (for example `.minutes(5)`). |
 | `settings` | Variadic ``FuzzSettings`` values: replay, suppression, log verbosity, `.commandLimit(n)`. |
 

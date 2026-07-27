@@ -19,6 +19,7 @@
                 """
                 await __ExhaustRuntime.__runStateMachineDispatch(
                     BoundedQueueSpec.self,
+                    mode: .sequential,
                     settings: [.commandLimit(20)],
                     fileID: #fileID,
                     filePath: #filePath,
@@ -39,6 +40,7 @@
                 """
                 await __ExhaustRuntime.__runStateMachineDispatch(
                     Spec.self,
+                    mode: .sequential,
                     settings: [.commandLimit(20), .budget(.thorough)],
                     fileID: #fileID,
                     filePath: #filePath,
@@ -59,6 +61,51 @@
                 """
                 await __ExhaustRuntime.__runStateMachineDispatch(
                     Spec.self,
+                    mode: .sequential,
+                    settings: [],
+                    fileID: #fileID,
+                    filePath: #filePath,
+                    line: #line,
+                    column: #column
+                )
+                """
+            }
+        }
+
+        /// The mode reaches the runtime as written, and the settings variadic keeps its own place in the expansion.
+        @Test("#execute forwards a mode and keeps the settings apart from it")
+        func executeStateMachineWithMode() {
+            assertMacro {
+                """
+                await #execute(Spec.self, mode: .tasks, .commandLimit(6))
+                """
+            } expansion: {
+                """
+                await __ExhaustRuntime.__runStateMachineDispatch(
+                    Spec.self,
+                    mode: .tasks,
+                    settings: [.commandLimit(6)],
+                    fileID: #fileID,
+                    filePath: #filePath,
+                    line: #line,
+                    column: #column
+                )
+                """
+            }
+        }
+
+        /// A mode the call site computed cannot be read at expansion time, so it is forwarded verbatim and the checks that depend on knowing it fall to the runtime.
+        @Test("#execute forwards a computed mode verbatim")
+        func executeStateMachineWithComputedMode() {
+            assertMacro {
+                """
+                await #execute(Spec.self, mode: chosenMode)
+                """
+            } expansion: {
+                """
+                await __ExhaustRuntime.__runStateMachineDispatch(
+                    Spec.self,
+                    mode: chosenMode,
                     settings: [],
                     fileID: #fileID,
                     filePath: #filePath,
@@ -100,6 +147,7 @@
                 """
                 await __ExhaustRuntime.__runStateMachineDispatchAsync(
                     AsyncSpec.self,
+                    mode: .sequential,
                     settings: [],
                     fileID: #fileID,
                     filePath: #filePath,
@@ -120,6 +168,7 @@
                 """
                 await __ExhaustRuntime.__runStateMachineDispatchAsync(
                     AsyncSpec.self,
+                    mode: .sequential,
                     settings: [.commandLimit(10), .parallelize(lanes: .three)],
                     fileID: #fileID,
                     filePath: #filePath,

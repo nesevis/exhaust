@@ -9,6 +9,7 @@ struct PreemptiveCommandFailureTests {
         let result = try #require(
             await #execute(
                 SyncPrefixFailingSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .suppress(.all)
             )
@@ -21,6 +22,7 @@ struct PreemptiveCommandFailureTests {
         let result = try #require(
             await #execute(
                 SyncLaneFailingSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .suppress(.all)
             )
@@ -33,6 +35,7 @@ struct PreemptiveCommandFailureTests {
         let result = try #require(
             await #execute(
                 AsyncPrefixFailingSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .suppress(.all)
             )
@@ -45,6 +48,7 @@ struct PreemptiveCommandFailureTests {
         let result = try #require(
             await #execute(
                 AsyncLaneFailingSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .suppress(.all)
             )
@@ -57,11 +61,11 @@ struct PreemptiveCommandFailureTests {
 
 /// Prefix command throws a postcondition failure after three increments.
 /// No invariant — the only failure path is the throw from `run(_:)`.
-@StateMachine(.threads)
+@StateMachine
 final class SyncPrefixFailingSpec {
     @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
 
-    @Oracle
+    @Equivalence
     func alwaysPass(other _: PostconditionOnlyCounter) -> Bool {
         true
     }
@@ -79,11 +83,11 @@ final class SyncPrefixFailingSpec {
 
 /// Concurrent lane command throws a postcondition failure. The oracle always passes —
 /// without proper error propagation from `run(_:)`, the failure is invisible.
-@StateMachine(.threads)
+@StateMachine
 final class SyncLaneFailingSpec {
     @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
 
-    @Oracle
+    @Equivalence
     func alwaysPass(other _: PostconditionOnlyCounter) -> Bool {
         true
     }
@@ -105,11 +109,11 @@ final class SyncLaneFailingSpec {
 // MARK: - Async Specs
 
 /// Async variant: prefix command throws a postcondition failure.
-@StateMachine(.threads)
+@StateMachine
 final class AsyncPrefixFailingSpec {
     @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
 
-    @Oracle
+    @Equivalence
     func alwaysPass(other _: PostconditionOnlyCounter) -> Bool {
         true
     }
@@ -126,11 +130,11 @@ final class AsyncPrefixFailingSpec {
 }
 
 /// Async variant: concurrent lane command throws a postcondition failure.
-@StateMachine(.threads)
+@StateMachine
 final class AsyncLaneFailingSpec {
     @SystemUnderTest var counter: PostconditionOnlyCounter = .init(threshold: 3)
 
-    @Oracle
+    @Equivalence
     func alwaysPass(other _: PostconditionOnlyCounter) -> Bool {
         true
     }

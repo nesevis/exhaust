@@ -44,7 +44,7 @@ actor CounterActor {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 actor ActorCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter = CounterActor()
@@ -89,7 +89,7 @@ actor BuggyCounterActor {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 actor BuggyActorCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter = BuggyCounterActor()

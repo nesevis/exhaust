@@ -36,7 +36,7 @@ struct MultiInvariantTests {
 
 // MARK: - Spec: Five invariants, one fails
 
-@StateMachine(.sequential)
+@StateMachine
 final class FiveInvariantSpec {
     var expected: Int = 0
     @SystemUnderTest
@@ -75,7 +75,7 @@ final class FiveInvariantSpec {
 
 // MARK: - Spec: Five invariants, all pass
 
-@StateMachine(.sequential)
+@StateMachine
 final class PassingFiveInvariantSpec {
     var expected: Int = 0
     @SystemUnderTest

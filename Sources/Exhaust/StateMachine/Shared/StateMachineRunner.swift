@@ -9,17 +9,20 @@ import IssueReporting
 // MARK: - Dispatch
 
 public extension __ExhaustRuntime {
-    /// Dispatches a synchronous spec test to the appropriate runner based on the spec's ``ExecutionModel``.
+    /// Dispatches a synchronous spec test to the runner the call site asked for.
+    ///
+    /// A synchronous spec has no suspension points to interleave at, so `.tasks` routes to the sequential runner: cooperative interleaving needs async commands, which reach the async twin instead.
     @discardableResult
     static func __runStateMachineDispatch<Spec: StateMachineSpec>(
         _ specType: Spec.Type,
+        mode: ExecutionModel,
         settings: [StateMachineSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
         column: UInt = #column
     ) async -> StateMachineResult<Spec>? {
-        switch Spec.executionModel {
+        switch mode {
             case .sequential, .tasks:
                 // Sequential specs run inline and spawn no GCD lanes, so no gate hop is needed.
                 return __runStateMachine(

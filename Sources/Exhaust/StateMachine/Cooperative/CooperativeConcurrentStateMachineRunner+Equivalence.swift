@@ -173,7 +173,7 @@ private func judge<Spec: AsyncStateMachineSpec>(
         }
     }
 
-    if await concurrentSpec.oracleCheck(referenceSpec.systemUnderTest) {
+    if await concurrentSpec.equivalenceCheck(referenceSpec.systemUnderTest) {
         return .equivalent
     }
 
@@ -263,7 +263,7 @@ private func searchForExplainingOrder<Spec: AsyncStateMachineSpec>(
             guard let spec = replaySpec else {
                 return false
             }
-            return await concurrentSpec.oracleCheck(spec.systemUnderTest)
+            return await concurrentSpec.equivalenceCheck(spec.systemUnderTest)
         },
         failureDescription: {
             concurrentSpec.failureDescription()

@@ -16,7 +16,7 @@ import IssueReporting
 public extension __ExhaustRuntime {
     /// Runs a preemptive concurrent spec test for the given synchronous specification type.
     ///
-    /// Dispatches commands across real GCD threads and uses the spec's ``StateMachineSpec/oracleCheck(_:)`` to verify consistency with sequential behavior. Non-deterministic scheduling means the same seed does not guarantee the same interleaving, so bug detection is probabilistic and relies on repetition across the sampling budget.
+    /// Dispatches commands across real GCD threads and uses the spec's ``StateMachineSpec/equivalenceCheck(_:)`` to verify consistency with sequential behavior. Non-deterministic scheduling means the same seed does not guarantee the same interleaving, so bug detection is probabilistic and relies on repetition across the sampling budget.
     @discardableResult
     static func __runPreemptiveConcurrentStateMachine<Spec: StateMachineSpec>(
         _: Spec.Type,
@@ -40,6 +40,16 @@ public extension __ExhaustRuntime {
         #if canImport(Testing)
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
+
+        guard threadsModeIsUsable(
+            Spec.self,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        ) else {
+            return nil
+        }
 
         let searchAbandonments = UnsafeSendableBox(0)
         let innerBackend = PreemptiveChecker<Spec>(
@@ -360,7 +370,7 @@ struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         // Void-only, no-skip commands carry no response data, so linearizability reduces to final-state equivalence.
         let hasResponseInfo = collectedResponses.contains { lane in lane.contains { $0.outcome.returnValue != nil || $0.outcome.isSkipped } }
         if hasResponseInfo == false {
-            if concurrentSpec.oracleCheck(sequentialSpec.systemUnderTest) {
+            if concurrentSpec.equivalenceCheck(sequentialSpec.systemUnderTest) {
                 return .passed
             }
             return .oracleMismatch(laneResponses: collectedResponses, concurrentSpec: concurrentSpec)
@@ -416,7 +426,7 @@ struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
                     return
                 }
             }
-            matched = concurrentSpec.oracleCheck(witnessSpec.systemUnderTest)
+            matched = concurrentSpec.equivalenceCheck(witnessSpec.systemUnderTest)
         }, &exception)
         return completed && exception == nil && matched
     }
@@ -547,7 +557,7 @@ struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
                 guard let spec = replaySpec else {
                     return false
                 }
-                return concurrentSpec.oracleCheck(spec.systemUnderTest)
+                return concurrentSpec.equivalenceCheck(spec.systemUnderTest)
             },
             failureDescription: {
                 concurrentSpec.failureDescription()
@@ -628,7 +638,7 @@ struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         guard referenceSetupError == nil, runAllCommandsCatchingObjC(commands, on: reference) else {
             return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
-        if spec.oracleCheck(reference.systemUnderTest) == false {
+        if spec.equivalenceCheck(reference.systemUnderTest) == false {
             return (trace, true, false, spec.systemUnderTest, spec.failureDescription())
         }
         return (trace, false, false, spec.systemUnderTest, nil)

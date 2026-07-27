@@ -44,7 +44,7 @@ struct InvariantOnlyTests {
 /// No reference model — the invariant checks a structural property of the SUT alone.
 /// The bug surfaces when `write` is called on a full buffer because there's
 /// no capacity guard in the SUT implementation.
-@StateMachine(.sequential)
+@StateMachine
 final class CircularBufferSpec {
     @SystemUnderTest var buffer = CircularBuffer(capacity: 2)
 
@@ -76,7 +76,7 @@ final class CircularBufferSpec {
 
 // MARK: - StateMachine: Priority queue sorted backing
 
-@StateMachine(.sequential)
+@StateMachine
 final class SortedBackingSpec {
     @SystemUnderTest var queue = BuggyPriorityQueue()
 

@@ -11,6 +11,7 @@ struct PreemptiveNonAtomicCounterTests {
         let result = try #require(
             await #execute(
                 PreemptiveCounterSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
@@ -26,6 +27,7 @@ struct PreemptiveNonAtomicCounterTests {
         let result = try #require(
             await #execute(
                 PreemptiveCounterSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
@@ -43,6 +45,7 @@ struct PreemptiveNonAtomicCounterTests {
         var capturedReport: ExhaustReport?
         _ = await #execute(
             PreemptiveCounterSpec.self,
+            mode: .threads,
             .parallelize(lanes: .two),
             .commandLimit(6),
             .budget(.custom(screening: 0, sampling: 200)),
@@ -61,6 +64,7 @@ struct PreemptiveNonAtomicCounterTests {
         let result = try #require(
             await #execute(
                 PreemptiveCounterSpec.self,
+                mode: .threads,
                 .parallelize(lanes: .two),
                 .commandLimit(20),
                 .suppress(.issueReporting)
@@ -72,12 +76,12 @@ struct PreemptiveNonAtomicCounterTests {
 
 // MARK: - Spec
 
-@StateMachine(.threads)
+@StateMachine
 final class PreemptiveCounterSpec {
     @SystemUnderTest
     var counter: RacyCounter = .init()
 
-    @Oracle
+    @Equivalence
     func valuesMatch(other: RacyCounter) -> Bool {
         counter.value == other.value
     }

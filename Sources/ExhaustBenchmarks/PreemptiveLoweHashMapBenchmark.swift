@@ -18,6 +18,7 @@ func registerPreemptiveLoweHashMapBenchmarks() {
             let result = __ExhaustRuntime.blockingAwait {
                 await #execute(
                     LoweHashMapBenchSpec.self,
+                    mode: .threads,
                     .parallelize(lanes: .two),
                     .replay(.numeric(seed)),
                     .budget(.custom(screening: 10000, sampling: 150_000)),
@@ -42,14 +43,14 @@ func registerPreemptiveLoweHashMapBenchmarks() {
 
 // MARK: - Spec
 
-@StateMachine(.threads)
+@StateMachine
 final class LoweHashMapBenchSpec {
     @SystemUnderTest
     var map: BuggyHashMapBench = .init(capacity: 4)
 
     static let keyGen = #gen(.int(in: 0 ... 31))
 
-    @Oracle
+    @Equivalence
     func stateMatches(other: BuggyHashMapBench) -> Bool {
         map.snapshot == other.snapshot
     }

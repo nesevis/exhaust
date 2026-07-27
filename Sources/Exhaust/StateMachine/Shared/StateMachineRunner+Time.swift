@@ -1,4 +1,4 @@
-// The spec adapter and dispatch for coverage-guided execution: `#execute(Spec.self, time:)`.
+// The spec adapter and dispatch for coverage-guided execution: `#execute(Spec.self, mode: .tasks, time:)`.
 
 import ExhaustCore
 import Foundation
@@ -7,12 +7,13 @@ import IssueReporting
 // MARK: - Dispatch
 
 public extension __ExhaustRuntime {
-    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(Spec.self, time:)`.
+    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(Spec.self, mode: .tasks, time:)`.
     ///
     /// Async for the same reason plain `#execute` is: the run occupies its thread for the whole time budget, so it hops to a GCD worker instead of starving the cooperative pool. Every path — configuration errors included — funnels through the shared reporting epilogue, so findings, configuration errors, and the summary attachment surface exactly as they do for `#explore(time:)`.
     @discardableResult
     static func __runStateMachineTimeDispatch(
         _ specType: (some StateMachineSpec).Type,
+        mode: SearchableExecutionModel = .sequential,
         time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
@@ -22,6 +23,7 @@ public extension __ExhaustRuntime {
     ) async -> FuzzReport {
         let report = await stateMachineTimeReport(
             specType,
+            mode: mode,
             time: time,
             settings: settings,
             fileID: fileID,
@@ -73,8 +75,9 @@ public extension __ExhaustRuntime {
     }
 
     /// Builds the run's report: validates settings, routes on the execution model, and runs the matching adapter. Records no issues — the dispatch reports the returned report's termination and clusters exactly once.
-    private static func stateMachineTimeReport<Spec: StateMachineSpec>(
-        _ specType: Spec.Type,
+    private static func stateMachineTimeReport(
+        _ specType: (some StateMachineSpec).Type,
+        mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString,
@@ -89,7 +92,7 @@ public extension __ExhaustRuntime {
         let commandLimit = consumed.commandLimit
         let coreSettings = consumed.coreSettings
 
-        switch Spec.executionModel {
+        switch mode {
             case .sequential, .tasks:
                 // A synchronous `.tasks` spec has no suspension points to interleave at, so it runs through the sequential adapter — the same routing plain `#execute` applies. Cooperative interleaving requires async commands, which dispatch through the async twin.
                 return await runSpecFuzz(
@@ -101,12 +104,6 @@ public extension __ExhaustRuntime {
                     line: line,
                     column: column
                 )
-            case .threads:
-                // Ruled permanently out of scope (2026-07-12), not deferred: coverage novelty requires every attempt to be a deterministic function of its choice sequence, and preemptive race detection requires the opposite — the OS realizing different schedules for the same input. One degree of freedom cannot be both pinned and free.
-                return .empty(
-                    termination: .invalidConfiguration("#execute(time:) does not support .threads specs. The search treats an attempt's coverage as determined by its command sequence, but under preemptive scheduling it also depends on an OS schedule the run can neither observe nor replay, so coverage novelty rewards scheduling luck instead of new behavior. Use .tasks to search interleavings deterministically, or run this spec under plain #execute for repetition-based race detection."),
-                    seed: 0
-                )
         }
     }
 
@@ -116,6 +113,7 @@ public extension __ExhaustRuntime {
     @discardableResult
     static func __runStateMachineTimeDispatchAsync(
         _ specType: (some AsyncStateMachineSpec).Type,
+        mode: SearchableExecutionModel = .sequential,
         time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString = #fileID,
@@ -125,6 +123,7 @@ public extension __ExhaustRuntime {
     ) async -> FuzzReport {
         let report = await asyncStateMachineTimeReport(
             specType,
+            mode: mode,
             time: time,
             settings: settings,
             fileID: fileID,
@@ -148,6 +147,7 @@ public extension __ExhaustRuntime {
     /// The async twin of ``stateMachineTimeReport(_:time:settings:fileID:filePath:line:column:)``: validates settings, routes on the execution model, and runs the matching adapter.
     private static func asyncStateMachineTimeReport<Spec: AsyncStateMachineSpec>(
         _ specType: Spec.Type,
+        mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [FuzzSettings],
         fileID: StaticString,
@@ -161,7 +161,7 @@ public extension __ExhaustRuntime {
         }
         let commandLimit = consumed.commandLimit
 
-        switch Spec.executionModel {
+        switch mode {
             case .sequential:
                 return await runSpecFuzz(
                     makeAdapter: { buildAsyncSequentialSpecAdapter(specType, commandLimit: commandLimit) },
@@ -207,12 +207,6 @@ public extension __ExhaustRuntime {
                     filePath: filePath,
                     line: line,
                     column: column
-                )
-            case .threads:
-                // Ruled permanently out of scope (2026-07-12), not deferred: coverage novelty requires every attempt to be a deterministic function of its choice sequence, and preemptive race detection requires the opposite — the OS realizing different schedules for the same input. One degree of freedom cannot be both pinned and free.
-                return .empty(
-                    termination: .invalidConfiguration("#execute(time:) does not support .threads specs. The search treats an attempt's coverage as determined by its command sequence, but under preemptive scheduling it also depends on an OS schedule the run can neither observe nor replay, so coverage novelty rewards scheduling luck instead of new behavior. Use .tasks to search interleavings deterministically, or run this spec under plain #execute for repetition-based race detection."),
-                    seed: 0
                 )
         }
     }

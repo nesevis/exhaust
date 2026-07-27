@@ -260,7 +260,7 @@ private final class LastWriteRegisterSpec: AsyncStateMachineSpec {
 
     func checkInvariants() async throws {}
 
-    func oracleCheck(_ sequentialResult: Register) async -> Bool {
+    func equivalenceCheck(_ sequentialResult: Register) async -> Bool {
         register.value == sequentialResult.value
     }
 
@@ -308,7 +308,7 @@ private final class RacyCounterSpec: AsyncStateMachineSpec {
 
     func checkInvariants() async throws {}
 
-    func oracleCheck(_ sequentialResult: NonAtomicCounter) async -> Bool {
+    func equivalenceCheck(_ sequentialResult: NonAtomicCounter) async -> Bool {
         counter.value == sequentialResult.value
     }
 
@@ -363,7 +363,7 @@ private final class AscendingLogSpec: AsyncStateMachineSpec {
         try check(appended == appended.sorted(), "appended \(appended) is not ascending")
     }
 
-    func oracleCheck(_ sequentialResult: Register) async -> Bool {
+    func equivalenceCheck(_ sequentialResult: Register) async -> Bool {
         register.value == sequentialResult.value
     }
 
@@ -410,7 +410,7 @@ private final class UnjudgedCounterSpec: AsyncStateMachineSpec {
 
     func checkInvariants() async throws {}
 
-    func oracleCheck(_ sequentialResult: NonAtomicCounter) async -> Bool {
+    func equivalenceCheck(_ sequentialResult: NonAtomicCounter) async -> Bool {
         Self.equivalenceCallCount.value += 1
         return counter.value == sequentialResult.value
     }

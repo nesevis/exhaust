@@ -101,7 +101,7 @@ struct SetupScreeningTests {
 
 // MARK: - Test Specs
 
-@StateMachine(.sequential)
+@StateMachine
 private final class TwoArgumentSetupSpec {
     var capacity = 0
     var preload: [Int] = []
@@ -121,7 +121,7 @@ private final class TwoArgumentSetupSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class NoSetupSpec {
     @SystemUnderTest var box = CountingBox()
 
@@ -133,7 +133,7 @@ private final class NoSetupSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class DeterministicSetupSpec {
     var configured = false
     @SystemUnderTest var box = CountingBox()
@@ -158,7 +158,7 @@ private final class DeterministicSetupSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class InteractionSpec {
     var capacity = 0
     @SystemUnderTest var box = CountingBox()

@@ -302,6 +302,7 @@ struct SetupConcurrentTests {
     func tasksSpecWithSetupPasses() async {
         let result = await #execute(
             SeededTasksSpec.self,
+            mode: .tasks,
             .commandLimit(6),
             .budget(.custom(screening: 0, sampling: 30)),
             .suppress(.issueReporting)
@@ -314,6 +315,7 @@ struct SetupConcurrentTests {
     func threadsSpecWithSetupPasses() async {
         let result = await #execute(
             SeededThreadsSpec.self,
+            mode: .threads,
             .commandLimit(6),
             .budget(.custom(screening: 0, sampling: 30)),
             .suppress(.issueReporting)
@@ -328,6 +330,7 @@ struct SetupConcurrentTests {
         let result = try #require(
             await #execute(
                 CapacityGatedTasksSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 200)),
                 .suppress(.issueReporting)
@@ -354,6 +357,7 @@ struct SetupConcurrentTests {
         let result = try #require(
             await #execute(
                 ThrowingSetupThreadsSpec.self,
+                mode: .threads,
                 .commandLimit(4),
                 .budget(.custom(screening: 0, sampling: 20)),
                 .suppress(.issueReporting)
@@ -373,6 +377,7 @@ struct SetupConcurrentTests {
         let result = try #require(
             await #execute(
                 CapacityGatedThreadsSpec.self,
+                mode: .threads,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 100)),
                 .suppress(.issueReporting)
@@ -396,7 +401,7 @@ struct SetupConcurrentTests {
 
 // MARK: - Test Specs
 
-@StateMachine(.sequential)
+@StateMachine
 private final class AlwaysFailingSetupSpec {
     var capacity = 0
     var preload: [Int] = []
@@ -419,7 +424,7 @@ private final class AlwaysFailingSetupSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class CapacityGatedSpec {
     var capacity = 0
     @SystemUnderTest var box = ValueBox()
@@ -440,7 +445,7 @@ private final class CapacityGatedSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class ThrowingSetupSpec {
     @SystemUnderTest var box = ValueBox()
 
@@ -457,7 +462,7 @@ private final class ThrowingSetupSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class PlainFailingSpec {
     var count = 0
     @SystemUnderTest var box = ValueBox()
@@ -473,7 +478,7 @@ private final class PlainFailingSpec {
     }
 }
 
-@StateMachine(.sequential)
+@StateMachine
 private final class ImplicitlyUnwrappedSUTSpec {
     @SystemUnderTest var box: ValueBox!
 
@@ -499,7 +504,7 @@ private final class ImplicitlyUnwrappedSUTSpec {
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 private final class ThrowingSetupThreadsSpec {
     @SystemUnderTest var counter = LockedCounter()
 
@@ -513,7 +518,7 @@ private final class ThrowingSetupThreadsSpec {
         _ = counter.value
     }
 
-    @Oracle
+    @Equivalence
     func equivalent(to other: LockedCounter) -> Bool {
         counter.value == other.value
     }
@@ -523,7 +528,7 @@ private final class ThrowingSetupThreadsSpec {
     }
 }
 
-@StateMachine(.tasks)
+@StateMachine
 private final class SeededTasksSpec {
     var model = 0
     @SystemUnderTest var counter = LockedCounter()
@@ -550,7 +555,7 @@ private final class SeededTasksSpec {
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 private final class SeededThreadsSpec {
     @SystemUnderTest var counter = LockedCounter()
 
@@ -559,7 +564,7 @@ private final class SeededThreadsSpec {
         counter.add(start)
     }
 
-    @Oracle
+    @Equivalence
     func equivalent(to other: LockedCounter) -> Bool {
         counter.value == other.value
     }
@@ -574,7 +579,7 @@ private final class SeededThreadsSpec {
     }
 }
 
-@StateMachine(.tasks)
+@StateMachine
 private final class CapacityGatedTasksSpec {
     @SystemUnderTest var counter = LockedCounter()
 
@@ -594,7 +599,7 @@ private final class CapacityGatedTasksSpec {
     }
 }
 
-@StateMachine(.threads)
+@StateMachine
 private final class CapacityGatedThreadsSpec {
     @SystemUnderTest var counter = LockedCounter()
 
@@ -609,7 +614,7 @@ private final class CapacityGatedThreadsSpec {
         _ = counter.value
     }
 
-    @Oracle
+    @Equivalence
     func equivalent(to other: LockedCounter) -> Bool {
         counter.value < 10 && counter.value == other.value
     }

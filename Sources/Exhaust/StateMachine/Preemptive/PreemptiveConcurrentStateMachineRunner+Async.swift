@@ -42,6 +42,16 @@ public extension __ExhaustRuntime {
             regressionSeeds = ExhaustTraitConfiguration.current?.regressions ?? []
         #endif
 
+        guard threadsModeIsUsable(
+            Spec.self,
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        ) else {
+            return nil
+        }
+
         let searchAbandonments = UnsafeSendableBox(0)
         let innerBackend = AsyncPreemptiveChecker<Spec>(
             idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds,
@@ -221,7 +231,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         if hasResponseInfo == false {
             nonisolated(unsafe) let oracleSpec = concurrentSpec
             nonisolated(unsafe) let sequentialResult = sequentialSpec.systemUnderTest
-            switch awaitOrTimeout("oracle", { await oracleSpec.oracleCheck(sequentialResult) }) {
+            switch awaitOrTimeout("oracle", { await oracleSpec.equivalenceCheck(sequentialResult) }) {
                 case .some(true):
                     return .passed
                 case .none:
@@ -282,7 +292,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
                         return false
                     }
                 }
-                return await unsafeConcurrent.oracleCheck(unsafeWitness.systemUnderTest)
+                return await unsafeConcurrent.equivalenceCheck(unsafeWitness.systemUnderTest)
             }
             matched = result ?? false
         }, &exception)
@@ -457,7 +467,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
                     guard let spec = replaySpec else {
                         return false
                     }
-                    return await unsafeSpec.oracleCheck(spec.systemUnderTest)
+                    return await unsafeSpec.equivalenceCheck(spec.systemUnderTest)
                 },
                 failureDescription: {
                     unsafeSpec.failureDescription()
@@ -549,7 +559,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         nonisolated(unsafe) let referenceResult = reference.systemUnderTest
         nonisolated(unsafe) let oracleSpec = spec
         let oracleHeld = awaitOrTimeout("smoke-oracle", timeoutMultiplier: 5) {
-            await oracleSpec.oracleCheck(referenceResult)
+            await oracleSpec.equivalenceCheck(referenceResult)
         }
         // nil = timed out waiting for oracle check
         if oracleHeld == nil {

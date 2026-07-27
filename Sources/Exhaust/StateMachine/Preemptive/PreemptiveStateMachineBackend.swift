@@ -121,6 +121,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
         )
 
         context.state.failureContext.specName = "\(Spec.self)"
+        context.state.failureContext.mode = .threads
         context.state.failureContext.isPreemptive = true
         context.state.failureContext.discoveryMethod = discoveryMethod
         context.state.failureContext.replaySeed = replaySeed

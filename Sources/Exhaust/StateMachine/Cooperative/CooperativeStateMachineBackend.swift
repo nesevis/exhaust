@@ -103,6 +103,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
         )
 
         context.state.failureContext.specName = "\(Spec.self)"
+        context.state.failureContext.mode = .tasks
         context.state.failureContext.discoveryMethod = discoveryMethod
         context.state.failureContext.replaySeed = replaySeed
         context.state.failureContext.oracleDescription = oracle.flatMap { oracle in

@@ -24,7 +24,7 @@ struct MultiModelTests {
 
 // MARK: - Spec
 
-@StateMachine(.sequential)
+@StateMachine
 final class MultiModelSpec {
     var expectedKeys: [String] = []
     var expectedValues: [Int] = []

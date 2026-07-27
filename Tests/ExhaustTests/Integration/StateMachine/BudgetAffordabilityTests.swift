@@ -48,7 +48,7 @@ struct BudgetAffordabilityTests {
 
 // MARK: - StateMachine: Correct implementation
 
-@StateMachine(.sequential)
+@StateMachine
 final class BudgetAffordabilitySpec {
     var wasUnaffordable = false
     @SystemUnderTest var items: [BillItem] = []
@@ -84,7 +84,7 @@ final class BudgetAffordabilitySpec {
 
 // MARK: - StateMachine: Buggy greedy implementation
 
-@StateMachine(.sequential)
+@StateMachine
 final class BuggyBudgetAffordabilitySpec {
     @SystemUnderTest var items: [BillItem] = []
 

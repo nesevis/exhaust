@@ -352,17 +352,17 @@ func isPlausiblyTypeName(_ expression: String) -> Bool {
     return lastComponent.first?.isUppercase ?? false
 }
 
-func synthesizeOracleCheck(oracle: OracleInfo, hasAnyAsync: Bool, access: String) -> DeclSyntax {
+func synthesizeEquivalenceCheck(equivalence: EquivalenceInfo, hasAnyAsync: Bool, access: String) -> DeclSyntax {
     let signature = hasAnyAsync
-        ? "\(access)func oracleCheck(_ sequentialResult: SystemUnderTest) async -> Bool"
-        : "\(access)func oracleCheck(_ sequentialResult: SystemUnderTest) -> Bool"
-    let awaitKeyword = oracle.isAsync ? "await " : ""
-    let callArgument = oracle.parameterLabel == "_"
+        ? "\(access)func equivalenceCheck(_ sequentialResult: SystemUnderTest) async -> Bool"
+        : "\(access)func equivalenceCheck(_ sequentialResult: SystemUnderTest) -> Bool"
+    let awaitKeyword = equivalence.isAsync ? "await " : ""
+    let callArgument = equivalence.parameterLabel == "_"
         ? "sequentialResult"
-        : "\(oracle.parameterLabel): sequentialResult"
+        : "\(equivalence.parameterLabel): sequentialResult"
     return """
     \(raw: signature) {
-        \(raw: awaitKeyword)\(raw: oracle.methodName)(\(raw: callArgument))
+        \(raw: awaitKeyword)\(raw: equivalence.methodName)(\(raw: callArgument))
     }
     """
 }

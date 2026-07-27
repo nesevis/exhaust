@@ -3,9 +3,9 @@
 // The macro synthesizes conformance. Users never implement this directly.
 import Foundation
 
-/// Drives asynchronous spec tests for both `.tasks` and `.threads` modes.
+/// Drives spec tests with any asynchronous member, under every execution mode.
 ///
-/// The `@StateMachine` macro synthesizes this conformance when any `@Command` or `@Invariant` method is `async`. For `.threads`, the macro also synthesizes ``oracleCheck(_:)`` from the `@Oracle` method. Override ``StateMachineSpecBase/failureDescription()`` to include diagnostic state in failure reports.
+/// The `@StateMachine` macro synthesizes this conformance when any `@Command`, `@Invariant`, `@Setup`, or `@Equivalence` method is `async`, and the synchronous ``StateMachineSpec`` one otherwise. Cooperative interleaving reaches this conformance only: `mode: .tasks` interleaves at `await` boundaries, which a synchronous spec does not have. Override ``StateMachineSpecBase/failureDescription()`` to include diagnostic state in failure reports.
 ///
 /// ## Skip Identification
 ///
@@ -13,7 +13,7 @@ import Foundation
 public protocol AsyncStateMachineSpec: StateMachineSpecBase, AnyObject {
     /// Executes a command against the model and SUT asynchronously, returning a ``CommandResponse`` for linearizability checking.
     ///
-    /// Both `.tasks` and `.threads` record the response against the lane that ran the command, which is what lets a return value be compared against a sequential replay. `.sequential` discards it.
+    /// Both `mode: .tasks` and `mode: .threads` record the response against the lane that ran the command, which is what lets a return value be compared against a sequential replay. `mode: .sequential` discards it.
     ///
     /// - Parameter command: The command to execute.
     /// - Returns: The command's description paired with its return value (or `nil` for void commands).
@@ -31,11 +31,11 @@ public protocol AsyncStateMachineSpec: StateMachineSpecBase, AnyObject {
     /// - Throws: Any error the setup method throws. A setup throw fails the run; there is no skip channel.
     func runSetup(_ step: SetupStep) async throws
 
-    /// Compares the concurrent SUT state against a sequentially-replayed reference SUT. Only called for `.threads` specs.
+    /// Answers whether a concurrent run produced the same result as a sequential replay of the same commands. Synthesized from the spec's `@Equivalence` method.
     ///
-    /// - Parameter sequentialResult: The SUT state from a sequential (race-free) replay of the same command sequence.
-    /// - Returns: `true` if the concurrent SUT state matches the expected sequential state.
-    func oracleCheck(_ sequentialResult: SystemUnderTest) async -> Bool
+    /// - Parameter sequentialResult: The system under test from a sequential replay of the same command sequence.
+    /// - Returns: `true` when the concurrent state counts as equivalent to that replay's.
+    func equivalenceCheck(_ sequentialResult: SystemUnderTest) async -> Bool
 
     /// Captures diagnostic state for failure reports from an actor-safe async context.
     ///
@@ -44,11 +44,11 @@ public protocol AsyncStateMachineSpec: StateMachineSpecBase, AnyObject {
 }
 
 public extension AsyncStateMachineSpec {
-    /// Default oracle that traps. Overridden by the `@StateMachine(.threads)` macro's synthesized `oracleCheck`.
+    /// Default that traps, for a spec that declares no `@Equivalence`. The macro synthesizes a real one when the method is present.
     ///
-    /// Reaching this trap would be a dispatch bug, not user error. The invariant that keeps it unreachable lives in ``__ExhaustRuntime/__runStateMachineDispatchAsync(_:settings:fileID:filePath:line:column:)``: only `.threads` specs are routed to the preemptive runner that calls `oracleCheck`, and only `@StateMachine(.threads)` synthesizes a real implementation. `.sequential` and `.tasks` never call it. The safety rests on that dispatch, not on the type system, because the unified protocol cannot express "oracle only when `.threads`".
-    func oracleCheck(_: SystemUnderTest) async -> Bool {
-        fatalError("oracleCheck is only called for .threads specs")
+    /// Reaching this trap would be a runner bug rather than user error. Two things keep it unreachable: ``StateMachineSpecBase/hasEquivalence`` is false for such a spec and every caller checks it first, and a thread-based run, which cannot proceed without an equivalence, refuses to start at all. The protocol cannot express "present only sometimes", so the guarantee lives in those two checks.
+    func equivalenceCheck(_: SystemUnderTest) async -> Bool {
+        fatalError("equivalenceCheck requires an @Equivalence method; hasEquivalence is false for this spec")
     }
 
     /// Default implementation for non-actor conformers that can access properties directly.

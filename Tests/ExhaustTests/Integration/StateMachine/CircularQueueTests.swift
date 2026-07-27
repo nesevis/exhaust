@@ -54,7 +54,7 @@ struct CircularQueueTests {
 
 // MARK: - StateMachine
 
-@StateMachine(.sequential)
+@StateMachine
 final class CircularQueueSpec {
     var expected: [Int] = []
     @SystemUnderTest var queue = BuggyCircularQueue(capacity: 6)

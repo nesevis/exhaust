@@ -89,7 +89,7 @@ struct ExamGraderTests {
 //
 // The `answersMatchKeyLength` invariant runs after every command and catches bug 1 as soon as a mismatched submission is stored.
 
-@StateMachine(.sequential)
+@StateMachine
 final class ExamGraderSpec {
     @SystemUnderTest var grader = BuggyExamGrader()
 

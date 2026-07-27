@@ -141,7 +141,7 @@ struct SCAReductionScreeningTests {
 
 // MARK: - StateMachine
 
-@StateMachine(.sequential)
+@StateMachine
 final class BuggyCounterSpec {
     var expectedValue: Int = 0
     @SystemUnderTest var counter = BuggyCounter(capacity: 3)
@@ -188,7 +188,7 @@ struct BuggyCounter {
 // MARK: - Pairwise Bug StateMachine
 
 /// A spec where any sequence containing both `setA` and `setB` triggers the invariant failure. Pairwise SCA at t=2 is guaranteed to produce such a row.
-@StateMachine(.sequential)
+@StateMachine
 final class PairwiseBugSpec {
     var modelState: Int = 0
     @SystemUnderTest var sut = PairwiseBugSUT()

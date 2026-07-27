@@ -13,6 +13,7 @@ struct TasksQuiescenceGateTests {
     func correctSutPassesWhenSystemUnderTestSuspends() async {
         let result = await #execute(
             SuspendingCounterSpec.self,
+            mode: .tasks,
             .commandLimit(4),
             .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.all)
@@ -32,6 +33,7 @@ struct TasksQuiescenceGateTests {
     func correctSutPassesWhenInvariantSuspends() async {
         let result = await #execute(
             AsyncInvariantSuspendingCounterSpec.self,
+            mode: .tasks,
             .commandLimit(4),
             .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.all)
@@ -74,7 +76,7 @@ struct TasksQuiescenceGateTests {
 // MARK: - Specs
 
 /// The textbook `.tasks` spec shape from the `@StateMachine` documentation, applied to a system under test whose API suspends: the model is updated, then the system under test is called.
-@StateMachine(.tasks)
+@StateMachine
 final class SuspendingCounterSpec {
     var expected: Int = 0
     @SystemUnderTest
@@ -97,7 +99,7 @@ final class SuspendingCounterSpec {
 }
 
 /// ``SuspendingCounterSpec`` with the one difference that the invariant itself suspends before comparing. The command and the counter are correct; only the check's own suspension point creates the window.
-@StateMachine(.tasks)
+@StateMachine
 final class AsyncInvariantSuspendingCounterSpec {
     var expected: Int = 0
     @SystemUnderTest
@@ -121,7 +123,7 @@ final class AsyncInvariantSuspendingCounterSpec {
 }
 
 /// A spec over a counter that drops every update, so the first `increment` leaves the model and the system under test permanently disagreeing. Paired with a command that suspends and then skips, so a hand-built schedule can make the skip the probe's final exit.
-@StateMachine(.tasks)
+@StateMachine
 final class LostUpdateCounterSpec {
     var expected: Int = 0
     @SystemUnderTest

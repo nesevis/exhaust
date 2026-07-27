@@ -92,6 +92,7 @@ struct PreemptiveOracleReplayTests {
         let initial = try #require(
             await #execute(
                 PreemptiveSequentiallyBrokenSpec.self,
+                mode: .threads,
                 .commandLimit(6),
                 .suppress(.all)
             )
@@ -100,6 +101,7 @@ struct PreemptiveOracleReplayTests {
         let replayed = try #require(
             await #execute(
                 PreemptiveSequentiallyBrokenSpec.self,
+                mode: .threads,
                 .commandLimit(6),
                 .replay(.encoded(replaySeed)),
                 .suppress(.all)
@@ -113,6 +115,7 @@ struct PreemptiveOracleReplayTests {
         let result = try #require(
             await #execute(
                 AlwaysThrowingPreemptiveSpec.self,
+                mode: .threads,
                 .commandLimit(2),
                 .budget(.custom(screening: 0, sampling: 50)),
                 .suppress(.all)
@@ -184,7 +187,7 @@ struct ConcurrentStateMachineReplayTests {
 
 // MARK: - Sequential Spec
 
-@StateMachine(.sequential)
+@StateMachine
 final class BrokenModuloSpec {
     var expected: Int = 0
     @SystemUnderTest var counter = ModuloCounter(modulus: 3)
@@ -226,7 +229,7 @@ struct ModuloCounter {
 
 // MARK: - Cooperative Concurrent Spec
 
-@StateMachine(.sequential)
+@StateMachine
 final class ReplayableNonAtomicCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: ReplayableNonAtomicCounter = .init()
@@ -281,12 +284,12 @@ actor ReplayableNonAtomicCounter: CustomDebugStringConvertible {
 
 // MARK: - Preemptive Concurrent Spec
 
-@StateMachine(.threads)
+@StateMachine
 final class PreemptiveReplayableSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: PreemptiveRacyCounter = .init()
 
-    @Oracle
+    @Equivalence
     func oracleMatches(other: PreemptiveRacyCounter) -> Bool {
         counter.value == other.value
     }
@@ -338,12 +341,12 @@ final class PreemptiveRacyCounter: @unchecked Sendable, CustomDebugStringConvert
 
 // MARK: - Preemptive Sequentially Broken Spec
 
-@StateMachine(.threads)
+@StateMachine
 final class PreemptiveSequentiallyBrokenSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: BrokenDecrementCounter = .init()
 
-    @Oracle
+    @Equivalence
     func oracleMatches(other: BrokenDecrementCounter) -> Bool {
         counter.value == other.value
     }
@@ -394,11 +397,11 @@ final class BrokenDecrementCounter: @unchecked Sendable, CustomDebugStringConver
 
 // MARK: - Always-Throwing Preemptive Spec
 
-@StateMachine(.threads)
+@StateMachine
 final class AlwaysThrowingPreemptiveSpec {
     @SystemUnderTest var sut = ThrowingSUT()
 
-    @Oracle
+    @Equivalence
     func oracleMatches(other _: ThrowingSUT) -> Bool {
         true
     }

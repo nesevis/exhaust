@@ -10,7 +10,7 @@
         "Command": CommandMacro.self,
         "Setup": SetupMacro.self,
         "Invariant": InvariantMacro.self,
-        "Oracle": OracleMacro.self,
+        "Equivalence": EquivalenceMacro.self,
     ]
 
 #endif

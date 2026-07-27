@@ -241,6 +241,7 @@ struct ConcurrentStateMachineDrainLoopTests {
         let result = try #require(
             await #execute(
                 YieldingCounterSpec.self,
+                mode: .tasks,
                 .commandLimit(6),
                 .budget(.custom(screening: 0, sampling: 100)),
                 .suppress(.issueReporting)
@@ -270,7 +271,7 @@ struct ConcurrentStateMachineDrainLoopTests {
 // MARK: - Specs
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-@StateMachine(.tasks)
+@StateMachine
 final class YieldingCounterSpec {
     var expected: Int = 0
     @SystemUnderTest var counter: YieldingCounter = .init()
@@ -299,7 +300,7 @@ final class YieldingCounterSpec {
 }
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-@StateMachine(.sequential)
+@StateMachine
 final class TokenDrawSpec {
     var tokens: [Int] = []
     var model: [Int] = []

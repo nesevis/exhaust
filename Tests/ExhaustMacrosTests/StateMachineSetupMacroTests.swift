@@ -15,7 +15,7 @@
         func setupSynthesizesMembers() {
             assertMacro {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class ConfiguredSpec {
                     @SystemUnderTest var queue: MyQueue!
 
@@ -97,8 +97,6 @@
                         }
                     }
 
-                    static let executionModel: ExecutionModel = .sequential
-
                     required init() {
                     }
                 }
@@ -113,7 +111,7 @@
         func zeroParameterSetup() {
             assertMacro {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class WarmedSpec {
                     @SystemUnderTest var cache: MyCache
 
@@ -191,8 +189,6 @@
                         }
                     }
 
-                    static let executionModel: ExecutionModel = .sequential
-
                     required init() {
                     }
                 }
@@ -207,7 +203,7 @@
         func asyncSetupForcesAsyncConformance() {
             assertMacro {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class AsyncSetupSpec {
                     @SystemUnderTest var store: MyStore!
 
@@ -287,8 +283,6 @@
                         }
                     }
 
-                    static let executionModel: ExecutionModel = .sequential
-
                     required init() {
                     }
                 }
@@ -311,7 +305,7 @@
         func multipleSetupsDiagnostic() {
             assertMacro {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class TwoSetupSpec {
                     @SystemUnderTest var queue: MyQueue!
 
@@ -330,7 +324,7 @@
                 """
             } diagnostics: {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class TwoSetupSpec {
                     @SystemUnderTest var queue: MyQueue!
 
@@ -355,7 +349,7 @@
         func setupCommandConflictDiagnostic() {
             assertMacro {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class ConflictSpec {
                     @SystemUnderTest var queue: MyQueue!
 
@@ -371,12 +365,12 @@
                 """
             } diagnostics: {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class ConflictSpec {
                     @SystemUnderTest var queue: MyQueue!
 
                     @Setup(.int(in: 1 ... 32))
-                    ╰─ 🛑 @Setup cannot be combined with @Command, @Invariant, or @Oracle on the same method
+                    ╰─ 🛑 @Setup cannot be combined with @Command, @Invariant, or @Equivalence on the same method
                     @Command(weight: 1, .int(in: 1 ... 32))
                     func configure(capacity: Int) {
                     }
@@ -393,7 +387,7 @@
         func staticSetupDiagnostic() {
             assertMacro {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class StaticSetupSpec {
                     @SystemUnderTest var queue: MyQueue!
 
@@ -408,7 +402,7 @@
                 """
             } diagnostics: {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class StaticSetupSpec {
                     @SystemUnderTest var queue: MyQueue!
 
@@ -429,7 +423,7 @@
         func staticCommandDiagnostic() {
             assertMacro {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class StaticCommandSpec {
                     @SystemUnderTest var queue: MyQueue!
 
@@ -440,7 +434,7 @@
                 """
             } diagnostics: {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class StaticCommandSpec {
                     @SystemUnderTest var queue: MyQueue!
 
@@ -457,7 +451,7 @@
         func setupArityMismatchDiagnostic() {
             assertMacro {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class ArityMismatchSpec {
                     @SystemUnderTest var queue: MyQueue!
 
@@ -472,7 +466,7 @@
                 """
             } diagnostics: {
                 """
-                @StateMachine(.sequential)
+                @StateMachine
                 final class ArityMismatchSpec {
                     @SystemUnderTest var queue: MyQueue!
 

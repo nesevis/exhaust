@@ -138,7 +138,7 @@ struct TasksResponseRecordingTests {
 // MARK: - Specs
 
 /// A `.tasks` spec whose commands answer with a value, so the recorded responses carry more than completion. `appendAfterSuspending` opens a window the drain loop can run another lane inside, and `removeLast` skips on an empty log.
-@StateMachine(.tasks)
+@StateMachine
 final class RespondingLogSpec {
     var appended: [Int] = []
     @SystemUnderTest

@@ -24,6 +24,7 @@
                 """
                 __ExhaustRuntime.__runStateMachineTimeDispatch(
                     BoundedQueueSpec.self,
+                    mode: .sequential,
                     time: .minutes(5),
                     settings: [],
                     fileID: #fileID,
@@ -68,6 +69,7 @@
                     """
                     __ExhaustRuntime.__runStateMachineTimeDispatchAsync(
                         ConcurrentQueueSpec.self,
+                        mode: .sequential,
                         time: .minutes(5),
                         settings: [.parallelize(lanes: .two)],
                         fileID: #fileID,
@@ -96,6 +98,7 @@
                 """
                 __ExhaustRuntime.__runStateMachineTimeDispatch(
                     BoundedQueueSpec.self,
+                    mode: .sequential,
                     time: .seconds(30),
                     settings: [.replay(42)],
                     fileID: #fileID,

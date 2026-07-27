@@ -11,6 +11,7 @@ struct AtomicCounterConcurrentTests {
     func threadSafeCounterPassesUnderAllInterleavings() async {
         let result = await #execute(
             AtomicCounterSpec.self,
+            mode: .tasks,
             .commandLimit(4),
             .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.issueReporting)
@@ -23,6 +24,7 @@ struct AtomicCounterConcurrentTests {
     func narrowRaceInNonSuspendingCounterIsInvisibleToCooperativeScheduler() async {
         let result = await #execute(
             NarrowRaceCounterSpec.self,
+            mode: .tasks,
             .commandLimit(6),
             .budget(.custom(screening: 0, sampling: 200)),
             .suppress(.issueReporting)
@@ -33,7 +35,7 @@ struct AtomicCounterConcurrentTests {
 
 // MARK: - Specs
 
-@StateMachine(.tasks)
+@StateMachine
 final class AtomicCounterSpec {
     var expected: Int = 0
     @SystemUnderTest
@@ -62,7 +64,7 @@ final class AtomicCounterSpec {
     }
 }
 
-@StateMachine(.tasks)
+@StateMachine
 final class NarrowRaceCounterSpec {
     var expected: Int = 0
     @SystemUnderTest

@@ -479,7 +479,7 @@ Exhaust has a separate facility for this kind of testing, built around a `@State
     await #execute(MySpec.self)
 }
 
-@StateMachine(.sequential)
+@StateMachine
 final class MySpec {
     @SystemUnderTest
     var sut = MyType()
@@ -494,7 +494,7 @@ final class MySpec {
 }
 ```
 
-The `@StateMachine` macro takes an execution mode (`.sequential`, `.tasks`, or `.threads`) that tells Exhaust how to run the commands. `.sequential` runs commands one at a time and checks `@Invariant` after each step. `.tasks` runs commands concurrently across multiple lanes with deterministic interleaving at `await` boundaries, for finding reentrancy and ordering bugs in async code. `.threads` dispatches commands to real OS threads for finding data races in locks, dispatch queues, and atomics, checked by an `@Oracle` that compares concurrent state against a sequential replay.
+The `@StateMachine` macro takes an execution mode (`.sequential`, `.tasks`, or `.threads`) that tells Exhaust how to run the commands. `.sequential` runs commands one at a time and checks `@Invariant` after each step. `.tasks` runs commands concurrently across multiple lanes with deterministic interleaving at `await` boundaries, for finding reentrancy and ordering bugs in async code. `.threads` dispatches commands to real OS threads for finding data races in locks, dispatch queues, and atomics, checked by an `@Equivalence` that compares concurrent state against a sequential replay.
 
 Specs on an `actor` use `.sequential` because actor isolation serialises all dispatch, so concurrent testing has nowhere to interleave. For `final class` specs with async commands, `.tasks` tests interleaving across N lanes:
 
