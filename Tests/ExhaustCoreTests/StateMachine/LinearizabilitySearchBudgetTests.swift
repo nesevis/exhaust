@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import ExhaustCore
 
@@ -72,6 +73,29 @@ private func measureVoidSearch(
     commandsPerLane: Int,
     prefixLength: Int = 0
 ) -> SearchMeasurement {
+    // Parks the calling thread on a semaphore while the checker's async-only search runs on a detached task, so this helper keeps its synchronous shape. The runners bridge the same way through `__ExhaustRuntime.blockingAwait`; tests cannot reach it from this module.
+    let measurement = UnsafeSendableBox<SearchMeasurement?>(nil)
+    let semaphore = DispatchSemaphore(value: 0)
+    Task.detached {
+        measurement.value = await runVoidSearch(
+            laneCount: laneCount,
+            commandsPerLane: commandsPerLane,
+            prefixLength: prefixLength
+        )
+        semaphore.signal()
+    }
+    semaphore.wait()
+    guard let value = measurement.value else {
+        fatalError("measureVoidSearch signalled without producing a measurement")
+    }
+    return value
+}
+
+private func runVoidSearch(
+    laneCount: Int,
+    commandsPerLane: Int,
+    prefixLength: Int
+) async -> SearchMeasurement {
     var lanes: [[ProbeObservation]] = []
     var nextValue = 0
     for laneIndex in 0 ..< laneCount {
@@ -96,7 +120,7 @@ private func measureVoidSearch(
     // One element longer than the history, so no ordering of these commands can produce it.
     let unreachableFinalState = Array(0 ... (laneCount * commandsPerLane))
 
-    let result = checker.check(
+    let result = await checker.check(
         prefixLength: prefixLength,
         replayPrefix: {
             prefixCalls += 1

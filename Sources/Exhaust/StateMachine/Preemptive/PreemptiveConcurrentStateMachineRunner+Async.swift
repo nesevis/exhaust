@@ -422,7 +422,7 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         // The search replays setup and commands on fresh specs, so a continuation that escapes to a foreign executor parks this lane exactly as it would in any other phase. The multiplier is generous because one bound covers the whole search rather than a single probe: on the drain-loop path it measures idle time since the last drained job, so a long-but-progressing search never trips it. On the semaphore fallback the bound is total wall clock, so a search that legitimately runs past it is abandoned.
         let result: LinearizabilityChecker.Result? = awaitOrTimeout("linearizability", timeoutMultiplier: 10) {
             var replaySpec: Spec?
-            return await checker.checkAsync(
+            return await checker.check(
                 prefixLength: prefixCommands.count,
                 replayPrefix: {
                     // Once per sibling retry in the DFS: every fresh replay instance receives the same setup, and a setup error fails this ordering rather than crashing into an unconfigured SUT.

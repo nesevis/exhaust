@@ -224,7 +224,7 @@ private func searchForExplainingOrder<Spec: AsyncStateMachineSpec>(
 ) async -> EquivalenceVerdict {
     let checker = LinearizabilityChecker(laneResponses: laneResponses)
     var replaySpec: Spec?
-    let result = await checker.checkAsync(
+    let result = await checker.check(
         prefixLength: prefixCommands.count,
         replayPrefix: {
             // Once per sibling retry in the search: every fresh replay instance receives the same setup, and a setup error fails this ordering rather than crashing into an unconfigured system under test.

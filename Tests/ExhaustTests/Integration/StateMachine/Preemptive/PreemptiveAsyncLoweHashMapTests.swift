@@ -2,7 +2,7 @@ import Exhaust
 import Foundation
 import Testing
 
-/// Async variant of the Lowe hash map linearizability test. Exercises the async preemptive runner's linearizability checking, which requires per-lane response recording and the async `checkAsync` path on ``LinearizabilityChecker``.
+/// Async variant of the Lowe hash map linearizability test. Exercises the async preemptive runner's linearizability checking, which requires per-lane response recording and the response-recording path into ``LinearizabilityChecker``.
 @Suite("Preemptive linearizability: async Lowe hash map", .serialized, .tags(.stateMachine))
 struct PreemptiveAsyncLoweHashMapTests {
     @Test("Async runner detects ghost entry from buggy delete")

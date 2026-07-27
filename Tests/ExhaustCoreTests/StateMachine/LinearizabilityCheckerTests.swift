@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import ExhaustCore
 
@@ -276,26 +277,28 @@ private func check(
     prefix: [StackCommand] = [],
     finalState: [Int]
 ) -> LinearizabilityChecker.Result {
-    let checker = LinearizabilityChecker(laneResponses: lanes)
-    var replayStack: Stack?
-    return checker.check(
-        prefixLength: prefix.count,
-        replayPrefix: {
-            let fresh = Stack()
-            for command in prefix {
-                fresh.apply(command)
-            }
-            replayStack = fresh
-            return true
-        },
-        replayCommand: { laneIndex, commandIndex in
-            replayStack?.replay(lanes[laneIndex][commandIndex].command)
-        },
-        checkOracle: {
-            replayStack?.elements == finalState
-        },
-        failureDescription: { nil }
-    )
+    blockingCheck {
+        let checker = LinearizabilityChecker(laneResponses: lanes)
+        var replayStack: Stack?
+        return await checker.check(
+            prefixLength: prefix.count,
+            replayPrefix: {
+                let fresh = Stack()
+                for command in prefix {
+                    fresh.apply(command)
+                }
+                replayStack = fresh
+                return true
+            },
+            replayCommand: { laneIndex, commandIndex in
+                replayStack?.replay(lanes[laneIndex][commandIndex].command)
+            },
+            checkOracle: {
+                replayStack?.elements == finalState
+            },
+            failureDescription: { nil }
+        )
+    }
 }
 
 /// Flattens a checker result into a plain pair for assertions: whether the run was linearizable, and the witness coordinates when it was not.
@@ -383,26 +386,44 @@ private func checkQueue(
     prefix: [QueueCommand] = [],
     finalState: [Int]
 ) -> LinearizabilityChecker.Result {
-    let checker = LinearizabilityChecker(laneResponses: lanes)
-    var replayQueue: Queue?
-    return checker.check(
-        prefixLength: prefix.count,
-        replayPrefix: {
-            let fresh = Queue()
-            for command in prefix {
-                fresh.apply(command)
-            }
-            replayQueue = fresh
-            return true
-        },
-        replayCommand: { laneIndex, commandIndex in
-            replayQueue?.replay(lanes[laneIndex][commandIndex].command)
-        },
-        checkOracle: {
-            replayQueue?.elements == finalState
-        },
-        failureDescription: { nil }
-    )
+    blockingCheck {
+        let checker = LinearizabilityChecker(laneResponses: lanes)
+        var replayQueue: Queue?
+        return await checker.check(
+            prefixLength: prefix.count,
+            replayPrefix: {
+                let fresh = Queue()
+                for command in prefix {
+                    fresh.apply(command)
+                }
+                replayQueue = fresh
+                return true
+            },
+            replayCommand: { laneIndex, commandIndex in
+                replayQueue?.replay(lanes[laneIndex][commandIndex].command)
+            },
+            checkOracle: {
+                replayQueue?.elements == finalState
+            },
+            failureDescription: { nil }
+        )
+    }
+}
+
+/// Parks the calling thread on a semaphore while the checker's async-only search runs on a detached task, so these synchronous helpers keep their shape. The runners bridge the same way through `__ExhaustRuntime.blockingAwait`; tests cannot reach it from this module.
+private func blockingCheck(_ work: @escaping () async -> LinearizabilityChecker.Result) -> LinearizabilityChecker.Result {
+    nonisolated(unsafe) let work = work
+    let result = UnsafeSendableBox<LinearizabilityChecker.Result?>(nil)
+    let semaphore = DispatchSemaphore(value: 0)
+    Task.detached {
+        result.value = await work()
+        semaphore.signal()
+    }
+    semaphore.wait()
+    guard let verdict = result.value else {
+        fatalError("blockingCheck signalled without producing a result")
+    }
+    return verdict
 }
 
 private func queueVerdict(

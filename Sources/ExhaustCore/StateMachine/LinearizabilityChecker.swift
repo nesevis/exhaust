@@ -8,7 +8,7 @@
 ///
 /// On failure, the checker reports the ``Witness``: the concurrent command whose observed response no ordering reproduces. This pins a response-level violation to a single command, the case the final-state diff cannot show, because the end state may coincidentally match a valid ordering even though no ordering yields the observed return value. When divergence is only in the final state (the oracle), there is no command witness and ``Witness`` is `nil`; that case is already visible in the expected-versus-actual state diff.
 ///
-/// Both synchronous and asynchronous replay are supported. The interleaving search and response comparison are shared; only the replay-and-verify step differs.
+/// Replay is asynchronous only. A synchronous caller bridges once around the whole check: the search runs after the concurrent phase, so the bridge adds nothing to the command path the lanes race on, and one bridge per check costs less than maintaining a synchronous twin of the exponential search.
 ///
 /// The checker is deliberately non-generic: it stores per-lane ``ObservedOutcome`` arrays and addresses commands by `(laneIndex, commandIndex)` coordinates through the replay closure, so the exponential search compiles as concrete code under this module's whole-module optimization instead of an unspecialized generic. The commands themselves stay with the caller.
 ///
@@ -55,51 +55,6 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         let commandIndex: Int
     }
 
-    // MARK: - Synchronous
-
-    /// Checks linearizability using synchronous replay closures with incremental verification.
-    ///
-    /// Folds verification into the DFS: each placed command is replayed immediately and the subtree is pruned on response mismatch.
-    ///
-    /// - Parameters:
-    ///   - prefixLength: How many prefix commands `replayPrefix` runs, so the search budget can charge a prefix replay for the work it actually does.
-    ///   - replayPrefix: Replays all prefix commands on a fresh sequential instance. Returns `false` if any prefix command fails. The closure captures its own prefix data.
-    ///   - replayCommand: Replays the concurrent command at the given `(laneIndex, commandIndex)` coordinates on the sequential instance. Returns `nil` if the command threw a non-skip error.
-    ///   - checkOracle: Checks whether the sequential instance's final state matches the concurrent execution's final state.
-    ///   - failureDescription: Produces a human-readable description of the expected state on failure.
-    package func check(
-        prefixLength: Int,
-        replayPrefix: () -> Bool,
-        replayCommand: (_ laneIndex: Int, _ commandIndex: Int) -> ReplayResponse?,
-        checkOracle: () -> Bool,
-        failureDescription: () -> String?
-    ) -> Result {
-        let laneCount = laneOutcomes.count
-        let totalCommands = laneOutcomes.reduce(0) { $0 + $1.count }
-        var state = SearchState(
-            laneCount: laneCount,
-            totalCommands: totalCommands,
-            prefixLength: prefixLength,
-            replayBudget: PreemptiveReduction.linearizabilitySearchReplayBudget
-        )
-
-        let found = searchIncrementally(
-            totalCommands: totalCommands,
-            state: &state,
-            replayPrefix: replayPrefix,
-            replayCommand: replayCommand,
-            checkOracle: checkOracle
-        )
-
-        return makeResult(
-            found: found,
-            abandoned: state.abandoned,
-            closestMatchDepth: state.closestMatchDepth,
-            closestPlaced: state.closestPlaced,
-            failureDescription: failureDescription
-        )
-    }
-
     // MARK: - Search State
 
     private struct SearchState {
@@ -143,108 +98,17 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         }
     }
 
-    // MARK: - Incremental Search
+    // MARK: - Check
 
-    private func replayToDepth(
-        _ depth: Int,
-        state: inout SearchState,
-        replayPrefix: () -> Bool,
-        replayCommand: (Int, Int) -> ReplayResponse?
-    ) -> Bool {
-        guard state.chargePrefixReplay() else {
-            return false
-        }
-        guard replayPrefix() else { return false }
-        for index in 0 ..< depth {
-            guard state.chargeReplay() else { return false }
-            let placed = state.currentOrdering[index]
-            guard replayCommand(placed.laneIndex, placed.commandIndex) != nil else { return false }
-        }
-        return true
-    }
-
-    private func searchIncrementally(
-        totalCommands: Int,
-        state: inout SearchState,
-        replayPrefix: () -> Bool,
-        replayCommand: (Int, Int) -> ReplayResponse?,
-        checkOracle: () -> Bool
-    ) -> Bool {
-        guard state.abandoned == false else { return false }
-        let depth = state.currentOrdering.count
-
-        if depth == totalCommands {
-            if depth == 0 {
-                guard replayPrefix() else { return false }
-            }
-            let oraclePassed = checkOracle()
-            if oraclePassed == false {
-                updateClosest(depth: depth, placed: nil, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
-            }
-            return oraclePassed
-        }
-
-        var childrenTried = 0
-
-        for laneIndex in 0 ..< laneOutcomes.count {
-            let cursor = state.cursors[laneIndex]
-            guard cursor < laneOutcomes[laneIndex].count else { continue }
-            guard candidateRespectsRealTime(laneIndex: laneIndex, cursor: cursor, cursors: state.cursors) else { continue }
-
-            let observed = laneOutcomes[laneIndex][cursor]
-
-            if childrenTried > 0 || depth == 0 {
-                guard replayToDepth(depth, state: &state, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
-                    if state.abandoned { return false }
-                    continue
-                }
-            }
-            childrenTried += 1
-
-            let placed = Placed(laneIndex: laneIndex, commandIndex: cursor)
-
-            guard state.chargeReplay() else { return false }
-            guard let replay = replayCommand(laneIndex, cursor) else {
-                updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
-                continue
-            }
-
-            if stepMismatches(observed: observed, replay: replay) {
-                updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
-                continue
-            }
-
-            if observed.isSkipped == false, responsesMatch(observed: observed, replay: replay) == false {
-                updateClosest(depth: depth, placed: placed, closestMatchDepth: &state.closestMatchDepth, closestPlaced: &state.closestPlaced)
-                continue
-            }
-
-            state.cursors[laneIndex] += 1
-            state.currentOrdering.append(placed)
-
-            let found = searchIncrementally(
-                totalCommands: totalCommands,
-                state: &state,
-                replayPrefix: replayPrefix,
-                replayCommand: replayCommand,
-                checkOracle: checkOracle
-            )
-
-            state.currentOrdering.removeLast()
-            state.cursors[laneIndex] -= 1
-
-            if found { return true }
-        }
-
-        return false
-    }
-
-    // MARK: - Asynchronous
-
-    /// Checks linearizability using asynchronous replay closures with incremental verification.
+    /// Checks linearizability with incremental verification, folded into the DFS: each placed command is replayed immediately and the subtree is pruned on response mismatch.
     ///
-    /// Async equivalent of ``check(prefixLength:replayPrefix:replayCommand:checkOracle:failureDescription:)``. Folds verification into the DFS with pruning on response mismatch.
-    package func checkAsync(
+    /// - Parameters:
+    ///   - prefixLength: How many prefix commands `replayPrefix` runs, so the search budget can charge a prefix replay for the work it actually does.
+    ///   - replayPrefix: Replays all prefix commands on a fresh sequential instance. Returns `false` if any prefix command fails. The closure captures its own prefix data.
+    ///   - replayCommand: Replays the concurrent command at the given `(laneIndex, commandIndex)` coordinates on the sequential instance. Returns `nil` if the command threw a non-skip error.
+    ///   - checkOracle: Checks whether the sequential instance's final state matches the concurrent execution's final state.
+    ///   - failureDescription: Produces a human-readable description of the expected state on failure.
+    package func check(
         prefixLength: Int,
         replayPrefix: () async -> Bool,
         replayCommand: (_ laneIndex: Int, _ commandIndex: Int) async -> ReplayResponse?,
@@ -260,7 +124,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
             replayBudget: PreemptiveReduction.linearizabilitySearchReplayBudget
         )
 
-        let found = await searchIncrementallyAsync(
+        let found = await searchIncrementally(
             totalCommands: totalCommands,
             state: &state,
             replayPrefix: replayPrefix,
@@ -277,9 +141,9 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         )
     }
 
-    // MARK: - Async Incremental Search
+    // MARK: - Incremental Search
 
-    private func replayToDepthAsync(
+    private func replayToDepth(
         _ depth: Int,
         state: inout SearchState,
         replayPrefix: () async -> Bool,
@@ -297,7 +161,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         return true
     }
 
-    private func searchIncrementallyAsync(
+    private func searchIncrementally(
         totalCommands: Int,
         state: inout SearchState,
         replayPrefix: () async -> Bool,
@@ -328,7 +192,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
             let observed = laneOutcomes[laneIndex][cursor]
 
             if childrenTried > 0 || depth == 0 {
-                guard await replayToDepthAsync(depth, state: &state, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
+                guard await replayToDepth(depth, state: &state, replayPrefix: replayPrefix, replayCommand: replayCommand) else {
                     if state.abandoned { return false }
                     continue
                 }
@@ -356,7 +220,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
             state.cursors[laneIndex] += 1
             state.currentOrdering.append(placed)
 
-            let found = await searchIncrementallyAsync(
+            let found = await searchIncrementally(
                 totalCommands: totalCommands,
                 state: &state,
                 replayPrefix: replayPrefix,
