@@ -306,10 +306,6 @@ private struct StubSpec: StateMachineSpecBase {
         #gen(.element(from: [StubCommand.increment, StubCommand.decrement]))
     }
 
-    static var executionModel: ExecutionModel {
-        .sequential
-    }
-
     var systemUnderTest: Int {
         0
     }

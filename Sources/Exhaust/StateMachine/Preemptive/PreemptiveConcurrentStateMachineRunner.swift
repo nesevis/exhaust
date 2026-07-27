@@ -516,84 +516,26 @@ struct PreemptiveChecker<Spec: StateMachineSpec>: PreemptiveBackend {
         return result
     }
 
-    /// Constructs the replay closures and drives the linearizability checker for a synchronous spec.
+    /// Drives the shared interleaving search for a synchronous spec.
     ///
-    /// The checker's replay interface is asynchronous only, so the whole check crosses one bridge; the closures inside never suspend. The bridge sits after the concurrent phase, so it adds nothing to the command path the lanes race on — the reason it can be tolerated here and nowhere near the lanes.
+    /// The search's replay interface is asynchronous only, so the whole check crosses one bridge; the closures inside never suspend. The bridge sits after the concurrent phase, so it adds nothing to the command path the lanes race on — the reason it can be tolerated here and nowhere near the lanes, and the reason ``realizedOrderIsLinearizable(prefix:setupStep:realizedOrder:concurrentSpec:)`` above stays synchronous instead of sharing this path: that check runs on every probe, this one only on the probes it rejected.
     static func runLinearizabilityCheck(
         taggedCommands: [(ScheduleMarker, Spec.Command)],
         setupStep: Spec.SetupStep?,
         laneResponses: [[ObservedResponse<Spec.Command>]],
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
-        // Materialized, not lazy: `replayPrefix` runs once per sibling retry in the DFS, and a lazy view would re-filter the full tagged array on every call.
+        // Materialized, not lazy: the prefix replay runs once per sibling retry in the DFS, and a lazy view would re-filter the full tagged array on every call.
         let prefixCommands = taggedCommands.filter(\.0.isPrefix).map(\.1)
-        let checker = LinearizabilityChecker(laneResponses: laneResponses)
         nonisolated(unsafe) let concurrentSpec = concurrentSpec
-        let result = __ExhaustRuntime.blockingAwait { () async -> LinearizabilityChecker.Result in
-            let replaySpec = UnsafeSendableBox<Spec?>(nil)
-            return await checker.check(
-                prefixLength: prefixCommands.count,
-                replayPrefix: {
-                    // Once per sibling retry in the DFS: every fresh replay instance receives the same setup, and a setup error fails this ordering rather than crashing into an unconfigured SUT.
-                    let (fresh, setupError) = Spec.makeSpec(setupStep: setupStep)
-                    guard setupError == nil else {
-                        return false
-                    }
-                    for command in prefixCommands {
-                        do {
-                            try fresh.run(command)
-                        } catch is StateMachineSkip {
-                            continue
-                        } catch {
-                            return false
-                        }
-                    }
-                    replaySpec.value = fresh
-                    return true
-                },
-                replayCommand: { laneIndex, commandIndex in
-                    guard let spec = replaySpec.value else {
-                        return nil
-                    }
-                    return Self.replaySync(laneResponses[laneIndex][commandIndex].command, on: spec)
-                },
-                checkOracle: {
-                    guard let spec = replaySpec.value else {
-                        return false
-                    }
-                    return concurrentSpec.equivalenceCheck(spec.systemUnderTest)
-                },
-                failureDescription: {
-                    concurrentSpec.failureDescription()
-                }
+        return __ExhaustRuntime.blockingAwait {
+            await searchForExplainingOrder(
+                concurrentSpec: concurrentSpec,
+                setupStep: setupStep,
+                prefixCommands: prefixCommands,
+                laneResponses: laneResponses,
+                replay: .synchronous
             )
-        }
-        return makeLinearizabilityResult(result, laneObservations: laneResponses)
-    }
-
-    /// Replays one command on the search's sequential instance, checking invariants after it.
-    ///
-    /// Returning nil rejects the candidate ordering the search is building and sends it back to try another, so an invariant that fails here prunes a subtree rather than failing the check: the ordering it was testing is not one the run could have taken. A sequence whose invariants fail under *every* ordering has already been reported by the reference replay, which runs before the search.
-    ///
-    /// The check is not charged against the search's replay budget. The budget bounds replays, and an invariant check runs no commands; charging it would shrink the search space by an amount that depends on how many invariants the spec declares.
-    private static func replaySync(
-        _ command: Spec.Command,
-        on spec: Spec
-    ) -> LinearizabilityChecker.ReplayResponse? {
-        do {
-            let response = try spec.run(command)
-            try spec.checkInvariants()
-            return .init(
-                returnValue: response.returnValue,
-                isSkipped: false
-            )
-        } catch is StateMachineSkip {
-            return .init(
-                returnValue: nil,
-                isSkipped: true
-            )
-        } catch {
-            return nil
         }
     }
 

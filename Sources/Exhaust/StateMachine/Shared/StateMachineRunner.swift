@@ -223,22 +223,19 @@ private extension __ExhaustRuntime {
             finalize: { candidate in
                 let commands = candidate.taggedCommands.map(\.1)
                 let setupStep = candidate.setupStep
-                let captured = __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
+                return __ExhaustRuntime._blockingAwaitSemaphore(timeoutMilliseconds: nil) {
                     let spec = specInit()
                     let (setupTrace, setupFailed) = await applySetupRecordingTrace(spec, setupStep: setupStep)
-                    if setupFailed {
-                        let snapshot = DiagnosticSnapshot(systemUnderTest: spec.systemUnderTest, failureDescription: spec.failureDescription())
-                        return (trace: setupTrace, snapshot: snapshot)
+                    guard setupFailed == false else {
+                        return (setupTrace, spec.systemUnderTest, spec.failureDescription())
                     }
                     let (trace, _) = await buildAsyncSequentialTrace(
                         commands,
                         run: { try await spec.run($0) },
                         checkInvariants: { try await spec.checkInvariants() }
                     )
-                    let snapshot = DiagnosticSnapshot(systemUnderTest: spec.systemUnderTest, failureDescription: spec.failureDescription())
-                    return (trace: joinTrace(setup: setupTrace, commands: trace), snapshot: snapshot)
+                    return (joinTrace(setup: setupTrace, commands: trace), spec.systemUnderTest, spec.failureDescription())
                 }!
-                return (captured.trace, captured.snapshot.systemUnderTest, captured.snapshot.failureDescription)
             }
         )
 

@@ -36,8 +36,6 @@ struct ConcurrentExecutionResult<Spec: AsyncStateMachineSpec> {
     ///
     /// Always one entry per lane, so a lane that never ran reads as an empty array rather than a missing one. Inside a lane there is one entry per command that returned or skipped: a command that failed has no response to report, and the drain ends at the first failure. Recording is unconditional, so a probe run with `recordTrace` false carries the same responses as the final trace run.
     var laneResponses: [[ObservedResponse<Spec.Command>]] = []
-    /// What the sequential prefix observed, in execution order. Kept apart from ``laneResponses`` because the linearizability search reorders lane commands and replays the prefix whole.
-    var prefixResponses: [ObservedResponse<Spec.Command>] = []
     /// The lane command whose observed response no valid ordering reproduces, set by the equivalence judgement when the interleaving search names one.
     var linearizabilityWitness: ResponseWitness?
     /// Why the equivalence judgement rejected a run whose drain came back clean, for the report. Nil when the drain itself produced the failure, where the trace already shows the failing step.
@@ -352,7 +350,8 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
     let commandIndices: [UnsafeSendableBox<Int>] = (0 ..< concurrencyLevel).map { _ in UnsafeSendableBox(0) }
     // One counter for the prefix and every lane: it exists to order events across lanes, which per-lane counters could not do.
     let responseClock = UnsafeSendableBox<UInt64>(0)
-    let prefixResponses = UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([])
+    // The prefix records into a sink nothing reads. Its responses answer no question — the prefix runs whole before any lane and the interleaving search replays it from the commands, not from what it observed — but recording it keeps one command path for the prefix and the lanes, and keeps the clock ticking through the prefix so a lane index is comparable against the whole run rather than against its own lane.
+    let discardedPrefixResponses = UnsafeSendableBox<[ObservedResponse<Spec.Command>]>([])
     let laneResponses: [UnsafeSendableBox<[ObservedResponse<Spec.Command>]>] = (0 ..< concurrencyLevel).map { _ in UnsafeSendableBox([]) }
 
     /// Every exit path renders the same way: the setup step first, command steps reindexed after it.
@@ -371,7 +370,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
 
     if setupStep != nil || prefixCommands.isEmpty == false {
         let prefixDone = UnsafeSendableBox(false)
-        let prefixTask = Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace, setupTrace, gate, prefixResponses, responseClock] in
+        let prefixTask = Task(executorPreference: executors[0]) { @Sendable [spec, failed, failedSymptomKind, prefixDone, trace, setupTrace, gate, discardedPrefixResponses, responseClock] in
             // Setup is the head of the sequential prefix: it runs on every fresh spec before any command, cannot skip, and its throw fails the run with the error type as the symptom.
             if let setupStep {
                 let outcome = await runSetupRecordingTrace(
@@ -394,7 +393,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                         label: recordTrace ? "\(command)" : ""
                     )
                     let responseRecorder = LaneResponseRecorder(
-                        responses: prefixResponses,
+                        responses: discardedPrefixResponses,
                         clock: responseClock,
                         marker: ScheduleMarker.prefix.rawValue
                     )
@@ -434,8 +433,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                 passed: false,
                 trace: assembleTrace(),
                 timedOut: true,
-                laneResponses: collectLaneResponses(),
-                prefixResponses: prefixResponses.value
+                laneResponses: collectLaneResponses()
             )
         }
         if failed.value != nil {
@@ -443,8 +441,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
                 passed: false,
                 trace: assembleTrace(),
                 failureSymptomKind: failedSymptomKind.value,
-                laneResponses: collectLaneResponses(),
-                prefixResponses: prefixResponses.value
+                laneResponses: collectLaneResponses()
             )
         }
     }
@@ -455,8 +452,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         return ConcurrentExecutionResult(
             passed: true,
             trace: assembleTrace(),
-            laneResponses: collectLaneResponses(),
-            prefixResponses: prefixResponses.value
+            laneResponses: collectLaneResponses()
         )
     }
 
@@ -555,8 +551,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
             passed: false,
             trace: assembleTrace(),
             timedOut: true,
-            laneResponses: collectLaneResponses(),
-            prefixResponses: prefixResponses.value
+            laneResponses: collectLaneResponses()
         )
     }
 
@@ -568,7 +563,6 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
         systemUnderTest: recordTrace ? spec.value.systemUnderTest : nil,
         failureDescription: concurrentFailed && recordTrace ? spec.value.failureDescription() : nil,
         failureSymptomKind: failedSymptomKind.value,
-        laneResponses: collectLaneResponses(),
-        prefixResponses: prefixResponses.value
+        laneResponses: collectLaneResponses()
     )
 }

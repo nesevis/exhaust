@@ -4,8 +4,6 @@ import Testing
 @testable import Exhaust
 
 // A task-based spec that defines an equivalence gets its runs judged against a sequential replay: the replay's own invariants first, then the equivalence, then the interleaving search when the equivalence rejects. Every schedule below is hand-built, so each judgement runs on a known interleaving instead of whichever one a search happens to reach.
-//
-// The specs are written out instead of declared with `@StateMachine` because the macro still refuses to synthesize an equivalence outside `.threads`. They implement exactly the surface the runner calls.
 
 @Suite("Tasks equivalence judgement", .serialized, .tags(.stateMachine))
 struct TasksEquivalenceTests {
@@ -100,6 +98,7 @@ struct TasksEquivalenceTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("A spec with no equivalence is never asked for one")
     func aSpecWithNoEquivalenceIsNeverAskedForOne() {
+        UnjudgedCounterSpec.equivalenceCallCount.value = 0
         let taggedCommands: [(ScheduleMarker, UnjudgedCounterSpec.Command)] = [
             (ScheduleMarker(rawValue: 1), .increment),
             (ScheduleMarker(rawValue: 2), .increment),
@@ -219,207 +218,100 @@ struct TasksEquivalenceTests {
 // MARK: - Specs
 
 /// A register whose commands overwrite each other, so the order the lanes ran in decides the result. Nothing here is order-independent, so the spec declares no invariants and states its claim as an equivalence.
-private final class LastWriteRegisterSpec: AsyncStateMachineSpec {
-    enum Command: CustomStringConvertible, Sendable {
-        case store(value: Int)
-
-        var description: String {
-            switch self {
-                case let .store(value):
-                    "store(value: \(value))"
-            }
-        }
-    }
-
-    typealias SystemUnderTest = Register
-
+@StateMachine
+final class LastWriteRegisterSpec {
     var lastWritten = 0
-    var register = Register()
+    @SystemUnderTest
+    var register = LastWriteRegister()
 
-    static var hasEquivalence: Bool {
-        true
+    @Equivalence
+    func sameLastWrite(as other: LastWriteRegister) -> Bool {
+        register.value == other.value
     }
 
-    static var commandGenerator: ReflectiveGenerator<Command> {
-        .just(Command.store(value: 1))
-    }
-
-    var systemUnderTest: Register {
-        register
-    }
-
-    @discardableResult
-    func run(_ command: Command) async throws -> CommandResponse {
-        switch command {
-            case let .store(value):
-                lastWritten = value
-                register.store(value)
-        }
-        return CommandResponse(commandDescription: command.description, returnValue: nil)
-    }
-
-    func checkInvariants() async throws {}
-
-    func equivalenceCheck(_ sequentialResult: Register) async -> Bool {
-        register.value == sequentialResult.value
+    @Command(.int(in: 1 ... 9))
+    func store(value: Int) async throws {
+        lastWritten = value
+        register.store(value)
     }
 
     func failureDescription() -> String? {
         "register: \(register.value)"
     }
-
-    init() {}
 }
 
 /// A counter whose read-modify-write suspends in the middle, so an interleaving can drop an update. The claim that the counter matches the number of increments depends on the order commands ran in, so it lives in the equivalence.
-private final class RacyCounterSpec: AsyncStateMachineSpec {
-    enum Command: CustomStringConvertible, Sendable {
-        case increment
-
-        var description: String {
-            "increment"
-        }
-    }
-
-    typealias SystemUnderTest = NonAtomicCounter
-
+@StateMachine
+final class RacyCounterSpec {
+    @SystemUnderTest
     var counter = NonAtomicCounter()
 
-    static var hasEquivalence: Bool {
-        true
+    @Equivalence
+    func sameCount(as other: NonAtomicCounter) -> Bool {
+        counter.value == other.value
     }
 
-    static var commandGenerator: ReflectiveGenerator<Command> {
-        .just(Command.increment)
-    }
-
-    var systemUnderTest: NonAtomicCounter {
-        counter
-    }
-
-    @discardableResult
-    func run(_ command: Command) async throws -> CommandResponse {
-        switch command {
-            case .increment:
-                await counter.increment()
-        }
-        return CommandResponse(commandDescription: command.description, returnValue: nil)
-    }
-
-    func checkInvariants() async throws {}
-
-    func equivalenceCheck(_ sequentialResult: NonAtomicCounter) async -> Bool {
-        counter.value == sequentialResult.value
+    @Command
+    func increment() async throws {
+        await counter.increment()
     }
 
     func failureDescription() -> String? {
         "counter: \(counter.value)"
     }
-
-    init() {}
 }
 
 /// Claims its log stays ascending, which is an order-dependent claim written where an order-independent one belongs. The reference replay is where that misplacement surfaces.
-private final class AscendingLogSpec: AsyncStateMachineSpec {
-    enum Command: CustomStringConvertible, Sendable {
-        case append(value: Int)
-
-        var description: String {
-            switch self {
-                case let .append(value):
-                    "append(value: \(value))"
-            }
-        }
-    }
-
-    typealias SystemUnderTest = Register
-
+@StateMachine
+final class AscendingLogSpec {
     var appended: [Int] = []
-    var register = Register()
+    @SystemUnderTest
+    var register = LastWriteRegister()
 
-    static var hasEquivalence: Bool {
-        true
+    @Invariant
+    func appendedIsAscending() -> Bool {
+        appended == appended.sorted()
     }
 
-    static var commandGenerator: ReflectiveGenerator<Command> {
-        .just(Command.append(value: 1))
+    @Equivalence
+    func sameLastWrite(as other: LastWriteRegister) -> Bool {
+        register.value == other.value
     }
 
-    var systemUnderTest: Register {
-        register
-    }
-
-    @discardableResult
-    func run(_ command: Command) async throws -> CommandResponse {
-        switch command {
-            case let .append(value):
-                appended.append(value)
-                register.store(value)
-        }
-        return CommandResponse(commandDescription: command.description, returnValue: nil)
-    }
-
-    func checkInvariants() async throws {
-        try check(appended == appended.sorted(), "appended \(appended) is not ascending")
-    }
-
-    func equivalenceCheck(_ sequentialResult: Register) async -> Bool {
-        register.value == sequentialResult.value
+    @Command(.int(in: 1 ... 9))
+    func append(value: Int) async throws {
+        appended.append(value)
+        register.store(value)
     }
 
     func failureDescription() -> String? {
         "appended: \(appended)"
     }
-
-    init() {}
 }
 
-/// The same lost update as ``RacyCounterSpec`` with nothing declared that could notice it. Its equivalence method counts its own calls, so a test can tell whether the runner asked.
-private final class UnjudgedCounterSpec: AsyncStateMachineSpec {
-    enum Command: CustomStringConvertible, Sendable {
-        case increment
-
-        var description: String {
-            "increment"
-        }
-    }
-
-    typealias SystemUnderTest = NonAtomicCounter
-
+/// The same lost update as ``RacyCounterSpec`` with nothing declared that could notice it.
+@StateMachine
+final class UnjudgedCounterSpec {
     /// Counts equivalence calls across instances, because the runner constructs its own. Reset by the one test that reads it, which the suite serializes.
     static let equivalenceCallCount = UnsafeSendableBox(0)
 
+    @SystemUnderTest
     var counter = NonAtomicCounter()
 
-    static var commandGenerator: ReflectiveGenerator<Command> {
-        .just(Command.increment)
-    }
-
-    var systemUnderTest: NonAtomicCounter {
-        counter
-    }
-
-    @discardableResult
-    func run(_ command: Command) async throws -> CommandResponse {
-        switch command {
-            case .increment:
-                await counter.increment()
-        }
-        return CommandResponse(commandDescription: command.description, returnValue: nil)
-    }
-
-    func checkInvariants() async throws {}
-
-    func equivalenceCheck(_ sequentialResult: NonAtomicCounter) async -> Bool {
-        Self.equivalenceCallCount.value += 1
-        return counter.value == sequentialResult.value
+    @Command
+    func increment() async throws {
+        await counter.increment()
     }
 
     func failureDescription() -> String? {
         "counter: \(counter.value)"
     }
 
-    init() {}
+    /// Deliberately not marked `@Equivalence`, so ``hasEquivalence`` stays false and this spec declares none. It exists only to replace the protocol's trapping default with something a test can observe: a runner that consulted an equivalence this spec never declared should fail an assertion rather than trap the process.
+    func equivalenceCheck(_ sequentialResult: NonAtomicCounter) async -> Bool {
+        Self.equivalenceCallCount.value += 1
+        return counter.value == sequentialResult.value
+    }
 }
 
 // MARK: - Supporting Types
@@ -450,7 +342,7 @@ private final class CapturingIssueReporter: IssueReporter, @unchecked Sendable {
 }
 
 /// A register that keeps only the last value written. Overwrites do not commute, which is what makes order matter.
-private final class Register: @unchecked Sendable, CustomDebugStringConvertible {
+final class LastWriteRegister: @unchecked Sendable, CustomDebugStringConvertible {
     private var storedValue = 0
 
     var value: Int {
@@ -458,7 +350,7 @@ private final class Register: @unchecked Sendable, CustomDebugStringConvertible 
     }
 
     var debugDescription: String {
-        "Register(value: \(storedValue))"
+        "LastWriteRegister(value: \(storedValue))"
     }
 
     func store(_ value: Int) {

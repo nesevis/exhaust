@@ -678,8 +678,8 @@
             }
         }
 
-        @Test("Parameterless @Equivalence produces targeted diagnostic instead of noOracle")
-        func parameterlessOracleProducesTargetedDiagnostic() {
+        @Test("Parameterless @Equivalence names the parameter requirement rather than going unreported")
+        func parameterlessEquivalenceProducesTargetedDiagnostic() {
             assertMacro {
                 """
                 @StateMachine

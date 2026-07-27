@@ -126,7 +126,7 @@ struct ConcurrentFailureRenderingTests {
         var context = __ExhaustRuntime.FailureContext()
         context.specName = "CounterSpec"
         context.seed = 99
-        context.isPreemptive = true
+        context.mode = .threads
         context.discoveryMethod = .randomSampling
         context.iteration = 1
         context.budget = 200
@@ -148,7 +148,7 @@ struct ConcurrentFailureRenderingTests {
         ]
         var context = __ExhaustRuntime.FailureContext()
         context.specName = "CounterSpec"
-        context.isPreemptive = true
+        context.mode = .threads
         context.discoveryMethod = .screening
         context.iteration = 1
         context.budget = 200

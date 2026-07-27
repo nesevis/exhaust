@@ -3,8 +3,6 @@ import Testing
 @testable import Exhaust
 
 // A thread-based probe runs every lane's commands on one shared spec instance, and it judges invariants only where a single command runs at a time: the per-probe sequential reference replay, and the replays inside the interleaving search (ADR 0004). These drive one probe directly, because a pipeline run reduces, repeats, and reports, and never shows which verdict a single probe reached.
-//
-// The specs are written out instead of declared with `@StateMachine` because the macro still refuses `@Invariant` under `.threads`. They implement exactly the surface the runner calls.
 
 @Suite("Preemptive replay invariants", .serialized, .tags(.stateMachine))
 struct PreemptiveReplayInvariantTests {
@@ -128,52 +126,24 @@ struct PreemptiveReplayInvariantTests {
 /// A spec whose model is deliberately thread-safe, written the way the mode invites: commands run concurrently against this instance, and the model is built to take it.
 ///
 /// Its equivalence claims the model and the system under test hold the same total. Both are synchronized and both take commuting writes, so the claim holds under every interleaving — and only while the lanes share this instance. It also counts its own constructions, which is what tells a test how many instances a probe built.
-private final class SharedModelSpec: StateMachineSpec {
-    enum Command: CustomStringConvertible, Sendable {
-        case record(amount: Int)
-
-        var description: String {
-            switch self {
-                case let .record(amount):
-                    "record(amount: \(amount))"
-            }
-        }
-    }
-
-    typealias SystemUnderTest = LockedTotal
-
+@StateMachine
+final class SharedModelSpec {
     /// Instances constructed since a test last reset it, counted under a lock because the runner builds them from its own threads.
     static let instancesConstructed = SendableBox(0)
 
     var expected = LockedTotal()
+    @SystemUnderTest
     var total = LockedTotal()
 
-    static var hasEquivalence: Bool {
-        true
+    @Equivalence
+    func sameTotal(as other: LockedTotal) -> Bool {
+        total.value == other.value && expected.value == total.value
     }
 
-    static var commandGenerator: ReflectiveGenerator<Command> {
-        .just(Command.record(amount: 1))
-    }
-
-    var systemUnderTest: LockedTotal {
-        total
-    }
-
-    @discardableResult
-    func run(_ command: Command) throws -> CommandResponse {
-        switch command {
-            case let .record(amount):
-                expected.add(amount)
-                total.add(amount)
-        }
-        return CommandResponse(commandDescription: command.description, returnValue: nil)
-    }
-
-    func checkInvariants() throws {}
-
-    func equivalenceCheck(_ sequentialResult: LockedTotal) -> Bool {
-        total.value == sequentialResult.value && expected.value == total.value
+    @Command(.int(in: 1 ... 100))
+    func record(amount: Int) throws {
+        expected.add(amount)
+        total.add(amount)
     }
 
     func failureDescription() -> String? {
@@ -186,145 +156,87 @@ private final class SharedModelSpec: StateMachineSpec {
 }
 
 /// A counter with a cap the model claims it never passes. The system under test is synchronized, so the only way to break the claim is to run more commands than the cap allows, which a sequential replay does as readily as a concurrent one.
-private final class BoundedTotalSpec: StateMachineSpec {
-    enum Command: CustomStringConvertible, Sendable {
-        case add
-
-        var description: String {
-            "add"
-        }
-    }
-
-    typealias SystemUnderTest = LockedTotal
-
+@StateMachine
+final class BoundedTotalSpec {
     var expected = 0
+    @SystemUnderTest
     var total = LockedTotal()
 
-    static var hasEquivalence: Bool {
-        true
+    @Invariant
+    func totalStaysWithinItsCap() -> Bool {
+        total.value <= 1
     }
 
-    static var commandGenerator: ReflectiveGenerator<Command> {
-        .just(Command.add)
+    @Equivalence
+    func sameTotal(as other: LockedTotal) -> Bool {
+        total.value == other.value
     }
 
-    var systemUnderTest: LockedTotal {
-        total
-    }
-
-    @discardableResult
-    func run(_ command: Command) throws -> CommandResponse {
-        switch command {
-            case .add:
-                expected += 1
-                total.add()
-        }
-        return CommandResponse(commandDescription: command.description, returnValue: nil)
-    }
-
-    func checkInvariants() throws {
-        try check(total.value <= 1, "total \(total.value) passed its cap of 1")
-    }
-
-    func equivalenceCheck(_ sequentialResult: LockedTotal) -> Bool {
-        total.value == sequentialResult.value
+    @Command
+    func add() throws {
+        expected += 1
+        total.add()
     }
 
     func failureDescription() -> String? {
         "expected: \(expected), total: \(total.value)"
     }
-
-    init() {}
 }
 
 /// Claims the log never holds the sentinel value, which is false of every ordering of a sequence that pushes it.
-private final class SentinelFreePushSpec: StateMachineSpec {
-    typealias Command = PushCommand
-    typealias SystemUnderTest = ModelValueLog
-
+@StateMachine
+final class SentinelFreePushSpec {
     var pushed: [Int] = []
+    @SystemUnderTest
     var log = ModelValueLog()
 
-    static var hasEquivalence: Bool {
-        true
+    @Invariant
+    func logIsSentinelFree() -> Bool {
+        pushed.contains(sentinelValue) == false
     }
 
-    static var commandGenerator: ReflectiveGenerator<Command> {
-        .just(Command.push(value: 1))
+    @Equivalence
+    func sameMultiset(as other: ModelValueLog) -> Bool {
+        log.values.sorted() == other.values.sorted()
     }
 
-    var systemUnderTest: ModelValueLog {
-        log
-    }
-
-    @discardableResult
-    func run(_ command: Command) throws -> CommandResponse {
-        switch command {
-            case let .push(value):
-                pushed.append(value)
-                log.append(value)
-        }
-        return CommandResponse(commandDescription: command.description, returnValue: nil)
-    }
-
-    func checkInvariants() throws {
-        try check(pushed.contains(sentinelValue) == false, "the log holds the sentinel \(sentinelValue)")
-    }
-
-    func equivalenceCheck(_ sequentialResult: ModelValueLog) -> Bool {
-        log.values.sorted() == sequentialResult.values.sorted()
+    @Command(.int(in: 1 ... 9))
+    func push(value: Int) throws {
+        pushed.append(value)
+        log.append(value)
     }
 
     func failureDescription() -> String? {
         "pushed: \(pushed)"
     }
-
-    init() {}
 }
 
-/// Claims the pushed values are ascending, which one ordering of a two-push sequence satisfies and the other does not. The oracle compares multisets so it cannot tell the two apart.
-private final class AscendingPushSpec: StateMachineSpec {
-    typealias Command = PushCommand
-    typealias SystemUnderTest = ModelValueLog
-
+/// Claims the pushed values are ascending, which one ordering of a two-push sequence satisfies and the other does not. The equivalence compares multisets so it cannot tell the two apart.
+@StateMachine
+final class AscendingPushSpec {
     var pushed: [Int] = []
+    @SystemUnderTest
     var log = ModelValueLog()
 
-    static var hasEquivalence: Bool {
-        true
+    @Invariant
+    func pushedIsAscending() -> Bool {
+        pushed == pushed.sorted()
     }
 
-    static var commandGenerator: ReflectiveGenerator<Command> {
-        .just(Command.push(value: 1))
+    @Equivalence
+    func sameMultiset(as other: ModelValueLog) -> Bool {
+        log.values.sorted() == other.values.sorted()
     }
 
-    var systemUnderTest: ModelValueLog {
-        log
-    }
-
-    @discardableResult
-    func run(_ command: Command) throws -> CommandResponse {
-        switch command {
-            case let .push(value):
-                pushed.append(value)
-                log.append(value)
-        }
-        return CommandResponse(commandDescription: command.description, returnValue: nil)
-    }
-
-    func checkInvariants() throws {
-        try check(pushed == pushed.sorted(), "pushed \(pushed) is not ascending")
-    }
-
-    func equivalenceCheck(_ sequentialResult: ModelValueLog) -> Bool {
-        log.values.sorted() == sequentialResult.values.sorted()
+    @Command(.int(in: 1 ... 9))
+    func push(value: Int) throws {
+        pushed.append(value)
+        log.append(value)
     }
 
     func failureDescription() -> String? {
         "pushed: \(pushed)"
     }
-
-    init() {}
 }
 
 // MARK: - Supporting Types
@@ -332,19 +244,8 @@ private final class AscendingPushSpec: StateMachineSpec {
 /// The value ``SentinelFreePushSpec`` claims never reaches the log.
 private let sentinelValue = 9
 
-private enum PushCommand: CustomStringConvertible, Sendable {
-    case push(value: Int)
-
-    var description: String {
-        switch self {
-            case let .push(value):
-                "push(value: \(value))"
-        }
-    }
-}
-
 /// An append-only log of integers, safe for concurrent appends so that a lost record can never be mistaken for a lane writing to a different instance.
-private final class ModelValueLog: @unchecked Sendable, CustomDebugStringConvertible {
+final class ModelValueLog: @unchecked Sendable, CustomDebugStringConvertible {
     private let lock = NSLock()
     private var storedValues: [Int] = []
 
@@ -362,7 +263,7 @@ private final class ModelValueLog: @unchecked Sendable, CustomDebugStringConvert
 }
 
 /// A counter whose increments are serialized, so a probe over it fails only for reasons the spec's own claims explain.
-private final class LockedTotal: @unchecked Sendable, CustomDebugStringConvertible {
+final class LockedTotal: @unchecked Sendable, CustomDebugStringConvertible {
     private let lock = NSLock()
     private var storedValue = 0
 

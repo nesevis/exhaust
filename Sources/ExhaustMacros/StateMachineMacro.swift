@@ -64,19 +64,7 @@ private func expandExecuteCall(
 
 /// The `mode:` argument as written, or the default when the call site omits it.
 ///
-/// Forwarded verbatim rather than resolved to a case, so a mode computed at runtime reaches the dispatch unchanged. The literal spelling is only read for the diagnostics that can be answered at expansion time; see ``executionModeLiteral(from:)``.
+/// Forwarded verbatim rather than resolved to a case, so a mode computed at runtime reaches the dispatch unchanged. Nothing here reads which mode it names: what a mode requires of a spec is checked at the start of the run, where a computed mode is knowable too.
 func executionModeExpression(from arguments: [LabeledExprSyntax]) -> String {
     arguments.first { $0.label?.text == "mode" }?.expression.trimmedDescription ?? ".sequential"
-}
-
-/// The mode's case name when the call site wrote a literal one, or nil when it omitted the argument or computed the value.
-///
-/// A computed mode is not knowable here, so the checks that depend on which mode a run uses fall back to the runtime ones. That is why those checks exist in both places.
-func executionModeLiteral(from arguments: [LabeledExprSyntax]) -> String? {
-    guard let modeArgument = arguments.first(where: { $0.label?.text == "mode" }),
-          let memberAccess = modeArgument.expression.as(MemberAccessExprSyntax.self)
-    else {
-        return nil
-    }
-    return memberAccess.declName.baseName.trimmedDescription
 }

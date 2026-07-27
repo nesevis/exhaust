@@ -1,13 +1,13 @@
 import Testing
 @testable import Exhaust
 
-// The drain loop records what every command answered, against the lane that ran it, whether or not the run is the one that reports. Nothing reads those responses yet; these pin the recording so the equivalence pipeline that will read them inherits a settled contract.
+// The drain loop records what every command answered, against the lane that ran it, whether or not the run is the one that reports. The equivalence judgement's interleaving search reads those responses and their intervals, so these pin what it is handed.
 //
 // Every schedule below is hand-built, so the drain order is fixed and the recorded indices are exact rather than probable.
 
 @Suite("Tasks response recording", .serialized, .tags(.stateMachine))
 struct TasksResponseRecordingTests {
-    /// Each lane owns its own response list, addressed by lane index, and the prefix keeps its own apart from all of them. The `lane` field carries the marker value the schedule used, because that is what the failure report prints beside a command.
+    /// Each lane owns its own response list, addressed by lane index. The `lane` field carries the marker value the schedule used, because that is what the failure report prints beside a command. The prefix is recorded nowhere the caller can reach: it runs whole before any lane and the interleaving search replays it from the commands rather than from what it observed.
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("Responses are recorded against the lane that ran the command")
     func responsesAreRecordedAgainstTheLaneThatRanTheCommand() {
@@ -26,10 +26,12 @@ struct TasksResponseRecordingTests {
 
         #expect(result.passed, "The log spec has no defect; the drain should not report one")
         #expect(result.laneResponses.count == 2, "One response list per lane, including lanes that never ran")
-        #expect(result.prefixResponses.count == 1)
         #expect(result.laneResponses.first?.count == 2)
         #expect(result.laneResponses.last?.count == 1)
-        #expect(result.prefixResponses.allSatisfy { $0.lane == ScheduleMarker.prefix.rawValue })
+        #expect(
+            result.laneResponses.first?.first?.interval?.callTime == 3,
+            "The prefix command consumed indices 1 and 2 from the same counter, so the first lane command starts at 3"
+        )
         #expect(result.laneResponses.first?.allSatisfy { $0.lane == 1 } == true)
         #expect(result.laneResponses.last?.allSatisfy { $0.lane == 2 } == true)
         #expect(
@@ -81,13 +83,14 @@ struct TasksResponseRecordingTests {
         )
 
         #expect(result.passed)
-        let recorded = result.prefixResponses + result.laneResponses.joined()
-        #expect(recorded.count == 4, "Every command either returned or skipped, so every command recorded")
+        let recorded = Array(result.laneResponses.joined())
+        #expect(recorded.count == 3, "Every lane command either returned or skipped, so every one of them recorded")
         let intervals = try recorded.map { try #require($0.interval) }
         #expect(intervals.allSatisfy { $0.callTime < $0.returnTime }, "A command cannot return before it was called")
         let indices = intervals.flatMap { [$0.callTime, $0.returnTime] }
         #expect(Set(indices).count == indices.count, "Two events must never share an index")
-        #expect(Set(indices) == Set(1 ... UInt64(indices.count)), "The counter ticks exactly twice per recorded command")
+        // Indices 1 and 2 went to the prefix command, which is recorded nowhere. The lanes take the rest with no gaps, which is what shows the counter is one shared counter ticking exactly twice per command rather than one per lane.
+        #expect(Set(indices) == Set(3 ... UInt64(2 + indices.count)))
     }
 
     /// Two commands overlap when one is parked inside its body while the other runs. The recorded ranges have to show that, because the linearizability search reads them to decide which orderings it may try: a range that contains another leaves both orders open.

@@ -116,6 +116,8 @@ private func renderMagnitude(_ count: Int) -> String {
 }
 
 /// Worst-case multinomial coefficient for `totalCommands` distributed as evenly as possible across `lanes`. Returns `Int.max` on overflow.
+///
+/// A lane's size is zero whenever there are fewer commands than lanes, which a caller reaches with something like `.parallelize(lanes: .three), .commandLimit(2)`. Such a lane contributes a factor of one and must be skipped rather than entered: `1 ... 0` is not a range.
 private func worstCaseInterleavings(totalCommands: Int, lanes: Int) -> Int {
     let base = totalCommands / lanes
     let extra = totalCommands % lanes
@@ -125,7 +127,7 @@ private func worstCaseInterleavings(totalCommands: Int, lanes: Int) -> Int {
     }
     var result = 1
     var remaining = totalCommands
-    for size in sizes {
+    for size in sizes where size > 0 {
         for pick in 1 ... size {
             let (product, overflow) = result.multipliedReportingOverflow(by: remaining)
             if overflow {

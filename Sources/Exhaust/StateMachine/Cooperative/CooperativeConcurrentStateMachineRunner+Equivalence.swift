@@ -182,7 +182,8 @@ private func judge<Spec: AsyncStateMachineSpec>(
         concurrentSpec: concurrentSpec,
         setupStep: setupStep,
         prefixCommands: prefixCommands,
-        laneResponses: laneResponses
+        laneResponses: laneResponses,
+        replay: .asynchronous
     ) {
         case .linearizable:
             return .equivalent

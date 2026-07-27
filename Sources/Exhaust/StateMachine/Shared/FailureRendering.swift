@@ -20,8 +20,7 @@ extension __ExhaustRuntime {
         var originalCount: Int = 0
         var sequencesTested: Int = 0
         var reductionInvocations: Int = 0
-        var isPreemptive: Bool = false
-        /// The mode the run used, so the reproduce line names it. A seed recorded under one mode means nothing under another, and `.sequential` needs no spelling because it is the default.
+        /// The mode the run used, which decides both how the reproduce line spells itself and whether the report warns that a counterexample may not come back. A seed recorded under one mode means nothing under another, and `.sequential` needs no spelling because it is the default.
         var mode: ExecutionModel = .sequential
         var replaySeed: String?
         var oracleDescription: String?
@@ -106,7 +105,7 @@ extension __ExhaustRuntime {
             lines.append("Reproduce: \(reproduceModePrefix(context.mode)).replay(\"\(replaySeed)\")")
         }
 
-        if context.isPreemptive {
+        if case .threads = context.mode {
             lines.append("")
             lines.append("* Preemptive scheduling depends on OS thread timing and may not reproduce on every run. Run the test repeatedly to reproduce.")
         }

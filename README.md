@@ -124,8 +124,8 @@ Then add it as a dependency of your test target:
 
 - Swift 6.3+ (Xcode 26+)
 - macOS 10.15+, iOS 13+, Mac Catalyst 13+, tvOS 13+, watchOS 6+, visionOS 1+, Linux, Windows
-- Cooperative concurrent spec testing (`@StateMachine(.tasks)`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+ (no version requirement on Linux and Windows)
-- Sequential and preemptive spec testing (`@StateMachine(.sequential)`, `@StateMachine(.threads)`) have no additional availability requirements
+- Cooperative concurrent spec testing (`#execute(Spec.self, mode: .tasks)`) requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, visionOS 2+ (no version requirement on Linux and Windows)
+- Sequential and preemptive spec testing (`#execute(Spec.self, mode: .sequential)`, `#execute(Spec.self, mode: .threads)`) have no additional availability requirements
 
 > [!NOTE]
 > Exhaust is under active development. Some APIs may change before the 1.0 release.

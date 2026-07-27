@@ -424,7 +424,8 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
                 concurrentSpec: unsafeSpec,
                 setupStep: setupStep,
                 prefixCommands: prefixCommands,
-                laneResponses: laneResponses
+                laneResponses: laneResponses,
+                replay: .asynchronous
             )
         }
         guard let result else {
