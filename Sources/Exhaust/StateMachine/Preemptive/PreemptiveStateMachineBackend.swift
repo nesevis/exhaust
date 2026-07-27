@@ -39,7 +39,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
         context: StateMachineRunContext<Spec>
     ) -> StateMachineReduction<Spec.Command> {
         let discoveryInvocations = context.invocationCounter.value
-        let repetitions = PreemptiveReduction.confirmationRepetitions(discoveryIterations: discoveryInvocations)
+        let repetitions = PreemptiveConfirmation.confirmationRepetitions(discoveryIterations: discoveryInvocations)
 
         nonisolated(unsafe) let capturedContext = context
         let linearizableProperty: @Sendable ([(ScheduleMarker, Spec.Command)]) -> __ExhaustRuntime.StateMachineProbeVerdict<__ExhaustRuntime.FailureEvidence<Spec>> = { commands in

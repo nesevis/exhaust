@@ -62,7 +62,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
         var currentOrdering: [Placed]
         var closestMatchDepth: Int = -1
         var closestPlaced: Placed?
-        /// Command replays left before the search abandons. See ``PreemptiveReduction/linearizabilitySearchReplayBudget``.
+        /// Command replays left before the search abandons. See ``ConcurrentSpecTunables/linearizabilitySearchReplayBudget``.
         var replayBudget: Int
         /// What one `replayPrefix` call costs against the budget, in command-replay units.
         let prefixReplayCost: Int
@@ -121,7 +121,7 @@ package struct LinearizabilityChecker: @unchecked Sendable {
             laneCount: laneCount,
             totalCommands: totalCommands,
             prefixLength: prefixLength,
-            replayBudget: PreemptiveReduction.linearizabilitySearchReplayBudget
+            replayBudget: ConcurrentSpecTunables.linearizabilitySearchReplayBudget
         )
 
         let found = await searchIncrementally(

@@ -13,7 +13,7 @@ struct LinearizabilitySearchBudgetTests {
         // Three lanes of seven void commands is multinomial(21; 7, 7, 7) orderings, hundreds of millions of them, and the oracle below rejects every one. Without the budget this call does not return in any useful time.
         let measurement = measureVoidSearch(laneCount: 3, commandsPerLane: 7)
 
-        #expect(measurement.replayCalls <= PreemptiveReduction.linearizabilitySearchReplayBudget)
+        #expect(measurement.replayCalls <= ConcurrentSpecTunables.linearizabilitySearchReplayBudget)
     }
 
     @Test("An abandoned search passes the probe rather than manufacturing a counterexample")
@@ -21,7 +21,7 @@ struct LinearizabilitySearchBudgetTests {
         // The oracle is unsatisfiable, so an exhaustive search would report a violation. Stopping early means the search neither found an explanation nor ruled one out, and an inconclusive result must not surface as a counterexample.
         let measurement = measureVoidSearch(laneCount: 3, commandsPerLane: 7)
 
-        #expect(measurement.replayCalls <= PreemptiveReduction.linearizabilitySearchReplayBudget)
+        #expect(measurement.replayCalls <= ConcurrentSpecTunables.linearizabilitySearchReplayBudget)
         #expect(measurement.passesTheProbe)
         // The pass is reported as its own verdict rather than as linearizability, because the runner counts abandonments and warns about the probes it let stand without judging.
         #expect(measurement.isAbandoned)
@@ -32,7 +32,7 @@ struct LinearizabilitySearchBudgetTests {
         // multinomial(6; 3, 3) is 20 orderings, far inside the budget, so the unsatisfiable oracle must produce the honest verdict rather than the abandonment fallback.
         let measurement = measureVoidSearch(laneCount: 2, commandsPerLane: 3)
 
-        #expect(measurement.replayCalls < PreemptiveReduction.linearizabilitySearchReplayBudget)
+        #expect(measurement.replayCalls < ConcurrentSpecTunables.linearizabilitySearchReplayBudget)
         #expect(measurement.passesTheProbe == false)
         #expect(measurement.isAbandoned == false)
     }

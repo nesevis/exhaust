@@ -133,7 +133,7 @@ struct TasksEquivalenceTests {
             screeningBudget: screeningBudget
         )
 
-        #expect(judged == PreemptiveReduction.defaultCommandLimit)
+        #expect(judged == ConcurrentSpecTunables.defaultCommandLimit)
         #expect(judged == 10, "The thread-based default, pinned here so lowering it stays a deliberate change")
         // Without an equivalence the limit is still whatever the screening estimate affords, capped at 40. Asserting the estimate rather than a number keeps this independent of how the estimate is computed.
         #expect(

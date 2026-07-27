@@ -56,7 +56,7 @@ public extension __ExhaustRuntime {
             idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds,
             searchAbandonments: searchAbandonments
         )
-        let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
+        let commandLimit = config.commandLimit ?? ConcurrentSpecTunables.defaultCommandLimit
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
         let timeoutProbeCounts = UnsafeSendableBox((attempts: 0, timedOut: 0))
@@ -115,7 +115,7 @@ extension __ExhaustRuntime {
         var deferredIssues: [String] = []
 
         let commandGen = Spec.commandGenerator.gen
-        let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
+        let commandLimit = config.commandLimit ?? ConcurrentSpecTunables.defaultCommandLimit
 
         guard let taggedCommandGen = zipScheduleMarker(onto: commandGen, concurrencyLevel: config.concurrencyLevel) else {
             deferredIssues.append("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure.")

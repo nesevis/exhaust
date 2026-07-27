@@ -108,7 +108,7 @@ struct TasksEquivalenceCostHarness {
     @Test("Wall clock of a judged run through discovery and reduction", .disabled("Measurement harness; remove this trait to produce numbers"))
     func wallClockOfAJudgedRunThroughDiscoveryAndReduction() async {
         print("reduction deadline floor: \(FuzzTunables.specReductionDeadlineNanoseconds / 1_000_000) ms")
-        print("search replay budget:     \(PreemptiveReduction.linearizabilitySearchReplayBudget) replays")
+        print("search replay budget:     \(ConcurrentSpecTunables.linearizabilitySearchReplayBudget) replays")
         for lanes in [ConcurrencyLevel.two, .three] {
             for commandLimit in [8, 16, 32] {
                 let cost = await measure(JudgedRegisterSpec.self, lanes: lanes, commandLimit: commandLimit)

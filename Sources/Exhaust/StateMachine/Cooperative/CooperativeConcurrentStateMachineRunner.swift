@@ -105,7 +105,7 @@ public extension __ExhaustRuntime {
         // Only a spec that declares an equivalence runs an interleaving search, and only its default command limit is knowable here: without one, the limit comes from an estimate over the command generator that the pipeline computes for itself. Emitted here rather than inside the pipeline for the same reason the thread-based runner does it here — on the test's own thread, before the work is dispatched, so the issue attaches to the running test.
         if Spec.hasEquivalence {
             warnIfInterleavingSpaceIsLarge(
-                commandLimit: config.commandLimit ?? PreemptiveReduction.defaultCommandLimit,
+                commandLimit: config.commandLimit ?? ConcurrentSpecTunables.defaultCommandLimit,
                 laneCount: config.concurrencyLevel,
                 fileID: fileID,
                 filePath: filePath,
@@ -289,7 +289,7 @@ extension __ExhaustRuntime {
         screeningBudget: Int
     ) -> Int {
         guard hasEquivalence == false else {
-            return PreemptiveReduction.defaultCommandLimit
+            return ConcurrentSpecTunables.defaultCommandLimit
         }
         return min(estimateCommandLimit(commandGen: commandGen, screeningBudget: UInt64(screeningBudget)), 40)
     }

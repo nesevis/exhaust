@@ -177,12 +177,20 @@ private func judge<Spec: AsyncStateMachineSpec>(
         return .equivalent
     }
 
-    return await searchForExplainingOrder(
+    // The intervals recorded during the drain are exact rather than measured, so every ordering the search skips is one the run demonstrably could not have taken.
+    switch await searchForExplainingOrder(
         concurrentSpec: concurrentSpec,
         setupStep: setupStep,
         prefixCommands: prefixCommands,
         laneResponses: laneResponses
-    )
+    ) {
+        case .linearizable:
+            return .equivalent
+        case .abandoned:
+            return .abandoned
+        case let .notLinearizable(witness, failureDescription):
+            return .notLinearizable(witness: witness, failureDescription: failureDescription)
+    }
 }
 
 /// Runs one command on the reference instance and checks its invariants, reporting the verdict a failure implies or nil when the command and the checks passed.
@@ -209,73 +217,5 @@ private func runCheckingInvariants<Spec: AsyncStateMachineSpec>(
             message: "\(error)",
             symptomKind: String(describing: type(of: error))
         )
-    }
-}
-
-/// Asks whether any valid ordering of the lane commands reproduces what the lanes observed and satisfies the equivalence.
-///
-/// The intervals recorded during the drain are exact rather than measured, so every ordering the search skips is one the run demonstrably could not have taken. Invariants are checked after each replayed command: a failure rejects that ordering and the search backtracks, which is pruning rather than a verdict, and the budget the search spends is charged in replays only.
-@available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-private func searchForExplainingOrder<Spec: AsyncStateMachineSpec>(
-    concurrentSpec: Spec,
-    setupStep: Spec.SetupStep?,
-    prefixCommands: [Spec.Command],
-    laneResponses: [[ObservedResponse<Spec.Command>]]
-) async -> EquivalenceVerdict {
-    let checker = LinearizabilityChecker(laneResponses: laneResponses)
-    var replaySpec: Spec?
-    let result = await checker.check(
-        prefixLength: prefixCommands.count,
-        replayPrefix: {
-            // Once per sibling retry in the search: every fresh replay instance receives the same setup, and a setup error fails this ordering rather than crashing into an unconfigured system under test.
-            let (fresh, setupError) = await Spec.makeSpec(setupStep: setupStep)
-            guard setupError == nil else {
-                return false
-            }
-            for command in prefixCommands {
-                do {
-                    try await fresh.run(command)
-                } catch is StateMachineSkip {
-                    continue
-                } catch {
-                    return false
-                }
-            }
-            replaySpec = fresh
-            return true
-        },
-        replayCommand: { laneIndex, commandIndex in
-            guard let spec = replaySpec else {
-                return nil
-            }
-            do {
-                let response = try await spec.run(laneResponses[laneIndex][commandIndex].command)
-                // Returning nil rejects the ordering the search is building. A sequence whose invariants fail under every ordering has already been reported by the reference replay, which runs first.
-                try await spec.checkInvariants()
-                return .init(returnValue: response.returnValue, isSkipped: false)
-            } catch is StateMachineSkip {
-                return .init(returnValue: nil, isSkipped: true)
-            } catch {
-                return nil
-            }
-        },
-        checkOracle: {
-            guard let spec = replaySpec else {
-                return false
-            }
-            return await concurrentSpec.equivalenceCheck(spec.systemUnderTest)
-        },
-        failureDescription: {
-            concurrentSpec.failureDescription()
-        }
-    )
-
-    switch makeLinearizabilityResult(result, laneObservations: laneResponses) {
-        case .linearizable:
-            return .equivalent
-        case .abandoned:
-            return .abandoned
-        case let .notLinearizable(witness, failureDescription):
-            return .notLinearizable(witness: witness, failureDescription: failureDescription)
     }
 }

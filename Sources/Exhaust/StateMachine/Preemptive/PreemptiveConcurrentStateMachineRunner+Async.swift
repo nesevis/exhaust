@@ -57,7 +57,7 @@ public extension __ExhaustRuntime {
             idleTimeoutMilliseconds: config.resolvedIdleTimeoutMilliseconds,
             searchAbandonments: searchAbandonments
         )
-        let commandLimit = config.commandLimit ?? PreemptiveReduction.defaultCommandLimit
+        let commandLimit = config.commandLimit ?? ConcurrentSpecTunables.defaultCommandLimit
         warnIfInterleavingSpaceIsLarge(commandLimit: commandLimit, laneCount: config.concurrencyLevel, fileID: fileID, filePath: filePath, line: line, column: column)
 
         let timeoutProbeCounts = UnsafeSendableBox((attempts: 0, timedOut: 0))
@@ -417,72 +417,24 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         concurrentSpec: Spec
     ) -> LinearizabilityResult {
         let prefixCommands: [Spec.Command] = taggedCommands.filter(\.0.isPrefix).map(\.1)
-        let checker = LinearizabilityChecker(laneResponses: laneResponses)
         nonisolated(unsafe) let unsafeSpec = concurrentSpec
         // The search replays setup and commands on fresh specs, so a continuation that escapes to a foreign executor parks this lane exactly as it would in any other phase. The multiplier is generous because one bound covers the whole search rather than a single probe: on the drain-loop path it measures idle time since the last drained job, so a long-but-progressing search never trips it. On the semaphore fallback the bound is total wall clock, so a search that legitimately runs past it is abandoned.
-        let result: LinearizabilityChecker.Result? = awaitOrTimeout("linearizability", timeoutMultiplier: 10) {
-            var replaySpec: Spec?
-            return await checker.check(
-                prefixLength: prefixCommands.count,
-                replayPrefix: {
-                    // Once per sibling retry in the DFS: every fresh replay instance receives the same setup, and a setup error fails this ordering rather than crashing into an unconfigured SUT.
-                    let (fresh, setupError) = await Spec.makeSpec(setupStep: setupStep)
-                    guard setupError == nil else {
-                        return false
-                    }
-                    for command in prefixCommands {
-                        do {
-                            try await fresh.run(command)
-                        } catch is StateMachineSkip {
-                            continue
-                        } catch {
-                            return false
-                        }
-                    }
-                    replaySpec = fresh
-                    return true
-                },
-                replayCommand: { laneIndex, commandIndex in
-                    guard let spec = replaySpec else {
-                        return nil
-                    }
-                    do {
-                        let response = try await spec.run(laneResponses[laneIndex][commandIndex].command)
-                        // Returning nil rejects the candidate ordering the search is building, so an invariant that fails here prunes a subtree rather than failing the check: this ordering is not one the run could have taken. A sequence whose invariants fail under every ordering has already been reported by the reference replay, which runs before the search. The check is not charged against the replay budget, which bounds replays and not judgements.
-                        try await spec.checkInvariants()
-                        return .init(
-                            returnValue: response.returnValue,
-                            isSkipped: false
-                        )
-                    } catch is StateMachineSkip {
-                        return .init(
-                            returnValue: nil,
-                            isSkipped: true
-                        )
-                    } catch {
-                        return nil
-                    }
-                },
-                checkOracle: {
-                    guard let spec = replaySpec else {
-                        return false
-                    }
-                    return await unsafeSpec.equivalenceCheck(spec.systemUnderTest)
-                },
-                failureDescription: {
-                    unsafeSpec.failureDescription()
-                }
+        let result: LinearizabilityResult? = awaitOrTimeout("linearizability", timeoutMultiplier: 10) {
+            await searchForExplainingOrder(
+                concurrentSpec: unsafeSpec,
+                setupStep: setupStep,
+                prefixCommands: prefixCommands,
+                laneResponses: laneResponses
             )
         }
         guard let result else {
             // The drain loop idled out mid-search, which is a stall rather than an exhausted budget. Report linearizable so the probe counts as a pass, matching the rule that an inconclusive probe never manufactures a failure; the timeout-fraction warning is what surfaces a run full of these.
             return .linearizable
         }
-        let resolved = makeLinearizabilityResult(result, laneObservations: laneResponses)
-        if resolved.isAbandoned {
+        if result.isAbandoned {
             searchAbandonments.value += 1
         }
-        return resolved
+        return result
     }
 
     func makeIdentifySkips() -> @Sendable (SpecCandidateValue<Spec>) -> Set<Int> {
