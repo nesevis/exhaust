@@ -51,8 +51,10 @@ package enum TypeTag: UInt8, Sendable, Hashable {
 /// Per-generator metadata for ``TypeTag`` cases that carry analysis-relevant payloads.
 ///
 /// Stored in ``ChoiceMetadata`` on ``ChoiceTree`` nodes (heap-allocated, no stride impact on the flat ``ChoiceSequence``). Consumed only by ``ProblematicValues`` during one-time screening analysis.
+///
+/// The enum is `indirect` so that ``ChoiceMetadata`` stores one pointer rather than inlining the largest case. ``DateGrid`` stores Foundation's `Calendar` and `Calendar.Component`, which are non-frozen types with no compile-time layout. Inlining the payload therefore strips ``ChoiceMetadata``, and every ``ChoiceTree`` node built from it, of its fixed layout, which forces runtime metadata instantiation and witness-based copies on the overwhelming majority of nodes that carry no payload at all. Boxing keeps that cost inside the date and character sites that actually pay it.
 @usableFromInline
-package enum TypeTagPayload: Hashable, Sendable {
+package indirect enum TypeTagPayload: Hashable, Sendable {
     /// The date generator's grid. Used by ``ProblematicValues`` to convert calendar-meaningful instants (month/year boundaries, DST transitions) into step indices with the same forward map generation uses.
     case date(grid: DateGrid)
     /// Pre-computed problematic character indices. Corresponds to ``ProblematicValues/interestingCharacterScalars`` in flat array index space, clamped to the valid range during construction.
