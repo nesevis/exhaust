@@ -43,7 +43,7 @@ import Testing
 
     private func scratchDirectory() -> URL {
         FileManager.default.temporaryDirectory
-            .appendingPathComponent("exhaust-execute-trap-tests")
+            .appendingPathComponent("exhaust-spec-trap-tests")
             .appendingPathComponent(UUID().uuidString)
     }
 

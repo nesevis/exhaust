@@ -102,7 +102,6 @@
 
         @Test("An invariant with parameters is diagnosed")
         func invariantWithParametersIsDiagnosed() throws {
-            let attribute: AttributeSyntax = "@StateMachine"
             let declaration: DeclSyntax = """
             final class InvalidInvariantSpec {
               @SystemUnderTest var counter: Counter
@@ -114,18 +113,10 @@
               func valid(after step: Int) -> Bool { true }
             }
             """
-            let classDeclaration = try #require(declaration.as(ClassDeclSyntax.self))
-            let context = RecordingMacroExpansionContext()
-
-            _ = try StateMachineDeclarationMacro.expansion(
-                of: attribute,
-                providingMembersOf: classDeclaration,
-                conformingTo: [],
-                in: context
-            )
+            let diagnostics = try expansionDiagnostics(of: declaration)
 
             #expect(
-                context.diagnostics.map(\.diagMessage.diagnosticID) == [
+                diagnostics.map(\.diagMessage.diagnosticID) == [
                     StateMachineDiagnostic.invariantHasParameters.diagnosticID,
                 ]
             )
@@ -133,7 +124,6 @@
 
         @Test("A throwing oracle is diagnosed before non-throwing synthesis")
         func throwingOracleIsDiagnosed() throws {
-            let attribute: AttributeSyntax = "@StateMachine"
             let declaration: DeclSyntax = """
             final class ThrowingOracleSpec {
               @SystemUnderTest var counter: Counter
@@ -145,18 +135,10 @@
               func equivalent(to other: Counter) throws -> Bool { true }
             }
             """
-            let classDeclaration = try #require(declaration.as(ClassDeclSyntax.self))
-            let context = RecordingMacroExpansionContext()
-
-            _ = try StateMachineDeclarationMacro.expansion(
-                of: attribute,
-                providingMembersOf: classDeclaration,
-                conformingTo: [],
-                in: context
-            )
+            let diagnostics = try expansionDiagnostics(of: declaration)
 
             #expect(
-                context.diagnostics.map(\.diagMessage.diagnosticID) == [
+                diagnostics.map(\.diagMessage.diagnosticID) == [
                     StateMachineDiagnostic.throwingEquivalence.diagnosticID,
                 ]
             )
@@ -164,7 +146,7 @@
 
         @Test("A member-isolated command is diagnosed before nonisolated synthesis")
         func memberIsolatedCommandIsDiagnosed() throws {
-            let attribute: AttributeSyntax = "@StateMachine"
+            // The spec also has no failure channel, so it draws the cannot-fail warning first: spec-level checks run before the per-command loop. Both are named rather than matched loosely, so a third diagnostic appearing here is a test failure rather than something the assertion absorbs.
             let declaration: DeclSyntax = """
             final class IsolatedCommandSpec {
               @SystemUnderTest var counter: Counter
@@ -174,25 +156,18 @@
               func increment() {}
             }
             """
-            let classDeclaration = try #require(declaration.as(ClassDeclSyntax.self))
-            let context = RecordingMacroExpansionContext()
-
-            _ = try StateMachineDeclarationMacro.expansion(
-                of: attribute,
-                providingMembersOf: classDeclaration,
-                conformingTo: [],
-                in: context
-            )
+            let diagnostics = try expansionDiagnostics(of: declaration)
 
             #expect(
-                context.diagnostics.map(\.diagMessage.diagnosticID)
-                    .contains(StateMachineDiagnostic.mainActorCommand.diagnosticID)
+                diagnostics.map(\.diagMessage.diagnosticID) == [
+                    StateMachineDiagnostic.specCannotFail.diagnosticID,
+                    StateMachineDiagnostic.mainActorCommand.diagnosticID,
+                ]
             )
         }
 
         @Test("A type-isolated command is diagnosed before nonisolated synthesis")
         func typeIsolatedCommandIsDiagnosed() throws {
-            let attribute: AttributeSyntax = "@StateMachine"
             let declaration: DeclSyntax = """
             @MainActor
             final class IsolatedCommandSpec {
@@ -202,19 +177,13 @@
               func increment() {}
             }
             """
-            let classDeclaration = try #require(declaration.as(ClassDeclSyntax.self))
-            let context = RecordingMacroExpansionContext()
-
-            _ = try StateMachineDeclarationMacro.expansion(
-                of: attribute,
-                providingMembersOf: classDeclaration,
-                conformingTo: [],
-                in: context
-            )
+            let diagnostics = try expansionDiagnostics(of: declaration)
 
             #expect(
-                context.diagnostics.map(\.diagMessage.diagnosticID)
-                    .contains(StateMachineDiagnostic.mainActorCommand.diagnosticID)
+                diagnostics.map(\.diagMessage.diagnosticID) == [
+                    StateMachineDiagnostic.specCannotFail.diagnosticID,
+                    StateMachineDiagnostic.mainActorCommand.diagnosticID,
+                ]
             )
         }
 
@@ -267,6 +236,25 @@
 
               @Equivalence
               func equivalent(to other: Counter) -> Bool { true }
+            }
+            """
+            let diagnostics = try expansionDiagnostics(of: declaration)
+
+            #expect(diagnostics.isEmpty)
+        }
+
+        @Test("A throwing setup is a failure channel, so the cannot-fail warning stays silent")
+        func throwingSetupSuppressesCannotFailWarning() throws {
+            // `applySetup(_:)` returns the setup's error to the runner instead of rethrowing it, and every runner turns that into a failed sequence, so a spec that only judges its initial state can still fail.
+            let declaration: DeclSyntax = """
+            final class ThrowingSetupSpec {
+              @SystemUnderTest var counter: Counter
+
+              @Setup
+              func prepare() throws {}
+
+              @Command
+              func increment() {}
             }
             """
             let diagnostics = try expansionDiagnostics(of: declaration)

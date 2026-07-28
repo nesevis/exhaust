@@ -105,11 +105,8 @@ struct ParsedStateMachineFuzzSettings {
     var parallelize: ConcurrencyLevel?
     /// The settings to forward to the shared core.
     var coreSettings: [PropertyFuzzSettings] = []
-
     /// The shared fields, read through the one parser both forms use.
-    var shared: ParsedPropertyFuzzSettings {
-        ParsedPropertyFuzzSettings(coreSettings)
-    }
+    let shared: ParsedPropertyFuzzSettings
 
     /// Non-nil when a consumed setting is invalid; the dispatch returns an empty report with this termination instead of running.
     var invalidConfiguration: FuzzReport.Termination? {
@@ -134,5 +131,6 @@ struct ParsedStateMachineFuzzSettings {
                     parallelize = lanes
             }
         }
+        shared = ParsedPropertyFuzzSettings(coreSettings)
     }
 }

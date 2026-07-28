@@ -116,10 +116,11 @@ public struct StateMachineDeclarationMacro: MemberMacro, ExtensionMacro {
                 message: StateMachineDiagnostic.multipleSUT
             ))
         }
-        // A spec is judged through one of three channels: an invariant after every command, an error thrown out of a command body (`check(_:_:)` is the usual one), or an equivalence. Declaring none of them leaves the synthesized invariant check empty and nothing else to consult, so every sequence passes. Commands are checked for `throws` rather than for a `check` call, because any thrown error fails the sequence.
+        // A spec is judged through one of four channels: an invariant after every command, an equivalence, an error thrown out of a command body (`check(_:_:)` is the usual one), or an error thrown out of setup — `applySetup(_:)` hands that error back to the runner rather than rethrowing it, and every runner turns it into a failed sequence. Declaring none of them leaves the synthesized invariant check empty and nothing else to consult, so every sequence passes. Methods are checked for `throws` rather than for a `check` call, because any thrown error fails the sequence.
         if commands.isEmpty == false,
            invariants.isEmpty,
            equivalences.isEmpty,
+           setups.contains(where: \.isThrows) == false,
            commands.contains(where: \.isThrows) == false
         {
             context.diagnose(Diagnostic(
