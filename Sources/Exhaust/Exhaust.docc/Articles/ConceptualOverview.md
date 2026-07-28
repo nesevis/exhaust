@@ -124,7 +124,7 @@ The `.metamorph` generator combinator builds the relation into the generator, pa
 
 ## Coverage-guided search: time budgets
 
-> Experiment: `#explore(time:)` and `#execute(time:)` are experimental. Settings, report format, and search behaviour may change in any release.
+> Experiment: `#explore(time:)` is experimental. Settings, report format, and search behaviour may change in any release.
 
 `#exhaust` and `#explore(directions:)` run a fixed number of iterations and stop. Some bugs hide behind branches the generator's natural distribution never reaches. `#explore(time:)` takes a wall-clock **time budget** instead of an iteration count and uses code coverage as a feedback signal: when a generated input reaches a branch nothing previous has reached, that input is kept and becomes the basis for further modifications. Over time, the search accumulates a **corpus** of inputs that collectively cover more of the code under test than random sampling alone.
 
@@ -132,7 +132,7 @@ The search has three phases. Screening and random sampling run first, the same a
 
 Unlike `#exhaust`, a coverage-guided run does not stop at the first failure. Failures are reduced to minimal counterexamples and grouped into **fault clusters**. Two failures that reduce to the same minimal form are one cluster. The report lists each distinct fault with its reduced counterexample.
 
-`#execute(time:)` applies the same search to `@StateMachine` specs, mutating command sequences instead of values. <doc:CoverageGuidedFuzzing> covers instrumentation setup, isolation requirements, and how to read the report.
+`#explore(MySpec.self, mode:, time:)` applies the same search to `@StateMachine` specs, mutating command sequences instead of values. <doc:CoverageGuidedFuzzing> covers instrumentation setup, isolation requirements, and how to read the report.
 
 ## Reproducing a find: seeds and replay
 
@@ -214,6 +214,6 @@ A **regression seed** is a seed pinned to a test (`.exhaust(.regressions("…"))
 ### Easily confused
 
 - **"Coverage" has exactly two senses.** *Space coverage* is how much of a domain or combinatorial space has been exercised: `#examine`'s domain metrics, `#explore(directions:)`'s direction coverage, and covering-array interaction coverage. *Code coverage* is which instrumented edges a candidate reached during a `time:`-mode run. The `#exhaust` phase that tries problematic values in pairwise combination is called **screening**, and is neither.
-- **"Replay" has three senses, from exact to approximate.** At its narrowest, replay is deterministic re-execution of a recorded choice sequence (the `Replay` interpreter). A step wider, it is seed-addressed reproduction of a run (`ReplaySeed`, the `.replay(…)` setting). At its widest, it is the re-run of a fuzz search from its seed (`FuzzSettings.replay`), which reruns the search rather than a log, so the reproduction is approximate.
+- **"Replay" has three senses, from exact to approximate.** At its narrowest, replay is deterministic re-execution of a recorded choice sequence (the `Replay` interpreter). A step wider, it is seed-addressed reproduction of a run (`ReplaySeed`, the `.replay(…)` setting). At its widest, it is the re-run of a fuzz search from its seed (`PropertyFuzzSettings.replay`), which reruns the search rather than a log, so the reproduction is approximate.
 - **"Reflection" is narrower than in most languages.** In Swift and Java, "reflection" typically means examining a value's structure at runtime. In Exhaust, inspection is the word for reading a generator's structure. Reflection means running a generator backward to recover the choices behind a concrete value. `#exhaust(…, reflecting:)` uses those choices to start reduction, while `#examine` checks the generated-value round trip.
 - **"Spec" and "state machine" name different things.** The spec is what you author: the class decorated with `@StateMachine`. The state machine is the machinery that runs specs. The macro carries the machinery's name because attaching it is what marks a class as a spec for the state machine to drive.

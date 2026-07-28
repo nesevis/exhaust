@@ -1,5 +1,5 @@
-import ExecuteFixture
 import Exhaust
+import SpecFixture
 
 /// The shared spec for the `CoupledStore` fixture (fault C — registry in `CoupledStore.swift`).
 ///

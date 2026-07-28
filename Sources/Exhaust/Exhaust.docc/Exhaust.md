@@ -70,6 +70,12 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 - ``exhaust(_:reflecting:_:property:)-2bzvp``
 - ``explore(_:directions:_:property:)-8mzym``
 - ``explore(_:directions:_:property:)-6teom``
+- ``explore(_:time:_:property:)-1rkzm``
+- ``explore(_:time:_:property:)-41j8q``
+- ``explore(_:mode:time:_:)-13s9v``
+- ``explore(_:mode:time:_:)-6wx9x``
+- ``execute(_:mode:_:)-32g6v``
+- ``execute(_:mode:_:)-5sjf0``
 - ``examine(_:_:)``
 - ``examine(_:_:replayCheck:)``
 - ``example(_:seed:)``
@@ -94,7 +100,8 @@ Exhaust builds generators with the `#gen` macro. Each generator is an inspectabl
 
 ### Fuzz Settings
 
-- ``FuzzSettings``
+- ``PropertyFuzzSettings``
+- ``StateMachineFuzzSettings``
 - ``FuzzReport``
 - ``TimeSpan``
 

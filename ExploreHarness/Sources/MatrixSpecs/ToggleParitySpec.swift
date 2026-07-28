@@ -1,5 +1,5 @@
-import ExecuteFixture
 import Exhaust
+import SpecFixture
 
 /// The shared spec for the `ToggleCounter` fixture (fault T — registry in `ToggleCounter.swift`).
 ///

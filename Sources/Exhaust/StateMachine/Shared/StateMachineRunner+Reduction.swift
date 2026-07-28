@@ -54,7 +54,7 @@ extension __ExhaustRuntime {
     ///
     /// Runs the command sequence through the skip identifier (which executes sequentially on a fresh spec) to find commands whose preconditions are not met. If any are found, those elements are removed from the tree and the tree is rematerialized. When `requireFailurePreserved` is `true`, the rematerialized value is returned only if it still fails the property; otherwise the originals are returned unchanged. When `false`, the rematerialized value is returned whenever materialization succeeds, without re-checking the property.
     ///
-    /// - Parameter requireFailurePreserved: Whether to re-check that the pruned sequence still fails the property before returning it. The counterexample-reduction callers keep this `true`. The `#execute(time:)` prune hook passes `false` because it normalizes every admitted candidate rather than only counterexamples, and skip pruning is pure element deletion into a fully populated tree, so a failing candidate keeps failing.
+    /// - Parameter requireFailurePreserved: Whether to re-check that the pruned sequence still fails the property before returning it. The counterexample-reduction callers keep this `true`. The `#explore(Spec.self, time:)` prune hook passes `false` because it normalizes every admitted candidate rather than only counterexamples, and skip pruning is pure element deletion into a fully populated tree, so a failing candidate keeps failing.
     static func pruneSkippedCommands<Value: Collection>(
         value: Value,
         tree: ChoiceTree,

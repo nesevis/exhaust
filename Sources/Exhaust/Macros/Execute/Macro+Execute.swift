@@ -1,6 +1,6 @@
 // Macro declarations for running spec tests with `#execute`.
 //
-// `#execute(MySpec.self, mode: .sequential, .settings...)` runs a spec test at the call site. The `@StateMachine` declaration macro and its markers live in `Macro+StateMachine.swift`.
+// `#execute(MySpec.self, mode: .sequential, .settings...)` runs a spec test at the call site. The `@StateMachine` declaration macro and its markers live in `Macro+StateMachine.swift`. Time-budgeted spec search is spelled `#explore(MySpec.self, mode:, time:)` and lives in `Macro+Explore.swift`, alongside the generator form it shares its report type with.
 //
 // `mode:` is required rather than defaulted, and there is no overload without it. Every other setting changes how hard a run tries; the mode changes which property it checks, and the value a default would pick is the weakest of the three. Omitting it on a spec whose commands are async would produce a run that executes, tests strictly less than the author meant, and passes — with nothing able to tell a deliberate `.sequential` from a forgotten one. Requiring it also keeps the mode written exactly once somewhere, which is what `@StateMachine(.sequential)` used to guarantee before the mode moved to the call site.
 import ExhaustCore
@@ -56,59 +56,3 @@ public macro execute<Spec: AsyncStateMachineSpec>(
     mode: ExecutionModel,
     _ settings: StateMachineSettings...
 ) -> StateMachineResult<Spec>? = #externalMacro(module: "ExhaustMacros", type: "ExhaustAsyncStateMachineMacro")
-
-/// Runs a coverage-guided spec test under the given ``ExecutionModel`` until the time budget is consumed.
-///
-/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. The run skips the covering-array screening phase and begins with random sampling, then spends the remaining budget in the mutation phase: exploration from corpus parents guided by branch-coverage feedback. Failures are cataloged and clustered rather than terminating the run.
-///
-/// `mode: .tasks` on a synchronous spec runs one command at a time, because interleaving needs `await` boundaries. The mode is a ``SearchableExecutionModel``, which has no `.threads`: coverage novelty assumes an attempt's coverage follows from its command sequence, and preemptive scheduling makes it follow from an OS schedule the run can neither observe nor replay. Run those specs under plain `#execute`, whose race detection relies on repetition rather than coverage.
-///
-/// ```swift
-/// @Test func boundedQueueFuzz() async {
-///     await #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
-/// }
-/// ```
-///
-/// Settings are variadic ``FuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, and the per-sequence command limit (``FuzzSettings/commandLimit(_:)``).
-///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
-///
-/// - Note: A spec's `failureDescription()` is not surfaced in `time:` mode; the reported counterexample is the reduced command sequence.
-///
-/// - Returns: A ``FuzzReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
-@freestanding(expression)
-@discardableResult
-public macro execute<Spec: StateMachineSpec>(
-    _ specType: Spec.Type,
-    mode: SearchableExecutionModel,
-    time: TimeSpan,
-    _ settings: FuzzSettings...
-) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExecuteTimeMacro")
-
-/// Runs a coverage-guided spec test for an async spec under the given ``ExecutionModel`` until the time budget is consumed.
-///
-/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. The run skips the covering-array screening phase and begins with random sampling, then spends the remaining budget in the mutation phase: exploration from corpus parents guided by branch-coverage feedback. Failures are cataloged and clustered rather than terminating the run.
-///
-/// `mode: .sequential` runs the commands one at a time, each awaited in turn. `mode: .tasks` drains each sequence through the cooperative scheduler: every command carries a lane-assigning schedule marker drawn as part of the generated input, so the interleaving itself is searched, mutated, and reduced alongside the commands (``FuzzSettings/parallelize(lanes:)`` sets the lane count, defaulting to two). It requires macOS 15, iOS 18, tvOS 18, watchOS 11, or visionOS 2. The mode is a ``SearchableExecutionModel``, which has no `.threads`: coverage novelty assumes an attempt's coverage follows from its command sequence, and preemptive scheduling makes it follow from an OS schedule the run can neither observe nor replay. Run those specs under plain `#execute`, whose race detection relies on repetition rather than coverage.
-///
-/// ```swift
-/// @Test func concurrentQueueFuzz() async {
-///     await #execute(ConcurrentQueueSpec.self, mode: .tasks, time: .minutes(5), .parallelize(lanes: .two))
-/// }
-/// ```
-///
-/// Settings are variadic ``FuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, the per-sequence command limit (``FuzzSettings/commandLimit(_:)``), and the lane count (``FuzzSettings/parallelize(lanes:)``).
-///
-/// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
-///
-/// - Note: A spec's `failureDescription()` is not surfaced in `time:` mode; the reported counterexample is the reduced command sequence.
-///
-/// - Returns: A ``FuzzReport`` containing the clustered fault inventory, attempt counts, throughput, and coverage summary.
-@freestanding(expression)
-@discardableResult
-public macro execute<Spec: AsyncStateMachineSpec>(
-    _ specType: Spec.Type,
-    mode: SearchableExecutionModel,
-    time: TimeSpan,
-    _ settings: FuzzSettings...
-) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExecuteTimeAsyncMacro")

@@ -1,4 +1,4 @@
-// The spec adapter and dispatch for coverage-guided execution: `#execute(Spec.self, mode: .tasks, time:)`.
+// The spec adapter and dispatch for coverage-guided spec search: `#explore(Spec.self, mode: .tasks, time:)`.
 
 import ExhaustCore
 import Foundation
@@ -7,7 +7,7 @@ import IssueReporting
 // MARK: - Dispatch
 
 public extension __ExhaustRuntime {
-    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(Spec.self, mode:, time:)`.
+    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#explore(Spec.self, mode:, time:)`.
     ///
     /// Async for the same reason plain `#execute` is: the run occupies its thread for the whole time budget, so it hops to a GCD worker instead of starving the cooperative pool. Every path, configuration errors included, funnels through the shared reporting epilogue, so findings, configuration errors, and the summary attachment surface exactly as they do for `#explore(time:)`.
     @discardableResult
@@ -15,7 +15,7 @@ public extension __ExhaustRuntime {
         _ specType: (some StateMachineSpec).Type,
         mode: SearchableExecutionModel,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [StateMachineFuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -32,7 +32,7 @@ public extension __ExhaustRuntime {
             column: column
         )
         // Reporting runs here on the test task, after the GCD hop: issue recording and attachment association both resolve the current test from task-locals a GCD worker does not carry.
-        let parsedSettings = ParsedFuzzSettings(settings)
+        let parsedSettings = ParsedStateMachineFuzzSettings(settings).shared
         reportFuzzIssues(
             report: report,
             suppressIssueReporting: parsedSettings.suppress.issueReporting,
@@ -45,52 +45,23 @@ public extension __ExhaustRuntime {
         return report
     }
 
-    /// The spec-path settings the dispatch consumes rather than forwards, with the remainder ready for the core. Both time dispatches (sync and async) consume through this so validation and filtering cannot drift between the twins.
-    private struct ConsumedSpecSettings {
-        let commandLimit: Int?
-        let parallelize: ConcurrencyLevel?
-        /// The settings to forward: the core rejects `.commandLimit` and `.parallelize` because they are meaningless on the value path, so the consumed cases must not travel further.
-        let coreSettings: [FuzzSettings]
-        /// Non-nil when a consumed setting is invalid; the dispatch returns an empty report with this termination.
-        let invalidConfiguration: FuzzReport.Termination?
-
-        init(_ settings: [FuzzSettings]) {
-            let parsed = ParsedFuzzSettings(settings)
-            commandLimit = parsed.commandLimit
-            parallelize = parsed.parallelize
-            coreSettings = settings.filter { setting in
-                switch setting {
-                    case .commandLimit, .parallelize:
-                        return false
-                    default:
-                        return true
-                }
-            }
-            if let commandLimit = parsed.commandLimit, commandLimit < 1 {
-                invalidConfiguration = .invalidConfiguration(".commandLimit must be at least 1, got \(commandLimit).")
-            } else {
-                invalidConfiguration = nil
-            }
-        }
-    }
-
     /// Builds the run's report: validates settings, routes on the execution model, and runs the matching adapter. Records no issues — the dispatch reports the returned report's termination and clusters exactly once.
     private static func stateMachineTimeReport(
         _ specType: (some StateMachineSpec).Type,
         mode: SearchableExecutionModel,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [StateMachineFuzzSettings],
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
         column: UInt
     ) async -> FuzzReport {
-        let consumed = ConsumedSpecSettings(settings)
-        if let invalid = consumed.invalidConfiguration {
+        let parsed = ParsedStateMachineFuzzSettings(settings)
+        if let invalid = parsed.invalidConfiguration {
             return .empty(termination: invalid, seed: 0)
         }
-        let commandLimit = consumed.commandLimit
-        let coreSettings = consumed.coreSettings
+        let commandLimit = parsed.commandLimit
+        let coreSettings = parsed.coreSettings
 
         switch mode {
             case .sequential, .tasks:
@@ -107,7 +78,7 @@ public extension __ExhaustRuntime {
         }
     }
 
-    /// Dispatches an asynchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(AsyncSpec.self, mode:, time:)`.
+    /// Dispatches an asynchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#explore(AsyncSpec.self, mode:, time:)`.
     ///
     /// The same shape as ``__runStateMachineTimeDispatch(_:mode:time:settings:fileID:filePath:line:column:)``: the run occupies a GCD worker for the whole budget, and reporting happens here on the test task after the hop.
     @discardableResult
@@ -115,7 +86,7 @@ public extension __ExhaustRuntime {
         _ specType: (some AsyncStateMachineSpec).Type,
         mode: SearchableExecutionModel,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [StateMachineFuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -131,7 +102,7 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
-        let parsedSettings = ParsedFuzzSettings(settings)
+        let parsedSettings = ParsedStateMachineFuzzSettings(settings).shared
         reportFuzzIssues(
             report: report,
             suppressIssueReporting: parsedSettings.suppress.issueReporting,
@@ -149,24 +120,24 @@ public extension __ExhaustRuntime {
         _ specType: (some AsyncStateMachineSpec).Type,
         mode: SearchableExecutionModel,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [StateMachineFuzzSettings],
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
         column: UInt
     ) async -> FuzzReport {
-        let consumed = ConsumedSpecSettings(settings)
-        if let invalid = consumed.invalidConfiguration {
+        let parsed = ParsedStateMachineFuzzSettings(settings)
+        if let invalid = parsed.invalidConfiguration {
             return .empty(termination: invalid, seed: 0)
         }
-        let commandLimit = consumed.commandLimit
+        let commandLimit = parsed.commandLimit
 
         switch mode {
             case .sequential:
                 return await runSpecFuzz(
                     makeAdapter: { buildAsyncSequentialSpecAdapter(specType, commandLimit: commandLimit) },
                     time: time,
-                    settings: consumed.coreSettings,
+                    settings: parsed.coreSettings,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -175,11 +146,11 @@ public extension __ExhaustRuntime {
             case .tasks:
                 guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
                     return .empty(
-                        termination: .invalidConfiguration("#execute(time:) with a .tasks spec requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, or visionOS 2+."),
+                        termination: .invalidConfiguration("#explore(Spec.self, time:) with a .tasks spec requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, or visionOS 2+."),
                         seed: 0
                     )
                 }
-                let resolvedConcurrencyLevel = consumed.parallelize?.rawValue ?? 2
+                let resolvedConcurrencyLevel = parsed.parallelize?.rawValue ?? 2
                 let searchAbandonments = UnsafeSendableBox(0)
                 let report = await runSpecFuzz(
                     makeAdapter: {
@@ -191,7 +162,7 @@ public extension __ExhaustRuntime {
                         )
                     },
                     time: time,
-                    settings: consumed.coreSettings,
+                    settings: parsed.coreSettings,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -215,7 +186,7 @@ public extension __ExhaustRuntime {
     private static func runSpecFuzz(
         makeAdapter: @escaping () -> SpecFuzzAdapter<some Any>?,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [PropertyFuzzSettings],
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,

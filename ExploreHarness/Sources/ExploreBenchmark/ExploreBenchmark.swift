@@ -17,11 +17,11 @@
 //   swift run -c debug ExploreBenchmark analyze .benchmarks/baseline.jsonl .benchmarks/candidate.jsonl
 
 import ArgumentParser
-import ExecuteFixture
 import Exhaust
 import ExploreFixture
 import Foundation
 import MatrixSpecs
+import SpecFixture
 
 @main
 struct ExploreBenchmark: AsyncParsableCommand {
@@ -172,7 +172,7 @@ struct ExploreBenchmark: AsyncParsableCommand {
         seed: UInt64,
         budget: TimeSpan
     ) async -> FuzzReport {
-        await #execute(spec, time: budget, .commandLimit(40), .replay(.numeric(seed)), .suppress(.all))
+        await #explore(spec, mode: .sequential, time: budget, .commandLimit(40), .replay(.numeric(seed)), .suppress(.all))
     }
 }
 

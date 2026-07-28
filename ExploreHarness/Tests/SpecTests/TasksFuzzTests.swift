@@ -1,4 +1,4 @@
-import ExecuteFixture
+import SpecFixture
 import Exhaust
 import MatrixSpecs
 import Testing
@@ -23,7 +23,7 @@ struct TasksFuzzTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("A two-lane fuzz run finds the lost update through real coverage feedback")
     func findsInterleavingFault() async {
-        let report = await #execute(
+        let report = await #explore(
             RacyLedgerSpec.self,
             mode: .tasks,
             time: .seconds(5),
@@ -40,7 +40,7 @@ struct TasksFuzzTests {
     @Test("The one-lane negative control never finds the interleaving fault")
     func sequentialLanesFindNothing() async {
         // Fault L's sequential-soundness pin: with one lane every marker is prefix, each read-modify-write runs to completion before the next command, and no schedule can realize the race. A cluster here means the fixture has a value-gated fault it must not have.
-        let report = await #execute(
+        let report = await #explore(
             RacyLedgerSpec.self,
             mode: .tasks,
             time: .seconds(5),
@@ -57,7 +57,7 @@ struct TasksFuzzTests {
     @Test("Replaying a seed rediscovers the same fault classes")
     func replayRediscoversSameClusters() async {
         // The documented replay contract for time: mode — same seed, same build, comparable budget rediscovers the same clusters, not an attempt-for-attempt identical log. This is the instrumented determinism check the synthetic-coverage tests cannot perform: it fails if the cooperative drain leaks schedule nondeterminism into the search's decisions.
-        let first = await #execute(
+        let first = await #explore(
             RacyLedgerSpec.self,
             mode: .tasks,
             time: .seconds(5),
@@ -66,7 +66,7 @@ struct TasksFuzzTests {
             .replay(42),
             .suppress(.issueReporting)
         )
-        let second = await #execute(
+        let second = await #explore(
             RacyLedgerSpec.self,
             mode: .tasks,
             time: .seconds(5),

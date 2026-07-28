@@ -3,30 +3,30 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expands `#execute(Spec.self, mode: .tasks, time: .minutes(5), .settings...)` into a call to `__ExhaustRuntime.__runStateMachineTimeDispatch(...)`.
-public struct ExecuteTimeMacro: ExpressionMacro {
+/// Expands `#explore(Spec.self, mode: .tasks, time: .minutes(5), .settings...)` into a call to `__ExhaustRuntime.__runStateMachineTimeDispatch(...)`.
+public struct ExploreSpecTimeMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
-        expandExecuteTimeCall(of: node, in: context, dispatchFunction: "__runStateMachineTimeDispatch")
+        expandExploreSpecTimeCall(of: node, in: context, dispatchFunction: "__runStateMachineTimeDispatch")
     }
 }
 
-/// Expands `#execute(AsyncSpec.self, mode: .sequential, time: .minutes(5), .settings...)` into a call to `__ExhaustRuntime.__runStateMachineTimeDispatchAsync(...)`.
-public struct ExecuteTimeAsyncMacro: ExpressionMacro {
+/// Expands `#explore(AsyncSpec.self, mode: .sequential, time: .minutes(5), .settings...)` into a call to `__ExhaustRuntime.__runStateMachineTimeDispatchAsync(...)`.
+public struct ExploreSpecTimeAsyncMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
-        expandExecuteTimeCall(of: node, in: context, dispatchFunction: "__runStateMachineTimeDispatchAsync")
+        expandExploreSpecTimeCall(of: node, in: context, dispatchFunction: "__runStateMachineTimeDispatchAsync")
     }
 }
 
 // MARK: - Shared Expansion Logic
 
-/// The shared body of the sync and async `#execute(time:)` macros: validates the spec and `time:` arguments and expands. The two macros differ only in the runtime dispatch function name.
-private func expandExecuteTimeCall(
+/// The shared body of the sync and async time-budgeted spec macros: validates the spec and `time:` arguments and expands. The two macros differ only in the runtime dispatch function name.
+private func expandExploreSpecTimeCall(
     of node: some FreestandingMacroExpansionSyntax,
     in context: some MacroExpansionContext,
     dispatchFunction: String
@@ -35,15 +35,15 @@ private func expandExecuteTimeCall(
 
     context.diagnose(Diagnostic(
         node: Syntax(node),
-        message: ExhaustMacroDiagnostic.executeTimeExperimental
+        message: ExhaustMacroDiagnostic.exploreTimeExperimental
     ))
 
     guard arguments.count >= 1 else {
         context.diagnose(Diagnostic(
             node: Syntax(node),
-            message: ExhaustMacroDiagnostic.exhaustStateMachineMissingSpec
+            message: ExhaustMacroDiagnostic.exploreStateMachineMissingSpec
         ))
-        return "fatalError(\"#execute requires a spec type argument\")"
+        return "fatalError(\"#explore requires a spec type argument\")"
     }
 
     let specExpression = arguments[0].expression.trimmedDescription
@@ -51,18 +51,18 @@ private func expandExecuteTimeCall(
     guard let timeArgument = arguments.first(where: { $0.label?.text == "time" }) else {
         context.diagnose(Diagnostic(
             node: Syntax(node),
-            message: ExhaustMacroDiagnostic.executeTimeMissingTime
+            message: ExhaustMacroDiagnostic.exploreTimeMissingTime
         ))
-        return "fatalError(\"#execute(time:) requires a 'time:' argument\")"
+        return "fatalError(\"#explore(time:) requires a 'time:' argument\")"
     }
     let timeExpression = timeArgument.expression.trimmedDescription
 
     guard let modeExpression = executionModeExpression(from: arguments) else {
         context.diagnose(Diagnostic(
             node: Syntax(node),
-            message: ExhaustMacroDiagnostic.exhaustStateMachineMissingMode
+            message: ExhaustMacroDiagnostic.exploreStateMachineMissingMode
         ))
-        return "fatalError(\"#execute requires a 'mode:' argument\")"
+        return "fatalError(\"#explore requires a 'mode:' argument\")"
     }
 
     let settingsExpressions = arguments.dropFirst()

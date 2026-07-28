@@ -22,25 +22,14 @@ Returns a ``StateMachineResult`` with the reduced command sequence and trace on 
 
 For the full guide, see <doc:StateMachineTesting>.
 
-## Coverage-guided fuzzing with time:
+## Searching under a time budget
 
-`#execute` also supports a `time:` mode that runs coverage-guided fuzzing over command sequences. Exhaust mutates sequences from a corpus toward novel SUT coverage until the time budget is consumed, cataloguing every distinct fault it discovers.
-
-> Experiment: This mode is experimental. Settings, report format, and search behaviour may change in any release.
+`#execute` runs a fixed budget of sequences and stops at the first failure. To search command sequences under a wall-clock budget instead, cataloguing every distinct fault rather than stopping at one, pass the same spec to `#explore`:
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
-    await #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
+    await #explore(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
 }
 ```
 
-| Parameter | Description |
-|---|---|
-| `specType` | The `@StateMachine` spec to run. |
-| `mode` | A ``SearchableExecutionModel``: `.sequential` or `.tasks`. Coverage-guided search cannot use `.threads`. |
-| `time` | Wall-clock ``TimeSpan`` for the run (for example `.minutes(5)`). |
-| `settings` | Variadic ``FuzzSettings`` values: replay, suppression, log verbosity, `.commandLimit(n)`. |
-
-Requires coverage instrumentation on the target under test. Returns a ``FuzzReport`` with the clustered fault inventory, attempt counts, throughput, and coverage summary.
-
-For the full guide, see <doc:CoverageGuidedFuzzing>.
+That mode is experimental, requires coverage instrumentation on the target under test, and returns a ``FuzzReport`` instead of a ``StateMachineResult``. See <doc:MacroExplore> for the parameters and <doc:CoverageGuidedFuzzing> for the full guide.

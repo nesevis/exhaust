@@ -4,8 +4,8 @@ import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("#execute(time:) runtime dispatch and adapter")
-struct ExecuteTimeRuntimeTests {
+@Suite("#explore(Spec.self, time:) runtime dispatch and adapter")
+struct ExploreSpecTimeRuntimeTests {
     @Test(".tasks spec with no async members routes to the sequential runner")
     func syncTasksSpecRoutesSequentially() async throws {
         // TasksCounterSpec has only synchronous members, so it conforms to plain StateMachineSpec and has no suspension points to interleave at. The dispatch routes it through the sequential adapter, mirroring plain #execute — the run reaches the instrumentation check instead of terminating on a configuration diagnostic.
@@ -211,23 +211,6 @@ struct ExecuteTimeRuntimeTests {
         #expect(verdict.isFailure == false)
     }
 
-    @Test("parallelize on #explore(time:) is a configuration error")
-    func parallelizeOnExplorePath() {
-        let report = __ExhaustRuntime.runExploreTimeCore(
-            gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
-            time: .seconds(60),
-            settings: [.parallelize(lanes: .two)],
-            source: SyntheticCoverageSource<Int>(edgeCount: 8, edges: { [$0 % 4] }),
-            configure: nil,
-            property: { _ in .pass }
-        )
-        guard case .invalidConfiguration = report.termination else {
-            Issue.record("Expected invalidConfiguration, got \(report.termination)")
-            return
-        }
-        #expect(report.totalAttempts == 0)
-    }
-
     @Test("commandLimit setting caps generated sequence length")
     func commandLimitCapsLength() {
         let adapter = __ExhaustRuntime.buildSequentialSpecAdapter(SkippableCounterSpec.self, commandLimit: 5)
@@ -282,23 +265,6 @@ struct ExecuteTimeRuntimeTests {
             Issue.record("Expected invalidConfiguration, got \(resolved.termination)")
             return
         }
-    }
-
-    @Test("commandLimit on #explore(time:) is a configuration error")
-    func commandLimitOnExplorePath() {
-        let report = __ExhaustRuntime.runExploreTimeCore(
-            gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
-            time: .seconds(60),
-            settings: [.commandLimit(10)],
-            source: SyntheticCoverageSource<Int>(edgeCount: 8, edges: { [$0 % 4] }),
-            configure: nil,
-            property: { _ in .pass }
-        )
-        guard case .invalidConfiguration = report.termination else {
-            Issue.record("Expected invalidConfiguration, got \(report.termination)")
-            return
-        }
-        #expect(report.totalAttempts == 0)
     }
 
     @Test("Swarm mask reaches the synthesized commandGenerator pick site")

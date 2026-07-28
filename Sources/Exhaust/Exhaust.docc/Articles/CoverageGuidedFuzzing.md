@@ -2,13 +2,13 @@
 
 Give Exhaust a time budget and let it search for bugs by observing which branches your code takes.
 
-> Experiment: `#explore(time:)` and `#execute(time:)` are experimental. Settings, report format, and search behaviour may change in any release. Every call site emits a build warning until the mode stabilises.
+> Experiment: `#explore(time:)` is experimental. Settings, report format, and search behaviour may change in any release. Every call site emits a build warning until the mode stabilises.
 
 ## Overview
 
 `#exhaust` runs a property across boundary values and random samples, then stops. For most tests that's the right tradeoff: fast feedback, deterministic budget, done in well under a second. But the iteration budget is finite, and some branches in your code may never be reached by the generator's natural distribution.
 
-`#explore(time:)` and `#execute(time:)` take a wall-clock time budget instead. You compile the target under test with coverage instrumentation (see below), and Exhaust watches which branches each generated input reaches, using that feedback as a novelty signal to drive a search. When it finds a failure, it keeps going. When the budget runs out, it reports every distinct fault it found, each reduced to a minimal counterexample.
+`#explore(time:)` takes a wall-clock time budget instead. You compile the target under test with coverage instrumentation (see below), and Exhaust watches which branches each generated input reaches, using that feedback as a novelty signal to drive a search. When it finds a failure, it keeps going. When the budget runs out, it reports every distinct fault it found, each reduced to a minimal counterexample.
 
 ```swift
 @Test func parserHandlesAdversarialInput() async {
@@ -115,17 +115,17 @@ The seed pins every decision the search makes: the screening rows, the random-sa
 
 One exception is deliberate: when the previous run crashed, the rerun resumes from the crash checkpoint instead of replaying, even when `.replay` is passed. A trapping input is the most valuable thing a fuzzing run can find, and reporting it beats a faithful rerun. Set `EXHAUST_RESUME=0` when reproduction matters more than the crash finding; the crash state is discarded.
 
-## Fuzzing a state machine spec with #execute(time:)
+## Fuzzing a state machine spec
 
-The same coverage-guided search works over `@StateMachine` specs. Where `#explore(time:)` modifies generated values, `#execute(time:)` modifies command sequences: deleting, duplicating, and replacing commands in the sequence.
+The same coverage-guided search works over `@StateMachine` specs. Pass the spec in place of the generator and add the `mode:` its commands should run under. Exhaust then mutates command sequences where it would otherwise mutate values, deleting, duplicating, and replacing commands as it searches.
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
-    await #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
+    await #explore(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
 }
 ```
 
-`#execute(time:)` skips the screening phase (boundary-value catalogues apply to values, not command vocabularies) and begins with random sampling. Commands whose preconditions fail at runtime are pruned from the stored sequence so that modifications don't keep resurrecting operations that have no effect in a given context.
+The spec form skips the screening phase (boundary-value catalogues apply to values, not command vocabularies) and begins with random sampling. Commands whose preconditions fail at runtime are pruned from the stored sequence so that modifications don't keep resurrecting operations that have no effect in a given context.
 
 Sequences carry up to 40 commands by default. Override with `.commandLimit(n)` when the default is too short to reach deep state, or to shorten sequences when each command is expensive.
 
@@ -141,7 +141,7 @@ That exclusion is the clean-signal requirement applied from the inside. Every co
 
 No isolation arrangement recovers the signal. The conditions in <doc:#Getting-a-clean-signal> are fixable because the interference comes from outside the run. Here the interference is the mode's purpose: `mode: .threads` exists so the OS is free to realise a different schedule for the same sequence on every attempt, which is the one freedom the coverage signal cannot absorb.
 
-Concurrency testing under a time budget splits by what you are hunting. To search interleavings, use `mode: .tasks`: the lane assignment travels inside the generated input, so schedules are mutated, replayed, and reduced like any other part of the sequence. To find data races, run the same spec under plain `#execute` with `mode: .threads`, which judges runs through the spec's `@Equivalence` and relies on repetition rather than coverage, and is built for schedules it cannot replay.
+Concurrency testing under a time budget splits by what you are hunting. To search interleavings, use `mode: .tasks`: the lane assignment travels inside the generated input, so schedules are mutated, replayed, and reduced like any other part of the sequence. To find data races, run the same spec under `#execute` with `mode: .threads`, which judges runs through the spec's `@Equivalence` and relies on repetition rather than coverage, and is built for schedules it cannot replay.
 
 ## Reading the report
 
@@ -197,7 +197,7 @@ Read it as an estimate with a known lean rather than a measurement. Chao1 assume
 
 **The seed is for replay.** Pass it as `.replay(1)` to rerun from the same starting point. Isolation matters doubly for replay: a replay that sees different coverage takes a different path.
 
-For `#execute(time:)` the report has the same structure, but each cluster's reduced counterexample is a command sequence:
+For the spec form the report has the same structure, but each cluster's reduced counterexample is a command sequence:
 
 ```
 Cluster 1 BoundedQueueError
@@ -218,6 +218,8 @@ await #explore(myInputGenerator, time: .minutes(15), .replay(20260710), .log(.in
 }
 ```
 
+The generator form takes ``PropertyFuzzSettings``. The spec form takes ``StateMachineFuzzSettings``, which adds the last two rows. Writing a spec-only setting on a generator does not compile.
+
 | Setting | Effect |
 |---------|--------|
 | `.replay(seed)` | Replays a prior run's search from its seed. Pass the seed from a report's `Reproduce:` line. |
@@ -226,7 +228,8 @@ await #explore(myInputGenerator, time: .minutes(15), .replay(20260710), .log(.in
 | `.suppress(.attachments)` | Stops the run recording its per-cluster and summary attachments. Use when a test loops fuzz runs and the attachments would only accumulate noise in the result bundle. |
 | `.suppress(.all)` | All of the above. |
 | `.log(.info)` | Raises log verbosity (default is `.error`). |
-| `.commandLimit(n)` | Maximum commands per generated sequence. Default 40. Only valid for `#execute(time:)`. |
+| `.commandLimit(n)` | Maximum commands per generated sequence. Default 40. Spec form only. |
+| `.parallelize(lanes:)` | Lane count for `.tasks` specs. Default two. Spec form only. |
 
 ## Choosing a time budget
 
@@ -274,6 +277,7 @@ If the instrumented code changed between the crash and the rerun, the saved inpu
 
 ### Settings and Results
 
-- ``FuzzSettings``
+- ``PropertyFuzzSettings``
+- ``StateMachineFuzzSettings``
 - ``FuzzReport``
 - ``TimeSpan``

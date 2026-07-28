@@ -1,4 +1,4 @@
-import ExecuteFixture
+import SpecFixture
 import Testing
 
 @Suite("CoupledStore reproducer smoke tests")

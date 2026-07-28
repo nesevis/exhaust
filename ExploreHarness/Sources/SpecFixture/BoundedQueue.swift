@@ -1,4 +1,4 @@
-// A deliberately buggy bounded queue for the execute-time harness.
+// A deliberately buggy bounded queue for the spec-fuzzing harness.
 //
 // Default capacity 24 (SW2a sweep: {16, 24, 32}). Six commands. Fault A is the swarm
 // target: its differential lives in reset absence, not coverage guidance. No edge

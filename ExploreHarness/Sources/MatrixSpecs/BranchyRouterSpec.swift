@@ -1,5 +1,5 @@
-import ExecuteFixture
 import Exhaust
+import SpecFixture
 
 /// The shared spec for the `BranchyRouter` fixture (fault B — registry in `BranchyRouter.swift`).
 ///

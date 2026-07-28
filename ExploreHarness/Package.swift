@@ -36,19 +36,19 @@ let package = Package(
             ],
             swiftSettings: coverageFlags
         ),
-        // The deliberately buggy bounded queue SUT for #execute(time:) validation.
+        // The deliberately buggy bounded queue SUT for #explore(Spec.self, time:) validation.
         .target(
-            name: "ExecuteFixture",
+            name: "SpecFixture",
             dependencies: [
                 .product(name: "Exhaust", package: "Exhaust"),
             ],
             swiftSettings: coverageFlags
         ),
-        // Uninstrumented shared home for the spec-path fixture specs. Both ExecuteTests and ExploreBenchmark import it, so the benchmark measures the exact spec the tests validate — access-level-mirroring @StateMachine synthesis (public specs get public members) is what makes the cross-module sharing possible.
+        // Uninstrumented shared home for the spec-path fixture specs. Both SpecTests and ExploreBenchmark import it, so the benchmark measures the exact spec the tests validate — access-level-mirroring @StateMachine synthesis (public specs get public members) is what makes the cross-module sharing possible.
         .target(
             name: "MatrixSpecs",
             dependencies: [
-                "ExecuteFixture",
+                "SpecFixture",
                 .product(name: "Exhaust", package: "Exhaust"),
             ]
         ),
@@ -61,11 +61,11 @@ let package = Package(
                 .product(name: "ExhaustCore", package: "Exhaust"),
             ]
         ),
-        // Uninstrumented: validates #execute(time:) against the BoundedQueue fixture.
+        // Uninstrumented: validates #explore(Spec.self, time:) against the BoundedQueue fixture.
         .testTarget(
-            name: "ExecuteTests",
+            name: "SpecTests",
             dependencies: [
-                "ExecuteFixture",
+                "SpecFixture",
                 "MatrixSpecs",
                 .product(name: "Exhaust", package: "Exhaust"),
                 .product(name: "ExhaustCore", package: "Exhaust"),
@@ -80,11 +80,11 @@ let package = Package(
                 .product(name: "ExhaustCore", package: "Exhaust"),
             ]
         ),
-        // Spawned as a child process by the execute trap test: runs a spec fuzz under time: that traps.
+        // Spawned as a child process by the spec trap test: runs a spec fuzz under time: that traps.
         .executableTarget(
-            name: "ExecuteTrapProbe",
+            name: "SpecTrapProbe",
             dependencies: [
-                "ExecuteFixture",
+                "SpecFixture",
                 .product(name: "Exhaust", package: "Exhaust"),
                 .product(name: "ExhaustCore", package: "Exhaust"),
             ],
@@ -95,7 +95,7 @@ let package = Package(
             name: "ExploreBenchmark",
             dependencies: [
                 "ExploreFixture",
-                "ExecuteFixture",
+                "SpecFixture",
                 "MatrixSpecs",
                 .product(name: "Exhaust", package: "Exhaust"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
