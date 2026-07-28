@@ -12,6 +12,7 @@ struct ExecuteMemoryProfileTests {
         var report: ExhaustReport?
         let counterexample = await #execute(
             MemoryProfileStoreSpec.self,
+            mode: .sequential,
             .commandLimit(64),
             .replay(19871),
             .suppress(.all),
