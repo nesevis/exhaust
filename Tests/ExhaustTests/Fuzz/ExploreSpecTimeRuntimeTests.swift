@@ -5,7 +5,7 @@ import Testing
 @testable import Exhaust
 
 @Suite("#explore(Spec.self, time:) runtime dispatch and adapter")
-struct ExecuteTimeRuntimeTests {
+struct ExploreSpecTimeRuntimeTests {
     @Test(".tasks spec with no async members routes to the sequential runner")
     func syncTasksSpecRoutesSequentially() async throws {
         // TasksCounterSpec has only synchronous members, so it conforms to plain StateMachineSpec and has no suspension points to interleave at. The dispatch routes it through the sequential adapter, mirroring plain #execute — the run reaches the instrumentation check instead of terminating on a configuration diagnostic.

@@ -1,4 +1,4 @@
-// The spec adapter and dispatch for coverage-guided execution: `#execute(Spec.self, mode: .tasks, time:)`.
+// The spec adapter and dispatch for coverage-guided spec search: `#explore(Spec.self, mode: .tasks, time:)`.
 
 import ExhaustCore
 import Foundation
@@ -7,7 +7,7 @@ import IssueReporting
 // MARK: - Dispatch
 
 public extension __ExhaustRuntime {
-    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(Spec.self, mode:, time:)`.
+    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#explore(Spec.self, mode:, time:)`.
     ///
     /// Async for the same reason plain `#execute` is: the run occupies its thread for the whole time budget, so it hops to a GCD worker instead of starving the cooperative pool. Every path, configuration errors included, funnels through the shared reporting epilogue, so findings, configuration errors, and the summary attachment surface exactly as they do for `#explore(time:)`.
     @discardableResult
@@ -45,28 +45,6 @@ public extension __ExhaustRuntime {
         return report
     }
 
-    /// The spec-path settings the dispatch consumes rather than forwards, with the remainder ready for the core. Both time dispatches (sync and async) consume through this so validation and filtering cannot drift between the twins.
-    private struct ConsumedSpecSettings {
-        let commandLimit: Int?
-        let parallelize: ConcurrencyLevel?
-        /// The settings to forward, carried by the type the core accepts. `.commandLimit` and `.parallelize` have no case there, so they cannot travel further.
-        let coreSettings: [PropertyFuzzSettings]
-        /// Non-nil when a consumed setting is invalid; the dispatch returns an empty report with this termination.
-        let invalidConfiguration: FuzzReport.Termination?
-
-        init(_ settings: [StateMachineFuzzSettings]) {
-            let parsed = ParsedStateMachineFuzzSettings(settings)
-            commandLimit = parsed.commandLimit
-            parallelize = parsed.parallelize
-            coreSettings = parsed.coreSettings
-            if let commandLimit = parsed.commandLimit, commandLimit < 1 {
-                invalidConfiguration = .invalidConfiguration(".commandLimit must be at least 1, got \(commandLimit).")
-            } else {
-                invalidConfiguration = nil
-            }
-        }
-    }
-
     /// Builds the run's report: validates settings, routes on the execution model, and runs the matching adapter. Records no issues — the dispatch reports the returned report's termination and clusters exactly once.
     private static func stateMachineTimeReport(
         _ specType: (some StateMachineSpec).Type,
@@ -78,12 +56,12 @@ public extension __ExhaustRuntime {
         line: UInt,
         column: UInt
     ) async -> FuzzReport {
-        let consumed = ConsumedSpecSettings(settings)
-        if let invalid = consumed.invalidConfiguration {
+        let parsed = ParsedStateMachineFuzzSettings(settings)
+        if let invalid = parsed.invalidConfiguration {
             return .empty(termination: invalid, seed: 0)
         }
-        let commandLimit = consumed.commandLimit
-        let coreSettings = consumed.coreSettings
+        let commandLimit = parsed.commandLimit
+        let coreSettings = parsed.coreSettings
 
         switch mode {
             case .sequential, .tasks:
@@ -100,7 +78,7 @@ public extension __ExhaustRuntime {
         }
     }
 
-    /// Dispatches an asynchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#execute(AsyncSpec.self, mode:, time:)`.
+    /// Dispatches an asynchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#explore(AsyncSpec.self, mode:, time:)`.
     ///
     /// The same shape as ``__runStateMachineTimeDispatch(_:mode:time:settings:fileID:filePath:line:column:)``: the run occupies a GCD worker for the whole budget, and reporting happens here on the test task after the hop.
     @discardableResult
@@ -148,18 +126,18 @@ public extension __ExhaustRuntime {
         line: UInt,
         column: UInt
     ) async -> FuzzReport {
-        let consumed = ConsumedSpecSettings(settings)
-        if let invalid = consumed.invalidConfiguration {
+        let parsed = ParsedStateMachineFuzzSettings(settings)
+        if let invalid = parsed.invalidConfiguration {
             return .empty(termination: invalid, seed: 0)
         }
-        let commandLimit = consumed.commandLimit
+        let commandLimit = parsed.commandLimit
 
         switch mode {
             case .sequential:
                 return await runSpecFuzz(
                     makeAdapter: { buildAsyncSequentialSpecAdapter(specType, commandLimit: commandLimit) },
                     time: time,
-                    settings: consumed.coreSettings,
+                    settings: parsed.coreSettings,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -172,7 +150,7 @@ public extension __ExhaustRuntime {
                         seed: 0
                     )
                 }
-                let resolvedConcurrencyLevel = consumed.parallelize?.rawValue ?? 2
+                let resolvedConcurrencyLevel = parsed.parallelize?.rawValue ?? 2
                 let searchAbandonments = UnsafeSendableBox(0)
                 let report = await runSpecFuzz(
                     makeAdapter: {
@@ -184,7 +162,7 @@ public extension __ExhaustRuntime {
                         )
                     },
                     time: time,
-                    settings: consumed.coreSettings,
+                    settings: parsed.coreSettings,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,

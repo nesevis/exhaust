@@ -5,9 +5,9 @@
 
     @Suite(
         "#explore(Spec.self, time:) macro expansion tests",
-        .macros(["explore": ExecuteTimeMacro.self], record: .failed)
+        .macros(["explore": ExploreSpecTimeMacro.self], record: .failed)
     )
-    struct ExecuteTimeMacroTests {
+    struct ExploreSpecTimeMacroTests {
         @Test("Sync spec expands to __runStateMachineTimeDispatch")
         func syncSpec() {
             assertMacro {
@@ -71,7 +71,7 @@
 
         @Test("Async macro expands to __runStateMachineTimeDispatchAsync")
         func asyncSpec() {
-            withMacroTesting(macros: ["explore": ExecuteTimeAsyncMacro.self]) {
+            withMacroTesting(macros: ["explore": ExploreSpecTimeAsyncMacro.self]) {
                 assertMacro {
                     """
                     #explore(ConcurrentQueueSpec.self, mode: .sequential, time: .minutes(5), .parallelize(lanes: .two))

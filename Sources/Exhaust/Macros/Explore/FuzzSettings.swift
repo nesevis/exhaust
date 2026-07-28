@@ -97,7 +97,7 @@ struct ParsedPropertyFuzzSettings {
 
 /// The spec path's settings, split into the two fields only it understands and the remainder the shared core reads.
 ///
-/// The command-sequence settings must not travel further: the core takes ``PropertyFuzzSettings``, which has no case to carry them.
+/// The command-sequence settings must not travel further: the core takes ``PropertyFuzzSettings``, which has no case to carry them. Validation of the consumed fields lives here too, so both time dispatches (sync and async) reject the same configurations.
 struct ParsedStateMachineFuzzSettings {
     /// The per-sequence command cap; nil when unset, in which case the runner applies ``FuzzTunables/specDefaultCommandLimit``.
     var commandLimit: Int?
@@ -109,6 +109,14 @@ struct ParsedStateMachineFuzzSettings {
     /// The shared fields, read through the one parser both forms use.
     var shared: ParsedPropertyFuzzSettings {
         ParsedPropertyFuzzSettings(coreSettings)
+    }
+
+    /// Non-nil when a consumed setting is invalid; the dispatch returns an empty report with this termination instead of running.
+    var invalidConfiguration: FuzzReport.Termination? {
+        guard let commandLimit, commandLimit < 1 else {
+            return nil
+        }
+        return .invalidConfiguration(".commandLimit must be at least 1, got \(commandLimit).")
     }
 
     init(_ settings: [StateMachineFuzzSettings]) {

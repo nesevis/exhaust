@@ -132,7 +132,7 @@ public macro explore<Spec: StateMachineSpec>(
     mode: SearchableExecutionModel,
     time: TimeSpan,
     _ settings: StateMachineFuzzSettings...
-) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExecuteTimeMacro")
+) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExploreSpecTimeMacro")
 
 /// Runs a coverage-guided spec test for an async spec under the given ``SearchableExecutionModel`` until the time budget is consumed.
 ///
@@ -160,7 +160,7 @@ public macro explore<Spec: AsyncStateMachineSpec>(
     mode: SearchableExecutionModel,
     time: TimeSpan,
     _ settings: StateMachineFuzzSettings...
-) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExecuteTimeAsyncMacro")
+) -> FuzzReport = #externalMacro(module: "ExhaustMacros", type: "ExploreSpecTimeAsyncMacro")
 
 /// Names the missing property closure on a `directions:` call written without one.
 ///

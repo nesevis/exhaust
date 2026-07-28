@@ -217,6 +217,112 @@
                     .contains(StateMachineDiagnostic.mainActorCommand.diagnosticID)
             )
         }
+
+        @Test("A spec with no invariant, no equivalence, and no throwing command warns that it cannot fail")
+        func specWithNoFailureChannelIsDiagnosed() throws {
+            let declaration: DeclSyntax = """
+            final class UnfailableSpec {
+              @SystemUnderTest var counter: Counter
+
+              @Command
+              func increment() {}
+            }
+            """
+            let diagnostics = try expansionDiagnostics(of: declaration)
+
+            #expect(
+                diagnostics.map(\.diagMessage.diagnosticID) == [
+                    StateMachineDiagnostic.specCannotFail.diagnosticID,
+                ]
+            )
+            #expect(diagnostics.first?.diagMessage.severity == .warning)
+        }
+
+        @Test("An invariant is a failure channel, so the cannot-fail warning stays silent")
+        func invariantSuppressesCannotFailWarning() throws {
+            let declaration: DeclSyntax = """
+            final class InvariantSpec {
+              @SystemUnderTest var counter: Counter
+
+              @Command
+              func increment() {}
+
+              @Invariant
+              func valid() -> Bool { true }
+            }
+            """
+            let diagnostics = try expansionDiagnostics(of: declaration)
+
+            #expect(diagnostics.isEmpty)
+        }
+
+        @Test("An equivalence is a failure channel, so the cannot-fail warning stays silent")
+        func equivalenceSuppressesCannotFailWarning() throws {
+            let declaration: DeclSyntax = """
+            final class EquivalenceSpec {
+              @SystemUnderTest var counter: Counter
+
+              @Command
+              func increment() {}
+
+              @Equivalence
+              func equivalent(to other: Counter) -> Bool { true }
+            }
+            """
+            let diagnostics = try expansionDiagnostics(of: declaration)
+
+            #expect(diagnostics.isEmpty)
+        }
+
+        @Test("A throwing command is a failure channel, so the cannot-fail warning stays silent")
+        func throwingCommandSuppressesCannotFailWarning() throws {
+            let declaration: DeclSyntax = """
+            final class ThrowingCommandSpec {
+              @SystemUnderTest var counter: Counter
+
+              @Command
+              func increment() throws {}
+            }
+            """
+            let diagnostics = try expansionDiagnostics(of: declaration)
+
+            #expect(diagnostics.isEmpty)
+        }
+
+        @Test("A spec with no commands gets the noCommands error alone, not the cannot-fail warning")
+        func zeroCommandSpecIsNotDoubleDiagnosed() throws {
+            let declaration: DeclSyntax = """
+            final class EmptySpec {
+              @SystemUnderTest var counter: Counter
+
+              @Invariant
+              func valid() -> Bool { true }
+            }
+            """
+            let diagnostics = try expansionDiagnostics(of: declaration)
+
+            #expect(
+                diagnostics.map(\.diagMessage.diagnosticID) == [
+                    StateMachineDiagnostic.noCommands.diagnosticID,
+                ]
+            )
+        }
+
+        /// Expands `@StateMachine` over the declaration and returns the diagnostics it emitted.
+        private func expansionDiagnostics(of declaration: DeclSyntax) throws -> [Diagnostic] {
+            let attribute: AttributeSyntax = "@StateMachine"
+            let classDeclaration = try #require(declaration.as(ClassDeclSyntax.self))
+            let context = RecordingMacroExpansionContext()
+
+            _ = try StateMachineDeclarationMacro.expansion(
+                of: attribute,
+                providingMembersOf: classDeclaration,
+                conformingTo: [],
+                in: context
+            )
+
+            return context.diagnostics
+        }
     }
 
     private final class RecordingMacroExpansionContext: MacroExpansionContext {
