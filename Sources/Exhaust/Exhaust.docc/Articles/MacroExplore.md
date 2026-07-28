@@ -4,7 +4,7 @@ Test a property with per-direction coverage guarantees or coverage-guided fuzzin
 
 ## Overview
 
-`#explore` has two modes, selected by parameter:
+`#explore` has two search modes, selected by parameter. The `time:` mode takes either a generator or a `@StateMachine` spec as its first argument, so there are three call shapes in all.
 
 **Directed exploration** (`directions:`) steers sampling toward named regions of the output space using Choice Gradient Sampling. Each direction is a predicate the test must reach; unreachable directions are reported rather than silently skipped.
 
@@ -47,10 +47,31 @@ For the full guide, see <doc:DirectedExploration>.
 |---|---|
 | `gen` | The generator to draw inputs from. |
 | `time` | Wall-clock ``TimeSpan`` for the run (for example `.minutes(15)`). |
-| `settings` | Variadic ``FuzzSettings`` values: replay, suppression, log verbosity. |
+| `settings` | Variadic ``PropertyFuzzSettings`` values: replay, suppression, log verbosity. |
 | `property` | Closure checked against each generated value. Async closures supported with `await`. |
 
 Requires coverage instrumentation on the target under test. Returns a ``FuzzReport`` with the clustered fault inventory, attempt counts, throughput, and coverage summary.
+
+**Coverage-guided fuzzing over command sequences** (`time:` with a spec) points the same search at a `@StateMachine` spec instead of a generator. Exhaust mutates command sequences where it would otherwise mutate values, deleting, duplicating, and replacing commands as it searches, and reduces every fault it finds to a minimal sequence.
+
+> Experiment: This mode is experimental. Settings, report format, and search behaviour may change in any release.
+
+```swift
+@Test func boundedQueueDeepFaults() async {
+    await #explore(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
+}
+```
+
+| Parameter | Description |
+|---|---|
+| `specType` | The `@StateMachine` spec to run. |
+| `mode` | A ``SearchableExecutionModel``: `.sequential` or `.tasks`. Coverage-guided search cannot use `.threads`. |
+| `time` | Wall-clock ``TimeSpan`` for the run (for example `.minutes(5)`). |
+| `settings` | Variadic ``StateMachineFuzzSettings`` values: replay, suppression, log verbosity, `.commandLimit(n)`, `.parallelize(lanes:)`. |
+
+`mode:` is required, the same as on `#execute`. Requires coverage instrumentation on the target under test. Returns a ``FuzzReport`` with the clustered fault inventory, attempt counts, throughput, and coverage summary.
+
+For the bounded counterpart that runs a fixed budget of sequences and stops at the first failure, see <doc:MacroExecute>.
 
 The `directions:` and `time:` parameters are mutually exclusive. Use `directions:` when you can name the regions you want tested. Use `time:` for the open-ended case where you want Exhaust to find what you haven't thought to name.
 

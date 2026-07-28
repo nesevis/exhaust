@@ -117,7 +117,7 @@ One exception is deliberate: when the previous run crashed, the rerun resumes fr
 
 ## Fuzzing a state machine spec
 
-The same coverage-guided search works over `@StateMachine` specs. Pass a spec where the generator form takes a generator, and add the `mode:` the run should search under. Where the generator form modifies generated values, the spec form modifies command sequences: deleting, duplicating, and replacing commands in the sequence.
+The same coverage-guided search works over `@StateMachine` specs. Pass the spec in place of the generator and add the `mode:` its commands should run under. Exhaust then mutates command sequences where it would otherwise mutate values, deleting, duplicating, and replacing commands as it searches.
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
@@ -141,7 +141,7 @@ That exclusion is the clean-signal requirement applied from the inside. Every co
 
 No isolation arrangement recovers the signal. The conditions in <doc:#Getting-a-clean-signal> are fixable because the interference comes from outside the run. Here the interference is the mode's purpose: `mode: .threads` exists so the OS is free to realise a different schedule for the same sequence on every attempt, which is the one freedom the coverage signal cannot absorb.
 
-Concurrency testing under a time budget splits by what you are hunting. To search interleavings, use `mode: .tasks`: the lane assignment travels inside the generated input, so schedules are mutated, replayed, and reduced like any other part of the sequence. To find data races, run the same spec under plain `#execute` with `mode: .threads`, which judges runs through the spec's `@Equivalence` and relies on repetition rather than coverage, and is built for schedules it cannot replay.
+Concurrency testing under a time budget splits by what you are hunting. To search interleavings, use `mode: .tasks`: the lane assignment travels inside the generated input, so schedules are mutated, replayed, and reduced like any other part of the sequence. To find data races, run the same spec under `#execute` with `mode: .threads`, which judges runs through the spec's `@Equivalence` and relies on repetition rather than coverage, and is built for schedules it cannot replay.
 
 ## Reading the report
 
@@ -218,6 +218,8 @@ await #explore(myInputGenerator, time: .minutes(15), .replay(20260710), .log(.in
 }
 ```
 
+The generator form takes ``PropertyFuzzSettings``. The spec form takes ``StateMachineFuzzSettings``, which adds the last two rows. Writing a spec-only setting on a generator does not compile.
+
 | Setting | Effect |
 |---------|--------|
 | `.replay(seed)` | Replays a prior run's search from its seed. Pass the seed from a report's `Reproduce:` line. |
@@ -226,7 +228,8 @@ await #explore(myInputGenerator, time: .minutes(15), .replay(20260710), .log(.in
 | `.suppress(.attachments)` | Stops the run recording its per-cluster and summary attachments. Use when a test loops fuzz runs and the attachments would only accumulate noise in the result bundle. |
 | `.suppress(.all)` | All of the above. |
 | `.log(.info)` | Raises log verbosity (default is `.error`). |
-| `.commandLimit(n)` | Maximum commands per generated sequence. Default 40. Only valid for the spec form. |
+| `.commandLimit(n)` | Maximum commands per generated sequence. Default 40. Spec form only. |
+| `.parallelize(lanes:)` | Lane count for `.tasks` specs. Default two. Spec form only. |
 
 ## Choosing a time budget
 
@@ -274,6 +277,7 @@ If the instrumented code changed between the crash and the rerun, the saved inpu
 
 ### Settings and Results
 
-- ``FuzzSettings``
+- ``PropertyFuzzSettings``
+- ``StateMachineFuzzSettings``
 - ``FuzzReport``
 - ``TimeSpan``

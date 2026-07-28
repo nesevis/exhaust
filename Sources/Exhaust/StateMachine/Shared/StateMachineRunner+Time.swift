@@ -15,7 +15,7 @@ public extension __ExhaustRuntime {
         _ specType: (some StateMachineSpec).Type,
         mode: SearchableExecutionModel,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [StateMachineFuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -32,7 +32,7 @@ public extension __ExhaustRuntime {
             column: column
         )
         // Reporting runs here on the test task, after the GCD hop: issue recording and attachment association both resolve the current test from task-locals a GCD worker does not carry.
-        let parsedSettings = ParsedFuzzSettings(settings)
+        let parsedSettings = ParsedStateMachineFuzzSettings(settings).shared
         reportFuzzIssues(
             report: report,
             suppressIssueReporting: parsedSettings.suppress.issueReporting,
@@ -49,23 +49,16 @@ public extension __ExhaustRuntime {
     private struct ConsumedSpecSettings {
         let commandLimit: Int?
         let parallelize: ConcurrencyLevel?
-        /// The settings to forward: the core rejects `.commandLimit` and `.parallelize` because they are meaningless on the value path, so the consumed cases must not travel further.
-        let coreSettings: [FuzzSettings]
+        /// The settings to forward, carried by the type the core accepts. `.commandLimit` and `.parallelize` have no case there, so they cannot travel further.
+        let coreSettings: [PropertyFuzzSettings]
         /// Non-nil when a consumed setting is invalid; the dispatch returns an empty report with this termination.
         let invalidConfiguration: FuzzReport.Termination?
 
-        init(_ settings: [FuzzSettings]) {
-            let parsed = ParsedFuzzSettings(settings)
+        init(_ settings: [StateMachineFuzzSettings]) {
+            let parsed = ParsedStateMachineFuzzSettings(settings)
             commandLimit = parsed.commandLimit
             parallelize = parsed.parallelize
-            coreSettings = settings.filter { setting in
-                switch setting {
-                    case .commandLimit, .parallelize:
-                        return false
-                    default:
-                        return true
-                }
-            }
+            coreSettings = parsed.coreSettings
             if let commandLimit = parsed.commandLimit, commandLimit < 1 {
                 invalidConfiguration = .invalidConfiguration(".commandLimit must be at least 1, got \(commandLimit).")
             } else {
@@ -79,7 +72,7 @@ public extension __ExhaustRuntime {
         _ specType: (some StateMachineSpec).Type,
         mode: SearchableExecutionModel,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [StateMachineFuzzSettings],
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -115,7 +108,7 @@ public extension __ExhaustRuntime {
         _ specType: (some AsyncStateMachineSpec).Type,
         mode: SearchableExecutionModel,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [StateMachineFuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -131,7 +124,7 @@ public extension __ExhaustRuntime {
             line: line,
             column: column
         )
-        let parsedSettings = ParsedFuzzSettings(settings)
+        let parsedSettings = ParsedStateMachineFuzzSettings(settings).shared
         reportFuzzIssues(
             report: report,
             suppressIssueReporting: parsedSettings.suppress.issueReporting,
@@ -149,7 +142,7 @@ public extension __ExhaustRuntime {
         _ specType: (some AsyncStateMachineSpec).Type,
         mode: SearchableExecutionModel,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [StateMachineFuzzSettings],
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -215,7 +208,7 @@ public extension __ExhaustRuntime {
     private static func runSpecFuzz(
         makeAdapter: @escaping () -> SpecFuzzAdapter<some Any>?,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [PropertyFuzzSettings],
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,

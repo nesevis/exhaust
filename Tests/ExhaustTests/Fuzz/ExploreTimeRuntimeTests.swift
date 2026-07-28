@@ -251,11 +251,11 @@ struct ExploreTimeRuntimeTests {
 
     @Test("suppress(.attachments) and suppress(.all) both parse into the attachment flag")
     func suppressAttachmentsParsing() {
-        #expect(ParsedFuzzSettings([.suppress(.attachments)]).suppress.attachments)
-        #expect(ParsedFuzzSettings([.suppress(.attachments)]).suppress.issueReporting == false)
-        #expect(ParsedFuzzSettings([.suppress(.attachments)]).suppress.logs == false)
-        #expect(ParsedFuzzSettings([.suppress(.all)]).suppress.attachments)
-        #expect(ParsedFuzzSettings([.suppress(.issueReporting)]).suppress.attachments == false)
+        #expect(ParsedPropertyFuzzSettings([.suppress(.attachments)]).suppress.attachments)
+        #expect(ParsedPropertyFuzzSettings([.suppress(.attachments)]).suppress.issueReporting == false)
+        #expect(ParsedPropertyFuzzSettings([.suppress(.attachments)]).suppress.logs == false)
+        #expect(ParsedPropertyFuzzSettings([.suppress(.all)]).suppress.attachments)
+        #expect(ParsedPropertyFuzzSettings([.suppress(.issueReporting)]).suppress.attachments == false)
     }
 
     @Test("Terminal suspects collapse duplicate function names, keeping the line-bearing form")

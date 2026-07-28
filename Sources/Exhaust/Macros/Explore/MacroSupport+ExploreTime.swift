@@ -69,7 +69,7 @@ public extension __ExhaustRuntime {
     static func __exploreTime<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [PropertyFuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -86,7 +86,7 @@ public extension __ExhaustRuntime {
             persistence: persistence,
             property: wrapVerdictProperty(property)
         )
-        let parsedSettings = ParsedFuzzSettings(settings)
+        let parsedSettings = ParsedPropertyFuzzSettings(settings)
         reportFuzzIssues(
             report: report,
             suppressIssueReporting: parsedSettings.suppress.issueReporting,
@@ -108,7 +108,7 @@ public extension __ExhaustRuntime {
     static func __exploreTimeExpect<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [PropertyFuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -131,7 +131,7 @@ public extension __ExhaustRuntime {
             )
         }
         var report = pipelineReport ?? .empty(termination: .budgetExhausted, seed: 0)
-        let parsedSettings = ParsedFuzzSettings(settings)
+        let parsedSettings = ParsedPropertyFuzzSettings(settings)
         replayFuzzDiagnostics(
             report: &report,
             gen: refGen.gen,
@@ -157,7 +157,7 @@ public extension __ExhaustRuntime {
     static func __exploreTimeAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [PropertyFuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -165,7 +165,7 @@ public extension __ExhaustRuntime {
         property: @escaping @Sendable (Output) async throws -> Bool
     ) async -> FuzzReport {
         let verdictProperty = bridgeAsyncVerdictProperty(property)
-        let parsedSettings = ParsedFuzzSettings(settings)
+        let parsedSettings = ParsedPropertyFuzzSettings(settings)
         let report = await dispatchToGCD(reserving: LaneReservation.fuzz) {
             let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
             let report = runExploreTimeCore(
@@ -198,7 +198,7 @@ public extension __ExhaustRuntime {
     static func __exploreTimeExpectAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [PropertyFuzzSettings],
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -236,7 +236,7 @@ public extension __ExhaustRuntime {
             #endif
             return pipelineReport ?? .empty(termination: .budgetExhausted, seed: 0)
         }
-        let parsedSettings = ParsedFuzzSettings(settings)
+        let parsedSettings = ParsedPropertyFuzzSettings(settings)
         await replayFuzzDiagnosticsAsync(
             report: &finalReport,
             gen: refGen.gen,
@@ -313,28 +313,16 @@ public extension __ExhaustRuntime {
     package static func runExploreTimeCore<Output>(
         gen: Generator<Output>,
         time: TimeSpan,
-        settings: [FuzzSettings],
+        settings: [PropertyFuzzSettings],
         source injectedSource: (any CoverageSource)?,
         configure: ((inout FuzzRunnerConfiguration) -> Void)?,
         hooks: FuzzHooks<Output>? = nil,
         persistence: FuzzPersistenceContext? = nil,
         property: @escaping @Sendable (Output) -> FuzzVerdict
     ) -> FuzzReport {
-        let parsed = ParsedFuzzSettings(settings)
+        let parsed = ParsedPropertyFuzzSettings(settings)
         if let message = parsed.invalidReplayMessage {
             return .empty(termination: .invalidConfiguration(message), seed: 0)
-        }
-        if parsed.commandLimit != nil {
-            return .empty(
-                termination: .invalidConfiguration(".commandLimit is only valid when searching a spec. #explore(time:) over a generator has no command-sequence structure to limit."),
-                seed: 0
-            )
-        }
-        if parsed.parallelize != nil {
-            return .empty(
-                termination: .invalidConfiguration(".parallelize is only valid when searching a spec. #explore(time:) over a generator has no command sequences to parallelize."),
-                seed: 0
-            )
         }
         let seed = parsed.seed ?? UInt64.random(in: UInt64.min ... UInt64.max)
         let suppressLogs = parsed.suppress.logs
