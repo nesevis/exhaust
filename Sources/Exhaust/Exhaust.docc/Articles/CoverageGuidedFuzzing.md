@@ -2,13 +2,13 @@
 
 Give Exhaust a time budget and let it search for bugs by observing which branches your code takes.
 
-> Experiment: `#explore(time:)` and `#execute(time:)` are experimental. Settings, report format, and search behaviour may change in any release. Every call site emits a build warning until the mode stabilises.
+> Experiment: `#explore(time:)` is experimental. Settings, report format, and search behaviour may change in any release. Every call site emits a build warning until the mode stabilises.
 
 ## Overview
 
 `#exhaust` runs a property across boundary values and random samples, then stops. For most tests that's the right tradeoff: fast feedback, deterministic budget, done in well under a second. But the iteration budget is finite, and some branches in your code may never be reached by the generator's natural distribution.
 
-`#explore(time:)` and `#execute(time:)` take a wall-clock time budget instead. You compile the target under test with coverage instrumentation (see below), and Exhaust watches which branches each generated input reaches, using that feedback as a novelty signal to drive a search. When it finds a failure, it keeps going. When the budget runs out, it reports every distinct fault it found, each reduced to a minimal counterexample.
+`#explore(time:)` takes a wall-clock time budget instead. You compile the target under test with coverage instrumentation (see below), and Exhaust watches which branches each generated input reaches, using that feedback as a novelty signal to drive a search. When it finds a failure, it keeps going. When the budget runs out, it reports every distinct fault it found, each reduced to a minimal counterexample.
 
 ```swift
 @Test func parserHandlesAdversarialInput() async {
@@ -115,17 +115,17 @@ The seed pins every decision the search makes: the screening rows, the random-sa
 
 One exception is deliberate: when the previous run crashed, the rerun resumes from the crash checkpoint instead of replaying, even when `.replay` is passed. A trapping input is the most valuable thing a fuzzing run can find, and reporting it beats a faithful rerun. Set `EXHAUST_RESUME=0` when reproduction matters more than the crash finding; the crash state is discarded.
 
-## Fuzzing a state machine spec with #execute(time:)
+## Fuzzing a state machine spec
 
-The same coverage-guided search works over `@StateMachine` specs. Where `#explore(time:)` modifies generated values, `#execute(time:)` modifies command sequences: deleting, duplicating, and replacing commands in the sequence.
+The same coverage-guided search works over `@StateMachine` specs. Pass a spec where the generator form takes a generator, and add the `mode:` the run should search under. Where the generator form modifies generated values, the spec form modifies command sequences: deleting, duplicating, and replacing commands in the sequence.
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
-    await #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
+    await #explore(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
 }
 ```
 
-`#execute(time:)` skips the screening phase (boundary-value catalogues apply to values, not command vocabularies) and begins with random sampling. Commands whose preconditions fail at runtime are pruned from the stored sequence so that modifications don't keep resurrecting operations that have no effect in a given context.
+The spec form skips the screening phase (boundary-value catalogues apply to values, not command vocabularies) and begins with random sampling. Commands whose preconditions fail at runtime are pruned from the stored sequence so that modifications don't keep resurrecting operations that have no effect in a given context.
 
 Sequences carry up to 40 commands by default. Override with `.commandLimit(n)` when the default is too short to reach deep state, or to shorten sequences when each command is expensive.
 
@@ -197,7 +197,7 @@ Read it as an estimate with a known lean rather than a measurement. Chao1 assume
 
 **The seed is for replay.** Pass it as `.replay(1)` to rerun from the same starting point. Isolation matters doubly for replay: a replay that sees different coverage takes a different path.
 
-For `#execute(time:)` the report has the same structure, but each cluster's reduced counterexample is a command sequence:
+For the spec form the report has the same structure, but each cluster's reduced counterexample is a command sequence:
 
 ```
 Cluster 1 BoundedQueueError
@@ -226,7 +226,7 @@ await #explore(myInputGenerator, time: .minutes(15), .replay(20260710), .log(.in
 | `.suppress(.attachments)` | Stops the run recording its per-cluster and summary attachments. Use when a test loops fuzz runs and the attachments would only accumulate noise in the result bundle. |
 | `.suppress(.all)` | All of the above. |
 | `.log(.info)` | Raises log verbosity (default is `.error`). |
-| `.commandLimit(n)` | Maximum commands per generated sequence. Default 40. Only valid for `#execute(time:)`. |
+| `.commandLimit(n)` | Maximum commands per generated sequence. Default 40. Only valid for the spec form. |
 
 ## Choosing a time budget
 

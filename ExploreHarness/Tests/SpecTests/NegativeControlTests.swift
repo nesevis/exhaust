@@ -1,4 +1,4 @@
-import ExecuteFixture
+import SpecFixture
 import Exhaust
 import MatrixSpecs
 import Testing
@@ -43,7 +43,7 @@ struct NegativeControlTests {
     @Test("The latch fault is not found at matched budget")
     func gradientFreeLatchNotFound() async {
         // A pre-registered differential target, not a capability claim: this test FAILING after a new feedback channel lands (spec-state feedback, value profile) is that channel's gate passing. Until then it documents that edge coverage alone does not ladder streak-gated state. The pinned seed makes the run deterministic; the unpinned miss probability is ~3.1e-9 per attempt (see the fixture header).
-        let report = await #execute(
+        let report = await #explore(
             ConsecutiveLatchSpec.self,
             mode: .sequential,
             time: .seconds(5),

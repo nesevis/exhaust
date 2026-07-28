@@ -175,7 +175,7 @@ public extension __ExhaustRuntime {
             case .tasks:
                 guard #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) else {
                     return .empty(
-                        termination: .invalidConfiguration("#execute(time:) with a .tasks spec requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, or visionOS 2+."),
+                        termination: .invalidConfiguration("#explore(Spec.self, time:) with a .tasks spec requires macOS 15+, iOS 18+, tvOS 18+, watchOS 11+, or visionOS 2+."),
                         seed: 0
                     )
                 }

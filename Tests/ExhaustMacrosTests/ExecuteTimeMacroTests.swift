@@ -4,21 +4,21 @@
     @testable import ExhaustMacros
 
     @Suite(
-        "#execute(time:) macro expansion tests",
-        .macros(["execute": ExecuteTimeMacro.self], record: .failed)
+        "#explore(Spec.self, time:) macro expansion tests",
+        .macros(["explore": ExecuteTimeMacro.self], record: .failed)
     )
     struct ExecuteTimeMacroTests {
         @Test("Sync spec expands to __runStateMachineTimeDispatch")
         func syncSpec() {
             assertMacro {
                 """
-                #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
+                #explore(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
                 """
             } diagnostics: {
                 """
-                #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
+                #explore(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
                 ┬────────────────────────────────────────────────────────────────────
-                ╰─ ⚠️ #execute(time:) is experimental: its settings, report format, and search behavior may change in any release
+                ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                 """
             } expansion: {
                 """
@@ -40,14 +40,14 @@
         func missingTime() {
             assertMacro {
                 """
-                #execute(BoundedQueueSpec.self)
+                #explore(BoundedQueueSpec.self)
                 """
             } diagnostics: {
                 """
-                #execute(BoundedQueueSpec.self)
+                #explore(BoundedQueueSpec.self)
                 ┬──────────────────────────────
-                ├─ ⚠️ #execute(time:) is experimental: its settings, report format, and search behavior may change in any release
-                ╰─ 🛑 #execute(time:) requires a 'time:' argument
+                ├─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
+                ╰─ 🛑 #explore(time:) requires a 'time:' argument
                 """
             }
         }
@@ -57,30 +57,30 @@
         func missingMode() {
             assertMacro {
                 """
-                #execute(BoundedQueueSpec.self, time: .minutes(5))
+                #explore(BoundedQueueSpec.self, time: .minutes(5))
                 """
             } diagnostics: {
                 """
-                #execute(BoundedQueueSpec.self, time: .minutes(5))
+                #explore(BoundedQueueSpec.self, time: .minutes(5))
                 ┬─────────────────────────────────────────────────
-                ├─ ⚠️ #execute(time:) is experimental: its settings, report format, and search behavior may change in any release
-                ╰─ 🛑 #execute requires a 'mode:' argument (.sequential, .tasks, or .threads)
+                ├─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
+                ╰─ 🛑 #explore requires a 'mode:' argument (.sequential or .tasks)
                 """
             }
         }
 
         @Test("Async macro expands to __runStateMachineTimeDispatchAsync")
         func asyncSpec() {
-            withMacroTesting(macros: ["execute": ExecuteTimeAsyncMacro.self]) {
+            withMacroTesting(macros: ["explore": ExecuteTimeAsyncMacro.self]) {
                 assertMacro {
                     """
-                    #execute(ConcurrentQueueSpec.self, mode: .sequential, time: .minutes(5), .parallelize(lanes: .two))
+                    #explore(ConcurrentQueueSpec.self, mode: .sequential, time: .minutes(5), .parallelize(lanes: .two))
                     """
                 } diagnostics: {
                     """
-                    #execute(ConcurrentQueueSpec.self, mode: .sequential, time: .minutes(5), .parallelize(lanes: .two))
+                    #explore(ConcurrentQueueSpec.self, mode: .sequential, time: .minutes(5), .parallelize(lanes: .two))
                     ┬──────────────────────────────────────────────────────────────────────────────────────────────────
-                    ╰─ ⚠️ #execute(time:) is experimental: its settings, report format, and search behavior may change in any release
+                    ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                     """
                 } expansion: {
                     """
@@ -103,13 +103,13 @@
         func settingsPassThrough() {
             assertMacro {
                 """
-                #execute(BoundedQueueSpec.self, mode: .sequential, time: .seconds(30), .replay(42))
+                #explore(BoundedQueueSpec.self, mode: .sequential, time: .seconds(30), .replay(42))
                 """
             } diagnostics: {
                 """
-                #execute(BoundedQueueSpec.self, mode: .sequential, time: .seconds(30), .replay(42))
+                #explore(BoundedQueueSpec.self, mode: .sequential, time: .seconds(30), .replay(42))
                 ┬──────────────────────────────────────────────────────────────────────────────────
-                ╰─ ⚠️ #execute(time:) is experimental: its settings, report format, and search behavior may change in any release
+                ╰─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
                 """
             } expansion: {
                 """

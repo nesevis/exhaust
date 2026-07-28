@@ -262,10 +262,10 @@ struct ExploreTimeRuntimeTests {
     func suspectsCollapseDuplicateNames() {
         // Three renderings of the same function — full line, line 0 (interior edge), and no file at all — plus one genuinely distinct suspect. Only the line-bearing form of the duplicate and the distinct suspect should survive.
         let edges: [FuzzReport.DiscriminatingEdge] = [
-            makeEdge(index: 1, location: "ExecuteFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
-            makeEdge(index: 2, location: "ExecuteFixture.RacyLedger.audit() + 80 (RacyLedger.swift:0)"),
-            makeEdge(index: 3, location: "ExecuteFixture.RacyLedger.audit() + 96"),
-            makeEdge(index: 4, location: "ExecuteFixture.RacyLedger.deposit(_:) + 12 (RacyLedger.swift:36)"),
+            makeEdge(index: 1, location: "SpecFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
+            makeEdge(index: 2, location: "SpecFixture.RacyLedger.audit() + 80 (RacyLedger.swift:0)"),
+            makeEdge(index: 3, location: "SpecFixture.RacyLedger.audit() + 96"),
+            makeEdge(index: 4, location: "SpecFixture.RacyLedger.deposit(_:) + 12 (RacyLedger.swift:36)"),
         ]
         let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
         #expect(suspects == [
@@ -278,9 +278,9 @@ struct ExploreTimeRuntimeTests {
     func suspectsKeepDistinctLines() {
         // Two resolved lines in the same function are distinct locations; only the line-less rendering collapses.
         let edges: [FuzzReport.DiscriminatingEdge] = [
-            makeEdge(index: 1, location: "ExecuteFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
-            makeEdge(index: 2, location: "ExecuteFixture.RacyLedger.audit() + 80 (RacyLedger.swift:52)"),
-            makeEdge(index: 3, location: "ExecuteFixture.RacyLedger.audit() + 96 (RacyLedger.swift:0)"),
+            makeEdge(index: 1, location: "SpecFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
+            makeEdge(index: 2, location: "SpecFixture.RacyLedger.audit() + 80 (RacyLedger.swift:52)"),
+            makeEdge(index: 3, location: "SpecFixture.RacyLedger.audit() + 96 (RacyLedger.swift:0)"),
         ]
         let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
         #expect(suspects == [
@@ -293,8 +293,8 @@ struct ExploreTimeRuntimeTests {
     func suspectsPreferLineBearingForm() {
         // The line-less form leads the edge ranking; the collapse must still keep the line-bearing rendering.
         let edges: [FuzzReport.DiscriminatingEdge] = [
-            makeEdge(index: 1, location: "ExecuteFixture.RacyLedger.audit() + 96 (RacyLedger.swift:0)"),
-            makeEdge(index: 2, location: "ExecuteFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
+            makeEdge(index: 1, location: "SpecFixture.RacyLedger.audit() + 96 (RacyLedger.swift:0)"),
+            makeEdge(index: 2, location: "SpecFixture.RacyLedger.audit() + 24 (RacyLedger.swift:45)"),
         ]
         let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
         #expect(suspects == ["RacyLedger.audit (RacyLedger.swift:45)"])

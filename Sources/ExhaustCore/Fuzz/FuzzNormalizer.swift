@@ -20,7 +20,7 @@ package enum FuzzNormalizer {
 
     /// Bounds the probe count across every field of one normalization.
     ///
-    /// The per-field cap alone bounds nothing useful, because it multiplies by the field count: a reduced counterexample carrying 20 value entries admits 20 times that budget. On the value path each probe is cheap and the product goes unnoticed. Under `#execute(time:)` a probe replays a whole command sequence against a fresh system under test, so the same counterexample permits thousands of sequence replays inline on the search lane, for one new cluster.
+    /// The per-field cap alone bounds nothing useful, because it multiplies by the field count: a reduced counterexample carrying 20 value entries admits 20 times that budget. On the value path each probe is cheap and the product goes unnoticed. Under `#explore(Spec.self, time:)` a probe replays a whole command sequence against a fresh system under test, so the same counterexample permits thousands of sequence replays inline on the search lane, for one new cluster.
     ///
     /// Fields are normalized in sequence order, so exhausting this budget keeps whatever earlier fields were minimized and leaves later ones as reduction left them. The result stays a valid still-failing form; it is simply less canonical, which costs at worst an extra cluster.
     package static let maxProbesPerNormalization = 512

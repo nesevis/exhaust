@@ -1,6 +1,6 @@
-import ExecuteFixture
 import Exhaust
 import Foundation
+import SpecFixture
 
 /// Process-wide skip accounting for ``HandleTableSpec`` — the starvation-shape observable (design doc, MX1b).
 ///

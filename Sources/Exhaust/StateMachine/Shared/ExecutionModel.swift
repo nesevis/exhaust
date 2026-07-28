@@ -30,7 +30,7 @@ public enum ExecutionModel: Sendable {
     ///
     /// Requires an `@Equivalence` and a reference-typed system under test, both reported at the start of the run.
     ///
-    /// - Note: Unavailable under `#execute(time:)`, and writing it there is a compile-time error. Coverage novelty assumes an attempt's coverage follows from its command sequence, and preemptive scheduling makes it follow from an OS schedule the run can neither observe nor replay. Use ``tasks`` to search interleavings under a time budget.
+    /// - Note: Unavailable under a `time:` budget, and writing it there is a compile-time error. Coverage novelty assumes an attempt's coverage follows from its command sequence, and preemptive scheduling makes it follow from an OS schedule the run can neither observe nor replay. Use ``tasks`` to search interleavings under a time budget.
     case threads
 }
 

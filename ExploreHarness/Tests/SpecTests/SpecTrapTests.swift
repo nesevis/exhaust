@@ -2,8 +2,8 @@ import Foundation
 import Testing
 
 #if os(macOS)
-    @Suite("Execute crash recovery", .serialized)
-    struct ExecuteTrapTests {
+    @Suite("Spec crash recovery", .serialized)
+    struct SpecTrapTests {
         @Test("A trap in a spec command leaves a breadcrumb and progress log on disk", .timeLimit(.minutes(2)))
         func trapLeavesRecoverableState() throws {
             let stateDirectory = scratchDirectory()
@@ -12,7 +12,7 @@ import Testing
             }
             try FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
 
-            let probe = try #require(trapProbeURL(), "ExecuteTrapProbe executable not found next to the test bundle")
+            let probe = try #require(trapProbeURL(), "SpecTrapProbe executable not found next to the test bundle")
             let process = Process()
             process.executableURL = probe
             process.arguments = []
@@ -59,7 +59,7 @@ import Testing
         let buildRoot = root.appendingPathComponent(".build")
 
         for configuration in ["debug", "release"] {
-            let candidate = buildRoot.appendingPathComponent(configuration).appendingPathComponent("ExecuteTrapProbe")
+            let candidate = buildRoot.appendingPathComponent(configuration).appendingPathComponent("SpecTrapProbe")
             if fileManager.isExecutableFile(atPath: candidate.path) {
                 return candidate
             }

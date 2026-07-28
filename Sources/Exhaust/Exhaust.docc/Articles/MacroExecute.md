@@ -24,13 +24,13 @@ For the full guide, see <doc:StateMachineTesting>.
 
 ## Coverage-guided fuzzing with time:
 
-`#execute` also supports a `time:` mode that runs coverage-guided fuzzing over command sequences. Exhaust mutates sequences from a corpus toward novel SUT coverage until the time budget is consumed, cataloguing every distinct fault it discovers.
+Coverage-guided fuzzing over command sequences is spelled `#explore`, which takes a spec in place of the generator its value-searching form expects. Exhaust mutates sequences from a corpus toward novel SUT coverage until the time budget is consumed, cataloguing every distinct fault it discovers.
 
 > Experiment: This mode is experimental. Settings, report format, and search behaviour may change in any release.
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
-    await #execute(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
+    await #explore(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
 }
 ```
 

@@ -94,7 +94,7 @@ package enum FuzzTunables {
     /// Wall-clock deadline for one spec reduction. Higher than the value path because a spec reduction probe replays a whole command sequence against a fresh SUT.
     package static let specReductionDeadlineNanoseconds: UInt64 = reductionDeadlineNanoseconds * 4
 
-    /// Maximum commands per generated sequence when `#execute(time:)` is not given an explicit `.commandLimit`. Sequence length is half the trigger for accumulation faults — a short default silently suppresses the class this mode targets — so the default is a fixed, visible constant rather than a heuristic, matching the length the SW2a calibration sweep ran at.
+    /// Maximum commands per generated sequence when `#explore(Spec.self, time:)` is not given an explicit `.commandLimit`. Sequence length is half the trigger for accumulation faults — a short default silently suppresses the class this mode targets — so the default is a fixed, visible constant rather than a heuristic, matching the length the SW2a calibration sweep ran at.
     package static let specDefaultCommandLimit = 40
 
     // MARK: - Escape-Hatch Backoff (Experiment: escapeBackoff)

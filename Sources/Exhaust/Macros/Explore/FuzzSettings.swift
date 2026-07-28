@@ -31,18 +31,18 @@ public enum FuzzSettings: Sendable {
     /// Defaults to `.log(.error)` when omitted, so only error-level messages appear.
     case log(LogLevel)
 
-    /// Limits the maximum number of commands per generated sequence in `#execute(time:)` runs.
+    /// Limits the maximum number of commands per generated sequence in `#explore(Spec.self, time:)` runs.
     ///
     /// When omitted, sequences carry up to 40 commands. Pass this when the default produces sequences too short to reach deep state (for example, a bounded data structure whose accumulation faults require capacity-many operations without interruption), or to shorten sequences when each command is expensive. Values below 1 are a configuration error.
     ///
-    /// Only valid for `#execute(time:)`. Passing this setting to `#explore(time:)` is a configuration error because `#explore` has no command-sequence structure to limit.
+    /// Only valid for the spec form. Passing this setting to the generator form is a configuration error because a generator has no command-sequence structure to limit.
     case commandLimit(Int)
 
-    /// Sets the number of concurrent lanes for `.tasks` specs in `#execute(time:)` runs.
+    /// Sets the number of concurrent lanes for `.tasks` specs in `#explore(Spec.self, time:)` runs.
     ///
     /// When omitted, `.tasks` specs run with two lanes. More lanes widen the space of interleavings each sequence can express, at the cost of spreading the same commands thinner across lanes. `.sequential` specs have no lanes, so they ignore this setting.
     ///
-    /// Only valid for `#execute(time:)`. Passing this setting to `#explore(time:)` is a configuration error because `#explore` has no command sequences to parallelize.
+    /// Only valid for the spec form. Passing this setting to the generator form is a configuration error because a generator has no command sequences to parallelize.
     case parallelize(lanes: ConcurrencyLevel)
 }
 
@@ -50,7 +50,7 @@ public enum FuzzSettings: Sendable {
 
 /// The fields the `time:` entry points read from their settings, extracted in one pass.
 ///
-/// Both `#explore(time:)` and `#execute(time:)` parse through this type so field extraction cannot drift between the two modes; each entry point then validates the fields it does not support (`commandLimit` is an error on the value path) and applies the rest.
+/// Both the generator and spec forms of `#explore(time:)` parse through this type so field extraction cannot drift between the two modes; each entry point then validates the fields it does not support (`commandLimit` is an error on the value path) and applies the rest.
 struct ParsedFuzzSettings {
     /// The replay seed, or nil when the run should draw a random one.
     var seed: UInt64?
@@ -58,9 +58,9 @@ struct ParsedFuzzSettings {
     var invalidReplayMessage: String?
     var suppress = SuppressFlags()
     var logLevel: LogLevel = .error
-    /// The `#execute(time:)` per-sequence command cap; nil when unset. Present on the value path, it is a configuration error the caller reports.
+    /// The spec form's per-sequence command cap; nil when unset. Present on the value path, it is a configuration error the caller reports.
     var commandLimit: Int?
-    /// The `#execute(time:)` lane count for `.tasks` specs; nil when unset. Present on the value path, it is a configuration error the caller reports.
+    /// The spec form's lane count for `.tasks` specs; nil when unset. Present on the value path, it is a configuration error the caller reports.
     var parallelize: ConcurrencyLevel?
 
     init(_ settings: [FuzzSettings]) {

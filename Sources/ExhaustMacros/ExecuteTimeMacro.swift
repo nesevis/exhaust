@@ -3,7 +3,7 @@ import SwiftSyntax
 import SwiftSyntaxBuilder
 import SwiftSyntaxMacros
 
-/// Expands `#execute(Spec.self, mode: .tasks, time: .minutes(5), .settings...)`, and the `#explore` spelling of the same call, into a call to `__ExhaustRuntime.__runStateMachineTimeDispatch(...)`.
+/// Expands `#explore(Spec.self, mode: .tasks, time: .minutes(5), .settings...)` into a call to `__ExhaustRuntime.__runStateMachineTimeDispatch(...)`.
 public struct ExecuteTimeMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
@@ -13,68 +13,13 @@ public struct ExecuteTimeMacro: ExpressionMacro {
     }
 }
 
-/// Expands `#execute(AsyncSpec.self, mode: .sequential, time: .minutes(5), .settings...)`, and the `#explore` spelling of the same call, into a call to `__ExhaustRuntime.__runStateMachineTimeDispatchAsync(...)`.
+/// Expands `#explore(AsyncSpec.self, mode: .sequential, time: .minutes(5), .settings...)` into a call to `__ExhaustRuntime.__runStateMachineTimeDispatchAsync(...)`.
 public struct ExecuteTimeAsyncMacro: ExpressionMacro {
     public static func expansion(
         of node: some FreestandingMacroExpansionSyntax,
         in context: some MacroExpansionContext
     ) throws -> ExprSyntax {
         expandExecuteTimeCall(of: node, in: context, dispatchFunction: "__runStateMachineTimeDispatchAsync")
-    }
-}
-
-// MARK: - Call-Site Spelling
-
-// The same two macro implementations back `#execute(Spec.self, mode:, time:)` and `#explore(Spec.self, mode:, time:)`. A fixed diagnostic string would name the other macro on half of its call sites, so every message and every expansion fallback reads the spelling off the expansion node.
-
-/// Which macro a time-budgeted spec call was written as.
-private enum TimeSearchSpelling {
-    case execute
-    case explore
-
-    init(callSite node: some FreestandingMacroExpansionSyntax) {
-        self = switch node.macroName.text {
-            case "explore":
-                .explore
-            default:
-                .execute
-        }
-    }
-
-    /// The macro name as written, for interpolating into expansion fallbacks.
-    var name: String {
-        switch self {
-            case .execute: "#execute"
-            case .explore: "#explore"
-        }
-    }
-
-    var experimental: ExhaustMacroDiagnostic {
-        switch self {
-            case .execute: .executeTimeExperimental
-            case .explore: .exploreTimeExperimental
-        }
-    }
-
-    var missingSpec: ExhaustMacroDiagnostic {
-        switch self {
-            case .execute: .exhaustStateMachineMissingSpec
-            case .explore: .exploreStateMachineMissingSpec
-        }
-    }
-
-    var missingTime: ExhaustMacroDiagnostic {
-        switch self {
-            case .execute: .executeTimeMissingTime
-            case .explore: .exploreTimeMissingTime
-        }
-    }
-
-    var missingMode: ExhaustMacroDiagnostic {
-        switch self {
-            case .execute: .exhaustStateMachineMissingMode
-            case .explore: .exploreStateMachineMissingMode
-        }
     }
 }
 
@@ -87,19 +32,18 @@ private func expandExecuteTimeCall(
     dispatchFunction: String
 ) -> ExprSyntax {
     let arguments = Array(node.arguments)
-    let spelling = TimeSearchSpelling(callSite: node)
 
     context.diagnose(Diagnostic(
         node: Syntax(node),
-        message: spelling.experimental
+        message: ExhaustMacroDiagnostic.exploreTimeExperimental
     ))
 
     guard arguments.count >= 1 else {
         context.diagnose(Diagnostic(
             node: Syntax(node),
-            message: spelling.missingSpec
+            message: ExhaustMacroDiagnostic.exploreStateMachineMissingSpec
         ))
-        return "fatalError(\"\(raw: spelling.name) requires a spec type argument\")"
+        return "fatalError(\"#explore requires a spec type argument\")"
     }
 
     let specExpression = arguments[0].expression.trimmedDescription
@@ -107,18 +51,18 @@ private func expandExecuteTimeCall(
     guard let timeArgument = arguments.first(where: { $0.label?.text == "time" }) else {
         context.diagnose(Diagnostic(
             node: Syntax(node),
-            message: spelling.missingTime
+            message: ExhaustMacroDiagnostic.exploreTimeMissingTime
         ))
-        return "fatalError(\"\(raw: spelling.name)(time:) requires a 'time:' argument\")"
+        return "fatalError(\"#explore(time:) requires a 'time:' argument\")"
     }
     let timeExpression = timeArgument.expression.trimmedDescription
 
     guard let modeExpression = executionModeExpression(from: arguments) else {
         context.diagnose(Diagnostic(
             node: Syntax(node),
-            message: spelling.missingMode
+            message: ExhaustMacroDiagnostic.exploreStateMachineMissingMode
         ))
-        return "fatalError(\"\(raw: spelling.name) requires a 'mode:' argument\")"
+        return "fatalError(\"#explore requires a 'mode:' argument\")"
     }
 
     let settingsExpressions = arguments.dropFirst()

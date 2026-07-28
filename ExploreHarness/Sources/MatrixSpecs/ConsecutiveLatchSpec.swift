@@ -1,5 +1,5 @@
-import ExecuteFixture
 import Exhaust
+import SpecFixture
 
 /// The negative control's spec: one command whose uniform digit argument makes the streak-gated fault blind-improbable. A future feedback channel's differential gate must measure this exact spec shape (one command kind, argument-carried signal) so the gate and the pinned baseline stay comparable.
 ///

@@ -1,5 +1,5 @@
-import ExecuteFixture
 import Exhaust
+import SpecFixture
 
 /// The shared spec for the flat `PhaseSession` fixture (fault O — registry in `PhaseSession.swift`).
 ///

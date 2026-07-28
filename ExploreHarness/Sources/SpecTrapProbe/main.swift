@@ -4,7 +4,7 @@
 // The parent sets `EXHAUST_STATE_DIR` to a directory it controls so the runtime's state
 // lands where the parent can find it.
 
-import ExecuteFixture
+import SpecFixture
 import Exhaust
 import Foundation
 
@@ -31,8 +31,8 @@ final class TrapSpec {
 
 // The trap fires at value 3, which is three increment commands. A generous budget the probe
 // never spends: the trap fires within milliseconds.
-_ = await #execute(TrapSpec.self, mode: .sequential, time: .seconds(120))
+_ = await #explore(TrapSpec.self, mode: .sequential, time: .seconds(120))
 
 // Only reachable if the trap never fired.
-FileHandle.standardError.write(Data("ExecuteTrapProbe completed without trapping\n".utf8))
+FileHandle.standardError.write(Data("SpecTrapProbe completed without trapping\n".utf8))
 Foundation.exit(1)

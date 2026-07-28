@@ -1,5 +1,5 @@
-import ExecuteFixture
 import Exhaust
+import SpecFixture
 
 /// The shared spec for the `RacyLedger` fixture (fault L — registry in `RacyLedger.swift`).
 ///

@@ -180,6 +180,40 @@
                 """
             }
         }
+
+        // The closure-less overload in Macro+Explore.swift exists so these two calls reach expansion at all. Without it the compiler stops at overload resolution with "no exact matches in call to macro 'explore'" and neither guard below runs.
+
+        @Test("Missing property closure is diagnosed")
+        func missingProperty() {
+            assertMacro {
+                """
+                #explore(messageGen, time: .minutes(15))
+                """
+            } diagnostics: {
+                """
+                #explore(messageGen, time: .minutes(15))
+                ┬───────────────────────────────────────
+                ├─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
+                ╰─ 🛑 #explore requires a property (trailing closure or 'property:' argument)
+                """
+            }
+        }
+
+        @Test("Missing property closure is diagnosed when settings are present")
+        func missingPropertyWithSettings() {
+            assertMacro {
+                """
+                #explore(messageGen, time: .minutes(15), .replay(42))
+                """
+            } diagnostics: {
+                """
+                #explore(messageGen, time: .minutes(15), .replay(42))
+                ┬────────────────────────────────────────────────────
+                ├─ ⚠️ #explore(time:) is experimental: its settings, report format, and search behavior may change in any release
+                ╰─ 🛑 #explore requires a property (trailing closure or 'property:' argument)
+                """
+            }
+        }
     }
 
     @Suite(

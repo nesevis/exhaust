@@ -18,7 +18,7 @@ struct StateMachineRunContext<Spec: StateMachineSpecBase> {
 
     /// Wall-clock ceiling for reducing one counterexample. A larger sampling budget raises it; nothing lowers it below ``FuzzTunables/specReductionDeadlineNanoseconds``.
     var reductionDeadlineNanoseconds: UInt64 {
-        // Sampling budget says how many sequences to try. Reduction difficulty is a function of the counterexample's size and the cost of one probe, and the two are unrelated, so the budget-derived term may only raise the floor: a run configured `.custom(screening: 400, sampling: 20)` because screening finds the bug would otherwise get 100 milliseconds, which reads as a bad reducer rather than a starved one. The floor is the constant `#execute(time:)` already uses for identical probes, which sits above the value path's because a spec probe replays a whole command sequence against a fresh system under test.
+        // Sampling budget says how many sequences to try. Reduction difficulty is a function of the counterexample's size and the cost of one probe, and the two are unrelated, so the budget-derived term may only raise the floor: a run configured `.custom(screening: 400, sampling: 20)` because screening finds the bug would otherwise get 100 milliseconds, which reads as a bad reducer rather than a starved one. The floor is the constant `#explore(Spec.self, time:)` already uses for identical probes, which sits above the value path's because a spec probe replays a whole command sequence against a fresh system under test.
         max(
             FuzzTunables.specReductionDeadlineNanoseconds,
             UInt64(config.budget.samplingBudget) * 5 * 1_000_000

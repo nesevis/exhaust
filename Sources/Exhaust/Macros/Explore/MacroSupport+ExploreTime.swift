@@ -326,13 +326,13 @@ public extension __ExhaustRuntime {
         }
         if parsed.commandLimit != nil {
             return .empty(
-                termination: .invalidConfiguration(".commandLimit is only valid for #execute(time:). #explore(time:) has no command-sequence structure to limit."),
+                termination: .invalidConfiguration(".commandLimit is only valid when searching a spec. #explore(time:) over a generator has no command-sequence structure to limit."),
                 seed: 0
             )
         }
         if parsed.parallelize != nil {
             return .empty(
-                termination: .invalidConfiguration(".parallelize is only valid for #execute(time:). #explore(time:) has no command sequences to parallelize."),
+                termination: .invalidConfiguration(".parallelize is only valid when searching a spec. #explore(time:) over a generator has no command sequences to parallelize."),
                 seed: 0
             )
         }

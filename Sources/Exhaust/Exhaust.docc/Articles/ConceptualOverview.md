@@ -124,7 +124,7 @@ The `.metamorph` generator combinator builds the relation into the generator, pa
 
 ## Coverage-guided search: time budgets
 
-> Experiment: `#explore(time:)` and `#execute(time:)` are experimental. Settings, report format, and search behaviour may change in any release.
+> Experiment: `#explore(time:)` is experimental. Settings, report format, and search behaviour may change in any release.
 
 `#exhaust` and `#explore(directions:)` run a fixed number of iterations and stop. Some bugs hide behind branches the generator's natural distribution never reaches. `#explore(time:)` takes a wall-clock **time budget** instead of an iteration count and uses code coverage as a feedback signal: when a generated input reaches a branch nothing previous has reached, that input is kept and becomes the basis for further modifications. Over time, the search accumulates a **corpus** of inputs that collectively cover more of the code under test than random sampling alone.
 
@@ -132,7 +132,7 @@ The search has three phases. Screening and random sampling run first, the same a
 
 Unlike `#exhaust`, a coverage-guided run does not stop at the first failure. Failures are reduced to minimal counterexamples and grouped into **fault clusters**. Two failures that reduce to the same minimal form are one cluster. The report lists each distinct fault with its reduced counterexample.
 
-`#execute(time:)` applies the same search to `@StateMachine` specs, mutating command sequences instead of values. <doc:CoverageGuidedFuzzing> covers instrumentation setup, isolation requirements, and how to read the report.
+Given a spec instead of a generator, `#explore(MySpec.self, mode:, time:)` applies the same search to `@StateMachine` specs, mutating command sequences instead of values. <doc:CoverageGuidedFuzzing> covers instrumentation setup, isolation requirements, and how to read the report.
 
 ## Reproducing a find: seeds and replay
 

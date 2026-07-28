@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import Exhaust
 
-@Suite("#execute(time:) runtime dispatch and adapter")
+@Suite("#explore(Spec.self, time:) runtime dispatch and adapter")
 struct ExecuteTimeRuntimeTests {
     @Test(".tasks spec with no async members routes to the sequential runner")
     func syncTasksSpecRoutesSequentially() async throws {

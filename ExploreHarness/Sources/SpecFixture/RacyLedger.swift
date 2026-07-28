@@ -1,4 +1,4 @@
-// The cooperative-interleaving archetype: the first fixture whose fault lives in the schedule, not the command values. Exists to validate the `.tasks` path of `#execute(time:)` — lane markers are choices in the sequence, so the search mutates the interleaving with the same operators that mutate commands.
+// The cooperative-interleaving archetype: the first fixture whose fault lives in the schedule, not the command values. Exists to validate the `.tasks` path of `#explore(Spec.self, time:)` — lane markers are choices in the sequence, so the search mutates the interleaving with the same operators that mutate commands.
 //
 // ## Shape Coordinates
 //

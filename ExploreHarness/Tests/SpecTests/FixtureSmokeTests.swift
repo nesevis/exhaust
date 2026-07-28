@@ -1,4 +1,4 @@
-import ExecuteFixture
+import SpecFixture
 import Testing
 
 @Suite("Fixture reproducer smoke tests")
