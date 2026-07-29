@@ -188,7 +188,7 @@ func extractParameters(from funcDecl: FunctionDeclSyntax) -> [CommandParameter] 
 
 /// The method's declared return type, or nil when it returns Void in any spelling.
 ///
-/// An explicit Void return clause (-> Void, -> (), -> Swift.Void) carries no response value, so it normalizes to the no-clause path. Capturing `()` as a real return value would compare two empty tuples through structurallyEqual, which rejects them and fabricates a response-level linearizability violation.
+/// An explicit Void return clause (-> Void, -> (), -> Swift.Void) carries no response value, so it normalizes to the no-clause path. Capturing `()` as a real return value would make every such command match every ordering on responses, which is what `.returnedVoid` already means, while costing the checker a comparison per replay to learn nothing.
 func nonVoidReturnType(of funcDecl: FunctionDeclSyntax) -> String? {
     let voidReturnSpellings: Set = ["Void", "()", "Swift.Void"]
     let declaredReturnType = funcDecl.signature.returnClause?.type.trimmedDescription

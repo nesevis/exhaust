@@ -407,6 +407,8 @@ Checking every order, instead of one fixed order, is what keeps order-independen
 
 Capturing return values is what catches bugs the final state hides. A hash map whose buggy `delete` resurrects a key can settle into a final state that coincidentally matches a valid ordering, while a `getOrElse` caught mid-race returns a value no ordering would ever produce. The final-state comparison alone passes that run. The recorded response does not.
 
+Conform your command return types to `Equatable` when you can. An `Equatable` return is compared with `==`; anything else is compared structurally through reflection, which is correct but materially slower. The search replays up to two million commands before it gives up on a single check, and it compares a response on every one of them, so the difference between the two paths is the difference between a check that finishes quickly and one that spends seconds reflecting. Reflection cannot see inside a class instance that exposes no stored properties, so a return type like that compares unequal to itself and reports a violation that is not there.
+
 When no ordering reproduces a return value, the report names the command that returned it:
 
 ```
