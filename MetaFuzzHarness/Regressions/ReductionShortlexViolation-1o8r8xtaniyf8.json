@@ -1,0 +1,104 @@
+{
+  "kind": "pipelineCase",
+  "note": "Non-transitive shortlex order: ChoiceSequenceValue.shortLexCompare returned .eq for mismatched entry kinds while keeping just-before-value ordered, so per-step-decreasing substitution chains composed into an enlargement ((B1:(JV)) -> (B2:(B0:V)) -> (B0:{VJ})). Fixed 2026-07-30 by restructuring ChoiceSequence.shortLexPrecedes as a lexicographic composition of count, value projection, and positional structuralRank. Found by the 2026-07-29 nightly campaign.",
+  "oracle": "ReductionShortlexViolation",
+  "perturbationSeed": 0,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "oneOf": {
+          "_0": [
+            {
+              "combinator": {
+                "_0": {
+                  "reifiedBind": {
+                    "_0": {
+                      "leaf": {
+                        "_0": {
+                          "int": {
+                            "_0": [
+                              10,
+                              10
+                            ]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "combinator": {
+                "_0": {
+                  "boundRange": {
+                    "_0": {
+                      "leaf": {
+                        "_0": {
+                          "justInt": {
+                            "_0": 0
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "combinator": {
+                "_0": {
+                  "weightedOneOf": {
+                    "_0": [
+                      {
+                        "recipe": {
+                          "leaf": {
+                            "_0": {
+                              "int": {
+                                "_0": [
+                                  10,
+                                  10
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "weight": 1
+                      },
+                      {
+                        "recipe": {
+                          "leaf": {
+                            "_0": {
+                              "justInt": {
+                                "_0": 0
+                              }
+                            }
+                          }
+                        },
+                        "weight": 1
+                      },
+                      {
+                        "recipe": {
+                          "leaf": {
+                            "_0": {
+                              "justInt": {
+                                "_0": 0
+                              }
+                            }
+                          }
+                        },
+                        "weight": 1
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "valueSeed": 2598403171033330624,
+  "version": 1
+}

@@ -165,7 +165,10 @@ struct ProbeSession {
         )
         counts.record(outcome)
 
-        if let result = outcome.reduction {
+        // Gate on the decoded sequence, not the encoder's candidate: exact materialization re-derives bind wrappers, so a shorter candidate can decode to an enlarging commit and a substitution pair can cycle until the deadline. Equal-comparing commits are lateral moves and stay admissible. numericReorder is exempt: it deliberately regresses shortlex to ascending numeric order.
+        if let result = outcome.reduction,
+           encoderName == .numericReorder || state.sequence.shortLexPrecedes(result.sequence) == false
+        {
             state.sequence = result.sequence
             state.tree = result.tree
             state.output = result.output

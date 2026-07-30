@@ -8,7 +8,7 @@
 // MARK: - Academic Background
 
 //
-// Corresponds to the dissertation's bracketed choice sequences (Goldstein section 4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker, is from MacIver & Donaldson (ECOOP 2020, section 2.2). Zobrist hashing for O(1) incremental duplicate detection lives in ``ZobristHash``.
+// Corresponds to the dissertation's bracketed choice sequences (Goldstein section 4.6). Shortlex ordering — shorter sequences are always simpler, with lexicographic comparison as tiebreaker, is from MacIver & Donaldson (ECOOP 2020, section 2.2). Zobrist hashing for O(1) incremental duplicate detection lives in `ZobristHash`.
 
 @usableFromInline
 package typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
@@ -221,25 +221,16 @@ package extension ChoiceSequence {
 
     // MARK: - Shortlex
 
+    /// Returns whether this sequence strictly precedes `other` in the reducer's shortlex order.
+    ///
+    /// A lexicographic composition of three total preorders, so the strict part is transitive: count, then the value projection, then a positional tiebreak over ``ChoiceSequenceValue/structuralRank``. Values compare before structure because a single positional pass would have to either rank branch identifiers (biasing reduction toward declaration order) or leave some kind pairs unordered (losing transitivity).
     func shortLexPrecedes(_ other: ChoiceSequence) -> Bool {
         // Shorter sequences are always better
         if count != other.count {
             return count < other.count
         }
-        // Equal length compares lexicographically.
+        // Value projection: the first differing value entry decides.
         // while-loop: avoiding zip/IteratorProtocol overhead in debug builds.
-        var i = 0
-        while i < count {
-            switch self[i].shortLexCompare(other[i]) {
-                case .lt:
-                    return true
-                case .gt:
-                    return false
-                case .eq:
-                    i += 1
-            }
-        }
-        // Value-projection tiebreaker: compare only value entries, ignoring structural noise that depends on generator argument order or tree topology rather than output simplicity.
         var selfIdx = 0
         var otherIdx = 0
         while selfIdx < count, otherIdx < other.count {
@@ -265,6 +256,18 @@ package extension ChoiceSequence {
             if selfRemaining != otherRemaining {
                 return selfRemaining < otherRemaining
             }
+        }
+        // Positional tiebreak. Value entries that align here are provably equal (a differing rank decides first), so ranks alone suffice.
+        var i = 0
+        while i < count {
+            let order = self[i].structuralRank - other[i].structuralRank
+            if order < 0 {
+                return true
+            }
+            if order > 0 {
+                return false
+            }
+            i += 1
         }
         return false // equal
     }

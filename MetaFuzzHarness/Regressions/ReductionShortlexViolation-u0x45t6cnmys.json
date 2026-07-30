@@ -1,0 +1,69 @@
+{
+  "kind": "pipelineCase",
+  "note": "Ungated exact-decode commit: producers gated the pre-materialisation candidate, but exact materialisation re-derives reifiedBind wrappers, so candidate (B0:V) committed as the shortlex-larger (B0:{VJ}) and substitution cycled with the reverse pivot until the reduction deadline. Fixed 2026-07-30 by admitting a decoded result in ProbeSession.stepDecode only when it does not strictly enlarge the current sequence (numericReorder exempt). Found by the post-fix local campaign.",
+  "oracle": "ReductionShortlexViolation",
+  "perturbationSeed": 0,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "weightedOneOf": {
+          "_0": [
+            {
+              "recipe": {
+                "combinator": {
+                  "_0": {
+                    "reifiedBind": {
+                      "_0": {
+                        "leaf": {
+                          "_0": {
+                            "bool": {}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "weight": 4
+            },
+            {
+              "recipe": {
+                "combinator": {
+                  "_0": {
+                    "weightedOneOf": {
+                      "_0": [
+                        {
+                          "recipe": {
+                            "leaf": {
+                              "_0": {
+                                "bool": {}
+                              }
+                            }
+                          },
+                          "weight": 1
+                        },
+                        {
+                          "recipe": {
+                            "leaf": {
+                              "_0": {
+                                "bool": {}
+                              }
+                            }
+                          },
+                          "weight": 2
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "weight": 3
+            }
+          ]
+        }
+      }
+    }
+  },
+  "valueSeed": 5263630712195794701,
+  "version": 1
+}

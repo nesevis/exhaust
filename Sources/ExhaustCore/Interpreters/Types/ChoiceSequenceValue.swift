@@ -59,6 +59,32 @@ package enum ChoiceSequenceValue: Equatable, Sendable {
         }
     }
 
+    /// Total rank over entry kinds for the positional tiebreak in ``ChoiceSequence/shortLexPrecedes(_:)``.
+    ///
+    /// Distinct ranks keep every cross-kind comparison ordered; an unordered pair would break transitivity. Branch entries share one rank because the selected ID reflects declaration order, not simplicity. Value payloads are excluded; the value projection stage has already decided them. Close markers rank below open so structure that ends sooner orders first.
+    public var structuralRank: Int {
+        switch self {
+            case .just:
+                0
+            case .group(false):
+                1
+            case .group(true):
+                2
+            case .bind(false):
+                3
+            case .bind(true):
+                4
+            case .sequence(false, validRange: _, isLengthExplicit: _):
+                5
+            case .sequence(true, validRange: _, isLengthExplicit: _):
+                6
+            case .branch:
+                7
+            case .value:
+                8
+        }
+    }
+
     /// Returns a single-character abbreviation for compact sequence printing.
     public var shortString: String {
         switch self {
