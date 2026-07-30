@@ -11,7 +11,7 @@ on:
       budget:
         description: "Fuzz budget in seconds"
         required: false
-        default: "900"
+        default: "2700"
 
 # Self-fuzzing lanes: Exhaust fuzzed with its own #explore(time:) mode, ExhaustCore
 # instrumented whole-graph via -Xswiftc.
@@ -79,7 +79,7 @@ jobs:
           bash Scripts/measure-memory.sh "${{ runner.temp }}/metafuzz-probe" -- \
             bash MetaFuzzHarness/scripts/nightly-fuzz.sh \
               "$(swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
-              --budget-seconds "${{ github.event.inputs.budget || '900' }}" \
+              --budget-seconds "${{ github.event.inputs.budget || '2700' }}" \
               --findings-directory "${{ runner.temp }}/metafuzz-findings"
 
       - name: Probe metrics summary
