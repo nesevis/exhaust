@@ -113,6 +113,7 @@ package enum ProblematicValues {
     package static let interestingCharacterScalars: [UInt32] = [
         0, // Null: truncates C-interop strings, invisible in output
         34, // Double quote: delimiter in JSON, SQL, HTML attributes, CSV, and shell commands
+        39, // Single quote: SQL and shell delimiter; normal text contains it as an apostrophe
         92, // Backslash: escape character in JSON, regex, file paths, shell commands, and string literals
         768, // Combining grave accent: merges with preceding character into a single grapheme cluster
         6158, // Mongolian vowel separator: reclassified from space (Zs) to format (Cf) in Unicode 6.3
