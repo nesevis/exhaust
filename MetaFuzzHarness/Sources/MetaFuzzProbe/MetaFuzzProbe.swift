@@ -86,6 +86,21 @@ struct MetaFuzzProbe: ParsableCommand {
                 + "mutation \(percentage(timing.mutationOverhead))% · "
                 + "reduction \(percentage(timing.reduction))% · other \(percentage(timing.other))%"
         )
+        print(
+            "metafuzz: probe coverage \(report.coveredEdgeCount)/\(report.instrumentedEdgeCount) instrumented edges "
+                + "(\(ratio(Double(report.coveredEdgeCount), of: Double(report.instrumentedEdgeCount))) of module); "
+                + "Chao1 reachable \(String(format: "%.0f", report.estimatedReachableEdgeCount)) "
+                + "(\(ratio(Double(report.coveredEdgeCount), of: report.estimatedReachableEdgeCount)) explored); "
+                + "next-edge probability \(String(format: "%.2e", report.estimatedNextEdgeProbability))"
+        )
+        print(
+            "metafuzz: probe corpus \(report.corpusEntryCount) entries, \(report.mutableTierCount) mutable tier; "
+                + "edge singletons \(report.edgeSingletonCount), doubletons \(report.edgeDoubletonCount)"
+        )
+        print(
+            "metafuzz: probe seed \(report.seed) (replay with --seed \(report.seed)); "
+                + "termination \(describe(report.termination))"
+        )
 
         if report.clusters.isEmpty {
             print("metafuzz: no findings in \(budgetSeconds)s")
@@ -97,5 +112,33 @@ struct MetaFuzzProbe: ParsableCommand {
             print("  - [\(cluster.symptoms.joined(separator: ", "))] \(cluster.reducedDescription)")
         }
         throw ExitCode(2)
+    }
+}
+
+// MARK: - Output Formatting
+
+/// Renders a percentage, or `n/a` when the denominator carries no information.
+private func ratio(_ numerator: Double, of denominator: Double) -> String {
+    guard denominator > 0 else {
+        return "n/a"
+    }
+    return String(format: "%.1f%%", numerator / denominator * 100)
+}
+
+/// Renders the stop reason, including the payloads that change how the coverage numbers should be read: a plateau means the corpus stopped growing before the budget ran out, so a low edge count is the search giving up rather than the budget running short.
+private func describe(_ termination: FuzzReport.Termination) -> String {
+    switch termination {
+        case .budgetExhausted:
+            "budget exhausted"
+        case let .coveragePlateau(unused):
+            "coverage plateau, \(String(format: "%.0f", unused.seconds))s unused"
+        case .instrumentationMissing:
+            "instrumentation missing"
+        case let .invalidConfiguration(message):
+            "invalid configuration: \(message)"
+        case let .generationFailed(message):
+            "generation failed: \(message)"
+        case .attemptLimitReached:
+            "attempt limit reached"
     }
 }

@@ -90,7 +90,13 @@ jobs:
           MEMORY_METRICS="${PROBE_PREFIX}.metrics.env"
           echo "### Meta-fuzz probe metrics" >> "$GITHUB_STEP_SUMMARY"
           if [ -f "$PROBE_OUTPUT" ] && grep -q '^metafuzz: probe throughput ' "$PROBE_OUTPUT"; then
-            grep '^metafuzz: probe throughput ' "$PROBE_OUTPUT" | tail -1 | sed 's/^metafuzz: /- /' >> "$GITHUB_STEP_SUMMARY"
+            # Throughput alone is not comparable across unpinned nightly runs: the power schedule
+            # concentrates budget, so two runs settle in regions with different per-case cost. The
+            # coverage and corpus lines say whether a throughput gap is the search reaching less
+            # code or the same code costing more, and the seed line makes the run replayable.
+            for field in throughput coverage corpus seed; do
+              grep "^metafuzz: probe ${field} " "$PROBE_OUTPUT" | tail -1 | sed 's/^metafuzz: /- /' >> "$GITHUB_STEP_SUMMARY"
+            done
           else
             echo "No probe completed, so throughput is unavailable." >> "$GITHUB_STEP_SUMMARY"
           fi

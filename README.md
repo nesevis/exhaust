@@ -12,7 +12,7 @@
 
 Exhaust is a testing library for Swift. It integrates with Swift Testing and XCTest, runs in your existing test target, and executes in milliseconds.
 
-Describe what your code should do, and Exhaust checks that claim across hundreds of inputs. When it finds a failure, it reduces it to the minimal counterexample.
+Describe what your code should do, and Exhaust checks that claim across hundreds of inputs. When it finds a failure, it reduces it to a minimal counterexample.
 
 ```swift
 @Test func mySortProducesAscendingOrder() {
