@@ -18,6 +18,11 @@ package enum ChoiceSequenceValue: Equatable, Sendable {
     case branch(Branch)
     /// An individual numeric value.
     case value(Value)
+    /// Zip scope markers (`true` = open, `false` = close), delimiting a zip's fixed-arity components.
+    ///
+    /// Distinct from ``group(_:)`` because the materializer parses child scopes out of the prefix, and an untagged group is ambiguous there: a two-generator zip whose first child flattens as a two-child group is indistinguishable from the `group[callee, continuation]` wrapper that encloses the zip. Scoping from the wrong reading rejects sequences the engine itself produced.
+    case zip(Bool)
+
     /// Bind scope markers (`true` = open, `false` = close).
     /// The first child is the inner subtree; the second is the bound subtree.
     case bind(Bool)
@@ -42,10 +47,12 @@ package enum ChoiceSequenceValue: Equatable, Sendable {
         switch (self, other) {
             case (.group(false), .group(true)),
                  (.sequence(false, validRange: _, isLengthExplicit: _), .sequence(true, validRange: _, isLengthExplicit: _)),
+                 (.zip(false), .zip(true)),
                  (.bind(false), .bind(true)):
                 .lt
             case (.group(true), .group(false)),
                  (.sequence(true, validRange: _, isLengthExplicit: _), .sequence(false, validRange: _, isLengthExplicit: _)),
+                 (.zip(true), .zip(false)),
                  (.bind(true), .bind(false)):
                 .gt
             case (.just, .value):
@@ -70,18 +77,22 @@ package enum ChoiceSequenceValue: Equatable, Sendable {
                 1
             case .group(true):
                 2
-            case .bind(false):
+            case .zip(false):
                 3
-            case .bind(true):
+            case .zip(true):
                 4
-            case .sequence(false, validRange: _, isLengthExplicit: _):
+            case .bind(false):
                 5
-            case .sequence(true, validRange: _, isLengthExplicit: _):
+            case .bind(true):
                 6
-            case .branch:
+            case .sequence(false, validRange: _, isLengthExplicit: _):
                 7
-            case .value:
+            case .sequence(true, validRange: _, isLengthExplicit: _):
                 8
+            case .branch:
+                9
+            case .value:
+                10
         }
     }
 
@@ -94,6 +105,10 @@ package enum ChoiceSequenceValue: Equatable, Sendable {
                 return "("
             case .group(false):
                 return ")"
+            case .zip(true):
+                return "<"
+            case .zip(false):
+                return ">"
             case .bind(true):
                 return "{"
             case .bind(false):

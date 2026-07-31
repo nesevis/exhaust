@@ -39,7 +39,7 @@ package extension ChoiceTree {
         switch self {
             case .choice, .just, .getSize:
                 []
-            case let .group(elements, _):
+            case let .group(elements, _, _):
                 elements
             case let .bind(_, inner, bound):
                 [inner, bound]
@@ -57,7 +57,7 @@ package extension ChoiceTree {
         switch self {
             case .choice, .just, .getSize:
                 preconditionFailure("Leaf nodes have no children to replace")
-            case let .group(elements, isOpaque):
+            case let .group(elements, isOpaque, _):
                 var copy = elements
                 copy[index] = newChild
                 return .group(copy, isOpaque: isOpaque)

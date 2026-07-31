@@ -102,6 +102,10 @@ package enum ZobristHash {
                 8
             case .bind(false):
                 9
+            case .zip(true):
+                10
+            case .zip(false):
+                11
             case let .branch(b):
                 b.id ^ 0xDEAD_BEEF_CAFE_BABE
             case .just:
@@ -134,6 +138,10 @@ package enum ZobristHash {
                 mix(0, at: 7)
             case let .branch(branch):
                 mix(branch.id, at: 8)
+            case .zip(true):
+                mix(0, at: 9)
+            case .zip(false):
+                mix(0, at: 10)
         }
         return mix(identity, at: position)
     }

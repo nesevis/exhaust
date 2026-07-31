@@ -319,7 +319,7 @@ private func containsBranchNode(_ tree: ChoiceTree) -> Bool {
             true
         case let .sequence(elements, _):
             elements.contains(where: containsBranchNode)
-        case let .group(children, _):
+        case let .group(children, _, _):
             children.contains(where: containsBranchNode)
         case let .resize(_, children):
             children.contains(where: containsBranchNode)

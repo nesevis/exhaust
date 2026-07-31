@@ -80,10 +80,10 @@ package enum CoveringArrayReplay {
                 }
                 return .resize(newSize: newSize, choices: newChildren)
 
-            case .group(_, isOpaque: true):
+            case .group(_, isOpaque: true, _):
                 return tree
 
-            case let .group(children, _):
+            case let .group(children, _, _):
                 if ChoiceTreeAnalysis.isPick(children) {
                     guard paramIndex < profile.parameters.count else { return nil }
                     let param = profile.parameters[paramIndex]

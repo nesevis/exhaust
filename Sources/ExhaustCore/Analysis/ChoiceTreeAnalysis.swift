@@ -176,10 +176,10 @@ package enum ChoiceTreeAnalysis {
             case .just:
                 return true
 
-            case .group(_, isOpaque: true):
+            case .group(_, isOpaque: true, _):
                 return true
 
-            case let .group(children, _):
+            case let .group(children, _, _):
                 return walkGroup(children, expandSequencePairs: expandSequencePairs, compositeThreshold: compositeThreshold, parameters: &parameters)
 
             case let .bind(_, inner, bound):
@@ -219,9 +219,9 @@ package enum ChoiceTreeAnalysis {
         switch tree {
             case .choice, .just, .getSize, .resize:
                 true
-            case .group(_, isOpaque: true):
+            case .group(_, isOpaque: true, _):
                 true
-            case let .group(children, _):
+            case let .group(children, _, _):
                 children.allSatisfy { walkTreeValidateOnly($0) }
             case let .bind(_, inner, bound):
                 walkTreeValidateOnly(inner) && walkTreeValidateOnly(bound)
@@ -512,10 +512,10 @@ package enum ChoiceTreeAnalysis {
             case .just:
                 return true
 
-            case .group(_, isOpaque: true):
+            case .group(_, isOpaque: true, _):
                 return true
 
-            case let .group(children, _):
+            case let .group(children, _, _):
                 if isPick(children) {
                     return walkPick(children, parameters: &parameters)
                 }

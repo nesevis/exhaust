@@ -86,7 +86,7 @@ extension Materializer {
         mutating func skipGroups() {
             while position < effectiveEnd {
                 switch entries[position] {
-                    case .group, .bind, .just:
+                    case .group, .zip, .bind, .just:
                         position &+= 1
                     default:
                         return
@@ -94,13 +94,16 @@ extension Materializer {
             }
         }
 
-        /// Advances past one group-open marker without consuming an inner generator's opening marker.
+        /// Advances past one group-open or zip-open marker without consuming an inner generator's opening marker.
         mutating func skipGroupOpen() {
             guard exhausted == false, position < effectiveEnd else {
                 return
             }
-            if case .group(true) = entries[position] {
-                position &+= 1
+            switch entries[position] {
+                case .group(true), .zip(true):
+                    position &+= 1
+                default:
+                    return
             }
         }
 
@@ -122,7 +125,7 @@ extension Materializer {
         mutating func skipGroupCloses() {
             while position < effectiveEnd {
                 switch entries[position] {
-                    case .group(false), .bind(false):
+                    case .group(false), .zip(false), .bind(false):
                         position &+= 1
                     default:
                         return
@@ -139,7 +142,7 @@ extension Materializer {
             guard exhausted == false, position < effectiveEnd else {
                 return nil
             }
-            guard case .group(true) = entries[position] else {
+            guard case .zip(true) = entries[position] else {
                 return nil
             }
             var ends: [Int] = []
@@ -152,7 +155,7 @@ extension Materializer {
                 ends.append(end)
                 start = end
             }
-            guard start < entries.count, case .group(false) = entries[start] else {
+            guard start < entries.count, case .zip(false) = entries[start] else {
                 return nil
             }
             return ends
@@ -237,10 +240,10 @@ extension Materializer {
                 switch entries[pos] {
                     case .sequence(false, _, _) where depth == 0:
                         return count
-                    case .group(true), .bind(true), .sequence(true, _, _):
+                    case .group(true), .bind(true), .zip(true), .sequence(true, _, _):
                         if depth == 0 { count &+= 1 }
                         depth &+= 1
-                    case .group(false), .bind(false), .sequence(false, _, _):
+                    case .group(false), .bind(false), .zip(false), .sequence(false, _, _):
                         depth -= 1
                     case .value, .just:
                         if depth == 0 { count &+= 1 }

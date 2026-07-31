@@ -44,7 +44,7 @@ extension ChoiceGraph {
                 // Transparent wrapper — pass through without consuming a step.
                 return walkForPathMatch(tree: b.choice, remainingPath: remainingPath)
 
-            case let .group(array, _):
+            case let .group(array, _, _):
                 if isPickSite(array) {
                     guard let step = remainingPath.first,
                           case let .pickBranch(targetID) = step

@@ -26,10 +26,11 @@ extension ChoiceTree {
                     && branch.isSelected == otherBranch.isSelected
                     && branch.choice.hasSameRepresentation(as: otherBranch.choice)
             case let (
-            .group(children, isOpaque),
-            .group(otherChildren, otherIsOpaque)
+            .group(children, isOpaque, isZip),
+            .group(otherChildren, otherIsOpaque, otherIsZip)
         ):
                 isOpaque == otherIsOpaque
+                    && isZip == otherIsZip
                     && children.haveSameRepresentations(as: otherChildren)
             case let (.getSize(size), .getSize(otherSize)):
                 size == otherSize

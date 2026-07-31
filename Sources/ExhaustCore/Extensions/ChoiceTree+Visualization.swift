@@ -147,7 +147,7 @@ private enum TreeVisualization {
                     RenderTree(symbol: nil, children: [buildRenderNode(from: b.choice)])
                 )
 
-            case let .group(array, _):
+            case let .group(array, _, _):
                 let children = array.filter(\.hasVisibleContent).map(buildRenderNode)
                 return collapseChain(RenderTree(symbol: nil, children: children))
 
@@ -501,7 +501,7 @@ private extension ChoiceTree {
                 false
             case let .branch(b):
                 b.choice.hasVisibleContent
-            case let .group(children, _):
+            case let .group(children, _, _):
                 children.contains(where: \.hasVisibleContent)
             case let .sequence(elements, _):
                 elements.isEmpty || elements.contains(where: \.hasVisibleContent)

@@ -15,7 +15,7 @@ package extension ChoiceTree {
                 return elements
             case let .bind(_, inner, bound):
                 return findSequenceElements(in: inner) ?? findSequenceElements(in: bound)
-            case let .group(children, _):
+            case let .group(children, _, _):
                 for child in children {
                     if let found = findSequenceElements(in: child) { return found }
                 }

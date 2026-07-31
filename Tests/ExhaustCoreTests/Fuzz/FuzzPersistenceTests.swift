@@ -37,11 +37,13 @@ struct FuzzPersistenceTests {
     func codecRejectsMalformed() {
         #expect(ChoiceSequenceCodec.decode("not base64 at all!") == nil)
         // Valid base64, truncated content: a value marker with no payload behind it.
-        #expect(ChoiceSequenceCodec.decode(Data([1, 8]).base64EncodedString()) == nil)
+        #expect(ChoiceSequenceCodec.decode(Data([2, 8]).base64EncodedString()) == nil)
         // Unknown format version.
         #expect(ChoiceSequenceCodec.decode(Data([99]).base64EncodedString()) == nil)
+        // A superseded format version.
+        #expect(ChoiceSequenceCodec.decode(Data([1]).base64EncodedString()) == nil)
         // The empty sequence is valid.
-        #expect(ChoiceSequenceCodec.decode(Data([1]).base64EncodedString()) == ChoiceSequence())
+        #expect(ChoiceSequenceCodec.decode(Data([2]).base64EncodedString()) == ChoiceSequence())
     }
 
     @Test("Documents round-trip through the store and later writes overwrite earlier ones")

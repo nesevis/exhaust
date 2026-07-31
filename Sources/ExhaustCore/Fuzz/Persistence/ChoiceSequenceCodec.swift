@@ -7,7 +7,7 @@ import Foundation
 /// The durable record is the choice sequence — bit patterns and structural markers only, nothing tied to a particular build. The byte stream is versioned so a format change invalidates old logs cleanly (decode returns nil, the log is ignored) instead of misreading them.
 package enum ChoiceSequenceCodec {
     /// Bumped on any change to the byte layout below.
-    private static let formatVersion: UInt8 = 1
+    private static let formatVersion: UInt8 = 2
 
     private enum Kind: UInt8 {
         case groupOpen = 0
@@ -19,6 +19,8 @@ package enum ChoiceSequenceCodec {
         case just = 6
         case branch = 7
         case value = 8
+        case zipOpen = 9
+        case zipClose = 10
     }
 
     // MARK: - Encoding
@@ -33,6 +35,10 @@ package enum ChoiceSequenceCodec {
                     bytes.append(Kind.groupOpen.rawValue)
                 case .group(false):
                     bytes.append(Kind.groupClose.rawValue)
+                case .zip(true):
+                    bytes.append(Kind.zipOpen.rawValue)
+                case .zip(false):
+                    bytes.append(Kind.zipClose.rawValue)
                 case let .sequence(isOpen, validRange, isLengthExplicit):
                     bytes.append(isOpen ? Kind.sequenceOpen.rawValue : Kind.sequenceClose.rawValue)
                     appendRange(validRange, to: &bytes)
@@ -82,6 +88,10 @@ package enum ChoiceSequenceCodec {
                     sequence.append(.group(true))
                 case .groupClose:
                     sequence.append(.group(false))
+                case .zipOpen:
+                    sequence.append(.zip(true))
+                case .zipClose:
+                    sequence.append(.zip(false))
                 case .sequenceOpen, .sequenceClose:
                     guard let range = readRange(bytes, &cursor), let explicitFlag = readUInt8(bytes, &cursor) else {
                         return nil

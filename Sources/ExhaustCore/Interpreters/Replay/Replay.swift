@@ -233,7 +233,7 @@ extension Interpreters {
             return nil
         }
         let choice = choices.removeFirst()
-        guard case var .group(branches, _) = choice else {
+        guard case var .group(branches, _, _) = choice else {
             throw ReplayError.wrongInputChoice
         }
 
@@ -266,7 +266,7 @@ extension Interpreters {
     }
 
     private static func replayChoices(for choice: ChoiceTree) -> [ChoiceTree] {
-        guard case let .group(children, _) = choice else {
+        guard case let .group(children, _, _) = choice else {
             return [choice]
         }
         let containsBranch = children.contains {
@@ -314,7 +314,7 @@ extension Interpreters {
     ) throws -> Output? {
         // Unwrap a single non-branch group wrapper that encloses per-lane subtrees (produced by reflect's reflectZipOperation).
         if choices.count == 1,
-           case let .group(children, _) = choices[choices.startIndex],
+           case let .group(children, _, _) = choices[choices.startIndex],
            children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
         {
             choices = children[...]
@@ -325,7 +325,7 @@ extension Interpreters {
         for gen in generators {
             guard choices.isEmpty == false else { return nil }
 
-            if case let .group(laneChoices, _) = choices[choices.startIndex],
+            if case let .group(laneChoices, _, _) = choices[choices.startIndex],
                laneChoices.allSatisfy({ !$0.isBranch && !$0.isSelected })
             {
                 choices.removeFirst()
@@ -425,7 +425,7 @@ extension Interpreters {
         with script: ChoiceTree
     ) throws -> Output? {
         // Handle group scripts by distributing choices to the generator Groups containing branches represent `picks` and are handled together
-        if case let .group(choices, _) = script {
+        if case let .group(choices, _, _) = script {
             if choices.allSatisfy({ $0.isBranch || $0.isSelected }) == false {
                 return try replayWithChoices(gen, choices: choices)
             }
@@ -682,7 +682,7 @@ extension Interpreters {
         script: ChoiceTree,
         runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
-        guard case let .group(children, _) = script else {
+        guard case let .group(children, _, _) = script else {
             return nil
         }
 

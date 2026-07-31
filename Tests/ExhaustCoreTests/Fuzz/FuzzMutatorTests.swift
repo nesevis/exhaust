@@ -305,7 +305,7 @@ private func characterPayloadIndices(in tree: ChoiceTree) -> [UInt64]? {
             return nil
         case let .sequence(elements, _):
             return elements.lazy.compactMap(characterPayloadIndices(in:)).first
-        case let .group(elements, _):
+        case let .group(elements, _, _):
             return elements.lazy.compactMap(characterPayloadIndices(in:)).first
         case let .branch(branch):
             return characterPayloadIndices(in: branch.choice)

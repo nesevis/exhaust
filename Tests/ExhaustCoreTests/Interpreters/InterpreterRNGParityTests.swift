@@ -332,7 +332,7 @@ struct InterpreterRNGParityTests {
         #expect(resizeChoices.count == 1)
 
         let innerTree = try #require(resizeChoices.first)
-        guard case let .group(branches, _) = innerTree else {
+        guard case let .group(branches, _, _) = innerTree else {
             Issue.record("Expected a materialized pick group")
             return
         }
@@ -392,6 +392,25 @@ struct InterpreterRNGParityTests {
                 using: &randomNumberGenerator
             )
         }
+    }
+
+    // MARK: - Nested Unique
+
+    @Test("Nested unique keeps both interpreters on the same stream")
+    func nestedUniqueStreamParity() {
+        let inner = ReflectiveGenerator(Gen.choose(in: -1 ... 0)).unique()
+        let outer = ReflectiveGenerator(
+            Gen.arrayOf(inner.gen, within: 0 ... 3, scaling: .constant)
+        ).unique()
+        assertOutcomeParity(outer.gen.erase(), seed: 645_339_999, runs: 5)
+    }
+
+    @Test("Single unique keeps both interpreters on the same stream")
+    func singleUniqueStreamParity() {
+        let outer = ReflectiveGenerator(
+            Gen.arrayOf(Gen.choose(in: -1 ... 0), within: 0 ... 3, scaling: .constant)
+        ).unique()
+        assertOutcomeParity(outer.gen.erase(), seed: 645_339_999, runs: 5)
     }
 }
 
@@ -550,4 +569,39 @@ private func filterGen<Value>(
             column: #column
         )
     )
+}
+
+/// Compares the two interpreters run for run, including exhaustion and recoverable failure.
+///
+/// `assertParity` requires a value on every run, so it cannot express this: a nested `.unique` diverges precisely by one engine exhausting its retry budget while the other keeps producing, which means the outcome itself has to be part of the comparison rather than just the value.
+private func assertOutcomeParity(
+    _ generator: AnyGenerator,
+    seed: UInt64,
+    runs: Int,
+    sourceLocation: SourceLocation = #_sourceLocation
+) {
+    var valueInterpreter = ValueInterpreter(generator, seed: seed, maxRuns: UInt64(runs))
+    var treeInterpreter = ValueAndChoiceTreeInterpreter(generator, seed: seed, maxRuns: UInt64(runs))
+
+    for iteration in 0 ..< runs {
+        let valueOutcome = interpreterOutcome { try valueInterpreter.next() }
+        let treeOutcome = interpreterOutcome { try treeInterpreter.next()?.value }
+        #expect(
+            valueOutcome == treeOutcome,
+            "Iteration \(iteration): ValueInterpreter=\(valueOutcome), ValueAndChoiceTreeInterpreter=\(treeOutcome)",
+            sourceLocation: sourceLocation
+        )
+    }
+}
+
+/// Renders one interpreter step as a comparable string: the value, `exhausted`, or the thrown error's type.
+private func interpreterOutcome(_ step: () throws -> Any?) -> String {
+    do {
+        guard let value = try step() else {
+            return "exhausted"
+        }
+        return "\(value)"
+    } catch {
+        return "failure(\(type(of: error)))"
+    }
 }

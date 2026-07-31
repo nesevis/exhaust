@@ -32,7 +32,7 @@ extension __ExhaustRuntime {
     ///
     /// `Gen.zip` materializes as `.group([setupTree, commandTree], isOpaque: false)` and the candidate's outer `.map` is tree-transparent, so the root of a with-setup candidate tree is exactly that two-child group. Returns `nil` when the shape does not match; callers must degrade safely (skip reduction) rather than operate on a tree they cannot decompose.
     static func splitCandidateTree(_ tree: ChoiceTree) -> (setupTree: ChoiceTree, commandTree: ChoiceTree)? {
-        guard case let .group(children, _) = tree, children.count == 2 else {
+        guard case let .group(children, _, _) = tree, children.count == 2 else {
             return nil
         }
         return (children[0], children[1])
@@ -40,6 +40,6 @@ extension __ExhaustRuntime {
 
     /// Recomposes a full candidate tree from its setup and command children, mirroring the shape `Gen.zip` materializes.
     static func composeCandidateTree(setupTree: ChoiceTree, commandTree: ChoiceTree) -> ChoiceTree {
-        .group([setupTree, commandTree], isOpaque: false)
+        .group([setupTree, commandTree], isOpaque: false, isZip: true)
     }
 }

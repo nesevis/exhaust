@@ -11,7 +11,7 @@ package extension ChoiceTree {
         switch self {
             case let .choice(_, meta), let .sequence(_, meta):
                 return meta
-            case let .group(array, _):
+            case let .group(array, _, _):
                 if let meta = array.first(where: { $0.metadata.validRange != nil })?.metadata {
                     return meta
                 }
@@ -49,7 +49,7 @@ package extension ChoiceTree {
                     choice: b.choice.minimizingLeaves,
                     isSelected: b.isSelected
                 )
-            case let .group(children, isOpaque):
+            case let .group(children, isOpaque, _):
                 return .group(
                     children.map(\.minimizingLeaves),
                     isOpaque: isOpaque

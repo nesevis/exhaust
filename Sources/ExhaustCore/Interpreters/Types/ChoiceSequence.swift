@@ -52,9 +52,9 @@ package extension ChoiceSequence {
         var index = start
         while index < count {
             switch self[index] {
-                case .group(true), .sequence(true, validRange: _, isLengthExplicit: _), .bind(true):
+                case .group(true), .sequence(true, validRange: _, isLengthExplicit: _), .zip(true), .bind(true):
                     depth += 1
-                case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .bind(false):
+                case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .zip(false), .bind(false):
                     depth -= 1
                     if depth < 0 {
                         return nil
@@ -109,7 +109,10 @@ package extension ChoiceSequence {
                 output.append(.sequence(false))
             case let .branch(b):
                 flatten(b.choice, includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
-            case let .group(array, _):
+            case let .group(array, _, isZip):
+                // A zip's own group is marked so the materializer can scope its fixed-arity children from the prefix. Both paths key on the flag: a mismatched open/close pair would desynchronise every downstream depth walk.
+                let openMarker: ChoiceSequenceValue = isZip ? .zip(true) : .group(true)
+                let closeMarker: ChoiceSequenceValue = isZip ? .zip(false) : .group(false)
                 var i = 0
                 var selectedBranchTree: ChoiceTree?
                 while i < array.count {
@@ -121,7 +124,7 @@ package extension ChoiceSequence {
                     i += 1
                 }
                 if case let .branch(b) = selectedBranchTree, b.isSelected {
-                    output.append(.group(true))
+                    output.append(openMarker)
                     // The fingerprint must survive flattening: swarm masks key per-site masks on it, and dropping it here silently disabled masking for every pick site (the tree node always carries the source fingerprint; see Gen.pick).
                     output.append(.branch(.init(id: b.id, branchCount: b.branchCount, fingerprint: b.fingerprint)))
                     let children = includingAllBranches ? array : [b.choice]
@@ -135,16 +138,16 @@ package extension ChoiceSequence {
                         )
                         cIdx += 1
                     }
-                    output.append(.group(false))
+                    output.append(closeMarker)
                 } else {
-                    output.append(.group(true))
+                    output.append(openMarker)
                     // while-loop: avoiding IteratorProtocol overhead in debug builds.
                     var aIdx = 0
                     while aIdx < array.count {
                         flatten(array[aIdx], includingAllBranches: includingAllBranches, skipBindInners: skipBindInners, into: &output)
                         aIdx += 1
                     }
-                    output.append(.group(false))
+                    output.append(closeMarker)
                 }
             case let .bind(_, inner, bound):
                 if inner.isGetSize {
@@ -176,6 +179,7 @@ package extension ChoiceSequence {
     static func validate(_ sequence: ChoiceSequence) -> Bool {
         var sequenceCount = 0
         var groupCount = 0
+        var zipCount = 0
         var bindCount = 0
         for element in sequence {
             switch element {
@@ -187,6 +191,10 @@ package extension ChoiceSequence {
                     groupCount += 1
                 case .group(false):
                     groupCount -= 1
+                case .zip(true):
+                    zipCount += 1
+                case .zip(false):
+                    zipCount -= 1
                 case .bind(true):
                     bindCount += 1
                 case .bind(false):
@@ -195,7 +203,7 @@ package extension ChoiceSequence {
                     break
             }
         }
-        return sequenceCount == 0 && groupCount == 0 && bindCount == 0
+        return sequenceCount == 0 && groupCount == 0 && zipCount == 0 && bindCount == 0
     }
 
     /// Returns the flattened ``ChoiceValue``s within the given range, ignoring structural markers.
@@ -211,7 +219,7 @@ package extension ChoiceSequence {
             switch sequence[i] {
                 case let .value(v):
                     keys.append(v.choice)
-                case .branch, .sequence, .group, .bind, .just:
+                case .branch, .sequence, .group, .zip, .bind, .just:
                     break
             }
             i += 1

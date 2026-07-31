@@ -130,7 +130,7 @@ struct ChoiceGraphBuilder {
             case let .branch(b):
                 return walk(b.choice, offset: offset, parent: parent, bindDepth: bindDepth, path: path, isActive: isActive)
 
-            case let .group(array, isOpaque):
+            case let .group(array, isOpaque, _):
                 return walkGroup(
                     children: array, isOpaque: isOpaque, offset: offset,
                     parent: parent, bindDepth: bindDepth, path: path, isActive: isActive
