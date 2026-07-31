@@ -149,7 +149,8 @@ extension Interpreters {
                         // Scope inner replay to innerTree so its zip doesn't consume boundTree's choices.
                         if case let .bind(_, innerTree, boundTree) = choices.first {
                             choices.removeFirst()
-                            var scopedChoices: ArraySlice<ChoiceTree> = [innerTree]
+                            // Unwrap a plain wrapper group the same way branch subtrees are unwrapped. Handing the wrapper in as one opaque choice starves an inner generator that consumes more than one, which is why a bind replayed under a pick failed while the same bind replayed alone succeeded.
+                            var scopedChoices = ArraySlice(replayChoices(for: innerTree))
                             guard let innerValue = try replayWithChoicesHelper(
                                 inner,
                                 choices: &scopedChoices
@@ -157,7 +158,7 @@ extension Interpreters {
                                 return nil
                             }
                             let boundGen = try forward(innerValue)
-                            var boundChoices: ArraySlice<ChoiceTree> = [boundTree]
+                            var boundChoices = ArraySlice(replayChoices(for: boundTree))
                             guard let boundValue = try replayWithChoicesHelper(
                                 boundGen,
                                 choices: &boundChoices
