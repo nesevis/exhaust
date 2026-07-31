@@ -626,14 +626,21 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     runs: context.runs
                 )
                 vactiContext.uniqueGenerationTrace = context.uniqueGenerationTrace
+                // A nested `.unique` inside `uniqueGen` accumulates into whichever context runs it, and the sub-context is fresh per attempt. Without carrying the seen sets across, the inner site forgets every value it produced and stops deduplicating, so the value-only engine yields a stream the value-and-tree engine never would. Carried on the rejected path too, matching the single-context accumulation in `ValueAndChoiceTreeInterpreter.handleUnique`.
+                vactiContext.uniqueSeenKeys = context.uniqueSeenKeys
+                vactiContext.uniqueSeenSequences = context.uniqueSeenSequences
                 swap(&context.prng, &vactiContext.prng)
                 let vactiResult = try ValueAndChoiceTreeInterpreter<Any>
                     .generateRecursiveAny(uniqueGen, context: &vactiContext)
                 guard let (candidate, tree) = vactiResult else {
                     swap(&context.prng, &vactiContext.prng)
+                    context.uniqueSeenKeys = vactiContext.uniqueSeenKeys
+                    context.uniqueSeenSequences = vactiContext.uniqueSeenSequences
                     return nil
                 }
                 swap(&context.prng, &vactiContext.prng)
+                context.uniqueSeenKeys = vactiContext.uniqueSeenKeys
+                context.uniqueSeenSequences = vactiContext.uniqueSeenSequences
                 let sequence = ChoiceSequence.flatten(tree)
                 if context.acceptUniqueChoiceSequence(
                     hash: sequence.operativeHash,
