@@ -399,7 +399,7 @@ extension Interpreters {
             results.append(contentsOf: result.map(\.value))
         }
 
-        return [(value: results, path: [.group(paths)])]
+        return [(value: results, path: [.group(paths, isZip: true)])]
     }
 
     private static func reflectPassthroughOperation(

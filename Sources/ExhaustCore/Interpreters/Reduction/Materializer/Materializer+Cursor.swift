@@ -86,7 +86,7 @@ extension Materializer {
         mutating func skipGroups() {
             while position < effectiveEnd {
                 switch entries[position] {
-                    case .group, .bind, .just:
+                    case .group, .zip, .bind, .just:
                         position &+= 1
                     default:
                         return
@@ -94,13 +94,16 @@ extension Materializer {
             }
         }
 
-        /// Advances past one group-open marker without consuming an inner generator's opening marker.
+        /// Advances past one group-open or zip-open marker without consuming an inner generator's opening marker.
         mutating func skipGroupOpen() {
             guard exhausted == false, position < effectiveEnd else {
                 return
             }
-            if case .group(true) = entries[position] {
-                position &+= 1
+            switch entries[position] {
+                case .group(true), .zip(true):
+                    position &+= 1
+                default:
+                    return
             }
         }
 
@@ -122,7 +125,7 @@ extension Materializer {
         mutating func skipGroupCloses() {
             while position < effectiveEnd {
                 switch entries[position] {
-                    case .group(false), .bind(false):
+                    case .group(false), .zip(false), .bind(false):
                         position &+= 1
                     default:
                         return
@@ -139,7 +142,7 @@ extension Materializer {
             guard exhausted == false, position < effectiveEnd else {
                 return nil
             }
-            guard case .group(true) = entries[position] else {
+            guard case .zip(true) = entries[position] else {
                 return nil
             }
             var ends: [Int] = []
@@ -152,7 +155,7 @@ extension Materializer {
                 ends.append(end)
                 start = end
             }
-            guard start < entries.count, case .group(false) = entries[start] else {
+            guard start < entries.count, case .zip(false) = entries[start] else {
                 return nil
             }
             return ends
@@ -161,7 +164,7 @@ extension Materializer {
         // MARK: - Consume entries
 
         /// Reads and returns the next value entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a value. Marks the cursor as exhausted on type mismatch so callers fall through to PRNG generation.
-        mutating func tryConsumeValue() -> ChoiceSequenceValue.Value? {
+        mutating func tryConsumeValue(expecting expected: TypeTag? = nil) -> ChoiceSequenceValue.Value? {
             guard exhausted == false else { return nil }
             skipGroups()
             guard position < effectiveEnd else {
@@ -170,12 +173,27 @@ extension Materializer {
             }
             switch entries[position] {
                 case let .value(v):
+                    if let expected, Cursor.tagIsCompatible(v.choice.tag, with: expected) == false {
+                        exhausted = true
+                        return nil
+                    }
                     position &+= 1
                     return v
                 default:
                     exhausted = true
                     return nil
             }
+        }
+
+        /// Whether a prefix entry carrying `actual` may satisfy a choice site declaring `expected`.
+        ///
+        /// Tags are otherwise interchangeable here on purpose: the reducer re-derives width inconsistently across paths, so one reduction's `uint8` is another's `uint16` for the same field, and requiring equality would reject honest candidates. ``TypeTag/depthControl`` is the exception. Its payload is a layer index for a recursive generator rather than a value in any site's domain, so reading it at another site yields a number unrelated to the declared range instead of an out-of-range one a clamp could correct.
+        @inline(__always)
+        static func tagIsCompatible(_ actual: TypeTag, with expected: TypeTag) -> Bool {
+            guard actual == .depthControl || expected == .depthControl else {
+                return true
+            }
+            return actual == expected
         }
 
         /// Reads and returns the next branch-selection entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a branch. Marks the cursor as exhausted on type mismatch.
@@ -237,10 +255,10 @@ extension Materializer {
                 switch entries[pos] {
                     case .sequence(false, _, _) where depth == 0:
                         return count
-                    case .group(true), .bind(true), .sequence(true, _, _):
+                    case .group(true), .bind(true), .zip(true), .sequence(true, _, _):
                         if depth == 0 { count &+= 1 }
                         depth &+= 1
-                    case .group(false), .bind(false), .sequence(false, _, _):
+                    case .group(false), .bind(false), .zip(false), .sequence(false, _, _):
                         depth -= 1
                     case .value, .just:
                         if depth == 0 { count &+= 1 }

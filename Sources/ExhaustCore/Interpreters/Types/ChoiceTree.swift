@@ -32,7 +32,9 @@ package indirect enum ChoiceTree: Sendable { // NOTE: The entire enum is marked 
     /// Represents a nested group of choices that usually represent objects or tuples.
     ///
     /// When `isOpaque` is `true`, screening analysis skips the group's subtree entirely. This prevents high-lane compositions (for example SIMD8+) from exploding the parameter count in covering arrays, and isolates `getSize`-dependent scalars so they don't poison the rest of the property's analysis.
-    case group([ChoiceTree], isOpaque: Bool = false)
+    ///
+    /// When `isZip` is `true`, the children are a zip's fixed-arity components and the group flattens to ``ChoiceSequenceValue/zip(_:)`` markers rather than ``ChoiceSequenceValue/group(_:)``. Without the distinction the materializer cannot tell a zip's own group from the `group[callee, continuation]` wrapper that encloses it, and a two-generator zip whose first child is itself a two-child group reads identically to that wrapper.
+    case group([ChoiceTree], isOpaque: Bool = false, isZip: Bool = false)
 
     /// Records the generation-time size parameter. Produces no entry in the ``ChoiceSequence``: the value is consumed during replay to restore the correct size context but is invisible to the reducer.
     case getSize(UInt64)
@@ -81,7 +83,7 @@ package extension ChoiceTree {
                 2 + elements.reduce(0) { $0 + $1.flattenedEntryCount } // open + elements + close
             case let .branch(b):
                 b.choice.flattenedEntryCount
-            case let .group(array, _):
+            case let .group(array, _, _):
                 if let selected = array.first(where: \.isSelected),
                    case let .branch(b) = selected
                 {
@@ -165,7 +167,7 @@ package extension ChoiceTree {
                 return b.choice.containsBind
             case let .sequence(elements, _):
                 return elements.contains(where: \.containsBind)
-            case let .group(array, _):
+            case let .group(array, _, _):
                 return array.contains(where: \.containsBind)
             case let .resize(_, choices):
                 return choices.contains(where: \.containsBind)
@@ -190,7 +192,7 @@ package extension ChoiceTree {
                 false
             case let .sequence(elements, _):
                 elements.contains(where: \.containsPicks)
-            case let .group(array, _):
+            case let .group(array, _, _):
                 array.contains(where: \.containsPicks)
             case let .bind(_, inner, bound):
                 inner.containsPicks || bound.containsPicks
@@ -216,7 +218,7 @@ package extension ChoiceTree {
                 return max(here, deeper)
             case let .sequence(elements, _):
                 return elements.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
-            case let .group(array, _):
+            case let .group(array, _, _):
                 return array.reduce(0 as UInt64) { Swift.max($0, $1.pickComplexityHelper(pickDepth: pickDepth)) }
             case let .bind(_, inner, bound):
                 return Swift.max(
@@ -257,7 +259,7 @@ package extension ChoiceTree {
                     choice: b.choice.map(transform),
                     isSelected: b.isSelected
                 )
-            case let .group(children, isOpaque: isOpaque):
+            case let .group(children, isOpaque: isOpaque, _):
                 // For a group, recursively map over its children.
                 return try .group(children.map { try $0.map(transform) }, isOpaque: isOpaque)
             case let .bind(fingerprint, inner, bound):
@@ -335,7 +337,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 result += "\n" + b.choice.treeDescription(prefix: childPrefix, isLast: true)
                 return result
 
-            case let .group(children, _):
+            case let .group(children, _, _):
                 var result = prefix + connector + "group"
                 for (index, child) in children.enumerated() {
                     let isLastChild = index == children.count - 1
@@ -379,7 +381,7 @@ extension ChoiceTree: CustomDebugStringConvertible {
                 "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
             case let .branch(b):
                 "\(b.weight),\(b.id): \(b.choice.elementDescription)"
-            case let .group(array, _):
+            case let .group(array, _, _):
                 "{" + array.map(\.elementDescription).joined() + "}"
             case let .bind(_, inner, bound):
                 "{" + inner.elementDescription + bound.elementDescription + "}"
@@ -420,7 +422,7 @@ package extension ChoiceTree {
                 elements.count + elements.reduce(0) { $0 + $1.complexity }
             case let .branch(data):
                 data.choice.complexity
-            case let .group(children, _):
+            case let .group(children, _, _):
                 children.reduce(0) { $0 + $1.complexity }
             case let .bind(_, inner, bound):
                 inner.complexity + bound.complexity
@@ -462,7 +464,7 @@ package extension ChoiceTree {
                 }
                 return compareValues(lhsData.choice, rhsData.choice)
 
-            case let (.group(lhsChildren, _), .group(rhsChildren, _)):
+            case let (.group(lhsChildren, _, _), .group(rhsChildren, _, _)):
                 for index in 0 ..< min(lhsChildren.count, rhsChildren.count) {
                     if let mismatch = compareValues(lhsChildren[index], rhsChildren[index]) {
                         return "group child \(index): \(mismatch)"
@@ -562,7 +564,7 @@ package extension ChoiceTree {
             case let .branch(b):
                 b.choice.collectNormalizedScores(into: &scores)
 
-            case let .group(children, _):
+            case let .group(children, _, _):
                 for child in children {
                     child.collectNormalizedScores(into: &scores)
                 }

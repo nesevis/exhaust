@@ -333,7 +333,7 @@ struct ReductionMaterializerTests {
         #expect(value == originalValue)
 
         // The tree should be a group with 3 branch children (one selected).
-        if case let .group(branches, _) = tree {
+        if case let .group(branches, _, _) = tree {
             #expect(branches.count == 3, "Expected 3 branches (1 selected + 2 alternatives)")
             let selectedCount = branches.filter(\.isSelected).count
             #expect(selectedCount == 1)

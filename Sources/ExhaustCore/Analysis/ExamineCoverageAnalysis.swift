@@ -180,7 +180,7 @@ private extension ExamineCoverageAnalysis {
                     complexity: &complexity
                 )
 
-            case let .group(children, _):
+            case let .group(children, _, _):
                 for child in children {
                     walkTree(
                         child,

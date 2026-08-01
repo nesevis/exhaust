@@ -331,24 +331,35 @@ extension MetaFuzz {
         }
     }
 
-    /// Flatten faithfulness: opening and closing structural markers must balance. A partial stand-in for full field-by-field verification, which needs a second flattening authority; the exact-round-trip sequence equality covers field fidelity.
+    /// Flatten faithfulness: opening and closing structural markers must balance and must agree in kind. A partial stand-in for full field-by-field verification, which needs a second flattening authority; the exact-round-trip sequence equality covers field fidelity.
+    ///
+    /// Kind agreement matters as much as depth: a span move that relocates a `<` without its `>` leaves the depth intact while pairing a zip open against a group close, and a depth-only check cannot see it.
     private static func checkMarkerBalance(_ sequence: ChoiceSequence, _ fuzzCase: MetaFuzzCase) throws {
-        var depth = 0
+        var openMarkers: [MarkerKind] = []
         for entry in sequence {
             switch entry {
-                case .group(true), .sequence(true, validRange: _, isLengthExplicit: _), .bind(true):
-                    depth += 1
-                case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .bind(false):
-                    depth -= 1
-                    if depth < 0 {
+                case .group(true):
+                    openMarkers.append(.group)
+                case .zip(true):
+                    openMarkers.append(.zip)
+                case .bind(true):
+                    openMarkers.append(.bind)
+                case .sequence(true, validRange: _, isLengthExplicit: _):
+                    openMarkers.append(.sequence)
+                case .group(false), .zip(false), .bind(false), .sequence(false, validRange: _, isLengthExplicit: _):
+                    guard let opened = openMarkers.popLast() else {
                         throw FlattenBalanceViolation("closing marker with no opener in flattening of recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+                    }
+                    let closing = MarkerKind(closing: entry)
+                    guard opened == closing else {
+                        throw FlattenBalanceViolation("\(closing) close paired with \(opened) open in flattening of recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
                     }
                 case .branch, .value, .just:
                     continue
             }
         }
-        guard depth == 0 else {
-            throw FlattenBalanceViolation("\(depth) unclosed markers in flattening of recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
+        guard openMarkers.isEmpty else {
+            throw FlattenBalanceViolation("\(openMarkers.count) unclosed markers in flattening of recipe \(fuzzCase.recipe), seed \(fuzzCase.valueSeed)")
         }
     }
 
@@ -591,4 +602,32 @@ package func checkPairedValues(
         return true
     }
     return true
+}
+
+// MARK: - Marker Kinds
+
+/// The container kinds that open and close a span in a flattened sequence, so ``MetaFuzz`` can assert that a close pairs with an open of the same kind.
+private enum MarkerKind: CustomStringConvertible {
+    case group
+    case zip
+    case bind
+    case sequence
+
+    init(closing entry: ChoiceSequenceValue) {
+        self = switch entry {
+            case .zip: .zip
+            case .bind: .bind
+            case .sequence: .sequence
+            default: .group
+        }
+    }
+
+    var description: String {
+        switch self {
+            case .group: "group"
+            case .zip: "zip"
+            case .bind: "bind"
+            case .sequence: "sequence"
+        }
+    }
 }

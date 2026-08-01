@@ -629,7 +629,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         }
         return try runContinuation(
             result: results,
-            calleeChoiceTree: .group(choiceTrees, isOpaque: isOpaque),
+            calleeChoiceTree: .group(choiceTrees, isOpaque: isOpaque, isZip: true),
             continuation: continuation,
             context: &context
         )

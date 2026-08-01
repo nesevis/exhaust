@@ -149,7 +149,8 @@ extension Interpreters {
                         // Scope inner replay to innerTree so its zip doesn't consume boundTree's choices.
                         if case let .bind(_, innerTree, boundTree) = choices.first {
                             choices.removeFirst()
-                            var scopedChoices: ArraySlice<ChoiceTree> = [innerTree]
+                            // Unwrap a plain wrapper group the same way branch subtrees are unwrapped. Handing the wrapper in as one opaque choice starves an inner generator that consumes more than one, which is why a bind replayed under a pick failed while the same bind replayed alone succeeded.
+                            var scopedChoices = ArraySlice(replayChoices(for: innerTree))
                             guard let innerValue = try replayWithChoicesHelper(
                                 inner,
                                 choices: &scopedChoices
@@ -157,7 +158,7 @@ extension Interpreters {
                                 return nil
                             }
                             let boundGen = try forward(innerValue)
-                            var boundChoices: ArraySlice<ChoiceTree> = [boundTree]
+                            var boundChoices = ArraySlice(replayChoices(for: boundTree))
                             guard let boundValue = try replayWithChoicesHelper(
                                 boundGen,
                                 choices: &boundChoices
@@ -233,7 +234,7 @@ extension Interpreters {
             return nil
         }
         let choice = choices.removeFirst()
-        guard case var .group(branches, _) = choice else {
+        guard case var .group(branches, _, _) = choice else {
             throw ReplayError.wrongInputChoice
         }
 
@@ -265,8 +266,18 @@ extension Interpreters {
         return try replayWithChoicesHelper(nextGen, choices: &choices)
     }
 
+    /// Unwraps a lone wrapper group into its children, so a sub-generator that consumes several choices is not handed one opaque node.
+    ///
+    /// The array-shaped counterpart of ``replayChoices(for:)``. A scope that carries exactly one child cannot distinguish "one choice" from "one wrapper around several" without looking inside it.
+    private static func unwrappedChoices(_ choices: [ChoiceTree]) -> [ChoiceTree] {
+        guard choices.count == 1 else {
+            return choices
+        }
+        return replayChoices(for: choices[0])
+    }
+
     private static func replayChoices(for choice: ChoiceTree) -> [ChoiceTree] {
-        guard case let .group(children, _) = choice else {
+        guard case let .group(children, _, _) = choice else {
             return [choice]
         }
         let containsBranch = children.contains {
@@ -314,7 +325,7 @@ extension Interpreters {
     ) throws -> Output? {
         // Unwrap a single non-branch group wrapper that encloses per-lane subtrees (produced by reflect's reflectZipOperation).
         if choices.count == 1,
-           case let .group(children, _) = choices[choices.startIndex],
+           case let .group(children, _, _) = choices[choices.startIndex],
            children.allSatisfy({ $0.isBranch || $0.isSelected }) == false
         {
             choices = children[...]
@@ -325,7 +336,7 @@ extension Interpreters {
         for gen in generators {
             guard choices.isEmpty == false else { return nil }
 
-            if case let .group(laneChoices, _) = choices[choices.startIndex],
+            if case let .group(laneChoices, _, _) = choices[choices.startIndex],
                laneChoices.allSatisfy({ !$0.isBranch && !$0.isSelected })
             {
                 choices.removeFirst()
@@ -409,7 +420,7 @@ extension Interpreters {
             return nil
         }
 
-        var subChoicesCopy = subChoices[...]
+        var subChoicesCopy = ArraySlice(unwrappedChoices(subChoices))
         guard let subResult = try replayWithChoicesHelper(
             subGenerator,
             choices: &subChoicesCopy
@@ -425,7 +436,7 @@ extension Interpreters {
         with script: ChoiceTree
     ) throws -> Output? {
         // Handle group scripts by distributing choices to the generator Groups containing branches represent `picks` and are handled together
-        if case let .group(choices, _) = script {
+        if case let .group(choices, _, _) = script {
             if choices.allSatisfy({ $0.isBranch || $0.isSelected }) == false {
                 return try replayWithChoices(gen, choices: choices)
             }
@@ -682,7 +693,7 @@ extension Interpreters {
         script: ChoiceTree,
         runContinuation: (Any) throws -> Output?
     ) throws -> Output? {
-        guard case let .group(children, _) = script else {
+        guard case let .group(children, _, _) = script else {
             return nil
         }
 

@@ -79,7 +79,7 @@ extension Materializer {
 
         switch context.mode {
             case .exact:
-                guard let prefixValue = context.cursor.tryConsumeValue() else {
+                guard let prefixValue = context.cursor.tryConsumeValue(expecting: tag) else {
                     throw RejectionError()
                 }
                 let bp = prefixValue.choice.bitPattern64
@@ -103,7 +103,7 @@ extension Materializer {
                 }
 
             case .guided:
-                if let prefixValue = context.cursor.tryConsumeValue() {
+                if let prefixValue = context.cursor.tryConsumeValue(expecting: tag) {
                     let bp = prefixValue.choice.bitPattern64
                     // Float NaN/infinity: pass through unclamped so the reducer can see non-finite problematic values.
                     randomBits = tag.clampBits(bp, min: min, max: max)
@@ -186,7 +186,7 @@ extension Materializer {
             default: calleeFallback
         }
         if let effectiveFallback,
-           case let .group(children, _) = effectiveFallback,
+           case let .group(children, _, _) = effectiveFallback,
            case let .branch(b) = children.first(where: \.isSelected), b.isSelected
         {
             fbBranchId = b.id
@@ -531,7 +531,7 @@ extension Materializer {
         prefixChildEnds: [Int]? = nil
     ) throws -> (Any, ChoiceTree)? {
         let fallbackChildren: [ChoiceTree]? = calleeFallback.flatMap { fallback -> [ChoiceTree]? in
-            guard case let .group(children, _) = fallback,
+            guard case let .group(children, _, _) = fallback,
                   children.count == generators.count
             else { return nil }
             return children
@@ -547,7 +547,7 @@ extension Materializer {
         let canScope = (prefixChildEnds != nil || fallbackChildren != nil) && context.cursor.isSpent == false
 
         let calleeStart = context.flatCount
-        context.emitFlat(.group(true))
+        context.emitFlat(.zip(true))
 
         // Scope limits come from the prefix's parsed spans (`prefixChildEnds`, absolute end positions; see Cursor.zipChildSubtreeEnds(count:)). When the prefix does not parse at this site, the fallback tree's per-child entry counts stand in: cumulative flattenedEntryCount from basePosition + 1, which avoids the cursor-position drift skipGroups() used to cause.
         var childScopeStart = context.cursor.position + 1 // past the zip group open
@@ -593,8 +593,8 @@ extension Materializer {
             }
             zipIndex += 1
         }
-        context.emitFlat(.group(false))
-        let calleeTree: ChoiceTree = context.skipTree ? .just : .group(choiceTrees)
+        context.emitFlat(.zip(false))
+        let calleeTree: ChoiceTree = context.skipTree ? .just : .group(choiceTrees, isZip: true)
         return try runContinuation(
             result: results, calleeChoiceTree: calleeTree, calleeStart: calleeStart,
             continuation: continuation, inputValue: inputValue,

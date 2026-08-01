@@ -15,6 +15,10 @@ package extension Collection<ChoiceSequenceValue> {
                     key += "("
                 case .group(false):
                     key += ")"
+                case .zip(true):
+                    key += "<"
+                case .zip(false):
+                    key += ">"
                 case .sequence(true, _, _):
                     key += "["
                 case .sequence(false, _, _):

@@ -75,9 +75,9 @@ package enum FuzzMutator {
                 case .bind(true):
                     bindOpenIndices.append(index)
                     openStack.append(index)
-                case .group(true), .sequence(true, validRange: _, isLengthExplicit: _):
+                case .group(true), .sequence(true, validRange: _, isLengthExplicit: _), .zip(true):
                     openStack.append(index)
-                case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .bind(false):
+                case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .zip(false), .bind(false):
                     if let open = openStack.popLast() {
                         matchingCloseByOpen[open] = index
                     }
@@ -126,7 +126,7 @@ package enum FuzzMutator {
                 for element in elements {
                     harvestPayloads(element, into: &payloads)
                 }
-            case let .group(elements, _):
+            case let .group(elements, _, _):
                 for element in elements {
                     harvestPayloads(element, into: &payloads)
                 }
@@ -388,10 +388,10 @@ package enum FuzzMutator {
         switch sequence[start] {
             case .value, .just, .branch:
                 return start + 1
-            case .group(true), .sequence(true, validRange: _, isLengthExplicit: _), .bind(true):
+            case .group(true), .sequence(true, validRange: _, isLengthExplicit: _), .zip(true), .bind(true):
                 let close = matchingCloseByOpen[start]
                 return close >= 0 ? close + 1 : nil
-            case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .bind(false):
+            case .group(false), .sequence(false, validRange: _, isLengthExplicit: _), .zip(false), .bind(false):
                 return nil
         }
     }

@@ -16,7 +16,7 @@ extension __ExhaustRuntime {
                     .filter { indices.contains($0.offset) == false }
                     .map(\.element)
                 return .sequence(elements: pruned, metadata: metadata)
-            case let .group(children, isOpaque):
+            case let .group(children, isOpaque, _):
                 guard let targetIndex = children.firstIndex(where: { containsSequence($0) }) else {
                     return tree
                 }
@@ -39,7 +39,7 @@ extension __ExhaustRuntime {
         switch tree {
             case .sequence:
                 return true
-            case let .group(children, _):
+            case let .group(children, _, _):
                 return children.contains(where: { containsSequence($0) })
             case let .resize(_, choices):
                 return choices.contains(where: { containsSequence($0) })

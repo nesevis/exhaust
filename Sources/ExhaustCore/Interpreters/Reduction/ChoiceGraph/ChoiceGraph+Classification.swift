@@ -274,7 +274,7 @@ extension ChoiceGraph {
                 return true
             case let (.bind(_, lowInner, lowBound), .bind(_, highInner, highBound)):
                 return sameTopology(lowInner, highInner) && sameTopology(lowBound, highBound)
-            case let (.group(lowArray, _), .group(highArray, _)):
+            case let (.group(lowArray, _, _), .group(highArray, _, _)):
                 if lowArray.count != highArray.count { return false }
                 var index = 0
                 while index < lowArray.count {
@@ -340,7 +340,7 @@ extension ChoiceGraph {
                 }
             case let .branch(b):
                 fold(b.choice, into: &hash)
-            case let .group(array, _):
+            case let .group(array, _, _):
                 hash = (hash ^ UInt64(array.count)) &* 1_099_511_628_211
                 for child in array {
                     fold(child, into: &hash)

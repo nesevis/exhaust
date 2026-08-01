@@ -52,7 +52,7 @@ struct AdaptiveSmoothingTests {
 
 private func containsOpaqueGroup(_ tree: ChoiceTree) -> Bool {
     switch tree {
-        case let .group(children, isOpaque):
+        case let .group(children, isOpaque, _):
             if isOpaque {
                 return true
             }

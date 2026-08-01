@@ -261,29 +261,13 @@ extension Materializer.Mode {
 // MARK: - Recursive Engine
 
 extension Materializer {
-    /// Returns whether a candidate reading of a zip's children lands its cumulative per-child entry counts exactly on the prefix's parsed subtree boundaries.
-    @inline(__always)
-    static func zipChildBoundariesMatch(_ children: [ChoiceTree], from start: Int, ends: [Int]) -> Bool {
-        guard children.count == ends.count else {
-            return false
-        }
-        var boundary = start
-        for (child, end) in zip(children, ends) {
-            boundary += child.flattenedEntryCount
-            if boundary != end {
-                return false
-            }
-        }
-        return true
-    }
-
     /// Split a fallback tree into callee and continuation portions for non-group operations.
     @inline(__always)
     static func decomposeNonGroupFallback(
         _ tree: ChoiceTree?
     ) -> (callee: ChoiceTree?, continuation: ChoiceTree?) {
         guard let tree else { return (nil, nil) }
-        if case let .group(children, _) = tree, children.count == 2 {
+        if case let .group(children, _, _) = tree, children.count == 2 {
             return (children[0], children[1])
         }
         return (tree, nil)
@@ -347,31 +331,15 @@ extension Materializer {
 
             case let .impure(.zip(generators, _), continuation):
                 let (calleeFallback, continuationFallback): (ChoiceTree?, ChoiceTree?)
-                var prefixChildEnds: [Int]?
+                // The prefix labels the zip, so this returns nil anywhere other than a real zip site and no shape heuristic is needed to decide whether to trust it.
+                let prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
                 if let fallbackTree,
-                   case let .group(children, _) = fallbackTree, children.count == 2,
-                   case let .group(inner, _) = children[0], inner.count == generators.count
+                   case let .group(children, _, false) = fallbackTree, children.count == 2,
+                   case let .group(inner, _, true) = children[0], inner.count == generators.count
                 {
-                    let isAmbiguousShape = generators.count == 2
-                    if context.mode == .guided || isAmbiguousShape {
-                        prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
-                    }
-                    var useWrapperReading = true
-                    if isAmbiguousShape, let prefixChildEnds {
-                        let childrenStart = context.cursor.position + 1
-                        let wrapperMatches = zipChildBoundariesMatch(inner, from: childrenStart, ends: prefixChildEnds)
-                        let calleeMatches = zipChildBoundariesMatch(children, from: childrenStart, ends: prefixChildEnds)
-                        if wrapperMatches == false, calleeMatches {
-                            useWrapperReading = false
-                        }
-                    }
-                    (calleeFallback, continuationFallback) = useWrapperReading
-                        ? (children[0], children[1])
-                        : (fallbackTree, nil)
+                    // `group[zipCallee, continuation]`: an untagged wrapper whose first child is the tagged zip. Before the tag this reading was indistinguishable from a zip whose own first child happened to be a two-child group.
+                    (calleeFallback, continuationFallback) = (children[0], children[1])
                 } else {
-                    if context.mode == .guided {
-                        prefixChildEnds = context.cursor.zipChildSubtreeEnds(count: generators.count)
-                    }
                     calleeFallback = fallbackTree
                     continuationFallback = nil
                 }

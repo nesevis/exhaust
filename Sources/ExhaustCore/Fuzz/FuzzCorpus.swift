@@ -356,6 +356,10 @@ package final class FuzzCorpus {
                 7
             case .bind(false):
                 8
+            case .zip(true):
+                9
+            case .zip(false):
+                10
         }
     }
 
