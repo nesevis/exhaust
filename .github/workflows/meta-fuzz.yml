@@ -80,6 +80,8 @@ jobs:
             bash MetaFuzzHarness/scripts/nightly-fuzz.sh \
               "$(swift build --package-path MetaFuzzHarness --configuration release --product MetaFuzzProbe $COVERAGE_FLAGS --show-bin-path)/MetaFuzzProbe" \
               --budget-seconds "${{ github.event.inputs.budget || '2700' }}" \
+              --depth 3 \
+              --node-budget 160 \
               --findings-directory "${{ runner.temp }}/metafuzz-findings"
 
       - name: Probe metrics summary
