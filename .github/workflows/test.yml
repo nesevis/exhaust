@@ -22,6 +22,22 @@ jobs:
           swift test --parallel 2>&1 | tee .build/test-output.txt
           exit ${PIPESTATUS[0]}
 
+      - name: Run macro implementation tests
+        run: swift test --package-path Packages/exhaust-macros --parallel
+
+      - name: Validate release manifest rewrite
+        run: |
+          cp Package.swift "$RUNNER_TEMP/Package.swift"
+          python3 Scripts/prepare-release-manifest.py \
+            --manifest "$RUNNER_TEMP/Package.swift" \
+            macro \
+            --version 0.0.0
+          python3 Scripts/prepare-release-manifest.py \
+            --manifest "$RUNNER_TEMP/Package.swift" \
+            binary \
+            --tag v0.0.0 \
+            --checksum 0000000000000000000000000000000000000000000000000000000000000000
+
       - name: Collect crash reports
         if: failure()
         run: |

@@ -11,25 +11,42 @@ on:
         required: true
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: exhaust-release
+  cancel-in-progress: false
 
 jobs:
   build-and-release:
     runs-on: macos-26
     outputs:
+      candidate-branch: ${{ steps.candidate.outputs.branch }}
+      candidate-sha: ${{ steps.candidate.outputs.sha }}
+      checksum: ${{ steps.checksum.outputs.checksum }}
+      version: ${{ steps.version.outputs.version }}
       vtag: ${{ steps.version.outputs.vtag }}
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Select Xcode 26.5
         run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
 
       - name: Run tests (source)
         run: |
-          mkdir -p .build
           set +o pipefail
-          swift test --no-parallel 2>&1 | tee .build/test-output-source.txt
+          swift test --no-parallel 2>&1 | tee "$RUNNER_TEMP/test-output-source.txt"
+          exit ${PIPESTATUS[0]}
+
+      - name: Run macro implementation tests
+        run: |
+          set +o pipefail
+          swift test --package-path Packages/exhaust-macros --no-parallel 2>&1 \
+            | tee "$RUNNER_TEMP/test-output-macros.txt"
           exit ${PIPESTATUS[0]}
 
       - name: Resolve version
@@ -41,26 +58,83 @@ jobs:
             # Strip 'release-' prefix from tag name
             VERSION="${GITHUB_REF_NAME#release-}"
           fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Invalid release version: $VERSION"
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "vtag=v$VERSION" >> "$GITHUB_OUTPUT"
 
-          git fetch --tags --force
-          NOTES=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
-          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$NOTES" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-
-      - name: Verify v-tag does not already exist
-        env:
-          VTAG: ${{ steps.version.outputs.vtag }}
+      - name: Verify release commit is on main
         run: |
-          if git rev-parse "refs/tags/$VTAG" >/dev/null 2>&1; then
-            echo "::error::Tag $VTAG already exists. Delete it first or bump the version."
+          git fetch origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Release commit $GITHUB_SHA is not reachable from main."
             exit 1
           fi
 
       - name: Build XCFramework
         run: bash Scripts/build-xcframework.sh
+
+      - name: Create cross-repository release token
+        id: release-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: |
+            exhaust
+            exhaust-macros
+          permission-contents: write
+
+      - name: Configure release Git identity
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          APP_SLUG: ${{ steps.release-token.outputs.app-slug }}
+        run: |
+          APP_USER_ID=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${APP_USER_ID}+${APP_SLUG}[bot]@users.noreply.github.com"
+          gh auth setup-git
+
+      - name: Publish macro implementation package
+        env:
+          VTAG: ${{ steps.version.outputs.vtag }}
+        run: |
+          MACRO_REPOSITORY="https://github.com/nesevis/exhaust-macros.git"
+          MACRO_SHA=$(git subtree split --prefix=Packages/exhaust-macros "$GITHUB_SHA")
+          git remote add exhaust-macros "$MACRO_REPOSITORY"
+
+          REMOTE_TAG=$(git ls-remote --refs --tags exhaust-macros "refs/tags/$VTAG" | awk '{print $1}')
+          if [ -n "$REMOTE_TAG" ] && [ "$REMOTE_TAG" != "$MACRO_SHA" ]; then
+            echo "::error::Satellite tag $VTAG already points to $REMOTE_TAG, expected $MACRO_SHA."
+            exit 1
+          fi
+
+          REMOTE_MAIN=$(git ls-remote --heads exhaust-macros refs/heads/main | awk '{print $1}')
+          if [ -n "$REMOTE_MAIN" ]; then
+            git fetch exhaust-macros refs/heads/main
+            if ! git merge-base --is-ancestor FETCH_HEAD "$MACRO_SHA"; then
+              echo "::error::Satellite main has diverged from the generated subtree history."
+              exit 1
+            fi
+            if [ "$REMOTE_MAIN" != "$MACRO_SHA" ]; then
+              git push exhaust-macros "$MACRO_SHA:refs/heads/main"
+            fi
+          else
+            git push exhaust-macros "$MACRO_SHA:refs/heads/main"
+          fi
+
+          if [ -z "$REMOTE_TAG" ]; then
+            git push exhaust-macros "$MACRO_SHA:refs/tags/$VTAG"
+          fi
+
+      - name: Use published macro package in release manifest
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 Scripts/prepare-release-manifest.py macro --version "$VERSION"
 
       - name: Clean debug artifacts
         run: swift package clean
@@ -70,7 +144,8 @@ jobs:
           EXHAUST_RELEASE: "1"
         run: |
           set +o pipefail
-          swift test --no-parallel --skip ExhaustCoreTests 2>&1 | tee .build/test-output-xcframework.txt
+          swift test --no-parallel --skip ExhaustCoreTests 2>&1 \
+            | tee "$RUNNER_TEMP/test-output-xcframework.txt"
           exit ${PIPESTATUS[0]}
 
       - name: Collect crash reports
@@ -91,7 +166,10 @@ jobs:
       - name: Test report
         if: always()
         run: |
-          python3 - .build/test-output-source.txt .build/test-output-xcframework.txt <<'SCRIPT'
+          python3 - \
+            "$RUNNER_TEMP/test-output-source.txt" \
+            "$RUNNER_TEMP/test-output-macros.txt" \
+            "$RUNNER_TEMP/test-output-xcframework.txt" <<'SCRIPT'
           import sys, os, re
 
           requested = sys.argv[1:]
@@ -114,7 +192,8 @@ jobs:
               sys.exit(0)
 
           failures = []
-          total = '?'
+          total = 0
+          summaries = 0
           all_lines = []
           for path in found:
               with open(path) as f:
@@ -127,13 +206,14 @@ jobs:
               for line in reversed(lines):
                   m = re.search(r'Test run with (\d+) tests? in (\d+) suites? (passed|failed)', line)
                   if m:
-                      total = m.group(1)
+                      total += int(m.group(1))
+                      summaries += 1
                       break
 
           errors = [l.rstrip() for l in all_lines if re.search(r'\berror:', l)]
 
           with open(summary_path, 'a') as f:
-              if total == '?':
+              if summaries == 0:
                   f.write("### Test report unavailable\n\nCould not find test summary line in output.\n")
                   if errors:
                       f.write(f"\n**Build errors ({len(errors)}):**\n```\n")
@@ -159,56 +239,57 @@ jobs:
           CHECKSUM=$(swift package compute-checksum Frameworks/ExhaustCore.xcframework.zip)
           echo "checksum=$CHECKSUM" >> "$GITHUB_OUTPUT"
 
-      - name: Update Package.swift and create release tag
+      - name: Prepare release candidate branch
+        id: candidate
         env:
           VTAG: ${{ steps.version.outputs.vtag }}
           CHECKSUM: ${{ steps.checksum.outputs.checksum }}
         run: |
-          URL="https://github.com/nesevis/exhaust/releases/download/$VTAG/ExhaustCore.xcframework.zip"
+          python3 Scripts/prepare-release-manifest.py binary \
+            --tag "$VTAG" \
+            --checksum "$CHECKSUM"
 
-          # Switch to precompiled mode on Apple hosts only. XCFrameworks do not resolve on Linux,
-          # so Linux consumers of the same release tag build ExhaustCore from source.
-          # EXHAUST_FORCE_SOURCE is the escape hatch for Apple hosts cross-compiling to Linux
-          # with a Swift SDK, where the host check alone would wrongly pick the binary.
-          sed -i '' \
-            's|let usePrecompiled = ProcessInfo.processInfo.environment\["EXHAUST_RELEASE"\] != nil|let usePrecompiled = isDarwinHost \&\& ProcessInfo.processInfo.environment["EXHAUST_FORCE_SOURCE"] == nil|' \
-            Package.swift
-
-          # Point binary target at the release URL
-          sed -i '' \
-            "s|.binaryTarget(name: \"ExhaustCore\", path: \"Frameworks/ExhaustCore.xcframework\")|.binaryTarget(name: \"ExhaustCore\", url: \"$URL\", checksum: \"$CHECKSUM\")|" \
-            Package.swift
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "release/$VTAG"
+          CANDIDATE_BRANCH="release/$VTAG"
+          git checkout -b "$CANDIDATE_BRANCH"
           git add Package.swift
           git commit -m "Update Package.swift with xcframework URL for $VTAG"
-          git tag "$VTAG"
-          git push origin "release/$VTAG"
-          git push origin "$VTAG"
 
-      - name: Create release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VTAG: ${{ steps.version.outputs.vtag }}
-          NOTES: ${{ steps.version.outputs.notes }}
-        run: |
-          if [ -n "$NOTES" ]; then
-            gh release create "$VTAG" \
-              --title "$VTAG" \
-              --notes "$NOTES" \
-              "Frameworks/ExhaustCore.xcframework.zip#ExhaustCore.xcframework.zip"
+          REMOTE_BRANCH=$(git ls-remote --heads origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')
+          if [ -n "$REMOTE_BRANCH" ]; then
+            git fetch origin "refs/heads/$CANDIDATE_BRANCH"
+            if [ "$(git rev-parse FETCH_HEAD^)" != "$GITHUB_SHA" ]; then
+              echo "::error::Existing $CANDIDATE_BRANCH has a different parent."
+              exit 1
+            fi
+            if [ "$(git rev-parse FETCH_HEAD^{tree})" != "$(git rev-parse HEAD^{tree})" ]; then
+              echo "::error::Existing $CANDIDATE_BRANCH has different generated content."
+              exit 1
+            fi
+            CANDIDATE_SHA="$REMOTE_BRANCH"
           else
-            gh release create "$VTAG" \
-              --title "$VTAG" \
-              --generate-notes \
-              "Frameworks/ExhaustCore.xcframework.zip#ExhaustCore.xcframework.zip"
+            git push origin "HEAD:refs/heads/$CANDIDATE_BRANCH"
+            CANDIDATE_SHA=$(git rev-parse HEAD)
           fi
 
-  # A Linux consumer of the release tag gets the rewritten manifest with usePrecompiled == false
-  # and builds ExhaustCore from source. This job proves that path against the pushed release
-  # branch before anyone hits it.
+          REMOTE_TAG=$(git ls-remote --refs --tags origin "refs/tags/$VTAG" | awk '{print $1}')
+          if [ -n "$REMOTE_TAG" ] && [ "$REMOTE_TAG" != "$CANDIDATE_SHA" ]; then
+            echo "::error::Tag $VTAG already points to $REMOTE_TAG, expected $CANDIDATE_SHA."
+            exit 1
+          fi
+
+          echo "branch=$CANDIDATE_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "sha=$CANDIDATE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release asset for publication
+        uses: actions/upload-artifact@v4
+        with:
+          name: exhaust-release-asset-${{ steps.version.outputs.vtag }}
+          path: Frameworks/ExhaustCore.xcframework.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  # Linux selects the source ExhaustCore target from the final candidate manifest.
+  # This gate runs before the consumer-facing tag and release are created.
   verify-linux:
     needs: build-and-release
     runs-on: ubuntu-latest
@@ -221,7 +302,103 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: release/${{ needs.build-and-release.outputs.vtag }}
+          ref: ${{ needs.build-and-release.outputs.candidate-branch }}
 
       - name: Build release manifest from source
         run: swift build
+
+  publish-release:
+    needs: [build-and-release, verify-linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.build-and-release.outputs.candidate-sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download release asset
+        uses: actions/download-artifact@v4
+        with:
+          name: exhaust-release-asset-${{ needs.build-and-release.outputs.vtag }}
+          path: Frameworks
+
+      - name: Verify downloaded release asset
+        env:
+          EXPECTED_CHECKSUM: ${{ needs.build-and-release.outputs.checksum }}
+        run: |
+          ACTUAL_CHECKSUM=$(sha256sum Frameworks/ExhaustCore.xcframework.zip | awk '{print $1}')
+          if [ "$ACTUAL_CHECKSUM" != "$EXPECTED_CHECKSUM" ]; then
+            echo "::error::Downloaded artifact checksum is $ACTUAL_CHECKSUM, expected $EXPECTED_CHECKSUM."
+            exit 1
+          fi
+
+      - name: Create release token
+        id: release-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+
+      - name: Create and verify draft release
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          VTAG: ${{ needs.build-and-release.outputs.vtag }}
+          CANDIDATE_SHA: ${{ needs.build-and-release.outputs.candidate-sha }}
+          EXPECTED_CHECKSUM: ${{ needs.build-and-release.outputs.checksum }}
+        run: |
+          NOTES=$(git tag -l --format='%(contents)' "$GITHUB_REF_NAME")
+          IS_DRAFT=true
+
+          if gh release view "$VTAG" >/dev/null 2>&1; then
+            IS_DRAFT=$(gh release view "$VTAG" --json isDraft --jq .isDraft)
+            TARGET=$(gh release view "$VTAG" --json targetCommitish --jq .targetCommitish)
+            RELEASE_TAG=$(git ls-remote --refs --tags origin "refs/tags/$VTAG" | awk '{print $1}')
+            if [ -n "$RELEASE_TAG" ] && [ "$RELEASE_TAG" != "$CANDIDATE_SHA" ]; then
+              echo "::error::Existing release tag points to $RELEASE_TAG, expected $CANDIDATE_SHA."
+              exit 1
+            fi
+            if [ -z "$RELEASE_TAG" ] && [ "$TARGET" != "$CANDIDATE_SHA" ]; then
+              echo "::error::Existing draft targets $TARGET, expected $CANDIDATE_SHA."
+              exit 1
+            fi
+          elif [ -n "$NOTES" ]; then
+            gh release create "$VTAG" \
+              --draft \
+              --target "$CANDIDATE_SHA" \
+              --title "$VTAG" \
+              --notes "$NOTES"
+          else
+            gh release create "$VTAG" \
+              --draft \
+              --target "$CANDIDATE_SHA" \
+              --title "$VTAG" \
+              --generate-notes
+          fi
+
+          ASSET_COUNT=$(gh release view "$VTAG" --json assets \
+            --jq '[.assets[] | select(.name == "ExhaustCore.xcframework.zip")] | length')
+          if [ "$ASSET_COUNT" = "0" ]; then
+            gh release upload "$VTAG" Frameworks/ExhaustCore.xcframework.zip
+          elif [ "$ASSET_COUNT" != "1" ]; then
+            echo "::error::Draft release has $ASSET_COUNT matching XCFramework assets."
+            exit 1
+          fi
+
+          VERIFY_DIRECTORY=$(mktemp -d)
+          gh release download "$VTAG" \
+            --pattern ExhaustCore.xcframework.zip \
+            --dir "$VERIFY_DIRECTORY"
+          RELEASE_CHECKSUM=$(sha256sum "$VERIFY_DIRECTORY/ExhaustCore.xcframework.zip" | awk '{print $1}')
+          if [ "$RELEASE_CHECKSUM" != "$EXPECTED_CHECKSUM" ]; then
+            echo "::error::Draft asset checksum is $RELEASE_CHECKSUM, expected $EXPECTED_CHECKSUM."
+            exit 1
+          fi
+
+          if [ "$IS_DRAFT" = "true" ]; then
+            gh release edit "$VTAG" --draft=false
+          else
+            echo "Release $VTAG is already published with the expected asset."
+          fi
