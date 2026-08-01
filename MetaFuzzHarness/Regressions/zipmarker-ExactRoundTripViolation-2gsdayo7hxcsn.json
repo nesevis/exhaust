@@ -1,0 +1,48 @@
+{
+  "kind": "pipelineCase",
+  "note": "Zip decomposition ambiguity, recurring at depth 3 after the 2026-07-12 prefix-scoping fix proved too narrow: that fix engaged prefix-derived scoping only when the fallback tree already had the wrapper shape and the zip had exactly two generators, so exact mode received it zero times out of 149 on the failing records. Fixed 2026-08-01 in cdfe27f55 by giving zip its own ChoiceSequenceValue markers (< and >), removing the ambiguity instead of narrowing the guess; ChoiceSequenceCodec formatVersion moved 1 to 2. Found by the 2026-07-31 depth-3 campaign.",
+  "oracle": "ExactRoundTripViolation",
+  "perturbationSeed": 0,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "optional": {
+          "_0": {
+            "combinator": {
+              "_0": {
+                "zipped": {
+                  "_0": {
+                    "combinator": {
+                      "_0": {
+                        "boundRange": {
+                          "_0": {
+                            "leaf": {
+                              "_0": {
+                                "justInt": {
+                                  "_0": 0
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "_1": {
+                    "combinator": {
+                      "_0": {
+                        "getSized": {}
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "valueSeed": 0,
+  "version": 1
+}

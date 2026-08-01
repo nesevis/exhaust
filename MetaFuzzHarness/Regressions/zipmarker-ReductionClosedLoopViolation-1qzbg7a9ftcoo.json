@@ -1,0 +1,56 @@
+{
+  "kind": "pipelineCase",
+  "note": "Zip decomposition ambiguity seen from the reducer's side: the reduced sequence failed to materialise because child scopes were derived from the wrong reading of the fallback tree. Same root and same fix as the zipmarker-ExactRoundTripViolation record. Fixed 2026-08-01 in cdfe27f55. Found by the 2026-07-31 depth-3 campaign.",
+  "oracle": "ReductionClosedLoopViolation",
+  "perturbationSeed": 0,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "unique": {
+          "_0": {
+            "combinator": {
+              "_0": {
+                "zipped": {
+                  "_0": {
+                    "combinator": {
+                      "_0": {
+                        "optional": {
+                          "_0": {
+                            "leaf": {
+                              "_0": {
+                                "int": {
+                                  "_0": [
+                                    0,
+                                    0
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "_1": {
+                    "combinator": {
+                      "_0": {
+                        "unfolded": {
+                          "depthRange": [
+                            0,
+                            0
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "valueSeed": 0,
+  "version": 1
+}

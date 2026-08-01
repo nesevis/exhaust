@@ -1,0 +1,82 @@
+{
+  "kind": "pipelineCase",
+  "note": "A depth marker read as a value. Reduction may legitimately switch a pick from a recursive branch to a plain one, but a TypeTag.depthControl entry then reached the destination site and was decoded as a Double, yielding -nan. Exact materialisation happened to reject it on a range bound rather than on the tag, while guided materialisation and replay accepted it, so the reducer committed a reduction only exact refuses. Fixed 2026-08-01 in bac70a598 by gating Cursor.tryConsumeValue on tag compatibility: depthControl satisfies only depthControl, in both directions, with tags interchangeable otherwise because the reducer re-derives width inconsistently across paths. Found by the 2026-07-31 depth-3 campaign.",
+  "oracle": "ReductionClosedLoopViolation",
+  "perturbationSeed": 6296242364421332181,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "weightedOneOf": {
+          "_0": [
+            {
+              "recipe": {
+                "leaf": {
+                  "_0": {
+                    "double": {
+                      "_0": [
+                        0,
+                        0
+                      ]
+                    }
+                  }
+                }
+              },
+              "weight": 5
+            },
+            {
+              "recipe": {
+                "combinator": {
+                  "_0": {
+                    "weightedOneOf": {
+                      "_0": [
+                        {
+                          "recipe": {
+                            "combinator": {
+                              "_0": {
+                                "recursive": {
+                                  "base": {
+                                    "leaf": {
+                                      "_0": {
+                                        "double": {
+                                          "_0": [
+                                            0,
+                                            62
+                                          ]
+                                        }
+                                      }
+                                    }
+                                  },
+                                  "maxDepth": 2
+                                }
+                              }
+                            }
+                          },
+                          "weight": 2
+                        },
+                        {
+                          "recipe": {
+                            "leaf": {
+                              "_0": {
+                                "justDouble": {
+                                  "_0": 0
+                                }
+                              }
+                            }
+                          },
+                          "weight": 1
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "weight": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  "valueSeed": 5877528032545770877,
+  "version": 1
+}

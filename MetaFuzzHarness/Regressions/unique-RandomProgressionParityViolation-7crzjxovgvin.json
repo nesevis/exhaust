@@ -1,0 +1,49 @@
+{
+  "kind": "pipelineCase",
+  "note": "Nested unique lost its seen-set state, observed as a PRNG divergence rather than a value divergence: the two engines consumed different amounts of entropy because the inner unique retried a different number of times. Same root and same fix as the unique-ExactInterpreterParityViolation record. Fixed 2026-07-31 in b2a8b427e. Found by the 2026-07-31 depth-3 campaign.",
+  "oracle": "RandomProgressionParityViolation",
+  "perturbationSeed": 0,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "unique": {
+          "_0": {
+            "combinator": {
+              "_0": {
+                "scaledArray": {
+                  "_0": {
+                    "combinator": {
+                      "_0": {
+                        "unique": {
+                          "_0": {
+                            "leaf": {
+                              "_0": {
+                                "int": {
+                                  "_0": [
+                                    -1,
+                                    0
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "lengthRange": [
+                    0,
+                    1
+                  ],
+                  "scaling": "constant"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "valueSeed": 77,
+  "version": 1
+}

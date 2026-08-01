@@ -1,0 +1,50 @@
+{
+  "kind": "pipelineCase",
+  "note": "A bind replayed under a pick threw noSuccessfulBranch while the same bind replayed alone succeeded. Replay's pick path unwraps branch subtrees through replayChoices(for:), but the bind case handed innerTree in as a single opaque choice, starving an inner generator that consumes more than one. Only the pick path reaches that code; the standalone path uses replayRecursive's separate bind case. Fixed 2026-08-01 in 5a832f066 by unwrapping a plain wrapper group the same way branch subtrees are unwrapped. Found by the 2026-07-31 depth-3 campaign.",
+  "oracle": "GeneratedWitnessReplayViolation",
+  "perturbationSeed": 0,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "oneOf": {
+          "_0": [
+            {
+              "combinator": {
+                "_0": {
+                  "reifiedBind": {
+                    "_0": {
+                      "combinator": {
+                        "_0": {
+                          "boundRange": {
+                            "_0": {
+                              "leaf": {
+                                "_0": {
+                                  "justInt": {
+                                    "_0": 0
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "combinator": {
+                "_0": {
+                  "getSized": {}
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "valueSeed": 0,
+  "version": 1
+}

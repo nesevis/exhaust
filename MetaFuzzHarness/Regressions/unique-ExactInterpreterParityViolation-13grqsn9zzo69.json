@@ -1,0 +1,49 @@
+{
+  "kind": "pipelineCase",
+  "note": "Nested unique lost its seen-set state: ValueInterpreter.handleUnique builds a fresh GenerationContext per attempt for choice-sequence deduplication and did not carry uniqueSeenKeys or uniqueSeenSequences across, so an inner unique forgot every value it had produced and stopped deduplicating. The value-only engine then yielded a stream the value-and-tree engine never would. Fixed 2026-07-31 in b2a8b427e by threading both sets into the sub-context and back out, matching the single-context accumulation in ValueAndChoiceTreeInterpreter.handleUnique; see InterpreterRNGParityTests. Found by the 2026-07-31 depth-3 campaign.",
+  "oracle": "ExactInterpreterParityViolation",
+  "perturbationSeed": 0,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "unique": {
+          "_0": {
+            "combinator": {
+              "_0": {
+                "scaledArray": {
+                  "_0": {
+                    "combinator": {
+                      "_0": {
+                        "unique": {
+                          "_0": {
+                            "leaf": {
+                              "_0": {
+                                "int": {
+                                  "_0": [
+                                    -57,
+                                    0
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "lengthRange": [
+                    3,
+                    3
+                  ],
+                  "scaling": "constant"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "valueSeed": 0,
+  "version": 1
+}

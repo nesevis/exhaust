@@ -1,0 +1,57 @@
+{
+  "kind": "pipelineCase",
+  "note": "The same starvation one boundary along: replayWithChoicesResize passed the resize node's children straight through, so a lone wrapper group reached a sub-generator consuming several choices. Isolation needed all three of pick, resize, and a bound range inside the resize; every pair alone replays. Fixed 2026-08-01 in 2a33acc87 with unwrappedChoices, the array-shaped counterpart of replayChoices(for:). Found by the 2026-07-31 depth-3 campaign.",
+  "oracle": "GeneratedWitnessReplayViolation",
+  "perturbationSeed": 4704058736922460755,
+  "recipe": {
+    "combinator": {
+      "_0": {
+        "weightedOneOf": {
+          "_0": [
+            {
+              "recipe": {
+                "combinator": {
+                  "_0": {
+                    "getSized": {}
+                  }
+                }
+              },
+              "weight": 5
+            },
+            {
+              "recipe": {
+                "combinator": {
+                  "_0": {
+                    "resized": {
+                      "_0": {
+                        "combinator": {
+                          "_0": {
+                            "boundRange": {
+                              "_0": {
+                                "leaf": {
+                                  "_0": {
+                                    "justInt": {
+                                      "_0": 0
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "size": 16
+                    }
+                  }
+                }
+              },
+              "weight": 3
+            }
+          ]
+        }
+      }
+    }
+  },
+  "valueSeed": 6486026910230075663,
+  "version": 1
+}
