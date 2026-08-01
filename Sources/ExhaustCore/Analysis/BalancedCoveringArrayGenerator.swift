@@ -8,7 +8,7 @@
 //
 // The coverage state is shared across all rows: each row's greedy choices see every pair covered by prior rows, so no effort is wasted on duplicates.
 //
-// When any clamped domain exceeds ``greedyThreshold``, the generator switches to a deterministic spread: each parameter is assigned a value via prime-stride cycling, giving diverse coverage in O(paramCount) per row without greedy evaluation or pairwise tracking. This avoids the O(params x domain x slices) cost that dominates for large domains where pairwise coverage is negligible relative to the budget.
+// When any clamped domain exceeds ``greedyThreshold``, the generator switches to a deterministic spread: each parameter is assigned a value via prime-stride cycling with a per-lap SplitMix64 phase offset, giving diverse coverage in O(paramCount) per row without greedy evaluation or pairwise tracking. This avoids the O(params x domain x slices) cost that dominates for large domains where pairwise coverage is negligible relative to the budget.
 
 /// Pairwise covering array generator with dynamic factor ordering for balanced parameter coverage.
 ///
@@ -24,7 +24,7 @@ package final class BalancedCoveringArrayGenerator {
     // Greedy fill evaluates every candidate value for every unfilled parameter per row — O(params x domain x slices). For small domains this is fast and produces near-optimal covering arrays that exhaust all pairs early. For large domains the pairwise space (d^2 per slice) dwarfs any practical budget, so greedy optimization spends most of its time distinguishing between negligible coverage fractions. At domain 64 the pairwise space is 4,096 per slice; a typical budget of 200 covers ~5%, the point where adaptive selection stops outperforming uniform spread.
     //
     // Below the threshold: greedy fill with full pairwise tracking. Terminates when all pairs are covered.
-    // Above the threshold: deterministic spread via coprime strides. No bit vectors, no coverage tracking. Each parameter cycles through all domain values (coprime stride guarantees full coverage), and different strides across parameters ensure distinct pairwise tuples per row. Uniform but not adaptive — may revisit covered pairs while others remain uncovered.
+    // Above the threshold: deterministic spread via coprime strides plus a per-lap phase offset. No bit vectors, no coverage tracking. Each parameter cycles through all domain values (coprime stride guarantees full value coverage per lap), and the SplitMix64 lap offset re-phases each parameter every time it completes a lap. The offset is what makes pair coverage converge: bare stride cycling revisits the same lcm(d1, d2) pairs forever, so two parameters whose domain sizes share a factor never exceed 1/gcd(d1, d2) pair coverage. Uniform but not adaptive — may revisit covered pairs while others remain uncovered.
 
     /// Domains above this threshold use deterministic spread instead of greedy pairwise optimization.
     package static let greedyThreshold = 64
@@ -185,7 +185,11 @@ package final class BalancedCoveringArrayGenerator {
     private func nextSpread() -> CoveringArrayRow {
         var row = [UInt64](repeating: 0, count: paramCount)
         for param in 0 ..< paramCount {
-            row[param] = UInt64((rowCount &* spreadStrides[param] &+ param) % domainSizes[param])
+            let domain = domainSizes[param]
+            // The lap offset is constant within a lap, so each parameter still sweeps its full domain every `domain` rows, and varies across laps to break the joint period: without it, any parameter pair repeats with period lcm(d1, d2), capping pair coverage at 1/gcd(d1, d2) regardless of budget.
+            let lap = rowCount / domain
+            let lapOffset = Int(Xoshiro256.deriveSeed(from: UInt64(lap), at: UInt64(param)) % UInt64(domain))
+            row[param] = UInt64((rowCount &* spreadStrides[param] &+ param &+ lapOffset) % domain)
         }
         rowCount += 1
         return CoveringArrayRow(values: row)

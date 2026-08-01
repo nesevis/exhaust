@@ -178,6 +178,32 @@ struct BalancedCoveringArrayTests {
             #expect(generator.next() != nil)
         }
     }
+
+    @Test("Fast path covers all pairs for domains sharing a factor")
+    func fastPathSharedFactorPairCoverage() {
+        // Without the per-lap phase offset, stride cycling repeats pairs with period lcm(132, 6) = 132, capping coverage at 132 of the 792 pairs at any budget.
+        let domains: [UInt64] = [132, 6]
+        let rows = generateAll(domainSizes: domains, budget: 20000)
+
+        let pairs = Set(rows.map { [$0.values[0], $0.values[1]] })
+        #expect(
+            pairs.count == 132 * 6,
+            "Expected full pairwise coverage, got \(pairs.count)/\(132 * 6)"
+        )
+    }
+
+    @Test("Fast path covers all pairs for equal-sized domains")
+    func fastPathEqualDomainsPairCoverage() {
+        // Equal domains are the worst case for the joint period: lcm(15, 15) = 15, so without the per-lap phase offset the 15x15 slice never exceeds 15 of its 225 pairs. The 70 domain exists only to activate spread mode.
+        let domains: [UInt64] = [70, 15, 15]
+        let rows = generateAll(domainSizes: domains, budget: 20000)
+
+        let pairs = Set(rows.map { [$0.values[1], $0.values[2]] })
+        #expect(
+            pairs.count == 15 * 15,
+            "Expected full pairwise coverage of the equal-domain slice, got \(pairs.count)/\(15 * 15)"
+        )
+    }
 }
 
 // MARK: - Helpers
