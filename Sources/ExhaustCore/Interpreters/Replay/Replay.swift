@@ -266,6 +266,16 @@ extension Interpreters {
         return try replayWithChoicesHelper(nextGen, choices: &choices)
     }
 
+    /// Unwraps a lone wrapper group into its children, so a sub-generator that consumes several choices is not handed one opaque node.
+    ///
+    /// The array-shaped counterpart of ``replayChoices(for:)``. A scope that carries exactly one child cannot distinguish "one choice" from "one wrapper around several" without looking inside it.
+    private static func unwrappedChoices(_ choices: [ChoiceTree]) -> [ChoiceTree] {
+        guard choices.count == 1 else {
+            return choices
+        }
+        return replayChoices(for: choices[0])
+    }
+
     private static func replayChoices(for choice: ChoiceTree) -> [ChoiceTree] {
         guard case let .group(children, _, _) = choice else {
             return [choice]
@@ -410,7 +420,7 @@ extension Interpreters {
             return nil
         }
 
-        var subChoicesCopy = subChoices[...]
+        var subChoicesCopy = ArraySlice(unwrappedChoices(subChoices))
         guard let subResult = try replayWithChoicesHelper(
             subGenerator,
             choices: &subChoicesCopy

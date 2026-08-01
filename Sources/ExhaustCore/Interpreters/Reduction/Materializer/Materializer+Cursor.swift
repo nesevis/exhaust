@@ -188,6 +188,7 @@ extension Materializer {
         /// Whether a prefix entry carrying `actual` may satisfy a choice site declaring `expected`.
         ///
         /// Tags are otherwise interchangeable here on purpose: the reducer re-derives width inconsistently across paths, so one reduction's `uint8` is another's `uint16` for the same field, and requiring equality would reject honest candidates. ``TypeTag/depthControl`` is the exception. Its payload is a layer index for a recursive generator rather than a value in any site's domain, so reading it at another site yields a number unrelated to the declared range instead of an out-of-range one a clamp could correct.
+        @inline(__always)
         static func tagIsCompatible(_ actual: TypeTag, with expected: TypeTag) -> Bool {
             guard actual == .depthControl || expected == .depthControl else {
                 return true
