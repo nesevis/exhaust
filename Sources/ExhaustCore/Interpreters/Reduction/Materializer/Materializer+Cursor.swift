@@ -164,7 +164,7 @@ extension Materializer {
         // MARK: - Consume entries
 
         /// Reads and returns the next value entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a value. Marks the cursor as exhausted on type mismatch so callers fall through to PRNG generation.
-        mutating func tryConsumeValue() -> ChoiceSequenceValue.Value? {
+        mutating func tryConsumeValue(expecting expected: TypeTag? = nil) -> ChoiceSequenceValue.Value? {
             guard exhausted == false else { return nil }
             skipGroups()
             guard position < effectiveEnd else {
@@ -173,12 +173,26 @@ extension Materializer {
             }
             switch entries[position] {
                 case let .value(v):
+                    if let expected, Cursor.tagIsCompatible(v.choice.tag, with: expected) == false {
+                        exhausted = true
+                        return nil
+                    }
                     position &+= 1
                     return v
                 default:
                     exhausted = true
                     return nil
             }
+        }
+
+        /// Whether a prefix entry carrying `actual` may satisfy a choice site declaring `expected`.
+        ///
+        /// Tags are otherwise interchangeable here on purpose: the reducer re-derives width inconsistently across paths, so one reduction's `uint8` is another's `uint16` for the same field, and requiring equality would reject honest candidates. ``TypeTag/depthControl`` is the exception. Its payload is a layer index for a recursive generator rather than a value in any site's domain, so reading it at another site yields a number unrelated to the declared range instead of an out-of-range one a clamp could correct.
+        static func tagIsCompatible(_ actual: TypeTag, with expected: TypeTag) -> Bool {
+            guard actual == .depthControl || expected == .depthControl else {
+                return true
+            }
+            return actual == expected
         }
 
         /// Reads and returns the next branch-selection entry from the cursor, or nil if the cursor is exhausted or the next non-marker entry is not a branch. Marks the cursor as exhausted on type mismatch.

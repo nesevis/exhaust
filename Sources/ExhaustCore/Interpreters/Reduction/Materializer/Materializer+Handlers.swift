@@ -79,7 +79,7 @@ extension Materializer {
 
         switch context.mode {
             case .exact:
-                guard let prefixValue = context.cursor.tryConsumeValue() else {
+                guard let prefixValue = context.cursor.tryConsumeValue(expecting: tag) else {
                     throw RejectionError()
                 }
                 let bp = prefixValue.choice.bitPattern64
@@ -103,7 +103,7 @@ extension Materializer {
                 }
 
             case .guided:
-                if let prefixValue = context.cursor.tryConsumeValue() {
+                if let prefixValue = context.cursor.tryConsumeValue(expecting: tag) {
                     let bp = prefixValue.choice.bitPattern64
                     // Float NaN/infinity: pass through unclamped so the reducer can see non-finite problematic values.
                     randomBits = tag.clampBits(bp, min: min, max: max)
