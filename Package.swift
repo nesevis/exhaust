@@ -1,7 +1,6 @@
 // swift-tools-version: 6.3
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
-import CompilerPluginSupport
 import Foundation
 import PackageDescription
 
@@ -59,13 +58,12 @@ let package = Package(
         ),
     ],
     dependencies: [
+        .package(path: "Packages/exhaust-macros"),
         .package(url: "https://github.com/google/swift-benchmark", from: "0.1.2"),
         .package(url: "https://github.com/nicklockwood/SwiftFormat", from: "0.59.1"),
         .package(url: "https://github.com/swiftlang/swift-docc-plugin", from: "1.4.6"),
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", "601.0.1" ..< "603.0.0"),
         .package(url: "https://github.com/pointfreeco/xctest-dynamic-overlay", from: "1.2.2"),
         .package(url: "https://github.com/pointfreeco/swift-custom-dump", from: "1.0.0"),
-        .package(url: "https://github.com/pointfreeco/swift-macro-testing", from: "0.5.0"),
     ] + swiftLintDependency,
     targets: [
         coreTarget,
@@ -77,7 +75,7 @@ let package = Package(
             name: "Exhaust",
             dependencies: [
                 "ExhaustCore",
-                "ExhaustMacros",
+                .product(name: "ExhaustMacroPlugin", package: "exhaust-macros"),
                 .target(
                     name: "ExhaustObjCSupport",
                     condition: .when(platforms: [.macOS, .iOS, .macCatalyst, .tvOS, .watchOS, .visionOS])
@@ -89,17 +87,6 @@ let package = Package(
                 ? [.unsafeFlags(["-Xfrontend", "-experimental-package-interface-load"])]
                 : []),
             plugins: swiftLintPlugins
-        ),
-        .macro(
-            name: "ExhaustMacros",
-            dependencies: [
-                .product(name: "SwiftSyntax", package: "swift-syntax"),
-                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
-                .product(name: "SwiftSyntaxBuilder", package: "swift-syntax"),
-                .product(name: "SwiftCompilerPlugin", package: "swift-syntax"),
-                .product(name: "SwiftDiagnostics", package: "swift-syntax"),
-            ],
-            swiftSettings: strictConcurrencySettings
         ),
         // The self-fuzzing support: recipe language, oracle roster, freeze codec, and the shared core generators. Deliberately free of Swift Testing so plain executables (MetaFuzzProbe) can link it; ExhaustTestSupport re-exports it for the in-tree test targets.
         .target(
@@ -119,14 +106,6 @@ let package = Package(
             dependencies: ["Exhaust", "ExhaustCore", "ExhaustTestSupport"],
             swiftSettings: strictConcurrencySettings,
             plugins: swiftLintPlugins
-        ),
-        .testTarget(
-            name: "ExhaustMacrosTests",
-            dependencies: [
-                "Exhaust",
-                "ExhaustMacros",
-                .product(name: "MacroTesting", package: "swift-macro-testing"),
-            ]
         ),
         // Calibration probe for the meta-test node budget; see MetaGeneratorPropertyTests.metaRecipeNodeBudget.
         .executableTarget(
