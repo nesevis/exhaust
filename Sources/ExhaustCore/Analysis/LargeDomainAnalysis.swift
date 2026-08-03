@@ -110,21 +110,25 @@ package enum ProblematicValues {
     /// Unicode scalar values that are prone to causing problems in string-processing code.
     ///
     /// ``ScalarRangeSet`` converts these to flat indices during construction so that ``computeProblematicValues(min:max:tag:)`` receives pre-computed, index-space problematic values via the ``TypeTag/character(problematicIndices:)`` tag.
+    ///
+    /// Declaration order is semantic — do not sort. Two-element composite slots split this list at the midpoint (`Collection.halved()`): the first half supplies position 0 and the second half position 1. Standalone and base scalars therefore go in the first half, trailing scalars (combining marks, joiners, separators, invisibles) in the second, so every screened two-character string is a base followed by something that attaches to or hides behind it.
     package static let interestingCharacterScalars: [UInt32] = [
+        // First half: standalone and base scalars (position 0 in two-element slots).
         0, // Null: truncates C-interop strings, invisible in output
         34, // Double quote: delimiter in JSON, SQL, HTML attributes, CSV, and shell commands
         39, // Single quote: SQL and shell delimiter; normal text contains it as an apostrophe
         92, // Backslash: escape character in JSON, regex, file paths, shell commands, and string literals
+        223, // Sharp s (ß): uppercases to the two-character SS, so case round-trips change length and are not invertible, and case folding disagrees with lowercasing
+        8238, // Right-to-left override: reverses display order of subsequent characters
+        128_078, // Thumbs down: supplementary plane emoji, requires UTF-16 surrogate pair
+        // Second half: trailing scalars (position 1 in two-element slots).
         768, // Combining grave accent: merges with preceding character into a single grapheme cluster
-        6158, // Mongolian vowel separator: reclassified from space (Zs) to format (Cf) in Unicode 6.3
         8205, // Zero-width joiner: glues adjacent emoji into a single grapheme cluster
         8232, // Line separator: acts as a newline but is not matched by \n
-        8238, // Right-to-left override: reverses display order of subsequent characters
         8239, // Narrow no-break space: visually identical to a space but fails equality and trim checks
         65279, // BOM: invisible at file start, zero-width no-break space elsewhere
         65533, // Replacement character: injected on invalid decode, corrupts serialization round-trips
         127_995, // Emoji skin tone modifier: combines with preceding emoji to form a single grapheme cluster
-        128_078, // Thumbs down: supplementary plane emoji, requires UTF-16 surrogate pair
     ]
 
     /// Computes problematic bit-patterns for a `[min, max]` domain using type-specific problematic-value analysis rules.
@@ -192,74 +196,83 @@ package enum ProblematicValues {
         }
     }
 
+    /// Declaration order is semantic — do not sort. Two-element composite slots split each list at the midpoint (`Collection.halved()`): the first half supplies position 0 and the second half position 1. Ordinary magnitudes go in the first half, poisoners and sign twins in the second, so every screened two-element pair is a plain value next to something that cancels, poisons, or shadows it: (0.0, -0.0), (1.0, -1.0), (greatestFiniteMagnitude, -greatestFiniteMagnitude), (x, NaN), (x, ±infinity).
     private static func fullRangeFloatProblematicValues(tag: TypeTag) -> [UInt64] {
-        var values = Set<UInt64>()
         switch tag {
             case .double:
-                let doubles = [
-                    -Double.greatestFiniteMagnitude,
-                    -1.0,
-                    -Double.leastNormalMagnitude,
-                    -Double.leastNonzeroMagnitude,
-                    -0.0,
+                let doubles: [Double] = [
+                    // First half: ordinary magnitudes (position 0 in two-element slots).
                     0.0,
-                    Double.leastNonzeroMagnitude,
-                    Double.leastNormalMagnitude,
-                    Double.ulpOfOne,
+                    Double.leastNonzeroMagnitude, // Smallest subnormal
+                    0.1, // Not exactly representable: exposes decimal round-trip and accumulation drift
                     1.0,
                     1.0.nextUp,
+                    0x1p53, // Integer-precision cliff: x + 1 == x from here up
+                    0x1p63, // Int64 conversion boundary: Int64(_:) traps from here up
                     Double.greatestFiniteMagnitude,
-                    Double.nan,
+                    // Second half: poisoners and sign twins (position 1 in two-element slots).
+                    -0.0,
+                    -1.0,
+                    -Double.greatestFiniteMagnitude,
+                    Double.leastNormalMagnitude, // Subnormal boundary: arithmetic below it loses precision or flushes
                     Double.infinity,
                     -Double.infinity,
+                    Double.nan,
+                    -Double(nan: 1, signaling: true), // Sign, signaling, and payload bits set: distinct from the default quiet NaN for bit-pattern comparisons and hashing
                 ]
-                values.formUnion(doubles.map(\.bitPattern64))
+                return doubles.map(\.bitPattern64)
             case .float:
-                let floats = [
-                    -Float.greatestFiniteMagnitude,
-                    -1.0,
-                    -Float.leastNormalMagnitude,
-                    -Float.leastNonzeroMagnitude,
-                    -0.0,
+                let floats: [Float] = [
+                    // First half: ordinary magnitudes (position 0 in two-element slots).
                     0.0,
                     Float.leastNonzeroMagnitude,
-                    Float.leastNormalMagnitude,
-                    Float.ulpOfOne,
+                    0.1,
                     1.0,
                     Float(1.0).nextUp,
+                    0x1p24, // Integer-precision cliff for Float
+                    0x1p63, // Int64 conversion boundary: exactly representable, and Int64(_:) traps from here up
                     Float.greatestFiniteMagnitude,
-                    Float.nan,
+                    // Second half: poisoners and sign twins (position 1 in two-element slots).
+                    -0.0,
+                    -1.0,
+                    -Float.greatestFiniteMagnitude,
+                    Float.leastNormalMagnitude,
                     Float.infinity,
                     -Float.infinity,
+                    Float.nan,
+                    -Float(nan: 1, signaling: true),
                 ]
-                values.formUnion(floats.map(\.bitPattern64))
+                return floats.map(\.bitPattern64)
             case .float16:
                 #if arch(arm64) || arch(arm64_32)
                     if #available(macOS 11, iOS 14, tvOS 14, watchOS 7, *) {
-                        let floats = [
-                            -Float16.greatestFiniteMagnitude,
-                            -Float16(1.0),
-                            -Float16.leastNormalMagnitude,
-                            -Float16.leastNonzeroMagnitude,
-                            -Float16(0.0),
+                        let floats: [Float16] = [
+                            // First half: ordinary magnitudes (position 0 in two-element slots).
                             Float16(0.0),
                             Float16.leastNonzeroMagnitude,
-                            Float16.leastNormalMagnitude,
-                            Float16.ulpOfOne,
+                            Float16(0.1),
                             Float16(1.0),
                             Float16(1.0).nextUp,
+                            0x1p11, // Integer-precision cliff for Float16
+                            0x1p15, // Int16 conversion boundary: exactly representable, and Int16(_:) traps from here up
                             Float16.greatestFiniteMagnitude,
-                            Float16.nan,
+                            // Second half: poisoners and sign twins (position 1 in two-element slots).
+                            -Float16(0.0),
+                            -Float16(1.0),
+                            -Float16.greatestFiniteMagnitude,
+                            Float16.leastNormalMagnitude,
                             Float16.infinity,
                             -Float16.infinity,
+                            Float16.nan,
+                            -Float16(nan: 1, signaling: true),
                         ]
-                        values.formUnion(floats.map(\.bitPattern64))
+                        return floats.map(\.bitPattern64)
                     }
                 #endif
+                return []
             default:
-                break
+                return []
         }
-        return values.sorted()
     }
 
     /// Returns the bit pattern for zero for the given type, if zero is a meaningful value.
