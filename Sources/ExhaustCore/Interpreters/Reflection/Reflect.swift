@@ -389,14 +389,13 @@ extension Interpreters {
         var paths = [ChoiceTree]()
 
         for (generator, output) in zip(generators, outputs) {
-            let result = try Self.reflectRecursive(generator, onFinalOutput: output)
-            let argPath = result.flatMap(\.path)
-            if argPath.count == 1 {
-                paths.append(argPath[0])
-            } else {
-                paths.append(.group(argPath))
+            let candidates = try Self.reflectRecursive(generator, onFinalOutput: output)
+            // Exactly one value per generator. Consumers read `results` positionally against the declared arity, so a component contributing zero or several entries shifts every later slot onto the wrong generator, and the type-erased read then force-casts across types.
+            guard let (value, path) = candidates.first else {
+                throw ReflectionError.couldNotReflectOnZipElement("\(output)")
             }
-            results.append(contentsOf: result.map(\.value))
+            paths.append(path.count == 1 ? path[0] : .group(path))
+            results.append(value)
         }
 
         return [(value: results, path: [.group(paths, isZip: true)])]
