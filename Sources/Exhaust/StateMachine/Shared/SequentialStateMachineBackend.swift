@@ -43,14 +43,13 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
         setupStep: Spec.SetupStep?,
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,
-        seed: UInt64?,
+        provenance: StateMachineCandidateProvenance,
         iteration: Int,
-        discoveryMethod: StateMachineDiscoveryMethod,
         context: StateMachineRunContext<Spec>
     ) -> (result: StateMachineResult<Spec>, issueMessage: String) {
         let outcome = finalize(SpecCandidateValue(setupStep: setupStep, taggedCommands: reduced))
         let commands = reduced.map(\.1)
-        let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
+        let discoveryMethod = provenance.discoveryMethod
 
         let result = StateMachineResult<Spec>(
             commands: commands,
@@ -58,8 +57,8 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
             setup: setupStep,
             trace: outcome.trace,
             systemUnderTest: outcome.systemUnderTest,
-            seed: discoveryMethod.resultSeed(seed),
-            replaySeed: replaySeed,
+            seed: provenance.resultSeed,
+            replaySeed: provenance.encodeReplaySeed(iteration: iteration),
             discoveryMethod: discoveryMethod
         )
 

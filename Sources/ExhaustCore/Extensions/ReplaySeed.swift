@@ -3,13 +3,14 @@
 /// Three wire formats:
 /// - **Bare seed**: Crockford Base32 encoded `UInt64` (for example, `"3RT5GH8KM2"`). Runs the full pipeline (screening + sampling) with the given PRNG seed.
 /// - **Seed + iteration**: Seed with a `-N` suffix (for example, `"3RT5GH8KM2-7"`). Jumps directly to the Nth 1-based iteration, skipping screening.
-/// - **Screening row**: seed followed by a `U` row marker (for example, `"3RT5GH8KM2-U3"`). Replays the Nth 1-based screening row of the covering array that seed produces. The seed is part of the identity because the array now depends on it.
+/// - **Screening row**: seed followed by a `U` row marker (for example, `"3RT5GH8KM2-U3"`). Replays the Nth 1-based screening row of the covering array that seed produces. The seed is part of the identity because the array depends on it. State machine screening seeds append an `L` tier marker (for example, `"3RT5GH8KM2-U3L5"`): the row is then local to the covering array built at that sequence length, so the replay reconstructs one tier and is independent of the run's budget.
 ///
 /// ```swift
 /// .replay(42)                // UInt64 literal, runs the full pipeline
 /// .replay("3RT5GH8KM2")      // seed only, runs full budget
 /// .replay("3RT5GH8KM2-7")    // seed with iteration (reproduces in one step)
 /// .replay("3RT5GH8KM2-U3")   // screening row replay
+/// .replay("3RT5GH8KM2-U3L5") // spec screening row replay, length-5 tier
 /// ```
 public enum ReplaySeed: Sendable {
     /// A raw numeric seed.
@@ -21,14 +22,14 @@ public enum ReplaySeed: Sendable {
     public enum Resolved: Sendable {
         /// Replay a sampling run with the given seed, optionally jumping to a specific iteration.
         case sampling(seed: UInt64, iteration: Int?)
-        /// Replay a screening row by 0-based index, against the covering array the seed produces.
-        case screening(seed: UInt64, row: Int)
+        /// Replay a screening row by 0-based index, against the covering array the seed produces. A non-nil `tierLength` scopes the row to the covering array built at that sequence length; `nil` means the single-array screening a value test runs.
+        case screening(seed: UInt64, row: Int, tierLength: Int?)
 
         /// The PRNG seed for sampling replays, or `nil` for screening replays.
         public var seed: UInt64? {
             switch self {
                 case let .sampling(seed, _): seed
-                case let .screening(seed, _): seed
+                case let .screening(seed, _, _): seed
             }
         }
 
@@ -49,8 +50,8 @@ public enum ReplaySeed: Sendable {
                     } else {
                         ReplaySeed.encodeRawSeed(seed)
                     }
-                case let .screening(seed, row):
-                    ReplaySeed.encodeScreeningRow(seed: seed, row: row)
+                case let .screening(seed, row, tierLength):
+                    ReplaySeed.encodeScreeningRow(seed: seed, row: row, tierLength: tierLength)
             }
         }
 
@@ -58,18 +59,13 @@ public enum ReplaySeed: Sendable {
         ///
         /// Returns `nil` when the string matches neither format.
         public static func decode(_ encoded: String) -> Resolved? {
-            if let (seed, row) = ReplaySeed.decodeScreeningRow(encoded) {
-                return .screening(seed: seed, row: row)
+            if let (seed, row, tierLength) = ReplaySeed.decodeScreeningRow(encoded) {
+                return .screening(seed: seed, row: row, tierLength: tierLength)
             }
             if let (seed, iteration) = ReplaySeed.decodeWithIteration(encoded) {
                 return .sampling(seed: seed, iteration: iteration)
             }
             return nil
-        }
-
-        /// Encodes a screening-phase failure from a 1-based iteration count to a 0-based screening row.
-        public static func encodeScreeningIteration(seed: UInt64, iteration: Int) -> String {
-            Resolved.screening(seed: seed, row: iteration - 1).encoded
         }
     }
 
@@ -113,24 +109,32 @@ public enum ReplaySeed: Sendable {
         return (seed: seed, iteration: nil)
     }
 
-    /// Encodes a covering-array seed and 0-indexed screening row (for example, row 0 becomes `"3RT5GH8KM2-U1"`).
+    /// Encodes a covering-array seed, 0-indexed screening row, and optional tier length (for example, row 0 becomes `"3RT5GH8KM2-U1"`, and row 6 of a length-5 tier becomes `"3RT5GH8KM2-U7L5"`).
     ///
-    /// The `U` marker distinguishes a screening replay from a sampling one: `U` is not a valid Crockford Base32 digit and has no typo fallback mapping, so `"SEED-U3"` can never be mistaken for `"SEED-3"`. The row is 1-indexed on the wire so `"-U0"` is never emitted. The seed is required because the covering array's row ordering depends on it.
-    package static func encodeScreeningRow(seed: UInt64, row: Int) -> String {
-        "\(encode(seed))-U\(row + 1)"
+    /// The `U` marker distinguishes a screening replay from a sampling one, and `L` marks the tier: neither is a valid Crockford Base32 digit and neither has a typo fallback mapping, so `"SEED-U3"` can never be mistaken for `"SEED-3"`. The row is 1-indexed on the wire so `"-U0"` is never emitted. The seed is required because the covering array's row ordering depends on it. The tier length is present for spec screening, where each sequence-length tier has its own covering array and the row is local to it.
+    package static func encodeScreeningRow(seed: UInt64, row: Int, tierLength: Int?) -> String {
+        let tierSuffix = tierLength.map { "L\($0)" } ?? ""
+        return "\(encode(seed))-U\(row + 1)\(tierSuffix)"
     }
 
-    /// Decodes a screening replay string into its covering-array seed and 0-indexed row.
+    /// Decodes a screening replay string into its covering-array seed, 0-indexed row, and optional tier length.
     ///
-    /// Returns `nil` unless the string is a Base32 seed, a dash, `U`, and a positive row number.
-    package static func decodeScreeningRow(_ string: String) -> (seed: UInt64, row: Int)? {
+    /// Returns `nil` unless the string is a Base32 seed, a dash, `U`, a positive row number, and optionally `L` followed by a positive tier length.
+    package static func decodeScreeningRow(_ string: String) -> (seed: UInt64, row: Int, tierLength: Int?)? {
         guard let dashIndex = string.lastIndex(of: "-") else { return nil }
         let seedPart = String(string[string.startIndex ..< dashIndex])
         var rowPart = String(string[string.index(after: dashIndex)...])
         guard let marker = rowPart.first, marker == "U" || marker == "u" else { return nil }
         rowPart = String(rowPart.dropFirst())
+        var tierLength: Int?
+        if let tierMarkerIndex = rowPart.firstIndex(where: { $0 == "L" || $0 == "l" }) {
+            let tierPart = String(rowPart[rowPart.index(after: tierMarkerIndex)...])
+            guard let length = Int(tierPart), length >= 1 else { return nil }
+            tierLength = length
+            rowPart = String(rowPart[..<tierMarkerIndex])
+        }
         guard let seed = decode(seedPart), let row = Int(rowPart), row >= 1 else { return nil }
-        return (seed: seed, row: row - 1)
+        return (seed: seed, row: row - 1, tierLength: tierLength)
     }
 
     // MARK: - Crockford Base32 Primitives

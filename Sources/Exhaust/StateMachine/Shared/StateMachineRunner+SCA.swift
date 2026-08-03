@@ -9,8 +9,8 @@ extension __ExhaustRuntime {
     ///
     /// Each caller handles the ``failure`` case differently. The sequential path prunes skipped commands and reduces directly, while the concurrent source wraps the value in a ``StateMachineCandidate`` for the machine to reduce.
     enum SCARowLoopResult<Value> {
-        /// A counterexample was found at the given screening iteration.
-        case failure(value: Value, tree: ChoiceTree, screeningInvocations: Int)
+        /// A counterexample was found at the given 0-based row of the covering array built at `tierLength`, after `screeningInvocations` property invocations overall.
+        case failure(value: Value, tree: ChoiceTree, tierLength: Int, rowInTier: Int, screeningInvocations: Int)
         /// The covering array was exhausted without finding a failure.
         case completed(screeningInvocations: Int)
         /// SCA was not applicable (generator structure or domain too small).
@@ -21,16 +21,16 @@ extension __ExhaustRuntime {
     ///
     /// Builds covering arrays at multiple sequence lengths to cover both short and long command sequences. Budget is split across length tiers: 50% at `min(5, commandLimit)`, 25% at `max(5, commandLimit / 2)`, 25% at `commandLimit`, with duplicate lengths collapsed and their budgets merged. Tiers run shortest-first so minimal counterexamples are found early.
     ///
-    /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:screeningInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"statemachine_screening"` for a fresh run, `"statemachine_screening_replay"` for row replay.
+    /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:tierLength:rowInTier:screeningInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"statemachine_screening"` for a fresh run, `"statemachine_screening_replay"` for row replay.
     ///
-    /// Every tier's covering array takes the same `coveringSeed`, so the row a `{seed}-U{N}` replay lands on depends only on that seed and the tier structure, both of which the replay reconstructs.
+    /// Every tier's covering array takes the same `coveringSeed`, and a `skipTo` replay addresses a row within the covering array built at one sequence length. The tier's row stream depends only on the seed, the length, and the command domain, so the replay reconstructs that one tier and lands on the same row under any budget, without running any other tier.
     static func runSCAScreeningRowLoop<Row, Value>(
         sequenceGen: Generator<Row>,
         commandGen: Generator<some Any>,
         commandLimit: Int,
         screeningBudget: UInt64,
         coveringSeed: UInt64,
-        skipToRow: Int?,
+        skipTo: (tierLength: Int, row: Int)?,
         logEventPrefix: String,
         concurrencyLevel: Int? = nil,
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<Row>)? = nil,
@@ -64,6 +64,10 @@ extension __ExhaustRuntime {
         var totalIterations = 0
 
         for tier in tiers {
+            // A replay addresses one tier by length. The others contribute nothing to the target row, so they are skipped wholesale rather than run and discarded.
+            if let skipTo, tier.length != skipTo.tierLength {
+                continue
+            }
             let domain: SCADomain
             if let concurrencyLevel {
                 domain = SCADomain.buildForStateMachine(
@@ -76,7 +80,6 @@ extension __ExhaustRuntime {
                 guard let built = SCADomain.build(
                     sequenceLength: tier.length,
                     pickChoices: pickChoices,
-                    screeningBudget: tier.budget,
                     strengthCap: 2
                 ) else {
                     continue
@@ -93,17 +96,26 @@ extension __ExhaustRuntime {
             // value with every per-position command value. Its slice of each row is replayed through its own
             // generator by `combine`; it is never folded into the row's fallback tree.
             let leadingDomainSizes = leadingFactors?.domainSizes ?? []
-            let generator = BalancedCoveringArrayGenerator(domainSizes: leadingDomainSizes + rowDomainSizes, seed: coveringSeed)
+            let tierDomainSizes = leadingDomainSizes + rowDomainSizes
+            // A space small enough to finish keeps going past the covering array into the points it left out, so a
+            // budget that outlasts the array is spent on new ground rather than returning early with the untested
+            // remainder decided by the covering seed. The threshold is the fixed nominal budget rather than this
+            // run's, so discovery and a screening replay under a different budget make the same choice.
+            let fitsInNominalBudget = ExhaustiveRowGenerator.totalSpace(of: tierDomainSizes)
+                <= SequenceCoveringArray.nominalDomainBudget
+            let nextRow: () -> CoveringArrayRow? = fitsInNominalBudget
+                ? SaturatingRowGenerator(domainSizes: tierDomainSizes, seed: coveringSeed).next
+                : BalancedCoveringArrayGenerator(domainSizes: tierDomainSizes, seed: coveringSeed).next
             var tierIterations: UInt64 = 0
             var tierAttempts: UInt64 = 0
-            // A replay must land on the exact row discovery found. The global row index depends on how many rows each tier contributes, and the fractional `tier.budget` split makes that budget-dependent — so a replay under a smaller budget would cut a tier short and shift the target row into a different combination. A replay only needs to *reach* `skipToRow` (earlier rows are skipped without running the property), so cap each tier at `skipToRow + 1` instead: every tier then runs to its covering-array completion up to the target, matching the discovery run's row numbering regardless of the replay budget.
-            let tierRowCap = skipToRow.map { UInt64($0) + 1 } ?? tier.budget
+            // A replay runs its one tier exactly to the target row. Earlier rows of that tier are regenerated (the stream is deterministic in the covering seed) but skipped without running the property.
+            let tierRowCap = skipTo.map { UInt64($0.row) + 1 } ?? tier.budget
             let maxAttempts = tierRowCap * 10
 
             let tierLengthRange = UInt64(tier.length) ... UInt64(tier.length)
             let tierGen = sequenceGenForLength?(tierLengthRange) ?? sequenceGen
 
-            while tierIterations < tierRowCap, tierAttempts < maxAttempts, let combinedRow = generator.next() {
+            while tierIterations < tierRowCap, tierAttempts < maxAttempts, let combinedRow = nextRow() {
                 tierAttempts += 1
                 let leadingRow = CoveringArrayRow(values: Array(combinedRow.values.prefix(leadingDomainSizes.count)))
                 let rowValues = CoveringArrayRow(values: Array(combinedRow.values.dropFirst(leadingDomainSizes.count)))
@@ -132,13 +144,19 @@ extension __ExhaustRuntime {
 
                 tierIterations += 1
                 totalIterations += 1
-                if let skipToRow, totalIterations - 1 < skipToRow {
+                if let skipTo, Int(tierIterations) - 1 < skipTo.row {
                     continue
                 }
                 if property(value) == false {
-                    return .failure(value: value, tree: candidateTree, screeningInvocations: totalIterations)
+                    return .failure(
+                        value: value,
+                        tree: candidateTree,
+                        tierLength: tier.length,
+                        rowInTier: Int(tierIterations) - 1,
+                        screeningInvocations: totalIterations
+                    )
                 }
-                if skipToRow != nil {
+                if skipTo != nil {
                     return .completed(screeningInvocations: totalIterations)
                 }
             }

@@ -57,7 +57,7 @@ package enum ScreeningRunner {
     package static func run<Output>(
         _ gen: Generator<Output>,
         screeningBudget: UInt64,
-        coveringSeed: UInt64 = 0,
+        coveringSeed: UInt64,
         skipToRow: Int? = nil,
         continuePastFailure: Bool = false,
         beforeRow: (() -> Void)? = nil,
@@ -110,11 +110,14 @@ package enum ScreeningRunner {
 
         // Pull-based pairwise coverage for 2+ parameters.
         if paramCount >= 2 {
-            let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes, seed: coveringSeed)
+            // A space the budget can finish is saturated: the covering array's rows first, then every point it left out, so the run ends having tested the whole space instead of returning early with the untested remainder decided by the covering seed. Gated on this run's budget to match the `.exhaustive` result below; a screening-row replay must therefore run under the discovery budget, which the budget-dependent domain analysis above already requires.
+            let nextRow: () -> CoveringArrayRow? = totalSpace <= screeningBudget
+                ? SaturatingRowGenerator(domainSizes: domainSizes, seed: coveringSeed).next
+                : BalancedCoveringArrayGenerator(domainSizes: domainSizes, seed: coveringSeed).next
             var summary = Summary()
             var rowIndex = 0
             var failureObserved = false
-            while rowIndex < budget, let row = generator.next() {
+            while rowIndex < budget, let row = nextRow() {
                 if shouldTerminate?() == true {
                     break
                 }

@@ -59,24 +59,17 @@ package struct SCADomain {
     ///
     /// Each position's domain is the sum of all branch contributions: parameter-free branches contribute 1, analyzed branches contribute the product of their parameter domain sizes, and unanalyzable branches contribute 1 (random arguments at replay). Caps interaction strength at t=2 when any branch has analyzed arguments to keep covering array sizes manageable.
     ///
-    /// - Parameters:
-    ///   - sequenceLength: Number of positions in each test sequence.
-    ///   - pickChoices: The command types available at each position.
-    ///   - screeningBudget: The covering array row budget, used for threshold computation.
-    ///   - strengthCap: Upper bound on interaction strength derived from sequence length.
-    /// - Returns: An ``SCADomain`` ready for covering array construction, or nil if no branches can be analyzed.
-    /// Builds an SCA domain from pick choices and sequence metadata.
+    /// Argument domains size against ``SequenceCoveringArray/nominalDomainBudget`` rather than the run's own budget, so discovery and a `{seed}-U{row}L{length}` replay under a different budget build the same array.
     ///
     /// - Parameters:
     ///   - sequenceLength: Number of positions in each test sequence.
     ///   - pickChoices: The command types available at each position.
-    ///   - screeningBudget: The covering array row budget, used for threshold computation.
     ///   - strengthCap: Upper bound on interaction strength derived from sequence length.
     ///   - commandTypeOnly: When `true`, skips argument analysis and treats every branch as parameter-free. The domain per position equals the branch count, covering command-type orderings without argument interactions. Use for spec tests where command-type diversity matters more than argument value coverage.
+    /// - Returns: An ``SCADomain`` ready for covering array construction, or nil if no branches can be analyzed.
     public static func build(
         sequenceLength: Int,
         pickChoices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        screeningBudget: UInt64,
         strengthCap: Int,
         commandTypeOnly: Bool = false
     ) -> SCADomain? {
@@ -84,15 +77,16 @@ package struct SCADomain {
         if commandTypeOnly {
             branchProfiles = pickChoices.map { _ in .parameterFree }
         } else {
+            let budget = SequenceCoveringArray.nominalDomainBudget
             let threshold = SequenceCoveringArray.computeThreshold(
-                budget: screeningBudget,
+                budget: budget,
                 sequenceLength: sequenceLength,
                 branchCount: pickChoices.count
             )
             branchProfiles = SequenceCoveringArray.analyzeBranches(
                 pickChoices,
                 threshold: threshold,
-                screeningBudget: screeningBudget
+                screeningBudget: budget
             )
         }
         let (profile, mapping) = SequenceCoveringArray.buildProfile(

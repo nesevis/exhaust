@@ -171,17 +171,18 @@ package final class BalancedCoveringArrayGenerator {
                             Xoshiro256.deriveSeed(from: seed &+ UInt64(rowCount), at: UInt64(param))
                                 % UInt64(domain)
                         )
-                    var step = 0
-                    while step < domain {
-                        let value = (valueOffset &+ step) % domain
-                        let gain = gainScratch[value]
-                        if gain > bestGain {
-                            bestGain = gain
-                            bestParam = param
-                            bestValue = value
-                            if gain >= maxPossibleGain { break search }
+                    // Two contiguous passes rather than one wrapping scan: each pass is a plain monotone loop the optimizer can unroll, where a per-step wrap or modulo costs ~20% on large domains. An unseeded generator's first pass is exactly the full scan, and its second is empty.
+                    for rangeIndex in 0 ..< 2 {
+                        let range = rangeIndex == 0 ? valueOffset ..< domain : 0 ..< valueOffset
+                        for value in range {
+                            let gain = gainScratch[value]
+                            if gain > bestGain {
+                                bestGain = gain
+                                bestParam = param
+                                bestValue = value
+                                if gain >= maxPossibleGain { break search }
+                            }
                         }
-                        step &+= 1
                     }
                 }
 

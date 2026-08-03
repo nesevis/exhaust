@@ -119,6 +119,38 @@ struct FuzzRunnerTests {
         }
     }
 
+    @Test("Screening rows are pinned by the run seed")
+    func screeningRowsPinnedBySeed() {
+        /// The replay contract says the run seed pins the screening rows. One seed must probe identical rows in identical order across runs, and a different seed must probe different ones: a covering array not derived from the run seed fails the first expectation by rotating per run, and a fixed unseeded array fails the second.
+        func screeningProbes(seed: UInt64) -> [[UInt64]] {
+            let probes = UnsafeSendableBox<[[UInt64]]>([])
+            let generator = Gen.zip(
+                Gen.choose(in: UInt64(0) ... 9),
+                Gen.choose(in: UInt64(0) ... 9)
+            )
+            let runner = FuzzRunner(
+                gen: generator,
+                property: { value in
+                    probes.value.append([value.0, value.1])
+                    return .pass
+                },
+                source: SyntheticCoverageSource<(UInt64, UInt64)>(edgeCount: 1, edges: { _ in [0] }),
+                configuration: FuzzRunnerConfiguration(
+                    budgetNanoseconds: 60_000_000_000,
+                    seed: seed,
+                    screeningBudget: 20,
+                    skipSampling: true,
+                    attemptLimit: 20
+                )
+            )
+            _ = runner.run()
+            return probes.value
+        }
+
+        #expect(screeningProbes(seed: 11) == screeningProbes(seed: 11))
+        #expect(screeningProbes(seed: 11) != screeningProbes(seed: 12))
+    }
+
     @Test("Cluster inventory is stable across runs with the same seed")
     func seedStableInventory() {
         func clusterForms(seed: UInt64) -> Set<String> {

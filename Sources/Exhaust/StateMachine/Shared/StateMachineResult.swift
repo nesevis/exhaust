@@ -22,7 +22,7 @@ public struct StateMachineResult<Spec: StateMachineSpecBase> {
     /// The seed for deterministic replay, if available.
     public let seed: UInt64?
 
-    /// The encoded replay string for reproducing this failure (for example, `"1A-7"` or `"1A-U3"`), or `nil` if no seed is available.
+    /// The encoded replay string for reproducing this failure (for example, `"1A-7"` or `"1A-U3L5"`), or `nil` if no seed is available.
     public let replaySeed: String?
 
     /// How the failing example was discovered.
@@ -46,30 +46,6 @@ public enum StateMachineDiscoveryMethod: Equatable, Sendable, CustomStringConver
             case .screening: "screening"
             case .randomSampling: "random sampling"
             case .replay: "replay"
-        }
-    }
-
-    /// Encodes a replay seed string for reproducing a failure found by this discovery method.
-    ///
-    /// Screening results encode the covering-array seed and row as `{seed}-U{row}` (for example, `3RT5GH8KM2-U3` replays the third screening row of that seed's array). Smoke tests encode a fixed seed. Random sampling and replay produce the standard seed-iteration format, returning `nil` when no seed is available.
-    func encodeReplaySeed(seed: UInt64?, iteration: Int) -> String? {
-        switch self {
-            case .screening:
-                ReplaySeed.Resolved.encodeScreeningIteration(seed: seed ?? 0, iteration: iteration)
-            case .smokeTest:
-                ReplaySeed.Resolved.sampling(seed: 0, iteration: 1).encoded
-            case .randomSampling, .replay:
-                seed.map { ReplaySeed.Resolved.sampling(seed: $0, iteration: iteration).encoded }
-        }
-    }
-
-    /// Filters seeds that are not PRNG seeds to `nil`, passing through only those a sampling replay can consume.
-    ///
-    /// A screening seed is a covering-array seed and a smoke-test seed is a hardcoded zero. Neither addresses a point in a PRNG stream, so neither belongs in ``StateMachineResult/seed``. The screening seed still reaches the user through ``StateMachineResult/replaySeed``, which pairs it with the row.
-    func resultSeed(_ rawSeed: UInt64?) -> UInt64? {
-        switch self {
-            case .screening, .smokeTest: nil
-            case .randomSampling, .replay: rawSeed
         }
     }
 }

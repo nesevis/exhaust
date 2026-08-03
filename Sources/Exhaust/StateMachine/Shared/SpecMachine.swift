@@ -139,7 +139,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
     }
 
     private mutating func accountCandidate(_ candidate: StateMachineCandidate<Backend.Spec>) {
-        context.state.failureContext.seed = candidate.discoveryMethod == .screening ? nil : candidate.seed
+        context.state.failureContext.seed = candidate.failureContextSeed
         context.state.failureContext.originalCount = candidate.value.taggedCommands.count
         context.state.failureContext.iteration = candidate.iteration
         context.state.failureContext.budget = candidate.discoveryMethod == .screening
@@ -191,7 +191,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
             setupStep: setupStep,
             taggedCommands: candidate.value.taggedCommands,
             commandTree: commandTree,
-            seed: candidate.seed
+            seed: candidate.pruningSeed
         )
 
         reductionInput = ReductionInput(
@@ -281,7 +281,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
                     setupStep: reducedStep,
                     taggedCommands: reductionInput.taggedCommands,
                     commandTree: reductionInput.commandTree,
-                    seed: candidate.seed
+                    seed: candidate.pruningSeed
                 )
                 reductionInput.taggedCommands = repruned.value
                 reductionInput.commandTree = repruned.tree
@@ -350,9 +350,8 @@ struct SpecMachine<Backend: StateMachineBackend> {
             setupStep: reducedSetupStep,
             reduced: reduction.finalInput,
             originalCommands: originalCommands,
-            seed: candidate.replayIdentitySeed,
+            provenance: candidate.provenance,
             iteration: candidate.iteration,
-            discoveryMethod: candidate.discoveryMethod,
             context: context
         )
 
@@ -422,7 +421,8 @@ struct SpecPipeline<Backend: StateMachineBackend> {
     let sequenceGen: Generator<[(ScheduleMarker, Backend.Spec.Command)]>
     let commandGen: Generator<Backend.Spec.Command>
     let commandLimit: Int
-    let concurrencyLevel: Int
+    /// Lane count for a `sequenceGen` built by ``zipScheduleMarker(onto:concurrencyLevel:)``, or `nil` when the generator tags every command `.prefix` without drawing a marker. Screening builds its covering-array tree to match: a lane-aware tree handed to a marker-free generator puts a lane node where the command pick belongs, and the row stops binding.
+    let concurrencyLevel: Int?
     let identifySkips: @Sendable (SpecCandidateValue<Backend.Spec>) -> Set<Int>
     let property: @Sendable (SpecCandidateValue<Backend.Spec>) -> Bool
     let invocationCounter: UnsafeSendableBox<Int>

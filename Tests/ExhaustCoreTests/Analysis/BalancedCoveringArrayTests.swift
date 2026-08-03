@@ -47,6 +47,25 @@ struct BalancedCoveringArrayTests {
         }
     }
 
+    @Test("Different covering seeds produce different row sequences")
+    func differentSeedsRotateRows() {
+        // The rotation itself: if the seed were ignored, every run would build the identical array and per-run rotation would be dead code that no other test notices.
+        let domains: [UInt64] = [4, 4, 4]
+        let rowsA = generateAll(domainSizes: domains, budget: 1000, seed: 1).map(\.values)
+        let rowsB = generateAll(domainSizes: domains, budget: 1000, seed: 2).map(\.values)
+
+        #expect(rowsA != rowsB)
+    }
+
+    @Test("A seeded greedy array still covers all pairs", arguments: [UInt64(1), 7, 12345])
+    func seededGreedyCoversAllPairs(seed: UInt64) {
+        // The rotation offset picks among equally optimal values, so termination-on-full-coverage must survive any seed.
+        let domains: [UInt64] = [2, 3, 4, 2]
+        let rows = generateAll(domainSizes: domains, budget: 1000, seed: seed)
+
+        verifyTWayCoverage(rows: rows, domainSizes: domains)
+    }
+
     // MARK: - Fast Path (domains > greedyThreshold)
 
     @Test("Fast path activates for domains above threshold")
@@ -208,8 +227,8 @@ struct BalancedCoveringArrayTests {
 
 // MARK: - Helpers
 
-private func generateAll(domainSizes: [UInt64], budget: Int) -> [CoveringArrayRow] {
-    let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
+private func generateAll(domainSizes: [UInt64], budget: Int, seed: UInt64 = 0) -> [CoveringArrayRow] {
+    let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes, seed: seed)
     var rows: [CoveringArrayRow] = []
     while rows.count < budget, let row = generator.next() {
         rows.append(row)

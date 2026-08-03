@@ -11,6 +11,7 @@ struct ScreeningContinuationTests {
         let result = ScreeningRunner.run(
             gen.gen,
             screeningBudget: 100,
+            coveringSeed: 0,
             property: { $0 != 3 && $0 != 7 },
             onExample: { value, _, passed in
                 examples.append((value, passed))
@@ -34,6 +35,7 @@ struct ScreeningContinuationTests {
         let result = ScreeningRunner.run(
             gen.gen,
             screeningBudget: 100,
+            coveringSeed: 0,
             continuePastFailure: true,
             property: { $0 != 3 && $0 != 7 },
             onExample: { value, _, passed in
@@ -58,6 +60,7 @@ struct ScreeningContinuationTests {
         let result = ScreeningRunner.run(
             gen.gen,
             screeningBudget: 100,
+            coveringSeed: 0,
             continuePastFailure: true,
             property: { _ in true }
         )

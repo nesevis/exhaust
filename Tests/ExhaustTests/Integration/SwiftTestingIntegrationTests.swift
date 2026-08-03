@@ -216,11 +216,43 @@ struct SwiftTestingIntegrationTests {
     func screeningReplaySeedResolvesToRow() {
         let seed = ReplaySeed.encoded("19-U6")
         let resolved = seed.resolve()
-        if case let .screening(coveringSeed, row) = resolved {
+        if case let .screening(coveringSeed, row, tierLength) = resolved {
             #expect(coveringSeed == 41)
             #expect(row == 5)
+            #expect(tierLength == nil)
         } else {
-            Issue.record("Expected .screening(seed:row:), got \(String(describing: resolved))")
+            Issue.record("Expected .screening(seed:row:tierLength:), got \(String(describing: resolved))")
+        }
+    }
+
+    @Test("screening replay seed with a tier marker resolves the tier length")
+    func screeningReplaySeedWithTierMarkerResolvesTierLength() {
+        let seed = ReplaySeed.encoded("19-U6L5")
+        let resolved = seed.resolve()
+        if case let .screening(coveringSeed, row, tierLength) = resolved {
+            #expect(coveringSeed == 41)
+            #expect(row == 5)
+            #expect(tierLength == 5)
+        } else {
+            Issue.record("Expected .screening(seed:row:tierLength:), got \(String(describing: resolved))")
+        }
+    }
+
+    @Test("screening replay seed encoding round-trips through decode")
+    func screeningReplaySeedEncodingRoundTrips() {
+        // A generated 0 stands in for "no tier", so one property covers both wire shapes: U{row} and U{row}L{length}.
+        let gen = #gen(.uint64(), .int(in: 0 ... 10000), .int(in: 0 ... 100))
+        #exhaust(gen, .budget(.extensive)) { coveringSeed, row, tierSource in
+            let tierLength: Int? = tierSource == 0 ? nil : tierSource
+            let encoded = ReplaySeed.Resolved.screening(seed: coveringSeed, row: row, tierLength: tierLength).encoded
+            let decoded = ReplaySeed.Resolved.decode(encoded)
+            if case let .screening(decodedSeed, decodedRow, decodedTier) = decoded {
+                #expect(decodedSeed == coveringSeed)
+                #expect(decodedRow == row)
+                #expect(decodedTier == tierLength)
+            } else {
+                Issue.record("Expected screening decode for \(encoded), got \(String(describing: decoded))")
+            }
         }
     }
 

@@ -110,7 +110,7 @@ struct SpecMachineTests {
         }
         let samplingSource = AnyStateMachineCandidateSource<StubSpec>(discoveryMethod: .randomSampling) {
             context.invocationCounter.value += 3
-            return makeCandidate(commands: [(.prefix, .increment)], discoveryMethod: .randomSampling)
+            return makeCandidate(commands: [(.prefix, .increment)], provenance: .randomSampling(seed: 0))
         }
         var machine = makeMachine(context: context, sources: [screeningSource, samplingSource])
 
@@ -127,7 +127,7 @@ struct SpecMachineTests {
     func samplingOnlyRunHasNoScreeningTime() {
         let context = makeContext()
         let samplingSource = AnyStateMachineCandidateSource<StubSpec>(discoveryMethod: .randomSampling) {
-            makeCandidate(commands: [(.prefix, .increment)], discoveryMethod: .randomSampling)
+            makeCandidate(commands: [(.prefix, .increment)], provenance: .randomSampling(seed: 0))
         }
         var machine = makeMachine(context: context, sources: [samplingSource])
 
@@ -218,14 +218,14 @@ struct ScreeningSourceSelectionTests {
         ) { seedSource, screeningReplayRow, replayIteration, screeningBudget in
             var config = ResolvedConcurrentConfig()
             config.seed = seedSource.map { UInt64($0) }
-            config.screeningReplayRow = screeningReplayRow
+            config.screeningReplay = screeningReplayRow.map { (tierLength: 5, row: $0) }
             config.replayIteration = replayIteration
             config.budget = .custom(screening: screeningBudget, sampling: 200)
             return config
         }
         #exhaust(configGen) { config in
             config.shouldRunScreening == false
-                || (config.seed == nil && config.screeningReplayRow == nil && config.replayIteration == nil)
+                || (config.seed == nil && config.screeningReplay == nil && config.replayIteration == nil)
         }
     }
 
@@ -344,9 +344,8 @@ private struct StubBackend: StateMachineBackend {
         setupStep: StubSpec.SetupStep?,
         reduced: [(ScheduleMarker, StubCommand)],
         originalCommands: [StubCommand]?,
-        seed: UInt64?,
+        provenance: StateMachineCandidateProvenance,
         iteration _: Int,
-        discoveryMethod: StateMachineDiscoveryMethod,
         context _: StateMachineRunContext<StubSpec>
     ) -> (result: StateMachineResult<StubSpec>, issueMessage: String) {
         let result = StateMachineResult<StubSpec>(
@@ -355,9 +354,9 @@ private struct StubBackend: StateMachineBackend {
             setup: setupStep,
             trace: [],
             systemUnderTest: 0,
-            seed: seed,
+            seed: provenance.resultSeed,
             replaySeed: nil,
-            discoveryMethod: discoveryMethod
+            discoveryMethod: provenance.discoveryMethod
         )
         return (result, "stub failure")
     }
@@ -375,18 +374,14 @@ private func makeCandidate(
     commands: [(ScheduleMarker, StubCommand)],
     setupStep: StubSetupStep? = nil,
     tree: ChoiceTree = .just,
-    discoveryMethod: StateMachineDiscoveryMethod = .screening,
-    seed: UInt64 = 0,
-    coveringSeed: UInt64? = nil
+    provenance: StateMachineCandidateProvenance = .screening(coveringSeed: 0, tierLength: 2, rowInTier: 0)
 ) -> StateMachineCandidate<StubSpec> {
     StateMachineCandidate(
         value: SpecCandidateValue(setupStep: setupStep, taggedCommands: commands),
         tree: tree,
         sequenceGen: stubSequenceGen(),
-        seed: seed,
-        coveringSeed: coveringSeed,
         iteration: 1,
-        discoveryMethod: discoveryMethod
+        provenance: provenance
     )
 }
 

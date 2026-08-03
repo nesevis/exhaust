@@ -47,7 +47,7 @@ struct StateMachineReplayTests {
             return
         }
         let replaySeed = try #require(initial.replaySeed)
-        #expect(replaySeed.hasPrefix("U"), "SCA replay seed should have U prefix")
+        #expect(replaySeed.contains("-U"), "SCA replay seed should carry a U row marker")
 
         let replayed = try #require(
             await #execute(

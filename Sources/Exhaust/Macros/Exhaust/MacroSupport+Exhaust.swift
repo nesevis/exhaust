@@ -255,8 +255,7 @@ public extension __ExhaustRuntime {
         var seed: UInt64?
         var replayIteration: Int?
         var screeningReplayRow: Int?
-        // Seeds the covering array. A replay carries it in the seed string; a fresh run draws one, so
-        // successive runs screen different regions of the pair space instead of the same rows.
+        // Seeds the covering array. A screening replay carries it in the seed string, a sampling replay reuses its PRNG seed so a bare seed reruns the same screening rows, and a fresh run draws one so successive runs screen different regions of the pair space instead of the same rows.
         var coveringSeed = Xoshiro256().seed
         var invalidReplaySeed: ReplaySeed?
         var suppress = SuppressFlags()
@@ -281,7 +280,9 @@ public extension __ExhaustRuntime {
                         case let .sampling(resolvedSeed, iteration):
                             seed = resolvedSeed
                             replayIteration = iteration
-                        case let .screening(resolvedSeed, row):
+                            coveringSeed = resolvedSeed
+                        case let .screening(resolvedSeed, row, _):
+                            // The tier marker is a spec-screening concept; #exhaust screens one array, so the row alone addresses it.
                             screeningReplayRow = row
                             coveringSeed = resolvedSeed
                     }

@@ -285,7 +285,7 @@ struct SetupChoiceSequenceTests {
         )
         #expect(first.discoveryMethod == .screening)
         let replaySeed = try #require(first.replaySeed)
-        #expect(replaySeed.hasPrefix("U"))
+        #expect(replaySeed.contains("-U"))
 
         let replayed = try #require(
             await #execute(
@@ -302,6 +302,45 @@ struct SetupChoiceSequenceTests {
         let firstOriginal = try #require(first.originalCommands)
         let replayedOriginal = try #require(replayed.originalCommands)
         #expect(replayedOriginal.map { "\($0)" } == firstOriginal.map { "\($0)" })
+    }
+
+    @Test("A failure in a later tier replays after an earlier tier was cut off by its budget share")
+    func laterTierFailureSurvivesEarlierTierTruncation() async throws {
+        // The geometry that used to corrupt global row numbering: at commandLimit 10 and screening budget 200, the tiers are length 5 with 150 rows and length 10 with 50. The length-5 tier's saturating stream holds 5 × 2⁵ = 160 points (setup domain × five binary command positions), so its budget share cuts it off mid-stream, and the spec only fails past the fifth command, so the failure lands in the length-10 tier. A global row number would count the 150 truncated rows and land a replay inside the length-5 tier; the tier-addressed seed cannot.
+        var capturedReport: ExhaustReport?
+        let discovered = try #require(
+            await #execute(
+                LongSequenceOnlyBugSpec.self,
+                mode: .sequential,
+                .commandLimit(10),
+                .budget(.custom(screening: 200, sampling: 0)),
+                .onReport { capturedReport = $0 },
+                .suppress(.issueReporting)
+            )
+        )
+        #expect(discovered.discoveryMethod == .screening)
+        let replaySeed = try #require(discovered.replaySeed)
+        #expect(replaySeed.hasSuffix("L10"), "The failure should come from the length-10 tier, got \(replaySeed)")
+        // 150 passing rows from the truncated length-5 tier, then the first length-10 row fails. Any other count means the tier geometry above no longer holds and this test has stopped exercising truncation.
+        #expect(capturedReport?.screeningInvocations == 151)
+
+        // A smaller replay budget on purpose: global row numbering would need 151 rows of budget and would spend the whole skip range inside the truncated length-5 tier. The tier-addressed replay rebuilds only the length-10 tier.
+        let replayed = try #require(
+            await #execute(
+                LongSequenceOnlyBugSpec.self,
+                mode: .sequential,
+                .commandLimit(10),
+                .budget(.custom(screening: 50, sampling: 0)),
+                .replay(ReplaySeed(stringLiteral: replaySeed)),
+                .suppress(.issueReporting)
+            )
+        )
+        #expect(replayed.discoveryMethod == .screening)
+        #expect(replayed.replaySeed == replaySeed)
+        #expect(replayed.setup.map { "\($0)" } == discovered.setup.map { "\($0)" })
+        let discoveredOriginal = try #require(discovered.originalCommands)
+        let replayedOriginal = try #require(replayed.originalCommands)
+        #expect(replayedOriginal.map { "\($0)" } == discoveredOriginal.map { "\($0)" })
     }
 }
 
@@ -433,6 +472,36 @@ private final class AlwaysFailingSetupSpec {
 
     func failureDescription() -> String? {
         "capacity: \(capacity), preload: \(preload)"
+    }
+}
+
+/// Fails only past the fifth executed command, so no length-5 screening row can trigger it and a screening failure must come from the length-10 tier. The setup argument exists to give the length-5 tier a 160-point saturating stream (5 × 2⁵), larger than that tier's 150-row share of the standard screening budget.
+@StateMachine
+private final class LongSequenceOnlyBugSpec {
+    var executedCommands = 0
+    @SystemUnderTest var counter = ValueBox()
+
+    @Setup(.int(in: 0 ... 4))
+    func configure(offset: Int) {
+        counter.value = offset
+    }
+
+    @Command(weight: 1)
+    func tick() throws {
+        executedCommands += 1
+        counter.value += 1
+        try check(executedCommands <= 5, "failed past the fifth command")
+    }
+
+    @Command(weight: 1)
+    func tock() throws {
+        executedCommands += 1
+        counter.value -= 1
+        try check(executedCommands <= 5, "failed past the fifth command")
+    }
+
+    func failureDescription() -> String? {
+        "executed: \(executedCommands), counter: \(counter.value)"
     }
 }
 

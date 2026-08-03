@@ -65,12 +65,12 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
         setupStep: Spec.SetupStep?,
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,
-        seed: UInt64?,
+        provenance: StateMachineCandidateProvenance,
         iteration: Int,
-        discoveryMethod: StateMachineDiscoveryMethod,
         context: StateMachineRunContext<Spec>
     ) -> (result: StateMachineResult<Spec>, issueMessage: String) {
         let reduced = reduced.prefixFirstOrder()
+        let discoveryMethod = provenance.discoveryMethod
 
         // The reported run's own judgement is not tallied: this is a re-run of a sequence the pipeline has already judged, and counting it twice would overstate how much of the search budget the run spent.
         let traceResult = drainAndJudge(
@@ -89,7 +89,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
             idleTimeoutMilliseconds: idleTimeoutMilliseconds
         )
 
-        let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
+        let replaySeed = provenance.encodeReplaySeed(iteration: iteration)
 
         let result = StateMachineResult<Spec>(
             commands: reduced.map(\.1),
@@ -97,7 +97,7 @@ struct CooperativeStateMachineBackend<Spec: AsyncStateMachineSpec>: StateMachine
             setup: setupStep,
             trace: traceResult.trace,
             systemUnderTest: traceResult.systemUnderTest,
-            seed: discoveryMethod.resultSeed(seed),
+            seed: provenance.resultSeed,
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod
         )

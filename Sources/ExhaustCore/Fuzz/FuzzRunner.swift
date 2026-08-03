@@ -283,6 +283,8 @@ package final class FuzzRunner<Output> {
         let result = ScreeningRunner.run(
             gen,
             screeningBudget: min(configuration.screeningBudget, remainingAttemptBudget()),
+            // The run seed, so the screening rows are pinned by the same seed that pins every other search decision. An unseeded #explore draws a fresh seed per run, which rotates the rows the same way a fresh #exhaust run does.
+            coveringSeed: configuration.seed,
             continuePastFailure: true,
             beforeRow: beforeRow,
             property: wrappedProperty,

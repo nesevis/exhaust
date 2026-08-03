@@ -24,6 +24,11 @@
 /// - 5 commands, length 10, t=2: ~40–50 rows
 /// - 10 commands, length 15, t=2: ~150–200 rows
 package enum SequenceCoveringArray {
+    /// The nominal row budget the argument-domain analysis sizes against.
+    ///
+    /// Fixed rather than read from the run's own budget: a `{seed}-U{N}` replay runs under a different budget than discovery did, and a budget-dependent domain would build a different covering array and land the replay on another row. Matches the standard screening budget, so a default-budget run gets the domain sizes the analysis was tuned for.
+    package static let nominalDomainBudget: UInt64 = 200
+
     /// Computes the per-parameter enumerable threshold for SCA domain construction, derived from the covering array budget.
     ///
     /// At strength t=2, the covering array produces roughly `d² × log₂(k)` rows where `d` is the per-position domain size and `k` is the sequence length. Solving for `d` gives `d ≤ sqrt(budget / log₂(k))`. Dividing evenly across branches gives each branch's per-parameter cap. Parameters with domain size above this threshold are converted to problematic-value representatives.
