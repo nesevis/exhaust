@@ -11,6 +11,19 @@ package final class SaturatingRowGenerator {
     private var emitted: Set<UInt64> = []
     private var remainder: ExhaustiveRowGenerator?
 
+    /// The screening row stream for a parameter space: saturating when the whole space fits within `saturationBudget`, a plain covering array otherwise.
+    ///
+    /// Saturation spends budget left over after pair coverage on the points the covering array skipped, so a run whose budget outlasts the array ends having tested the whole space whatever the seed was. The caller chooses the budget that preserves its replay semantics: a fixed nominal budget where a replay must build the same stream under any run budget, the run's own budget where replay is already budget-coupled.
+    package static func rowStream(
+        domainSizes: [UInt64],
+        seed: UInt64,
+        saturationBudget: UInt64
+    ) -> () -> CoveringArrayRow? {
+        ExhaustiveRowGenerator.totalSpace(of: domainSizes) <= saturationBudget
+            ? SaturatingRowGenerator(domainSizes: domainSizes, seed: seed).next
+            : BalancedCoveringArrayGenerator(domainSizes: domainSizes, seed: seed).next
+    }
+
     package init(domainSizes: [UInt64], seed: UInt64) {
         self.domainSizes = domainSizes
         // The spread path never reports exhaustion, so a spread-mode covering generator would hold ``next()`` in the covering phase forever and the remainder would never run. Forcing the greedy path makes termination structural, and the small-space gate callers apply keeps its pairwise tracking trivial.

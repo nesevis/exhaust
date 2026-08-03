@@ -40,10 +40,7 @@ package extension Gen {
         return Gen.liftF(.transform(
             kind: .isomorph(
                 forward: { anyValues in
-                    // The read below is positional, so a component list of the wrong length lands each value on a different generator's slot and force-casts across types. Reject the shape instead.
-                    guard let values = anyValues as? [Any], values.count == arity else {
-                        throw ReflectionError.zipWasWrongLengthOrType
-                    }
+                    let values = try zipComponents(anyValues, arity: arity)
                     var index = 0
                     func next<Element>(_: Element.Type) -> Element {
                         defer { index += 1 }

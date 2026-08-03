@@ -92,20 +92,16 @@ extension __ExhaustRuntime {
                 continue
             }
 
-            // The leading block's factors join the same covering array, so strength-2 coverage pairs every leading
-            // value with every per-position command value. Its slice of each row is replayed through its own
-            // generator by `combine`; it is never folded into the row's fallback tree.
+            // The leading block's factors join the same covering array, so strength-2 coverage pairs every leading value with every per-position command value.
+            // Its slice of each row is replayed through its own generator by `combine`; it is never folded into the row's fallback tree.
             let leadingDomainSizes = leadingFactors?.domainSizes ?? []
             let tierDomainSizes = leadingDomainSizes + rowDomainSizes
-            // A space small enough to finish keeps going past the covering array into the points it left out, so a
-            // budget that outlasts the array is spent on new ground rather than returning early with the untested
-            // remainder decided by the covering seed. The threshold is the fixed nominal budget rather than this
-            // run's, so discovery and a screening replay under a different budget make the same choice.
-            let fitsInNominalBudget = ExhaustiveRowGenerator.totalSpace(of: tierDomainSizes)
-                <= SequenceCoveringArray.nominalDomainBudget
-            let nextRow: () -> CoveringArrayRow? = fitsInNominalBudget
-                ? SaturatingRowGenerator(domainSizes: tierDomainSizes, seed: coveringSeed).next
-                : BalancedCoveringArrayGenerator(domainSizes: tierDomainSizes, seed: coveringSeed).next
+            // Saturation gates on the fixed nominal budget rather than this run's, so discovery and a screening replay under a different budget make the same choice.
+            let nextRow = SaturatingRowGenerator.rowStream(
+                domainSizes: tierDomainSizes,
+                seed: coveringSeed,
+                saturationBudget: SequenceCoveringArray.nominalDomainBudget
+            )
             var tierIterations: UInt64 = 0
             var tierAttempts: UInt64 = 0
             // A replay runs its one tier exactly to the target row. Earlier rows of that tier are regenerated (the stream is deterministic in the covering seed) but skipped without running the property.

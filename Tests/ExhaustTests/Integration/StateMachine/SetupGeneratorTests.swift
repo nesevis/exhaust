@@ -188,7 +188,7 @@ struct SetupGeneratorTests {
                 CapacityGatedSpec.self,
                 mode: .sequential,
                 .commandLimit(6),
-                .replay(ReplaySeed(stringLiteral: replaySeed)),
+                .replay(.encoded(replaySeed)),
                 .suppress(.issueReporting)
             )
         )
@@ -292,7 +292,7 @@ struct SetupChoiceSequenceTests {
                 AlwaysFailingSetupSpec.self,
                 mode: .sequential,
                 .commandLimit(4),
-                .replay(ReplaySeed(stringLiteral: replaySeed)),
+                .replay(.encoded(replaySeed)),
                 .suppress(.issueReporting)
             )
         )
@@ -331,7 +331,7 @@ struct SetupChoiceSequenceTests {
                 mode: .sequential,
                 .commandLimit(10),
                 .budget(.custom(screening: 50, sampling: 0)),
-                .replay(ReplaySeed(stringLiteral: replaySeed)),
+                .replay(.encoded(replaySeed)),
                 .suppress(.issueReporting)
             )
         )

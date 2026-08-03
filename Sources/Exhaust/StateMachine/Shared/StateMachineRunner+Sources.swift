@@ -196,8 +196,7 @@ extension __ExhaustRuntime {
         guard let setupTree else {
             return nil
         }
-        // seed 0: the covering array already pins every analyzed setup factor, so the seed only fills choices the
-        // analysis could not model, and a fixed seed keeps a `{seed}-U{row}L{length}` replay landing on the same setup value.
+        // seed 0: the covering array already pins every analyzed setup factor, so the seed only fills choices the analysis could not model, and a fixed seed keeps a `{seed}-U{row}L{length}` replay landing on the same setup value.
         guard case let .success(step, freshSetupTree, _) = Materializer.materialize(
             setupGen.gen,
             prefix: ChoiceSequence(),

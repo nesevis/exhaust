@@ -106,7 +106,7 @@ public extension __ExhaustRuntime {
             throw GeneratorError.invalidReplaySeed("\(seed)")
         }
         switch resolved {
-            case .screening:
+            case .valueScreening, .specScreening:
                 reportError(
                     "Screening replay seeds (with a U row marker) cannot be replayed by #example, which has no covering array. Use #exhaust(gen, .replay(...)) instead.",
                     fileID: fileID,

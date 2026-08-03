@@ -289,13 +289,12 @@ extension __ExhaustRuntime {
 
             var replayConfig = config
             switch decoded {
-                case let .screening(resolvedSeed, row, tierLength):
-                    guard let tierLength else {
-                        deferredIssues.append("Screening regression seed lacks a tier marker: \(encodedSeed)")
-                        continue
-                    }
+                case let .specScreening(resolvedSeed, row, tierLength):
                     replayConfig.screeningReplay = (tierLength: tierLength, row: row)
                     replayConfig.coveringSeed = resolvedSeed
+                case .valueScreening:
+                    deferredIssues.append("Screening regression seed lacks a tier marker: \(encodedSeed)")
+                    continue
                 case let .sampling(seed, iteration?):
                     replayConfig.seed = seed
                     replayConfig.replayIteration = iteration

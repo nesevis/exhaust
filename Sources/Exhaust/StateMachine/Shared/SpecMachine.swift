@@ -139,7 +139,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
     }
 
     private mutating func accountCandidate(_ candidate: StateMachineCandidate<Backend.Spec>) {
-        context.state.failureContext.seed = candidate.failureContextSeed
+        context.state.failureContext.seed = candidate.provenance.failureContextSeed
         context.state.failureContext.originalCount = candidate.value.taggedCommands.count
         context.state.failureContext.iteration = candidate.iteration
         context.state.failureContext.budget = candidate.discoveryMethod == .screening
@@ -191,7 +191,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
             setupStep: setupStep,
             taggedCommands: candidate.value.taggedCommands,
             commandTree: commandTree,
-            seed: candidate.pruningSeed
+            seed: candidate.provenance.pruningSeed
         )
 
         reductionInput = ReductionInput(
@@ -281,7 +281,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
                     setupStep: reducedStep,
                     taggedCommands: reductionInput.taggedCommands,
                     commandTree: reductionInput.commandTree,
-                    seed: candidate.pruningSeed
+                    seed: candidate.provenance.pruningSeed
                 )
                 reductionInput.taggedCommands = repruned.value
                 reductionInput.commandTree = repruned.tree

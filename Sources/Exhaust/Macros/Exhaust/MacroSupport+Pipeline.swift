@@ -116,7 +116,7 @@ package extension __ExhaustRuntime {
                     case .rejected, .failed:
                         tree
                 }
-                let screeningReplaySeed = ReplaySeed.Resolved.screening(seed: coveringSeed, row: rowOrdinal - 1, tierLength: nil).encoded
+                let screeningReplaySeed = ReplaySeed.Resolved.valueScreening(seed: coveringSeed, row: rowOrdinal - 1).encoded
                 report.replaySeed = screeningReplaySeed
                 let result = reduceAndReport(
                     context: context,

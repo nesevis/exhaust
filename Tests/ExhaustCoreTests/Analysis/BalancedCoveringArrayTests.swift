@@ -68,6 +68,16 @@ struct BalancedCoveringArrayTests {
 
     // MARK: - Fast Path (domains > greedyThreshold)
 
+    @Test("Different covering seeds produce different spread row sequences")
+    func differentSeedsRotateSpreadRows() {
+        // Domains above greedyThreshold take the spread path, whose lap offset must mix the seed like the greedy scan does: otherwise large-domain spaces would build the identical array every run and rotation would silently not apply to them.
+        let domains: [UInt64] = [65, 4]
+        let rowsA = generateAll(domainSizes: domains, budget: 200, seed: 1).map(\.values)
+        let rowsB = generateAll(domainSizes: domains, budget: 200, seed: 2).map(\.values)
+
+        #expect(rowsA != rowsB)
+    }
+
     @Test("Fast path activates for domains above threshold")
     func fastPathActivation() {
         let largeDomain = UInt64(BalancedCoveringArrayGenerator.greedyThreshold + 1)

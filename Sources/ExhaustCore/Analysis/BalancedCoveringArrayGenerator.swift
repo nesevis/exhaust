@@ -29,12 +29,13 @@ package final class BalancedCoveringArrayGenerator {
     /// Domains above this threshold use deterministic spread instead of greedy pairwise optimization.
     package static let greedyThreshold = 64
 
-    /// Seeds the value scan's starting offset in the greedy fill.
+    /// Seeds the value scan's starting offset in the greedy fill and the lap offset in the spread path.
     ///
-    /// The first pick of every row saturates `maxPossibleGain`, so `break search` takes whichever
-    /// value it scans first. Scanning from a derived offset instead of always from zero picks an
-    /// equally optimal value in a different place, which is what stops successive rows filling shells
-    /// outward from the origin. Zero means no offset, preserving the unseeded array exactly.
+    /// In the greedy fill, the first pick of every row saturates `maxPossibleGain`, so `break search` takes whichever value it scans first. Scanning from a derived offset instead of always from zero picks an equally optimal value in a different place, which is what stops successive rows filling shells outward from the origin.
+    ///
+    /// In the spread path, the seed joins the per-lap offset derivation, so a truncated run's row prefix varies per seed rather than testing the same leading points every run.
+    ///
+    /// Zero means no offset in either path, preserving the unseeded array exactly.
     private let seed: UInt64
 
     private let paramCount: Int
@@ -203,9 +204,9 @@ package final class BalancedCoveringArrayGenerator {
         var row = [UInt64](repeating: 0, count: paramCount)
         for param in 0 ..< paramCount {
             let domain = domainSizes[param]
-            // The lap offset is constant within a lap, so each parameter still sweeps its full domain every `domain` rows, and varies across laps to break the joint period: without it, any parameter pair repeats with period lcm(d1, d2), capping pair coverage at 1/gcd(d1, d2) regardless of budget.
+            // The lap offset is constant within a lap, so each parameter still sweeps its full domain every `domain` rows, and varies across laps to break the joint period: without it, any parameter pair repeats with period lcm(d1, d2), capping pair coverage at 1/gcd(d1, d2) regardless of budget. Mixing in the seed rotates which points a truncated run sees, and a zero seed reproduces the unseeded derivation exactly.
             let lap = rowCount / domain
-            let lapOffset = Int(Xoshiro256.deriveSeed(from: UInt64(lap), at: UInt64(param)) % UInt64(domain))
+            let lapOffset = Int(Xoshiro256.deriveSeed(from: seed &+ UInt64(lap), at: UInt64(param)) % UInt64(domain))
             row[param] = UInt64((rowCount &* spreadStrides[param] &+ param &+ lapOffset) % domain)
         }
         rowCount += 1

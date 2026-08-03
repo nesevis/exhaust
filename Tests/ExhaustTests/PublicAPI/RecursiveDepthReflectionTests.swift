@@ -1,8 +1,3 @@
-//
-//  RecursiveDepthReflectionTests.swift
-//  Exhaust
-//
-
 import Exhaust
 import ExhaustCore
 import Testing

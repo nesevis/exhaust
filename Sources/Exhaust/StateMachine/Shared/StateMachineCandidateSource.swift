@@ -28,7 +28,7 @@ enum StateMachineCandidateProvenance {
     func encodeReplaySeed(iteration: Int) -> String {
         switch self {
             case let .screening(coveringSeed, tierLength, rowInTier):
-                ReplaySeed.Resolved.screening(seed: coveringSeed, row: rowInTier, tierLength: tierLength).encoded
+                ReplaySeed.Resolved.specScreening(seed: coveringSeed, row: rowInTier, tierLength: tierLength).encoded
             case .smokeTest:
                 ReplaySeed.Resolved.sampling(seed: 0, iteration: 1).encoded
             case let .randomSampling(seed), let .replay(seed):
@@ -42,6 +42,24 @@ enum StateMachineCandidateProvenance {
     var resultSeed: UInt64? {
         switch self {
             case .screening, .smokeTest: nil
+            case let .randomSampling(seed), let .replay(seed): seed
+        }
+    }
+
+    /// The PRNG seed command pruning draws from. A screening row comes from a covering array rather than a PRNG stream, so pruning gets a synthetic seed derived from the row's tier-local address, which discovery and a replay compute identically.
+    var pruningSeed: UInt64 {
+        switch self {
+            case let .screening(_, _, rowInTier): UInt64(rowInTier)
+            case .smokeTest: 0
+            case let .randomSampling(seed), let .replay(seed): seed
+        }
+    }
+
+    /// The seed the failure context reports: the PRNG seed for candidates a PRNG produced, and `nil` for screening, whose identity is a covering-array row rather than a position in a PRNG stream.
+    var failureContextSeed: UInt64? {
+        switch self {
+            case .screening: nil
+            case .smokeTest: 0
             case let .randomSampling(seed), let .replay(seed): seed
         }
     }
@@ -60,24 +78,6 @@ struct StateMachineCandidate<Spec: StateMachineSpecBase> {
 
     var discoveryMethod: StateMachineDiscoveryMethod {
         provenance.discoveryMethod
-    }
-
-    /// The PRNG seed command pruning draws from. A screening row comes from a covering array rather than a PRNG stream, so pruning gets a synthetic seed derived from the row's tier-local address, which discovery and a replay compute identically.
-    var pruningSeed: UInt64 {
-        switch provenance {
-            case let .screening(_, _, rowInTier): UInt64(rowInTier)
-            case .smokeTest: 0
-            case let .randomSampling(seed), let .replay(seed): seed
-        }
-    }
-
-    /// The seed the failure context reports: the PRNG seed for candidates a PRNG produced, and `nil` for screening, whose identity is a covering-array row rather than a position in a PRNG stream.
-    var failureContextSeed: UInt64? {
-        switch provenance {
-            case .screening: nil
-            case .smokeTest: 0
-            case let .randomSampling(seed), let .replay(seed): seed
-        }
     }
 }
 
@@ -150,7 +150,7 @@ extension AnyStateMachineCandidateSource {
     ) -> AnyStateMachineCandidateSource {
         .once(
             discoveryMethod: .screening,
-            resolvedReplaySeed: .screening(seed: coveringSeed, row: row, tierLength: tierLength)
+            resolvedReplaySeed: .specScreening(seed: coveringSeed, row: row, tierLength: tierLength)
         ) {
             let result = __ExhaustRuntime.runSCAScreeningRowLoop(
                 sequenceGen: sequenceGen,

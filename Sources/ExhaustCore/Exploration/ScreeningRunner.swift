@@ -110,10 +110,12 @@ package enum ScreeningRunner {
 
         // Pull-based pairwise coverage for 2+ parameters.
         if paramCount >= 2 {
-            // A space the budget can finish is saturated: the covering array's rows first, then every point it left out, so the run ends having tested the whole space instead of returning early with the untested remainder decided by the covering seed. Gated on this run's budget to match the `.exhaustive` result below; a screening-row replay must therefore run under the discovery budget, which the budget-dependent domain analysis above already requires.
-            let nextRow: () -> CoveringArrayRow? = totalSpace <= screeningBudget
-                ? SaturatingRowGenerator(domainSizes: domainSizes, seed: coveringSeed).next
-                : BalancedCoveringArrayGenerator(domainSizes: domainSizes, seed: coveringSeed).next
+            // Saturation gates on this run's budget to match the `.exhaustive` result below; a screening-row replay must therefore run under the discovery budget, which the budget-dependent domain analysis above already requires.
+            let nextRow = SaturatingRowGenerator.rowStream(
+                domainSizes: domainSizes,
+                seed: coveringSeed,
+                saturationBudget: screeningBudget
+            )
             var summary = Summary()
             var rowIndex = 0
             var failureObserved = false

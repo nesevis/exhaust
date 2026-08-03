@@ -281,10 +281,12 @@ public extension __ExhaustRuntime {
                             seed = resolvedSeed
                             replayIteration = iteration
                             coveringSeed = resolvedSeed
-                        case let .screening(resolvedSeed, row, _):
-                            // The tier marker is a spec-screening concept; #exhaust screens one array, so the row alone addresses it.
+                        case let .valueScreening(resolvedSeed, row):
                             screeningReplayRow = row
                             coveringSeed = resolvedSeed
+                        case .specScreening:
+                            // A tier-addressed seed belongs to a spec test. #exhaust screens one array with no tiers, so honoring the row against it would replay a different combination than the one the seed names.
+                            invalidReplaySeed = replaySeed
                     }
                 case let .suppress(option):
                     suppress.apply(option)

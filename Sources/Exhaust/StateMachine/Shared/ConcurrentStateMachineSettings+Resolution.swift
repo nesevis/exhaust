@@ -68,14 +68,12 @@ struct ResolvedConcurrentConfig {
                                 config.seed = resolvedSeed
                                 config.replayIteration = iteration
                                 config.coveringSeed = resolvedSeed
-                            case let .screening(resolvedSeed, row, tierLength):
-                                // A spec screening replay needs the tier marker; a seed without one addresses a value test's single array and cannot pick a tier here.
-                                if let tierLength {
-                                    config.screeningReplay = (tierLength: tierLength, row: row)
-                                    config.coveringSeed = resolvedSeed
-                                } else {
-                                    invalidSeed = replaySeed
-                                }
+                            case let .specScreening(resolvedSeed, row, tierLength):
+                                config.screeningReplay = (tierLength: tierLength, row: row)
+                                config.coveringSeed = resolvedSeed
+                            case .valueScreening:
+                                // A tierless seed addresses a value test's single array and cannot pick a tier here.
+                                invalidSeed = replaySeed
                         }
                     } else {
                         invalidSeed = replaySeed

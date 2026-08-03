@@ -40,33 +40,29 @@ public extension __ExhaustRuntime {
                 case let .budget(exploreBudget):
                     budget = exploreBudget
                 case let .replay(replaySeed):
-                    guard let resolved = replaySeed.resolve() else {
-                        reportError(
-                            "Invalid replay seed: \(replaySeed)",
-                            fileID: fileID,
-                            filePath: filePath,
-                            line: line,
-                            column: column
-                        )
-                        return ExploreReport(
-                            result: nil,
-                            seed: 0,
-                            directionCoverage: [],
-                            coOccurrence: CoOccurrenceMatrix(directionCount: 0),
-                            counterexampleDirections: [],
-                            invocations: ExploreInvocationCounts(
-                                warmup: 0,
-                                regression: 0,
-                                directedSampling: 0,
-                                reduction: 0,
-                                diagnostic: 0
-                            ),
-                            warmup: nil,
-                            totalMilliseconds: 0,
-                            termination: .budgetExhausted
-                        )
+                    // Screening seeds are rejected rather than ignored: they address a covering-array row that #explore cannot replay, and honoring their seed digits as a run seed would silently explore a different stream than the one the seed names.
+                    switch replaySeed.resolve() {
+                        case let .sampling(resolvedSeed, _):
+                            seed = resolvedSeed
+                        case .valueScreening, .specScreening:
+                            reportError(
+                                "Screening replay seeds (with a U row marker) address a covering-array row and cannot seed #explore. Pass the run seed from a prior report.",
+                                fileID: fileID,
+                                filePath: filePath,
+                                line: line,
+                                column: column
+                            )
+                            return emptyExploreReport()
+                        case nil:
+                            reportError(
+                                "Invalid replay seed: \(replaySeed)",
+                                fileID: fileID,
+                                filePath: filePath,
+                                line: line,
+                                column: column
+                            )
+                            return emptyExploreReport()
                     }
-                    seed = resolved.seed
                 case let .suppress(option):
                     suppress.apply(option)
                 case let .log(level):
@@ -538,5 +534,30 @@ public extension __ExhaustRuntime {
 
             return report
         }
+    }
+}
+
+// MARK: - Replay Seed Resolution
+
+private extension __ExhaustRuntime {
+    /// The report an `#explore` run returns when its replay seed is unusable: zero invocations, with the failure already reported as an issue.
+    static func emptyExploreReport<Output>() -> ExploreReport<Output> {
+        ExploreReport(
+            result: nil,
+            seed: 0,
+            directionCoverage: [],
+            coOccurrence: CoOccurrenceMatrix(directionCount: 0),
+            counterexampleDirections: [],
+            invocations: ExploreInvocationCounts(
+                warmup: 0,
+                regression: 0,
+                directedSampling: 0,
+                reduction: 0,
+                diagnostic: 0
+            ),
+            warmup: nil,
+            totalMilliseconds: 0,
+            termination: .budgetExhausted
+        )
     }
 }
