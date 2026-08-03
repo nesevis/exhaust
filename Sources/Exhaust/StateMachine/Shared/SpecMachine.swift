@@ -350,7 +350,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
             setupStep: reducedSetupStep,
             reduced: reduction.finalInput,
             originalCommands: originalCommands,
-            seed: candidate.seed,
+            seed: candidate.replayIdentitySeed,
             iteration: candidate.iteration,
             discoveryMethod: candidate.discoveryMethod,
             context: context

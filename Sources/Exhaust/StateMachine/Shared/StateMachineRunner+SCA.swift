@@ -22,11 +22,14 @@ extension __ExhaustRuntime {
     /// Builds covering arrays at multiple sequence lengths to cover both short and long command sequences. Budget is split across length tiers: 50% at `min(5, commandLimit)`, 25% at `max(5, commandLimit / 2)`, 25% at `commandLimit`, with duplicate lengths collapsed and their budgets merged. Tiers run shortest-first so minimal counterexamples are found early.
     ///
     /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:screeningInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"statemachine_screening"` for a fresh run, `"statemachine_screening_replay"` for row replay.
+    ///
+    /// Every tier's covering array takes the same `coveringSeed`, so the row a `{seed}-U{N}` replay lands on depends only on that seed and the tier structure, both of which the replay reconstructs.
     static func runSCAScreeningRowLoop<Row, Value>(
         sequenceGen: Generator<Row>,
         commandGen: Generator<some Any>,
         commandLimit: Int,
         screeningBudget: UInt64,
+        coveringSeed: UInt64,
         skipToRow: Int?,
         logEventPrefix: String,
         concurrencyLevel: Int? = nil,
@@ -90,7 +93,7 @@ extension __ExhaustRuntime {
             // value with every per-position command value. Its slice of each row is replayed through its own
             // generator by `combine`; it is never folded into the row's fallback tree.
             let leadingDomainSizes = leadingFactors?.domainSizes ?? []
-            let generator = BalancedCoveringArrayGenerator(domainSizes: leadingDomainSizes + rowDomainSizes)
+            let generator = BalancedCoveringArrayGenerator(domainSizes: leadingDomainSizes + rowDomainSizes, seed: coveringSeed)
             var tierIterations: UInt64 = 0
             var tierAttempts: UInt64 = 0
             // A replay must land on the exact row discovery found. The global row index depends on how many rows each tier contributes, and the fractional `tier.budget` split makes that budget-dependent — so a replay under a smaller budget would cut a tier short and shift the target row into a different combination. A replay only needs to *reach* `skipToRow` (earlier rows are skipped without running the property), so cap each tier at `skipToRow + 1` instead: every tier then runs to its covering-array completion up to the target, matching the discovery run's row numbering regardless of the replay budget.

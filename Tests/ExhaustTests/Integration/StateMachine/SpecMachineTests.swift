@@ -376,13 +376,15 @@ private func makeCandidate(
     setupStep: StubSetupStep? = nil,
     tree: ChoiceTree = .just,
     discoveryMethod: StateMachineDiscoveryMethod = .screening,
-    seed: UInt64 = 0
+    seed: UInt64 = 0,
+    coveringSeed: UInt64? = nil
 ) -> StateMachineCandidate<StubSpec> {
     StateMachineCandidate(
         value: SpecCandidateValue(setupStep: setupStep, taggedCommands: commands),
         tree: tree,
         sequenceGen: stubSequenceGen(),
         seed: seed,
+        coveringSeed: coveringSeed,
         iteration: 1,
         discoveryMethod: discoveryMethod
     )

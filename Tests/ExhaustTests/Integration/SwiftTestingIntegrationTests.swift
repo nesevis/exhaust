@@ -214,12 +214,13 @@ struct SwiftTestingIntegrationTests {
 
     @Test("screening replay seed resolves to row - 1")
     func screeningReplaySeedResolvesToRow() {
-        let seed = ReplaySeed.encoded("U6")
+        let seed = ReplaySeed.encoded("19-U6")
         let resolved = seed.resolve()
-        if case let .screening(row) = resolved {
+        if case let .screening(coveringSeed, row) = resolved {
+            #expect(coveringSeed == 41)
             #expect(row == 5)
         } else {
-            Issue.record("Expected .screening(row:), got \(String(describing: resolved))")
+            Issue.record("Expected .screening(seed:row:), got \(String(describing: resolved))")
         }
     }
 
@@ -227,7 +228,7 @@ struct SwiftTestingIntegrationTests {
     func screeningReplayTestsOneRow() throws {
         let generator = #gen(.int(in: 0 ... 2), .int(in: 0 ... 2))
         var capturedReport: ExhaustReport?
-        #exhaust(generator, .replay("U3"), .suppress(.issueReporting), .onReport { report in
+        #exhaust(generator, .replay("19-U3"), .suppress(.issueReporting), .onReport { report in
             capturedReport = report
         }) { _ in
             true

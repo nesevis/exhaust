@@ -3,13 +3,13 @@
 /// Three wire formats:
 /// - **Bare seed**: Crockford Base32 encoded `UInt64` (for example, `"3RT5GH8KM2"`). Runs the full pipeline (screening + sampling) with the given PRNG seed.
 /// - **Seed + iteration**: Seed with a `-N` suffix (for example, `"3RT5GH8KM2-7"`). Jumps directly to the Nth 1-based iteration, skipping screening.
-/// - **Screening row**: `U-N` prefix (for example, `"U-3"`). Replays the Nth 1-based screening row (internally 0-indexed).
+/// - **Screening row**: seed followed by a `U` row marker (for example, `"3RT5GH8KM2-U3"`). Replays the Nth 1-based screening row of the covering array that seed produces. The seed is part of the identity because the array now depends on it.
 ///
 /// ```swift
 /// .replay(42)                // UInt64 literal, runs the full pipeline
 /// .replay("3RT5GH8KM2")      // seed only, runs full budget
 /// .replay("3RT5GH8KM2-7")    // seed with iteration (reproduces in one step)
-/// .replay("U-3")              // screening row replay
+/// .replay("3RT5GH8KM2-U3")   // screening row replay
 /// ```
 public enum ReplaySeed: Sendable {
     /// A raw numeric seed.
@@ -21,14 +21,14 @@ public enum ReplaySeed: Sendable {
     public enum Resolved: Sendable {
         /// Replay a sampling run with the given seed, optionally jumping to a specific iteration.
         case sampling(seed: UInt64, iteration: Int?)
-        /// Replay a screening row by 0-based index.
-        case screening(row: Int)
+        /// Replay a screening row by 0-based index, against the covering array the seed produces.
+        case screening(seed: UInt64, row: Int)
 
         /// The PRNG seed for sampling replays, or `nil` for screening replays.
         public var seed: UInt64? {
             switch self {
                 case let .sampling(seed, _): seed
-                case .screening: nil
+                case let .screening(seed, _): seed
             }
         }
 
@@ -49,8 +49,8 @@ public enum ReplaySeed: Sendable {
                     } else {
                         ReplaySeed.encodeRawSeed(seed)
                     }
-                case let .screening(row):
-                    ReplaySeed.encodeScreeningRow(row)
+                case let .screening(seed, row):
+                    ReplaySeed.encodeScreeningRow(seed: seed, row: row)
             }
         }
 
@@ -58,8 +58,8 @@ public enum ReplaySeed: Sendable {
         ///
         /// Returns `nil` when the string matches neither format.
         public static func decode(_ encoded: String) -> Resolved? {
-            if let row = ReplaySeed.decodeScreeningRow(encoded) {
-                return .screening(row: row)
+            if let (seed, row) = ReplaySeed.decodeScreeningRow(encoded) {
+                return .screening(seed: seed, row: row)
             }
             if let (seed, iteration) = ReplaySeed.decodeWithIteration(encoded) {
                 return .sampling(seed: seed, iteration: iteration)
@@ -68,8 +68,8 @@ public enum ReplaySeed: Sendable {
         }
 
         /// Encodes a screening-phase failure from a 1-based iteration count to a 0-based screening row.
-        public static func encodeScreeningIteration(_ iteration: Int) -> String {
-            Resolved.screening(row: iteration - 1).encoded
+        public static func encodeScreeningIteration(seed: UInt64, iteration: Int) -> String {
+            Resolved.screening(seed: seed, row: iteration - 1).encoded
         }
     }
 
@@ -113,22 +113,24 @@ public enum ReplaySeed: Sendable {
         return (seed: seed, iteration: nil)
     }
 
-    /// Encodes a 0-indexed screening row as a replay string (for example, row 0 becomes `"U-1"`).
+    /// Encodes a covering-array seed and 0-indexed screening row (for example, row 0 becomes `"3RT5GH8KM2-U1"`).
     ///
-    /// The `U` prefix distinguishes screening replays from sampling replays. `U` is not a valid Crockford Base32 digit and has no typo fallback mapping. The wire format is 1-indexed so `"U-0"` is never emitted.
-    package static func encodeScreeningRow(_ row: Int) -> String {
-        "U-\(row + 1)"
+    /// The `U` marker distinguishes a screening replay from a sampling one: `U` is not a valid Crockford Base32 digit and has no typo fallback mapping, so `"SEED-U3"` can never be mistaken for `"SEED-3"`. The row is 1-indexed on the wire so `"-U0"` is never emitted. The seed is required because the covering array's row ordering depends on it.
+    package static func encodeScreeningRow(seed: UInt64, row: Int) -> String {
+        "\(encode(seed))-U\(row + 1)"
     }
 
-    /// Decodes a `U`-prefixed screening replay string into a 0-indexed row index (for example, `"U-1"` becomes 0).
+    /// Decodes a screening replay string into its covering-array seed and 0-indexed row.
     ///
-    /// Accepts both `"U-1"` (current format) and `"U1"` (legacy format without dash). Returns `nil` if the string does not start with `U` or the number is not a positive integer.
-    package static func decodeScreeningRow(_ string: String) -> Int? {
-        guard let first = string.first, first == "U" || first == "u" else { return nil }
-        var rowPart = String(string.dropFirst())
-        if rowPart.hasPrefix("-") { rowPart = String(rowPart.dropFirst()) }
-        guard let row = Int(rowPart), row >= 1 else { return nil }
-        return row - 1
+    /// Returns `nil` unless the string is a Base32 seed, a dash, `U`, and a positive row number.
+    package static func decodeScreeningRow(_ string: String) -> (seed: UInt64, row: Int)? {
+        guard let dashIndex = string.lastIndex(of: "-") else { return nil }
+        let seedPart = String(string[string.startIndex ..< dashIndex])
+        var rowPart = String(string[string.index(after: dashIndex)...])
+        guard let marker = rowPart.first, marker == "U" || marker == "u" else { return nil }
+        rowPart = String(rowPart.dropFirst())
+        guard let seed = decode(seedPart), let row = Int(rowPart), row >= 1 else { return nil }
+        return (seed: seed, row: row - 1)
     }
 
     // MARK: - Crockford Base32 Primitives

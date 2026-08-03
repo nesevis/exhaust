@@ -57,6 +57,7 @@ package enum ScreeningRunner {
     package static func run<Output>(
         _ gen: Generator<Output>,
         screeningBudget: UInt64,
+        coveringSeed: UInt64 = 0,
         skipToRow: Int? = nil,
         continuePastFailure: Bool = false,
         beforeRow: (() -> Void)? = nil,
@@ -109,7 +110,7 @@ package enum ScreeningRunner {
 
         // Pull-based pairwise coverage for 2+ parameters.
         if paramCount >= 2 {
-            let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes)
+            let generator = BalancedCoveringArrayGenerator(domainSizes: domainSizes, seed: coveringSeed)
             var summary = Summary()
             var rowIndex = 0
             var failureObserved = false

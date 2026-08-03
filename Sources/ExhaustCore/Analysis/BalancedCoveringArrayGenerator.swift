@@ -29,6 +29,14 @@ package final class BalancedCoveringArrayGenerator {
     /// Domains above this threshold use deterministic spread instead of greedy pairwise optimization.
     package static let greedyThreshold = 64
 
+    /// Seeds the value scan's starting offset in the greedy fill.
+    ///
+    /// The first pick of every row saturates `maxPossibleGain`, so `break search` takes whichever
+    /// value it scans first. Scanning from a derived offset instead of always from zero picks an
+    /// equally optimal value in a different place, which is what stops successive rows filling shells
+    /// outward from the origin. Zero means no offset, preserving the unseeded array exactly.
+    private let seed: UInt64
+
     private let paramCount: Int
     private let domainSizes: [Int]
     private let useGreedy: Bool
@@ -48,7 +56,8 @@ package final class BalancedCoveringArrayGenerator {
     /// - Parameters:
     ///   - domainSizes: The number of distinct values for each parameter, in original order.
     ///   - greedyThreshold: Per-domain size above which the generator falls back to deterministic spread. Defaults to ``greedyThreshold``. Pass a higher value when the parameter count is small enough that the pairwise bit vector memory (proportional to `paramCount² × maxDomain²`) is acceptable.
-    package init(domainSizes: [UInt64], greedyThreshold: Int? = nil) {
+    package init(domainSizes: [UInt64], seed: UInt64 = 0, greedyThreshold: Int? = nil) {
+        self.seed = seed
         let effectiveThreshold = greedyThreshold ?? Self.greedyThreshold
         paramCount = domainSizes.count
         let perParamCap = Self.maxDomainSize / max(paramCount, 1)
@@ -156,8 +165,15 @@ package final class BalancedCoveringArrayGenerator {
                         sliceBuffer: sliceBuffer
                     )
 
-                    var value = 0
-                    while value < domain {
+                    let valueOffset = seed == 0
+                        ? 0
+                        : Int(
+                            Xoshiro256.deriveSeed(from: seed &+ UInt64(rowCount), at: UInt64(param))
+                                % UInt64(domain)
+                        )
+                    var step = 0
+                    while step < domain {
+                        let value = (valueOffset &+ step) % domain
                         let gain = gainScratch[value]
                         if gain > bestGain {
                             bestGain = gain
@@ -165,7 +181,7 @@ package final class BalancedCoveringArrayGenerator {
                             bestValue = value
                             if gain >= maxPossibleGain { break search }
                         }
-                        value &+= 1
+                        step &+= 1
                     }
                 }
 

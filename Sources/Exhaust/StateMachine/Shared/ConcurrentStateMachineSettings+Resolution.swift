@@ -9,6 +9,8 @@ struct ResolvedConcurrentConfig {
     var seed: UInt64?
     var replayIteration: Int?
     var screeningReplayRow: Int?
+    /// Seeds the SCA covering array. A replay carries it in the seed string; a fresh run draws one, so successive runs screen different regions of the command space instead of the same rows.
+    var coveringSeed: UInt64 = Xoshiro256().seed
     static let defaultIdleTimeout = 2000
     var idleTimeoutMilliseconds: Int = defaultIdleTimeout
     var suppress = SuppressFlags()
@@ -64,8 +66,9 @@ struct ResolvedConcurrentConfig {
                             case let .sampling(resolvedSeed, iteration):
                                 config.seed = resolvedSeed
                                 config.replayIteration = iteration
-                            case let .screening(row):
+                            case let .screening(resolvedSeed, row):
                                 config.screeningReplayRow = row
+                                config.coveringSeed = resolvedSeed
                         }
                     } else {
                         invalidSeed = replaySeed

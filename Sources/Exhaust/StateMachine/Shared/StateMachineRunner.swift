@@ -289,8 +289,9 @@ extension __ExhaustRuntime {
 
             var replayConfig = config
             switch decoded {
-                case let .screening(row):
+                case let .screening(resolvedSeed, row):
                     replayConfig.screeningReplayRow = row
+                    replayConfig.coveringSeed = resolvedSeed
                     let needed = row + 1
                     if replayConfig.budget.screeningBudget < needed {
                         replayConfig.budget = .custom(

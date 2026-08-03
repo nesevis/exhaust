@@ -70,9 +70,9 @@ struct BuggyCounterTests {
         #expect(result.seed != nil, "Sampling failure should carry a PRNG seed")
     }
 
-    @Test("Sequential spec SCA screening failure carries U-prefixed replay seed")
-    func sequentialStateMachineSCAScreeningFailureCarriesUPrefixedReplaySeed() async throws {
-        // A sampling-free budget forces the screening source, so the U-prefix assertion always runs.
+    @Test("Sequential spec SCA screening failure carries a U-marked replay seed")
+    func sequentialStateMachineSCAScreeningFailureCarriesUMarkedReplaySeed() async throws {
+        // A sampling-free budget forces the screening source, so the row-marker assertion always runs.
         let result = try #require(
             await #execute(
                 BuggyCounterSpec.self,
@@ -84,7 +84,7 @@ struct BuggyCounterTests {
         )
         #expect(result.discoveryMethod == .screening)
         let replaySeed = try #require(result.replaySeed)
-        #expect(replaySeed.hasPrefix("U"), "SCA screening replay seed should have U prefix")
+        #expect(replaySeed.contains("-U"), "SCA screening replay seed should carry a U row marker")
     }
 }
 
@@ -143,6 +143,35 @@ struct SCAReductionScreeningTests {
         let report = try #require(capturedReport)
         #expect(report.reductionMilliseconds >= 0)
         #expect(report.totalMilliseconds >= report.reductionMilliseconds)
+    }
+
+    @Test("A screening replay seed reproduces the candidate it was emitted for")
+    func screeningReplaySeedReproducesItsCandidate() async throws {
+        let discovered = try #require(
+            await #execute(
+                PairwiseBugSpec.self,
+                mode: .sequential,
+                .commandLimit(3),
+                .budget(.custom(screening: 200, sampling: 0)),
+                .suppress(.issueReporting)
+            )
+        )
+        #expect(discovered.discoveryMethod == .screening)
+        let replaySeed = try #require(discovered.replaySeed)
+
+        let replayed = try #require(
+            await #execute(
+                PairwiseBugSpec.self,
+                mode: .sequential,
+                .commandLimit(3),
+                .budget(.custom(screening: 200, sampling: 0)),
+                .replay(.encoded(replaySeed)),
+                .suppress(.issueReporting)
+            )
+        )
+        #expect(replayed.discoveryMethod == .screening)
+        #expect(replayed.originalCommands?.map { "\($0)" } == discovered.originalCommands?.map { "\($0)" })
+        #expect(replayed.commands.map { "\($0)" } == discovered.commands.map { "\($0)" })
     }
 }
 

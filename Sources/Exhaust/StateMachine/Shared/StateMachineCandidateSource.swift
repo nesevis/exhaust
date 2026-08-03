@@ -9,8 +9,18 @@ struct StateMachineCandidate<Spec: StateMachineSpecBase> {
     /// The command-side generator that produced this candidate's command child. Pruning and reduction must use it so the choice sequence stays consistent with the command child of `tree`. Smoke supplies a concurrency-1 generator, so a smoke-discovered failure reduces sequentially regardless of the run's lane count.
     let sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
     let seed: UInt64
+    /// The covering-array seed the screening row came from, `nil` for candidates no covering array produced. Held apart from ``seed``, which screening fills with a synthetic row count that ``SpecMachine`` feeds to command pruning as a PRNG seed.
+    let coveringSeed: UInt64?
     let iteration: Int
     let discoveryMethod: StateMachineDiscoveryMethod
+
+    /// The seed identifying this candidate for replay: the covering-array seed for screening, whose ``seed`` carries no replay meaning, and the PRNG seed otherwise.
+    var replayIdentitySeed: UInt64? {
+        switch discoveryMethod {
+            case .screening: coveringSeed
+            case .smokeTest, .randomSampling, .replay: seed
+        }
+    }
 }
 
 /// Produces failing candidates for the ``SpecMachine``, owning its iteration state internally.
@@ -67,8 +77,9 @@ extension AnyStateMachineCandidateSource {
 // MARK: - Source Factories
 
 extension AnyStateMachineCandidateSource {
-    /// Replays a single SCA screening row from a `U-{N}` seed.
+    /// Replays a single SCA screening row from a `{seed}-U{N}` seed.
     static func screeningReplay(
+        coveringSeed: UInt64,
         row: Int,
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         commandGen: Generator<Spec.Command>,
@@ -78,12 +89,13 @@ extension AnyStateMachineCandidateSource {
         leadingFactors: ScreeningLeadingFactors?,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
-        .once(discoveryMethod: .screening, resolvedReplaySeed: .screening(row: row)) {
+        .once(discoveryMethod: .screening, resolvedReplaySeed: .screening(seed: coveringSeed, row: row)) {
             let result = __ExhaustRuntime.runSCAScreeningRowLoop(
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: screeningBudget,
+                coveringSeed: coveringSeed,
                 skipToRow: row,
                 logEventPrefix: "statemachine_screening_replay",
                 concurrencyLevel: concurrencyLevel,
@@ -94,12 +106,13 @@ extension AnyStateMachineCandidateSource {
 
             switch result {
                 case let .failure(value, tree, screeningInvocations):
-                    // Match the shape of a fresh screening candidate so the replayed failure round-trips to the same `U-N` seed and nils its synthetic seed.
+                    // Match the shape of a fresh screening candidate so the replayed failure round-trips to the seed it was replayed from and nils its synthetic seed.
                     return StateMachineCandidate(
                         value: value,
                         tree: tree,
                         sequenceGen: sequenceGen,
                         seed: UInt64(screeningInvocations),
+                        coveringSeed: coveringSeed,
                         iteration: screeningInvocations,
                         discoveryMethod: .screening
                     )
@@ -139,6 +152,7 @@ extension AnyStateMachineCandidateSource {
                 tree: tree,
                 sequenceGen: sequenceGen,
                 seed: replaySeed,
+                coveringSeed: nil,
                 iteration: Int(startIndex) + 1,
                 discoveryMethod: .replay
             )
@@ -164,6 +178,7 @@ extension AnyStateMachineCandidateSource {
                 tree: tree,
                 sequenceGen: sequenceGen,
                 seed: 0,
+                coveringSeed: nil,
                 iteration: 0,
                 discoveryMethod: .smokeTest
             )
@@ -176,6 +191,7 @@ extension AnyStateMachineCandidateSource {
         commandGen: Generator<Spec.Command>,
         commandLimit: Int,
         screeningBudget: UInt64,
+        coveringSeed: UInt64,
         concurrencyLevel: Int,
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil,
         leadingFactors: ScreeningLeadingFactors?,
@@ -187,6 +203,7 @@ extension AnyStateMachineCandidateSource {
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: screeningBudget,
+                coveringSeed: coveringSeed,
                 skipToRow: nil,
                 logEventPrefix: "statemachine_screening",
                 concurrencyLevel: concurrencyLevel,
@@ -203,6 +220,7 @@ extension AnyStateMachineCandidateSource {
                         tree: tree,
                         sequenceGen: sequenceGen,
                         seed: UInt64(screeningInvocations),
+                        coveringSeed: coveringSeed,
                         iteration: screeningInvocations,
                         discoveryMethod: .screening
                     )
@@ -235,6 +253,7 @@ extension AnyStateMachineCandidateSource {
                         tree: tree,
                         sequenceGen: sequenceGen,
                         seed: seed,
+                        coveringSeed: nil,
                         iteration: iteration,
                         discoveryMethod: .randomSampling
                     )

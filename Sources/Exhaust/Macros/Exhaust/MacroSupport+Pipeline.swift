@@ -58,6 +58,7 @@ package extension __ExhaustRuntime {
     static func runScreeningPhase<Output>(
         context: PipelineContext<Output>,
         screeningBudget: UInt64,
+        coveringSeed: UInt64,
         skipToRow: Int? = nil,
         report: inout ExhaustReport,
         ledger: inout RunLedger
@@ -66,6 +67,7 @@ package extension __ExhaustRuntime {
         let screeningResult = ScreeningRunner.run(
             context.gen,
             screeningBudget: screeningBudget,
+            coveringSeed: coveringSeed,
             skipToRow: skipToRow,
             property: context.property,
             onExample: context.statsAccumulator.map { accumulator in
@@ -114,7 +116,7 @@ package extension __ExhaustRuntime {
                     case .rejected, .failed:
                         tree
                 }
-                let screeningReplaySeed = ReplaySeed.Resolved.screening(row: rowOrdinal - 1).encoded
+                let screeningReplaySeed = ReplaySeed.Resolved.screening(seed: coveringSeed, row: rowOrdinal - 1).encoded
                 report.replaySeed = screeningReplaySeed
                 let result = reduceAndReport(
                     context: context,
