@@ -85,7 +85,8 @@ extension __ExhaustRuntime {
         concurrencyLevel: Int?,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool,
         smokeSource: AnyStateMachineCandidateSource<Spec>? = nil,
-        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil
+        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil,
+        onFilterLosses: ((ScreeningFilterLosses) -> Void)? = nil
     ) -> [AnyStateMachineCandidateSource<Spec>] {
         var sources: [AnyStateMachineCandidateSource<Spec>] = []
         let leadingFactors = setupScreeningFactors(for: Spec.self)
@@ -129,6 +130,7 @@ extension __ExhaustRuntime {
                 concurrencyLevel: concurrencyLevel,
                 sequenceGenForLength: sequenceGenForLength,
                 leadingFactors: leadingFactors,
+                onFilterLosses: onFilterLosses,
                 property: property
             ))
         }

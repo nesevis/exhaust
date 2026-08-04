@@ -434,7 +434,8 @@ struct SpecPipeline<Backend: StateMachineBackend> {
 
     func run(
         config: ResolvedConcurrentConfig,
-        smokeSource: AnyStateMachineCandidateSource<Backend.Spec>? = nil
+        smokeSource: AnyStateMachineCandidateSource<Backend.Spec>? = nil,
+        onFilterLosses: ((__ExhaustRuntime.ScreeningFilterLosses) -> Void)? = nil
     ) -> (result: StateMachineResult<Backend.Spec>?, issues: [String]) {
         let runContext = StateMachineRunContext<Backend.Spec>(
             config: config,
@@ -456,7 +457,8 @@ struct SpecPipeline<Backend: StateMachineBackend> {
             concurrencyLevel: concurrencyLevel,
             property: property,
             smokeSource: smokeSource,
-            sequenceGenForLength: sequenceGenForLength
+            sequenceGenForLength: sequenceGenForLength,
+            onFilterLosses: onFilterLosses
         )
         var machine = SpecMachine(backend: backend, context: runContext, sources: sources)
         while let transition = machine.next() {
@@ -480,22 +482,42 @@ struct SpecPipeline<Backend: StateMachineBackend> {
         mainRunSmokeSource: AnyStateMachineCandidateSource<Backend.Spec>? = nil
     ) -> (result: StateMachineResult<Backend.Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
+        // Merged across every sweep in the run (bare-seed regression replays screen too), so the warning below fires at most once per test run.
+        let filterLosses = UnsafeSendableBox<__ExhaustRuntime.ScreeningFilterLosses?>(nil)
+        let accumulateFilterLosses: (__ExhaustRuntime.ScreeningFilterLosses) -> Void = { losses in
+            if var merged = filterLosses.value {
+                merged.merge(losses)
+                filterLosses.value = merged
+            } else {
+                filterLosses.value = losses
+            }
+        }
 
         let (regressionResult, regressionIssues) = __ExhaustRuntime.replayRegressionSeeds(
             config: config,
             regressionSeeds: regressionSeeds,
-            runMachine: { run(config: $0) }
+            runMachine: { run(config: $0, onFilterLosses: accumulateFilterLosses) }
         )
         deferredIssues.append(contentsOf: regressionIssues)
         if let regressionResult {
             return (regressionResult, deferredIssues)
         }
 
-        let (result, issues) = run(config: config, smokeSource: mainRunSmokeSource)
+        let (result, issues) = run(config: config, smokeSource: mainRunSmokeSource, onFilterLosses: accumulateFilterLosses)
         deferredIssues.append(contentsOf: issues)
         // A passing run that never executed a command sequence asserts nothing. Checked against the shared invocation counter so a regression replay that did execute counts.
         if result == nil, issues.isEmpty, invocationCounter.value == 0 {
             deferredIssues.append("The spec was never executed: the screening and sampling budgets are both zero, so this test asserts nothing.")
+        }
+        // Filter losses are legitimate domain narrowing: a warning, never an error. A reproduced regression failure returns above without it.
+        if let losses = filterLosses.value, config.suppress.issueReporting == false {
+            reportWarning(
+                losses.warningMessage,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
         }
         return (result, deferredIssues)
     }

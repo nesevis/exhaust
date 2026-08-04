@@ -268,6 +268,7 @@ extension AnyStateMachineCandidateSource {
         concurrencyLevel: Int?,
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil,
         leadingFactors: ScreeningLeadingFactors?,
+        onFilterLosses: ((__ExhaustRuntime.ScreeningFilterLosses) -> Void)? = nil,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .screening) {
@@ -282,6 +283,7 @@ extension AnyStateMachineCandidateSource {
                 concurrencyLevel: concurrencyLevel,
                 sequenceGenForLength: sequenceGenForLength,
                 leadingFactors: leadingFactors,
+                onFilterLosses: onFilterLosses,
                 combine: __ExhaustRuntime.screeningCombine(Spec.self),
                 property: property
             )

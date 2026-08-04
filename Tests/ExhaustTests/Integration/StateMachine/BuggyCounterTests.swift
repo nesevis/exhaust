@@ -207,6 +207,67 @@ struct SCAReductionScreeningTests {
         #expect(replayedOriginal.map { "\($0)" } == discoveredOriginal.map { "\($0)" })
     }
 
+    @Test("A filtered argument on the concurrent path survives screening and replays identically")
+    func filteredArgumentSurvivesConcurrentScreening() async throws {
+        // Command-type-only domains leave the add argument to the materializer's PRNG, and single-shot filtering would kill nearly every covering row. Retry keeps the rows alive, and the tier-skipping replay must reassemble the same arguments.
+        let discovered = try #require(
+            await #execute(
+                FilteredArgumentConcurrentSpec.self,
+                mode: .tasks,
+                .commandLimit(10),
+                .budget(.custom(screening: 200, sampling: 0)),
+                .suppress(.issueReporting)
+            )
+        )
+        #expect(discovered.discoveryMethod == .screening)
+        let replaySeed = try #require(discovered.replaySeed)
+        #expect(replaySeed.hasSuffix("L10"), "The failure should come from the length-10 tier, got \(replaySeed)")
+
+        let replayed = try #require(
+            await #execute(
+                FilteredArgumentConcurrentSpec.self,
+                mode: .tasks,
+                .commandLimit(10),
+                .budget(.custom(screening: 200, sampling: 0)),
+                .replay(.encoded(replaySeed)),
+                .suppress(.issueReporting)
+            )
+        )
+        #expect(replayed.discoveryMethod == .screening)
+        let discoveredOriginal = try #require(discovered.originalCommands)
+        let replayedOriginal = try #require(replayed.originalCommands)
+        #expect(replayedOriginal.map { "\($0)" } == discoveredOriginal.map { "\($0)" })
+    }
+
+    @Test("Screening starved by a filter warns and continues to random sampling")
+    func filterStarvedScreeningWarnsAndContinues() async throws {
+        // The filter precludes every representative the covering rows pin, so screening starves. That is legitimate: the run must warn, continue into sampling, and not fail.
+        var capturedReport: ExhaustReport?
+        var result: StateMachineResult<StarvedFilterSpec>?
+        await withKnownIssue("Screening coverage loss is reported as a warning") {
+            result = await #execute(
+                StarvedFilterSpec.self,
+                mode: .sequential,
+                .commandLimit(6),
+                .budget(.custom(screening: 60, sampling: 5)),
+                .onReport { capturedReport = $0 }
+            )
+        }
+        #expect(result == nil)
+        let report = try #require(capturedReport)
+        #expect(report.randomSamplingInvocations > 0)
+
+        // Under suppression the same run must stay silent; an unsuppressed warning would fail this test.
+        let suppressed = await #execute(
+            StarvedFilterSpec.self,
+            mode: .sequential,
+            .commandLimit(6),
+            .budget(.custom(screening: 60, sampling: 5)),
+            .suppress(.issueReporting)
+        )
+        #expect(suppressed == nil)
+    }
+
     @Test("A spec screening replay whose row no longer exists reports an error instead of passing")
     func specScreeningReplayMissingRowReportsError() async {
         // The length-3 tier saturates long before row 500, so the addressed row cannot exist: a stale pin must go red rather than pass as fixed.
@@ -346,4 +407,58 @@ private final class ArgumentSinkBox: @unchecked Sendable, CustomDebugStringConve
     var debugDescription: String {
         "ArgumentSinkBox(total: \(total))"
     }
+}
+
+// MARK: - Filtered Argument StateMachines
+
+/// The racy shape of ``LongSequenceArgumentBugSpec`` with a filtered argument. `.tasks` covering rows do not pin the argument, and the one-in-ten pass rate compounded across ten positions kills essentially every row single-shot: screening discovers the later-tier failure only through the bounded retry.
+@StateMachine
+private final class FilteredArgumentConcurrentSpec {
+    var executedCommands = 0
+    var expectedTotal = 0
+    @SystemUnderTest var sink = ArgumentSinkBox()
+
+    @Command(weight: 2, .int(in: 1 ... 99).filter { @Sendable value in value % 10 == 5 })
+    func add(value: Int) async throws {
+        executedCommands += 1
+        expectedTotal += value
+        await sink.racyAdd(value)
+    }
+
+    @Command(weight: 1)
+    func verify() throws {
+        executedCommands += 1
+        try check(executedCommands <= 5 || sink.total == expectedTotal, "lost an update past the fifth command")
+    }
+
+    func failureDescription() -> String? {
+        "executed: \(executedCommands), expected: \(expectedTotal), total: \(sink.total)"
+    }
+}
+
+/// The filter precludes every problematic-value representative of the 0...99 domain ({0, 1, 49, 98, 99}, none ending in 5), so covering rows containing a push die at the re-check and screening starves. Commands are `throws` for the failure channel; nothing throws, so every run passes.
+@StateMachine
+private final class StarvedFilterSpec {
+    var total = 0
+    @SystemUnderTest var sink = StarvedFilterSink()
+
+    @Command(weight: 1, .int(in: 0 ... 99).filter { @Sendable value in value % 10 == 5 })
+    func push(value: Int) throws {
+        total += value
+        sink.value += value
+    }
+
+    @Command(weight: 1)
+    func reset() throws {
+        total = 0
+        sink.value = 0
+    }
+
+    func failureDescription() -> String? {
+        nil
+    }
+}
+
+private final class StarvedFilterSink {
+    var value = 0
 }

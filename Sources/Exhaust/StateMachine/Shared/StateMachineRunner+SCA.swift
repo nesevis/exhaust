@@ -5,6 +5,22 @@ import Foundation
 // MARK: - Shared SCA Row Loop
 
 extension __ExhaustRuntime {
+    /// Candidate rows the SCA row loop lost to filter rejection, with the observations naming the filters. Losses are legitimate domain narrowing; the pipeline reports them as a warning so the reduced coverage stays visible.
+    struct ScreeningFilterLosses {
+        var rowsLost = 0
+        var observations: [UInt64: FilterObservation] = [:]
+
+        mutating func merge(_ other: ScreeningFilterLosses) {
+            rowsLost += other.rowsLost
+            observations.merge(other.observations) { existing, new in
+                var combined = existing
+                combined.attempts += new.attempts
+                combined.passes += new.passes
+                return combined
+            }
+        }
+    }
+
     /// Reports the raw outcome of the SCA row loop before caller-specific failure handling.
     ///
     /// Each caller handles the ``failure`` case differently. The sequential path prunes skipped commands and reduces directly, while the concurrent source wraps the value in a ``StateMachineCandidate`` for the machine to reduce.
@@ -35,6 +51,7 @@ extension __ExhaustRuntime {
         concurrencyLevel: Int? = nil,
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<Row>)? = nil,
         leadingFactors: ScreeningLeadingFactors? = nil,
+        onFilterLosses: ((ScreeningFilterLosses) -> Void)? = nil,
         combine: (ChoiceTree?, Row, ChoiceTree) -> (value: Value, tree: ChoiceTree)?,
         property: @escaping @Sendable (Value) -> Bool
     ) -> SCARowLoopResult<Value> {
@@ -62,6 +79,7 @@ extension __ExhaustRuntime {
         let tiers = buildScreeningTiers(commandLimit: commandLimit, totalBudget: screeningBudget)
 
         var totalIterations = 0
+        var filterLosses = ScreeningFilterLosses()
 
         for tier in tiers {
             // A replay addresses one tier by length. The others contribute nothing to the target row, so they are skipped wholesale rather than run and discarded.
@@ -132,9 +150,15 @@ extension __ExhaustRuntime {
                     ),
                     fallbackTree: tree
                 )
-                guard case let .success(rowValue, freshTree, _) = Materializer.materialize(
-                    tierGen, prefix: ChoiceSequence(), mode: mode
-                ) else {
+                let materialized = Materializer.materialize(tierGen, prefix: ChoiceSequence(), mode: mode)
+                guard case let .success(rowValue, freshTree, _) = materialized else {
+                    // Failed predicate attempts on record mean the row was lost to a filter: a pinned-value rejection or an exhausted retry budget.
+                    if case let .failed(report) = materialized,
+                       let observations = report?.filterObservations,
+                       observations.contains(where: { $0.value.passes < $0.value.attempts })
+                    {
+                        filterLosses.merge(ScreeningFilterLosses(rowsLost: 1, observations: observations))
+                    }
                     continue
                 }
                 guard let (value, candidateTree) = combine(leadingTree, rowValue, freshTree) else {
@@ -172,6 +196,11 @@ extension __ExhaustRuntime {
                 "strength": "2",
             ]
         )
+
+        // Fresh completed sweeps only: a found failure supersedes the coverage concern, and replay drift is already covered by the unreachable-row error.
+        if let onFilterLosses, skipTo == nil, filterLosses.rowsLost > 0 {
+            onFilterLosses(filterLosses)
+        }
 
         return .completed(screeningInvocations: totalIterations)
     }
@@ -309,5 +338,23 @@ extension __ExhaustRuntime {
         )
 
         return limit
+    }
+}
+
+// MARK: - Filter Loss Reporting
+
+extension __ExhaustRuntime.ScreeningFilterLosses {
+    /// The runtime warning naming the lost coverage and the filters responsible.
+    var warningMessage: String {
+        let sites = observations.values.compactMap { observation -> String? in
+            guard observation.passes < observation.attempts, let location = observation.sourceLocation else {
+                return nil
+            }
+            let file = "\(location.fileID)".split(separator: "/").last.map(String.init) ?? "\(location.fileID)"
+            return "\(file):\(location.line)"
+        }
+        let siteList = sites.isEmpty ? "an unlocatable filter" : Array(Set(sites)).sorted().joined(separator: ", ")
+        let rowNoun = rowsLost == 1 ? "row" : "rows"
+        return "Spec screening lost \(rowsLost) candidate \(rowNoun) to filter rejection (\(siteList)). Screening coverage is reduced; the run continues to random sampling."
     }
 }

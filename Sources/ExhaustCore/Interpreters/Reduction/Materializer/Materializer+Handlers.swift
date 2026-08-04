@@ -814,6 +814,8 @@ extension Materializer {
     // MARK: - filter / classify / unique
 
     /// Materializes through a filter site, re-checking the predicate against the materialized value and recording the observation.
+    ///
+    /// In guided mode a rejected predicate retries from the continuing seeded PRNG, bounded by ``__ExhaustRuntime/maxFilterRuns``, but only while the subtree is free: cursor spent at entry, no flat emission, nothing resolved from the fallback tree. A free value carries none of the row's identity, so redrawing corrupts neither the row nor the replay address; cursor- and fallback-fed values stay single-shot because rejection there means the addressed point is invalid. Inner generation failure never retries.
     @inline(__always)
     static func handleFilter(
         _ gen: AnyGenerator,
@@ -827,19 +829,41 @@ extension Materializer {
         calleeFallback: ChoiceTree?,
         continuationFallback: ChoiceTree?
     ) throws -> (Any, ChoiceTree)? {
-        let calleeStart = context.flatCount
-        guard let (result, tree) = try generateRecursive(
-            gen, with: inputValue, context: &context, fallbackTree: calleeFallback
-        ) else { return nil }
-        let passed = predicate(result)
-        context.filterObservations[fingerprint, default: FilterObservation(sourceLocation: sourceLocation, filterType: filterType)]
-            .recordAttempt(passed: passed)
-        guard passed else { return nil }
-        return try runContinuation(
-            result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
-            continuation: continuation, inputValue: inputValue,
-            context: &context, continuationFallback: continuationFallback
-        )
+        let cursorSpentAtEntry = context.cursor.isSpent
+        var attempts: UInt64 = 0
+        while true {
+            let calleeStart = context.flatCount
+            let reportBeforeAttempt = context.decodingReport
+            guard let (result, tree) = try generateRecursive(
+                gen, with: inputValue, context: &context, fallbackTree: calleeFallback
+            ) else { return nil }
+            let passed = predicate(result)
+            context.filterObservations[fingerprint, default: FilterObservation(sourceLocation: sourceLocation, filterType: filterType)]
+                .recordAttempt(passed: passed)
+            if passed {
+                return try runContinuation(
+                    result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, continuationFallback: continuationFallback
+                )
+            }
+            attempts += 1
+            // Without a decoding report, fallback consumption is unobservable; require no fallback at all.
+            let consumedFallback = switch (reportBeforeAttempt, context.decodingReport) {
+                case let (before?, after?): after.fallbackResolutionCount > before.fallbackResolutionCount
+                default: calleeFallback != nil
+            }
+            guard context.mode == .guided,
+                  cursorSpentAtEntry,
+                  context.emitsFlat == false,
+                  consumedFallback == false,
+                  attempts < __ExhaustRuntime.maxFilterRuns
+            else {
+                return nil
+            }
+            // The failed attempt's tier counts would misstate the surviving value's provenance.
+            context.decodingReport = reportBeforeAttempt
+        }
     }
 
     /// Materializes through a generation-only site (classify, unique) whose payload is irrelevant during materialization; the inner generator's choices are the only choices.
