@@ -81,6 +81,17 @@ struct StateMachineCandidate<Spec: StateMachineSpecBase> {
     }
 }
 
+/// Thrown by the screening replay source when its addressed covering-array row cannot be reproduced, which means the spec's command domain no longer matches the one the seed was recorded against.
+struct ScreeningReplayRowUnreachable: Error, CustomStringConvertible {
+    let row: Int
+    let tierLength: Int
+    let rowsProduced: Int
+
+    var description: String {
+        "screening replay never reached row \(row + 1) of the length-\(tierLength) tier (the tier produced \(rowsProduced) row\(rowsProduced == 1 ? "" : "s")); the spec or its command domain has changed since the seed was recorded"
+    }
+}
+
 /// Produces failing candidates for the ``SpecMachine``, owning its iteration state internally.
 struct AnyStateMachineCandidateSource<Spec: StateMachineSpecBase> {
     /// Which discovery phase this source represents. The machine attributes the source's invocations and wall time to the matching report bucket whether or not the source yields a candidate, so a phase that runs and passes is still counted.
@@ -176,8 +187,14 @@ extension AnyStateMachineCandidateSource {
                         iteration: screeningInvocations,
                         provenance: .screening(coveringSeed: coveringSeed, tierLength: tierLength, rowInTier: rowInTier)
                     )
-                case .completed, .skipped:
+                case let .completed(screeningInvocations):
+                    // Reaching the row costs exactly row + 1 iterations in a tier-skipping replay, so fewer means the tier's row stream ended first. Returning nil would let a stale regression pin pass as if the failure were fixed.
+                    if screeningInvocations < row + 1 {
+                        throw ScreeningReplayRowUnreachable(row: row, tierLength: tierLength, rowsProduced: screeningInvocations)
+                    }
                     return nil
+                case .skipped:
+                    throw ScreeningReplayRowUnreachable(row: row, tierLength: tierLength, rowsProduced: 0)
             }
         }
     }

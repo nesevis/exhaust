@@ -207,9 +207,9 @@ struct SpecMachineTests {
 
 @Suite("Spec screening source selection", .tags(.stateMachine))
 struct ScreeningSourceSelectionTests {
-    /// Whenever screening runs, no replay target may be set. A replay (sampling seed, screening row, or iteration) must reproduce its targeted failure, not launch a fresh full screening sweep that could surface an unrelated failure and mask a stale regression seed.
-    @Test("A replay never also triggers a full screening sweep")
-    func replayNeverTriggersScreeningSweep() {
+    /// Whenever screening runs, no targeted replay may be set. A targeted replay (a sampling iteration or a screening row) must reproduce its one failure, not launch a fresh full screening sweep that could surface an unrelated failure and mask a stale regression seed. A bare seed is not a target: it promises the whole pipeline deterministically, so it keeps the sweep.
+    @Test("A targeted replay never also triggers a full screening sweep")
+    func targetedReplayNeverTriggersScreeningSweep() {
         let configGen = #gen(
             .int(in: 0 ... 1_000_000).optional(),
             .int(in: 0 ... 100).optional(),
@@ -225,7 +225,7 @@ struct ScreeningSourceSelectionTests {
         }
         #exhaust(configGen) { config in
             config.shouldRunScreening == false
-                || (config.seed == nil && config.screeningReplay == nil && config.replayIteration == nil)
+                || (config.screeningReplay == nil && config.replayIteration == nil)
         }
     }
 
@@ -233,6 +233,16 @@ struct ScreeningSourceSelectionTests {
     @Test("A fresh run with budget enables the screening sweep")
     func freshRunEnablesScreening() {
         var config = ResolvedConcurrentConfig()
+        config.budget = .custom(screening: 200, sampling: 200)
+        #expect(config.shouldRunScreening)
+    }
+
+    /// The bare-seed contract: `.replay(42)` runs the full pipeline under that seed, which includes the screening sweep. Only targeted replays skip it.
+    @Test("A bare seed keeps the screening sweep")
+    func bareSeedKeepsScreening() {
+        var config = ResolvedConcurrentConfig()
+        config.seed = 42
+        config.coveringSeed = 42
         config.budget = .custom(screening: 200, sampling: 200)
         #expect(config.shouldRunScreening)
     }

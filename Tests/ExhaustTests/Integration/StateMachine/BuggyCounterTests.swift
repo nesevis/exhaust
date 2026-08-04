@@ -173,6 +173,55 @@ struct SCAReductionScreeningTests {
         #expect(replayed.originalCommands?.map { "\($0)" } == discovered.originalCommands?.map { "\($0)" })
         #expect(replayed.commands.map { "\($0)" } == discovered.commands.map { "\($0)" })
     }
+
+    @Test("A later-tier failure with generated arguments replays the same arguments")
+    func laterTierFailureReplaysSameArguments() async throws {
+        // The failure only fires past the fifth executed command, so it lands in the length-10 tier after the length-5 tier has already produced rows, and the replay must skip the length-5 tier entirely. The cooperative runner's screening domain is command-type-only, so the add argument is filled by the guided materializer's PRNG rather than the covering row: a materialization seed derived from work done in other tiers (rather than from the row's replay address) sends this red at the replay, which then reproduces nothing.
+        let discovered = try #require(
+            await #execute(
+                LongSequenceArgumentBugSpec.self,
+                mode: .tasks,
+                .commandLimit(10),
+                .budget(.custom(screening: 200, sampling: 0)),
+                .suppress(.issueReporting)
+            )
+        )
+        #expect(discovered.discoveryMethod == .screening)
+        let replaySeed = try #require(discovered.replaySeed)
+        #expect(replaySeed.hasSuffix("L10"), "The failure should come from the length-10 tier, got \(replaySeed)")
+
+        let replayed = try #require(
+            await #execute(
+                LongSequenceArgumentBugSpec.self,
+                mode: .tasks,
+                .commandLimit(10),
+                .budget(.custom(screening: 200, sampling: 0)),
+                .replay(.encoded(replaySeed)),
+                .suppress(.issueReporting)
+            )
+        )
+        #expect(replayed.discoveryMethod == .screening)
+        #expect(replayed.replaySeed == replaySeed)
+        let discoveredOriginal = try #require(discovered.originalCommands)
+        let replayedOriginal = try #require(replayed.originalCommands)
+        #expect(replayedOriginal.map { "\($0)" } == discoveredOriginal.map { "\($0)" })
+    }
+
+    @Test("A spec screening replay whose row no longer exists reports an error instead of passing")
+    func specScreeningReplayMissingRowReportsError() async {
+        // The length-3 tier saturates long before row 500, so the addressed row cannot exist: a stale pin must go red rather than pass as fixed.
+        var result: StateMachineResult<PairwiseBugSpec>?
+        await withKnownIssue("The replay cannot reach its addressed row") {
+            result = await #execute(
+                PairwiseBugSpec.self,
+                mode: .sequential,
+                .commandLimit(3),
+                .budget(.custom(screening: 200, sampling: 0)),
+                .replay(.encoded("19-U500L3"))
+            )
+        }
+        #expect(result == nil)
+    }
 }
 
 // MARK: - StateMachine
@@ -255,4 +304,46 @@ final class PairwiseBugSpec {
 struct PairwiseBugSUT {
     var flagA: Bool = false
     var flagB: Bool = false
+}
+
+// MARK: - Later-Tier Argument StateMachine
+
+/// Loses updates only under overlapping lanes and only reports the loss past the fifth executed command, so the sequential smoke probe passes and a screening failure must come from the length-10 tier of the cooperative runner, whose command-type-only screening domains leave the add argument out of the covering row.
+@StateMachine
+private final class LongSequenceArgumentBugSpec {
+    var executedCommands = 0
+    var expectedTotal = 0
+    @SystemUnderTest var sink = ArgumentSinkBox()
+
+    @Command(weight: 2, .int(in: 1 ... 99))
+    func add(value: Int) async throws {
+        executedCommands += 1
+        expectedTotal += value
+        await sink.racyAdd(value)
+    }
+
+    @Command(weight: 1)
+    func verify() throws {
+        executedCommands += 1
+        try check(executedCommands <= 5 || sink.total == expectedTotal, "lost an update past the fifth command")
+    }
+
+    func failureDescription() -> String? {
+        "executed: \(executedCommands), expected: \(expectedTotal), total: \(sink.total)"
+    }
+}
+
+private final class ArgumentSinkBox: @unchecked Sendable, CustomDebugStringConvertible {
+    private(set) var total = 0
+
+    /// Reads, suspends, then writes back, so two overlapping adds lose one of the updates.
+    func racyAdd(_ amount: Int) async {
+        let current = total
+        await Task.yield()
+        total = current + amount
+    }
+
+    var debugDescription: String {
+        "ArgumentSinkBox(total: \(total))"
+    }
 }

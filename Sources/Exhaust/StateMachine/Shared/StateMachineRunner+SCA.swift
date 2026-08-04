@@ -123,10 +123,13 @@ extension __ExhaustRuntime {
                     continue
                 }
 
-                // The row tree describes the row generator alone, so guided materialization sees a fallback built for
-                // exactly the generator it is materializing. Any leading block is materialized separately in `combine`.
+                // The row tree describes the row generator alone, so guided materialization sees a fallback built for exactly the generator it is materializing. Any leading block is materialized separately in `combine`.
+                // The seed derives from the row's replay address alone (covering seed, tier length, row within the tier), never from rows other tiers produced, because a tier-skipping replay cannot reconstruct those counts. The sequential path is insensitive to this seed (its analyzed domains pin every argument in the fallback tree), but the concurrent path's command-type-only domains leave all command arguments to the PRNG, and a global count here made later-tier replays materialize different arguments than discovery.
                 let mode = Materializer.Mode.guided(
-                    seed: UInt64(totalIterations),
+                    seed: Xoshiro256.deriveSeed(
+                        from: Xoshiro256.deriveSeed(from: coveringSeed, at: UInt64(tier.length)),
+                        at: tierIterations
+                    ),
                     fallbackTree: tree
                 )
                 guard case let .success(rowValue, freshTree, _) = Materializer.materialize(

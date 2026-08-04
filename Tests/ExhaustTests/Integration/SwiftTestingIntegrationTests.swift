@@ -320,6 +320,22 @@ struct SwiftTestingIntegrationTests {
         #expect(report?.invocations.directedSampling == 0)
     }
 
+    @Test("A screening replay whose row no longer exists reports an error instead of passing")
+    func screeningReplayMissingRowReportsError() throws {
+        // A 2x2 space saturates after 4 rows, so row 9 is unreachable under any budget: a stale pin must go red rather than pass as fixed.
+        let generator = #gen(.int(in: 0 ... 1), .int(in: 0 ... 1))
+        var capturedReport: ExhaustReport?
+        withKnownIssue("The replay cannot reach its addressed row") {
+            #exhaust(generator, .replay("19-U9"), .onReport { report in
+                capturedReport = report
+            }) { _ in
+                true
+            }
+        }
+        let report = try #require(capturedReport)
+        #expect(report.screeningInvocations == 0)
+    }
+
     @Test("screening replay tests exactly one row")
     func screeningReplayTestsOneRow() throws {
         let generator = #gen(.int(in: 0 ... 2), .int(in: 0 ... 2))

@@ -91,6 +91,16 @@ package extension __ExhaustRuntime {
             skips: context.skipCount - skipsBefore,
             failures: screeningFailures
         )
+        // A replay that never tested its addressed row would otherwise complete as a quiet pass, which reads as "fixed" when it means "not reproduced". The value covering array is budget-coupled, so a budget change since discovery can end the row stream before the row.
+        if let skipToRow, screeningFailures == 0, screeningResult.summary.propertyInvocations == 0 {
+            reportError(
+                "Screening replay never tested row \(skipToRow + 1): the covering array under the current budget ends before it. Run value screening replays under the budget the failure was discovered with.",
+                fileID: context.fileID,
+                filePath: context.filePath,
+                line: context.line,
+                column: context.column
+            )
+        }
         switch screeningResult {
             case let .failure(value, tree, rowOrdinal, _, strength, rows, parameters, totalSpace, kind):
                 ExhaustLog.notice(

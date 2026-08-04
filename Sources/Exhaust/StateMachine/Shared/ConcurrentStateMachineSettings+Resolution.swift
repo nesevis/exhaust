@@ -18,9 +18,9 @@ struct ResolvedConcurrentConfig {
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
 
+    /// Whether the run performs the full SCA screening sweep. Targeted replays (a sampling iteration or a screening row) skip it: they must reproduce one failure, and a fresh sweep could surface an unrelated one first. A bare seed is not a targeted replay — it promises the whole pipeline deterministically under that seed, so it keeps the sweep, pinned through ``coveringSeed``.
     var shouldRunScreening: Bool {
         replayIteration == nil
-            && seed == nil
             && screeningReplay == nil
             && budget.screeningBudget > 0
     }
