@@ -31,7 +31,7 @@ public extension __ExhaustRuntime {
             case let .seeded(resolvedSeed):
                 seed = resolvedSeed
             case .invalid:
-                return emptyExamineReport()
+                return ExamineReport()
         }
 
         let gen = refGen.gen
@@ -67,7 +67,7 @@ public extension __ExhaustRuntime {
             case let .seeded(resolvedSeed):
                 seed = resolvedSeed
             case .invalid:
-                return emptyExamineReport()
+                return ExamineReport()
         }
 
         let gen = refGen.gen
@@ -99,7 +99,7 @@ private extension __ExhaustRuntime {
         case unseeded
         /// A sampling seed to validate under.
         case seeded(UInt64)
-        /// The seed failed to decode or names a screening row. The error is already reported; the run must return an empty report.
+        /// The seed failed to decode or names a screening row. The error is already reported; the run must return `ExamineReport()`.
         case invalid
     }
 
@@ -138,32 +138,5 @@ private extension __ExhaustRuntime {
                 )
                 return .invalid
         }
-    }
-
-    /// The report an `#examine` run returns when its replay seed is unusable: zero samples, with the failure already reported as an issue.
-    static func emptyExamineReport() -> ExamineReport {
-        ExamineReport(
-            sampleCount: 0,
-            valuesGenerated: 0,
-            reflectionRoundTripSuccesses: 0,
-            replayDeterminismSuccesses: nil,
-            uniqueChoiceSequences: 0,
-            reflectionSkipped: false,
-            pinnedFieldCount: 0,
-            failures: [],
-            generationTime: 0,
-            elapsedTime: 0,
-            filterObservations: [:],
-            numericCoverage: [],
-            branchCoverage: 1.0,
-            sequenceLengthDeciles: 10,
-            hasSequences: false,
-            sequenceLengthMin: 0,
-            sequenceLengthMax: 0,
-            sequenceLengthMean: 0,
-            characterCoverage: [],
-            complexityDeciles: 10,
-            representativeTree: nil
-        )
     }
 }
