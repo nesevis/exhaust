@@ -139,11 +139,7 @@ struct HypothesisShrinkQualityParityTests {
                 start = n - min(1_000_000, maxDelta)
             }
 
-            let property: (Int) -> Bool = if n >= 0 {
-                { $0 < n }
-            } else {
-                { $0 > n }
-            }
+            let property: (Int) -> Bool = n >= 0 ? { $0 < n } : { $0 > n }
 
             let output = try reduce(gen, startingAt: start, property: property)
             #expect(property(output) == false)
@@ -351,17 +347,11 @@ struct HypothesisShrinkQualityParityTests {
             ]
 
             for target in cases {
-                let start: Float16 = if target >= 0 {
-                    min(target + 500, Float16.greatestFiniteMagnitude)
-                } else {
-                    max(target - 500, -Float16.greatestFiniteMagnitude)
-                }
+                let start: Float16 = target >= 0
+                    ? min(target + 500, Float16.greatestFiniteMagnitude)
+                    : max(target - 500, -Float16.greatestFiniteMagnitude)
 
-                let property: (Float16) -> Bool = if target >= 0 {
-                    { $0 < target }
-                } else {
-                    { $0 > target }
-                }
+                let property: (Float16) -> Bool = target >= 0 ? { $0 < target } : { $0 > target }
 
                 let output = try reduce(gen, startingAt: start, property: property)
                 #expect(property(output) == false)

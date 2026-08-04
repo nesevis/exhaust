@@ -14,8 +14,7 @@ extension __ExhaustRuntime {
             rowsLost += other.rowsLost
             observations.merge(other.observations) { existing, new in
                 var combined = existing
-                combined.attempts += new.attempts
-                combined.passes += new.passes
+                combined.merge(new)
                 return combined
             }
         }
@@ -155,7 +154,7 @@ extension __ExhaustRuntime {
                     // Failed predicate attempts on record mean the row was lost to a filter: a pinned-value rejection or an exhausted retry budget.
                     if case let .failed(report) = materialized,
                        let observations = report?.filterObservations,
-                       observations.contains(where: { $0.value.passes < $0.value.attempts })
+                       observations.values.contains(where: \.hasRejections)
                     {
                         filterLosses.merge(ScreeningFilterLosses(rowsLost: 1, observations: observations))
                     }
@@ -347,7 +346,7 @@ extension __ExhaustRuntime.ScreeningFilterLosses {
     /// The runtime warning naming the lost coverage and the filters responsible.
     var warningMessage: String {
         let sites = observations.values.compactMap { observation -> String? in
-            guard observation.passes < observation.attempts, let location = observation.sourceLocation else {
+            guard observation.hasRejections, let location = observation.sourceLocation else {
                 return nil
             }
             let file = "\(location.fileID)".split(separator: "/").last.map(String.init) ?? "\(location.fileID)"

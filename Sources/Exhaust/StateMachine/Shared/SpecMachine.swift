@@ -509,8 +509,8 @@ struct SpecPipeline<Backend: StateMachineBackend> {
         if result == nil, issues.isEmpty, invocationCounter.value == 0 {
             deferredIssues.append("The spec was never executed: the screening and sampling budgets are both zero, so this test asserts nothing.")
         }
-        // Filter losses are legitimate domain narrowing: a warning, never an error. A reproduced regression failure returns above without it.
-        if let losses = filterLosses.value, config.suppress.issueReporting == false {
+        // Filter losses are legitimate domain narrowing: a warning, never an error. A found failure supersedes the coverage concern, so a red run reports one issue, not two: a reproduced regression failure returns above without the warning, and a sampling failure gates it here.
+        if result == nil, let losses = filterLosses.value, config.suppress.issueReporting == false {
             reportWarning(
                 losses.warningMessage,
                 fileID: fileID,

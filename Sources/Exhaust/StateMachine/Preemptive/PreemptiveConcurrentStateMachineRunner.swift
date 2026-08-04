@@ -230,11 +230,8 @@ extension __ExhaustRuntime {
                 laneCounts[marker.rawValue, default: 0] += 1
                 let laneIndex = laneCounts[marker.rawValue]!
                 let values = laneResponseValues?[marker.rawValue]
-                let annotation = if let values, laneIndex - 1 < values.count, let value = values[laneIndex - 1] {
-                    " → \(value)"
-                } else {
-                    ""
-                }
+                let responseValue = values.flatMap { laneIndex - 1 < $0.count ? $0[laneIndex - 1] : nil }
+                let annotation = responseValue.map { " → \($0)" } ?? ""
                 let isWitness = linearizabilityWitness?.lane == marker.rawValue && linearizabilityWitness?.index == laneIndex - 1
                 let witnessMarker = isWitness ? linearizabilityWitnessMarker : ""
                 return TraceStep(
