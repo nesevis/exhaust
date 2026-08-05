@@ -80,11 +80,12 @@ struct ParsedPropertyFuzzSettings {
         for setting in settings {
             switch setting {
                 case let .replay(replaySeed):
-                    // A screening-row replay resolves without a PRNG seed; a fuzz run replays the whole search from its root seed, so only seed-carrying replays apply here.
-                    if let resolved = replaySeed.resolve(), let resolvedSeed = resolved.seed {
-                        seed = resolvedSeed
-                    } else {
-                        invalidReplayMessage = "Invalid replay seed for #explore(time:): \(replaySeed). Pass the run seed from a prior report."
+                    // A fuzz run replays the whole search from its root seed, so only sampling forms apply here. A screening seed addresses a covering-array row this runner cannot replay, and honoring its seed digits as a run seed would silently run a different search than the one the seed names.
+                    switch replaySeed.resolve() {
+                        case let .sampling(resolvedSeed, _):
+                            seed = resolvedSeed
+                        case .valueScreening, .specScreening, nil:
+                            invalidReplayMessage = "Invalid replay seed for #explore(time:): \(replaySeed). Pass the run seed from a prior report."
                     }
                 case let .suppress(option):
                     suppress.apply(option)

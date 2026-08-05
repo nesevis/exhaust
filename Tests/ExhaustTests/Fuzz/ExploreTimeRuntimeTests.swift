@@ -40,6 +40,24 @@ struct ExploreTimeRuntimeTests {
         #expect(report.totalAttempts == 0)
     }
 
+    @Test("A screening replay seed is a configuration error, not a run", arguments: ["19-U3", "19-U3L5"])
+    func screeningReplaySeedRejected(encodedSeed: String) {
+        // The digits before the U marker are a covering-array seed, not a run seed. Honoring them as one would silently run a different search than the row the seed names, so both screening forms fail configuration instead.
+        let report = __ExhaustRuntime.runExploreTimeCore(
+            gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
+            time: .seconds(60),
+            settings: [.replay(.encoded(encodedSeed))],
+            source: passthroughSource(),
+            configure: nil,
+            property: { _ in .pass }
+        )
+        guard case .invalidConfiguration = report.termination else {
+            Issue.record("Expected invalidConfiguration, got \(report.termination)")
+            return
+        }
+        #expect(report.totalAttempts == 0)
+    }
+
     @Test("A nonpositive time budget is a configuration error, not a run")
     func nonpositiveBudget() {
         let report = __ExhaustRuntime.runExploreTimeCore(

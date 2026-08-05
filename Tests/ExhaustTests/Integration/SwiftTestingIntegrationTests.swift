@@ -168,24 +168,36 @@ struct SwiftTestingIntegrationTests {
     func replaySeedIntegerLiteral() {
         let seed: ReplaySeed = 42
         let resolved = seed.resolve()
-        #expect(resolved?.seed == 42)
-        #expect(resolved?.iteration == nil)
+        if case let .sampling(resolvedSeed, iteration) = resolved {
+            #expect(resolvedSeed == 42)
+            #expect(iteration == nil)
+        } else {
+            Issue.record("Expected .sampling(seed:iteration:), got \(String(describing: resolved))")
+        }
     }
 
     @Test("replay seed with iteration")
     func replaySeedWithIteration() {
         let seed = ReplaySeed.encoded("1A-7")
         let resolved = seed.resolve()
-        #expect(resolved?.seed == 42)
-        #expect(resolved?.iteration == 7)
+        if case let .sampling(resolvedSeed, iteration) = resolved {
+            #expect(resolvedSeed == 42)
+            #expect(iteration == 7)
+        } else {
+            Issue.record("Expected .sampling(seed:iteration:), got \(String(describing: resolved))")
+        }
     }
 
     @Test("replay seed without iteration")
     func replaySeedWithoutIteration() {
         let seed = ReplaySeed.encoded("1A")
         let resolved = seed.resolve()
-        #expect(resolved?.seed == 42)
-        #expect(resolved?.iteration == nil)
+        if case let .sampling(resolvedSeed, iteration) = resolved {
+            #expect(resolvedSeed == 42)
+            #expect(iteration == nil)
+        } else {
+            Issue.record("Expected .sampling(seed:iteration:), got \(String(describing: resolved))")
+        }
     }
 
     @Test("replay seed with iteration generates exactly one value")
@@ -214,20 +226,121 @@ struct SwiftTestingIntegrationTests {
 
     @Test("screening replay seed resolves to row - 1")
     func screeningReplaySeedResolvesToRow() {
-        let seed = ReplaySeed.encoded("U6")
+        let seed = ReplaySeed.encoded("19-U6")
         let resolved = seed.resolve()
-        if case let .screening(row) = resolved {
+        if case let .valueScreening(coveringSeed, row) = resolved {
+            #expect(coveringSeed == 41)
             #expect(row == 5)
         } else {
-            Issue.record("Expected .screening(row:), got \(String(describing: resolved))")
+            Issue.record("Expected .valueScreening(seed:row:), got \(String(describing: resolved))")
         }
+    }
+
+    @Test("screening replay seed with a tier marker resolves the tier length")
+    func screeningReplaySeedWithTierMarkerResolvesTierLength() {
+        let seed = ReplaySeed.encoded("19-U6L5")
+        let resolved = seed.resolve()
+        if case let .specScreening(coveringSeed, row, tierLength) = resolved {
+            #expect(coveringSeed == 41)
+            #expect(row == 5)
+            #expect(tierLength == 5)
+        } else {
+            Issue.record("Expected .specScreening(seed:row:tierLength:), got \(String(describing: resolved))")
+        }
+    }
+
+    @Test("screening replay seed encoding round-trips through decode")
+    func screeningReplaySeedEncodingRoundTrips() {
+        // A generated 0 stands in for "no tier", so one property covers both wire shapes: U{row} and U{row}L{length}.
+        let gen = #gen(.uint64(), .int(in: 0 ... 10000), .int(in: 0 ... 100))
+        #exhaust(gen, .budget(.extensive)) { coveringSeed, row, tierSource in
+            let original: ReplaySeed.Resolved = tierSource == 0
+                ? .valueScreening(seed: coveringSeed, row: row)
+                : .specScreening(seed: coveringSeed, row: row, tierLength: tierSource)
+            let decoded = ReplaySeed.Resolved.decode(original.encoded)
+            switch decoded {
+                case let .valueScreening(decodedSeed, decodedRow):
+                    #expect(tierSource == 0)
+                    #expect(decodedSeed == coveringSeed)
+                    #expect(decodedRow == row)
+                case let .specScreening(decodedSeed, decodedRow, decodedTier):
+                    #expect(tierSource != 0)
+                    #expect(decodedSeed == coveringSeed)
+                    #expect(decodedRow == row)
+                    #expect(decodedTier == tierSource)
+                default:
+                    Issue.record("Expected screening decode for \(original.encoded), got \(String(describing: decoded))")
+            }
+        }
+    }
+
+    @Test("#exhaust rejects a spec screening replay seed")
+    func exhaustRejectsSpecScreeningReplaySeed() throws {
+        // A tier-addressed seed belongs to a spec test. #exhaust screens one array with no tiers, so replaying the row against it would reproduce a different combination than the one the seed names.
+        let generator = #gen(.int(in: 0 ... 2), .int(in: 0 ... 2))
+        var capturedReport: ExhaustReport?
+        withKnownIssue("A spec screening seed cannot address #exhaust's single array") {
+            #exhaust(generator, .replay("19-U3L5"), .onReport { report in
+                capturedReport = report
+            }) { _ in
+                true
+            }
+        }
+        let report = try #require(capturedReport)
+        #expect(report.screeningInvocations == 0)
+        #expect(report.randomSamplingInvocations == 0)
+    }
+
+    @Test("#examine rejects a screening replay seed")
+    func examineRejectsScreeningReplaySeed() {
+        // A screening seed addresses a covering-array row #examine cannot replay, and honoring its digits as a sampling seed would silently validate a different stream than the one the seed names.
+        let generator = #gen(.int(in: 0 ... 100))
+        var report: ExamineReport?
+        withKnownIssue("Screening seeds cannot seed #examine") {
+            report = #examine(generator, .samples(10), .replay("19-U3"))
+        }
+        #expect(report?.sampleCount == 0)
+        #expect(report?.valuesGenerated == 0)
+    }
+
+    @Test("#explore rejects a screening replay seed")
+    func exploreRejectsScreeningReplaySeed() {
+        // Same contract as #examine: a screening seed names a covering-array row, not a run seed.
+        var report: ExploreReport<Int>?
+        withKnownIssue("Screening seeds cannot seed #explore") {
+            report = #explore(
+                #gen(.int(in: 0 ... 100)),
+                directions: [("nonNegative", { $0 >= 0 })],
+                .replay("19-U3")
+            ) { _ in
+                true
+            }
+        }
+        #expect(report?.invocations.warmup == 0)
+        #expect(report?.invocations.directedSampling == 0)
+    }
+
+    @Test("A screening replay whose row no longer exists reports an error instead of passing")
+    func screeningReplayMissingRowReportsError() throws {
+        // A 2x2 space saturates after 4 rows, so row 9 is unreachable under any budget: a stale pin must go red rather than pass as fixed.
+        let generator = #gen(.int(in: 0 ... 1), .int(in: 0 ... 1))
+        var capturedReport: ExhaustReport?
+        withKnownIssue("The replay cannot reach its addressed row") {
+            #exhaust(generator, .replay("19-U9"), .onReport { report in
+                capturedReport = report
+            }) { _ in
+                true
+            }
+        }
+        let report = try #require(capturedReport)
+        #expect(report.screeningInvocations == 0)
     }
 
     @Test("screening replay tests exactly one row")
     func screeningReplayTestsOneRow() throws {
         let generator = #gen(.int(in: 0 ... 2), .int(in: 0 ... 2))
         var capturedReport: ExhaustReport?
-        #exhaust(generator, .replay("U3"), .suppress(.issueReporting), .onReport { report in
+        #exhaust(generator, .replay("19-U3"), .suppress(.issueReporting), .onReport { report in
             capturedReport = report
         }) { _ in
             true

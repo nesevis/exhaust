@@ -139,7 +139,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
     }
 
     private mutating func accountCandidate(_ candidate: StateMachineCandidate<Backend.Spec>) {
-        context.state.failureContext.seed = candidate.discoveryMethod == .screening ? nil : candidate.seed
+        context.state.failureContext.seed = candidate.provenance.failureContextSeed
         context.state.failureContext.originalCount = candidate.value.taggedCommands.count
         context.state.failureContext.iteration = candidate.iteration
         context.state.failureContext.budget = candidate.discoveryMethod == .screening
@@ -191,7 +191,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
             setupStep: setupStep,
             taggedCommands: candidate.value.taggedCommands,
             commandTree: commandTree,
-            seed: candidate.seed
+            seed: candidate.provenance.pruningSeed
         )
 
         reductionInput = ReductionInput(
@@ -281,7 +281,7 @@ struct SpecMachine<Backend: StateMachineBackend> {
                     setupStep: reducedStep,
                     taggedCommands: reductionInput.taggedCommands,
                     commandTree: reductionInput.commandTree,
-                    seed: candidate.seed
+                    seed: candidate.provenance.pruningSeed
                 )
                 reductionInput.taggedCommands = repruned.value
                 reductionInput.commandTree = repruned.tree
@@ -350,9 +350,8 @@ struct SpecMachine<Backend: StateMachineBackend> {
             setupStep: reducedSetupStep,
             reduced: reduction.finalInput,
             originalCommands: originalCommands,
-            seed: candidate.seed,
+            provenance: candidate.provenance,
             iteration: candidate.iteration,
-            discoveryMethod: candidate.discoveryMethod,
             context: context
         )
 
@@ -422,7 +421,8 @@ struct SpecPipeline<Backend: StateMachineBackend> {
     let sequenceGen: Generator<[(ScheduleMarker, Backend.Spec.Command)]>
     let commandGen: Generator<Backend.Spec.Command>
     let commandLimit: Int
-    let concurrencyLevel: Int
+    /// Lane count for a `sequenceGen` built by ``zipScheduleMarker(onto:concurrencyLevel:)``, or `nil` when the generator tags every command `.prefix` without drawing a marker. Screening builds its covering-array tree to match: a lane-aware tree handed to a marker-free generator puts a lane node where the command pick belongs, and the row stops binding.
+    let concurrencyLevel: Int?
     let identifySkips: @Sendable (SpecCandidateValue<Backend.Spec>) -> Set<Int>
     let property: @Sendable (SpecCandidateValue<Backend.Spec>) -> Bool
     let invocationCounter: UnsafeSendableBox<Int>
@@ -434,7 +434,8 @@ struct SpecPipeline<Backend: StateMachineBackend> {
 
     func run(
         config: ResolvedConcurrentConfig,
-        smokeSource: AnyStateMachineCandidateSource<Backend.Spec>? = nil
+        smokeSource: AnyStateMachineCandidateSource<Backend.Spec>? = nil,
+        onFilterLosses: ((__ExhaustRuntime.ScreeningFilterLosses) -> Void)? = nil
     ) -> (result: StateMachineResult<Backend.Spec>?, issues: [String]) {
         let runContext = StateMachineRunContext<Backend.Spec>(
             config: config,
@@ -456,7 +457,8 @@ struct SpecPipeline<Backend: StateMachineBackend> {
             concurrencyLevel: concurrencyLevel,
             property: property,
             smokeSource: smokeSource,
-            sequenceGenForLength: sequenceGenForLength
+            sequenceGenForLength: sequenceGenForLength,
+            onFilterLosses: onFilterLosses
         )
         var machine = SpecMachine(backend: backend, context: runContext, sources: sources)
         while let transition = machine.next() {
@@ -480,22 +482,42 @@ struct SpecPipeline<Backend: StateMachineBackend> {
         mainRunSmokeSource: AnyStateMachineCandidateSource<Backend.Spec>? = nil
     ) -> (result: StateMachineResult<Backend.Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
+        // Merged across every sweep in the run (bare-seed regression replays screen too), so the warning below fires at most once per test run.
+        let filterLosses = UnsafeSendableBox<__ExhaustRuntime.ScreeningFilterLosses?>(nil)
+        let accumulateFilterLosses: (__ExhaustRuntime.ScreeningFilterLosses) -> Void = { losses in
+            if var merged = filterLosses.value {
+                merged.merge(losses)
+                filterLosses.value = merged
+            } else {
+                filterLosses.value = losses
+            }
+        }
 
         let (regressionResult, regressionIssues) = __ExhaustRuntime.replayRegressionSeeds(
             config: config,
             regressionSeeds: regressionSeeds,
-            runMachine: { run(config: $0) }
+            runMachine: { run(config: $0, onFilterLosses: accumulateFilterLosses) }
         )
         deferredIssues.append(contentsOf: regressionIssues)
         if let regressionResult {
             return (regressionResult, deferredIssues)
         }
 
-        let (result, issues) = run(config: config, smokeSource: mainRunSmokeSource)
+        let (result, issues) = run(config: config, smokeSource: mainRunSmokeSource, onFilterLosses: accumulateFilterLosses)
         deferredIssues.append(contentsOf: issues)
         // A passing run that never executed a command sequence asserts nothing. Checked against the shared invocation counter so a regression replay that did execute counts.
         if result == nil, issues.isEmpty, invocationCounter.value == 0 {
             deferredIssues.append("The spec was never executed: the screening and sampling budgets are both zero, so this test asserts nothing.")
+        }
+        // Filter losses are legitimate domain narrowing: a warning, never an error. A found failure supersedes the coverage concern, so a red run reports one issue, not two: a reproduced regression failure returns above without the warning, and a sampling failure gates it here.
+        if result == nil, let losses = filterLosses.value, config.suppress.issueReporting == false {
+            reportWarning(
+                losses.warningMessage,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
         }
         return (result, deferredIssues)
     }

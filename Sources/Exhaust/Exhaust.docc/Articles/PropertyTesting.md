@@ -112,7 +112,9 @@ A function that overflows at `Int.max + 1` fails only when one parameter is at i
 
 Exhaust defaults to pairwise (t=2) coverage, but will go up to t=4 for smaller domains where the higher-strength arrays fit within the screening budget. The screening rows in the budget table control how many of these problematic-value combinations Exhaust tests before moving to random sampling.
 
-In the rare case where the generator's total domain is small enough to fit within the screening budget, Exhaust enumerates it exhaustively and skips random sampling entirely.
+The covering array is seeded per run. Many different row sets cover all pairs, and each run builds a different one, so successive runs screen different regions of the combination space and a suite that runs repeatedly accumulates coverage beyond any single run's budget. The cost of that reach is run-to-run variation: a screening failure one run finds can go unfound the next, because the failing combination may not appear in the next run's rows. This is why a screening failure report carries its covering-array seed. The reported seed (for example `"3RT5GH8KM2-U3"`, the third screening row of that seed's array) replays the exact row, and pinning it with the `.exhaust(.regressions(...))` trait keeps the failure reproducible whatever later runs happen to screen.
+
+When the generator's total domain fits within the screening budget, the rotation costs nothing: after the covering array's rows, Exhaust continues into every point the array left out, so the run ends having tested the whole space whatever the seed was, and random sampling is skipped entirely.
 
 ## Run statistics
 

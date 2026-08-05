@@ -218,6 +218,8 @@ Reproduce: .replay("3JK4M2-5")
 
 The replay seed lets you re-run the exact same sequence deterministically for debugging.
 
+A screening failure's seed carries a row address instead of an iteration: `"3JK4M2-U3L5"` replays the third row of the covering array built at sequence length 5, using the covering-array seed before the dash. Screening arrays are seeded per run, and successive runs screen different command-type combinations, so a spec that passed yesterday can legitimately fail today on a combination earlier runs never screened. Pin the reported seed with the `.exhaust(.regressions(...))` trait and the failure stays reproducible: the replay rebuilds only the addressed array, so it lands on the same row under any budget.
+
 `.commandLimit(N)` sets the maximum length of generated command sequences. When omitted, Exhaust estimates a limit from the command domain size and the screening budget: the estimate's budget-derived ceiling tops out at 100, with a floor of three appearances per command type. `mode: .tasks` caps the estimate at 40. A spec that declares an `@Equivalence` gets a flat 10 under either concurrent mode, the same default `mode: .threads` uses, because both then search the orders a run could have taken and that search grows multinomially in the sequence length. Longer sequences explore deeper states but take longer to test and to reduce. Specs with expensive command bodies (I/O, network calls, heavy computation) should use a lower limit, since the per-command cost multiplies across every screening row and every reduction probe.
 
 ## Your SUT uses async/await

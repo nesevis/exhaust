@@ -99,11 +99,13 @@ public extension __ExhaustRuntime {
             continuation: { .pure($0) }
         )
 
+        let arity = erased.count
+
         // The macro expands an initializer call to the forward closure and derives the backward from the same member labels, so the pair inverts by construction of the expansion and the `.isomorph` guarantee holds without user involvement.
         return Gen.liftF(.transform(
             kind: .isomorph(
                 forward: { anyValues in
-                    let values = anyValues as! [Any]
+                    let values = try zipComponents(anyValues, arity: arity)
                     var index = 0
                     func next<Element>(_: Element.Type) -> Element {
                         defer { index += 1 }
@@ -175,11 +177,13 @@ public extension __ExhaustRuntime {
             continuation: { .pure($0) }
         )
 
+        let arity = erased.count
+
         // The macro expands an enum case constructor to the forward closure and a pattern match over the same case to the backward, so the pair inverts by construction of the expansion. A `nil` from the pattern match means the value is a different case: a normal rejection during pick-branch probing, surfaced as a throw.
         return Gen.liftF(.transform(
             kind: .isomorph(
                 forward: { anyValues in
-                    let values = anyValues as! [Any]
+                    let values = try zipComponents(anyValues, arity: arity)
                     var index = 0
                     func next<Element>(_: Element.Type) -> Element {
                         defer { index += 1 }

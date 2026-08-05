@@ -95,14 +95,14 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
         setupStep: Spec.SetupStep?,
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,
-        seed: UInt64?,
+        provenance: StateMachineCandidateProvenance,
         iteration: Int,
-        discoveryMethod: StateMachineDiscoveryMethod,
         context: StateMachineRunContext<Spec>
     ) -> (result: StateMachineResult<Spec>, issueMessage: String) {
         // Reduction already orders its output prefix-first, but the timeout path skips reduction entirely, so normalize here as well. The partition is idempotent, so the reduced path is unaffected.
         let reduced = reduced.prefixFirstOrder()
-        let replaySeed = discoveryMethod.encodeReplaySeed(seed: seed, iteration: iteration)
+        let discoveryMethod = provenance.discoveryMethod
+        let replaySeed = provenance.encodeReplaySeed(iteration: iteration)
         // Replayed on a fresh spec so the trace carries the setup's real outcome: a setup throw renders as the failing step instead of a fabricated success.
         let setupSteps = inner.setupTraceSteps(setupStep)
 
@@ -115,7 +115,7 @@ struct PreemptiveStateMachineBackend<Inner: PreemptiveBackend>: StateMachineBack
             setup: setupStep,
             trace: __ExhaustRuntime.buildPreemptiveTrace(reduced, setupSteps: setupSteps),
             systemUnderTest: context.state.probeEvidence?.outcome.concurrentSpec?.systemUnderTest,
-            seed: discoveryMethod.resultSeed(seed),
+            seed: provenance.resultSeed,
             replaySeed: replaySeed,
             discoveryMethod: discoveryMethod
         )

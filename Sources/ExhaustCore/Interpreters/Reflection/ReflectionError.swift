@@ -23,6 +23,8 @@ public enum ReflectionError: LocalizedError, Equatable {
     case inputWasWrongForSequence(String)
     /// Indicates that an individual element within a sequence could not be reflected through the element generator.
     case couldNotReflectOnSequenceElement(String)
+    /// Indicates that an individual component of a zip could not be reflected through its generator.
+    case couldNotReflectOnZipElement(String)
     /// Indicates that a pick branch value lacks the `Equatable` conformance needed to match against the target.
     case pickValueIsNotEquatable(String)
     /// Indicates that the reflected bit pattern falls outside the declared chooseBits range.
@@ -49,6 +51,8 @@ public enum ReflectionError: LocalizedError, Equatable {
                 "The reflection target is not a valid collection for the sequence operation: \(detail)."
             case let .couldNotReflectOnSequenceElement(detail):
                 "A sequence element could not be reflected through the element generator: \(detail)."
+            case let .couldNotReflectOnZipElement(detail):
+                "A zip component could not be reflected through its generator: \(detail)."
             case let .pickValueIsNotEquatable(type):
                 "Pick branch value of type '\(type)' lacks Equatable conformance required for reflection matching."
             case let .inputWasOutOfGeneratorRange(value, range):
@@ -76,6 +80,8 @@ public enum ReflectionError: LocalizedError, Equatable {
                 "Pass an Array or other supported collection type as the reflection target."
             case .couldNotReflectOnSequenceElement:
                 "Ensure every element in the target collection is within the element generator's domain."
+            case .couldNotReflectOnZipElement:
+                "Ensure every component of the target is within its generator's domain. For a recursive generator, a target nested deeper than the upper bound of `depthRange` has no representation: widen `depthRange` or supply a shallower target."
             case let .pickValueIsNotEquatable(type):
                 "Add Equatable conformance to '\(type)' or use a different generator that does not require value matching."
             case .inputWasOutOfGeneratorRange:

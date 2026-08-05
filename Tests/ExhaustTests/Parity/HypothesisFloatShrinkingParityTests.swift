@@ -184,10 +184,11 @@ private enum Helpers {
         in range: ClosedRange<Double>? = nil,
         where condition: (Double) -> Bool
     ) throws -> Double {
-        let gen: Generator<Double> = if let range {
-            Gen.choose(in: range)
-        } else {
-            Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: Double.defaultScaling)
+        let gen: Generator<Double> = switch range {
+            case let range?:
+                Gen.choose(in: range)
+            case nil:
+                Gen.choose(in: -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude, scaling: Double.defaultScaling)
         }
 
         return try reduceFromReflection(gen, startingAt: start) { value in

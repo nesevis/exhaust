@@ -141,11 +141,8 @@ extension __ExhaustRuntime {
                 let values = laneResponseValues?[laneValue]
                 lines.append("Lane \(label):")
                 for (index, command) in laneCommands.enumerated() {
-                    let annotation = if let values, index < values.count, let value = values[index] {
-                        " → \(value)"
-                    } else {
-                        ""
-                    }
+                    let responseValue = values.flatMap { index < $0.count ? $0[index] : nil }
+                    let annotation = responseValue.map { " → \($0)" } ?? ""
                     let isWitness = linearizabilityWitness?.lane == laneValue && linearizabilityWitness?.index == index
                     let witnessMarker = isWitness ? linearizabilityWitnessMarker : ""
                     let entryPrefix = "  \(index + 1)\(label). "

@@ -38,9 +38,8 @@ protocol StateMachineBackend<Spec>: SendableMetatype {
         setupStep: Spec.SetupStep?,
         reduced: [(ScheduleMarker, Spec.Command)],
         originalCommands: [Spec.Command]?,
-        seed: UInt64?,
+        provenance: StateMachineCandidateProvenance,
         iteration: Int,
-        discoveryMethod: StateMachineDiscoveryMethod,
         context: StateMachineRunContext<Spec>
     ) -> (result: StateMachineResult<Spec>, issueMessage: String)
 }

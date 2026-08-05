@@ -36,6 +36,11 @@ package struct DecodingReport: Sendable {
         exactCarryForwardCount + fallbackTreeCount + prngCount
     }
 
+    /// Coordinates resolved from the fallback tree. The filter retry gate reads the delta to detect row-identity consumption, which must stay single-shot.
+    var fallbackResolutionCount: Int {
+        fallbackTreeCount
+    }
+
     /// Weighted fidelity score in `[0, 1]`.
     ///
     /// Exact carry-forward scores 1.0, fallback tree scores 0.5, PRNG scores 0.0. Returns 0.0 when no coordinates have been recorded (empty lift).
@@ -70,6 +75,6 @@ package struct DecodingReport: Sendable {
         convergence >= Self.convergenceCacheThreshold
     }
 
-    /// Per-fingerprint filter predicate observations accumulated during this materialization.
-    var filterObservations: [UInt64: FilterObservation] = [:]
+    /// Per-fingerprint filter predicate observations accumulated during this materialization. Package so the spec screening row loop can read them off failed rows.
+    package var filterObservations: [UInt64: FilterObservation] = [:]
 }

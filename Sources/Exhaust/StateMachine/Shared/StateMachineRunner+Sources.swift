@@ -82,21 +82,25 @@ extension __ExhaustRuntime {
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         commandGen: Generator<Spec.Command>,
         commandLimit: Int,
-        concurrencyLevel: Int,
+        concurrencyLevel: Int?,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool,
         smokeSource: AnyStateMachineCandidateSource<Spec>? = nil,
-        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil
+        sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil,
+        onFilterLosses: ((ScreeningFilterLosses) -> Void)? = nil
     ) -> [AnyStateMachineCandidateSource<Spec>] {
         var sources: [AnyStateMachineCandidateSource<Spec>] = []
         let leadingFactors = setupScreeningFactors(for: Spec.self)
 
-        if let row = config.screeningReplayRow {
+        if let screeningReplay = config.screeningReplay {
             sources.append(.screeningReplay(
-                row: row,
+                coveringSeed: config.coveringSeed,
+                tierLength: screeningReplay.tierLength,
+                row: screeningReplay.row,
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
-                screeningBudget: max(UInt64(config.budget.screeningBudget), UInt64(row) + 1),
+                // The budget no longer gates reaching the row (the replay caps its tier at the row itself); it only decides which tiers get built. Flooring at the nominal budget keeps every merged tier's share positive, so the addressed tier always exists.
+                screeningBudget: max(UInt64(config.budget.screeningBudget), SequenceCoveringArray.nominalDomainBudget),
                 concurrencyLevel: concurrencyLevel,
                 leadingFactors: leadingFactors,
                 property: property
@@ -122,14 +126,16 @@ extension __ExhaustRuntime {
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: UInt64(config.budget.screeningBudget),
+                coveringSeed: config.coveringSeed,
                 concurrencyLevel: concurrencyLevel,
                 sequenceGenForLength: sequenceGenForLength,
                 leadingFactors: leadingFactors,
+                onFilterLosses: onFilterLosses,
                 property: property
             ))
         }
 
-        if config.replayIteration == nil, config.screeningReplayRow == nil {
+        if config.replayIteration == nil, config.screeningReplay == nil {
             let seed = config.seed ?? Xoshiro256().seed
             sources.append(.sampling(
                 sequenceGen: sequenceGen,
@@ -146,7 +152,7 @@ extension __ExhaustRuntime {
     ///
     /// Setup arguments become factors in the same covering array as the command positions, so strength-2 coverage pairs every setup value with every command type at every position. A setup method's arguments are worth that budget in a way a command's arguments are not: there is at most one setup method, so its factors add a fixed block rather than multiplying across positions and lanes, and its values configure the SUT for every command that follows.
     ///
-    /// The analysis is deliberately budget-independent. Passing the screening budget as a composite threshold would make the factor domains vary with the budget, and a `U-{N}` replay runs under a different budget than discovery did — the covering array would differ and the replay would land on another row.
+    /// The analysis is deliberately budget-independent. Passing the screening budget as a composite threshold would make the factor domains vary with the budget, and a `{seed}-U{row}L{length}` replay runs under a different budget than discovery did: the covering array would differ and the replay would land on another row.
     ///
     /// A deterministic setup generator (a zero-parameter `@Setup`, whose generator is a bare `.just`) has no parameters for the analysis to extract, so it contributes a zero-factor block whose `buildTree` always yields the one tree the generator materializes. The block carries no covering-array budget, but it keeps the invariant that every with-setup screening candidate receives a setup tree — without it, screening probes would run against an unconfigured spec.
     static func setupScreeningFactors<Spec: StateMachineSpecBase>(
@@ -167,7 +173,7 @@ extension __ExhaustRuntime {
                     buildTree: { profile.buildTree(from: $0) }
                 )
             case nil:
-                // seed 0 matches the fixed seed `combineScreeningCandidate` materializes with, so discovery and a `U-{N}` replay land on the same setup value.
+                // seed 0 matches the fixed seed `combineScreeningCandidate` materializes with, so discovery and a `{seed}-U{row}L{length}` replay land on the same setup value.
                 var interpreter = ValueAndChoiceTreeInterpreter(setupGen.gen, seed: 0, maxRuns: 1)
                 guard let (_, tree) = try? interpreter.next() else {
                     return nil
@@ -192,8 +198,7 @@ extension __ExhaustRuntime {
         guard let setupTree else {
             return nil
         }
-        // seed 0: the covering array already pins every analyzed setup factor, so the seed only fills choices the
-        // analysis could not model, and a fixed seed keeps a `U-{N}` replay landing on the same setup value.
+        // seed 0: the covering array already pins every analyzed setup factor, so the seed only fills choices the analysis could not model, and a fixed seed keeps a `{seed}-U{row}L{length}` replay landing on the same setup value.
         guard case let .success(step, freshSetupTree, _) = Materializer.materialize(
             setupGen.gen,
             prefix: ChoiceSequence(),
@@ -207,7 +212,7 @@ extension __ExhaustRuntime {
         )
     }
 
-    /// The `combine` hook for ``runSCAScreeningRowLoop(sequenceGen:commandGen:commandLimit:screeningBudget:skipToRow:logEventPrefix:concurrencyLevel:sequenceGenForLength:leadingFactors:combine:property:)``, bound to a spec. Shared by the fresh screening source and the `U-{N}` replay source so the two cannot drift on how candidates are assembled.
+    /// The `combine` hook for ``runSCAScreeningRowLoop(sequenceGen:commandGen:commandLimit:screeningBudget:coveringSeed:skipTo:logEventPrefix:concurrencyLevel:sequenceGenForLength:leadingFactors:combine:property:)``, bound to a spec. Shared by the fresh screening source and the `{seed}-U{row}L{length}` replay source so the two cannot drift on how candidates are assembled.
     static func screeningCombine<Spec: StateMachineSpecBase>(
         _: Spec.Type
     ) -> (ChoiceTree?, [(ScheduleMarker, Spec.Command)], ChoiceTree) -> (value: SpecCandidateValue<Spec>, tree: ChoiceTree)? {

@@ -17,46 +17,46 @@ import IssueReporting
 /// Correctness properties (``reflectionRoundTripSuccesses``, ``replayDeterminismSuccesses``) reflect whether the generator round-trips and replays correctly. Coverage properties (`NumericTypeCoverage.decilesCovered`, ``branchCoverage``, ``sequenceLengthDeciles``, ``characterVariety``, ``complexityDeciles``) measure how well the generator explores its domain. When a metric does not apply to the generator (for example, ``branchCoverage`` on a generator with no picks), the property returns a passing default so assertions do not fail on irrelevant checks.
 public struct ExamineReport: Sendable, CustomStringConvertible {
     /// Number of samples requested for the validation run.
-    public let sampleCount: Int
+    public fileprivate(set) var sampleCount = 0
     /// Number of values the generator actually produced. Lower than ``sampleCount`` when generation fails for some samples.
-    public let valuesGenerated: Int
+    public fileprivate(set) var valuesGenerated = 0
     /// Number of values whose reflected choice tree matched the generation tree. Equal to ``valuesGenerated`` for a healthy generator.
-    public let reflectionRoundTripSuccesses: Int
+    public fileprivate(set) var reflectionRoundTripSuccesses = 0
     /// Number of values that passed the user-provided replay equivalence check. Nil when no `replayCheck` closure was provided.
-    public let replayDeterminismSuccesses: Int?
+    public fileprivate(set) var replayDeterminismSuccesses: Int?
     /// Number of distinct choice sequences observed across all generated values. A value of 1 means every sample produced the same output.
-    public let uniqueChoiceSequences: Int
+    public fileprivate(set) var uniqueChoiceSequences = 0
     /// Whether the reflection round-trip check was skipped because the generator is synthesized (forward-only by design).
-    public let reflectionSkipped: Bool
+    public fileprivate(set) var reflectionSkipped = false
     /// Number of `.just` (pinned constant) nodes found in a synthesized generator tree. These are fields the synthesizer could not build a full generator for.
-    public let pinnedFieldCount: Int
+    public fileprivate(set) var pinnedFieldCount = 0
     /// All validation failures detected during the run. Empty when the generator is healthy.
-    public let failures: [ExamineFailure]
+    public fileprivate(set) var failures: [ExamineFailure] = []
     /// Wall-clock time spent generating values, in seconds. Does not include correctness checks.
-    public let generationTime: Double
+    public fileprivate(set) var generationTime = 0.0
     /// Total wall-clock time for the entire validation run, in seconds.
-    public let elapsedTime: Double
+    public fileprivate(set) var elapsedTime = 0.0
     /// Per-filter predicate observations accumulated during generation, keyed by filter fingerprint. Check `FilterObservation.validityRate` and `FilterObservation.sourceLocation` to identify sparse filters.
-    public let filterObservations: [UInt64: FilterObservation]
+    public fileprivate(set) var filterObservations: [UInt64: FilterObservation] = [:]
 
     // MARK: - Coverage Metrics
 
     /// Per-type coverage and descriptive statistics for numeric parameters. Each entry reports decile coverage and min/max/mean of the decoded values. Empty when the generator has no numeric parameters with a domain size of 10 or more.
-    public let numericCoverage: [NumericTypeCoverage]
+    public fileprivate(set) var numericCoverage: [NumericTypeCoverage] = []
     /// Fraction of all pick branches observed out of all possible branches across all pick sites. Returns 1.0 when the generator has no pick sites.
-    public let branchCoverage: Double
+    public fileprivate(set) var branchCoverage = 1.0
     /// Minimum decile coverage across all sequence-length sites. A value below 10 means at least one sequence site did not explore its full length range. Returns 10 when the generator has no sequences.
-    public let sequenceLengthDeciles: Int
+    public fileprivate(set) var sequenceLengthDeciles = 10
     /// Whether the generator contains sequence nodes.
-    public let hasSequences: Bool
+    public fileprivate(set) var hasSequences = false
     /// Smallest observed sequence length. Zero when the generator has no sequences.
-    public let sequenceLengthMin: Int
+    public fileprivate(set) var sequenceLengthMin = 0
     /// Largest observed sequence length. Zero when the generator has no sequences.
-    public let sequenceLengthMax: Int
+    public fileprivate(set) var sequenceLengthMax = 0
     /// Mean observed sequence length. Zero when the generator has no sequences.
-    public let sequenceLengthMean: Double
+    public fileprivate(set) var sequenceLengthMean = 0.0
     /// Per-domain character variety. Each entry reports the fraction covered and the domain size. Empty when the generator has no character parameters. The minimum variety across all domains is used for single-value assertions.
-    public let characterCoverage: [(domainSize: Int, variety: Double)]
+    public fileprivate(set) var characterCoverage: [(domainSize: Int, variety: Double)] = []
 
     /// Minimum character variety across all character domains. Returns 1.0 when the generator has no character parameters.
     public var characterVariety: Double {
@@ -64,9 +64,12 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     }
 
     /// Deciles covered in the normalized per-sample complexity distribution. A value below 10 means the generator does not produce a full variety of structural sizes. Returns 10 when complexity does not vary (for example, generators with no sequences).
-    public let complexityDeciles: Int
+    public fileprivate(set) var complexityDeciles = 10
     /// A representative sample from the midpoint of the run, showing the generator's structural shape at a typical size parameter.
-    package let representativeTree: ChoiceTree?
+    package fileprivate(set) var representativeTree: ChoiceTree?
+
+    /// The empty report: zero samples, no failures, and passing coverage defaults. The starting state `_validate` fills as the run progresses, and the return value for a run whose replay seed was rejected before any sample was generated.
+    init() {}
 
     /// Whether the validation passed with no failures.
     public var passed: Bool {
@@ -340,10 +343,10 @@ private extension Generator where Operation == ReflectiveOperation {
         column: UInt
     ) -> ExamineReport {
         let maxFailures = 20
-        var failures: [ExamineFailure] = []
+        var report = ExamineReport()
+        report.sampleCount = samples
+        report.reflectionSkipped = skipReflection
         var forwardOnlyDetected = skipReflection
-        var valuesGenerated = 0
-        var roundTripSuccesses = 0
         var replaySuccesses = 0
         var uniqueSequenceHashes: Set<UInt64> = []
         var storedTrees: [ChoiceTree] = []
@@ -363,46 +366,51 @@ private extension Generator where Operation == ReflectiveOperation {
             let genStart = monotonicNanoseconds()
             guard let (value, tree) = try? iterator.next() else { continue }
             generationNanoseconds += monotonicNanoseconds() - genStart
-            valuesGenerated += 1
+            report.valuesGenerated += 1
             storedTrees.append(tree)
 
             let generatedSequence = ChoiceSequence.flatten(tree)
             uniqueSequenceHashes.insert(generatedSequence.operativeHash)
 
-            if forwardOnlyDetected == false, failures.count < maxFailures {
+            if forwardOnlyDetected == false, report.failures.count < maxFailures {
                 let success = checkReflectionRoundTrip(
                     value: value,
                     originalTree: tree,
                     sampleIndex: sampleIndex,
                     forwardOnlyDetected: &forwardOnlyDetected,
-                    failures: &failures
+                    failures: &report.failures
                 )
-                if success { roundTripSuccesses += 1 }
+                if success { report.reflectionRoundTripSuccesses += 1 }
             }
 
-            if let replayCheck, failures.count < maxFailures {
+            if let replayCheck, report.failures.count < maxFailures {
                 let replayPassed = checkReplayDeterminism(
                     tree: tree,
                     sampleIndex: sampleIndex,
                     replayCheck: replayCheck,
-                    failures: &failures
+                    failures: &report.failures
                 )
                 if replayPassed { replaySuccesses += 1 }
             }
         }
+        report.replayDeterminismSuccesses = replayCheck != nil ? replaySuccesses : nil
+        report.uniqueChoiceSequences = uniqueSequenceHashes.count
+        report.pinnedFieldCount = skipReflection ? (storedTrees.first?.justNodeCount ?? 0) : 0
+        report.representativeTree = Self.medianComplexityTree(from: storedTrees)
 
         let nanosecondsPerSecond = 1_000_000_000.0
         let totalElapsedNanoseconds = monotonicNanoseconds() - startNanoseconds
-        let elapsedSeconds = Double(totalElapsedNanoseconds) / nanosecondsPerSecond
-        let generationSeconds = Double(generationNanoseconds) / nanosecondsPerSecond
+        report.elapsedTime = Double(totalElapsedNanoseconds) / nanosecondsPerSecond
+        report.generationTime = Double(generationNanoseconds) / nanosecondsPerSecond
 
-        if valuesGenerated == 0 {
-            failures.append(.noValuesGenerated)
+        if report.valuesGenerated == 0 {
+            report.failures.append(.noValuesGenerated)
         }
 
+        report.filterObservations = iterator.filterObservations
         for (fingerprint, observation) in iterator.filterObservations where observation.attempts >= 20 {
             if observation.validityRate < 0.05 {
-                failures.append(.lowFilterValidityRate(
+                report.failures.append(.lowFilterValidityRate(
                     fingerprint: fingerprint,
                     rate: observation.validityRate,
                     attempts: observation.attempts
@@ -411,30 +419,15 @@ private extension Generator where Operation == ReflectiveOperation {
         }
 
         let coverage = ExamineCoverageAnalysis.analyze(trees: storedTrees)
-
-        let report = ExamineReport(
-            sampleCount: samples,
-            valuesGenerated: valuesGenerated,
-            reflectionRoundTripSuccesses: roundTripSuccesses,
-            replayDeterminismSuccesses: replayCheck != nil ? replaySuccesses : nil,
-            uniqueChoiceSequences: uniqueSequenceHashes.count,
-            reflectionSkipped: skipReflection,
-            pinnedFieldCount: skipReflection ? (storedTrees.first?.justNodeCount ?? 0) : 0,
-            failures: failures,
-            generationTime: generationSeconds,
-            elapsedTime: elapsedSeconds,
-            filterObservations: iterator.filterObservations,
-            numericCoverage: coverage.numericCoverage,
-            branchCoverage: coverage.branchCoverage,
-            sequenceLengthDeciles: coverage.sequenceLengthDeciles,
-            hasSequences: coverage.hasSequences,
-            sequenceLengthMin: coverage.sequenceLengthMin,
-            sequenceLengthMax: coverage.sequenceLengthMax,
-            sequenceLengthMean: coverage.sequenceLengthMean,
-            characterCoverage: coverage.characterCoverage,
-            complexityDeciles: coverage.complexityDeciles,
-            representativeTree: Self.medianComplexityTree(from: storedTrees)
-        )
+        report.numericCoverage = coverage.numericCoverage
+        report.branchCoverage = coverage.branchCoverage
+        report.sequenceLengthDeciles = coverage.sequenceLengthDeciles
+        report.hasSequences = coverage.hasSequences
+        report.sequenceLengthMin = coverage.sequenceLengthMin
+        report.sequenceLengthMax = coverage.sequenceLengthMax
+        report.sequenceLengthMean = coverage.sequenceLengthMean
+        report.characterCoverage = coverage.characterCoverage
+        report.complexityDeciles = coverage.complexityDeciles
 
         if reporting?.suppress.issueReporting == true {
             return report

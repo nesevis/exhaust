@@ -255,6 +255,8 @@ public extension __ExhaustRuntime {
         var seed: UInt64?
         var replayIteration: Int?
         var screeningReplayRow: Int?
+        // Seeds the covering array. A screening replay carries it in the seed string, a sampling replay reuses its PRNG seed so a bare seed reruns the same screening rows, and a fresh run draws one so successive runs screen different regions of the pair space instead of the same rows.
+        var coveringSeed = Xoshiro256().seed
         var invalidReplaySeed: ReplaySeed?
         var suppress = SuppressFlags()
         var visualize = false
@@ -278,8 +280,13 @@ public extension __ExhaustRuntime {
                         case let .sampling(resolvedSeed, iteration):
                             seed = resolvedSeed
                             replayIteration = iteration
-                        case let .screening(row):
+                            coveringSeed = resolvedSeed
+                        case let .valueScreening(resolvedSeed, row):
                             screeningReplayRow = row
+                            coveringSeed = resolvedSeed
+                        case .specScreening:
+                            // A tier-addressed seed belongs to a spec test. #exhaust screens one array with no tiers, so honoring the row against it would replay a different combination than the one the seed names.
+                            invalidReplaySeed = replaySeed
                     }
                 case let .suppress(option):
                     suppress.apply(option)
@@ -442,6 +449,7 @@ public extension __ExhaustRuntime {
                 let outcome: ScreeningOutcome<Output> = runScreeningPhase(
                     context: context,
                     screeningBudget: UInt64(budget.screeningBudget),
+                    coveringSeed: coveringSeed,
                     skipToRow: screeningReplayRow,
                     report: &report,
                     ledger: &ledger
@@ -464,6 +472,7 @@ public extension __ExhaustRuntime {
                 let outcome: ScreeningOutcome<Output> = runScreeningPhase(
                     context: context,
                     screeningBudget: screeningBudget,
+                    coveringSeed: coveringSeed,
                     report: &report,
                     ledger: &ledger
                 )

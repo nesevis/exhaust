@@ -5,12 +5,27 @@ import Foundation
 // MARK: - Shared SCA Row Loop
 
 extension __ExhaustRuntime {
+    /// Candidate rows the SCA row loop lost to filter rejection, with the observations naming the filters. Losses are legitimate domain narrowing; the pipeline reports them as a warning so the reduced coverage stays visible.
+    struct ScreeningFilterLosses {
+        var rowsLost = 0
+        var observations: [UInt64: FilterObservation] = [:]
+
+        mutating func merge(_ other: ScreeningFilterLosses) {
+            rowsLost += other.rowsLost
+            observations.merge(other.observations) { existing, new in
+                var combined = existing
+                combined.merge(new)
+                return combined
+            }
+        }
+    }
+
     /// Reports the raw outcome of the SCA row loop before caller-specific failure handling.
     ///
     /// Each caller handles the ``failure`` case differently. The sequential path prunes skipped commands and reduces directly, while the concurrent source wraps the value in a ``StateMachineCandidate`` for the machine to reduce.
     enum SCARowLoopResult<Value> {
-        /// A counterexample was found at the given screening iteration.
-        case failure(value: Value, tree: ChoiceTree, screeningInvocations: Int)
+        /// A counterexample was found at the given 0-based row of the covering array built at `tierLength`, after `screeningInvocations` property invocations overall.
+        case failure(value: Value, tree: ChoiceTree, tierLength: Int, rowInTier: Int, screeningInvocations: Int)
         /// The covering array was exhausted without finding a failure.
         case completed(screeningInvocations: Int)
         /// SCA was not applicable (generator structure or domain too small).
@@ -21,17 +36,21 @@ extension __ExhaustRuntime {
     ///
     /// Builds covering arrays at multiple sequence lengths to cover both short and long command sequences. Budget is split across length tiers: 50% at `min(5, commandLimit)`, 25% at `max(5, commandLimit / 2)`, 25% at `commandLimit`, with duplicate lengths collapsed and their budgets merged. Tiers run shortest-first so minimal counterexamples are found early.
     ///
-    /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:screeningInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"statemachine_screening"` for a fresh run, `"statemachine_screening_replay"` for row replay.
+    /// Returns ``SCARowLoopResult/skipped`` when domain construction fails or the domain is too small for pairwise coverage. Returns ``SCARowLoopResult/failure(value:tree:tierLength:rowInTier:screeningInvocations:)`` with the raw (unreduced) counterexample so callers can apply their own reduction logic. The `logEventPrefix` parameterizes log event names: `"statemachine_screening"` for a fresh run, `"statemachine_screening_replay"` for row replay.
+    ///
+    /// Every tier's covering array takes the same `coveringSeed`, and a `skipTo` replay addresses a row within the covering array built at one sequence length. The tier's row stream depends only on the seed, the length, and the command domain, so the replay reconstructs that one tier and lands on the same row under any budget, without running any other tier.
     static func runSCAScreeningRowLoop<Row, Value>(
         sequenceGen: Generator<Row>,
         commandGen: Generator<some Any>,
         commandLimit: Int,
         screeningBudget: UInt64,
-        skipToRow: Int?,
+        coveringSeed: UInt64,
+        skipTo: (tierLength: Int, row: Int)?,
         logEventPrefix: String,
         concurrencyLevel: Int? = nil,
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<Row>)? = nil,
         leadingFactors: ScreeningLeadingFactors? = nil,
+        onFilterLosses: ((ScreeningFilterLosses) -> Void)? = nil,
         combine: (ChoiceTree?, Row, ChoiceTree) -> (value: Value, tree: ChoiceTree)?,
         property: @escaping @Sendable (Value) -> Bool
     ) -> SCARowLoopResult<Value> {
@@ -59,8 +78,13 @@ extension __ExhaustRuntime {
         let tiers = buildScreeningTiers(commandLimit: commandLimit, totalBudget: screeningBudget)
 
         var totalIterations = 0
+        var filterLosses = ScreeningFilterLosses()
 
         for tier in tiers {
+            // A replay addresses one tier by length. The others contribute nothing to the target row, so they are skipped wholesale rather than run and discarded.
+            if let skipTo, tier.length != skipTo.tierLength {
+                continue
+            }
             let domain: SCADomain
             if let concurrencyLevel {
                 domain = SCADomain.buildForStateMachine(
@@ -73,7 +97,6 @@ extension __ExhaustRuntime {
                 guard let built = SCADomain.build(
                     sequenceLength: tier.length,
                     pickChoices: pickChoices,
-                    screeningBudget: tier.budget,
                     strengthCap: 2
                 ) else {
                     continue
@@ -86,21 +109,26 @@ extension __ExhaustRuntime {
                 continue
             }
 
-            // The leading block's factors join the same covering array, so strength-2 coverage pairs every leading
-            // value with every per-position command value. Its slice of each row is replayed through its own
-            // generator by `combine`; it is never folded into the row's fallback tree.
+            // The leading block's factors join the same covering array, so strength-2 coverage pairs every leading value with every per-position command value.
+            // Its slice of each row is replayed through its own generator by `combine`; it is never folded into the row's fallback tree.
             let leadingDomainSizes = leadingFactors?.domainSizes ?? []
-            let generator = BalancedCoveringArrayGenerator(domainSizes: leadingDomainSizes + rowDomainSizes)
+            let tierDomainSizes = leadingDomainSizes + rowDomainSizes
+            // Saturation gates on the fixed nominal budget rather than this run's, so discovery and a screening replay under a different budget make the same choice.
+            let nextRow = SaturatingRowGenerator.rowStream(
+                domainSizes: tierDomainSizes,
+                seed: coveringSeed,
+                saturationBudget: SequenceCoveringArray.nominalDomainBudget
+            )
             var tierIterations: UInt64 = 0
             var tierAttempts: UInt64 = 0
-            // A replay must land on the exact row discovery found. The global row index depends on how many rows each tier contributes, and the fractional `tier.budget` split makes that budget-dependent — so a replay under a smaller budget would cut a tier short and shift the target row into a different combination. A replay only needs to *reach* `skipToRow` (earlier rows are skipped without running the property), so cap each tier at `skipToRow + 1` instead: every tier then runs to its covering-array completion up to the target, matching the discovery run's row numbering regardless of the replay budget.
-            let tierRowCap = skipToRow.map { UInt64($0) + 1 } ?? tier.budget
+            // A replay runs its one tier exactly to the target row. Earlier rows of that tier are regenerated (the stream is deterministic in the covering seed) but skipped without running the property.
+            let tierRowCap = skipTo.map { UInt64($0.row) + 1 } ?? tier.budget
             let maxAttempts = tierRowCap * 10
 
             let tierLengthRange = UInt64(tier.length) ... UInt64(tier.length)
             let tierGen = sequenceGenForLength?(tierLengthRange) ?? sequenceGen
 
-            while tierIterations < tierRowCap, tierAttempts < maxAttempts, let combinedRow = generator.next() {
+            while tierIterations < tierRowCap, tierAttempts < maxAttempts, let combinedRow = nextRow() {
                 tierAttempts += 1
                 let leadingRow = CoveringArrayRow(values: Array(combinedRow.values.prefix(leadingDomainSizes.count)))
                 let rowValues = CoveringArrayRow(values: Array(combinedRow.values.dropFirst(leadingDomainSizes.count)))
@@ -112,15 +140,24 @@ extension __ExhaustRuntime {
                     continue
                 }
 
-                // The row tree describes the row generator alone, so guided materialization sees a fallback built for
-                // exactly the generator it is materializing. Any leading block is materialized separately in `combine`.
+                // The row tree describes the row generator alone, so guided materialization sees a fallback built for exactly the generator it is materializing. Any leading block is materialized separately in `combine`.
+                // The seed derives from the row's replay address alone (covering seed, tier length, row within the tier), never from rows other tiers produced, because a tier-skipping replay cannot reconstruct those counts. The sequential path is insensitive to this seed (its analyzed domains pin every argument in the fallback tree), but the concurrent path's command-type-only domains leave all command arguments to the PRNG, and a global count here made later-tier replays materialize different arguments than discovery.
                 let mode = Materializer.Mode.guided(
-                    seed: UInt64(totalIterations),
+                    seed: Xoshiro256.deriveSeed(
+                        from: Xoshiro256.deriveSeed(from: coveringSeed, at: UInt64(tier.length)),
+                        at: tierIterations
+                    ),
                     fallbackTree: tree
                 )
-                guard case let .success(rowValue, freshTree, _) = Materializer.materialize(
-                    tierGen, prefix: ChoiceSequence(), mode: mode
-                ) else {
+                let materialized = Materializer.materialize(tierGen, prefix: ChoiceSequence(), mode: mode)
+                guard case let .success(rowValue, freshTree, _) = materialized else {
+                    // Failed predicate attempts on record mean the row was lost to a filter: a pinned-value rejection or an exhausted retry budget.
+                    if case let .failed(report) = materialized,
+                       let observations = report?.filterObservations,
+                       observations.values.contains(where: \.hasRejections)
+                    {
+                        filterLosses.merge(ScreeningFilterLosses(rowsLost: 1, observations: observations))
+                    }
                     continue
                 }
                 guard let (value, candidateTree) = combine(leadingTree, rowValue, freshTree) else {
@@ -129,13 +166,19 @@ extension __ExhaustRuntime {
 
                 tierIterations += 1
                 totalIterations += 1
-                if let skipToRow, totalIterations - 1 < skipToRow {
+                if let skipTo, Int(tierIterations) - 1 < skipTo.row {
                     continue
                 }
                 if property(value) == false {
-                    return .failure(value: value, tree: candidateTree, screeningInvocations: totalIterations)
+                    return .failure(
+                        value: value,
+                        tree: candidateTree,
+                        tierLength: tier.length,
+                        rowInTier: Int(tierIterations) - 1,
+                        screeningInvocations: totalIterations
+                    )
                 }
-                if skipToRow != nil {
+                if skipTo != nil {
                     return .completed(screeningInvocations: totalIterations)
                 }
             }
@@ -152,6 +195,11 @@ extension __ExhaustRuntime {
                 "strength": "2",
             ]
         )
+
+        // Fresh completed sweeps only: a found failure supersedes the coverage concern, and replay drift is already covered by the unreachable-row error.
+        if let onFilterLosses, skipTo == nil, filterLosses.rowsLost > 0 {
+            onFilterLosses(filterLosses)
+        }
 
         return .completed(screeningInvocations: totalIterations)
     }
@@ -289,5 +337,23 @@ extension __ExhaustRuntime {
         )
 
         return limit
+    }
+}
+
+// MARK: - Filter Loss Reporting
+
+extension __ExhaustRuntime.ScreeningFilterLosses {
+    /// The runtime warning naming the lost coverage and the filters responsible.
+    var warningMessage: String {
+        let sites = observations.values.compactMap { observation -> String? in
+            guard observation.hasRejections, let location = observation.sourceLocation else {
+                return nil
+            }
+            let file = "\(location.fileID)".split(separator: "/").last.map(String.init) ?? "\(location.fileID)"
+            return "\(file):\(location.line)"
+        }
+        let siteList = sites.isEmpty ? "an unlocatable filter" : Array(Set(sites)).sorted().joined(separator: ", ")
+        let rowNoun = rowsLost == 1 ? "row" : "rows"
+        return "Spec screening lost \(rowsLost) candidate \(rowNoun) to filter rejection (\(siteList)). Screening coverage is reduced; the run continues to random sampling."
     }
 }

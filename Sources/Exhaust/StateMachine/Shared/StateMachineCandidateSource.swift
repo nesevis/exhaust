@@ -1,5 +1,70 @@
 import ExhaustCore
 
+/// How a candidate was discovered, carrying the seed material each discovery method actually produces.
+///
+/// Merging the seed into the discovery case makes the unrepresentable states unconstructible: a screening candidate cannot lack its replay address, and no other candidate can carry one.
+enum StateMachineCandidateProvenance {
+    /// An SCA screening row: the covering-array seed whose row stream produced it, the sequence length of the tier it came from, and the 0-based row within that tier.
+    case screening(coveringSeed: UInt64, tierLength: Int, rowInTier: Int)
+    /// The fixed seed-0 sequential probe.
+    case smokeTest
+    /// Random sampling with the given PRNG seed.
+    case randomSampling(seed: UInt64)
+    /// A sampling replay with the given PRNG seed.
+    case replay(seed: UInt64)
+
+    var discoveryMethod: StateMachineDiscoveryMethod {
+        switch self {
+            case .screening: .screening
+            case .smokeTest: .smokeTest
+            case .randomSampling: .randomSampling
+            case .replay: .replay
+        }
+    }
+
+    /// Encodes the replay seed string for reproducing this candidate's failure.
+    ///
+    /// Screening candidates encode their full replay address as `{seed}-U{row}L{length}` (for example, `3RT5GH8KM2-U3L5` replays the third row of that seed's length-5 tier). Smoke tests encode a fixed seed. Random sampling and replay produce the standard seed-iteration format, taking `iteration` from the candidate.
+    func encodeReplaySeed(iteration: Int) -> String {
+        switch self {
+            case let .screening(coveringSeed, tierLength, rowInTier):
+                ReplaySeed.Resolved.specScreening(seed: coveringSeed, row: rowInTier, tierLength: tierLength).encoded
+            case .smokeTest:
+                ReplaySeed.Resolved.sampling(seed: 0, iteration: 1).encoded
+            case let .randomSampling(seed), let .replay(seed):
+                ReplaySeed.Resolved.sampling(seed: seed, iteration: iteration).encoded
+        }
+    }
+
+    /// The seed for ``StateMachineResult/seed``: only those a sampling replay can consume.
+    ///
+    /// A screening candidate is addressed by covering-array row and a smoke test is a hardcoded zero. Neither addresses a point in a PRNG stream, so neither belongs in ``StateMachineResult/seed``. The screening address still reaches the user through ``StateMachineResult/replaySeed``.
+    var resultSeed: UInt64? {
+        switch self {
+            case .screening, .smokeTest: nil
+            case let .randomSampling(seed), let .replay(seed): seed
+        }
+    }
+
+    /// The PRNG seed command pruning draws from. A screening row comes from a covering array rather than a PRNG stream, so pruning gets a synthetic seed derived from the row's tier-local address, which discovery and a replay compute identically.
+    var pruningSeed: UInt64 {
+        switch self {
+            case let .screening(_, _, rowInTier): UInt64(rowInTier)
+            case .smokeTest: 0
+            case let .randomSampling(seed), let .replay(seed): seed
+        }
+    }
+
+    /// The seed the failure context reports: the PRNG seed for candidates a PRNG produced, and `nil` for screening, whose identity is a covering-array row rather than a position in a PRNG stream.
+    var failureContextSeed: UInt64? {
+        switch self {
+            case .screening: nil
+            case .smokeTest: 0
+            case let .randomSampling(seed), let .replay(seed): seed
+        }
+    }
+}
+
 /// Carries a failing candidate from a source to the ``SpecMachine`` for reduction.
 struct StateMachineCandidate<Spec: StateMachineSpecBase> {
     /// The full generated candidate: the setup step ahead of the tagged command sequence.
@@ -8,9 +73,23 @@ struct StateMachineCandidate<Spec: StateMachineSpecBase> {
     let tree: ChoiceTree
     /// The command-side generator that produced this candidate's command child. Pruning and reduction must use it so the choice sequence stays consistent with the command child of `tree`. Smoke supplies a concurrency-1 generator, so a smoke-discovered failure reduces sequentially regardless of the run's lane count.
     let sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>
-    let seed: UInt64
     let iteration: Int
-    let discoveryMethod: StateMachineDiscoveryMethod
+    let provenance: StateMachineCandidateProvenance
+
+    var discoveryMethod: StateMachineDiscoveryMethod {
+        provenance.discoveryMethod
+    }
+}
+
+/// Thrown by the screening replay source when its addressed covering-array row cannot be reproduced, which means the spec's command domain no longer matches the one the seed was recorded against.
+struct ScreeningReplayRowUnreachable: Error, CustomStringConvertible {
+    let row: Int
+    let tierLength: Int
+    let rowsProduced: Int
+
+    var description: String {
+        "screening replay never reached row \(row + 1) of the length-\(tierLength) tier (the tier produced \(rowsProduced) row\(rowsProduced == 1 ? "" : "s")); the spec or its command domain has changed since the seed was recorded"
+    }
 }
 
 /// Produces failing candidates for the ``SpecMachine``, owning its iteration state internally.
@@ -67,24 +146,30 @@ extension AnyStateMachineCandidateSource {
 // MARK: - Source Factories
 
 extension AnyStateMachineCandidateSource {
-    /// Replays a single SCA screening row from a `U-{N}` seed.
+    /// Replays a single SCA screening row from a `{seed}-U{row}L{length}` seed.
     static func screeningReplay(
+        coveringSeed: UInt64,
+        tierLength: Int,
         row: Int,
         sequenceGen: Generator<[(ScheduleMarker, Spec.Command)]>,
         commandGen: Generator<Spec.Command>,
         commandLimit: Int,
         screeningBudget: UInt64,
-        concurrencyLevel: Int,
+        concurrencyLevel: Int?,
         leadingFactors: ScreeningLeadingFactors?,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
-        .once(discoveryMethod: .screening, resolvedReplaySeed: .screening(row: row)) {
+        .once(
+            discoveryMethod: .screening,
+            resolvedReplaySeed: .specScreening(seed: coveringSeed, row: row, tierLength: tierLength)
+        ) {
             let result = __ExhaustRuntime.runSCAScreeningRowLoop(
                 sequenceGen: sequenceGen,
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: screeningBudget,
-                skipToRow: row,
+                coveringSeed: coveringSeed,
+                skipTo: (tierLength: tierLength, row: row),
                 logEventPrefix: "statemachine_screening_replay",
                 concurrencyLevel: concurrencyLevel,
                 leadingFactors: leadingFactors,
@@ -93,18 +178,23 @@ extension AnyStateMachineCandidateSource {
             )
 
             switch result {
-                case let .failure(value, tree, screeningInvocations):
-                    // Match the shape of a fresh screening candidate so the replayed failure round-trips to the same `U-N` seed and nils its synthetic seed.
+                case let .failure(value, tree, tierLength, rowInTier, screeningInvocations):
+                    // Match the shape of a fresh screening candidate so the replayed failure round-trips to the seed it was replayed from.
                     return StateMachineCandidate(
                         value: value,
                         tree: tree,
                         sequenceGen: sequenceGen,
-                        seed: UInt64(screeningInvocations),
                         iteration: screeningInvocations,
-                        discoveryMethod: .screening
+                        provenance: .screening(coveringSeed: coveringSeed, tierLength: tierLength, rowInTier: rowInTier)
                     )
-                case .completed, .skipped:
+                case let .completed(screeningInvocations):
+                    // Reaching the row costs exactly row + 1 iterations in a tier-skipping replay, so fewer means the tier's row stream ended first. Returning nil would let a stale regression pin pass as if the failure were fixed.
+                    if screeningInvocations < row + 1 {
+                        throw ScreeningReplayRowUnreachable(row: row, tierLength: tierLength, rowsProduced: screeningInvocations)
+                    }
                     return nil
+                case .skipped:
+                    throw ScreeningReplayRowUnreachable(row: row, tierLength: tierLength, rowsProduced: 0)
             }
         }
     }
@@ -138,9 +228,8 @@ extension AnyStateMachineCandidateSource {
                 value: value,
                 tree: tree,
                 sequenceGen: sequenceGen,
-                seed: replaySeed,
                 iteration: Int(startIndex) + 1,
-                discoveryMethod: .replay
+                provenance: .replay(seed: replaySeed)
             )
         }
     }
@@ -163,9 +252,8 @@ extension AnyStateMachineCandidateSource {
                 value: value,
                 tree: tree,
                 sequenceGen: sequenceGen,
-                seed: 0,
                 iteration: 0,
-                discoveryMethod: .smokeTest
+                provenance: .smokeTest
             )
         }
     }
@@ -176,9 +264,11 @@ extension AnyStateMachineCandidateSource {
         commandGen: Generator<Spec.Command>,
         commandLimit: Int,
         screeningBudget: UInt64,
-        concurrencyLevel: Int,
+        coveringSeed: UInt64,
+        concurrencyLevel: Int?,
         sequenceGenForLength: ((ClosedRange<UInt64>) -> Generator<[(ScheduleMarker, Spec.Command)]>)? = nil,
         leadingFactors: ScreeningLeadingFactors?,
+        onFilterLosses: ((__ExhaustRuntime.ScreeningFilterLosses) -> Void)? = nil,
         property: @escaping @Sendable (SpecCandidateValue<Spec>) -> Bool
     ) -> AnyStateMachineCandidateSource {
         .once(discoveryMethod: .screening) {
@@ -187,24 +277,25 @@ extension AnyStateMachineCandidateSource {
                 commandGen: commandGen,
                 commandLimit: commandLimit,
                 screeningBudget: screeningBudget,
-                skipToRow: nil,
+                coveringSeed: coveringSeed,
+                skipTo: nil,
                 logEventPrefix: "statemachine_screening",
                 concurrencyLevel: concurrencyLevel,
                 sequenceGenForLength: sequenceGenForLength,
                 leadingFactors: leadingFactors,
+                onFilterLosses: onFilterLosses,
                 combine: __ExhaustRuntime.screeningCombine(Spec.self),
                 property: property
             )
 
             switch result {
-                case let .failure(value, tree, screeningInvocations):
+                case let .failure(value, tree, tierLength, rowInTier, screeningInvocations):
                     return StateMachineCandidate(
                         value: value,
                         tree: tree,
                         sequenceGen: sequenceGen,
-                        seed: UInt64(screeningInvocations),
                         iteration: screeningInvocations,
-                        discoveryMethod: .screening
+                        provenance: .screening(coveringSeed: coveringSeed, tierLength: tierLength, rowInTier: rowInTier)
                     )
                 case .completed, .skipped:
                     return nil
@@ -234,9 +325,8 @@ extension AnyStateMachineCandidateSource {
                         value: value,
                         tree: tree,
                         sequenceGen: sequenceGen,
-                        seed: seed,
                         iteration: iteration,
-                        discoveryMethod: .randomSampling
+                        provenance: .randomSampling(seed: seed)
                     )
                 }
             }

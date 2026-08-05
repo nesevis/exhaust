@@ -5,6 +5,31 @@ import Testing
 
 @Suite("Spec replay seed resolution", .serialized, .tags(.stateMachine))
 struct StateMachineReplayTests {
+    @Test("A bare seed pins the screening sweep")
+    func bareSeedPinsScreeningSweep() async {
+        /// The bare-seed contract: `.replay(42)` runs the full pipeline under that seed, so the screening sweep must run and must probe the same command sequences every time. A gate that skips screening whenever a seed is present fails the equality by recording nothing beyond the smoke probe (making both traces identical across seeds), and an unpinned covering array fails it by rotating per run.
+        func screenedTrace(seed: UInt64) async -> [String] {
+            ScreeningTraceSpec.trace = []
+            _ = await #execute(
+                ScreeningTraceSpec.self,
+                mode: .sequential,
+                .commandLimit(4),
+                .budget(.custom(screening: 60, sampling: 0)),
+                .replay(.numeric(seed)),
+                .suppress(.issueReporting)
+            )
+            return ScreeningTraceSpec.trace
+        }
+
+        let first = await screenedTrace(seed: 42)
+        let second = await screenedTrace(seed: 42)
+        let rotated = await screenedTrace(seed: 43)
+
+        #expect(first.isEmpty == false)
+        #expect(first == second)
+        #expect(first != rotated)
+    }
+
     @Test("Iteration-targeted replay reproduces a sampling failure")
     func iterationTargetedReplayReproducesSamplingFailure() async throws {
         let initial = try #require(
@@ -47,7 +72,7 @@ struct StateMachineReplayTests {
             return
         }
         let replaySeed = try #require(initial.replaySeed)
-        #expect(replaySeed.hasPrefix("U"), "SCA replay seed should have U prefix")
+        #expect(replaySeed.contains("-U"), "SCA replay seed should carry a U row marker")
 
         let replayed = try #require(
             await #execute(
@@ -437,3 +462,28 @@ final class ThrowingSUT: @unchecked Sendable, CustomDebugStringConvertible {
 }
 
 private struct AlwaysThrowingError: Error {}
+
+// MARK: - Screening Trace StateMachine
+
+/// Records every executed command so tests can observe which sequences the screening sweep probed. Commands are declared `throws` to give the spec a failure channel; nothing ever throws, so every run passes and the sweep runs to completion.
+@StateMachine
+private final class ScreeningTraceSpec {
+    nonisolated(unsafe) static var trace: [String] = []
+    @SystemUnderTest var sut = PassiveSUT()
+
+    @Command(weight: 1, .int(in: 0 ... 9))
+    func add(value: Int) throws {
+        Self.trace.append("add(\(value))")
+    }
+
+    @Command(weight: 1)
+    func clear() throws {
+        Self.trace.append("clear")
+    }
+
+    func failureDescription() -> String? {
+        nil
+    }
+}
+
+private struct PassiveSUT {}

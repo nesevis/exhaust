@@ -28,21 +28,20 @@ import ExhaustCore
             if let range {
                 precondition(range.lowerBound.isFinite && range.upperBound.isFinite, "Range bounds must be finite")
             }
-            let generator: Generator<Float16> = if let range {
-                if let scaling {
+            let generator: Generator<Float16> = switch (range, scaling) {
+                case let (range?, scaling?):
                     Gen.choose(in: range, scaling: scaling)
-                } else if range == -Float16.greatestFiniteMagnitude ... Float16.greatestFiniteMagnitude {
+                case let (range?, nil) where range == -Float16.greatestFiniteMagnitude ... Float16.greatestFiniteMagnitude:
                     Gen.choose(in: range, scaling: Float16.defaultScaling)
-                } else {
+                case let (range?, nil):
                     Gen.choose(in: range)
-                }
-            } else {
-                Gen.choose(
-                    in: nil as ClosedRange<Float16>?,
-                    type: Float16.self,
-                    isRangeExplicit: false,
-                    scaling: (scaling ?? Float16.defaultScaling).erased
-                )
+                case (nil, _):
+                    Gen.choose(
+                        in: nil as ClosedRange<Float16>?,
+                        type: Float16.self,
+                        isRangeExplicit: false,
+                        scaling: (scaling ?? Float16.defaultScaling).erased
+                    )
             }
             return generator.wrapped
         }
@@ -77,21 +76,20 @@ public extension ReflectiveGenerator {
         if let range {
             precondition(range.lowerBound.isFinite && range.upperBound.isFinite, "Range bounds must be finite")
         }
-        let generator: Generator<Double> = if let range {
-            if let scaling {
+        let generator: Generator<Double> = switch (range, scaling) {
+            case let (range?, scaling?):
                 Gen.choose(in: range, scaling: scaling)
-            } else if range == -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude {
+            case let (range?, nil) where range == -Double.greatestFiniteMagnitude ... Double.greatestFiniteMagnitude:
                 Gen.choose(in: range, scaling: Double.defaultScaling)
-            } else {
+            case let (range?, nil):
                 Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(
-                in: nil as ClosedRange<Double>?,
-                type: Double.self,
-                isRangeExplicit: false,
-                scaling: (scaling ?? Double.defaultScaling).erased
-            )
+            case (nil, _):
+                Gen.choose(
+                    in: nil as ClosedRange<Double>?,
+                    type: Double.self,
+                    isRangeExplicit: false,
+                    scaling: (scaling ?? Double.defaultScaling).erased
+                )
         }
         return generator.wrapped
     }
@@ -111,21 +109,20 @@ public extension ReflectiveGenerator {
         if let range {
             precondition(range.lowerBound.isFinite && range.upperBound.isFinite, "Range bounds must be finite")
         }
-        let generator: Generator<Float> = if let range {
-            if let scaling {
+        let generator: Generator<Float> = switch (range, scaling) {
+            case let (range?, scaling?):
                 Gen.choose(in: range, scaling: scaling)
-            } else if range == -Float.greatestFiniteMagnitude ... Float.greatestFiniteMagnitude {
+            case let (range?, nil) where range == -Float.greatestFiniteMagnitude ... Float.greatestFiniteMagnitude:
                 Gen.choose(in: range, scaling: Float.defaultScaling)
-            } else {
+            case let (range?, nil):
                 Gen.choose(in: range)
-            }
-        } else {
-            Gen.choose(
-                in: nil as ClosedRange<Float>?,
-                type: Float.self,
-                isRangeExplicit: false,
-                scaling: (scaling ?? Float.defaultScaling).erased
-            )
+            case (nil, _):
+                Gen.choose(
+                    in: nil as ClosedRange<Float>?,
+                    type: Float.self,
+                    isRangeExplicit: false,
+                    scaling: (scaling ?? Float.defaultScaling).erased
+                )
         }
         return generator.wrapped
     }

@@ -110,7 +110,7 @@ public extension __ExhaustRuntime {
                 sequenceGen: taggedSeqGen,
                 commandGen: commandGen.gen,
                 commandLimit: commandLimit,
-                concurrencyLevel: 1,
+                concurrencyLevel: nil,
                 identifySkips: identifySkips,
                 property: property,
                 invocationCounter: invocationCounter,
@@ -244,7 +244,7 @@ private extension __ExhaustRuntime {
             sequenceGen: taggedSeqGen,
             commandGen: commandGen.gen,
             commandLimit: commandLimit,
-            concurrencyLevel: 1,
+            concurrencyLevel: nil,
             identifySkips: identifySkips,
             property: property,
             invocationCounter: invocationCounter,
@@ -277,7 +277,7 @@ extension __ExhaustRuntime {
     ) -> (result: StateMachineResult<Spec>?, deferredIssues: [String]) {
         var deferredIssues: [String] = []
 
-        guard config.screeningReplayRow == nil, config.seed == nil else {
+        guard config.screeningReplay == nil, config.seed == nil else {
             return (nil, deferredIssues)
         }
 
@@ -289,18 +289,16 @@ extension __ExhaustRuntime {
 
             var replayConfig = config
             switch decoded {
-                case let .screening(row):
-                    replayConfig.screeningReplayRow = row
-                    let needed = row + 1
-                    if replayConfig.budget.screeningBudget < needed {
-                        replayConfig.budget = .custom(
-                            screening: needed,
-                            sampling: replayConfig.budget.samplingBudget
-                        )
-                    }
+                case let .specScreening(resolvedSeed, row, tierLength):
+                    replayConfig.screeningReplay = (tierLength: tierLength, row: row)
+                    replayConfig.coveringSeed = resolvedSeed
+                case .valueScreening:
+                    deferredIssues.append("Screening regression seed lacks a tier marker: \(encodedSeed)")
+                    continue
                 case let .sampling(seed, iteration?):
                     replayConfig.seed = seed
                     replayConfig.replayIteration = iteration
+                    replayConfig.coveringSeed = seed
                     if replayConfig.budget.samplingBudget < iteration + 1 {
                         replayConfig.budget = .custom(
                             screening: replayConfig.budget.screeningBudget,
@@ -309,6 +307,7 @@ extension __ExhaustRuntime {
                     }
                 case let .sampling(seed, nil):
                     replayConfig.seed = seed
+                    replayConfig.coveringSeed = seed
             }
 
             let (result, issues) = runMachine(replayConfig)

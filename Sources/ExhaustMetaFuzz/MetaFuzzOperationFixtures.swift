@@ -366,6 +366,7 @@ package extension MetaFuzz {
         let result = ScreeningRunner.run(
             generator,
             screeningBudget: screeningBudget,
+            coveringSeed: 0,
             property: { output in
                 let outputIsValid = fixture.recipe.outputType.acceptsRuntimeOutput(output)
                 if outputIsValid == false, firstViolation == nil {

@@ -29,6 +29,15 @@ package final class BalancedCoveringArrayGenerator {
     /// Domains above this threshold use deterministic spread instead of greedy pairwise optimization.
     package static let greedyThreshold = 64
 
+    /// Seeds the value scan's starting offset in the greedy fill and the lap offset in the spread path.
+    ///
+    /// In the greedy fill, the first pick of every row saturates `maxPossibleGain`, so `break search` takes whichever value it scans first. Scanning from a derived offset instead of always from zero picks an equally optimal value in a different place, which is what stops successive rows filling shells outward from the origin.
+    ///
+    /// In the spread path, the seed joins the per-lap offset derivation, so a truncated run's row prefix varies per seed rather than testing the same leading points every run.
+    ///
+    /// Zero means no offset in either path, preserving the unseeded array exactly.
+    private let seed: UInt64
+
     private let paramCount: Int
     private let domainSizes: [Int]
     private let useGreedy: Bool
@@ -48,7 +57,8 @@ package final class BalancedCoveringArrayGenerator {
     /// - Parameters:
     ///   - domainSizes: The number of distinct values for each parameter, in original order.
     ///   - greedyThreshold: Per-domain size above which the generator falls back to deterministic spread. Defaults to ``greedyThreshold``. Pass a higher value when the parameter count is small enough that the pairwise bit vector memory (proportional to `paramCount² × maxDomain²`) is acceptable.
-    package init(domainSizes: [UInt64], greedyThreshold: Int? = nil) {
+    package init(domainSizes: [UInt64], seed: UInt64 = 0, greedyThreshold: Int? = nil) {
+        self.seed = seed
         let effectiveThreshold = greedyThreshold ?? Self.greedyThreshold
         paramCount = domainSizes.count
         let perParamCap = Self.maxDomainSize / max(paramCount, 1)
@@ -156,16 +166,24 @@ package final class BalancedCoveringArrayGenerator {
                         sliceBuffer: sliceBuffer
                     )
 
-                    var value = 0
-                    while value < domain {
-                        let gain = gainScratch[value]
-                        if gain > bestGain {
-                            bestGain = gain
-                            bestParam = param
-                            bestValue = value
-                            if gain >= maxPossibleGain { break search }
+                    let valueOffset = seed == 0
+                        ? 0
+                        : Int(
+                            Xoshiro256.deriveSeed(from: seed &+ UInt64(rowCount), at: UInt64(param))
+                                % UInt64(domain)
+                        )
+                    // Two contiguous passes rather than one wrapping scan: each pass is a plain monotone loop the optimizer can unroll, where a per-step wrap or modulo costs ~20% on large domains. An unseeded generator's first pass is exactly the full scan, and its second is empty.
+                    for rangeIndex in 0 ..< 2 {
+                        let range = rangeIndex == 0 ? valueOffset ..< domain : 0 ..< valueOffset
+                        for value in range {
+                            let gain = gainScratch[value]
+                            if gain > bestGain {
+                                bestGain = gain
+                                bestParam = param
+                                bestValue = value
+                                if gain >= maxPossibleGain { break search }
+                            }
                         }
-                        value &+= 1
                     }
                 }
 
@@ -186,9 +204,9 @@ package final class BalancedCoveringArrayGenerator {
         var row = [UInt64](repeating: 0, count: paramCount)
         for param in 0 ..< paramCount {
             let domain = domainSizes[param]
-            // The lap offset is constant within a lap, so each parameter still sweeps its full domain every `domain` rows, and varies across laps to break the joint period: without it, any parameter pair repeats with period lcm(d1, d2), capping pair coverage at 1/gcd(d1, d2) regardless of budget.
+            // The lap offset is constant within a lap, so each parameter still sweeps its full domain every `domain` rows, and varies across laps to break the joint period: without it, any parameter pair repeats with period lcm(d1, d2), capping pair coverage at 1/gcd(d1, d2) regardless of budget. Mixing in the seed rotates which points a truncated run sees, and a zero seed reproduces the unseeded derivation exactly.
             let lap = rowCount / domain
-            let lapOffset = Int(Xoshiro256.deriveSeed(from: UInt64(lap), at: UInt64(param)) % UInt64(domain))
+            let lapOffset = Int(Xoshiro256.deriveSeed(from: seed &+ UInt64(lap), at: UInt64(param)) % UInt64(domain))
             row[param] = UInt64((rowCount &* spreadStrides[param] &+ param &+ lapOffset) % domain)
         }
         rowCount += 1

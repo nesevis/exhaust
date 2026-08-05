@@ -22,7 +22,7 @@ public struct StateMachineResult<Spec: StateMachineSpecBase> {
     /// The seed for deterministic replay, if available.
     public let seed: UInt64?
 
-    /// The encoded replay string for reproducing this failure (for example, `"1A-7"` or `"U3"`), or `nil` if no seed is available.
+    /// The encoded replay string for reproducing this failure (for example, `"1A-7"` or `"1A-U3L5"`), or `nil` if no seed is available.
     public let replaySeed: String?
 
     /// How the failing example was discovered.
@@ -46,30 +46,6 @@ public enum StateMachineDiscoveryMethod: Equatable, Sendable, CustomStringConver
             case .screening: "screening"
             case .randomSampling: "random sampling"
             case .replay: "replay"
-        }
-    }
-
-    /// Encodes a replay seed string for reproducing a failure found by this discovery method.
-    ///
-    /// Screening results encode the row number as `U-{row}` (for example, `U-3` replays the third screening row). Smoke tests encode a fixed seed. Random sampling and replay produce the standard seed-iteration format, returning `nil` when no seed is available.
-    func encodeReplaySeed(seed: UInt64?, iteration: Int) -> String? {
-        switch self {
-            case .screening:
-                ReplaySeed.Resolved.encodeScreeningIteration(iteration)
-            case .smokeTest:
-                ReplaySeed.Resolved.sampling(seed: 0, iteration: 1).encoded
-            case .randomSampling, .replay:
-                seed.map { ReplaySeed.Resolved.sampling(seed: $0, iteration: iteration).encoded }
-        }
-    }
-
-    /// Filters synthetic seeds to `nil`, passing through only seeds that enable deterministic replay.
-    ///
-    /// Screening and smoke-test candidates carry synthetic seeds (row numbers or hardcoded zero) that have no PRNG replay value.
-    func resultSeed(_ rawSeed: UInt64?) -> UInt64? {
-        switch self {
-            case .screening, .smokeTest: nil
-            case .randomSampling, .replay: rawSeed
         }
     }
 }

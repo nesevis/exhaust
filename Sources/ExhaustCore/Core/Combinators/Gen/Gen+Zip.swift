@@ -34,11 +34,13 @@ package extension Gen {
             continuation: { .pure($0) }
         )
 
+        let arity = erased.count
+
         // The `[Any]` ↔ tuple packaging is a framework-authored exact inverse pair, so it qualifies for `.isomorph`: one transform node replaces the contramap + map sandwich this method emitted previously.
         return Gen.liftF(.transform(
             kind: .isomorph(
                 forward: { anyValues in
-                    let values = anyValues as! [Any]
+                    let values = try zipComponents(anyValues, arity: arity)
                     var index = 0
                     func next<Element>(_: Element.Type) -> Element {
                         defer { index += 1 }

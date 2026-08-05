@@ -8,17 +8,20 @@ struct ResolvedConcurrentConfig {
     var budget: ExhaustBudget = .standard
     var seed: UInt64?
     var replayIteration: Int?
-    var screeningReplayRow: Int?
+    /// The screening row to replay, addressed tier-locally: the sequence length identifying the tier and the 0-based row within its covering array.
+    var screeningReplay: (tierLength: Int, row: Int)?
+    /// Seeds the SCA covering array. A screening replay carries it in the seed string, a sampling replay reuses its PRNG seed so a bare seed pins the whole pipeline, and a fresh run draws one, so successive runs screen different regions of the command space instead of the same rows.
+    var coveringSeed: UInt64 = Xoshiro256().seed
     static let defaultIdleTimeout = 2000
     var idleTimeoutMilliseconds: Int = defaultIdleTimeout
     var suppress = SuppressFlags()
     var onReportClosure: ((ExhaustReport) -> Void)?
     var logLevel: LogLevel = .error
 
+    /// Whether the run performs the full SCA screening sweep. Targeted replays (a sampling iteration or a screening row) skip it: they must reproduce one failure, and a fresh sweep could surface an unrelated one first. A bare seed is not a targeted replay — it promises the whole pipeline deterministically under that seed, so it keeps the sweep, pinned through ``coveringSeed``.
     var shouldRunScreening: Bool {
         replayIteration == nil
-            && seed == nil
-            && screeningReplayRow == nil
+            && screeningReplay == nil
             && budget.screeningBudget > 0
     }
 
@@ -64,8 +67,13 @@ struct ResolvedConcurrentConfig {
                             case let .sampling(resolvedSeed, iteration):
                                 config.seed = resolvedSeed
                                 config.replayIteration = iteration
-                            case let .screening(row):
-                                config.screeningReplayRow = row
+                                config.coveringSeed = resolvedSeed
+                            case let .specScreening(resolvedSeed, row, tierLength):
+                                config.screeningReplay = (tierLength: tierLength, row: row)
+                                config.coveringSeed = resolvedSeed
+                            case .valueScreening:
+                                // A tierless seed addresses a value test's single array and cannot pick a tier here.
+                                invalidSeed = replaySeed
                         }
                     } else {
                         invalidSeed = replaySeed

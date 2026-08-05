@@ -599,7 +599,7 @@ private func screeningFindsFailure<Output>(
     gen: Generator<Output>,
     property: @escaping (Output) -> Bool
 ) -> Bool {
-    let result = ScreeningRunner.run(gen, screeningBudget: 200, property: property)
+    let result = ScreeningRunner.run(gen, screeningBudget: 200, coveringSeed: 0, property: property)
     if case .failure = result { return true }
     return false
 }

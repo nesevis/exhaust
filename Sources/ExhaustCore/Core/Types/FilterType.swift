@@ -105,6 +105,11 @@ public struct FilterObservation: Sendable {
         if passed { passes += 1 }
     }
 
+    /// Whether any recorded attempt failed the predicate.
+    public var hasRejections: Bool {
+        passes < attempts
+    }
+
     /// Merges another observation into this one by summing counters.
     public mutating func merge(_ other: FilterObservation) {
         attempts += other.attempts

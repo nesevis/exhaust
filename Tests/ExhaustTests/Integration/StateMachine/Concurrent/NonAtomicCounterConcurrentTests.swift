@@ -162,8 +162,8 @@ struct NonAtomicCounterConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Concurrent spec screening failure carries U-prefixed replay seed")
-    func concurrentStateMachineScreeningFailureCarriesUPrefixedReplaySeed() async throws {
+    @Test("Concurrent spec screening failure carries a U-marked replay seed")
+    func concurrentStateMachineScreeningFailureCarriesUMarkedReplaySeed() async throws {
         let result = try #require(
             await #execute(
                 NonAtomicCounterSpec.self,
@@ -174,7 +174,7 @@ struct NonAtomicCounterConcurrentTests {
             )
         )
         let replaySeed = try #require(result.replaySeed)
-        #expect(replaySeed.hasPrefix("U"), "Screening replay seed should have U prefix")
+        #expect(replaySeed.contains("-U"), "Screening replay seed should carry a U row marker")
     }
 }
 
