@@ -1,0 +1,45 @@
+{
+  "kind" : "pipelineCase",
+  "oracle" : "FlatEmissionParityViolation",
+  "perturbationSeed" : 17351986117408355332,
+  "recipe" : {
+    "combinator" : {
+      "_0" : {
+        "classified" : {
+          "_0" : {
+            "combinator" : {
+              "_0" : {
+                "boundArray" : {
+                  "element" : {
+                    "combinator" : {
+                      "_0" : {
+                        "filtered" : {
+                          "_0" : {
+                            "leaf" : {
+                              "_0" : {
+                                "int" : {
+                                  "_0" : [
+                                    0,
+                                    1
+                                  ]
+                                }
+                              }
+                            }
+                          },
+                          "_1" : "isPositive"
+                        }
+                      }
+                    }
+                  },
+                  "maxLength" : 1
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "valueSeed" : 0,
+  "version" : 1
+}

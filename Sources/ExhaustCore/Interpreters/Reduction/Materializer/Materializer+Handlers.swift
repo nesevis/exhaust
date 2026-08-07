@@ -815,7 +815,9 @@ extension Materializer {
 
     /// Materializes through a filter site, re-checking the predicate against the materialized value and recording the observation.
     ///
-    /// In guided mode a rejected predicate retries from the continuing seeded PRNG, bounded by ``__ExhaustRuntime/maxFilterRuns``, but only while the subtree is free: cursor spent at entry, no flat emission, nothing resolved from the fallback tree. A free value carries none of the row's identity, so redrawing corrupts neither the row nor the replay address; cursor- and fallback-fed values stay single-shot because rejection there means the addressed point is invalid. Inner generation failure never retries.
+    /// In guided mode a rejected predicate retries from the continuing seeded PRNG, bounded by ``__ExhaustRuntime/maxFilterRuns``, but only while the subtree is free: cursor spent at entry, nothing resolved from the fallback tree. A free value carries none of the row's identity, so redrawing corrupts neither the row nor the replay address; cursor- and fallback-fed values stay single-shot because rejection there means the addressed point is invalid. Inner generation failure never retries.
+    ///
+    /// A rejected attempt's flat emissions are truncated back to its entry index. Declining the retry under flat emission instead would make the flat walk reject inputs the tree walk accepts.
     @inline(__always)
     static func handleFilter(
         _ gen: AnyGenerator,
@@ -855,7 +857,6 @@ extension Materializer {
             }
             guard context.mode == .guided,
                   cursorSpentAtEntry,
-                  context.emitsFlat == false,
                   consumedFallback == false,
                   attempts < __ExhaustRuntime.maxFilterRuns
             else {
@@ -863,6 +864,8 @@ extension Materializer {
             }
             // The failed attempt's tier counts would misstate the surviving value's provenance.
             context.decodingReport = reportBeforeAttempt
+            // Drop the failed attempt's emissions so the retry re-emits from the same index.
+            context.flatOutput?.removeSubrange(calleeStart...)
         }
     }
 

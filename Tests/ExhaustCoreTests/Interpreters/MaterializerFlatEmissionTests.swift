@@ -133,6 +133,26 @@ struct MaterializerFlatEmissionTests {
         try assertFlatEmissionMatchesFlatten(gen)
     }
 
+    @Test("Filter under a length bind matches flattened tree")
+    func filterUnderLengthBind() throws {
+        // Unlike `filtered`, the bound length draw spends the cursor before the element filter runs, which is what admits the rejection retry. The predicate passes one of two values, so most elements retry.
+        let elementGen = AnyGenerator.impure(
+            operation: .filter(
+                gen: (Gen.choose(in: 0 ... 1) as Generator<Int>).erase(),
+                fingerprint: Gen.sourceFingerprint(fileID: #fileID, line: #line, column: #column),
+                filterType: .auto,
+                predicate: { ($0 as? Int).map { $0 > 0 } ?? false },
+                sourceLocation: FilterSourceLocation(fileID: #fileID, filePath: #filePath, line: #line, column: #column)
+            ),
+            continuation: { .pure($0) }
+        )
+        let boundArrayGen = Gen.choose(in: UInt64(0) ... 1).bind { length in
+            Gen.arrayOf(elementGen, exactly: length)
+        }.erase()
+        let gen = Gen.classify(boundArrayGen, ("recipe", { _ in true }))
+        try assertFlatEmissionMatchesFlatten(gen)
+    }
+
     @Test("Classified generator matches flattened tree")
     func classified() throws {
         let gen = Gen.classify(
