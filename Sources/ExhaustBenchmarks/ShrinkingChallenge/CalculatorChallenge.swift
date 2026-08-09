@@ -43,7 +43,8 @@ func eval(_ expr: Expr) throws -> Int {
         case let .div(lhs, rhs):
             let denominator = try eval(rhs)
             guard denominator != 0 else { throw EvalError.divisionByZero }
-            return try eval(lhs) / denominator
+            // Int.min / -1 traps. Addition already wraps with &+, so division wraps to match.
+            return try eval(lhs).dividedReportingOverflow(by: denominator).partialValue
     }
 }
 
