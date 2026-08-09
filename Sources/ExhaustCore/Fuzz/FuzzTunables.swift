@@ -46,8 +46,16 @@ package enum FuzzTunables {
 
     // MARK: - Phase 3 (Mutation) Stopping
 
-    /// Fraction of the wall-clock budget without a single coverage-novel corpus admission (across all intensity bands including splice) before the run ends early and returns the unused budget.
+    /// Fraction of the wall-clock budget without a discovery before the run ends early and returns the unused budget.
+    ///
+    /// A discovery is a new edge or a newly classified fault cluster, not a corpus admission. Admission also fires on a new hit-count bucket for an already-covered edge, which is right for keeping a mutation parent and wrong for deciding a run is finished: on a fixed generator the last new edge can arrive within a second while admissions trickle in for minutes afterwards.
     package static let plateauBudgetFraction = 0.25
+
+    /// Floor on the plateau window, whatever the budget.
+    ///
+    /// Without it the window is purely proportional, so a short budget is impatient exactly when it can least afford to be. A 60-second run allowed 15 seconds and abandoned a fault that arrived at 15.14; the same seed under a 300-second budget found it. Faults also outlive coverage by a wide margin — one target's last new edge landed at 0.65 seconds and its last new cluster at 18.98 — so the floor is set above the largest such gap observed rather than tuned to a single case.
+    /// Capped at half the budget where that is smaller, so the rule stays able to fire on short runs.
+    package static let plateauFloorNanoseconds: UInt64 = 30_000_000_000
 
     // MARK: - Crash Recovery
 

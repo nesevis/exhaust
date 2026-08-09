@@ -85,7 +85,23 @@ package final class FuzzRunner<Output> {
     private let normalizationCache = SendableBox<[UInt64: ChoiceSequence?]>([:])
 
     var startNanoseconds: UInt64 = 0
-    private var lastAdmissionNanoseconds: UInt64 = 0
+    /// When an attempt last covered an edge no attempt had covered before, or zero if none ever did.
+    private var lastNewEdgeNanoseconds: UInt64 = 0
+    /// When a failure last classified as a cluster nothing had matched before, or zero if none ever did.
+    private var lastNewClusterNanoseconds: UInt64 = 0
+    /// Attempts evaluated when the first cluster classified.
+    private var attemptsAtFirstFault = 0
+
+    /// The later of the two discoveries, falling back to the run's start before anything is found.
+    ///
+    /// This is what the mutation phase measures its plateau against. Corpus admission is the wrong
+    /// signal for it: a candidate also enters on a new hit-count bucket for an edge already covered, so
+    /// admissions keep arriving long after the run has stopped finding anything, and the window ends up
+    /// timing something nobody cares about.
+    private var lastDiscoveryNanoseconds: UInt64 {
+        max(lastNewEdgeNanoseconds, max(lastNewClusterNanoseconds, startNanoseconds))
+    }
+
     var counts = FuzzRunCounts()
     private var timing = FuzzRunTiming()
 
@@ -176,9 +192,11 @@ package final class FuzzRunner<Output> {
     // MARK: - Run
 
     /// Executes the three phases and returns the final result. Synchronous; the caller owns GCD-lane placement.
+    /// Scratch for ``evaluateInBracket``; see the note there.
+    private var hitsBuffer: [(edge: Int, hitCount: UInt8)] = []
+
     package func run() -> FuzzRunResult {
         startNanoseconds = monotonicNanoseconds()
-        lastAdmissionNanoseconds = startNanoseconds
         setUpPersistence()
 
         // Sampling hands over to the mutation phase by returning nil (plateau or time backstop); a non-nil value is a hard stop that skips the mutation phase.
@@ -196,7 +214,7 @@ package final class FuzzRunner<Output> {
             timing.samplingOverheadNanoseconds += samplingMeasurement.overheadNanoseconds
             termination = samplingMeasurement.result
         }
-        if termination == nil, terminationDue() == nil {
+        if termination == nil, terminationDue() == nil, configuration.skipMutation == false {
             let mutationMeasurement = measureSearchPhase {
                 runFuzzPhase()
             }
@@ -233,10 +251,18 @@ package final class FuzzRunner<Output> {
             instrumentedEdgeCount: source.edgeCount,
             edgeSingletonCount: corpus.edgeSingletonCount,
             edgeDoubletonCount: corpus.edgeDoubletonCount,
+            edgeTripletonCount: corpus.edgeTripletonCount,
+            edgeQuadrupletonCount: corpus.edgeQuadrupletonCount,
+            incidenceTotal: corpus.incidenceTotal,
             termination: finalTermination,
             clusterDiscriminations: discriminations,
             startNanoseconds: reportEpochNanoseconds,
             elapsedNanoseconds: elapsedNanoseconds,
+            // On the report epoch, so it shares a timeline with cluster timestamps across a resume.
+            lastNewEdgeNanoseconds: lastNewEdgeNanoseconds > reportEpochNanoseconds
+                ? lastNewEdgeNanoseconds - reportEpochNanoseconds
+                : 0,
+            attemptsAtFirstFault: attemptsAtFirstFault,
             timing: timing,
             seed: configuration.seed
         )
@@ -329,11 +355,14 @@ package final class FuzzRunner<Output> {
             if let termination = terminationDue() {
                 return termination
             }
-            if samplesSinceNovelty >= configuration.samplingPlateauWindow {
-                return nil
-            }
-            if monotonicNanoseconds() >= backstopNanoseconds {
-                return nil
+            // Both exits hand over to mutation. With mutation skipped there is nowhere to hand over to, so they would cut the arm short rather than pace it.
+            if configuration.skipMutation == false {
+                if samplesSinceNovelty >= configuration.samplingPlateauWindow {
+                    return nil
+                }
+                if monotonicNanoseconds() >= backstopNanoseconds {
+                    return nil
+                }
             }
             checkpointIfDue()
 
@@ -362,8 +391,13 @@ package final class FuzzRunner<Output> {
             seed: configuration.seed ^ 0x5EED_FA11_BACC_0FFE,
             maxRuns: UInt64.max
         )
-        let plateauWindowNanoseconds = UInt64(
-            Double(configuration.budgetNanoseconds) * FuzzTunables.plateauBudgetFraction
+        // Floored, so a short budget does not buy a window too impatient to outlast the gap between a
+        // run's last new edge and its last new fault. Capped at half the budget, because a floor that
+        // outran the budget would leave the rule unable to fire at all, and a run should get at least
+        // two windows' worth of chance before the clock decides for it.
+        let plateauWindowNanoseconds = max(
+            min(FuzzTunables.plateauFloorNanoseconds, configuration.budgetNanoseconds / 2),
+            UInt64(Double(configuration.budgetNanoseconds) * FuzzTunables.plateauBudgetFraction)
         )
 
         while true {
@@ -371,13 +405,16 @@ package final class FuzzRunner<Output> {
                 return termination
             }
             let now = monotonicNanoseconds()
-            if now - lastAdmissionNanoseconds >= plateauWindowNanoseconds {
+            if now - lastDiscoveryNanoseconds >= plateauWindowNanoseconds {
                 let deadline = startNanoseconds + configuration.budgetNanoseconds
                 return .plateau(unusedNanoseconds: deadline > now ? deadline - now : 0)
             }
             checkpointIfDue()
 
-            guard let (parentIndex, parent) = corpus.pickParent(random: randomUnit()) else {
+            let parentStart = monotonicNanoseconds()
+            let picked = corpus.pickParent(random: randomUnit())
+            timing.parentSelectionNanoseconds += monotonicNanoseconds() - parentStart
+            guard let (parentIndex, parent) = picked else {
                 // Empty mutable tier: fall back to fresh sampling until something is mutable.
                 switch freshSample(interpreter: &fallbackInterpreter, phase: .mutation) {
                     case .evaluated:
@@ -397,7 +434,9 @@ package final class FuzzRunner<Output> {
                 if terminationDue() != nil {
                     break
                 }
+                let mutatorStart = monotonicNanoseconds()
                 let (mutated, armsMask) = nextCandidate(from: parent)
+                timing.mutatorNanoseconds += monotonicNanoseconds() - mutatorStart
                 counts.mutationAttempts += 1
                 evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: armsMask)
             }
@@ -413,11 +452,13 @@ package final class FuzzRunner<Output> {
         source.beginAttempt()
         // Phase 1: flat emission produces the value, the fresh sequence, and (below) its hash without building a ChoiceTree. The tree is rebuilt in phase 2 only for the rare candidates that consume it: corpus admission and failure dispatch.
         let guidedSeed = prng.next()
+        let materializeStart = monotonicNanoseconds()
         let result = Materializer.materializeAnyFlat(
             erasedGen,
             prefix: candidate,
             mode: .guided(seed: guidedSeed, fallbackTree: parent.tree)
         )
+        timing.candidateMaterializationNanoseconds += monotonicNanoseconds() - materializeStart
         guard case let .success(anyValue, sequence, decodingReport) = result else {
             counts.discardedAttempts += 1
             return
@@ -567,11 +608,13 @@ package final class FuzzRunner<Output> {
         let propertyStart = monotonicNanoseconds()
         let verdict = property(value)
         timing.propertyNanoseconds += monotonicNanoseconds() - propertyStart
-        var hits: [(edge: Int, hitCount: UInt8)] = []
+        // Reused across attempts: a fresh array grows through roughly eleven reallocations on the way
+        // to the few thousand edges a typical attempt lights, and the contents never outlive the call.
+        hitsBuffer.removeAll(keepingCapacity: true)
         source.forEachHitEdge { edge, hitCount in
-            hits.append((edge, hitCount))
+            hitsBuffer.append((edge, hitCount))
         }
-        return (verdict, hits)
+        return (verdict, hitsBuffer)
     }
 
     /// The shared post-evaluation epilogue: counts the attempt, offers the candidate to the corpus, tracks admission recency, and dispatches failure handling with the admission's coverage-novelty signal.
@@ -590,6 +633,7 @@ package final class FuzzRunner<Output> {
         isBoundaryDerived: Bool = false,
         parentIndex: Int? = nil
     ) -> CorpusAdmission {
+        configuration.onAttempt?(phase, hits)
         switch phase {
             case .screening:
                 break
@@ -626,8 +670,8 @@ package final class FuzzRunner<Output> {
             propertyFailed: candidates.corpus.verdict.isFailure,
             precomputedHash: candidates.corpus.sequenceHash
         )
-        if admission.isAdmitted {
-            lastAdmissionNanoseconds = monotonicNanoseconds()
+        if case let .admitted(index, _) = admission, corpus.introducedNewEdges(at: index) {
+            lastNewEdgeNanoseconds = monotonicNanoseconds()
         }
         if let failure = candidates.failure,
            case let .fail(symptom) = failure.verdict
@@ -832,6 +876,12 @@ package final class FuzzRunner<Output> {
 
         if classification.isNewCluster {
             forceCheckpoint = true
+            // Faults outlive coverage: a target whose last new edge arrives in under a second can still
+            // be classifying new clusters twenty seconds later, and stopping on coverage alone loses them.
+            lastNewClusterNanoseconds = monotonicNanoseconds()
+            if attemptsAtFirstFault == 0 {
+                attemptsAtFirstFault = counts.totalAttempts
+            }
         }
         if wasEscape {
             gate.noteEscapeOutcome(symptom: symptom, isNewCluster: classification.isNewCluster)
@@ -866,6 +916,9 @@ package final class FuzzRunner<Output> {
 
     /// The run-wide stop conditions every phase checks: wall clock and the testing attempt limit.
     private func terminationDue() -> FuzzTermination? {
+        if configuration.stopOnFirstFault, inventory.clusterCount > 0 {
+            return .firstFaultFound
+        }
         if let limit = configuration.attemptLimit, counts.totalAttempts >= limit {
             return .attemptLimitReached
         }

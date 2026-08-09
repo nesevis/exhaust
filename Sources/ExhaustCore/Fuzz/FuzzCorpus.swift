@@ -102,8 +102,13 @@ package final class FuzzCorpus {
     /// Per-edge count of entries whose signature covers the edge; the rarity denominator.
     private var coveringEntryCounts: [Int]
 
-    /// Per-edge attempt-incidence counters saturating at 3, updated inside the offer walk the loop already pays for. Only the singleton and doubleton counts feed the STADS estimators. Duplicate-sequence offers return before the walk and are not counted — a duplicate re-hits an already-counted edge set, and the resulting bias overstates remaining discovery, the conservative direction for a completeness estimate.
+    /// Per-edge attempt-incidence counters saturating at 5, updated inside the offer walk the loop already pays for. Singletons and doubletons feed Chao2; tripletons and quadrupletons feed iChao2, which is why the cap is 5 rather than 3. Duplicate-sequence offers return before the walk and are not counted — a duplicate re-hits an already-counted edge set, and the resulting bias overstates remaining discovery, the conservative direction for a completeness estimate.
     private var edgeIncidenceCounts: [UInt8]
+
+    /// Sum of all entries in the incidence matrix (`V = Σₖ k·Qₖ`): every (attempt, edge) pair counted once.
+    ///
+    /// The denominator of the Bernoulli-product discovery probability. One input covers many edges, so the number of attempts is the wrong denominator for incidence data; `V` is the right one and aggregates online without ever materializing the matrix.
+    private var incidenceTotalCount: Int = 0
 
     /// Edge → indices of entries covering it, for O(affected) score invalidation on admission.
     private var coveringEntries: [[Int]]
@@ -142,14 +147,29 @@ package final class FuzzCorpus {
         entries.filter { $0.propertyFailed == false }.map(\.signature)
     }
 
-    /// Edges hit by exactly one non-duplicate attempt (f₁), for the STADS estimators.
+    /// Edges hit by exactly one non-duplicate attempt (Q₁), for the STADS estimators.
     package var edgeSingletonCount: Int {
         edgeIncidenceCounts.count(where: { $0 == 1 })
     }
 
-    /// Edges hit by exactly two non-duplicate attempts (f₂), for the STADS estimators.
+    /// Edges hit by exactly two non-duplicate attempts (Q₂), for the STADS estimators.
     package var edgeDoubletonCount: Int {
         edgeIncidenceCounts.count(where: { $0 == 2 })
+    }
+
+    /// Edges hit by exactly three non-duplicate attempts (Q₃), for iChao2.
+    package var edgeTripletonCount: Int {
+        edgeIncidenceCounts.count(where: { $0 == 3 })
+    }
+
+    /// Edges hit by exactly four non-duplicate attempts (Q₄), for iChao2.
+    package var edgeQuadrupletonCount: Int {
+        edgeIncidenceCounts.count(where: { $0 == 4 })
+    }
+
+    /// Sum of all entries in the incidence matrix (`V`), the discovery-probability denominator.
+    package var incidenceTotal: Int {
+        incidenceTotalCount
     }
 
     /// The number of edges any corpus entry has covered.
@@ -190,6 +210,18 @@ package final class FuzzCorpus {
     ///   - propertyFailed: Whether the property failed on this candidate, recorded for report-time discrimination.
     ///   - precomputedHash: `ZobristHash.hash(of:)` of `sequence` when the caller already computed it (the runner hashes every fresh sequence for the crash breadcrumb); must match exactly. Nil recomputes here.
     /// - Returns: The admission verdict. On admission, seen-bucket masks and rarity counts are already updated.
+    /// Whether the entry admitted at this index brought edges nothing had reached before.
+    ///
+    /// Admission alone does not imply new code: a candidate also enters on a new (edge, hit-count
+    /// bucket) pair, which is the right criterion for keeping a mutation parent and the wrong one for
+    /// deciding a run has stopped discovering.
+    package func introducedNewEdges(at index: Int) -> Bool {
+        guard index >= 0, index < entries.count else {
+            return false
+        }
+        return entries[index].introducedEdges.isEmpty == false
+    }
+
     package func offer(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
@@ -212,7 +244,8 @@ package final class FuzzCorpus {
             guard edge >= 0, edge < edgeCount else {
                 continue
             }
-            if edgeIncidenceCounts[edge] < 3 {
+            incidenceTotalCount += 1
+            if edgeIncidenceCounts[edge] < 5 {
                 edgeIncidenceCounts[edge] += 1
             }
             if seenBucketMasks[edge] == 0 {

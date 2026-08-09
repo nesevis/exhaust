@@ -1,5 +1,3 @@
-// The seam between the fuzz loop and coverage attribution.
-
 /// Supplies per-attempt coverage signatures to the fuzz loop.
 ///
 /// The production conformance (``SancovCoverageSource``) reads the process-global SanitizerCoverage counter region. The synthetic test conformance computes a signature as a pure function of the generated value, which makes the entire search loop deterministic and runnable in an uninstrumented suite — corpus acceptance, plateau detection, and cluster taxonomy are all tested through this seam.
@@ -67,9 +65,37 @@ package final class SancovCoverageSource: CoverageSource, @unchecked Sendable {
         }
     }
 
+    /// Reports every nonzero counter, scanning eight bytes at a time.
+    ///
+    /// A typical attempt lights a low single-digit percentage of the instrumented edges, so almost every eight-byte window is entirely zero and can be rejected with one load and one compare instead of eight. The byte loop survives for the unaligned head and tail, so the reported edges are identical either way.
     package func forEachHitEdge(_ body: (_ edge: Int, _ hitCount: UInt8) -> Void) {
         for region in regions {
             var index = 0
+            // Head: bytes before the first eight-byte boundary.
+            let alignment = Int(UInt(bitPattern: region.base) % 8)
+            let headCount = alignment == 0 ? 0 : min(8 - alignment, region.count)
+            while index < headCount {
+                let hitCount = region.base[index]
+                if hitCount != 0 {
+                    body(region.globalOffset + index, hitCount)
+                }
+                index += 1
+            }
+            // Body: whole words, skipped entirely when no counter in the window fired.
+            let wordEnd = index + (region.count - index) / 8 * 8
+            while index < wordEnd {
+                let word = UnsafeRawPointer(region.base + index).loadUnaligned(as: UInt64.self)
+                if word != 0 {
+                    for offset in 0 ..< 8 {
+                        let hitCount = region.base[index + offset]
+                        if hitCount != 0 {
+                            body(region.globalOffset + index + offset, hitCount)
+                        }
+                    }
+                }
+                index += 8
+            }
+            // Tail: whatever the word loop could not cover.
             while index < region.count {
                 let hitCount = region.base[index]
                 if hitCount != 0 {

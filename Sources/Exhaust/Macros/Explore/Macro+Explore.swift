@@ -64,7 +64,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// }
 /// ```
 ///
-/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. Settings are variadic ``PropertyFuzzSettings`` values controlling deterministic replay, output suppression, and log verbosity.
+/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. Settings are variadic ``PropertyFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, and fail-fast stopping (``PropertyFuzzSettings/failFast``).
 ///
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
 ///
@@ -90,7 +90,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// }
 /// ```
 ///
-/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. Settings are variadic ``PropertyFuzzSettings`` values controlling deterministic replay, output suppression, and log verbosity.
+/// Requires coverage instrumentation on the target under test; without it the test fails immediately with the compiler flags to add, before any budget is consumed. Settings are variadic ``PropertyFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, and fail-fast stopping (``PropertyFuzzSettings/failFast``).
 ///
 /// Use `directions:` mode instead when the goal is guaranteeing named coverage targets within an iteration budget; the two modes are mutually exclusive.
 ///
@@ -118,7 +118,7 @@ public macro explore<GeneratedValue, PropertyResult>(
 /// }
 /// ```
 ///
-/// Settings are variadic ``StateMachineFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, and the per-sequence command limit (``StateMachineFuzzSettings/commandLimit(_:)``).
+/// Settings are variadic ``StateMachineFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, fail-fast stopping (``StateMachineFuzzSettings/failFast``), and the per-sequence command limit (``StateMachineFuzzSettings/commandLimit(_:)``).
 ///
 /// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 ///
@@ -146,7 +146,7 @@ public macro explore<Spec: StateMachineSpec>(
 /// }
 /// ```
 ///
-/// Settings are variadic ``StateMachineFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, the per-sequence command limit (``StateMachineFuzzSettings/commandLimit(_:)``), and the lane count (``StateMachineFuzzSettings/parallelize(lanes:)``).
+/// Settings are variadic ``StateMachineFuzzSettings`` values controlling deterministic replay, output suppression, log verbosity, fail-fast stopping (``StateMachineFuzzSettings/failFast``), the per-sequence command limit (``StateMachineFuzzSettings/commandLimit(_:)``), and the lane count (``StateMachineFuzzSettings/parallelize(lanes:)``).
 ///
 /// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 ///

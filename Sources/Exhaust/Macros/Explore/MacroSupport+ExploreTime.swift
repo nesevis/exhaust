@@ -347,6 +347,7 @@ public extension __ExhaustRuntime {
         }
 
         var configuration = FuzzRunnerConfiguration(budgetNanoseconds: budgetNanoseconds, seed: seed)
+        configuration.stopOnFirstFault = parsed.failFast
         #if DEBUG
             // The benchmark arm seam: read once at run start, debug builds only. A malformed or unknown knob is a hard configuration error — a silently ignored typo would invalidate a benchmark arm.
             if let experimentValue = ProcessInfo.processInfo.environment["EXHAUST_FUZZ_EXPERIMENT"] {
@@ -524,7 +525,7 @@ public extension __ExhaustRuntime {
                 if report.evaluatedSearchCases == 0 {
                     return
                 }
-            case .budgetExhausted, .coveragePlateau, .attemptLimitReached:
+            case .budgetExhausted, .coveragePlateau, .attemptLimitReached, .firstFaultFound:
                 break
         }
 

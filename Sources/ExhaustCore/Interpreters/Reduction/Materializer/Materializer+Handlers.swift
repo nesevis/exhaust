@@ -850,6 +850,12 @@ extension Materializer {
                 )
             }
             attempts += 1
+            // Checked per retry rather than on the element axis: a filter over a scalar inner advances no element index, so the generation deadline's sampled cadence never sees it, and nested filters compound the retry cap rather than sharing it.
+            if context.deadlineNanoseconds > 0, monotonicNanoseconds() > context.deadlineNanoseconds {
+                throw GeneratorError.generationDeadlineExceeded(
+                    seconds: Double(SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds) / 1_000_000_000
+                )
+            }
             // Without a decoding report, fallback consumption is unobservable; require no fallback at all.
             let consumedFallback = switch (reportBeforeAttempt, context.decodingReport) {
                 case let (before?, after?): after.fallbackResolutionCount > before.fallbackResolutionCount

@@ -131,6 +131,9 @@ public struct FuzzReport: Sendable {
 
         /// A package-visible attempt limit stopped the run before any time-based condition fired. Reachable only through harness configuration, never through the public settings.
         case attemptLimitReached
+
+        /// The first fault clustered and the run stopped there, as `.failFast` requested. The remaining budget was returned rather than spent searching for further faults.
+        case firstFaultFound
     }
 
     /// The distinct fault clusters discovered, in discovery order. Empty when every attempt passed.
@@ -191,30 +194,49 @@ public struct FuzzReport: Sendable {
     /// Total instrumented edges across all loaded instrumented modules. A denominator for module size, not for exploration progress, because the count includes code the property never calls.
     public let instrumentedEdgeCount: Int
 
-    /// Edges hit by exactly one evaluated search case across the whole run. The raw singleton count (f₁) behind the discovery-probability and reachability estimates, exposed so downstream tooling can recompute or extrapolate.
+    /// Edges hit by exactly one evaluated search case across the whole run. The raw singleton count (Q₁) behind the discovery-probability and reachability estimates, exposed so downstream tooling can recompute or extrapolate.
     public let edgeSingletonCount: Int
 
-    /// Edges hit by exactly two evaluated search cases across the whole run: the doubleton count (f₂) behind ``estimatedReachableEdgeCount``.
+    /// Edges hit by exactly two evaluated search cases across the whole run: the doubleton count (Q₂) behind ``estimatedReachableEdgeCount``.
     public let edgeDoubletonCount: Int
 
-    /// The Good-Turing estimate of the probability that one more evaluated search case covers a new edge (`f₁/n`).
+    /// Edges hit by exactly three evaluated search cases (Q₃), one of the two counts iChao2 adds over Chao2.
+    public let edgeTripletonCount: Int
+
+    /// Edges hit by exactly four evaluated search cases (Q₄). When this is zero, ``estimatedReachableEdgeCount`` falls back to plain Chao2.
+    public let edgeQuadrupletonCount: Int
+
+    /// Every (search case, edge) pair counted once: the incidence-matrix sum `V`.
     ///
-    /// Use this to decide whether extending the budget buys anything: at 2×10⁻⁶, a new edge costs about 500,000 further evaluated cases. The estimate is scoped to what this generator and property can reach and is proven consistent as the sample count grows, unlike time-since-last-discovery, which swings orders of magnitude minute to minute.
+    /// One search case covers many edges, so this is far larger than ``evaluatedSearchCases`` and is the correct denominator for ``estimatedNextEdgeProbability``. Its ratio to the case count is the mean edges an attempt covers.
+    public let incidenceTotal: Int
+
+    /// The estimated probability that the next incidence covers an edge nothing has reached yet.
+    ///
+    /// Denominated in incidences, not search cases: a single case covers thousands of edges, so this is a per-edge-observation probability rather than a per-case one. To express it per case, multiply by ``incidenceTotal`` divided by ``evaluatedSearchCases``.
+    ///
+    /// Scoped to what this generator and property can reach, and consistent as the sample grows — unlike time-since-last-discovery, which swings orders of magnitude minute to minute.
     public var estimatedNextEdgeProbability: Double {
-        CoverageEstimators.goodTuringNextDiscoveryProbability(
+        CoverageEstimators.nextDiscoveryProbability(
             singletons: edgeSingletonCount,
+            incidenceTotal: incidenceTotal,
+            undiscovered: estimatedReachableEdgeCount - Double(coveredEdgeCount),
             attempts: evaluatedSearchCases
         )
     }
 
-    /// The Chao1 estimate of how many edges this generator and property can reach in total: the asymptote ``coveredEdgeCount`` approaches.
+    /// The iChao2 **lower bound** on how many edges this generator and property can reach in total.
     ///
-    /// Unlike ``instrumentedEdgeCount``, which measures the module, this denominator is scoped to the run's own search space, so `coveredEdgeCount / estimatedReachableEdgeCount` is an honest completeness fraction. Treat it as an estimate: adaptive sampling bias did not break consistency in the STADS evaluation, but the guarantee is asymptotic.
+    /// Unlike ``instrumentedEdgeCount``, which measures the module, this denominator is scoped to the run's own search space, so `coveredEdgeCount / estimatedReachableEdgeCount` is a completeness fraction rather than a module fraction.
+    ///
+    /// - Important: A lower bound, so the fraction derived from it is an **upper** bound on completeness. A coverage-guided run can approach a false asymptote and then surge, which biases the bound low and the fraction high; the effect shrinks as the run lengthens but is largest exactly when a small ``edgeDoubletonCount`` makes the estimate volatile.
     public var estimatedReachableEdgeCount: Double {
-        CoverageEstimators.chao1ReachableEdges(
+        CoverageEstimators.iChao2ReachableEdges(
             covered: coveredEdgeCount,
             singletons: edgeSingletonCount,
             doubletons: edgeDoubletonCount,
+            tripletons: edgeTripletonCount,
+            quadrupletons: edgeQuadrupletonCount,
             attempts: evaluatedSearchCases
         )
     }
@@ -347,6 +369,9 @@ package extension FuzzReport {
         coveredEdgeCount = result.coveredEdgeCount
         instrumentedEdgeCount = result.instrumentedEdgeCount
         edgeSingletonCount = result.edgeSingletonCount
+        edgeTripletonCount = result.edgeTripletonCount
+        edgeQuadrupletonCount = result.edgeQuadrupletonCount
+        incidenceTotal = result.incidenceTotal
         edgeDoubletonCount = result.edgeDoubletonCount
         termination = Termination(termination: result.termination)
         elapsed = TimeSpan(nanoseconds: result.elapsedNanoseconds)
@@ -392,6 +417,9 @@ package extension FuzzReport {
             instrumentedEdgeCount: 0,
             edgeSingletonCount: 0,
             edgeDoubletonCount: 0,
+            edgeTripletonCount: 0,
+            edgeQuadrupletonCount: 0,
+            incidenceTotal: 0,
             termination: termination,
             elapsed: .zero,
             timing: TimingBreakdown(
@@ -427,6 +455,8 @@ package extension FuzzReport.Termination {
                 .coveragePlateau(unused: TimeSpan(nanoseconds: unusedNanoseconds))
             case .attemptLimitReached:
                 .attemptLimitReached
+            case .firstFaultFound:
+                .firstFaultFound
             case let .generationError(message):
                 .generationFailed(message)
         }

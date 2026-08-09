@@ -25,6 +25,8 @@ package enum FuzzTermination: Equatable, Sendable {
     case plateau(unusedNanoseconds: UInt64)
     /// The package-visible attempt limit was reached (testing control; no time-based termination fired).
     case attemptLimitReached
+    /// A fault clustered and ``FuzzRunnerConfiguration/stopOnFirstFault`` was set.
+    case firstFaultFound
     /// Generation failed irrecoverably.
     case generationError(String)
 }
@@ -43,12 +45,22 @@ package struct FuzzRunnerConfiguration {
     package var skipScreening: Bool
     /// Skips Phase 2 (with `skipScreening`, the run starts directly in the mutation phase).
     package var skipSampling: Bool
+    /// Skips Phase 3, so the run is screening and sampling only.
+    ///
+    /// Also disables the plateau window and the sampling time backstop: both exist solely to decide when to hand over to mutation, and with no phase to hand over to they would end the run early instead. Sampling then runs until the budget or the attempt limit stops it, which is what a non-guided control arm needs.
+    package var skipMutation: Bool = false
     /// Hard cap on total attempts across all phases, for deterministic tests. Nil means time-bounded only.
     package var attemptLimit: Int?
+    /// Ends the run as soon as one fault clusters, rather than continuing to search. Set by the public `.failFast` setting, and by measurement harnesses.
+    ///
+    /// The measurement question "how much work did finding this cost?" is answered by the attempt at which the first fault landed, and a run that keeps going past it reports a total dominated by whatever the stopping rule does afterwards. Off by default: a normal campaign wants every distinct fault, not the first.
+    package var stopOnFirstFault: Bool = false
     /// Crash-recovery configuration: where checkpoints go and what a crashed predecessor left. Nil disables persistence entirely.
     package var persistence: FuzzPersistenceContext?
     /// Knobs for benchmark-gated mechanisms; see ``FuzzExperiments`` for the seam precedence.
     package var experiments: FuzzExperiments
+    /// Called once per attempt with its phase and the edges that attempt hit. Nil in production runs; coverage-harvest tooling uses it to build a first-hit timeline without re-reading the counter regions.
+    package var onAttempt: ((FuzzPhase, [(edge: Int, hitCount: UInt8)]) -> Void)?
 
     package init(
         budgetNanoseconds: UInt64,
@@ -57,9 +69,11 @@ package struct FuzzRunnerConfiguration {
         samplingPlateauWindow: Int = FuzzTunables.samplingPlateauWindow,
         skipScreening: Bool = false,
         skipSampling: Bool = false,
+        skipMutation: Bool = false,
         attemptLimit: Int? = nil,
         persistence: FuzzPersistenceContext? = nil,
-        experiments: FuzzExperiments = FuzzExperiments()
+        experiments: FuzzExperiments = FuzzExperiments(),
+        onAttempt: ((FuzzPhase, [(edge: Int, hitCount: UInt8)]) -> Void)? = nil
     ) {
         self.budgetNanoseconds = budgetNanoseconds
         self.seed = seed
@@ -67,9 +81,11 @@ package struct FuzzRunnerConfiguration {
         self.samplingPlateauWindow = samplingPlateauWindow
         self.skipScreening = skipScreening
         self.skipSampling = skipSampling
+        self.skipMutation = skipMutation
         self.attemptLimit = attemptLimit
         self.persistence = persistence
         self.experiments = experiments
+        self.onAttempt = onAttempt
     }
 }
 
@@ -109,6 +125,13 @@ package struct FuzzRunTiming: Sendable {
     package var screeningOverheadNanoseconds: UInt64 = 0
     package var samplingOverheadNanoseconds: UInt64 = 0
     package var mutationOverheadNanoseconds: UInt64 = 0
+    /// Mutation overhead decomposed. These are subsets of mutationOverheadNanoseconds, not additions to it, so they are excluded from the accounted total below.
+    /// Time inside the weighted parent draw.
+    package var parentSelectionNanoseconds: UInt64 = 0
+    /// Time inside the sequence mutators.
+    package var mutatorNanoseconds: UInt64 = 0
+    /// Time materializing a mutated candidate back through the generator.
+    package var candidateMaterializationNanoseconds: UInt64 = 0
     package var reductionNanoseconds: UInt64 = 0
 
     /// Returns elapsed time not attributed to a property invocation, search phase, or reduction, clamping inconsistent input rather than underflowing.
@@ -131,20 +154,52 @@ package struct FuzzRunResult: Sendable {
     package var mutableTierCount: Int
     package var coveredEdgeCount: Int
     package var instrumentedEdgeCount: Int
-    /// Edges hit by exactly one attempt (f₁) and exactly two (f₂), for the STADS estimators.
+    /// Incidence frequency counts: edges hit by exactly one attempt (Q₁), two (Q₂), three (Q₃), four (Q₄), plus the incidence-matrix sum. Q₃ and Q₄ feed iChao2; the sum denominates the discovery probability.
     package var edgeSingletonCount: Int
     package var edgeDoubletonCount: Int
+    package var edgeTripletonCount: Int = 0
+    package var edgeQuadrupletonCount: Int = 0
+    /// `V`, the incidence-matrix sum: the discovery-probability denominator for incidence data.
+    package var incidenceTotal: Int = 0
     package var termination: FuzzTermination
     /// Report-time discrimination results, parallel to `clusters` by position.
     package var clusterDiscriminations: [ClusterDiscrimination]
     package var startNanoseconds: UInt64
     package var elapsedNanoseconds: UInt64
+    /// Time from the run's start to its last new edge, or zero if it never covered one.
+    ///
+    /// The gap between this and `elapsedNanoseconds` is time the run spent covering no new code. It is
+    /// not the same question the mutation phase's plateau window asks, which is time since the last
+    /// corpus admission — a candidate also enters on a new hit-count bucket for an edge already known.
+    package var lastNewEdgeNanoseconds: UInt64 = 0
+    /// Attempts evaluated when the first fault clustered, or zero if none did.
+    ///
+    /// Recorded at the moment of classification rather than interpolated from the clock, because it is the answer to what finding the fault cost and the two diverge once a run keeps searching afterwards.
+    package var attemptsAtFirstFault: Int = 0
     package var timing: FuzzRunTiming
     package var seed: UInt64
 
     /// The elapsed time net of inline reduction — the denominator for throughput and overhead, so a failure-dense run does not read as a slow pipeline.
     package var searchNanoseconds: UInt64 {
         elapsedNanoseconds - min(timing.reductionNanoseconds, elapsedNanoseconds)
+    }
+
+    /// Time from the run's start to the last fault cluster that classified as new, or zero if none did.
+    package var lastNewClusterNanoseconds: UInt64 {
+        let latest = clusters.map(\.firstSeenNanoseconds).max() ?? 0
+        return latest > startNanoseconds ? latest - startNanoseconds : 0
+    }
+
+    /// The share of the run that followed its last discovery, counting new edges and new fault clusters alike.
+    ///
+    /// Resuming a crashed run backdates the epoch, so a resumed run's discoveries can predate this
+    /// process entirely; the clamp keeps the fraction in range rather than reporting the shortfall.
+    package var idleFraction: Double {
+        guard elapsedNanoseconds > 0 else {
+            return 0
+        }
+        let lastDiscovery = min(max(lastNewEdgeNanoseconds, lastNewClusterNanoseconds), elapsedNanoseconds)
+        return Double(elapsedNanoseconds - lastDiscovery) / Double(elapsedNanoseconds)
     }
 
     package var attemptsPerSecond: Double {

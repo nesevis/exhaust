@@ -120,7 +120,8 @@ package enum Materializer {
             maximizeBoundRegionIndices: maximizeBoundRegionIndices,
             materializePicks: materializePicks,
             skipTree: skipTree,
-            decodingReport: collectDecodingReport ? DecodingReport() : nil
+            decodingReport: collectDecodingReport ? DecodingReport() : nil,
+            deadlineNanoseconds: monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
         )
 
         do {
@@ -199,7 +200,8 @@ package extension Materializer {
             maximizeBoundRegionIndices: maximizeBoundRegionIndices,
             materializePicks: false,
             skipTree: true,
-            decodingReport: collectDecodingReport ? DecodingReport() : nil
+            decodingReport: collectDecodingReport ? DecodingReport() : nil,
+            deadlineNanoseconds: monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
         )
         context.flatOutput = ChoiceSequence()
         context.flatOutput!.reserveCapacity(64)
@@ -495,6 +497,10 @@ extension Materializer {
         var decodingReport: DecodingReport?
         /// Per-fingerprint filter predicate observations accumulated during this materialization.
         var filterObservations: [UInt64: FilterObservation] = [:]
+        /// Absolute instant after which materialization gives up, or zero for an unbounded walk.
+        ///
+        /// The generation-side deadline samples on element index, which retry loops never advance: a filter over a scalar can spin ``__ExhaustRuntime/maxFilterRuns`` times without passing a single checkpoint, and nested filters multiply that. Retry counts do not compose, so the bound that does has to be a clock.
+        var deadlineNanoseconds: UInt64 = 0
 
         /// Whether flat emission is active right now (a buffer exists and no discarded-tree sub-walk has suspended it).
         @inline(__always)

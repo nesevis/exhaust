@@ -69,15 +69,18 @@ extension __ExhaustRuntime {
         return lines.joined(separator: "\n")
     }
 
-    /// Renders the estimator lines: the Good-Turing price of one more edge and the Chao1 completeness fraction against the run's own reachable set. The reachable-set scoping is stated inline so the fraction cannot be read as module coverage.
+    /// Renders the estimator lines: the price of one more edge and the completeness fraction against the run's own reachable set. The reachable-set scoping is stated inline so the fraction cannot be read as module coverage.
+    ///
+    /// The estimator is denominated in incidences, because one attempt covers many edges. Readers think in attempts, so the rate is converted back by the mean edges an attempt covers before it reaches the page.
     private static func renderEstimatorLines(_ report: FuzzReport) -> [String] {
         guard report.evaluatedSearchCases > 0, report.coveredEdgeCount > 0 else {
             return []
         }
         var lines: [String] = []
-        let nextEdgeProbability = report.estimatedNextEdgeProbability
-        if nextEdgeProbability > 0 {
-            let attemptsPerEdge = Int((1 / nextEdgeProbability).rounded())
+        let edgesPerCase = Double(report.incidenceTotal) / Double(report.evaluatedSearchCases)
+        let newEdgesPerCase = report.estimatedNextEdgeProbability * edgesPerCase
+        if newEdgesPerCase > 0 {
+            let attemptsPerEdge = Int((1 / newEdgesPerCase).rounded())
             lines.append(
                 "Estimated chance the next attempt covers a new edge: about 1 in \(attemptsPerEdge)."
             )
@@ -89,10 +92,10 @@ extension __ExhaustRuntime {
         let reachable = report.estimatedReachableEdgeCount
         let remaining = max(0, Int(reachable.rounded()) - report.coveredEdgeCount)
         lines.append(
-            "About \(Int(reachable.rounded())) edges look reachable for this generator and property."
+            "At least \(Int(reachable.rounded())) edges look reachable for this generator and property."
         )
         lines.append(
-            "\(remaining) of those remain\(remaining == 1 ? "s" : "") uncovered (scoped to this run's search space, not the module)."
+            "At least \(remaining) of those remain\(remaining == 1 ? "s" : "") uncovered (scoped to this run's search space, not the module)."
         )
         return lines
     }

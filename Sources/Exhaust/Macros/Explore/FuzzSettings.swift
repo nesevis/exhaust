@@ -1,6 +1,6 @@
 // Configuration options for `#explore(time:)` coverage-guided runs.
 //
-// Two types rather than one. The generator form and the spec form share three settings and differ in two, and a single enum made `.commandLimit` spellable on a generator, where it could only be reported as a run-time configuration error. Splitting moves that report to compile time. `ParsedPropertyFuzzSettings` stays the single reader of the shared three, so their handling cannot drift between the forms.
+// Two types rather than one. The generator form and the spec form share four settings and differ in two, and a single enum made `.commandLimit` spellable on a generator, where it could only be reported as a run-time configuration error. Splitting moves that report to compile time. `ParsedPropertyFuzzSettings` stays the single reader of the shared four, so their handling cannot drift between the forms.
 import ExhaustCore
 
 /// Controls test behavior for `#explore(gen, time:)` coverage-guided runs, passed as variadic arguments.
@@ -27,11 +27,16 @@ public enum PropertyFuzzSettings: Sendable {
     ///
     /// Defaults to `.log(.error)` when omitted, so only error-level messages appear.
     case log(LogLevel)
+
+    /// Stops the run as soon as its first fault is classified, instead of spending the remaining budget cataloging every distinct fault.
+    ///
+    /// The failing input is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is a complete fault inventory, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
+    case failFast
 }
 
 /// Controls test behavior for `#explore(Spec.self, mode:, time:)` coverage-guided runs, passed as variadic arguments.
 ///
-/// Carries the same replay, suppression, and log settings as ``PropertyFuzzSettings``, plus the two that describe command sequences. Those two are absent from the generator form because a generator produces one value rather than a sequence of commands, so writing them there is a compile error.
+/// Carries the same replay, suppression, log, and fail-fast settings as ``PropertyFuzzSettings``, plus the two that describe command sequences. Those two are absent from the generator form because a generator produces one value rather than a sequence of commands, so writing them there is a compile error.
 ///
 /// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 public enum StateMachineFuzzSettings: Sendable {
@@ -51,6 +56,11 @@ public enum StateMachineFuzzSettings: Sendable {
     ///
     /// Defaults to `.log(.error)` when omitted, so only error-level messages appear.
     case log(LogLevel)
+
+    /// Stops the run as soon as its first fault is classified, instead of spending the remaining budget cataloging every distinct fault.
+    ///
+    /// The failing command sequence is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is a complete fault inventory, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
+    case failFast
 
     /// Limits the maximum number of commands per generated sequence.
     ///
@@ -75,6 +85,8 @@ struct ParsedPropertyFuzzSettings {
     var invalidReplayMessage: String?
     var suppress = SuppressFlags()
     var logLevel: LogLevel = .error
+    /// Whether the run stops at its first classified fault instead of cataloging every distinct fault.
+    var failFast = false
 
     init(_ settings: [PropertyFuzzSettings]) {
         for setting in settings {
@@ -91,6 +103,8 @@ struct ParsedPropertyFuzzSettings {
                     suppress.apply(option)
                 case let .log(level):
                     logLevel = level
+                case .failFast:
+                    failFast = true
             }
         }
     }
@@ -126,6 +140,8 @@ struct ParsedStateMachineFuzzSettings {
                     coreSettings.append(.suppress(option))
                 case let .log(level):
                     coreSettings.append(.log(level))
+                case .failFast:
+                    coreSettings.append(.failFast)
                 case let .commandLimit(limit):
                     commandLimit = limit
                 case let .parallelize(lanes):

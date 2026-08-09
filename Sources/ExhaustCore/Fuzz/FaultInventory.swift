@@ -174,6 +174,11 @@ package final class FaultInventory: @unchecked Sendable {
     private let lock = NSLock()
     private var clusters: [FaultCluster] = []
 
+    /// How many distinct clusters have classified, without copying the snapshot.
+    package var clusterCount: Int {
+        clusters.count
+    }
+
     /// Cluster position by canonical reduced key, so classification stays O(1) as the inventory grows. `reducedKey` is immutable on a cluster, so entries never go stale; the index is rebuilt wholesale on ``restore(clusters:)``.
     private var clusterIndexByKey: [String: Int] = [:]
     private var unmatchedBySymptom: [FailureSymptom: Int] = [:]
