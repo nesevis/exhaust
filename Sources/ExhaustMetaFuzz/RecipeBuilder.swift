@@ -108,6 +108,10 @@ private func buildCombinator(
         case let .resized(inner, size: size):
             return Gen.resize(size, buildNestedGenerator(from: inner))
 
+        case let .eachOf(recipes):
+            // Routed through `Gen.eachOf` rather than a hand-built `.zip` node so the recipe covers the combinator's own node construction and the structural decomposition the reflector performs on it. The isomorph's casts do not discriminate here: recipes are type-erased, so `Value` is `Any` and both directions succeed for any array.
+            return Gen.eachOf(recipes.map { buildNestedGenerator(from: $0) }).erase()
+
         case let .zipped(a, b):
             // Keep the raw `.zip` output as `[first, second]` rather than projecting to one element. The `.zip` operation reflects structurally by decomposing the array into its children, so the whole pair round-trips; projecting to a single element produced a value the reflector could not decompose, silently voiding every zip round-trip assertion.
             return AnyGenerator.impure(

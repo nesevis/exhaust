@@ -64,7 +64,14 @@ package extension __ExhaustRuntime {
                     reducedSequence: reducedSequence
                 )
                 failure.replayHint = replayHint
-                failure.reductionWasCapped = report.reductionWasCapped
+                failure.reductionNote = ReductionNote(
+                    probes: report.reductionProbes,
+                    invocations: ledger.count(.reduction),
+                    stalledLeafCount: report.stalledLeafCount,
+                    anyAcceptanceOccurred: report.anyAcceptanceEverOccurred,
+                    producedNoImprovement: false,
+                    wasCapped: report.reductionWasCapped
+                )
                 failure.includeDiff = context.includeDiff
                 let rendered = failure.render(format: context.logFormat)
                 report.renderedFailure = rendered
@@ -117,9 +124,14 @@ package extension __ExhaustRuntime {
             propertyInvocations: ledger.totalInvocations
         )
         failure.replayHint = replayHint
-        failure.reductionProducedNoImprovement = true
-        // Reflected inputs (the other no-improvement site) deliberately do not set this: a user-supplied example is often already minimal, and warning "may not be minimal" there would be noise.
-        failure.reductionStalled = report.reductionStalled
+        failure.reductionNote = ReductionNote(
+            probes: report.reductionProbes,
+            invocations: ledger.count(.reduction),
+            stalledLeafCount: report.stalledLeafCount,
+            anyAcceptanceOccurred: report.anyAcceptanceEverOccurred,
+            producedNoImprovement: true,
+            wasCapped: report.reductionWasCapped
+        )
         let rendered = failure.render(format: context.logFormat)
         report.renderedFailure = rendered
         report.replaySeed = failure.encodedReplaySeed
@@ -265,7 +277,8 @@ package extension __ExhaustRuntime {
             propertyInvocations: countingProperty.invocations
         )
         failure.replayHint = "No replay seed — counterexample found via reflection."
-        failure.reductionProducedNoImprovement = true
+        // Reflected inputs report only that nothing improved: a user-supplied example is often already minimal, and a stall warning there would be noise.
+        failure.reductionNote = .noImprovement
         let rendered = failure.render(format: ExhaustLog.configuration.format)
         report.renderedFailure = rendered
         let reductionEnd = monotonicNanoseconds()

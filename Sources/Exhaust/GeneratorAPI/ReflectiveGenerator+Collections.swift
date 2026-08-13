@@ -66,6 +66,48 @@ public extension ReflectiveGenerator {
         return Gen.arrayOf(gen.gen, exactly: UInt64(length)).wrapped
     }
 
+    /// Generates one value from each of the given generators, in order.
+    ///
+    /// The fixed-length counterpart to ``array(_:)``. The result has exactly one entry per input generator, and every position keeps its own generator, so positions with different domains stay distinct. Reach for ``array(_:)`` instead when every position draws from the same domain and the length itself should vary: that is the combinator whose length the reducer can collapse.
+    ///
+    /// Each position is an independent scope for the reducer, so reducing one entry leaves the others alone, and screening enumerates combinations across positions without generating a length first.
+    ///
+    /// ```swift
+    /// let generators: [ReflectiveGenerator<Int>] = [.int(in: 0 ... 9), .int(in: 100 ... 109)]
+    /// let gen = #gen(.eachOf(generators))
+    /// ```
+    ///
+    /// - Parameter generators: One generator per output position.
+    /// - Returns: A generator producing an array with one value per input generator, in order.
+    static func eachOf<Value>(
+        _ generators: [ReflectiveGenerator<Value>]
+    ) -> ReflectiveGenerator<[Value]> where Output == [Value] {
+        Gen.eachOf(generators.map(\.gen)).wrapped
+    }
+
+    /// Generates one value for each element of a known collection, using a generator built from that element.
+    ///
+    /// Use this when the domain of each position depends on the element sitting at it, such as one column type per column of a schema. The output length is the collection's count and never varies, so the reducer spends its budget on the values rather than on the shape.
+    ///
+    /// Building the same structure by folding generators together with `map` costs the backward pass: `map` is forward-only, so reflection stops at the first fold. This combinator keeps reflection intact.
+    ///
+    /// ```swift
+    /// let gen = #gen(.eachOf(Column.allCases) { column in
+    ///     .element(from: column.storageClass.compatibleColumnTypes)
+    /// })
+    /// ```
+    ///
+    /// - Parameters:
+    ///   - elements: The elements to generate a value for, one each, in the collection's order.
+    ///   - generator: Builds the generator for the position occupied by the given element.
+    /// - Returns: A generator producing an array with one value per element, in the collection's order.
+    static func eachOf<Elements: Collection, Value>(
+        _ elements: Elements,
+        _ generator: (Elements.Element) throws -> ReflectiveGenerator<Value>
+    ) rethrows -> ReflectiveGenerator<[Value]> where Output == [Value] {
+        try Gen.eachOf(elements.map { try generator($0).gen }).wrapped
+    }
+
     /// Creates a generator that produces sets of random elements with size-scaled count.
     ///
     /// Elements are deduplicated by hash, so the generated set may be smaller than the requested count if the element generator produces duplicates.

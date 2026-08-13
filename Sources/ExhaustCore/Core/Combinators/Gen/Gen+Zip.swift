@@ -29,6 +29,74 @@ package extension Gen {
             erased.append(generator.erase())
         }
 
+        return zipped(
+            erased,
+            isOpaque: isOpaque,
+            pack: { values in
+                var index = 0
+                func next<Element>(_: Element.Type) -> Element {
+                    defer { index += 1 }
+                    return values[index] as! Element
+                }
+                return (repeat next((each T).self))
+            },
+            unpack: { tuple in
+                var values: [Any] = []
+                for value in repeat each tuple {
+                    values.append(value)
+                }
+                return values
+            }
+        )
+    }
+
+    /// Composes a runtime-sized array of generators into a single array result.
+    ///
+    /// The homogeneous counterpart to ``zip(_:isOpaque:)``. A parameter pack fixes the arity at the call site, so a collection whose size is known only at runtime cannot go through the variadic form, while ``ReflectiveOperation/zip(_:isOpaque:)`` has always taken a runtime-sized array. What separates this from ``arrayOf(_:_:)`` is that each position keeps its own generator: a sequence instantiates one element generator and reuses it everywhere, so per-position domains cannot vary there.
+    ///
+    /// An empty input yields ``just(_:)`` rather than a childless zip node, so no operation in the tree carries zero children.
+    ///
+    /// - Parameters:
+    ///   - generators: One generator per output position.
+    ///   - isOpaque: When `true`, the resulting zip node is treated as a single unit during screening analysis. Defaults to `false`.
+    /// - Returns: A generator producing an array with one value per input generator, in order.
+    static func eachOf<Value>(
+        _ generators: [Generator<Value>],
+        isOpaque: Bool = false
+    ) -> Generator<[Value]> {
+        guard generators.isEmpty == false else {
+            return Gen.just([])
+        }
+
+        var erased: ContiguousArray<AnyGenerator> = []
+        erased.reserveCapacity(generators.count)
+        for generator in generators {
+            erased.append(generator.erase())
+        }
+
+        return zipped(
+            erased,
+            isOpaque: isOpaque,
+            pack: { values in values.map { $0 as! Value } },
+            unpack: { array in array.map { $0 as Any } }
+        )
+    }
+
+    /// Builds the zip node and the transform that packages its positional `[Any]` payload into `Packed`.
+    ///
+    /// The two public forms differ only in how that payload is packed and unpacked, so the node construction, the arity capture the forward pass validates against, and the `.isomorph` scaffold live here. A change to how a zip reflects then lands in one place rather than in two that have to be kept in step.
+    ///
+    /// - Parameters:
+    ///   - erased: One type-erased generator per position, in output order.
+    ///   - isOpaque: When `true`, the resulting zip node is treated as a single unit during screening analysis.
+    ///   - pack: Builds the result from the positional values. Must be the exact inverse of `unpack`, since the pair is declared as an isomorphism rather than a forward-only map.
+    ///   - unpack: Decomposes a result back into positional values.
+    private static func zipped<Packed>(
+        _ erased: ContiguousArray<AnyGenerator>,
+        isOpaque: Bool,
+        pack: @escaping ([Any]) -> Packed,
+        unpack: @escaping (Packed) -> [Any]
+    ) -> Generator<Packed> {
         let zipNode: AnyGenerator = .impure(
             operation: .zip(erased, isOpaque: isOpaque),
             continuation: { .pure($0) }
@@ -36,31 +104,21 @@ package extension Gen {
 
         let arity = erased.count
 
-        // The `[Any]` ↔ tuple packaging is a framework-authored exact inverse pair, so it qualifies for `.isomorph`: one transform node replaces the contramap + map sandwich this method emitted previously.
+        // The `[Any]` ↔ `Packed` packaging is a framework-authored exact inverse pair, so it qualifies for `.isomorph`: one transform node replaces the contramap + map sandwich this construction emitted previously.
         return Gen.liftF(.transform(
             kind: .isomorph(
                 forward: { anyValues in
-                    let values = try zipComponents(anyValues, arity: arity)
-                    var index = 0
-                    func next<Element>(_: Element.Type) -> Element {
-                        defer { index += 1 }
-                        return values[index] as! Element
-                    }
-                    return (repeat next((each T).self))
+                    try pack(zipComponents(anyValues, arity: arity))
                 },
-                backward: { anyTuple in
+                backward: { anyPacked in
                     // Reflection probes pick branches against a shared final output, so a mismatched value is a normal rejection rather than a programmer error. Throw, as the previous contramap-based construction did, instead of trapping.
-                    guard let tuple = anyTuple as? (repeat each T) else {
+                    guard let packed = anyPacked as? Packed else {
                         throw ReflectionError.contramapWasWrongType
                     }
-                    var values: [Any] = []
-                    for value in repeat each tuple {
-                        values.append(value)
-                    }
-                    return values
+                    return unpack(packed)
                 },
                 inputType: [Any].self,
-                outputType: (repeat each T).self
+                outputType: Packed.self
             ),
             inner: zipNode
         ))

@@ -274,6 +274,7 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
         case filtered(GenRecipe, KnownPredicate)
         case resized(GenRecipe, size: UInt64)
         case zipped(GenRecipe, GenRecipe)
+        case eachOf([GenRecipe])
         case optional(GenRecipe)
         case boundArray(element: GenRecipe, maxLength: UInt64)
         case boundRange(GenRecipe)
@@ -307,6 +308,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                     "resize(\(size), \(inner))"
                 case let .zipped(a, b):
                     "zip(\(a), \(b))"
+                case let .eachOf(recipes):
+                    "eachOf(\(recipes.map(\.description).joined(separator: ", ")))"
                 case let .optional(inner):
                     "\(inner)?"
                 case let .boundArray(element: element, maxLength: maxLength):
@@ -369,6 +372,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                         return 1 + inner.nodeCount
                     case let .zipped(a, b):
                         return 1 + a.nodeCount + b.nodeCount
+                    case let .eachOf(recipes):
+                        return 1 + recipes.reduce(0) { $0 + $1.nodeCount }
                     case let .optional(inner):
                         return 1 + inner.nodeCount
                     case let .boundArray(element: element, maxLength: _):
@@ -429,6 +434,12 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                     case let .zipped(a, _):
                         // The build keeps the raw `.zip` output as `[element, element]`, so the recipe produces an array of the child type, not a scalar.
                         return .arrayOf(a.outputType)
+                    case let .eachOf(recipes):
+                        // Positions are homogeneous by construction, so the first child names the element type.
+                        guard let first = recipes.first else {
+                            preconditionFailure("An eachOf recipe must carry at least one position; recipe construction emitted none.")
+                        }
+                        return .arrayOf(first.outputType)
                     case let .optional(inner):
                         return inner.outputType
                     case let .boundArray(element: element, maxLength: _):

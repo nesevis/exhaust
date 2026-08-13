@@ -16,12 +16,8 @@ struct PropertyTestFailure<Output> {
     var replayHint: String?
     /// When `true`, renders only the replay seed — the `#expect` assertions provide per-value detail.
     var transparent: Bool = false
-    /// When `true`, reduction was attempted but produced no improvement over the original counterexample.
-    var reductionProducedNoImprovement: Bool = false
-    /// When `true`, reduction never accepted an improvement while values sit converged short of their reduction targets. A stronger signal than ``reductionProducedNoImprovement``: the values are likely linked by a relationship the reducer cannot cross, and the counterexample may be far from minimal.
-    var reductionStalled: Bool = false
-    /// When `true`, the reduction was cut short by the wall-clock deadline and the counterexample may not be fully reduced.
-    var reductionWasCapped: Bool = false
+    /// What the failure says about how reduction went, or `nil` when it has nothing to report. See ``ReductionNote`` for the precedence between the states.
+    var reductionNote: ReductionNote?
     /// When `true`, includes a structural diff between the original and reduced values. Off by default because the diff is expensive for large values.
     var includeDiff: Bool = false
 
@@ -89,15 +85,9 @@ struct PropertyTestFailure<Output> {
             lines.append("Property invoked: \(propertyInvocations) times")
         }
 
-        if reductionStalled {
+        if let reductionNote {
             lines.append("")
-            lines.append("Note: reduction stalled; the counterexample may not be minimal.")
-        } else if reductionProducedNoImprovement {
-            lines.append("")
-            lines.append("Note: this result could not be reduced.")
-        } else if reductionWasCapped {
-            lines.append("")
-            lines.append("Note: Reduction halted by time limit. Increase .budget(...) to allow more reduction time.")
+            lines.append(reductionNote.message)
         }
 
         if let replaySeed = encodedReplaySeed {
@@ -155,6 +145,65 @@ struct PropertyTestFailure<Output> {
             return "{\"event\":\"property_failed\"}"
         }
         return json
+    }
+}
+
+// MARK: - Reduction Note
+
+/// What a failure reports about the reduction phase.
+///
+/// The states are mutually exclusive, and their precedence is the order the cases are tested in ``init(probes:invocations:stalledLeafCount:anyAcceptanceOccurred:producedNoImprovement:wasCapped:)``: a run that never materialized a candidate reports that ahead of the time limit, because raising the budget cannot help it, and the time limit outranks a stall because a truncated search says nothing about the shape of the landscape.
+///
+/// The counts arrive as arguments rather than being read from an ``ExhaustReport``. A report is filled in progressively across a run, and its invocation counts land only when the ledger is applied at the very end, so a caller reading them mid-run silently sees zero. Requiring them here puts the burden on the call site to supply a number it actually has.
+enum ReductionNote {
+    /// Probes were opened and none of them materialized, so the property never ran during reduction.
+    case noCandidateMaterialized
+    /// The wall-clock deadline ended reduction early.
+    case timeLimit
+    /// Reduction never accepted an improvement while leaves sit converged short of their reduction targets, which usually means the values are linked by a relationship no single-value move preserves.
+    case stalled
+    /// Reduction ran without improving the counterexample.
+    case noImprovement
+
+    /// - Parameters:
+    ///   - probes: Reduction proposals opened by encoder passes and relax rounds.
+    ///   - invocations: Property invocations attributed to the reduction phase.
+    ///   - stalledLeafCount: Leaves that ended reduction converged short of their reduction target.
+    ///   - anyAcceptanceOccurred: Whether any pass in the run accepted a probe.
+    ///   - producedNoImprovement: Whether reduction returned the counterexample unchanged.
+    ///   - wasCapped: Whether the wall-clock deadline ended reduction early.
+    init?(
+        probes: Int,
+        invocations: Int,
+        stalledLeafCount: Int,
+        anyAcceptanceOccurred: Bool,
+        producedNoImprovement: Bool,
+        wasCapped: Bool
+    ) {
+        if probes > 0, invocations == 0 {
+            self = .noCandidateMaterialized
+        } else if wasCapped {
+            self = .timeLimit
+        } else if stalledLeafCount > 0, anyAcceptanceOccurred == false {
+            self = .stalled
+        } else if producedNoImprovement {
+            self = .noImprovement
+        } else {
+            return nil
+        }
+    }
+
+    var message: String {
+        switch self {
+            case .noCandidateMaterialized:
+                "Note: reduction failed; no candidate materialized, so the property never ran during reduction. Check the generator for a filter or a bind the reduced choices cannot satisfy."
+            case .timeLimit:
+                "Note: Reduction halted by time limit. Increase .budget(...) to allow more reduction time."
+            case .stalled:
+                "Note: reduction stalled; the counterexample may not be minimal."
+            case .noImprovement:
+                "Note: this result could not be reduced."
+        }
     }
 }
 

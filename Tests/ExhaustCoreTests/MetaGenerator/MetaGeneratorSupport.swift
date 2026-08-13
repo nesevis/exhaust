@@ -123,6 +123,8 @@ func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorK
             return branches.contains { recipeContains($0.recipe, where: predicate) }
         case let .zipped(first, second):
             return recipeContains(first, where: predicate) || recipeContains(second, where: predicate)
+        case let .eachOf(recipes):
+            return recipes.contains { recipeContains($0, where: predicate) }
         case .unfolded, .getSized:
             return false
     }

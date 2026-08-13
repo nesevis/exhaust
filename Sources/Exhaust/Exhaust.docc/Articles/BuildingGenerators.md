@@ -35,6 +35,16 @@ let sets = #gen(.int().set(count: 1...5))
 let lookup = #gen(.dictionary(.asciiString(), .int(), count: 1...5))
 ```
 
+`.eachOf` covers the case these do not: a collection whose length is fixed by something you already have, where each position draws from its own domain. The result has one entry per element, in order.
+
+```swift
+let schema = #gen(.eachOf(Column.allCases) { column in
+    .element(from: column.compatibleTypes)
+})
+```
+
+Every position is an independent scope for the reducer, so reducing one entry leaves the others alone. Reach for `.array` instead when the positions share a domain and the length itself is part of what you are testing, since that is the combinator whose length the reducer can collapse.
+
 Arrays preserve their generated sequence structure, so `#exhaust(…, reflecting:)` can start reduction from a concrete array when its element generator supports reflection. Sets and dictionaries are forward-only because constructing them discards draw order and may collapse duplicate elements or keys. Exhaust still replays and reduces their generated counterexamples from the recorded choices.
 
 ## Optionals

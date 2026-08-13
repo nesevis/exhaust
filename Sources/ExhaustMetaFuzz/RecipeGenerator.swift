@@ -47,6 +47,7 @@ package func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
         choices.append((1, scaledArrayGenerator(producing: type, maxDepth: maxDepth)))
         choices.append((1, metamorphedGenerator(producing: type, maxDepth: maxDepth)))
         choices.append((1, zippedGenerator(producing: type, maxDepth: maxDepth)))
+        choices.append((1, eachOfGenerator(producing: type, maxDepth: maxDepth)))
     }
     return Gen.pick(choices: choices)
 }
@@ -259,6 +260,17 @@ private func zippedGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
     let subB = recipeGenerator(producing: elementType, maxDepth: maxDepth - 1)
     return Gen.zip(subA, subB).map { a, b in
         GenRecipe.combinator(.zipped(a, b))
+    }
+}
+
+private func eachOfGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
+    guard case let .arrayOf(elementType) = type else {
+        return leafGenerator(producing: type)
+    }
+    // Positions are drawn independently, so they share an output type while differing in range, filter, and nesting. That is the shape `.eachOf` exists for. Constant scaling keeps every position count reachable from the first run, where the default linear ramp would start every recipe at two.
+    let positions = recipeGenerator(producing: elementType, maxDepth: maxDepth - 1)
+    return Gen.arrayOf(positions, within: 2 ... 4, scaling: .constant).map { recipes in
+        GenRecipe.combinator(.eachOf(recipes))
     }
 }
 

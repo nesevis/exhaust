@@ -174,9 +174,21 @@ public struct ExhaustReport: Sendable {
     /// True when the reducer accepted at least one improvement during reduction.
     public var anyAcceptanceEverOccurred: Bool = false
 
-    /// True when reduction could not improve the counterexample even once while leaves sit short of their reduction targets. The counterexample may be far from minimal. Typically the failing values are linked by a relationship (for example `x == 2 * y + 1`) that no single-value change can preserve, so every reduction attempt un-fails the property. Deadline-capped runs are excluded: they report the time limit instead, because their lack of progress is explained by the budget rather than by the landscape.
+    /// True when reduction could not improve the counterexample even once while leaves sit short of their reduction targets. The counterexample may be far from minimal. Typically the failing values are linked by a relationship (for example `x == 2 * y + 1`) that no single-value change can preserve, so every reduction attempt un-fails the property. Deadline-capped runs are excluded: they report the time limit instead, because their lack of progress is explained by the budget rather than by the landscape. Runs that never reached the property are excluded too, and report ``reductionFailed`` instead: a landscape claim needs at least one verdict behind it.
     public var reductionStalled: Bool {
-        stalledLeafCount > 0 && anyAcceptanceEverOccurred == false && reductionWasCapped == false
+        stalledLeafCount > 0
+            && anyAcceptanceEverOccurred == false
+            && reductionWasCapped == false
+            && reductionInvocations > 0
+    }
+
+    /// True when reduction opened probes but none of them materialized into a value, so the property never ran during reduction and the counterexample came back exactly as found.
+    ///
+    /// Like ``reductionStalled``, this reads ``reductionInvocations``, which lands only when the run's ledger is applied at the end of the pipeline. Both are meaningful to an ``PropertySettings/onReport(_:)`` consumer, which receives the report after that point, and meaningless earlier in the run.
+    ///
+    /// This says nothing about the shape of the search: the encoders got no verdict to act on, so their convergence records record failed decodes rather than certified floors. Reach for the generator rather than the property. A filter the rewritten choice sequences cannot satisfy, and a generator that throws on a rewritten sequence, both present this way.
+    public var reductionFailed: Bool {
+        reductionProbes > 0 && reductionInvocations == 0
     }
 
     // MARK: - Graph Reducer
