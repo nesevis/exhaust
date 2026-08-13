@@ -75,7 +75,8 @@ struct EachOfGeneratorTests {
         let generator = #gen(.eachOf([Int]()) { _ in .int(in: 0 ... 9) })
         let values = try #example(generator, count: 3, seed: 1)
 
-        #expect(values.allSatisfy(\.isEmpty))
+        let everyValueIsEmpty = values.allSatisfy(\.isEmpty)
+        #expect(everyValueIsEmpty)
     }
 
     @Test("An empty array of generators produces the empty array")
@@ -83,7 +84,8 @@ struct EachOfGeneratorTests {
         let generators: [ReflectiveGenerator<Int>] = []
         let values = try #example(#gen(.eachOf(generators)), count: 3, seed: 1)
 
-        #expect(values.allSatisfy(\.isEmpty))
+        let everyValueIsEmpty = values.allSatisfy(\.isEmpty)
+        #expect(everyValueIsEmpty)
     }
 }
 
