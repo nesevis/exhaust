@@ -62,7 +62,7 @@ public extension ReflectiveGenerator {
     ///   - column: Source column for fingerprinting (auto-captured).
     /// - Returns: A generator that only yields values with unique keys.
     func unique(
-        by path: KeyPath<Output, some Hashable> & Sendable,
+        by path: KeyPath<Output, some Hashable & Sendable> & Sendable,
         fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column

@@ -110,25 +110,6 @@ package func charGen(from characterSet: CharacterSet) -> Generator<Character> {
 package func optionalGen<Value>(_ gen: Generator<Value>) -> Generator<Value?> {
     Gen.pick(choices: [
         (1, Gen.just(Value?.none)),
-        (5, asOptionalGen(gen)),
+        (5, gen.liftToOptional()),
     ])
-}
-
-/// Wraps a non-optional generator into an optional one (the .some branch).
-package func asOptionalGen<Value>(_ gen: Generator<Value>) -> Generator<Value?> {
-    let description = String(describing: Value.self)
-    return .impure(operation: .contramap(
-        transform: { result in
-            if let optional = result as? Value?, optional == nil {
-                throw ReflectionError.reflectedNil(
-                    type: description,
-                    resultType: String(describing: type(of: result))
-                )
-            }
-            return result as! Value
-        },
-        next: gen.erase()
-    )) { result in
-        .pure(result as? Value)
-    }
 }

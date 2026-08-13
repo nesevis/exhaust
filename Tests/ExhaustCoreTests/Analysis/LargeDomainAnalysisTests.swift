@@ -752,7 +752,7 @@ struct CharacterProblematicIndicesTests {
             case .enumerable: "enumerable"
             case .large: "large"
         }
-        #expect(domainSizes.isEmpty == false, "Analysis should produce at least one parameter")
+        #expect(domainSizes.isEmpty == false, "\(analysisKind) analysis should produce at least one parameter")
 
         var rowsTested = 0
         if profile.parameterCount >= 2 {

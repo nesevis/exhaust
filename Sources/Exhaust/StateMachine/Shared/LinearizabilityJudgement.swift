@@ -65,7 +65,8 @@ func searchForExplainingOrder<Spec: StateMachineSpecBase>(
             }
             for command in prefixCommands {
                 do {
-                    try await replay.run(fresh, command)
+                    // The prefix only re-establishes state; its responses are judged in `replayCommand`, not here.
+                    _ = try await replay.run(fresh, command)
                 } catch is StateMachineSkip {
                     continue
                 } catch {

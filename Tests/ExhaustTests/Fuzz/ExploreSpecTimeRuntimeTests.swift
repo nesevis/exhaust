@@ -220,7 +220,7 @@ struct ExploreSpecTimeRuntimeTests {
                 [candidate.taggedCommands.count % 8]
             }
         )
-        var configuration = FuzzRunnerConfiguration(
+        let configuration = FuzzRunnerConfiguration(
             budgetNanoseconds: 60_000_000_000,
             seed: 7,
             skipScreening: true,
@@ -339,7 +339,7 @@ struct ExploreSpecTimeRuntimeTests {
                 return edges
             }
         )
-        var configuration = FuzzRunnerConfiguration(
+        let configuration = FuzzRunnerConfiguration(
             budgetNanoseconds: 60_000_000_000,
             seed: 42,
             skipScreening: true,

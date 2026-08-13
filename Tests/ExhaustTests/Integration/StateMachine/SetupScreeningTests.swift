@@ -22,7 +22,7 @@ struct SetupScreeningTests {
     @Test("Screening rows vary the setup arguments rather than repeating one value")
     func screeningRowsVarySetupArguments() throws {
         let factors = try #require(__ExhaustRuntime.setupScreeningFactors(for: TwoArgumentSetupSpec.self))
-        let setupGen = try #require(TwoArgumentSetupSpec.setupGenerator)
+        _ = try #require(TwoArgumentSetupSpec.setupGenerator)
         let generator = BalancedCoveringArrayGenerator(domainSizes: factors.domainSizes)
 
         var steps: [String] = []

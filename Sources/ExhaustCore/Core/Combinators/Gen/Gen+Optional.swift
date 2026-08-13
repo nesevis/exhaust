@@ -18,7 +18,8 @@ package extension Generator where Operation == ReflectiveOperation {
             },
             next: erase()
         )) { result in
-            .pure(result as? Value)
+            // The leaf carries `Optional<Value>` rather than `Value`: the interpreter recovers it with `as! Value?`, and both `.none` and `.some` are valid outputs, so a failed cast is not an error path. The `as Any` is spelled out because `.impure` continuations always return an erased `FreerMonad`.
+            .pure(result as? Value as Any)
         }
     }
 }
