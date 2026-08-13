@@ -12,7 +12,7 @@ import Testing
 struct ExploreFuzzTests {
     @Test("A fuzz run finds every catchable fault, separates the slippage pair, and never over-splits one value", .timeLimit(.minutes(2)))
     func fuzzInventory() {
-        let report = fuzz()
+        let report = Self.report
 
         // Every planted fault's canonical minimal form appears among the clusters.
         #expect(clusterMatching(report, .faultA) != nil, "expected fault A (data / region 5 / [0, 0])")
@@ -42,7 +42,7 @@ struct ExploreFuzzTests {
 
     @Test("The clustered inventory separates the slippage pair that symptom deduplication cannot", .timeLimit(.minutes(2)))
     func slippageDifferential() {
-        let report = fuzz()
+        let report = Self.report
 
         // The distinctive signal is separation, not depth: the two faults A and B throw the same error type from the same site, so a symptom-deduplicating view — everything a blind sampler can offer — collapses them to one entry. The blind sampler here confirms it sees at most one IntegrityError symptom, with no way to tell the two faults apart.
         let blindSymptoms = blindSampleFaultTypes(attempts: report.totalAttempts, seed: 20_260_710)
@@ -57,9 +57,55 @@ struct ExploreFuzzTests {
         #expect(clusterMatching(report, .faultB) != nil)
     }
 
+    @Test("The reported summary names the function that threw for every cluster", .timeLimit(.minutes(2)))
+    func summaryAttribution() {
+        let summary = Self.summary
+
+        // The compact suspect form is what a developer reads in the failure message, and each fault names the branch it threw from.
+        #expect(summary.contains("validateWindow (Parser.swift)"))
+        #expect(summary.contains("decodeData (Parser.swift)"))
+        #expect(summary.contains("decodeControl (Parser.swift)"))
+        #expect(summary.contains("checkChecksum (Parser.swift)"))
+
+        // Function-entry edges resolve to a line; interior edges collapse to the bare file rather than rendering a misleading `:0`.
+        #expect(summary.contains("integrityCheck (Parser.swift:121)"))
+
+        // The seed reaches the report, so the run a reader replays is the run that produced these clusters.
+        #expect(summary.contains("Reproduce: .replay(20260710)"))
+    }
+
+    @Test("The reported summary separates the slippage pair by decoder frame", .timeLimit(.minutes(2)))
+    func summarySlippagePairSeparation() {
+        let summary = Self.summary
+        guard let faultA = clusterMatching(Self.report, .faultA),
+              let faultB = clusterMatching(Self.report, .faultB),
+              let data = block(for: faultA, in: summary),
+              let control = block(for: faultB, in: summary)
+        else {
+            Issue.record("expected a rendered block for each half of the slippage pair:\n\(summary)")
+            return
+        }
+
+        // Both halves throw from one site, so the line a stack trace would print is identical for the two.
+        #expect(data.contains("integrityCheck (Parser.swift:121)"))
+        #expect(control.contains("integrityCheck (Parser.swift:121)"))
+
+        // The suspect list reaches past the shared throw site to the decoder that selected the branch, which is what shows the reader these are two faults rather than one.
+        #expect(data.contains("decodeData (Parser.swift)"))
+        #expect(data.contains("decodeControl") == false)
+        #expect(control.contains("decodeControl (Parser.swift)"))
+        #expect(control.contains("decodeData") == false)
+    }
+
     // MARK: - Shared Fuzz Run
 
-    private func fuzz() -> FuzzReport {
+    /// One instrumented run for the whole suite. Swift Testing builds a fresh suite value per test, so a per-test call would spend the full wall-clock budget four times over and leave each test describing a different campaign.
+    private static let report = fuzz()
+
+    /// The shared run's rendered inventory. ``FuzzReport/renderedSummary()`` re-renders on every call, and every assertion against it wants the same text.
+    private static let summary = ExploreFuzzTests.report.renderedSummary()
+
+    private static func fuzz() -> FuzzReport {
         // A throwing single-expression property, so each distinct fault type flows through as its own symptom rather than collapsing to a bare returnedFalse.
         #explore(
             Fixture.messageGenerator,
@@ -96,6 +142,13 @@ private func clusterMatching(_ report: FuzzReport, _ fault: PlantedFault) -> Fuz
     report.clusters.first { cluster in
         fault.markers.allSatisfy { cluster.reducedDescription.contains($0) }
     }
+}
+
+/// The rendered block for `cluster`, taken from the summary's blank-line-separated sections.
+///
+/// Found by displayed cluster number rather than by matching counterexample text: the summary rewrites a counterexample when it collapses a multi-line dump onto one line, dropping the per-index labels ``PlantedFault/markers`` relies on. The number is stable because a cluster's `id` stays its position in the report even though the summary orders frontier clusters first.
+private func block(for cluster: FuzzReport.Cluster, in summary: String) -> String? {
+    summary.components(separatedBy: "\n\n").first { $0.hasPrefix("Cluster \(cluster.id + 1) ") }
 }
 
 // MARK: - Blind Sampler

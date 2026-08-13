@@ -53,7 +53,7 @@ extension __ExhaustRuntime {
             )
         }
         if ordered.contains(where: \.isLikelySplit) {
-            lines.append("~paths: one reduced form reached through multiple coverage signatures — possibly distinct paths to one fault.")
+            lines.append("~paths: one reduced form reached through multiple coverage signatures, possibly distinct paths to one fault.")
         }
 
         if report.clusters.isEmpty == false {
@@ -86,7 +86,7 @@ extension __ExhaustRuntime {
             )
         } else {
             lines.append(
-                "No edge was hit by only a single evaluated case — the estimated chance of a new edge on the next evaluated case is below 1 in \(report.evaluatedSearchCases)."
+                "No edge was hit by only a single evaluated case, so the estimated chance of a new edge on the next evaluated case is below 1 in \(report.evaluatedSearchCases)."
             )
         }
         let reachable = report.estimatedReachableEdgeCount
@@ -144,13 +144,13 @@ extension __ExhaustRuntime {
             "symptoms: \(cluster.symptoms.joined(separator: ", "))",
         ]
         if cluster.unnormalizedMemberCount > 0 {
-            attributes.append("\(cluster.unnormalizedMemberCount) member\(cluster.unnormalizedMemberCount == 1 ? "" : "s") normalized in — reduction stalled short of the canonical form on these")
+            attributes.append("\(cluster.unnormalizedMemberCount) member\(cluster.unnormalizedMemberCount == 1 ? "" : "s") normalized in, reduction stalled short of the canonical form on these")
         }
         if isFrontier {
-            attributes.insert("discovered late, at \(renderDuration(cluster.firstSeen)) — the frontier had just reached this region", at: 1)
+            attributes.insert("discovered late at \(renderDuration(cluster.firstSeen)): the frontier had just reached this region", at: 1)
         }
         if cluster.isLikelySplit {
-            attributes.append("multiple coverage signatures — possibly distinct paths to one fault")
+            attributes.append("multiple coverage signatures, possibly distinct paths to one fault")
         }
         // Clusters display 1-based; `id` stays the report's zero-based array position.
         var lines = ["Cluster \(cluster.id + 1) [\(attributes.joined(separator: "; "))]:"]
@@ -161,9 +161,9 @@ extension __ExhaustRuntime {
             for edge in cluster.discriminatingEdges {
                 let failPercent = Int((edge.failureHitFraction * 100).rounded())
                 let passPercent = Int((edge.passingHitFraction * 100).rounded())
-                let location = edge.location.map { " — \($0)" } ?? ""
+                let location = edge.location.map { "; \($0)" } ?? ""
                 lines.append(
-                    "    edge \(edge.edgeIndex) — hit in \(failPercent)% of this cluster's failures, \(passPercent)% of passing runs\(location)"
+                    "    edge \(edge.edgeIndex): hit in \(failPercent)% of this cluster's failures, \(passPercent)% of passing runs\(location)"
                 )
             }
         }

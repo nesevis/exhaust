@@ -294,6 +294,15 @@ public struct FuzzReport: Sendable {
         }
         return Double(evaluatedSearchCases) / seconds
     }
+
+    /// Renders the run's fault inventory as the multi-line text a failing run reports.
+    ///
+    /// When the run clustered faults, this is the string `#explore(time:)` records as the test failure, so a run under `.suppress(.issueReporting)` can still assert on what a developer would have read. A run that stopped because of a configuration or instrumentation problem reports that separately, and none of that text appears here. Suspect edges appear in their compact form (`integrityCheck (Parser.swift:121)`), not as raw symbolizer output. The wording is diagnostic text and changes between releases, so match substrings rather than whole lines.
+    ///
+    /// - Complexity: Renders from scratch on every call, including a regular-expression pass per cluster. Bind the result rather than calling this repeatedly.
+    public func renderedSummary() -> String {
+        __ExhaustRuntime.renderFuzzSummary(self)
+    }
 }
 
 // MARK: - Wrapping the package-level result

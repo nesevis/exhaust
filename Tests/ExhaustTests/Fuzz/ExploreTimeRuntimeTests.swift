@@ -318,6 +318,27 @@ struct ExploreTimeRuntimeTests {
         #expect(suspects == ["RacyLedger.audit (RacyLedger.swift:45)"])
     }
 
+    @Test("Terminal suspects drop edges that symbolized into compiler-generated code")
+    func suspectsDropCompilerGenerated() {
+        // atos resolves thunks and synthesized conformances to a pseudo-file. They name no branch a reader can act on, so they never reach a suspect line.
+        let edges: [FuzzReport.DiscriminatingEdge] = [
+            makeEdge(index: 1, location: "SpecFixture.RacyLedger.audit() + 24 (/<compiler-generated>:0)"),
+            makeEdge(index: 2, location: "SpecFixture.RacyLedger.deposit(_:) + 12 (RacyLedger.swift:36)"),
+        ]
+        let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
+        #expect(suspects == ["RacyLedger.deposit (RacyLedger.swift:36)"])
+    }
+
+    @Test("Terminal suspects shorten a private symbol to its bare function name")
+    func suspectsShortenPrivateSymbols() {
+        // A private function demangles as `(name in _Discriminator)`. The discriminator is build-specific, so it identifies nothing to a reader comparing two runs.
+        let edges: [FuzzReport.DiscriminatingEdge] = [
+            makeEdge(index: 1, location: "SpecFixture.RacyLedger.(reconcile in _8B3D01F2)() + 40 (RacyLedger.swift:72)"),
+        ]
+        let suspects = __ExhaustRuntime.terminalSuspects(for: makeCluster(discriminatingEdges: edges))
+        #expect(suspects == ["reconcile (RacyLedger.swift:72)"])
+    }
+
     @Test("A run whose property never ran reports the pointless-run error even when suppressed")
     func pointlessRun() {
         let report = __ExhaustRuntime.runExploreTimeCore(

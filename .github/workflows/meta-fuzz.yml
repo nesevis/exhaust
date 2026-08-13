@@ -94,9 +94,10 @@ jobs:
           if [ -f "$PROBE_OUTPUT" ] && grep -q '^metafuzz: probe throughput ' "$PROBE_OUTPUT"; then
             # Throughput alone is not comparable across unpinned nightly runs: the power schedule
             # concentrates budget, so two runs settle in regions with different per-case cost. The
-            # coverage and corpus lines say whether a throughput gap is the search reaching less
-            # code or the same code costing more, and the seed line makes the run replayable.
-            for field in throughput coverage corpus seed; do
+            # corpus line and the inventory's coverage lines say whether a throughput gap is the
+            # search reaching less code or the same code costing more, and the seed line makes the
+            # run replayable.
+            for field in throughput corpus seed; do
               grep "^metafuzz: probe ${field} " "$PROBE_OUTPUT" | tail -1 | sed 's/^metafuzz: /- /' >> "$GITHUB_STEP_SUMMARY"
             done
           else
@@ -108,6 +109,28 @@ jobs:
             echo "- peak memory footprint ${peak_footprint_mib} MiB" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "- memory metrics unavailable" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # The probe's own rendering, not a reconstruction: the clustered inventory with the
+          # compact suspect lines, which is what says where in ExhaustCore a nightly finding lives.
+          # Cut from the probe log rather than a file the probe writes, because the wrapper relaunches
+          # after a trap and every completed slice prints its own inventory — a file would hold only
+          # the last slice while the findings directory below accumulates all of them.
+          MAX_INVENTORY_BYTES=200000
+          INVENTORY="${{ runner.temp }}/metafuzz-inventory.txt"
+          awk '/^#explore\(time:\) cataloged/,/^Reproduce: /' "$PROBE_OUTPUT" > "$INVENTORY" 2>/dev/null || true
+          echo "### Meta-fuzz fault inventory" >> "$GITHUB_STEP_SUMMARY"
+          if [ -s "$INVENTORY" ]; then
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            # A job summary over 1 MiB is rejected outright, and a campaign that clusters dozens of
+            # deep recipe counterexamples can reach that. Truncate here; the log artifact keeps it all.
+            head -c "$MAX_INVENTORY_BYTES" "$INVENTORY" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$(wc -c < "$INVENTORY")" -gt "$MAX_INVENTORY_BYTES" ]; then
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "[truncated — full inventory in metafuzz-probe.log in the meta-fuzz-metrics artifact]" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No probe inventory was rendered." >> "$GITHUB_STEP_SUMMARY"
           fi
 
       - name: Upload probe metrics

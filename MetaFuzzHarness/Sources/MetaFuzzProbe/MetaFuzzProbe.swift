@@ -87,13 +87,6 @@ struct MetaFuzzProbe: ParsableCommand {
                 + "reduction \(percentage(timing.reduction))% · other \(percentage(timing.other))%"
         )
         print(
-            "metafuzz: probe coverage \(report.coveredEdgeCount)/\(report.instrumentedEdgeCount) instrumented edges "
-                + "(\(ratio(Double(report.coveredEdgeCount), of: Double(report.instrumentedEdgeCount))) of module); "
-                + "Chao1 reachable \(String(format: "%.0f", report.estimatedReachableEdgeCount)) "
-                + "(\(ratio(Double(report.coveredEdgeCount), of: report.estimatedReachableEdgeCount)) explored); "
-                + "next-edge probability \(String(format: "%.2e", report.estimatedNextEdgeProbability))"
-        )
-        print(
             "metafuzz: probe corpus \(report.corpusEntryCount) entries, \(report.mutableTierCount) mutable tier; "
                 + "edge singletons \(report.edgeSingletonCount), doubletons \(report.edgeDoubletonCount)"
         )
@@ -102,28 +95,20 @@ struct MetaFuzzProbe: ParsableCommand {
                 + "termination \(describe(report.termination))"
         )
 
+        // The same inventory a failing test would print, suspect lines included. A passing run emits it too: what the budget bought is the question either way. Every relaunch after a trap prints its own, so the log accumulates the whole campaign's inventory rather than one slice's.
+        print(report.renderedSummary())
+
         if report.clusters.isEmpty {
             print("metafuzz: no findings in \(budgetSeconds)s")
             return
         }
 
         print("metafuzz: \(report.clusters.count) finding(s) — freeze candidates in \(findings.path)")
-        for cluster in report.clusters {
-            print("  - [\(cluster.symptoms.joined(separator: ", "))] \(cluster.reducedDescription)")
-        }
         throw ExitCode(2)
     }
 }
 
 // MARK: - Output Formatting
-
-/// Renders a percentage, or `n/a` when the denominator carries no information.
-private func ratio(_ numerator: Double, of denominator: Double) -> String {
-    guard denominator > 0 else {
-        return "n/a"
-    }
-    return String(format: "%.1f%%", numerator / denominator * 100)
-}
 
 /// Renders the stop reason, including the payloads that change how the coverage numbers should be read: a plateau means the corpus stopped growing before the budget ran out, so a low edge count is the search giving up rather than the budget running short.
 private func describe(_ termination: FuzzReport.Termination) -> String {
@@ -140,5 +125,7 @@ private func describe(_ termination: FuzzReport.Termination) -> String {
             "generation failed: \(message)"
         case .attemptLimitReached:
             "attempt limit reached"
+        case .firstFaultFound:
+            "first fault found"
     }
 }
