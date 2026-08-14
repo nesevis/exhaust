@@ -343,7 +343,7 @@ package extension MetaFuzz {
         let generator = buildGenerator(from: fixture.recipe)
         let analysis = ChoiceTreeAnalysis.analyze(
             generator,
-            compositeThreshold: screeningBudget
+            compositeThreshold: ScreeningRunner.modelBudget(for: screeningBudget)
         )
 
         switch fixture.interpreterCapabilities.screening {

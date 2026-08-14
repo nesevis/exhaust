@@ -55,8 +55,8 @@ package enum ChoiceTreeAnalysis {
     /// Tries multiple seeds to maximize element coverage for sequences.
     ///
     /// - Parameters:
-    ///   - expandSequencePairs: When `true`, sequence coverage models include `[X, Y][X, Y]` two-element configurations (N^2 domain entries). When `false`, only `[]` and `[X]` are modeled. ``ScreeningRunner`` uses this to retry with a smaller domain when the full model exceeds the screening budget.
-    ///   - compositeThreshold: Composite sequence parameters whose domain exceeds this value after problematic-value conversion are treated as opaque. Defaults to ``enumerableDomainThreshold``. Pass the screening budget to prevent sequences of multi-parameter elements from inflating the covering array domain beyond what the budget can cover.
+    ///   - expandSequencePairs: When `true`, two-element configurations give both positions the full element catalog (N² pair entries), degrading per slot to disjoint halves ((N/2)² entries) when the full model exceeds `compositeThreshold`. When `false`, every two-element configuration uses disjoint halves. ``ScreeningRunner`` passes `false` on retry when the flattened pair product exceeds its model budget.
+    ///   - compositeThreshold: Composite sequence parameters whose domain exceeds this value after problematic-value conversion and pair halving go opaque. Defaults to ``enumerableDomainThreshold``. ``ScreeningRunner`` passes its model budget so composite domains stay within what rotated covering runs can sweep.
     public static func analyze(
         _ gen: Generator<some Any>,
         expandSequencePairs: Bool = true,
@@ -448,14 +448,14 @@ package enum ChoiceTreeAnalysis {
             }
         }
 
-        if compositeSize > compositeThreshold {
-            return true
-        }
-
-        // When not expanding sequence pairs, keep length 2 but give each position a disjoint half of the problematic values. Length ≤1 keeps the full set so every problematic value appears at least once. This reduces the length-2 product from d² to (d/2)² = d²/4 while still exercising pair interactions.
-        if expandSequencePairs == false, elementSlotParams.count >= 2 {
+        // Halving keeps length 2 but gives each position a disjoint half of the problematic values. Length ≤1 keeps the full set so every problematic value appears at least once. This reduces the length-2 product from d² to (d/2)² = d²/4 while still exercising pair interactions. Two triggers: the caller opted out of full pair expansion, or this slot's full model exceeds the threshold and only the halved model can keep the slot from going opaque. Halving must precede the threshold check for the second trigger to exist: checking the unhalved size first would drop the slots the halved model is for (an array of dates fits the threshold only after halving).
+        if elementSlotParams.count >= 2, expandSequencePairs == false || compositeSize > compositeThreshold {
             halvedPairs = true
             (slots, compositeSize) = buildSlots(from: elementSlotParams, halvedPairs: true)
+        }
+
+        if compositeSize > compositeThreshold {
+            return true
         }
 
         let param = ScreeningParameter(

@@ -4,6 +4,17 @@
 
 /// Runs the screening phase of a property test, exhausting the generator's enumerable or large domain before the random phase.
 package enum ScreeningRunner {
+    /// Headroom the domain model gets over the per-run row budget.
+    ///
+    /// Both model gates below (the composite threshold passed to analysis and the pair-product downgrade) compare against the row budget scaled by this factor rather than the raw budget. Per-run covering-seed rotation starts each run at a different row window, so a model larger than one run's rows still completes its pair coverage across successive runs. Every parameter still sweeps its full value catalog within roughly one run. Without the headroom, two-element composite slots for the character and float catalogs exceed the raw standard budget and go opaque, so their pair space is never screened.
+    package static let modelOverprovisionFactor: UInt64 = 4
+
+    /// The domain-model budget for a per-run row budget: the budget scaled by ``modelOverprovisionFactor``, saturating on overflow.
+    package static func modelBudget(for screeningBudget: UInt64) -> UInt64 {
+        let (product, overflow) = screeningBudget.multipliedReportingOverflow(by: modelOverprovisionFactor)
+        return overflow ? .max : product
+    }
+
     /// Separates covering-row progress from the property calls that those rows produce.
     package struct Summary: Equatable, Sendable {
         /// Number of covering rows considered as candidate opportunities.
@@ -65,15 +76,16 @@ package enum ScreeningRunner {
         onExample: ((Output, ChoiceTree, Bool) -> Void)? = nil,
         shouldTerminate: (() -> Bool)? = nil
     ) -> Result<Output> {
-        guard var analysis = ChoiceTreeAnalysis.analyze(gen, compositeThreshold: screeningBudget) else {
+        let modelBudget = Self.modelBudget(for: screeningBudget)
+        guard var analysis = ChoiceTreeAnalysis.analyze(gen, compositeThreshold: modelBudget) else {
             return .notApplicable
         }
 
         if case let .large(largeProfile) = analysis {
             let sorted = largeProfile.domainSizes.sorted(by: >)
             let largestPairProduct = sorted.prefix(2).reduce(UInt64(1), *)
-            if largestPairProduct > screeningBudget,
-               let smaller = ChoiceTreeAnalysis.analyze(gen, expandSequencePairs: false, compositeThreshold: screeningBudget)
+            if largestPairProduct > modelBudget,
+               let smaller = ChoiceTreeAnalysis.analyze(gen, expandSequencePairs: false, compositeThreshold: modelBudget)
             {
                 analysis = smaller
             }
@@ -171,15 +183,16 @@ package enum ScreeningRunner {
             )
         }
 
-        // Single parameter: enumerate all values.
+        // Single parameter: enumerate all values. The covering seed rotates the sweep's start so a domain larger than the budget has no permanently untestable tail: successive runs sweep different windows and collectively reach every value, matching the pairwise path's per-run rotation.
         var summary = Summary()
         var rowIndex = skipToRow ?? 0
         var failureObserved = false
+        let rotationStart = domainSizes[0] > 0 ? coveringSeed % domainSizes[0] : 0
         while rowIndex < budget, UInt64(rowIndex) < domainSizes[0] {
             if shouldTerminate?() == true {
                 break
             }
-            let row = CoveringArrayRow(values: [UInt64(rowIndex)])
+            let row = CoveringArrayRow(values: [(rotationStart &+ UInt64(rowIndex)) % domainSizes[0]])
             summary.rowAttempts += 1
             let rowResult = testRow(
                 erasedGen, row: row, rowIndex: rowIndex,

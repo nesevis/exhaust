@@ -800,6 +800,63 @@ struct CharacterProblematicIndicesTests {
     }
 }
 
+// MARK: - Composite Model Tiers
+
+@Suite("Composite Model Tiers")
+struct CompositeModelTierTests {
+    // A string(0...20) composite with the current 14-scalar character catalog costs 1 + 14 + 196 = 211 flattened values in the full pair model and 1 + 14 + 49 = 64 halved. The thresholds below are placed relative to those sizes and stay valid for moderate catalog growth.
+
+    @Test("A composite whose full pair model fits the threshold keeps full pairs")
+    func fullModelKeptWhenItFits() {
+        let gen = Gen.string(length: 0 ... 20).gen
+        guard case let .large(profile) = ChoiceTreeAnalysis.analyze(gen, compositeThreshold: 1000) else {
+            Issue.record("Expected large profile")
+            return
+        }
+        guard case let .compositeSequence(_, _, halvedPairs, _) = profile.parameters[0].kind else {
+            Issue.record("Expected compositeSequence parameter")
+            return
+        }
+        #expect(halvedPairs == false)
+    }
+
+    @Test("A composite whose full pair model exceeds the threshold degrades to halved pairs instead of going opaque")
+    func fullModelDegradesToHalvedBeforeOpaque() {
+        let gen = Gen.string(length: 0 ... 20).gen
+        guard case let .large(profile) = ChoiceTreeAnalysis.analyze(gen, compositeThreshold: 150) else {
+            Issue.record("Expected large profile: the halved model fits 150 and must rescue the slot")
+            return
+        }
+        guard case let .compositeSequence(_, _, halvedPairs, _) = profile.parameters[0].kind else {
+            Issue.record("Expected compositeSequence parameter")
+            return
+        }
+        #expect(halvedPairs)
+        #expect(profile.parameters[0].domainSize <= 150)
+    }
+
+    @Test("The no-expand path checks the halved size against the threshold, not the unhalved size")
+    func noExpandPathHalvesBeforeThresholdCheck() {
+        let gen = Gen.string(length: 0 ... 20).gen
+        guard case let .large(profile) = ChoiceTreeAnalysis.analyze(gen, expandSequencePairs: false, compositeThreshold: 150) else {
+            Issue.record("Expected large profile: checking the unhalved size first would drop the slot")
+            return
+        }
+        guard case let .compositeSequence(_, _, halvedPairs, _) = profile.parameters[0].kind else {
+            Issue.record("Expected compositeSequence parameter")
+            return
+        }
+        #expect(halvedPairs)
+    }
+
+    @Test("A composite too large for even the halved model goes opaque")
+    func oversizedCompositeGoesOpaque() {
+        let gen = Gen.string(length: 0 ... 20).gen
+        let analysis = ChoiceTreeAnalysis.analyze(gen, compositeThreshold: 30)
+        #expect(analysis == nil, "A solo composite dropped as opaque leaves zero parameters")
+    }
+}
+
 // MARK: - Helpers
 
 private func asciiStringGen(length: ClosedRange<Int>) -> Generator<String> {
