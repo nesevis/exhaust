@@ -119,13 +119,20 @@ package enum ProblematicValues {
         39, // Single quote: SQL and shell delimiter; normal text contains it as an apostrophe
         92, // Backslash: escape character in JSON, regex, file paths, shell commands, and string literals
         223, // Sharp s (ß): uppercases to the two-character SS, so case round-trips change length and are not invertible, and case folding disagrees with lowercasing
+        232, // Precomposed e-grave (è): canonically equivalent to e plus combining grave, so NFC and NFD forms compare unequal byte-wise while comparing equal as Characters
+        305, // Dotless i (ı): uppercases to plain I, so lowercase-uppercase round-trips produce a different letter and Turkish-locale casing diverges from invariant casing
         8238, // Right-to-left override: reverses display order of subsequent characters
+        8490, // Kelvin sign (K): canonically decomposes to Latin K, so normalization changes the scalar and case folding maps it to plain k
         128_078, // Thumbs down: supplementary plane emoji, requires UTF-16 surrogate pair
         // Second half: trailing scalars (position 1 in two-element slots).
         768, // Combining grave accent: merges with preceding character into a single grapheme cluster
+        962, // Final sigma (ς): uppercases to Σ, which lowercases to σ, so case round-trips produce a different letter depending on word position
+        1632, // Arabic-Indic zero (٠): reports as a digit but fails ASCII-only numeric parsing, and mixed-script numbers break digit-run assumptions
         8205, // Zero-width joiner: glues adjacent emoji into a single grapheme cluster
         8232, // Line separator: acts as a newline but is not matched by \n
         8239, // Narrow no-break space: visually identical to a space but fails equality and trim checks
+        8260, // Fraction slash: visually near-identical to solidus but fails path and URL splitting on "/"
+        65018, // Arabic ligature sallallahou alayhe wasallam: NFKC-expands to 18 characters, the largest expansion in Unicode, breaking length and buffer assumptions
         65279, // BOM: invisible at file start, zero-width no-break space elsewhere
         65533, // Replacement character: injected on invalid decode, corrupts serialization round-trips
         127_995, // Emoji skin tone modifier: combines with preceding emoji to form a single grapheme cluster
@@ -317,6 +324,8 @@ package enum ProblematicValues {
         -978_307_200, // Unix epoch (1970-01-01 00:00:00 UTC)
         1_169_176_447, // Y2038 32-bit overflow (2038-01-19 03:14:07 UTC)
         -31_622_400, // Y2K (2000-01-01 00:00:00 UTC)
+        3_316_660_095, // Unsigned 32-bit Unix overflow (2106-02-07 06:28:15 UTC)
+        -3_125_790_848, // Int32 minimum Unix time (1901-12-13 20:45:52 UTC)
     ]
 
     /// Computes problematic values for date step indices.
@@ -472,9 +481,9 @@ package enum DSTTransitions {
 
 // MARK: - Calendar Boundary Computation
 
-/// Computes real month starts, year starts, leap day, and month-end last-day boundaries within a date range.
+/// Computes real month starts, year starts, leap day, ISO week-year divergence days, and month-end last-day boundaries within a date range.
 package enum CalendarBoundaries {
-    /// Returns seconds-since-reference-date for the first and last month start, year start, Feb 29, and the start of the last day for each distinct month length (28, 29, 30, 31 days) within [lower, upper].
+    /// Returns seconds-since-reference-date for the first and last month start, year start, Feb 29, ISO week-year divergence days (where `YYYY` and `yyyy` formatting disagree), and the start of the last day for each distinct month length (28, 29, 30, 31 days) within [lower, upper].
     package static func inRange(lower: Int64, upper: Int64, timeZoneID: String) -> [Int64] {
         let zone = TimeZone(identifier: timeZoneID) ?? TimeZone(secondsFromGMT: 0)!
         var calendar = Calendar(identifier: .gregorian)
@@ -556,6 +565,42 @@ package enum CalendarBoundaries {
                 if seconds >= lower, seconds <= upper {
                     results.append(seconds)
                 }
+            }
+        }
+
+        // ISO week-year divergence: days where the ISO week-based year (the YYYY format pattern) differs from the calendar year (yyyy). Around a year boundary, Dec 29-31 can belong to week 1 of the next week-year and Jan 1-3 to week 52/53 of the previous one, and YYYY/yyyy formatting confusion fires exactly on those days. Computed with a dedicated ISO-8601 calendar because the Gregorian calendar's yearForWeekOfYear follows locale week settings and screening rows must be identical across machines. The candidate boundaries are the year starts nearest each range edge, taken even when the boundary itself lies outside the range so a range clipped mid-window (for example Dec 20-30) still sees its divergent days. First and last divergent day per boundary, matching the small-set discipline of the other families.
+        var isoCalendar = Calendar(identifier: .iso8601)
+        isoCalendar.timeZone = zone
+
+        var divergenceBoundaries = [Date]()
+        if let yearStartAfterLower = calendar.nextDate(after: startDate, matching: DateComponents(month: 1, day: 1), matchingPolicy: .nextTime) {
+            divergenceBoundaries.append(yearStartAfterLower)
+        }
+        if let yearStartAfterUpper = calendar.nextDate(after: endDate, matching: DateComponents(month: 1, day: 1), matchingPolicy: .nextTime),
+           let yearStartOfUpper = calendar.date(byAdding: .year, value: -1, to: yearStartAfterUpper),
+           divergenceBoundaries.contains(yearStartOfUpper) == false
+        {
+            divergenceBoundaries.append(yearStartOfUpper)
+        }
+        for boundary in divergenceBoundaries {
+            var divergentDayStarts = [Int64]()
+            for dayOffset in -3 ... 2 {
+                guard let day = calendar.date(byAdding: .day, value: dayOffset, to: boundary) else { continue }
+                let dayStart = calendar.startOfDay(for: day)
+                let weekYear = isoCalendar.component(.yearForWeekOfYear, from: dayStart)
+                let calendarYear = calendar.component(.year, from: dayStart)
+                if weekYear != calendarYear {
+                    let seconds = Int64(dayStart.timeIntervalSinceReferenceDate)
+                    if seconds >= lower, seconds <= upper {
+                        divergentDayStarts.append(seconds)
+                    }
+                }
+            }
+            if let firstDivergent = divergentDayStarts.first {
+                results.append(firstDivergent)
+            }
+            if let lastDivergent = divergentDayStarts.last, lastDivergent != divergentDayStarts.first {
+                results.append(lastDivergent)
             }
         }
 

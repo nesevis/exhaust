@@ -590,6 +590,60 @@ struct DateDSTProblematicValueTests {
     }
 }
 
+// MARK: - ISO Week-Year Divergence
+
+@Suite("ISO Week-Year Divergence")
+struct ISOWeekYearDivergenceTests {
+    @Test("December days belonging to next year's ISO week 1 are emitted")
+    func decemberSideDivergence() {
+        // Jan 1 2026 is a Thursday, so ISO week 1 of 2026 starts Mon Dec 29 2025: Dec 29-31 carry week-year 2026 inside calendar year 2025.
+        let boundaries = CalendarBoundaries.inRange(
+            lower: utcSeconds(year: 2025, month: 12, day: 1),
+            upper: utcSeconds(year: 2026, month: 2, day: 1),
+            timeZoneID: "UTC"
+        )
+        #expect(boundaries.contains(utcSeconds(year: 2025, month: 12, day: 29)))
+        #expect(boundaries.contains(utcSeconds(year: 2025, month: 12, day: 31)))
+    }
+
+    @Test("January days belonging to the previous ISO week-year are emitted")
+    func januarySideDivergence() {
+        // Jan 1 2027 is a Friday, so it falls in ISO week 53 of 2026: Jan 1-3 carry week-year 2026 inside calendar year 2027.
+        let boundaries = CalendarBoundaries.inRange(
+            lower: utcSeconds(year: 2026, month: 12, day: 1),
+            upper: utcSeconds(year: 2027, month: 2, day: 1),
+            timeZoneID: "UTC"
+        )
+        #expect(boundaries.contains(utcSeconds(year: 2027, month: 1, day: 1)))
+        #expect(boundaries.contains(utcSeconds(year: 2027, month: 1, day: 3)))
+    }
+
+    @Test("A range clipped before the year boundary still sees its divergent days")
+    func clippedRangeSeesDivergentDays() {
+        // The year start (Jan 1 2026) lies outside the range, but Dec 29 and 30 2025 are inside it and divergent.
+        let boundaries = CalendarBoundaries.inRange(
+            lower: utcSeconds(year: 2025, month: 12, day: 20),
+            upper: utcSeconds(year: 2025, month: 12, day: 30) + 43200,
+            timeZoneID: "UTC"
+        )
+        #expect(boundaries.contains(utcSeconds(year: 2025, month: 12, day: 29)))
+        #expect(boundaries.contains(utcSeconds(year: 2025, month: 12, day: 30)))
+    }
+
+    @Test("A range without a nearby year boundary emits no divergence days")
+    func rangeWithoutBoundaryEmitsNone() {
+        let boundaries = CalendarBoundaries.inRange(
+            lower: utcSeconds(year: 2026, month: 3, day: 1),
+            upper: utcSeconds(year: 2026, month: 11, day: 1),
+            timeZoneID: "UTC"
+        )
+        #expect(boundaries.contains(utcSeconds(year: 2025, month: 12, day: 29)) == false)
+        #expect(boundaries.contains(utcSeconds(year: 2025, month: 12, day: 31)) == false)
+        #expect(boundaries.contains(utcSeconds(year: 2027, month: 1, day: 1)) == false)
+        #expect(boundaries.contains(utcSeconds(year: 2027, month: 1, day: 3)) == false)
+    }
+}
+
 // MARK: - Opaque Group
 
 @Suite("Opaque Group Screening Skipping")
@@ -804,7 +858,7 @@ struct CharacterProblematicIndicesTests {
 
 @Suite("Composite Model Tiers")
 struct CompositeModelTierTests {
-    // A string(0...20) composite with the current 14-scalar character catalog costs 1 + 14 + 196 = 211 flattened values in the full pair model and 1 + 14 + 49 = 64 halved. The thresholds below are placed relative to those sizes and stay valid for moderate catalog growth.
+    // A string(0...20) composite with the current 21-scalar character catalog costs 1 + 21 + 441 = 463 flattened values in the full pair model and 1 + 21 + 110 = 132 halved. The thresholds below are placed relative to those sizes and stay valid for moderate catalog growth.
 
     @Test("A composite whose full pair model fits the threshold keeps full pairs")
     func fullModelKeptWhenItFits() {
@@ -858,6 +912,14 @@ struct CompositeModelTierTests {
 }
 
 // MARK: - Helpers
+
+/// Seconds since the reference date for midnight UTC on the given day.
+private func utcSeconds(year: Int, month: Int, day: Int) -> Int64 {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "UTC")!
+    let date = calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    return Int64(date.timeIntervalSinceReferenceDate)
+}
 
 private func asciiStringGen(length: ClosedRange<Int>) -> Generator<String> {
     var rangeSet = ExhaustRangeSet<UInt32>()
