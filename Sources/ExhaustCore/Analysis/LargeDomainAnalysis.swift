@@ -124,6 +124,7 @@ package enum ProblematicValues {
         8238, // Right-to-left override: reverses display order of subsequent characters
         8490, // Kelvin sign (K): canonically decomposes to Latin K, so normalization changes the scalar and case folding maps it to plain k
         128_078, // Thumbs down: supplementary plane emoji, requires UTF-16 surrogate pair
+        65536, // Linear B syllable B008 A: the first scalar past the BMP, so it is the exact point where one UTF-16 code unit becomes two
         // Second half: trailing scalars (position 1 in two-element slots).
         768, // Combining grave accent: merges with preceding character into a single grapheme cluster
         962, // Final sigma (ς): uppercases to Σ, which lowercases to σ, so case round-trips produce a different letter depending on word position
