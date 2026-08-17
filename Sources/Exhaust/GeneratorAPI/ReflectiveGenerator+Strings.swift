@@ -7,11 +7,20 @@ import ExhaustCore
 import Foundation
 
 public extension ReflectiveGenerator {
-    /// Generates a random Unicode character from all valid Unicode scalars except illegal characters and Private Use Areas.
+    /// Generates a random Unicode character from a Unicode version's blocks.
+    ///
+    /// Draws from every block the version defines, less the surrogates, the private use areas, and the noncharacters, so unassigned code points are included. Code that assumes every scalar has a name or a category breaks on those, which is the reason to generate them.
+    ///
+    /// ```swift
+    /// let gen = #gen(.character())
+    /// ```
     ///
     /// For characters within a specific scalar range, use ``character(in:simplest:)``. For arbitrary sets, use ``character(from:simplest:)`` with a `CharacterSet`.
-    static func character() -> ReflectiveGenerator<Character> {
-        Gen.character()
+    ///
+    /// - Parameter unicodeVersion: Which version's blocks to draw from. Changing it moves every flat index above the first added block, so replay seeds recorded under one version do not reproduce under another.
+    /// - Returns: A generator that produces single-scalar characters.
+    static func character(unicodeVersion: UnicodeVersion = .v17) -> ReflectiveGenerator<Character> {
+        Gen.character(unicodeVersion: unicodeVersion)
     }
 
     /// Generates a random character from the given range of Unicode scalars.
@@ -51,9 +60,14 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator that produces Unicode strings.
     static func string(
         length: ClosedRange<Int>? = nil,
-        scaling: SizeScaling<Int> = .linear
+        scaling: SizeScaling<Int> = .linear,
+        unicodeVersion: UnicodeVersion = .v17
     ) -> ReflectiveGenerator<String> {
-        Gen.string(length: length.map(LengthConversion.uint64Range), scaling: LengthConversion.uint64Scaling(scaling))
+        Gen.string(
+            length: length.map(LengthConversion.uint64Range),
+            scaling: LengthConversion.uint64Scaling(scaling),
+            unicodeVersion: unicodeVersion
+        )
     }
 
     /// Generates a random printable ASCII string (U+0020–U+007E) with size-scaled or fixed length.

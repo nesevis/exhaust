@@ -222,9 +222,9 @@ package extension Gen {
 // MARK: - Character and String
 
 package extension Gen {
-    /// Generates a Unicode character from all valid scalars except illegals and the Private Use Areas.
-    static func character() -> ReflectiveGenerator<Character> {
-        characterGenerator(from: defaultScalarRangeSet).wrapped
+    /// Generates a Unicode character from the version's blocks.
+    static func character(unicodeVersion: UnicodeVersion = .v17) -> ReflectiveGenerator<Character> {
+        characterGenerator(from: unicodeVersion.scalarRangeSet).wrapped
     }
 
     /// Generates a character drawn uniformly from `characterSet`.
@@ -252,12 +252,13 @@ package extension Gen {
         return character(from: combined)
     }
 
-    /// Generates a Unicode string with size-scaled or fixed length, drawing from all valid scalars except illegals and the Private Use Areas.
+    /// Generates a Unicode string with size-scaled or fixed length, drawing from the version's blocks.
     static func string(
         length: ClosedRange<UInt64>? = nil,
-        scaling: SizeScaling<UInt64> = .linear
+        scaling: SizeScaling<UInt64> = .linear,
+        unicodeVersion: UnicodeVersion = .v17
     ) -> ReflectiveGenerator<String> {
-        stringGenerator(from: defaultScalarRangeSet, length: length, scaling: scaling)
+        stringGenerator(from: unicodeVersion.scalarRangeSet, length: length, scaling: scaling)
     }
 
     /// Generates a printable ASCII string (U+0020–U+007E) with size-scaled or fixed length.
@@ -385,11 +386,6 @@ private func stringGenerator(
 
 // MARK: - Pre-computed ScalarRangeSets
 
-/// All assigned Unicode scalars minus illegals and Private Use Areas. Reduces toward space (U+0020).
-private let defaultScalarRangeSet: ScalarRangeSet = CharacterSet.illegalCharacters.inverted
-    .removingPrivateUseAreas()
-    .scalarRangeSet(bottomCodepoint: " ")
-
 /// Printable ASCII (U+0020–U+007E). Space is naturally at index 0; no bottom codepoint needed.
 private let asciiScalarRangeSet: ScalarRangeSet =
     CharacterSet(charactersIn: Unicode.Scalar(0x0020)! ... Unicode.Scalar(0x007E)!).scalarRangeSet()
@@ -487,21 +483,4 @@ private func validatingDataPrefix(
         { (data: Data) -> Data? in data.starts(with: prefix) ? data : nil },
         generator.gen
     ).wrapped
-}
-
-// MARK: - CharacterSet Extensions
-
-private extension CharacterSet {
-    /// Returns a copy with the three Unicode Private Use Areas removed.
-    ///
-    /// - BMP PUA: U+E000–U+F8FF (6,400 code points)
-    /// - Supplementary PUA-A (Plane 15): U+F0000–U+FFFFD (65,534 code points)
-    /// - Supplementary PUA-B (Plane 16): U+100000–U+10FFFD (65,534 code points)
-    func removingPrivateUseAreas() -> CharacterSet {
-        var result = self
-        result.remove(charactersIn: Unicode.Scalar(0xE000)! ... Unicode.Scalar(0xF8FF)!)
-        result.remove(charactersIn: Unicode.Scalar(0xF0000)! ... Unicode.Scalar(0xFFFFD)!)
-        result.remove(charactersIn: Unicode.Scalar(0x100000)! ... Unicode.Scalar(0x10FFFD)!)
-        return result
-    }
 }
