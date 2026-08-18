@@ -57,6 +57,16 @@ import ExhaustCore
             else { preconditionFailure("Range bounds must fit inside \(Float16.self)") }
             return float16(in: lower ... upper, scaling: scaling)
         }
+
+        /// Generates arbitrary `Float16` values within the given range.
+        ///
+        /// Accepts `ClosedRange<Int>` so whole-number literals resolve without a decimal point or an explicit type annotation. Each argument of a multi-argument `#gen` is checked against a type variable, and a bare literal range there commits to `ClosedRange<Int>` before the member is looked up, so without this overload `.float16(in: 0 ... 1)` fails to compile inside `#gen(_:_:)`.
+        static func float16(
+            in range: ClosedRange<Int>,
+            scaling: SizeScaling<Float16>? = nil
+        ) -> ReflectiveGenerator<Float16> {
+            float16(in: Double(range.lowerBound) ... Double(range.upperBound), scaling: scaling)
+        }
     }
 #endif
 
@@ -92,6 +102,16 @@ public extension ReflectiveGenerator {
                 )
         }
         return generator.wrapped
+    }
+
+    /// Generates arbitrary `Double` values within the given range.
+    ///
+    /// Accepts `ClosedRange<Int>` so whole-number literals resolve without a decimal point or an explicit type annotation. Each argument of a multi-argument `#gen` is checked against a type variable, and a bare literal range there commits to `ClosedRange<Int>` before the member is looked up, so without this overload `.double(in: 0 ... 1)` fails to compile inside `#gen(_:_:)`.
+    static func double(
+        in range: ClosedRange<Int>,
+        scaling: SizeScaling<Double>? = nil
+    ) -> ReflectiveGenerator<Double> {
+        double(in: Double(range.lowerBound) ... Double(range.upperBound), scaling: scaling)
     }
 
     /// Generates arbitrary `Float` values within the given range.
@@ -139,6 +159,16 @@ public extension ReflectiveGenerator {
         return float(in: lower ... upper, scaling: scaling)
     }
 
+    /// Generates arbitrary `Float` values within the given range.
+    ///
+    /// Accepts `ClosedRange<Int>` so whole-number literals resolve without a decimal point or an explicit type annotation. Each argument of a multi-argument `#gen` is checked against a type variable, and a bare literal range there commits to `ClosedRange<Int>` before the member is looked up, so without this overload `.float(in: 0 ... 1)` fails to compile inside `#gen(_:_:)`.
+    static func float(
+        in range: ClosedRange<Int>,
+        scaling: SizeScaling<Float>? = nil
+    ) -> ReflectiveGenerator<Float> {
+        float(in: Double(range.lowerBound) ... Double(range.upperBound), scaling: scaling)
+    }
+
     #if canImport(CoreGraphics)
         /// Generates arbitrary `CGFloat` values within the given range.
         ///
@@ -162,6 +192,16 @@ public extension ReflectiveGenerator {
         /// Generates arbitrary `CGFloat` values within the given range.
         static func cgfloat(
             in range: ClosedRange<Double>,
+            scaling: SizeScaling<Double>? = nil
+        ) -> ReflectiveGenerator<CGFloat> {
+            cgfloat(in: CGFloat(range.lowerBound) ... CGFloat(range.upperBound), scaling: scaling)
+        }
+
+        /// Generates arbitrary `CGFloat` values within the given range.
+        ///
+        /// Accepts `ClosedRange<Int>` so whole-number literals resolve without a decimal point or an explicit type annotation. Each argument of a multi-argument `#gen` is checked against a type variable, and a bare literal range there commits to `ClosedRange<Int>` before the member is looked up, so without this overload `.cgfloat(in: 0 ... 320)` fails to compile inside `#gen(_:_:)`.
+        static func cgfloat(
+            in range: ClosedRange<Int>,
             scaling: SizeScaling<Double>? = nil
         ) -> ReflectiveGenerator<CGFloat> {
             cgfloat(in: CGFloat(range.lowerBound) ... CGFloat(range.upperBound), scaling: scaling)

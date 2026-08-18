@@ -20,7 +20,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing arrays of random length.
     static func array<Element>(
         _ gen: ReflectiveGenerator<Element>
-    ) -> ReflectiveGenerator<[Element]> where Output == [Element] {
+    ) -> ReflectiveGenerator<[Element]> {
         Gen.arrayOf(gen.gen).wrapped
     }
 
@@ -39,7 +39,7 @@ public extension ReflectiveGenerator {
         _ gen: ReflectiveGenerator<Element>,
         length: ClosedRange<Int>,
         scaling: SizeScaling<Int> = .linear
-    ) -> ReflectiveGenerator<[Element]> where Output == [Element] {
+    ) -> ReflectiveGenerator<[Element]> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         return Gen.arrayOf(
             gen.gen,
@@ -61,7 +61,7 @@ public extension ReflectiveGenerator {
     static func array<Element>(
         _ gen: ReflectiveGenerator<Element>,
         length: Int
-    ) -> ReflectiveGenerator<[Element]> where Output == [Element] {
+    ) -> ReflectiveGenerator<[Element]> {
         precondition(length >= 0, "Length must be non-negative")
         return Gen.arrayOf(gen.gen, exactly: UInt64(length)).wrapped
     }
@@ -81,7 +81,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing an array with one value per input generator, in order.
     static func eachOf<Value>(
         _ generators: [ReflectiveGenerator<Value>]
-    ) -> ReflectiveGenerator<[Value]> where Output == [Value] {
+    ) -> ReflectiveGenerator<[Value]> {
         Gen.eachOf(generators.map(\.gen)).wrapped
     }
 
@@ -104,7 +104,7 @@ public extension ReflectiveGenerator {
     static func eachOf<Elements: Collection, Value>(
         _ elements: Elements,
         _ generator: (Elements.Element) throws -> ReflectiveGenerator<Value>
-    ) rethrows -> ReflectiveGenerator<[Value]> where Output == [Value] {
+    ) rethrows -> ReflectiveGenerator<[Value]> {
         try Gen.eachOf(elements.map { try generator($0).gen }).wrapped
     }
 
@@ -121,7 +121,7 @@ public extension ReflectiveGenerator {
     /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete set from this factory because set construction discards the order elements were drawn in and collapses duplicates. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func set<Element: Hashable>(
         _ gen: ReflectiveGenerator<Element>
-    ) -> ReflectiveGenerator<Set<Element>> where Output == Set<Element> {
+    ) -> ReflectiveGenerator<Set<Element>> {
         Gen.setOf(gen.gen).wrapped
     }
 
@@ -143,7 +143,7 @@ public extension ReflectiveGenerator {
         _ gen: ReflectiveGenerator<Element>,
         count: ClosedRange<Int>,
         scaling: SizeScaling<Int> = .linear
-    ) -> ReflectiveGenerator<Set<Element>> where Output == Set<Element> {
+    ) -> ReflectiveGenerator<Set<Element>> {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
         let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)
         return Gen.setOf(gen.gen, within: range, scaling: LengthConversion.uint64Scaling(scaling)).wrapped
@@ -165,7 +165,7 @@ public extension ReflectiveGenerator {
     static func set<Element: Hashable>(
         _ gen: ReflectiveGenerator<Element>,
         count: Int
-    ) -> ReflectiveGenerator<Set<Element>> where Output == Set<Element> {
+    ) -> ReflectiveGenerator<Set<Element>> {
         precondition(count >= 0, "Count must be non-negative")
         return Gen.setOf(gen.gen, exactly: UInt64(count)).wrapped
     }
@@ -188,7 +188,7 @@ public extension ReflectiveGenerator {
     static func dictionary<Key: Hashable, DictValue>(
         _ keyGen: ReflectiveGenerator<Key>,
         _ valueGen: ReflectiveGenerator<DictValue>
-    ) -> ReflectiveGenerator<[Key: DictValue]> where Output == [Key: DictValue] {
+    ) -> ReflectiveGenerator<[Key: DictValue]> {
         Gen.dictionaryOf(keyGen.gen, valueGen.gen).wrapped
     }
 
@@ -212,7 +212,7 @@ public extension ReflectiveGenerator {
         _ valueGen: ReflectiveGenerator<DictValue>,
         count: ClosedRange<Int>,
         scaling: SizeScaling<Int> = .linear
-    ) -> ReflectiveGenerator<[Key: DictValue]> where Output == [Key: DictValue] {
+    ) -> ReflectiveGenerator<[Key: DictValue]> {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
         let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)
         return Gen.dictionaryOf(keyGen.gen, valueGen.gen, within: range, scaling: LengthConversion.uint64Scaling(scaling)).wrapped
@@ -236,7 +236,7 @@ public extension ReflectiveGenerator {
         _ keyGen: ReflectiveGenerator<Key>,
         _ valueGen: ReflectiveGenerator<DictValue>,
         count: Int
-    ) -> ReflectiveGenerator<[Key: DictValue]> where Output == [Key: DictValue] {
+    ) -> ReflectiveGenerator<[Key: DictValue]> {
         precondition(count >= 0, "Count must be non-negative")
         return Gen.dictionaryOf(keyGen.gen, valueGen.gen, exactly: UInt64(count)).wrapped
     }
@@ -254,7 +254,7 @@ public extension ReflectiveGenerator {
     /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete slice from this factory because the output does not contain the generated source collection needed to reconstruct the dependent choices. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     static func slice<C: Collection>(
         of gen: ReflectiveGenerator<C>
-    ) -> ReflectiveGenerator<C.SubSequence> where Output == C.SubSequence {
+    ) -> ReflectiveGenerator<C.SubSequence> {
         Gen.slice(of: gen.gen).wrapped
     }
 
@@ -271,7 +271,7 @@ public extension ReflectiveGenerator {
     /// - Note: `#exhaust(…, reflecting:)` can reduce a concrete sub-sequence from this factory because the captured collection supplies the source needed to recover its start and length.
     static func slice<C: Collection>(
         of collection: C
-    ) -> ReflectiveGenerator<C.SubSequence> where Output == C.SubSequence {
+    ) -> ReflectiveGenerator<C.SubSequence> {
         precondition(collection.isEmpty == false, "Cannot slice an empty collection")
         return Gen.slice(of: collection).wrapped
     }
@@ -426,7 +426,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection>(
         from collection: C
-    ) -> ReflectiveGenerator<C.Element> where Output == C.Element, C.Element: Hashable {
+    ) -> ReflectiveGenerator<C.Element> where C.Element: Hashable {
         precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
         return Gen.element(from: collection).wrapped
     }
@@ -443,7 +443,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator that produces random elements from the collection.
     static func element<C: Collection>(
         from collection: C
-    ) -> ReflectiveGenerator<C.Element> where Output == C.Element, C.Element: Equatable {
+    ) -> ReflectiveGenerator<C.Element> where C.Element: Equatable {
         precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
         return Gen.element(from: collection).wrapped
     }
@@ -463,7 +463,7 @@ public extension ReflectiveGenerator {
     static func element<C: Collection>(
         from collection: C,
         id path: KeyPath<C.Element, some Hashable>
-    ) -> ReflectiveGenerator<C.Element> where Output == C.Element {
+    ) -> ReflectiveGenerator<C.Element> {
         precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
         return Gen.element(from: collection, id: path).wrapped
     }
@@ -483,7 +483,7 @@ public extension ReflectiveGenerator {
     static func element<C: Collection>(
         from collection: C,
         id path: KeyPath<C.Element, some Equatable>
-    ) -> ReflectiveGenerator<C.Element> where Output == C.Element {
+    ) -> ReflectiveGenerator<C.Element> {
         precondition(collection.isEmpty == false, "Cannot pick elements from an empty collection")
         return Gen.element(from: collection, id: path).wrapped
     }

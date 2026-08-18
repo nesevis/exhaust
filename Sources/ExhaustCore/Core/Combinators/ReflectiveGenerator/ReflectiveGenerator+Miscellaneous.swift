@@ -158,9 +158,7 @@ public extension ReflectiveGenerator {
     static func result<Success, Failure: Error>(
         success: ReflectiveGenerator<Success>,
         failure: ReflectiveGenerator<Failure>
-    ) -> ReflectiveGenerator<Result<Success, Failure>>
-        where Output == Result<Success, Failure>
-    {
+    ) -> ReflectiveGenerator<Result<Success, Failure>> {
         Gen.pick(choices: [
             (1, Gen.contramap(
                 { (result: Result<Success, Failure>) throws -> Success in
