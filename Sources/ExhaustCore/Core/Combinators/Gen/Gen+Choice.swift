@@ -62,7 +62,7 @@ package extension Gen {
         column: UInt = #column
     ) -> Generator<Output> {
         precondition(
-            choices.map(\.weight).allSatisfy { $0 > 0 },
+            choices.allSatisfy { $0.weight > 0 },
             "Weights must be higher than zero"
         )
 
