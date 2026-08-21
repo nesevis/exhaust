@@ -548,6 +548,8 @@ private func printEncoderBreakdownReport(name: String, results: [SeedResult], fo
     var totalAccepted: [EncoderName: Int] = [:]
     var totalCacheRej: [EncoderName: Int] = [:]
     var totalDecRej: [EncoderName: Int] = [:]
+    var totalPropPass: [EncoderName: Int] = [:]
+    var totalPropFail: [EncoderName: Int] = [:]
     for result in results {
         for (encoder, count) in result.stats?.encoderProbes ?? [:] {
             totalEmitted[encoder, default: 0] += count
@@ -560,6 +562,12 @@ private func printEncoderBreakdownReport(name: String, results: [SeedResult], fo
         }
         for (encoder, count) in result.stats?.encoderProbesRejectedByDecoder ?? [:] {
             totalDecRej[encoder, default: 0] += count
+        }
+        for (encoder, count) in result.stats?.encoderProbesWherePropertyPassed ?? [:] {
+            totalPropPass[encoder, default: 0] += count
+        }
+        for (encoder, count) in result.stats?.encoderProbesWherePropertyFailed ?? [:] {
+            totalPropFail[encoder, default: 0] += count
         }
     }
     let allEncoders = Set(totalEmitted.keys)
@@ -578,7 +586,9 @@ private func printEncoderBreakdownReport(name: String, results: [SeedResult], fo
         let acc = totalAccepted[encoder] ?? 0
         let cacheRej = totalCacheRej[encoder] ?? 0
         let decRej = totalDecRej[encoder] ?? 0
-        print("  \(encoder.rawValue): emit=\(emit) acc=\(acc) rejCache=\(cacheRej) rejDec=\(decRej)")
+        let propPass = totalPropPass[encoder] ?? 0
+        let propFail = totalPropFail[encoder] ?? 0
+        print("  \(encoder.rawValue): emit=\(emit) acc=\(acc) rejCache=\(cacheRej) rejDec=\(decRej) propPass=\(propPass) propFail=\(propFail)")
     }
 }
 
