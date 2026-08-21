@@ -203,7 +203,8 @@ struct UniquenessConstraintTests {
     @Test("CGS interpreter treats choice-sequence uniqueness as tuning-transparent")
     func choiceGradientSamplingTreatsChoiceSequenceUniquenessAsTransparent() throws {
         let generator = ReflectiveGenerator(
-            Gen.just(NonHashableValue(value: 42))
+            Gen.just(NonHashableValue(value: 42)),
+            isReflective: true
         ).unique().gen
         var interpreter = OnlineCGSInterpreter(
             generator,

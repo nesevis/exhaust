@@ -5,7 +5,7 @@ import Testing
 struct ForwardOnlyReflectionTests {
     @Test("Forward-only map reports its exact reflection error")
     func mapReportsExactError() {
-        let generator = ReflectiveGenerator(Gen.just(1)).map(String.init)
+        let generator = ReflectiveGenerator(Gen.just(1), isReflective: true).map(String.init)
 
         #expect(throws: ReflectionError.forwardOnlyMap(
             inputType: "Int",
@@ -17,8 +17,8 @@ struct ForwardOnlyReflectionTests {
 
     @Test("Forward-only bind reports its exact reflection error")
     func bindReportsExactError() {
-        let generator = ReflectiveGenerator(Gen.just(1)).bind { value in
-            ReflectiveGenerator(Gen.just(String(value)))
+        let generator = ReflectiveGenerator(Gen.just(1), isReflective: true).bind { value in
+            ReflectiveGenerator(Gen.just(String(value)), isReflective: true)
         }
 
         #expect(throws: ReflectionError.forwardOnlyBind(

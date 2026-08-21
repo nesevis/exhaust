@@ -55,6 +55,7 @@ public enum MetaFuzz {
                 }
             }
         }
-        return ReflectiveGenerator(cases)
+        // The seed chain is raw `bind` with no backward, so reflection cannot decompose a case.
+        return ReflectiveGenerator(cases, isReflective: false)
     }
 }

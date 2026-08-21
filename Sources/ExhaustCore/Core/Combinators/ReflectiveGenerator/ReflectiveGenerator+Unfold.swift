@@ -50,6 +50,6 @@ public extension ReflectiveGenerator {
             fileID: fileID,
             line: line,
             column: column
-        ).wrapped
+        ).wrapped(isReflective: false)
     }
 }

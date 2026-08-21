@@ -89,10 +89,15 @@ package enum FuzzTunables {
     /// Bound on the exponent in the power schedule's `2^s` term, so the arithmetic saturates at the cap instead of overflowing on long runs.
     package static let powerScheduleExponentLimit = 10
 
-    // MARK: - Swarm Generation (Experiment: swarm)
+    // MARK: - Swarm Generation (Experiment: swarmMode)
 
     /// Fuzz attempts per swarm epoch. Attempts-based rather than wall-clock so the epoch schedule replays deterministically under a pinned seed regardless of machine load.
     package static let swarmEpochAttempts = 2048
+
+    // MARK: - Comparison Injection
+
+    /// Component positions the field graft may target on a composite. trace-cmp reports the operand and its call site but not which field the comparison read, so the graft sprays positions; an out-of-range or non-reconstructable position is a cheap miss. Kept small: most initializer-shaped composites have few fields, and a wide span dilutes the graft with positions that never fit.
+    package static let reflectionGraftPositionSpan = 8
 
     // MARK: - Spec-Specific Defaults
 
@@ -135,8 +140,18 @@ package struct FuzzExperiments: Sendable, Equatable {
     /// Per-edge shortlex champion archive as the parent-selection domain. Default-on; the knob stays one release for A/B.
     package var championArchive = true
 
-    /// Swarm generation: per-epoch deterministic branch masks pivot mutated children's disallowed branch selections, reaching command mixes the uniform distribution statistically suppresses.
-    package var swarm = false
+    /// How swarm generation rewrites a mutated child's branch selections.
+    package enum SwarmMode: String, Sendable {
+        /// No swarm rewrite: mutated children keep the uniform branch mix.
+        case off
+        /// Legacy per-epoch binary mask: each pick site's branches are hard-allowed or hard-excluded for an epoch, and a disallowed selection is pivoted to an allowed one.
+        case binary
+        /// Per-attempt continuous activation weights: each branch is thinned by a weight rather than excluded, so mutated children reach command mixes at specific ratios a binary mask cannot.
+        case activated
+    }
+
+    /// The swarm generation mode. Defaults to ``SwarmMode/activated`` — the diversity gain over no swarm is robust (~1.7x more distinct fault shapes) at no measurable throughput cost. Set `swarmMode=off` to disable swarm generation, or `swarmMode=binary` for the legacy per-epoch mask. See ADR 0006.
+    package var swarmMode: SwarmMode = .activated
 
     /// Creates the default knob set: gated mechanisms off until their gates pass.
     package init() {}
@@ -158,15 +173,22 @@ package struct FuzzExperiments: Sendable, Equatable {
             ("banditBands", \.banditBands),
             ("powerSchedule", \.powerSchedule),
             ("championArchive", \.championArchive),
-            ("swarm", \.swarm),
         ]
         for fragment in environmentValue.split(separator: ",") {
             let parts = fragment.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             guard parts.count == 2 else {
-                throw ParseError(description: "EXHAUST_FUZZ_EXPERIMENT fragment '\(fragment)' is not of the form knob=on|off.")
+                throw ParseError(description: "EXHAUST_FUZZ_EXPERIMENT fragment '\(fragment)' is not of the form knob=value.")
+            }
+            // swarmMode is the one multi-state knob, so it parses off the enum rather than the on/off table.
+            if parts[0] == "swarmMode" {
+                guard let mode = SwarmMode(rawValue: parts[1]) else {
+                    throw ParseError(description: "EXHAUST_FUZZ_EXPERIMENT knob 'swarmMode' has value '\(parts[1])'; expected off, binary, or activated.")
+                }
+                experiments.swarmMode = mode
+                continue
             }
             guard let keyPath = assignments.first(where: { $0.0 == parts[0] })?.1 else {
-                let known = assignments.map(\.0).joined(separator: ", ")
+                let known = (assignments.map(\.0) + ["swarmMode"]).joined(separator: ", ")
                 throw ParseError(description: "EXHAUST_FUZZ_EXPERIMENT names unknown knob '\(parts[0])'. Known knobs: \(known).")
             }
             switch parts[1] {

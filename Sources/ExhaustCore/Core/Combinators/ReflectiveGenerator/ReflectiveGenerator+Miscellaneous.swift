@@ -10,7 +10,7 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.just(42))
     /// ```
     static func just(_ value: Output) -> ReflectiveGenerator<Output> {
-        Gen.just(value).wrapped
+        Gen.just(value).wrapped(isReflective: true)
     }
 
     /// Generates arbitrary `Bool` values. Reduces toward `false`.
@@ -19,10 +19,11 @@ public extension ReflectiveGenerator {
     /// let gen = #gen(.bool())
     /// ```
     static func bool() -> ReflectiveGenerator<Bool> {
-        Gen.choose(in: UInt8(0) ... 1, scaling: .constant).wrapped.mapped(
-            forward: { $0 == 1 },
-            backward: { $0 ? 1 : 0 }
-        )
+        Gen.choose(in: UInt8(0) ... 1, scaling: .constant).wrapped(isReflective: true)
+            .mapped(
+                forward: { $0 == 1 },
+                backward: { $0 ? 1 : 0 }
+            )
     }
 
     /// Creates a generator that randomly selects from one of the provided generators with equal weight.
@@ -36,7 +37,7 @@ public extension ReflectiveGenerator {
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
-        Gen.pick(choices: generators.map { (1, $0.gen) }, fileID: fileID, line: line, column: column).wrapped
+        Gen.pick(choices: generators.map { (1, $0.gen) }, fileID: fileID, line: line, column: column).wrapped(isReflective: generators.allSatisfy(\.isReflective))
     }
 
     /// Creates a generator that randomly selects from weighted generators.
@@ -67,7 +68,7 @@ public extension ReflectiveGenerator {
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
-        Gen.pick(choices: generators.map { (1, $0.gen) }, fileID: fileID, line: line, column: column).wrapped
+        Gen.pick(choices: generators.map { (1, $0.gen) }, fileID: fileID, line: line, column: column).wrapped(isReflective: generators.allSatisfy(\.isReflective))
     }
 
     /// Selects from an array of weighted generators.
@@ -91,7 +92,7 @@ public extension ReflectiveGenerator {
         if zeroWeightRemovalOccurred, activeChoices.count == 1, let onlyChoice = activeChoices.first {
             return onlyChoice.1
         }
-        return Gen.pick(choices: activeChoices.map { ($0.0, $0.1.gen) }, fileID: fileID, line: line, column: column).wrapped
+        return Gen.pick(choices: activeChoices.map { ($0.0, $0.1.gen) }, fileID: fileID, line: line, column: column).wrapped(isReflective: activeChoices.allSatisfy(\.1.isReflective))
     }
 
     /// Wraps this generator to produce optional values, choosing between `nil` and a generated value.
@@ -113,7 +114,7 @@ public extension ReflectiveGenerator {
         Gen.pick(choices: [
             (someWeight, gen.liftToOptional()),
             (noneWeight, Gen.just(.none)),
-        ]).wrapped
+        ]).wrapped(isReflective: isReflective)
     }
 
     /// Wraps a generator to produce optional values, choosing between `nil` and a generated value.
@@ -137,7 +138,7 @@ public extension ReflectiveGenerator {
         Gen.pick(choices: [
             (someWeight, gen.gen.liftToOptional()),
             (noneWeight, Gen.just(.none)),
-        ]).wrapped
+        ]).wrapped(isReflective: gen.isReflective)
     }
 
     /// Generates arbitrary `Result` values by choosing between a success and a failure generator with equal weight.
@@ -178,6 +179,6 @@ public extension ReflectiveGenerator {
                 },
                 failure.gen.map { Result<Success, Failure>.failure($0) }
             )),
-        ]).wrapped
+        ]).wrapped(isReflective: success.isReflective && failure.isReflective)
     }
 }

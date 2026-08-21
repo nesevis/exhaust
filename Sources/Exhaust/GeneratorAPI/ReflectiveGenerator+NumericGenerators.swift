@@ -43,7 +43,7 @@ import ExhaustCore
                         scaling: (scaling ?? Float16.defaultScaling).erased
                     )
             }
-            return generator.wrapped
+            return generator.wrapped(isReflective: true)
         }
 
         /// Generates arbitrary `Float16` values within the given range.
@@ -101,7 +101,7 @@ public extension ReflectiveGenerator {
                     scaling: (scaling ?? Double.defaultScaling).erased
                 )
         }
-        return generator.wrapped
+        return generator.wrapped(isReflective: true)
     }
 
     /// Generates arbitrary `Double` values within the given range.
@@ -144,7 +144,7 @@ public extension ReflectiveGenerator {
                     scaling: (scaling ?? Float.defaultScaling).erased
                 )
         }
-        return generator.wrapped
+        return generator.wrapped(isReflective: true)
     }
 
     /// Generates arbitrary `Float` values within the given range.
@@ -503,6 +503,6 @@ private extension ReflectiveGenerator {
             case (nil, _):
                 Gen.choose(in: Value.min ... Value.max, scaling: scaling ?? Value.defaultScaling)
         }
-        return generator.wrapped
+        return generator.wrapped(isReflective: true)
     }
 }

@@ -42,7 +42,7 @@ public extension ReflectiveGenerator {
                 fingerprint: fingerprint,
                 keyExtractor: nil
             )
-        ) { .pure($0 as! Output) }.wrapped
+        ) { .pure($0 as! Output) }.wrapped(isReflective: isReflective)
     }
 
     /// Creates a generator that only produces unique values, deduplicated by a hashable key path.
@@ -104,6 +104,6 @@ public extension ReflectiveGenerator {
                     AnyHashable(transform(value as! Output))
                 }
             )
-        ) { .pure($0 as! Output) }.wrapped
+        ) { .pure($0 as! Output) }.wrapped(isReflective: isReflective)
     }
 }

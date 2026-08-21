@@ -92,5 +92,5 @@ func makeCaseIterableGenerator(_ type: any (CaseIterable & Decodable).Type) -> A
 
 /// Wraps a field generator so the field varies between `nil` and a generated value, using the public ``ReflectiveGenerator/optional()`` so default weights stay consistent.
 func wrapOptional(_ innerGenerator: AnyGenerator) -> AnyGenerator {
-    ReflectiveGenerator(innerGenerator, isSynthesized: true).optional().gen.erase()
+    ReflectiveGenerator(innerGenerator, isSynthesized: true, isReflective: false).optional().gen.erase()
 }

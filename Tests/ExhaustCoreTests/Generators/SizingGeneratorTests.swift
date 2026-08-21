@@ -27,7 +27,7 @@ struct SizingGeneratorTests {
     @Test("Public getSize reflects through the maximum size")
     func publicGetSizeReflectsThroughMaximumSize() throws {
         let generator = ReflectiveGenerator<UInt64>.getSize { size in
-            Gen.chooseDerived(in: 0 ... size).wrapped
+            Gen.chooseDerived(in: 0 ... size).wrapped(isReflective: true)
         }
         let target: UInt64 = 73
 

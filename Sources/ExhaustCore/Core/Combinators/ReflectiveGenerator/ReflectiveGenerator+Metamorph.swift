@@ -139,6 +139,6 @@ private extension ReflectiveGenerator {
                 outputType: (Output, repeat each Transformed).self
             ),
             inner: metamorphicNode
-        )).wrapped
+        )).wrapped(isReflective: isReflective)
     }
 }

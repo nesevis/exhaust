@@ -7,7 +7,8 @@ struct UniqueTuningIntegrationTests {
     @Test("VACTI deduplicates a tuned generator with non-Hashable output")
     func valueAndChoiceTreeInterpreterDeduplicatesTunedGenerator() throws {
         let generator = ReflectiveGenerator(
-            Gen.just(NonHashableTunedValue(value: 42))
+            Gen.just(NonHashableTunedValue(value: 42)),
+            isReflective: true
         ).unique().gen
         let tunedGenerator = try ChoiceGradientTuner.tune(
             generator,

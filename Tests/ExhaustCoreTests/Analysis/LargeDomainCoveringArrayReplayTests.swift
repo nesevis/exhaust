@@ -370,7 +370,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
 
         @Test("Int inside resize round-trips through replay")
         func resizeRoundTrip() throws {
-            let gen = Gen.choose(in: 0 ... 10000).wrapped.resize(50).gen
+            let gen = Gen.choose(in: 0 ... 10000).wrapped(isReflective: true).resize(50).gen
             let profile = try #require(analyzeLargeDomain(gen))
 
             #expect(profile.parameters.count == 1, "Should extract one parameter from inside the resize")
@@ -396,7 +396,7 @@ struct LargeDomainCoveringArrayReplayUnitTests {
         @Test("Zip with resize peer round-trips through replay")
         func zipWithResizeRoundTrip() throws {
             let gen = Gen.zip(
-                Gen.choose(in: 0 ... 10000).wrapped.resize(50).gen,
+                Gen.choose(in: 0 ... 10000).wrapped(isReflective: true).resize(50).gen,
                 Gen.choose(in: 0 ... 10000)
             )
             let profile = try #require(analyzeLargeDomain(gen))

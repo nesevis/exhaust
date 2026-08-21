@@ -62,6 +62,6 @@ public extension ReflectiveGenerator {
                     )
                 }
             )
-        ).wrapped
+        ).wrapped(isReflective: isReflective)
     }
 }

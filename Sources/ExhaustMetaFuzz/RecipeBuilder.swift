@@ -76,8 +76,10 @@ private func buildCombinator(
             )
 
         case let .mapped(inner, transform):
+            // A transient wrapper whose flag is discarded by the trailing `.gen.erase()`.
             return ReflectiveGenerator(
-                buildNestedGenerator(from: inner)
+                buildNestedGenerator(from: inner),
+                isReflective: true
             ).mapped(
                 forward: { transform.forward($0) },
                 backward: { transform.backward($0) }

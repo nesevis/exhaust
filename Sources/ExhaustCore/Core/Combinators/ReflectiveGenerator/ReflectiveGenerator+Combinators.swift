@@ -40,7 +40,7 @@ public extension ReflectiveGenerator {
                 outputType: NewOutput.self
             ),
             inner: gen.erase()
-        )).wrapped
+        )).wrapped(isReflective: isReflective)
     }
 
     /// Adapts a generator to a new output type, using a key path as the inverse for reflection.
@@ -92,7 +92,7 @@ public extension ReflectiveGenerator {
                 outputType: NewValue.self
             ),
             inner: gen.erase()
-        )).wrapped
+        )).wrapped(isReflective: isReflective)
     }
 
     /// Chains this generator with a dependent generator, using a key path for backward extraction.
@@ -127,6 +127,6 @@ public extension ReflectiveGenerator {
                 outputType: NewValue.self
             ),
             inner: gen.erase()
-        )).wrapped
+        )).wrapped(isReflective: isReflective)
     }
 }

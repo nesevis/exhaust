@@ -9,12 +9,19 @@ extension FuzzRunner {
         var (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands
             ? composedCandidate(from: parent)
             : legacyCandidate(from: parent)
-        if experiments.swarm {
-            let epoch = SwarmMask.forEpoch(
-                index: counts.mutationAttempts / FuzzTunables.swarmEpochAttempts,
-                rootSeed: configuration.seed
-            )
-            candidate = epoch.apply(to: candidate, prng: &prng)
+        switch experiments.swarmMode {
+            case .off:
+                break
+            case .activated:
+                // Per-attempt weights, so the activation distribution roams every attempt rather than every epoch.
+                let mask = SwarmMask.forIndex(counts.mutationAttempts, rootSeed: configuration.seed)
+                candidate = mask.applyActivated(to: candidate, prng: &prng)
+            case .binary:
+                let epoch = SwarmMask.forIndex(
+                    counts.mutationAttempts / FuzzTunables.swarmEpochAttempts,
+                    rootSeed: configuration.seed
+                )
+                candidate = epoch.apply(to: candidate, prng: &prng)
         }
         return (candidate, armsMask)
     }
@@ -97,7 +104,11 @@ extension FuzzRunner {
             // Nothing perturbed the parent (splice arms found no usable bind region or donor, or a band mutation was a no-op on this sequence), and the corpus would reject the duplicate. Fall back to one band mutation so the attempt always explores.
             let intensityDraw = prng.next(upperBound: UInt64(MutationIntensity.allCases.count))
             armsMask |= 1 << UInt8(intensityDraw)
-            candidate = FuzzMutator.mutate(candidate, intensity: MutationIntensity.allCases[Int(intensityDraw)], prng: &prng)
+            candidate = FuzzMutator.mutate(
+                candidate,
+                intensity: MutationIntensity.allCases[Int(intensityDraw)],
+                prng: &prng
+            )
         }
         return (candidate, armsMask)
     }

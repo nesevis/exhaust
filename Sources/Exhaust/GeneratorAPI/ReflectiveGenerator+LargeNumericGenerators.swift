@@ -22,7 +22,7 @@ public extension ReflectiveGenerator {
         Gen.zip(
             Gen.chooseBits(),
             Gen.chooseBits()
-        ).wrapped.mapped(
+        ).wrapped(isReflective: true).mapped(
             forward: { high, low in
                 UInt128(high) << 64 | UInt128(low)
             },
@@ -46,7 +46,7 @@ public extension ReflectiveGenerator {
         Gen.zip(
             Gen.chooseBits(),
             Gen.chooseBits()
-        ).wrapped.mapped(
+        ).wrapped(isReflective: true).mapped(
             forward: { high, low in
                 let bits = UInt128(high) << 64 | UInt128(low)
                 return Int128(bitPattern: bits)

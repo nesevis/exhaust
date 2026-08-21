@@ -36,7 +36,7 @@ public extension ReflectiveGenerator {
         depthRange: ClosedRange<Int>,
         extend: @Sendable @escaping (@Sendable @escaping () -> ReflectiveGenerator<Output>, Int) -> ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
-        recursive(base: Gen.just(baseValue).wrapped, depthRange: depthRange, extend: extend)
+        recursive(base: Gen.just(baseValue).wrapped(isReflective: true), depthRange: depthRange, extend: extend)
     }
 
     /// Creates a recursive generator with a generator base case and a reducible depth range.
@@ -73,8 +73,10 @@ public extension ReflectiveGenerator {
             depthRange: UInt64(depthRange.lowerBound) ... UInt64(depthRange.upperBound)
         ) { recurse, remaining in
             nonisolated(unsafe) let capturedRecurse = recurse
-            let sendableRecurse: @Sendable () -> ReflectiveGenerator<Output> = { capturedRecurse().wrapped }
+            let sendableRecurse: @Sendable () -> ReflectiveGenerator<Output> = { capturedRecurse().wrapped(isReflective: true) }
             return extend(sendableRecurse, Int(remaining)).gen
-        }.wrapped
+        }
+        // The extend layers are produced at generation time and cannot be inspected here, so the claim covers the base; reflection still rejects a value an extend layer cannot decompose.
+        .wrapped(isReflective: base.isReflective)
     }
 }

@@ -21,9 +21,10 @@ public extension ReflectiveGenerator {
     static func getSize(
         _ forward: @Sendable @escaping (UInt64) -> ReflectiveGenerator<Output>
     ) -> ReflectiveGenerator<Output> {
+        // The forward closure runs at generation time and cannot be inspected here; reflection still rejects a value the produced generator cannot decompose.
         Gen.getSize { size in
             forward(size).gen
-        }.wrapped
+        }.wrapped(isReflective: true)
     }
 
     /// Runs this generator with a temporarily modified size parameter.
@@ -33,6 +34,6 @@ public extension ReflectiveGenerator {
     /// ```
     func resize(_ newSize: Int) -> ReflectiveGenerator<Output> {
         precondition(newSize >= 0, "Size must be non-negative")
-        return Gen.liftF(.resize(newSize: UInt64(newSize), next: gen.erase())).wrapped
+        return Gen.liftF(.resize(newSize: UInt64(newSize), next: gen.erase())).wrapped(isReflective: isReflective)
     }
 }

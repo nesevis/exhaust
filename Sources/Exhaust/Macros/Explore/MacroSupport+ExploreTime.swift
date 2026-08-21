@@ -79,6 +79,7 @@ public extension __ExhaustRuntime {
         let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
         let report = runExploreTimeCore(
             gen: refGen.gen,
+            generatorIsReflective: refGen.isReflective,
             time: time,
             settings: settings,
             source: nil,
@@ -122,6 +123,7 @@ public extension __ExhaustRuntime {
         withRoutedExpectedIssue(isIntermittent: true) {
             pipelineReport = runExploreTimeCore(
                 gen: refGen.gen,
+                generatorIsReflective: refGen.isReflective,
                 time: time,
                 settings: settings,
                 source: nil,
@@ -170,6 +172,7 @@ public extension __ExhaustRuntime {
             let persistence = prepareFuzzPersistence(fileID: fileID, filePath: filePath, line: line, column: column)
             let report = runExploreTimeCore(
                 gen: refGen.gen,
+                generatorIsReflective: refGen.isReflective,
                 time: time,
                 settings: settings,
                 source: nil,
@@ -215,6 +218,7 @@ public extension __ExhaustRuntime {
                 withKnownIssue(isIntermittent: true) {
                     pipelineReport = runExploreTimeCore(
                         gen: refGen.gen,
+                        generatorIsReflective: refGen.isReflective,
                         time: time,
                         settings: settings,
                         source: nil,
@@ -226,6 +230,7 @@ public extension __ExhaustRuntime {
             #else
                 pipelineReport = runExploreTimeCore(
                     gen: refGen.gen,
+                    generatorIsReflective: refGen.isReflective,
                     time: time,
                     settings: settings,
                     source: nil,
@@ -312,6 +317,7 @@ public extension __ExhaustRuntime {
     /// The `source` and `configure` parameters are test seams: in-package tests inject a synthetic coverage source (skipping the instrumentation check) and tighten the runner configuration (attempt limits, phase skips) for deterministic termination.
     package static func runExploreTimeCore<Output>(
         gen: Generator<Output>,
+        generatorIsReflective: Bool = true,
         time: TimeSpan,
         settings: [PropertyFuzzSettings],
         source injectedSource: (any CoverageSource)?,
@@ -336,16 +342,6 @@ public extension __ExhaustRuntime {
             )
         }
 
-        let source: any CoverageSource
-        if let injectedSource {
-            source = injectedSource
-        } else {
-            guard FuzzInstrumentationCheck.isInstrumented, let sancovSource = SancovCoverageSource() else {
-                return .empty(termination: .instrumentationMissing, seed: seed)
-            }
-            source = sancovSource
-        }
-
         var configuration = FuzzRunnerConfiguration(budgetNanoseconds: budgetNanoseconds, seed: seed)
         configuration.stopOnFirstFault = parsed.failFast
         #if DEBUG
@@ -358,6 +354,27 @@ public extension __ExhaustRuntime {
                 }
             }
         #endif
+
+        // The whole-value operand reconstructor, derived from the output type's OperandReconstructable conformance and gated on reflectivity: a non-reflective generator means reflection cannot place a reconstructed value. A reflective composite (a struct) has no whole-type conformance, so this is nil there and the field graft handles it instead.
+        let reflectionReconstructor = generatorIsReflective
+            ? OperandReconstruction.reconstructor(for: Output.self)
+            : nil
+        // Injection activates on the presence of trace-cmp instrumentation, not a knob: a reflective generator on a trace-cmp build harvests operands and places them (whole-value gates through the reconstructor, composites through the field graft), while a non-reflective generator has nothing to place and a build without trace-cmp never fills the pool, so the injection arms stay free. There is no init-time way to detect the flag — its presence shows up as a non-empty pool once a comparison fires.
+        let usesInjection = generatorIsReflective
+
+        // Built after the experiment knobs are resolved: the sancov source enables comparison-operand harvesting at init only when injection can use the operands.
+        let source: any CoverageSource
+        if let injectedSource {
+            source = injectedSource
+        } else {
+            guard FuzzInstrumentationCheck.isInstrumented,
+                  let sancovSource = SancovCoverageSource(harvestsComparisons: usesInjection)
+            else {
+                return .empty(termination: .instrumentationMissing, seed: seed)
+            }
+            source = sancovSource
+        }
+
         if let persistence {
             configuration.persistence = persistence
             if let document = persistence.resumeDocument {
@@ -398,6 +415,9 @@ public extension __ExhaustRuntime {
                 source: source,
                 configuration: configuration,
                 hooks: hooks,
+                reflectionReconstructor: usesInjection ? reflectionReconstructor : nil,
+                // The graft only reaches a zip-shaped generator, so gate it on that static shape here — a non-composite generator otherwise materializes a parent every attempt before discovering it.
+                graftReflective: usesInjection && Interpreters.isZipShaped(gen),
                 renderValue: { value in
                     var description = ""
                     customDump(value, to: &description, maxDepth: 3)

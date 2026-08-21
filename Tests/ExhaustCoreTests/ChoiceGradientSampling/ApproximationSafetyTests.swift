@@ -49,7 +49,8 @@ private let approximateTransformFixtures: [ApproximateTransformFixture] = [
         name: "transform.map",
         buildGenerator: {
             ReflectiveGenerator(
-                Gen.choose(in: 0 ... 10 as ClosedRange<Int>)
+                Gen.choose(in: 0 ... 10 as ClosedRange<Int>),
+                isReflective: true
             ).map { $0 + 100 }.gen.erase()
         },
         observe: { output in
@@ -102,12 +103,16 @@ private let approximateTransformFixtures: [ApproximateTransformFixture] = [
         name: "transform.bind",
         buildGenerator: {
             ReflectiveGenerator(
-                Gen.choose(in: 0 ... 10 as ClosedRange<Int>)
+                Gen.choose(in: 0 ... 10 as ClosedRange<Int>),
+                isReflective: true
             ).bind { source in
-                ReflectiveGenerator(Gen.zip(
-                    Gen.just(source),
-                    Gen.choose(in: source ... (source + 10))
-                ))
+                ReflectiveGenerator(
+                    Gen.zip(
+                        Gen.just(source),
+                        Gen.choose(in: source ... (source + 10))
+                    ),
+                    isReflective: true
+                )
             }.gen.erase()
         },
         observe: { output in
@@ -138,7 +143,8 @@ private let approximateTransformFixtures: [ApproximateTransformFixture] = [
         name: "transform.metamorphic",
         buildGenerator: {
             ReflectiveGenerator(
-                Gen.choose(in: 0 ... 10 as ClosedRange<Int>)
+                Gen.choose(in: 0 ... 10 as ClosedRange<Int>),
+                isReflective: true
             ).metamorph { $0 + 100 }.gen.erase()
         },
         observe: { output in

@@ -18,6 +18,18 @@ package protocol CoverageSource: AnyObject, Sendable {
 
     /// Visits each edge hit during the attempt bracketed by ``beginAttempt()``, with its saturating 8-bit hit count.
     func forEachHitEdge(_ body: (_ edge: Int, _ hitCount: UInt8) -> Void)
+
+    /// Whether the source harvests comparison operands from the attempt. When false, the runner skips the capture bracket and ``forEachComparisonOperand(_:)`` entirely, and the operand-injection experiment has no pool to draw from.
+    var wantsComparisons: Bool { get }
+
+    /// Starts recording comparison operands. Called immediately before the property evaluation, so the harvest excludes the generator's own instrumented comparisons — the framework is compiled with the same flags as the system under test, and its loop and bounds comparisons would otherwise flood the pool.
+    func beginComparisonCapture()
+
+    /// Stops recording comparison operands. Called immediately after the property evaluation.
+    func endComparisonCapture()
+
+    /// Visits each comparison record — call site and both operands — captured between ``beginComparisonCapture()`` and ``endComparisonCapture()``. Only meaningful when ``wantsComparisons`` is true.
+    func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void)
 }
 
 package extension CoverageSource {
@@ -26,6 +38,16 @@ package extension CoverageSource {
     }
 
     func noteValue(_: Any) {}
+
+    var wantsComparisons: Bool {
+        false
+    }
+
+    func beginComparisonCapture() {}
+
+    func endComparisonCapture() {}
+
+    func forEachComparisonRecord(_: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {}
 
     /// The attempt's coverage signature as a ``BitSet`` of hit edges.
     func signature() -> BitSet {
@@ -49,20 +71,44 @@ package final class SancovCoverageSource: CoverageSource, @unchecked Sendable {
     /// The total instrumented edge count across all regions.
     package let edgeCount: Int
 
+    /// Whether this source drains comparison operands each attempt. Set at init from the experiment knob and the hooks' presence, so the per-attempt path pays nothing when the channel is off or the build lacks `trace-cmp`.
+    package let wantsComparisons: Bool
+
     /// Creates a source over the currently registered counter regions, or returns nil when no instrumented image registered — the caller surfaces the missing-instrumentation diagnostic.
-    package init?() {
+    ///
+    /// - Parameter harvestsComparisons: Requests comparison-operand harvesting. On a build without the `trace-cmp` flag the hooks never fire, so the buffer stays empty and every drain is a cheap no-op — the channel is safe to request unconditionally and costs nothing when the instrumentation is absent.
+    package init?(harvestsComparisons: Bool = false) {
         let regions = SancovRuntime.currentCounterRegions()
         guard regions.isEmpty == false else {
             return nil
         }
         self.regions = regions
         edgeCount = regions.reduce(0) { $0 + $1.count }
+        wantsComparisons = harvestsComparisons
     }
 
     package func beginAttempt() {
         for region in regions {
             region.base.update(repeating: 0, count: region.count)
         }
+        if wantsComparisons {
+            ComparisonRuntime.reset()
+        }
+    }
+
+    package func beginComparisonCapture() {
+        ComparisonRuntime.setEnabled(true)
+    }
+
+    package func endComparisonCapture() {
+        ComparisonRuntime.setEnabled(false)
+    }
+
+    package func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {
+        guard wantsComparisons else {
+            return
+        }
+        ComparisonRuntime.forEachRecord(body)
     }
 
     /// Reports every nonzero counter, scanning eight bytes at a time.

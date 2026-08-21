@@ -83,6 +83,34 @@ FUZZ=1 swift test \
     --filter FuzzTests
 ```
 
+### Adding comparison-operand injection (optional)
+
+> Experiment: Comparison-operand injection is experimental and may change or be removed in any release.
+
+Some branches gate on a value the generator will almost never produce by chance: an equality against a wide constant (`token == 0x5F3759DF`), a parsed magic number, a specific string. Edge coverage gives the search nothing to climb there, because every wrong value takes the same branch. Adding `trace-cmp` to the coverage flags lets Exhaust read the operands of the code's own comparisons and work backward through the generator to the choices that would produce the wanted constant. On constructed wide-constant gates this has been the difference between never solving and solving in around a thousand attempts. It works for whole-value gates and for structs compared field by field.
+
+It helps only where the wanted value is rare in its domain. A comparison on a small per-element domain — a byte, a printable character — sees no benefit, because ordinary generation already produces every value there; the payoff is on wide or parsed constants, not on the small enumerable ones typed generators manufacture by construction.
+
+Append `trace-cmp` to the coverage list, in the per-target flags:
+
+```swift
+.unsafeFlags(
+    ["-sanitize=undefined",
+     "-sanitize-coverage=edge,inline-8bit-counters,pc-table,trace-cmp"],
+    .when(configuration: .debug)
+)
+```
+
+or on the command line:
+
+```bash
+swift test \
+    -Xswiftc -sanitize=undefined \
+    -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table,trace-cmp
+```
+
+Injection activates automatically when the flag is present. It steers only the generators Exhaust can run backward: the reflective generators `#gen` builds from initialisers and value-preserving transforms. A generator whose output comes from a forward-only `map` cannot be steered this way, and Exhaust ignores the harvested operand. Without the flag, or on a run that never reaches such a comparison, the search behaves as it does without it. In the throughput measurement, adding the flag cost under one percent on a generation-bound fixture.
+
 ## How a time-bounded run works
 
 Exhaust runs the property in three phases:

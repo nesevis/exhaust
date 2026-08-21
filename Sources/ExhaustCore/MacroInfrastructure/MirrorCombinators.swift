@@ -24,7 +24,7 @@ public extension __ExhaustRuntime {
                 outputType: Output.self
             ),
             inner: generator.gen.erase()
-        )).wrapped
+        )).wrapped(isReflective: generator.isReflective)
     }
 
     /// Maps a single generator through a qualified enum-case or static-factory call, validating the output shape during reflection.
@@ -77,7 +77,7 @@ public extension __ExhaustRuntime {
                 outputType: Output.self
             ),
             inner: generator.gen.erase()
-        )).wrapped
+        )).wrapped(isReflective: generator.isReflective)
     }
 
     /// Zips multiple generators with a forward transform and Mirror-based backward extraction.
@@ -90,8 +90,10 @@ public extension __ExhaustRuntime {
     ) -> ReflectiveGenerator<NewOutput> {
         var erased: ContiguousArray<AnyGenerator> = []
         erased.reserveCapacity(5)
+        var allReflective = true
         for generator in repeat each generators {
             erased.append(generator.gen.erase())
+            allReflective = allReflective && generator.isReflective
         }
 
         let zipNode: AnyGenerator = .impure(
@@ -126,7 +128,7 @@ public extension __ExhaustRuntime {
                 outputType: NewOutput.self
             ),
             inner: zipNode
-        )).wrapped
+        )).wrapped(isReflective: allReflective)
     }
 
     /// Zips generators through a qualified enum-case or static-factory call, validating the output shape during reflection.
@@ -168,8 +170,10 @@ public extension __ExhaustRuntime {
     ) -> ReflectiveGenerator<NewOutput> {
         var erased: ContiguousArray<AnyGenerator> = []
         erased.reserveCapacity(5)
+        var allReflective = true
         for generator in repeat each generators {
             erased.append(generator.gen.erase())
+            allReflective = allReflective && generator.isReflective
         }
 
         let zipNode: AnyGenerator = .impure(
@@ -203,7 +207,7 @@ public extension __ExhaustRuntime {
                 outputType: NewOutput.self
             ),
             inner: zipNode
-        )).wrapped
+        )).wrapped(isReflective: allReflective)
     }
 
     // MARK: - Scalar conversion overloads
@@ -242,6 +246,10 @@ public extension __ExhaustRuntime {
     static func __zip<each T>(
         _ generators: repeat ReflectiveGenerator<each T>
     ) -> ReflectiveGenerator<(repeat each T)> {
-        Gen.zip(repeat (each generators).gen).wrapped
+        var allReflective = true
+        for generator in repeat each generators {
+            allReflective = allReflective && generator.isReflective
+        }
+        return Gen.zip(repeat (each generators).gen).wrapped(isReflective: allReflective)
     }
 }

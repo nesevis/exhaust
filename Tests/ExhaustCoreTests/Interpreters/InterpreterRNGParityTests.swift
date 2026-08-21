@@ -398,9 +398,10 @@ struct InterpreterRNGParityTests {
 
     @Test("Nested unique keeps both interpreters on the same stream")
     func nestedUniqueStreamParity() {
-        let inner = ReflectiveGenerator(Gen.choose(in: -1 ... 0)).unique()
+        let inner = ReflectiveGenerator(Gen.choose(in: -1 ... 0), isReflective: true).unique()
         let outer = ReflectiveGenerator(
-            Gen.arrayOf(inner.gen, within: 0 ... 3, scaling: .constant)
+            Gen.arrayOf(inner.gen, within: 0 ... 3, scaling: .constant),
+            isReflective: true
         ).unique()
         assertOutcomeParity(outer.gen.erase(), seed: 645_339_999, runs: 5)
     }
@@ -408,7 +409,8 @@ struct InterpreterRNGParityTests {
     @Test("Single unique keeps both interpreters on the same stream")
     func singleUniqueStreamParity() {
         let outer = ReflectiveGenerator(
-            Gen.arrayOf(Gen.choose(in: -1 ... 0), within: 0 ... 3, scaling: .constant)
+            Gen.arrayOf(Gen.choose(in: -1 ... 0), within: 0 ... 3, scaling: .constant),
+            isReflective: true
         ).unique()
         assertOutcomeParity(outer.gen.erase(), seed: 645_339_999, runs: 5)
     }

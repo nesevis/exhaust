@@ -61,7 +61,7 @@ package struct FuzzReductionResult<Output> {
 /// The runner is single-threaded: the corpus, gate, PRNG, and every instrumented evaluation — attempt brackets, reduction probes, classification re-runs — execute on the one GCD lane that owns `run()`. Reduction runs inline at the point of failure discovery, trading attempts for signal purity: no instrumented code ever executes concurrently with an open attempt bracket, so every coverage snapshot is attributable to exactly one evaluation and classification feedback lands at a deterministic point in the attempt stream.
 package final class FuzzRunner<Output> {
     // Members without an access modifier are internal so the same-module extension files (FuzzRunner+Recovery, FuzzRunner+Mutation) can reach them; nothing outside the module sees them.
-    private let gen: Generator<Output>
+    let gen: Generator<Output>
     let erasedGen: AnyGenerator
     let property: @Sendable (Output) -> FuzzVerdict
     let source: any CoverageSource
@@ -77,6 +77,15 @@ package final class FuzzRunner<Output> {
     private var gate: ReductionGate
     var prng: Xoshiro256
     var bandit = MutationBandit()
+
+    /// Comparison operands harvested from the system under test, drawn on during mutation when the injection experiment is on. Stays empty otherwise, so reads cost nothing.
+    var comparisonPool = ComparisonPool()
+
+    /// Rebuilds an output value from a harvested operand word, or nil when the word is not a natural value of the generator's type. When set and the injection experiment is on, the mutation phase reconstructs a value from the pool, reflects it through the generator to the choices that produce it, and evaluates that candidate — the trace-cmp path for a value that flows through the generator's leaves. Derived from ``OperandReconstructable`` at the typed boundary; the generator's type is the byte schema, reflection supplies the encoding.
+    let reflectionReconstructor: (@Sendable (UInt64) -> Output?)?
+
+    /// Whether the generator is reflective, enabling the field-graft path. When set and the injection experiment is on, the mutation phase grafts a harvested operand into one field of a corpus parent and reflects the whole composite through the generator — the trace-cmp path for a struct or tuple whose fields are compared one at a time, which the whole-value reconstructor cannot reach because the composite type has no single natural byte encoding. Distinct from ``reflectionReconstructor``: a composite is reflective but not itself `OperandReconstructable`, so its reconstructor is nil while this stays true.
+    private let graftReflective: Bool
 
     /// Renders a reduced counterexample for its cluster's report description. Injected because the render runs during reduction — the value never crosses back to a context that could render it later — while the runner's module must stay free of rendering dependencies. The default serves direct package-level construction (tests, harnesses); `runExploreTimeCore` supplies the production renderer.
     private let renderValue: @Sendable (Any) -> String
@@ -94,16 +103,13 @@ package final class FuzzRunner<Output> {
 
     /// The later of the two discoveries, falling back to the run's start before anything is found.
     ///
-    /// This is what the mutation phase measures its plateau against. Corpus admission is the wrong
-    /// signal for it: a candidate also enters on a new hit-count bucket for an edge already covered, so
-    /// admissions keep arriving long after the run has stopped finding anything, and the window ends up
-    /// timing something nobody cares about.
+    /// This is what the mutation phase measures its plateau against. Corpus admission is the wrong signal for it: a candidate also enters on a new hit-count bucket for an edge already covered, so admissions keep arriving long after the run has stopped finding anything, and the window ends up timing something nobody cares about.
     private var lastDiscoveryNanoseconds: UInt64 {
         max(lastNewEdgeNanoseconds, max(lastNewClusterNanoseconds, startNanoseconds))
     }
 
     var counts = FuzzRunCounts()
-    private var timing = FuzzRunTiming()
+    var timing = FuzzRunTiming()
 
     // MARK: - Crash-Recovery State
 
@@ -129,6 +135,8 @@ package final class FuzzRunner<Output> {
         source: any CoverageSource,
         configuration: FuzzRunnerConfiguration,
         hooks: FuzzHooks<Output>? = nil,
+        reflectionReconstructor: (@Sendable (UInt64) -> Output?)? = nil,
+        graftReflective: Bool = false,
         renderValue: @escaping @Sendable (Any) -> String = { String(describing: $0) }
     ) {
         self.gen = gen
@@ -136,6 +144,8 @@ package final class FuzzRunner<Output> {
         self.property = property
         self.source = source
         self.configuration = configuration
+        self.reflectionReconstructor = reflectionReconstructor
+        self.graftReflective = graftReflective
         self.renderValue = renderValue
         prune = hooks?.prune
         reduceStrategy = hooks?.reduceStrategy ?? Self.propertyOnlyReduceStrategy(
@@ -391,10 +401,7 @@ package final class FuzzRunner<Output> {
             seed: configuration.seed ^ 0x5EED_FA11_BACC_0FFE,
             maxRuns: UInt64.max
         )
-        // Floored, so a short budget does not buy a window too impatient to outlast the gap between a
-        // run's last new edge and its last new fault. Capped at half the budget, because a floor that
-        // outran the budget would leave the rule unable to fire at all, and a run should get at least
-        // two windows' worth of chance before the clock decides for it.
+        // Floored, so a short budget does not buy a window too impatient to outlast the gap between a run's last new edge and its last new fault. Capped at half the budget, because a floor that outran the budget would leave the rule unable to fire at all, and a run should get at least two windows' worth of chance before the clock decides for it.
         let plateauWindowNanoseconds = max(
             min(FuzzTunables.plateauFloorNanoseconds, configuration.budgetNanoseconds / 2),
             UInt64(Double(configuration.budgetNanoseconds) * FuzzTunables.plateauBudgetFraction)
@@ -410,6 +417,25 @@ package final class FuzzRunner<Output> {
                 return .plateau(unusedNanoseconds: deadline > now ? deadline - now : 0)
             }
             checkpointIfDue()
+
+            // Reflection injection: reconstruct a value from a harvested operand and reflect it to the choices that produce it. Offered on half of iterations when the pool has something to draw from; a whole-value gate leaks its constant on every attempt, so a drawn candidate reaches it quickly.
+            // The capability flags are set only when the run harvests operands (a reflective generator on a trace-cmp build), so they gate injection without a separate knob; the empty-pool check makes both arms free when the build carries no trace-cmp instrumentation and nothing is ever harvested.
+            if reflectionReconstructor != nil,
+               comparisonPool.isEmpty == false,
+               prng.next(upperBound: 2) == 0,
+               reflectionInjectionAttempt()
+            {
+                continue
+            }
+
+            // Field graft: for a composite compared field by field, graft a harvested operand into one field of a corpus parent and reflect the whole value, preserving the matched prefix. Generic over the output type — the parent's component supplies the field type at runtime, so no per-type closure is needed.
+            if graftReflective,
+               comparisonPool.isEmpty == false,
+               prng.next(upperBound: 2) == 0,
+               reflectionGraftAttempt()
+            {
+                continue
+            }
 
             let parentStart = monotonicNanoseconds()
             let picked = corpus.pickParent(random: randomUnit())
@@ -595,7 +621,7 @@ package final class FuzzRunner<Output> {
     /// The instrumented tail of one evaluation bracket: records the breadcrumb slot, notes the value, times the property, and collects the attempt's hits.
     ///
     /// Must run inside the attribution token, after `source.beginAttempt()` and after candidate production — generation and materialization can execute user code, and its coverage belongs to the attempt whose bracket is open.
-    private func evaluateInBracket(
+    func evaluateInBracket(
         _ value: Output,
         recordingBreadcrumb slot: (candidateHash: UInt64, parentHash: UInt64)?
     ) -> (verdict: FuzzVerdict, hits: [(edge: Int, hitCount: UInt8)]) {
@@ -605,21 +631,33 @@ package final class FuzzRunner<Output> {
         if source.wantsValues {
             source.noteValue(value)
         }
+        let capturesComparisons = source.wantsComparisons
+        if capturesComparisons {
+            source.beginComparisonCapture()
+        }
         let propertyStart = monotonicNanoseconds()
         let verdict = property(value)
         timing.propertyNanoseconds += monotonicNanoseconds() - propertyStart
-        // Reused across attempts: a fresh array grows through roughly eleven reallocations on the way
-        // to the few thousand edges a typical attempt lights, and the contents never outlive the call.
+        if capturesComparisons {
+            source.endComparisonCapture()
+        }
+        // Reused across attempts: a fresh array grows through roughly eleven reallocations on the way to the few thousand edges a typical attempt lights, and the contents never outlive the call.
         hitsBuffer.removeAll(keepingCapacity: true)
         source.forEachHitEdge { edge, hitCount in
             hitsBuffer.append((edge, hitCount))
+        }
+        if capturesComparisons {
+            source.forEachComparisonRecord { site, arg1, arg2 in
+                comparisonPool.insert(site: site, value: arg1)
+                comparisonPool.insert(site: site, value: arg2)
+            }
         }
         return (verdict, hitsBuffer)
     }
 
     /// The shared post-evaluation epilogue: counts the attempt, offers the candidate to the corpus, tracks admission recency, and dispatches failure handling with the admission's coverage-novelty signal.
     @discardableResult
-    private func recordAttempt(
+    func recordAttempt(
         value: Output,
         tree: ChoiceTree,
         sequence: ChoiceSequence,
@@ -876,8 +914,7 @@ package final class FuzzRunner<Output> {
 
         if classification.isNewCluster {
             forceCheckpoint = true
-            // Faults outlive coverage: a target whose last new edge arrives in under a second can still
-            // be classifying new clusters twenty seconds later, and stopping on coverage alone loses them.
+            // Faults outlive coverage: a target whose last new edge arrives in under a second can still be classifying new clusters twenty seconds later, and stopping on coverage alone loses them.
             lastNewClusterNanoseconds = monotonicNanoseconds()
             if attemptsAtFirstFault == 0 {
                 attemptsAtFirstFault = counts.totalAttempts

@@ -71,7 +71,7 @@ struct IssueReportingIntegrationTests {
         let report = absorbingDirectTestingIssues {
             withIssueReporters([reporter]) {
                 __ExhaustRuntime.__exploreExpect(
-                    ReflectiveGenerator(Gen.just(0)),
+                    ReflectiveGenerator(Gen.just(0), isReflective: true),
                     settings: [
                         .budget(.custom(screening: 1, sampling: 1)),
                         .replay(42),
@@ -97,7 +97,7 @@ struct IssueReportingIntegrationTests {
         let report = absorbingDirectTestingIssues {
             withIssueReporters([reporter]) {
                 __ExhaustRuntime.__explore(
-                    ReflectiveGenerator(Gen.just(0)),
+                    ReflectiveGenerator(Gen.just(0), isReflective: true),
                     settings: [
                         .budget(.custom(screening: 1, sampling: 1)),
                         .replay(42),
@@ -127,7 +127,7 @@ struct IssueReportingIntegrationTests {
         let report = await absorbingDirectTestingIssues(isIntermittent: true) {
             await withIssueReporters([reporter]) {
                 await __ExhaustRuntime.__exploreExpectAsync(
-                    ReflectiveGenerator(Gen.just(0)),
+                    ReflectiveGenerator(Gen.just(0), isReflective: true),
                     settings: [
                         .budget(.custom(screening: 1, sampling: 1)),
                         .replay(42),

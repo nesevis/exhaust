@@ -42,13 +42,13 @@ package enum GeneratorSynthesizer {
     ) throws -> ReflectiveGenerator<T> {
         // A top-level leaf or collection type resolves to its pre-configured generator directly, without running `init(from:)`. This covers single-value types (Date, UUID, URL, Data, Decimal, CGFloat, and the primitives) and top-level collections of generable elements — both of which the example-driven discovery pass cannot characterize on its own (a top-level array records no child generators, and a single-value type would record the inner primitive rather than itself).
         if let rootGenerator = rootGenerator(for: T.self) {
-            return ReflectiveGenerator(rootGenerator, isSynthesized: true)
+            return ReflectiveGenerator(rootGenerator, isSynthesized: true, isReflective: false)
         }
 
         // A top-level collection of a non-generable element type (for example `[Person]`) has no pre-configured generator, but its element can be discovered from a representative element of the example. This varies the collection's length and contents rather than pinning the whole value.
         if let discoveredCollection = makeDiscoveredCollectionGenerator(for: T.self, fromExample: jsonValue, codingPath: []) {
             let typed: Generator<T> = discoveredCollection.map { $0 as! T }
-            return ReflectiveGenerator(typed, isSynthesized: true)
+            return ReflectiveGenerator(typed, isSynthesized: true, isReflective: false)
         }
 
         // The example-driven path: run `init(from:)` once to discover the type's shape, then reconstruct from it. `makeReconstructingGenerator` owns the zip-map-replay machinery and the catch-and-pin fallback; an empty shape (nothing to synthesize) pins to the example directly. The example value seeds the fallback at the root path `[]`.
@@ -61,7 +61,7 @@ package enum GeneratorSynthesizer {
             codingPath: []
         )
         let typed: Generator<T> = reconstructing.map { $0 as! T }
-        return ReflectiveGenerator(typed, isSynthesized: true)
+        return ReflectiveGenerator(typed, isSynthesized: true, isReflective: false)
     }
 
     /// Returns the pre-configured generator for a top-level leaf or collection type, or `nil` when the type needs the discovery pass.

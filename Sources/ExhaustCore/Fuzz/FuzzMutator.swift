@@ -192,6 +192,7 @@ package enum FuzzMutator {
         }
 
         var result = sequence
+
         let mutationCount = min(valueIndices.count, 1 + Int(prng.next(upperBound: 3)))
         for _ in 0 ..< mutationCount {
             let target = valueIndices[Int(prng.next(upperBound: UInt64(valueIndices.count)))]

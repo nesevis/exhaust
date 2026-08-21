@@ -29,10 +29,18 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
     /// Generators synthesized from JSON example data may contain `.just` nodes for fields where the ``GeneratorSynthesizer`` could not build a full generator (for example, non-`CaseIterable` enums). These fields are pinned to the constant value from the example JSON. Diagnostic tools can check this flag to distinguish synthesized generators from hand-written ones.
     public let isSynthesized: Bool
 
+    /// Whether every transform in this generator preserves reflection — no forward-only ``map(_:)`` or ``bind(_:fileID:line:column:)`` sits between the choices and the output, and no factory discards information reflection would need to recover the choices (set and dictionary construction, shuffling, unfold's internal binds).
+    ///
+    /// Carried at composition rather than recomputed: the ``FreerMonad`` spine hides its tail behind continuations, so it cannot be folded after the fact. Each combinator states its claim through ``FreerMonad/wrapped(isReflective:)``, ANDing the flags of the generators it combines — a forward-only transform or an information-discarding factory contributes `false` and the flag is monotone, never recovering. A `true` reading is a promise that ``Interpreters/reflect(_:with:where:)`` can decompose a value through this generator; a `false` reading means it cannot, so callers such as comparison-operand injection can skip the attempt. Over-claiming is safe: reflection still returns nil on a value it cannot decompose, so the flag is an optimization, not a correctness gate. Combinators whose layers are produced by closures at generation time (``recursive(base:depthRange:extend:)``, ``getSize(_:)``) cannot inspect those layers at construction and over-claim deliberately.
+    package let isReflective: Bool
+
     /// Wraps an already-constructed generator.
-    package init(_ gen: Generator<Output>, isSynthesized: Bool = false) {
+    ///
+    /// `isReflective` has no default so every construction site states whether reflection can decompose values through the wrapped generator; a silent default here is how an over-claim slips into a whole family of factories.
+    package init(_ gen: Generator<Output>, isSynthesized: Bool = false, isReflective: Bool) {
         self.gen = gen
         self.isSynthesized = isSynthesized
+        self.isReflective = isReflective
     }
 
     /// Chains this generator with a dependent generator whose structure depends on the produced value.
@@ -59,7 +67,7 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
                 outputType: NewOutput.self
             ),
             inner: gen.erase()
-        )).wrapped
+        )).wrapped(isReflective: false)
     }
 
     /// Applies a forward-only transform to the generated value.
@@ -83,16 +91,18 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
                 outputType: NewOutput.self
             ),
             inner: gen.erase()
-        )).wrapped
+        )).wrapped(isReflective: false)
     }
 }
 
 // MARK: - Generator → ReflectiveGenerator
 
 package extension FreerMonad where Operation == ReflectiveOperation {
-    /// Wraps this generator in a ``ReflectiveGenerator``.
-    var wrapped: ReflectiveGenerator<Value> {
-        ReflectiveGenerator(self)
+    /// Wraps this generator in a ``ReflectiveGenerator``, carrying the composed reflection status.
+    ///
+    /// The parameter has no default so every combinator states its claim explicitly. Leaf generators and framework-authored exact inverse pairs pass `true`; a combinator over ``ReflectiveGenerator`` inputs passes the AND of their flags plus whether the operation it introduces preserves reflection; a forward-only ``ReflectiveGenerator/map(_:)`` or ``ReflectiveGenerator/bind(_:fileID:line:column:)``, and any factory whose construction discards information reflection would need, passes `false`.
+    func wrapped(isReflective: Bool) -> ReflectiveGenerator<Value> {
+        ReflectiveGenerator(self, isReflective: isReflective)
     }
 }
 

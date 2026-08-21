@@ -22,7 +22,7 @@ package extension Gen {
         Gen.zip(
             Gen.chooseBits(in: 0 ... 0x0FFF_FFFF_FFFF_FFFF),
             Gen.chooseBits(in: 0 ... 0x3FFF_FFFF_FFFF_FFFF)
-        ).wrapped.mapped(
+        ).wrapped(isReflective: true).mapped(
             forward: { uuidFromHalves($0, $1) },
             backward: { uuidToHalves($0) }
         )
@@ -111,7 +111,7 @@ package extension Gen {
                 outputType: URL.self
             ),
             inner: Gen.zip(scheme, host, path, query).erase()
-        )).wrapped
+        )).wrapped(isReflective: true)
     }
 }
 
@@ -165,7 +165,7 @@ package extension Gen {
                 typeTagPayload: .date(grid: grid)
             )
         ) { try .pure(Int64(bitPattern64: chooseBitsBitPattern($0))) }
-            .wrapped.mapped(
+            .wrapped(isReflective: true).mapped(
                 forward: { step in
                     Date(timeIntervalSinceReferenceDate: Double(grid.secondsAtStep(step)))
                 },
@@ -206,7 +206,7 @@ package extension Gen {
             "Lower bound must not exceed upper bound after scaling"
         )
 
-        return Gen.choose(in: lowerStep ... upperStep).wrapped
+        return Gen.choose(in: lowerStep ... upperStep).wrapped(isReflective: true)
             .mapped(
                 forward: { step in
                     Decimal(step) / multiplier
@@ -224,7 +224,7 @@ package extension Gen {
 package extension Gen {
     /// Generates a Unicode character from the version's blocks.
     static func character(unicodeVersion: UnicodeVersion = .v17) -> ReflectiveGenerator<Character> {
-        characterGenerator(from: unicodeVersion.scalarRangeSet).wrapped
+        characterGenerator(from: unicodeVersion.scalarRangeSet).wrapped(isReflective: true)
     }
 
     /// Generates a character drawn uniformly from `characterSet`.
@@ -233,7 +233,7 @@ package extension Gen {
         simplest: Unicode.Scalar? = nil
     ) -> ReflectiveGenerator<Character> {
         let bottom = resolveSimplest(simplest, in: characterSet)
-        return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)).wrapped
+        return characterGenerator(from: characterSet.scalarRangeSet(bottomCodepoint: bottom)).wrapped(isReflective: true)
     }
 
     /// Generates a character drawn uniformly from the scalars in `range`.
@@ -371,13 +371,13 @@ private func stringGenerator(
 ) -> ReflectiveGenerator<String> {
     let charGen = characterGenerator(from: srs)
     if let length {
-        return Gen.arrayOf(charGen, within: length, scaling: scaling).wrapped
+        return Gen.arrayOf(charGen, within: length, scaling: scaling).wrapped(isReflective: true)
             .mapped(
                 forward: { String($0) },
                 backward: { $0.unicodeScalars.map { Character($0) } }
             )
     }
-    return Gen.arrayOf(charGen).wrapped
+    return Gen.arrayOf(charGen).wrapped(isReflective: true)
         .mapped(
             forward: { String($0) },
             backward: { $0.unicodeScalars.map { Character($0) } }
@@ -395,7 +395,7 @@ private let asciiScalarRangeSet: ScalarRangeSet =
 package extension Gen {
     /// Generates `Data` with size-scaled length, each byte uniform in 0...255.
     static func data() -> ReflectiveGenerator<Data> {
-        Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)).wrapped
+        Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)).wrapped(isReflective: true)
             .mapped(
                 forward: { Data($0) },
                 backward: { Array($0) }
@@ -411,7 +411,7 @@ package extension Gen {
             Gen.choose(in: UInt8.min ... UInt8.max),
             within: range,
             scaling: scaling
-        ).wrapped.mapped(
+        ).wrapped(isReflective: true).mapped(
             forward: { Data($0) },
             backward: { Array($0) }
         )
@@ -424,7 +424,7 @@ package extension Gen {
         Gen.arrayOf(
             Gen.choose(in: UInt8.min ... UInt8.max),
             exactly: length
-        ).wrapped.mapped(
+        ).wrapped(isReflective: true).mapped(
             forward: { Data($0) },
             backward: { Array($0) }
         )
@@ -434,7 +434,7 @@ package extension Gen {
     static func data(
         prefix: [UInt8]
     ) -> ReflectiveGenerator<Data> {
-        let generator = Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)).wrapped
+        let generator = Gen.arrayOf(Gen.choose(in: UInt8.min ... UInt8.max)).wrapped(isReflective: true)
             .mapped(
                 forward: { Data(prefix + $0) },
                 backward: { Array($0.dropFirst(prefix.count)) }
@@ -452,7 +452,7 @@ package extension Gen {
             Gen.choose(in: UInt8.min ... UInt8.max),
             within: range,
             scaling: scaling
-        ).wrapped.mapped(
+        ).wrapped(isReflective: true).mapped(
             forward: { Data(prefix + $0) },
             backward: { Array($0.dropFirst(prefix.count)) }
         )
@@ -467,7 +467,7 @@ package extension Gen {
         let generator = Gen.arrayOf(
             Gen.choose(in: UInt8.min ... UInt8.max),
             exactly: length
-        ).wrapped.mapped(
+        ).wrapped(isReflective: true).mapped(
             forward: { Data(prefix + $0) },
             backward: { Array($0.dropFirst(prefix.count)) }
         )
@@ -482,5 +482,5 @@ private func validatingDataPrefix(
     Gen.comap(
         { (data: Data) -> Data? in data.starts(with: prefix) ? data : nil },
         generator.gen
-    ).wrapped
+    ).wrapped(isReflective: true)
 }

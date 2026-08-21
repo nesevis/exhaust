@@ -283,7 +283,7 @@ struct ExploreSpecTimeRuntimeTests {
 
         // The fingerprint is the source location of the synthesized pick, so it shifts whenever this file is edited above the spec; any single epoch masks a 2-branch site with probability 3/8. Scanning 64 epochs makes the check deterministic in practice (miss probability (5/8)^64) without pinning a fingerprint.
         let maskingEpochExists = (0 ..< 64).contains { epoch in
-            let mask = SwarmMask.forEpoch(index: epoch, rootSeed: 42)
+            let mask = SwarmMask.forIndex(epoch, rootSeed: 42)
             return branches.contains { branch in
                 mask.allowedBranches(fingerprint: branch.fingerprint, branchCount: branch.branchCount) != nil
             }

@@ -60,7 +60,8 @@ struct ReductionMaterializerTests {
     @Test("Exact mode reports a throwing transform as failed")
     func exactReportsThrowingTransformAsFailed() throws {
         let generator = try ReflectiveGenerator(
-            Gen.choose(in: 0 ... 10 as ClosedRange<Int>)
+            Gen.choose(in: 0 ... 10 as ClosedRange<Int>),
+            isReflective: true
         ).map { value in
             guard value != 5 else {
                 throw ExactMaterializationFixtureError.rejectedValue
