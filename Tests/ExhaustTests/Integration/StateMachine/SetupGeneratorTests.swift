@@ -662,12 +662,16 @@ private final class LockedCounter: @unchecked Sendable {
 // MARK: - Helpers
 
 /// Re-renders a result the way the sequential backend does, so the assembled failure report can be asserted on while issue reporting stays suppressed.
+///
+/// A ``StateMachineResult`` does not carry the run's iteration or budget, so the header those two produce is stubbed. Callers here assert on the command-sequence line, never the header.
 private func renderSequentialFailure(_ result: StateMachineResult<some StateMachineSpecBase>) -> String {
     __ExhaustRuntime.renderFailure(
         result,
         failureInfo: __ExhaustRuntime.StateMachineFailureInfo(
             originalCommands: result.originalCommands,
-            discoveryMethod: result.discoveryMethod
+            discoveryMethod: result.discoveryMethod,
+            iteration: 1,
+            budget: ExhaustBudget.standard.samplingBudget
         ),
         failureDescription: nil
     )

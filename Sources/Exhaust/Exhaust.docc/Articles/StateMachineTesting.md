@@ -203,7 +203,7 @@ Exhaust first runs a screening phase that systematically covers command-type ord
 The failure report shows the reduced sequence and the execution trace:
 
 ```
-State machine failure (found via screening)
+CircularQueueSpec failure (iteration 5/600, found via random sampling, seed 3JK4M2-5)
 
 Command sequence (4 steps, reduced from 8):
   1. put(7) [ok]

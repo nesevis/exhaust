@@ -68,7 +68,9 @@ struct SequentialStateMachineBackend<Spec: StateMachineSpecBase>: StateMachineBa
                 result,
                 failureInfo: __ExhaustRuntime.StateMachineFailureInfo(
                     originalCommands: originalCommands,
-                    discoveryMethod: discoveryMethod
+                    discoveryMethod: discoveryMethod,
+                    iteration: context.state.failureContext.iteration,
+                    budget: context.state.failureContext.budget
                 ),
                 failureDescription: outcome.failureDescription
             )

@@ -190,7 +190,12 @@ extension __ExhaustRuntime {
         failureDescription: String?
     ) -> String {
         var lines: [String] = []
-        lines.append("State machine failure (found via \(failureInfo.discoveryMethod))")
+        let encodedSeed = result.replaySeed ?? result.seed.map(ReplaySeed.encodeRawSeed)
+        if let encodedSeed {
+            lines.append("\(Spec.self) failure (iteration \(failureInfo.iteration)/\(failureInfo.budget), found via \(failureInfo.discoveryMethod), seed \(encodedSeed))")
+        } else {
+            lines.append("\(Spec.self) failure (iteration \(failureInfo.iteration)/\(failureInfo.budget), found via \(failureInfo.discoveryMethod))")
+        }
         lines.append("")
 
         // The setup step is generated and occupies the trace's first row, so it counts on both sides of the reduction. Reduction never deletes it, so the same step is present before and after.
@@ -215,7 +220,7 @@ extension __ExhaustRuntime {
             lines.append("State: \(indentedDescription)")
         }
 
-        if let encodedSeed = result.replaySeed ?? result.seed.map(ReplaySeed.encodeRawSeed) {
+        if let encodedSeed {
             lines.append("")
             lines.append("Reproduce: .replay(\"\(encodedSeed)\")")
         }
@@ -228,10 +233,16 @@ extension __ExhaustRuntime {
 
 extension __ExhaustRuntime {
     /// Captures the original command sequence and the discovery method for a spec failure, used by ``renderFailure(_:failureInfo:failureDescription:)`` to build failure reports.
+    ///
+    /// The sequential twin of ``FailureContext``. Both carry the header's iteration and budget so the two renderers report a failure's position in the run identically; a reader comparing a `.sequential` report against a `.threads` one should not have to learn two headers.
     struct StateMachineFailureInfo<Command> {
         /// The original failing command sequence before reduction, if available.
         var originalCommands: [Command]?
         /// How the failure was discovered.
         var discoveryMethod: StateMachineDiscoveryMethod
+        /// The candidate's 1-based position within its discovery phase: the sampling iteration, or the screening row within its tier.
+        var iteration: Int
+        /// The budget `iteration` counts against, which is the screening budget for a screening candidate and the sampling budget otherwise. Populated from the same values ``FailureContext`` reports, so neither renderer re-derives the rule.
+        var budget: Int
     }
 }
