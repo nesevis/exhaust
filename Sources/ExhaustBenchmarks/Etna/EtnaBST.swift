@@ -5,7 +5,7 @@
 // Source: https://github.com/alpaylan/etna-haskell-bst
 // Implementation and bugs from Hughes, "How to Specify It" (2019).
 //
-// 8 mutants (insert_1..3, delete_4..5, union_6..8), 52 tasks.
+// 8 mutants (insert_1..3, delete_4..5, union_6..8), 53 tasks (etna.toml's 52 plus union_6 × UnionUnionIdem from the shrinking paper's Table 1).
 
 import Exhaust
 

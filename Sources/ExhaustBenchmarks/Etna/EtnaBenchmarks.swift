@@ -7,6 +7,7 @@
 
 import Benchmark
 import Exhaust
+import Foundation
 
 // MARK: - Shared Generators
 
@@ -43,6 +44,10 @@ private struct EtnaResult {
     let reductionMs: Double
     let totalMs: Double
     let counterexample: String?
+    let firstCounterexample: String?
+    let reductionProbesFailed: Int
+    let reductionProbesPassed: Int
+    let reductionProbesTotal: Int
 
     var generationOnlyMs: Double {
         generationMs + screeningMs - propertyMs
@@ -66,6 +71,7 @@ private func runEtnaSeeds<Input>(
 
         var capturedReport: ExhaustReport?
         let timer = PropertyTimer()
+        let firstFailure = FirstFailureBox()
         let counterexample = #exhaust(
             refGen,
             .suppress(.all),
@@ -76,6 +82,9 @@ private func runEtnaSeeds<Input>(
             let lap = timer.start()
             let result = property(value)
             timer.stop(lap)
+            if result == false, firstFailure.serialized == nil {
+                firstFailure.serialized = String(describing: value)
+            }
             return result
         }
 
@@ -92,10 +101,81 @@ private func runEtnaSeeds<Input>(
             propertyMs: timer.milliseconds,
             reductionMs: report.reductionMilliseconds,
             totalMs: report.totalMilliseconds,
-            counterexample: counterexample.map { String(describing: $0) }
+            counterexample: counterexample.map { String(describing: $0) },
+            firstCounterexample: firstFailure.serialized,
+            reductionProbesFailed: report.reductionProbesWherePropertyFailed,
+            reductionProbesPassed: report.reductionProbesWherePropertyPassed,
+            reductionProbesTotal: report.reductionProbes
         ))
     }
     return results
+}
+
+/// Records the first input for which the property returned false during a run. The sampling phase precedes reduction, so the first chronological failure is the original (pre-reduction) counterexample.
+private final class FirstFailureBox: @unchecked Sendable {
+    var serialized: String?
+}
+
+// MARK: - Shrinking Result Log
+
+//
+// One JSON line per (task, seed), joining Exhaust's reported counterexamples
+// with the paper's ground-truth minima. Scripts/etna_ted.py consumes this file
+// to compute tree edit distances (Zhang-Shasha via the zss package, matching
+// the paper's metric).
+
+private struct EtnaShrinkRecord: Encodable {
+    let workload: String
+    let task: String
+    let seed: UInt64
+    let solved: Bool
+    let preCounterexample: String?
+    let postCounterexample: String?
+    let bugFindingInvocations: Int
+    let reductionInvocations: Int
+    let reductionMs: Double
+    let totalMs: Double
+    let reductionProbesFailed: Int
+    let reductionProbesPassed: Int
+    let reductionProbesTotal: Int
+}
+
+private final class EtnaShrinkLog: @unchecked Sendable {
+    static let shared = EtnaShrinkLog()
+
+    let path = FileManager.default.currentDirectoryPath + "/etna-shrinking-results.jsonl"
+    private var buffer = Data()
+
+    func append(workload: String, taskResults: [(name: String, results: [EtnaResult])]) {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+            for (taskName, results) in taskResults {
+                for result in results {
+                    let record = EtnaShrinkRecord(
+                        workload: workload,
+                        task: taskName,
+                        seed: result.seed,
+                        solved: result.solved,
+                        preCounterexample: result.firstCounterexample,
+                        postCounterexample: result.counterexample,
+                        bugFindingInvocations: result.screeningInvocations + result.randomInvocations,
+                        reductionInvocations: result.reductionInvocations,
+                        reductionMs: result.reductionMs,
+                        totalMs: result.totalMs,
+                        reductionProbesFailed: result.reductionProbesFailed,
+                        reductionProbesPassed: result.reductionProbesPassed,
+                        reductionProbesTotal: result.reductionProbesTotal
+                    )
+                    try buffer.append(encoder.encode(record))
+                    buffer.append(0x0A)
+                }
+            }
+            try buffer.write(to: URL(fileURLWithPath: path))
+        } catch {
+            print("[EtnaShrinkLog] write failed: \(error)")
+        }
+    }
 }
 
 // MARK: - Reporting
@@ -187,7 +267,8 @@ private func printEtnaSummary(workload: String, taskResults: [(name: String, res
 // MARK: - BST Task Registration
 
 //
-// 52 tasks from etna.toml, each a specific (mutant, property) pair.
+// 53 tasks matching the paper's Table 1: the 52 from etna.toml plus
+// union_6 × UnionUnionIdem.
 // Insert operations: insert_1, insert_2, insert_3
 // Delete operations: delete_4, delete_5
 // Union operations: union_6, union_7, union_8
@@ -307,6 +388,12 @@ private func registerEtnaBSTBenchmark(
             return bstStructurallyEqual(union(delete(key, tree1), insert(key, value, tree2)), insert(key, value, union(tree1, tree2)))
         })
     }
+    /// Haskell source: prop_UnionUnionIdem t = isBST t --> union t t =~= t, where (=~=) compares via toList.
+    func unionUnionIdem(_ union: @escaping UnionFn) -> (ReflectiveGenerator<EtnaBST>, @Sendable (EtnaBST) -> Bool) {
+        (etnaBSTTreeGen, { tree in
+            bstListsEqual(bstToList(union(tree, tree)), bstToList(tree))
+        })
+    }
     func unionUnionAssoc(_ union: @escaping UnionFn) -> (ReflectiveGenerator<(EtnaBST, EtnaBST, EtnaBST)>, @Sendable ((EtnaBST, EtnaBST, EtnaBST)) -> Bool) {
         (etnaBSTUnionUnionInputGen, { input in
             let (tree1, tree2, tree3) = input
@@ -330,7 +417,7 @@ private func registerEtnaBSTBenchmark(
         let del = bstDelete as DeleteFn
         let uni = bstUnion as UnionFn
 
-        // 52 tasks from etna.toml, grouped by mutant.
+        // 53 tasks (etna.toml's 52 plus UnionUnionIdem), grouped by mutant.
 
         for (mutName, mutIns) in insertMutants {
             let p1 = insertPost(mutIns); task("\(mutName) × InsertPost", p1.0, p1.1, &allResults)
@@ -372,9 +459,15 @@ private func registerEtnaBSTBenchmark(
             if mutName == "union_6" || mutName == "union_7" {
                 let p7 = unionValid(mutUni); task("\(mutName) × UnionValid", p7.0, p7.1, &allResults)
             }
+            // union_6 alone has UnionUnionIdem (task 53 in the paper's Table 1)
+            if mutName == "union_6" {
+                let p8 = unionUnionIdem(mutUni)
+                task("\(mutName) × UnionUnionIdem", p8.0, p8.1, &allResults)
+            }
         }
 
         printEtnaSummary(workload: "BST", taskResults: allResults, seedCount: seedCount)
+        EtnaShrinkLog.shared.append(workload: "BST", taskResults: allResults)
     }
 }
 
@@ -639,6 +732,7 @@ private func registerEtnaRBTBenchmark(
         }
 
         printEtnaSummary(workload: "RBT", taskResults: allResults, seedCount: seedCount)
+        EtnaShrinkLog.shared.append(workload: "RBT", taskResults: allResults)
     }
 }
 
@@ -703,6 +797,8 @@ private func registerEtnaSTLCBenchmark(
         }
 
         printEtnaSummary(workload: "STLC", taskResults: allResults, seedCount: seedCount)
+        EtnaShrinkLog.shared.append(workload: "STLC", taskResults: allResults)
+        print("[EtnaShrinkLog] results written to \(EtnaShrinkLog.shared.path)")
     }
 }
 

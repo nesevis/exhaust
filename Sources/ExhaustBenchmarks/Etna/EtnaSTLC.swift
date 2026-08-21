@@ -380,7 +380,7 @@ private func stlcGenOne(
 ) -> ReflectiveGenerator<STLCExpr> {
     switch type {
         case .bool:
-            return .oneOf(.just(.boolean(true)), .just(.boolean(false)))
+            return #gen(.bool()).map { value in STLCExpr.boolean(value) }
         case let .function(paramType, returnType):
             return stlcGenOne(returnType, context: [paramType] + context)
                 .map { body in STLCExpr.abstraction(paramType, body) }
@@ -477,12 +477,16 @@ private func stlcTypeGenRust(depth: Int) -> ReflectiveGenerator<STLCType> {
     if depth <= 0 {
         return .just(.bool)
     }
-    let half = depth / 2
-    return .oneOf(
-        weighted: (1, .just(.bool)),
-        (depth, #gen(stlcTypeGenRust(depth: half), stlcTypeGenRust(depth: half))
-            .map { param, ret in STLCType.function(param, ret) })
-    )
+    // Idiomatic variant: .recursive draws the depth as a reducible choice, so the reducer can collapse type subtrees by driving the depth toward 0. The layer weighting mirrors the upstream (1, TBool) vs (remaining, TFun) split; the depth decrements by 1 per layer where the upstream halves, a declared distribution change of the idiomatic lane.
+    return .recursive(
+        baseValue: .bool,
+        depthRange: 0 ... depth
+    ) { recurse, remaining in
+        .oneOf(
+            weighted: (1, .just(.bool)),
+            (remaining, #gen(recurse(), recurse()).map { param, ret in STLCType.function(param, ret) })
+        )
+    }
 }
 
 /// Rust source:
@@ -490,7 +494,41 @@ private func stlcTypeGenRust(depth: Int) -> ReflectiveGenerator<STLCType> {
 ///     if size == 0 { g.choose(&[gen_one, gen_var?]) }
 ///     else { g.choose(&[gen_one, gen_app, gen_abs?, gen_var?]) }
 ///   }
+/// Memoizes the type-directed term generator family. Generator construction is pure in `(type, context, depth)`, and the family is re-entered on every generation through the `.lazy` branches, so caching construction removes the per-sample rebuild cost. Generation is single-threaded; growth is bounded by the distinct index triples a run reaches.
+private final class STLCTermGenCache: @unchecked Sendable {
+    static let shared = STLCTermGenCache()
+
+    struct Key: Hashable {
+        let type: STLCType
+        let context: [STLCType]
+        let depth: Int
+    }
+
+    private var storage: [Key: ReflectiveGenerator<STLCExpr>] = [:]
+
+    func generator(for key: Key, make: () -> ReflectiveGenerator<STLCExpr>) -> ReflectiveGenerator<STLCExpr> {
+        if let cached = storage[key] {
+            return cached
+        }
+        let built = make()
+        storage[key] = built
+        return built
+    }
+}
+
 private func stlcTermOfTypeRust(
+    _ type: STLCType,
+    context: [STLCType],
+    depth: Int
+) -> ReflectiveGenerator<STLCExpr> {
+    STLCTermGenCache.shared.generator(
+        for: .init(type: type, context: context, depth: depth)
+    ) {
+        stlcTermOfTypeRustUncached(type, context: context, depth: depth)
+    }
+}
+
+private func stlcTermOfTypeRustUncached(
     _ type: STLCType,
     context: [STLCType],
     depth: Int
@@ -503,53 +541,38 @@ private func stlcTermOfTypeRust(
 
     // Rust order: [genOne, genApp?, genAbs?, genVar?]
     // At depth 0: [genOne, genVar?]
-    var optionCount = 1
+    //
+    // Dispatch through .oneOf rather than an integer choice + bind so the ChoiceGraph sees pick nodes: branch pivots and descendant promotion form scopes only over picks, and an integer-bind dispatch hides every term node from the reducer's replacement machinery. The option list matches the upstream `g.choose` with uniform weighting.
+    var options: [ReflectiveGenerator<STLCExpr>] = [.lazy { stlcGenOne(type, context: context) }]
+
     if depth > 0 {
-        optionCount += 1 // genApp
-        if isFunctionType != nil { optionCount += 1 }
-    }
-    if matchingIndices.isEmpty == false { optionCount += 1 }
-
-    if optionCount == 1 {
-        return stlcGenOne(type, context: context)
-    }
-
-    return #gen(.int(in: 0 ... (optionCount - 1), scaling: .constant)).bind { choice in
-        var index = choice
-
-        // genOne
-        if index == 0 {
-            return stlcGenOne(type, context: context)
-        }
-        index -= 1
-
-        // genApp (depth > 0)
-        if depth > 0 {
-            if index == 0 {
-                let half = depth / 2
-                return stlcTypeGenRust(depth: half).bind { argType in
-                    let funcGen = stlcTermOfTypeRust(.function(argType, type), context: context, depth: half)
-                    let argGen = stlcTermOfTypeRust(argType, context: context, depth: half)
-                    return #gen(funcGen, argGen).map { function, argument in
-                        STLCExpr.application(function, argument)
-                    }
-                }
+        let half = depth / 2
+        // genApp: the term subgenerators stay deferred inside the type bind.
+        options.append(.lazy { stlcTypeGenRust(depth: half).bind { argType in
+            let funcGen = stlcTermOfTypeRust(.function(argType, type), context: context, depth: half)
+            let argGen = stlcTermOfTypeRust(argType, context: context, depth: half)
+            return #gen(funcGen, argGen).map { function, argument in
+                STLCExpr.application(function, argument)
             }
-            index -= 1
+        } })
 
-            // genAbs (function types only, depth > 0)
-            if let (paramType, returnType) = isFunctionType {
-                if index == 0 {
-                    return stlcTermOfTypeRust(returnType, context: [paramType] + context, depth: depth - 1)
-                        .map { body in STLCExpr.abstraction(paramType, body) }
-                }
-                index -= 1
-            }
+        // genAbs (function types only): deferred so the recursive construction happens only when the pick selects this branch.
+        if let (paramType, returnType) = isFunctionType {
+            options.append(.lazy {
+                stlcTermOfTypeRust(returnType, context: [paramType] + context, depth: depth - 1)
+                    .map { body in STLCExpr.abstraction(paramType, body) }
+            })
         }
-
-        // genVar
-        return #gen(.element(from: matchingIndices)).map { STLCExpr.variable($0) }
     }
+
+    if matchingIndices.isEmpty == false {
+        options.append(.lazy { #gen(.element(from: matchingIndices)).map { STLCExpr.variable($0) } })
+    }
+
+    if options.count == 1 {
+        return options[0]
+    }
+    return .oneOf(options)
 }
 
 let etnaSTLCExprGenRust: ReflectiveGenerator<STLCExpr> =
