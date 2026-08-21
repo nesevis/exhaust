@@ -122,6 +122,10 @@ private final class ConstructionCounter: @unchecked Sendable {
     func increment() {
         count += 1
     }
+
+    var isEmpty: Bool {
+        count < 1
+    }
 }
 
 private final class ValueRecorder: @unchecked Sendable {
