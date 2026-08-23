@@ -13,16 +13,17 @@ extension FuzzRunner {
             case .off:
                 break
             case .activated:
-                // Per-attempt weights, so the activation distribution roams every attempt rather than every epoch.
-                let mask = SwarmMask.forIndex(counts.mutationAttempts, rootSeed: configuration.seed)
+                // Per-candidate weights, so the activation distribution roams every produced candidate rather than every epoch.
+                let mask = SwarmMask.forIndex(swarmDerivationIndex, rootSeed: configuration.seed)
                 candidate = mask.applyActivated(to: candidate, prng: &prng)
             case .binary:
                 let epoch = SwarmMask.forIndex(
-                    counts.mutationAttempts / FuzzTunables.swarmEpochAttempts,
+                    swarmDerivationIndex / FuzzTunables.swarmEpochAttempts,
                     rootSeed: configuration.seed
                 )
                 candidate = epoch.apply(to: candidate, prng: &prng)
         }
+        swarmDerivationIndex += 1
         return (candidate, armsMask)
     }
 
@@ -52,7 +53,7 @@ extension FuzzRunner {
                 layout: parent.mutationLayout,
                 prng: &prng
             ),
-            1 << UInt8(intensityDraw)
+            1 << UInt8(MutationArm(intensity: intensity).rawValue)
         )
     }
 
@@ -103,10 +104,11 @@ extension FuzzRunner {
         if candidate == parent.sequence {
             // Nothing perturbed the parent (splice arms found no usable bind region or donor, or a band mutation was a no-op on this sequence), and the corpus would reject the duplicate. Fall back to one band mutation so the attempt always explores.
             let intensityDraw = prng.next(upperBound: UInt64(MutationIntensity.allCases.count))
-            armsMask |= 1 << UInt8(intensityDraw)
+            let intensity = MutationIntensity.allCases[Int(intensityDraw)]
+            armsMask |= 1 << UInt8(MutationArm(intensity: intensity).rawValue)
             candidate = FuzzMutator.mutate(
                 candidate,
-                intensity: MutationIntensity.allCases[Int(intensityDraw)],
+                intensity: intensity,
                 prng: &prng
             )
         }

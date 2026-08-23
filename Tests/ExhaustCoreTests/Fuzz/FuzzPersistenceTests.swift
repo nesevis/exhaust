@@ -35,6 +35,7 @@ struct FuzzPersistenceTests {
 
     @Test("Malformed and foreign payloads decode to nil, never to garbage")
     func codecRejectsMalformed() {
+        // Structural balance (matched sequence/bind/group open-and-close markers) is deliberately not validated by decode: the materializer is the validator, and an unbalanced sequence fails there. The codec rejects only what it cannot represent.
         #expect(ChoiceSequenceCodec.decode("not base64 at all!") == nil)
         // Valid base64, truncated content: a value marker with no payload behind it.
         #expect(ChoiceSequenceCodec.decode(Data([2, 8]).base64EncodedString()) == nil)

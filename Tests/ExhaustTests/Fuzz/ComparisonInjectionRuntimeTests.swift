@@ -41,6 +41,59 @@ struct ComparisonInjectionRuntimeTests {
         #expect(report.clusters.isEmpty)
     }
 
+    @Test("Graft candidate production runs inside its attribution bracket")
+    func graftProductionInsideBracket() {
+        // The graft's `.exact` materializations execute the generator transform closure — user code that may be instrumented — so its coverage must land in the injected attempt's own bracket. Both the transform and the property record the count of opened brackets at the moment they run; if production ran before the bracket opened, the injected candidate's transform snapshot would belong to the previous bracket and its signature would be systematically smaller than a mutation candidate's.
+        let source = OperandScriptedSource(target: UInt64(target), emitsComparisons: true) { value in
+            (value as? BracketProbePair).map { $0.first % 40 }
+        }
+        let events = UnsafeSendableBox<[BracketEvent]>([])
+        // The transform must stay a simple initializer call over the bare parameters or #gen cannot synthesize the backward mapping, the generator stops being reflective, and the graft path under test never runs — so the probe lives in the composite's initializer instead of the closure body.
+        BracketProbePair.onMaterialize = {
+            events.value.append(.transform(bracket: source.attemptsOpened))
+        }
+        defer {
+            BracketProbePair.onMaterialize = nil
+        }
+        let generator = #gen(.int(in: 0 ... Int.max), .int(in: 0 ... Int.max)) { first, second in
+            BracketProbePair(first: first, second: second)
+        }
+        let report = __ExhaustRuntime.runExploreTimeCore(
+            gen: generator.gen,
+            generatorIsReflective: generator.isReflective,
+            time: .seconds(60),
+            settings: [.replay(1), .suppress(.all)],
+            source: source,
+            configure: { configuration in
+                configuration.attemptLimit = 20000
+            },
+            property: { [target] (pair: BracketProbePair) in
+                events.value.append(.property(bracket: source.attemptsOpened, isTarget: pair.first == target))
+                return pair.first == target ? .fail(.returnedFalse) : .pass
+            }
+        )
+        #expect(report.clusters.isEmpty == false, "The graft must solve the gate for the bracket assertion to mean anything")
+
+        let log = events.value
+        let targetIndex = log.firstIndex { event in
+            if case let .property(_, isTarget) = event {
+                return isTarget
+            }
+            return false
+        }
+        guard let targetIndex, case let .property(targetBracket, _) = log[targetIndex] else {
+            Issue.record("No property invocation reached the target value")
+            return
+        }
+        let producedInsideBracket = log[..<targetIndex].contains { event in
+            if case let .transform(bracket) = event {
+                return bracket == targetBracket
+            }
+            return false
+        }
+        #expect(producedInsideBracket, "The injected candidate's materialization ran outside the attribution bracket that evaluated it")
+    }
+
     // MARK: - Fixture
 
     private struct Pair: Equatable, Sendable {
@@ -91,6 +144,26 @@ struct ComparisonInjectionRuntimeTests {
     }
 }
 
+/// One observation for the bracket-placement test: which attribution bracket was open when a transform or property ran.
+private enum BracketEvent {
+    case transform(bracket: Int)
+    case property(bracket: Int, isTarget: Bool)
+}
+
+/// The bracket test's composite: its initializer records which bracket was open when materialization built it, standing in for instrumented user code inside a generator transform. The hook is static because the transform closure must stay a bare initializer call for #gen to synthesize the backward mapping; the suite is `.serialized`, so the shared slot is never contended.
+private struct BracketProbePair: Sendable {
+    nonisolated(unsafe) static var onMaterialize: (() -> Void)?
+
+    let first: Int
+    let second: Int
+
+    init(first: Int, second: Int) {
+        Self.onMaterialize?()
+        self.first = first
+        self.second = second
+    }
+}
+
 /// A fake coverage source that reports value-derived edges so the run seeds a corpus and reaches mutation, and scripts comparison records — the gate's constant under one site, plus a shallow decoy firing every attempt with varying operands under its own site, so injection must pick the target's site through the uniform site draw rather than being handed the only value in the pool.
 private final class OperandScriptedSource: CoverageSource, @unchecked Sendable {
     let edgeCount = 64
@@ -110,8 +183,12 @@ private final class OperandScriptedSource: CoverageSource, @unchecked Sendable {
         true
     }
 
+    /// The number of attribution brackets opened so far. The bracket-placement test reads it from the generator transform and the property to prove both execute inside the same bracket.
+    private(set) var attemptsOpened = 0
+
     func beginAttempt() {
         current = nil
+        attemptsOpened += 1
     }
 
     func noteValue(_ value: Any) {

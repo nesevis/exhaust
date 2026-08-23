@@ -192,7 +192,14 @@ public extension __ExhaustRuntime {
         line: UInt,
         column: UInt
     ) async -> FuzzReport {
-        await dispatchToGCD(reserving: LaneReservation.fuzz) {
+        // Persistence prepares here on the test task, before the hop: reportFuzzResumeFindings records the predecessor's trap finding, and issue recording resolves the current test from task-locals a GCD worker does not carry. Context construction performs no writes, so nothing about it needs the fuzz lane.
+        let persistence = prepareFuzzPersistence(
+            fileID: fileID,
+            filePath: filePath,
+            line: line,
+            column: column
+        )
+        return await dispatchToGCD(reserving: LaneReservation.fuzz) {
             guard let adapter = makeAdapter() else {
                 return .empty(
                     termination: .invalidConfiguration("Command generator must be a top-level pick (.oneOf). Concurrent testing requires per-command branch structure."),
@@ -209,12 +216,7 @@ public extension __ExhaustRuntime {
                     configuration.samplingPlateauWindow = FuzzTunables.specSamplingPlateauWindow
                 },
                 hooks: adapter.hooks,
-                persistence: prepareFuzzPersistence(
-                    fileID: fileID,
-                    filePath: filePath,
-                    line: line,
-                    column: column
-                ),
+                persistence: persistence,
                 property: adapter.property
             )
         }

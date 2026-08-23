@@ -19,7 +19,7 @@ Give Exhaust a time budget and let it search for bugs by observing which branche
 }
 ```
 
-The test reads like any other `#exhaust` test: a generator, a property, and `#expect` assertions. The differences are the `time:` parameter and the `async`/`await` (the call must be awaited because the run occupies its thread for the full budget).
+The test reads like any other `#exhaust` test: a generator, a property, and `#expect` assertions. The differences are the `time:` parameter and the `async`/`await`. The search is single-threaded by design: one thread generates each input, runs the property, and reads back the coverage counters, so every measurement belongs to exactly one attempt (<doc:#Getting-a-clean-signal> covers what that buys and what it asks of you). That thread is occupied for the entire budget, whichever form you write. The async form moves the run onto a dedicated thread away from the cooperative pool.
 
 > Important: Fuzz tests must run in isolation. The branch counters Exhaust reads are shared by the whole process, so any other test running in parallel executes instrumented code in the middle of an attempt and distorts the feedback signal the search depends on. Give fuzz tests their own test target and mark the suite `.serialized`; for the strongest signal, filter each test run down to a single fuzz test (`swift test --filter FuzzTests.fuzzMyLibrary`) so nothing else runs in the process at all. Isolation also keeps minute-scale time budgets out of your everyday `swift test` runs. <doc:#Getting-a-clean-signal> covers the full set of conditions.
 
@@ -180,13 +180,13 @@ When a run discovers faults, the terminal shows a summary. This is real output f
 Coverage: 103 of 1171 instrumented edges hit; 1068 never hit (module-wide count,
   includes code the property never calls).
 Estimated chance the next attempt covers a new edge: about 1 in 2489.
-About 104 edges look reachable for this generator and property.
-1 of those remains uncovered (scoped to this run's search space, not the module).
+At least 104 edges look reachable for this generator and property.
+At least 1 of those remains uncovered (scoped to this run's search space, not the module).
 Stopped 0.3s early: no coverage-novel corpus admission in the plateau window;
   the unused budget was returned.
 
 Cluster 1 WindowError
-  223 failures, 7 reduced, found via sampling
+  7 reduced, 216 more attributed by symptom, found via sampling
   Counterexample: Message(mode: .heartbeat, flags: 0, checksum: 0, region: 6, payload: [])
   suspects:
     - Parser.decode (Parser.swift)
@@ -194,7 +194,7 @@ Cluster 1 WindowError
     - validateWindow (Parser.swift)
 
 Cluster 2 IntegrityError
-  154 failures, 6 reduced (1 normalized in), found via sampling
+  6 reduced, 148 more attributed by symptom (1 normalized in), found via sampling
   Counterexample: Message(mode: .data, flags: 3, checksum: 0, region: 5, payload: [0, 0])
   suspects:
     - integrityCheck (Parser.swift:121)
@@ -202,7 +202,7 @@ Cluster 2 IntegrityError
     - decodeData (Parser.swift)
 
 Cluster 3 ChecksumError
-  454 failures, 8 reduced, found via mutation
+  8 reduced, 446 more attributed by symptom, found via mutation
   Counterexample: Message(mode: .handshake, flags: 0, checksum: 65535, region: 0, payload: [])
   suspects:
     - Parser.decode (Parser.swift)
@@ -217,9 +217,9 @@ Reproduce: .replay(1)
 
 **The overhead figure is about the property, not the pipeline.** 97% here means the property is cheap enough that generation, mutation, and coverage bookkeeping dominate, which is expected for a small parser fixture and is not actionable. It is worth attention when a property that does real work still reports a high fraction: then the pipeline is genuinely eating the budget.
 
-**The edge count is the module, not the run.** The 1171 edges include everything in the instrumented module, most of which this property and generator can never reach. The Chao1 estimate is scoped to what this run can actually reach, which is a more honest denominator than module size.
+**The edge count is the module, not the run.** The 1171 edges include everything in the instrumented module, most of which this property and generator can never reach. The reachable-edge estimate (Chao2, sharpened to iChao2 when the run's incidence counts allow it) is scoped to what this run can actually reach, which is a more honest denominator than module size.
 
-Read it as an estimate with a known lean rather than a measurement. Chao1 assumes one sampling frame, and a run is a mixture of three phases with different distributions; the mutation phase also concentrates on regions that already paid off, which suppresses the singleton count the estimator reads. Both effects push the same way, toward reporting the search as more complete than it is. Treat a rising estimate as evidence, and a flat one as weak evidence.
+Read it as a lower bound with a known lean rather than a measurement. The estimator assumes one sampling frame, and a run is a mixture of three phases with different distributions; the mutation phase also concentrates on regions that already paid off, which suppresses the singleton count the estimator reads. Both effects push the same way, toward reporting the search as more complete than it is. Treat a rising estimate as evidence, and a flat one as weak evidence.
 
 **Late-discovered clusters are foregrounded.** A cluster found in the final quarter of the run with few instances is the strongest signal that extending the budget would find more.
 
@@ -229,7 +229,7 @@ For the spec form the report has the same structure, but each cluster's reduced 
 
 ```
 Cluster 1 BoundedQueueError
-  11028 failures, 25 reduced, found via sampling
+  25 reduced, 11003 more attributed by symptom, found via sampling
   Counterexample: [.enqueue(value: 0), .clear, .enqueue(value: 0), .clear]
   suspect:
     - BoundedQueue.clear (BoundedQueue.swift:123)
@@ -256,6 +256,7 @@ The generator form takes ``PropertyFuzzSettings``. The spec form takes ``StateMa
 | `.suppress(.attachments)` | Stops the run recording its per-cluster and summary attachments. Use when a test loops fuzz runs and the attachments would only accumulate noise in the result bundle. |
 | `.suppress(.all)` | All of the above. |
 | `.log(.info)` | Raises log verbosity (default is `.error`). |
+| `.failFast` | Stops the run as soon as its first fault is classified, instead of spending the remaining budget cataloging every distinct fault. The failing input is still reduced first. Use where any failure fails the run, such as a merge gate. |
 | `.commandLimit(n)` | Maximum commands per generated sequence. Default 40. Spec form only. |
 | `.parallelize(lanes:)` | Lane count for `.tasks` specs. Default two. Spec form only. |
 
@@ -265,7 +266,7 @@ Short budgets (seconds to a minute) are useful during development: confirm the i
 
 Longer budgets (five to thirty minutes) give the mutation phase time to work. A fifteen-minute run on an M-series machine completes hundreds of thousands of attempts; each attempt that reaches a new branch becomes a candidate for further modification.
 
-Overnight budgets (hours) suit nightly CI. The report's "estimated chance the next attempt covers a new edge" line is the one to steer by: when it drops below one in a million, the search has saturated and further time buys diminishing returns. That figure is a Good-Turing estimate, whose consistency argument is the stronger of the two the report carries. The Chao1 reachable-edge line beside it is more sensitive to the search's own bias, so prefer the discovery-probability line when the two disagree.
+Overnight budgets (hours) suit nightly CI. The report's "estimated chance the next attempt covers a new edge" line is the one to steer by: when it drops below one in a million, the search has saturated and further time buys diminishing returns. That figure is a discovery-probability estimate denominated in edge incidences rather than attempts, and its consistency argument is the stronger of the two the report carries. The Chao2 reachable-edge line beside it is more sensitive to the search's own bias, so prefer the discovery-probability line when the two disagree.
 
 ## Early termination
 
@@ -300,6 +301,8 @@ Rerun the test after a crash and Exhaust reports the trapping candidate as a fin
 Checkpoints live in the system temporary directory and are removed when a run completes normally, so there is nothing to add to `.gitignore`. Set `EXHAUST_STATE_DIR` to relocate them, for example on CI where each step gets a fresh temporary directory. Set `EXHAUST_RESUME=0` to ignore a crashed predecessor's state and start fresh.
 
 If the instrumented code changed between the crash and the rerun, the saved inputs' coverage records may no longer match the new binary. Exhaust detects this and re-measures the restored inputs against the rebuilt code before resuming.
+
+Checkpoints are keyed by test file and line, not by process, so two processes fuzzing the same test at the same time (a local run alongside a CI runner on a shared temporary directory, or two concurrent `swift test` invocations) overwrite each other's checkpoints and can misread each other's crash state as their own. Point each process at its own `EXHAUST_STATE_DIR` when runs of the same test can overlap.
 
 ## Topics
 

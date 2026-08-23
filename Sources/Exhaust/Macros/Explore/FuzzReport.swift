@@ -180,6 +180,9 @@ public struct FuzzReport: Sendable {
     /// Final source-located property invocations used to report assertion-closure failures.
     public private(set) var diagnosticInvocations: Int
 
+    /// Whether this run consumed a crashed predecessor's checkpoint, restoring its corpus and fault inventory. Package-visible so issue reporting can tell "the budget was spent by crashed predecessors" from "the property was never invoked".
+    package private(set) var resumedFromCrash = false
+
     /// Entries accepted into the corpus across all phases.
     public let corpusEntryCount: Int
 
@@ -313,6 +316,11 @@ package extension FuzzReport {
         diagnosticInvocations += 1
     }
 
+    /// Marks the run as having consumed a crashed predecessor's checkpoint. Called by the core once the runner returns, because the raw ``FuzzRunResult`` does not carry persistence state.
+    mutating func recordCrashResume() {
+        resumedFromCrash = true
+    }
+
     /// Builds the public report from the runner's raw result. Cluster timestamps are converted from monotonic clock readings to run-relative durations.
     ///
     /// - Parameter symbolizeEdges: Whether to resolve discriminating edges to source locations through the live PC table. True only for sancov-backed runs — a synthetic source's edge indices do not address real program counters.
@@ -349,9 +357,18 @@ package extension FuzzReport {
                 unnormalizedMemberCount: cluster.unnormalizedMemberCount,
                 isLikelySplit: cluster.signatures.count > 1,
                 discoveringPhase: Phase(phase: cluster.discoveringPhase),
-                firstSeen: TimeSpan(nanoseconds: cluster.firstSeenNanoseconds &- runStartNanoseconds),
+                // Clamped like every other timestamp conversion in the pipeline: a restored record that violates the ordering assumption must read as zero, not as a wrapped 584-year duration.
+                firstSeen: TimeSpan(
+                    nanoseconds: cluster.firstSeenNanoseconds > runStartNanoseconds
+                        ? cluster.firstSeenNanoseconds - runStartNanoseconds
+                        : 0
+                ),
                 firstSeenAttempt: cluster.firstSeenAttempt,
-                lastSeen: TimeSpan(nanoseconds: cluster.lastSeenNanoseconds &- runStartNanoseconds),
+                lastSeen: TimeSpan(
+                    nanoseconds: cluster.lastSeenNanoseconds > runStartNanoseconds
+                        ? cluster.lastSeenNanoseconds - runStartNanoseconds
+                        : 0
+                ),
                 discriminatingEdges: rankedEdges,
                 necessaryEdgeCount: discrimination?.necessaryEdges.count ?? 0,
                 nearMissEdgeIndices: discrimination?.nearMissDistinguishingEdges.indices ?? [],

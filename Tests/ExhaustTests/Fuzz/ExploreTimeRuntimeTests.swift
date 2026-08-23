@@ -23,6 +23,86 @@ struct ExploreTimeRuntimeTests {
         #expect(report?.elapsed == .zero)
     }
 
+    // MARK: - Per-Variant Reporting Channel
+
+    // One test per value entry point of the shape "the run's recorded issue reaches the current test". The recorded issue here is the missing-instrumentation error (the suite runs uninstrumented, and the override pins that), which travels the same reportFuzzIssues tail as the fault inventory. withKnownIssue is task-scoped, so a variant that reports off the test task — as the async Bool variant once did from inside its GCD closure — fails its test here instead of silently losing the report.
+
+    @Test("The sync Bool entry point records its issue on the test task")
+    func reportingChannelSyncBool() {
+        FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = false }
+        defer {
+            FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = nil }
+        }
+        nonisolated(unsafe) var report: FuzzReport?
+        withKnownIssue {
+            report = __ExhaustRuntime.__exploreTime(
+                #gen(.int(in: 0 ... 100)),
+                time: .seconds(60),
+                settings: []
+            ) { value in
+                value >= 0
+            }
+        }
+        #expect(report?.termination == .instrumentationMissing)
+    }
+
+    @Test("The sync expect entry point records its issue on the test task")
+    func reportingChannelSyncExpect() {
+        FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = false }
+        defer {
+            FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = nil }
+        }
+        nonisolated(unsafe) var report: FuzzReport?
+        withKnownIssue {
+            report = __ExhaustRuntime.__exploreTimeExpect(
+                #gen(.int(in: 0 ... 100)),
+                time: .seconds(60),
+                settings: [],
+                property: { _ in },
+                detection: { _ in }
+            )
+        }
+        #expect(report?.termination == .instrumentationMissing)
+    }
+
+    @Test("The async Bool entry point records its issue on the test task, after the GCD hop")
+    func reportingChannelAsyncBool() async {
+        FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = false }
+        defer {
+            FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = nil }
+        }
+        nonisolated(unsafe) var report: FuzzReport?
+        await withKnownIssue {
+            report = await __ExhaustRuntime.__exploreTimeAsync(
+                #gen(.int(in: 0 ... 100)),
+                time: .seconds(60),
+                settings: []
+            ) { value in
+                value >= 0
+            }
+        }
+        #expect(report?.termination == .instrumentationMissing)
+    }
+
+    @Test("The async expect entry point records its issue on the test task, after the GCD hop")
+    func reportingChannelAsyncExpect() async {
+        FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = false }
+        defer {
+            FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = nil }
+        }
+        nonisolated(unsafe) var report: FuzzReport?
+        await withKnownIssue {
+            report = await __ExhaustRuntime.__exploreTimeExpectAsync(
+                #gen(.int(in: 0 ... 100)),
+                time: .seconds(60),
+                settings: [],
+                property: { _ in },
+                detection: { _ in }
+            )
+        }
+        #expect(report?.termination == .instrumentationMissing)
+    }
+
     @Test("An unresolvable replay seed is a configuration error, not a run")
     func invalidReplaySeed() {
         let report = __ExhaustRuntime.runExploreTimeCore(

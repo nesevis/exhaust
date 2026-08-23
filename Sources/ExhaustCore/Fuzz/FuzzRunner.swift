@@ -111,6 +111,11 @@ package final class FuzzRunner<Output> {
     var counts = FuzzRunCounts()
     var timing = FuzzRunTiming()
 
+    /// Derivation index for the swarm mask, advanced once per produced mutation candidate in ``nextCandidate(from:)``.
+    ///
+    /// Deliberately not `counts.mutationAttempts`: that counter is a report statistic whose increment sites serve attempt accounting, and deriving the mask schedule from it made any reordering of bookkeeping against candidate production a silent change to every activated-swarm run. This index has one meaning and one increment site.
+    var swarmDerivationIndex = 0
+
     // MARK: - Crash-Recovery State
 
     // Owned by the recovery extension (see FuzzRunner+Recovery.swift); declared here because stored properties cannot live in an extension.
@@ -446,7 +451,10 @@ package final class FuzzRunner<Output> {
                     case .evaluated:
                         break
                     case .exhausted:
-                        break
+                        // A fully enumerated domain with an empty mutable tier has nothing left to produce: the interpreter's stream stays exhausted and tier membership only changes on admissions, which need evaluations. Waiting out the plateau window instead would burn up to half the budget on a hot loop.
+                        let now = monotonicNanoseconds()
+                        let deadline = startNanoseconds + configuration.budgetNanoseconds
+                        return .plateau(unusedNanoseconds: deadline > now ? deadline - now : 0)
                     case let .generationError(message):
                         return .generationError(message)
                 }
@@ -463,7 +471,7 @@ package final class FuzzRunner<Output> {
                 let mutatorStart = monotonicNanoseconds()
                 let (mutated, armsMask) = nextCandidate(from: parent)
                 timing.mutatorNanoseconds += monotonicNanoseconds() - mutatorStart
-                counts.mutationAttempts += 1
+                openMutationAttempt()
                 evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: armsMask)
             }
         }
@@ -574,6 +582,11 @@ package final class FuzzRunner<Output> {
 
     // MARK: - Shared Attempt Plumbing
 
+    /// The sole incrementer of `counts.mutationAttempts`: each mutation-phase candidate opportunity opens through here exactly once, so the invariant lives in one place instead of three coordinated comments. Opened by the producer, before materialization, so candidates the materializer discards still count. The child loop and the field graft open their own opportunities; parentless paths (the empty-tier fallback and whole-value injection) open theirs through ``recordAttempt(value:tree:sequence:sequenceHash:deferredTreeRebuild:verdict:hits:convergence:generation:phase:isBoundaryDerived:parentIndex:)``.
+    func openMutationAttempt() {
+        counts.mutationAttempts += 1
+    }
+
     /// The outcome of one fresh interpreter sample, shared by Phase 2 and the mutation phase's empty-tier fallback.
     private enum FreshSampleOutcome {
         case evaluated(CorpusAdmission)
@@ -641,7 +654,7 @@ package final class FuzzRunner<Output> {
         if capturesComparisons {
             source.endComparisonCapture()
         }
-        // Reused across attempts: a fresh array grows through roughly eleven reallocations on the way to the few thousand edges a typical attempt lights, and the contents never outlive the call.
+        // Reused across attempts: a fresh array grows through roughly eleven reallocations on the way to the few thousand edges a typical attempt lights. Admitted candidates retain the returned array in CorpusEntry.hits (for restore re-offer), so the removeAll after each admission triggers one CoW reallocation; every non-admitting attempt reuses the capacity.
         hitsBuffer.removeAll(keepingCapacity: true)
         source.forEachHitEdge { edge, hitCount in
             hitsBuffer.append((edge, hitCount))
@@ -679,7 +692,7 @@ package final class FuzzRunner<Output> {
                 counts.samplingAttempts += 1
             case .mutation:
                 if parentIndex == nil {
-                    counts.mutationAttempts += 1
+                    openMutationAttempt()
                 }
         }
         counts.evaluatedSearchCases += 1

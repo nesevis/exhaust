@@ -203,6 +203,85 @@ struct ExploreTimeResumeTests {
         #expect(context.resumeDocument == nil)
         #expect(context.survivor == nil)
     }
+
+    @Test("A resume whose predecessor consumed the whole budget reports the restored inventory, not the pointless-run error")
+    func resumeWithConsumedBudget() throws {
+        let directory = scratchDirectory()
+        let store = FuzzProgressStore(directory: directory)
+        defer {
+            store.removeAll()
+        }
+        let gen = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)
+
+        var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1, maxRuns: UInt64.max)
+        let (_, tree) = try #require(try interpreter.next())
+        let sequence = ChoiceSequence.flatten(tree)
+        let clusterRecord = FuzzProgressDocument.ClusterRecord(
+            cluster: FaultCluster(
+                restoredID: 0,
+                reducedSequence: sequence,
+                reducedDescription: "planted-restored-cluster",
+                reducedKey: "planted-restored-cluster",
+                signatures: [],
+                symptoms: [.returnedFalse],
+                instanceCount: 3,
+                reducedCount: 1,
+                firstSeenNanoseconds: 1_000_000,
+                lastSeenNanoseconds: 2_000_000,
+                firstSeenAttempt: 1,
+                unnormalizedMemberCount: 0,
+                discoveringPhase: .mutation
+            ),
+            epochNanoseconds: 0
+        )
+        // The predecessor consumed the entire declared budget before it died, so the remaining slice is zero and this run evaluates nothing.
+        try store.write(FuzzProgressDocument(
+            metadata: FuzzProgressDocument.Metadata(
+                seed: 9,
+                budgetNanoseconds: 60_000_000_000,
+                consumedNanoseconds: 60_000_000_000,
+                lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
+                pcTableHash: 0,
+                edgeCount: 32
+            ),
+            clusters: [clusterRecord],
+            snapshot: []
+        ))
+        let context = FuzzPersistenceContext(store: store, resumeEnabled: true)
+        #expect(context.resumeDocument != nil)
+
+        let report = __ExhaustRuntime.runExploreTimeCore(
+            gen: gen,
+            time: .seconds(60),
+            settings: [.replay(9), .suppress(.all)],
+            source: resumeSource(),
+            configure: nil,
+            persistence: context,
+            property: { _ in .pass }
+        )
+        #expect(report.evaluatedSearchCases == 0)
+        #expect(report.resumedFromCrash)
+        #expect(report.clusters.contains { $0.reducedDescription == "planted-restored-cluster" })
+
+        // The recorded issues are the consumed-budget explanation and the restored inventory. The "asserts nothing" pointless-run error must not fire: the generator and budget are both fine, and blaming them would send the reader in the wrong direction.
+        nonisolated(unsafe) var sawConsumedBudgetMessage = false
+        withKnownIssue {
+            __ExhaustRuntime.reportFuzzIssues(
+                report: report,
+                suppressIssueReporting: false,
+                fileID: #fileID,
+                filePath: #filePath,
+                line: #line,
+                column: #column
+            )
+        } matching: { issue in
+            if issue.description.contains("already consumed by crashed predecessors") {
+                sawConsumedBudgetMessage = true
+            }
+            return issue.description.contains("asserts nothing") == false
+        }
+        #expect(sawConsumedBudgetMessage)
+    }
 }
 
 // MARK: - Helpers

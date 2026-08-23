@@ -56,8 +56,9 @@ package final class FuzzBreadcrumb: @unchecked Sendable {
 
     /// Records the candidate about to be evaluated. Called on the loop thread before every property invocation.
     package func record(candidateHash: UInt64, parentHash: UInt64) {
-        mapping.storeBytes(of: candidateHash.littleEndian, toByteOffset: 0, as: UInt64.self)
+        // Parent first, candidate last. The two stores are not atomic together, and a process death between them (leaked concurrent work trapping; the loop thread itself runs no user code here) must not pair the new candidate with the previous slot's parent — resume would quarantine an unrelated corpus entry. The reversed tear pairs the previous, already-survived candidate with its successor's parent, which quarantines nothing that matters.
         mapping.storeBytes(of: parentHash.littleEndian, toByteOffset: 8, as: UInt64.self)
+        mapping.storeBytes(of: candidateHash.littleEndian, toByteOffset: 0, as: UInt64.self)
     }
 
     /// Clears the slot. Called after a run completes normally so a later resume does not misread a survived evaluation as a trap.

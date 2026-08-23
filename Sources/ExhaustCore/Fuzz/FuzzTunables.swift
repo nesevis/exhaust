@@ -1,6 +1,6 @@
 // Central home for the fuzz search's tunable constants.
 //
-// Every value here is an eyeballed default pending empirical tuning against the ExploreHarness fixtures. Keeping them in one namespace makes the tuning surface visible and keeps magic numbers out of the search loop.
+// Values land as eyeballed defaults and graduate as they are measured; several below carry their own measurement provenance (the plateau floor's worked example, the spec command limit's calibration sweep, the splice probability's AFL citation). A constant without such a note is still an eyeballed default. Keeping them in one namespace makes the tuning surface visible and keeps magic numbers out of the search loop.
 
 import Foundation
 
@@ -153,7 +153,7 @@ package struct FuzzExperiments: Sendable, Equatable {
     /// The swarm generation mode. Defaults to ``SwarmMode/activated`` — the diversity gain over no swarm is robust (~1.7x more distinct fault shapes) at no measurable throughput cost. Set `swarmMode=off` to disable swarm generation, or `swarmMode=binary` for the legacy per-epoch mask. See ADR 0006.
     package var swarmMode: SwarmMode = .activated
 
-    /// Creates the default knob set: gated mechanisms off until their gates pass.
+    /// Creates the default knob set: mechanisms whose gates passed default on (`normalization`, `escapeBackoff`, `championArchive`, and the activated swarm mode); the rest stay off until theirs do.
     package init() {}
 
     /// A parse failure with the offending fragment, rendered into the run's configuration error. Silent typos would invalidate benchmark arms, so unknown knobs are a hard error rather than a warning.

@@ -4,6 +4,8 @@
 //
 // Each record carries the comparison's call-site address (the return address into the instrumented system under test), so the harvest can group operands by the comparison that produced them. Grouping matters because a shallow comparison in a cascade fires on every attempt and would otherwise flood a flat pool, drowning the constants of deeper comparisons that only fire once earlier ones match.
 //
+// Past the capacity within one attempt, new records overwrite the oldest: last-N-wins. The alternative, dropping the tail, is the wrong bias for exactly the cascades the pool exists to solve — deep comparisons fire late in a comparison-heavy attempt, so a first-N policy would discard the frontier operands and keep the shallow decoys.
+//
 // The cursor and writes are deliberately non-atomic, matching the inline-8bit-counter model: an instrumented SUT may run comparisons on more than one thread, and a lost or torn record is harmless.
 
 #define EXHAUST_CMP_CAPACITY 4096
@@ -17,10 +19,7 @@ static inline void exhaust_cmp_record(uint64_t site, uint64_t arg1, uint64_t arg
     if (!exhaust_cmp_enabled) {
         return;
     }
-    if (exhaust_cmp_cursor >= EXHAUST_CMP_CAPACITY) {
-        return;
-    }
-    size_t slot = exhaust_cmp_cursor * 3;
+    size_t slot = (exhaust_cmp_cursor % EXHAUST_CMP_CAPACITY) * 3;
     exhaust_cmp_buffer[slot] = site;
     exhaust_cmp_buffer[slot + 1] = arg1;
     exhaust_cmp_buffer[slot + 2] = arg2;

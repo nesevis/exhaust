@@ -16,10 +16,10 @@ void exhaust_cmp_set_enabled(int enabled);
 // Clears the operand buffer, dropping every pair recorded so far. Called at the start of each attempt bracket.
 void exhaust_cmp_reset(void);
 
-// The number of comparison records currently in the buffer, saturating at its capacity.
+// The number of live comparison records in the buffer, saturating at its capacity. Recording past the capacity wraps around and overwrites the oldest records (last-N-wins), so the count stays at the capacity while the contents keep advancing.
 size_t exhaust_cmp_record_count(void);
 
-// The record buffer base. Record i occupies words 3i (call-site pc), 3i+1 (arg1), and 3i+2 (arg2). Valid for exhaust_cmp_record_count() records until the next reset.
+// The record buffer base. Record i occupies words 3i (call-site pc), 3i+1 (arg1), and 3i+2 (arg2). Valid for exhaust_cmp_record_count() records until the next reset. Once the buffer has wrapped, index order is no longer chronological; the pool groups by site and does not depend on record order.
 const uint64_t *exhaust_cmp_records(void);
 
 #endif

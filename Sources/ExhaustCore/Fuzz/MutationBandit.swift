@@ -16,6 +16,20 @@ package enum MutationArm: Int, CaseIterable, Sendable {
     case medium = 1
     case high = 2
     case splice = 3
+
+    /// The arm credited for a band mutation of this intensity.
+    ///
+    /// An explicit map rather than shared index arithmetic: the two enums declare their cases independently, and deriving one from the other's `allCases` position would silently mis-credit the bandit if either reordered, with no test failing.
+    package init(intensity: MutationIntensity) {
+        self = switch intensity {
+            case .low:
+                .low
+            case .medium:
+                .medium
+            case .high:
+                .high
+        }
+    }
 }
 
 /// EXP3 weights over ``MutationArm``, rewarded by corpus admission. See the file header for why EXP3 over discounted UCB.
