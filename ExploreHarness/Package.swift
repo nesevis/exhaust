@@ -5,12 +5,12 @@ import PackageDescription
 
 /// Coverage instrumentation for the fixture only, debug-only.
 ///
-/// `-sanitize=undefined` is the lightest base sanitiser the frontend requires before it accepts `-sanitize-coverage`; `edge,inline-8bit-counters,pc-table` is libFuzzer's default and what the live loop plus the report both read. Debug-only keeps release builds clean.
+/// `-sanitize=undefined` is the lightest base sanitiser the frontend requires before it accepts `-sanitize-coverage`; `edge,inline-8bit-counters,pc-table` is libFuzzer's default and what the live loop plus the report both read; `trace-cmp` additionally exposes comparison operands for injection. Debug-only keeps release builds clean.
 let coverageFlags: [SwiftSetting] = [
     .unsafeFlags(
         [
             "-sanitize=undefined",
-            "-sanitize-coverage=edge,inline-8bit-counters,pc-table",
+            "-sanitize-coverage=edge,inline-8bit-counters,pc-table,trace-cmp",
         ],
         .when(configuration: .debug)
     ),

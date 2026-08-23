@@ -26,7 +26,7 @@ on:
 # Do not add coverage flags to the replay job or lift the fuzz suite's env gate without
 # restructuring accordingly.
 env:
-  COVERAGE_FLAGS: -Xswiftc -sanitize=undefined -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table
+  COVERAGE_FLAGS: -Xswiftc -sanitize=undefined -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table,trace-cmp
 
 jobs:
   # The hard gate: every frozen reproducer replays clean, plus the in-package oracle smoke
