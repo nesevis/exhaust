@@ -26,7 +26,7 @@ package final class SaturatingRowGenerator {
 
     package init(domainSizes: [UInt64], seed: UInt64) {
         self.domainSizes = domainSizes
-        // The spread path never reports exhaustion, so a spread-mode covering generator would hold ``next()`` in the covering phase forever and the remainder would never run. Forcing the greedy path makes termination structural, and the small-space gate callers apply keeps its pairwise tracking trivial.
+        // A generator holding any untracked slice never reports exhaustion, so ``next()`` would stay in the covering phase forever and the remainder would never run. Passing the largest domain as the threshold squares it into a slice threshold no slice can exceed, so every slice is tracked and termination is structural. The small-space gate callers apply keeps that tracking trivial.
         covering = BalancedCoveringArrayGenerator(
             domainSizes: domainSizes,
             seed: seed,

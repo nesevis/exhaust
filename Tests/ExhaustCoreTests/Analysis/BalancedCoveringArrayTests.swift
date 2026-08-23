@@ -233,6 +233,74 @@ struct BalancedCoveringArrayTests {
             "Expected full pairwise coverage of the equal-domain slice, got \(pairs.count)/\(15 * 15)"
         )
     }
+
+    // MARK: - Seed Rotation
+
+    @Test("Consecutive seeds do not share spread rows")
+    func consecutiveSeedsDoNotShareSpreadRows() {
+        // Folding the lap into the base seed made seed s + 1 draw seed s's offset one lap later, so with equal domains the whole row stream repeated one lap apart and ten consecutive seeds covered 1,100 of 2,000 rows instead of all of them.
+        let domains: [UInt64] = [100, 100, 100, 100, 100]
+        var union = Set<[UInt64]>()
+        for seed in UInt64(1337) ... 1346 {
+            union.formUnion(generateAll(domainSizes: domains, budget: 200, seed: seed).map(\.values))
+        }
+
+        #expect(union.count == 2000, "Consecutive seeds overlap: \(union.count)/2000 distinct rows")
+    }
+
+    // MARK: - Per-Slice Tracking
+
+    @Test("A narrow slice is covered completely beside a wide parameter")
+    func narrowSliceIsCoveredBesideAWideParameter() {
+        // 3000 x 6 exceeds the slice threshold and goes untracked, but 6 x 6 does not. Tracking that slice covers all 36 of its pairs within 36 rows; an all-spread generator needs about 60.
+        let domains: [UInt64] = [3000, 6, 6]
+        let rows = generateAll(domainSizes: domains, budget: 36)
+
+        let pairs = Set(rows.map { [$0.values[1], $0.values[2]] })
+        #expect(pairs.count == 36, "Narrow slice covered \(pairs.count)/36 pairs in 36 rows")
+    }
+
+    @Test("A wide parameter still spreads while its narrow partners are tracked")
+    func wideParameterSpreadsInAHybrid() {
+        let domains: [UInt64] = [3000, 6, 6]
+        let rows = generateAll(domainSizes: domains, budget: 36)
+
+        let distinct = Set(rows.map { $0.values[0] })
+        #expect(distinct.count == 36, "Wide parameter repeated values: \(distinct.count)/36 distinct")
+    }
+
+    @Test("An untracked slice keeps the row stream infinite")
+    func untrackedSliceKeepsTheStreamInfinite() {
+        // The spread reports no exhaustion, so stopping once the tracked pairs are covered would cut a screening run short while the wide parameter was still cycling usefully.
+        let domains: [UInt64] = [3000, 6, 6]
+        let generator = BalancedCoveringArrayGenerator(domainSizes: domains)
+
+        for _ in 0 ..< 1000 {
+            #expect(generator.next() != nil)
+        }
+    }
+
+    @Test("A wide parameter whose slices all fit still terminates")
+    func everySliceTrackedTerminatesDespiteAWideParameter() {
+        // 200 x 2 is within the slice threshold, so every slice here is tracked and the generator keeps the greedy path's termination guarantee even though one domain is far above greedyThreshold.
+        let domains: [UInt64] = [200, 2, 2, 2]
+        let rows = generateAll(domainSizes: domains, budget: 5000)
+
+        #expect(rows.count < 5000, "Expected exhaustion, got \(rows.count) rows")
+        verifyTWayCoverage(rows: rows, domainSizes: domains)
+    }
+
+    // MARK: - Gain Ceiling
+
+    @Test("A domain whose reciprocal is inexact still reaches optimal coverage")
+    func inexactReciprocalDomainReachesOptimalCoverage() {
+        // Gains accumulate as Double(uncovered) * (1 / Double(domain)), and for domain 49 that product is 0.99999999999999989, so an exact ceiling comparison never fires. The tolerance that fixes it must not be loose enough to accept a genuinely lower gain, which would cost rows.
+        let domains: [UInt64] = [49, 4]
+        let rows = generateAll(domainSizes: domains, budget: 1000)
+
+        #expect(rows.count == 196, "Expected the optimal 196 rows, got \(rows.count)")
+        verifyTWayCoverage(rows: rows, domainSizes: domains)
+    }
 }
 
 // MARK: - Helpers

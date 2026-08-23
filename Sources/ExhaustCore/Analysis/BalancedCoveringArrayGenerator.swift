@@ -7,95 +7,110 @@
 // This generator addresses the starvation by choosing which parameter to fill next based on the density signal itself: the parameter whose best candidate covers the most new pairs goes first. When multiple parameters have equal gain (common with equal-sized domains), a cycled start offset rotates which parameter wins the tie, ensuring each parameter gets equal opportunity to be filled first across successive rows.
 //
 // The coverage state is shared across all rows: each row's greedy choices see every pair covered by prior rows, so no effort is wasted on duplicates.
+
+// MARK: - Per-Slice Tracking
+
+// Whether a slice is tracked is decided slice by slice, not for the generator as a whole. Greedy fill evaluates every candidate value for every unfilled parameter per row: O(params x domain x slices). For a narrow slice this is fast and produces a near-optimal covering array that exhausts all pairs early. For a wide slice the pair space (dA x dB) dwarfs any practical budget, so greedy optimization spends its time distinguishing between negligible coverage fractions. At domain 64 the pairwise space is 4,096 per slice; a typical budget of 200 covers ~5%, the point where adaptive selection stops outperforming uniform spread.
 //
-// When any clamped domain exceeds ``greedyThreshold``, the generator switches to a deterministic spread: each parameter is assigned a value via prime-stride cycling with a per-lap SplitMix64 phase offset, giving diverse coverage in O(paramCount) per row without greedy evaluation or pairwise tracking. This avoids the O(params x domain x slices) cost that dominates for large domains where pairwise coverage is negligible relative to the budget.
+// A slice with dA x dB at or below the slice threshold is tracked: it allocates a bit vector and contributes to greedy gains. A slice above it is never constructed. A parameter left with no tracked slice takes its value from the spread instead, so one wide parameter no longer costs pairwise coverage on the narrow slices around it.
+//
+// The spread is deterministic: coprime stride cycling plus a per-lap SplitMix64 phase offset, O(1) per parameter with no bit vectors and no coverage tracking. Each parameter cycles through all domain values (the coprime stride guarantees full value coverage per lap), and the lap offset re-phases it every time it completes a lap. The offset is what makes pair coverage converge: bare stride cycling revisits the same lcm(d1, d2) pairs forever, so two parameters whose domain sizes share a factor never exceed 1/gcd(d1, d2) pair coverage. Uniform but not adaptive: the spread may revisit covered pairs while others remain uncovered.
+//
+// Termination follows the partition. All slices tracked means the generator stops once every pair is covered, which is what callers that need a finite stream rely on. Any untracked slice means the stream never ends, because the spread reports no exhaustion.
 
 /// Pairwise covering array generator with dynamic factor ordering for balanced parameter coverage.
 ///
 /// Emits one row at a time via ``next()``, greedily selecting values to maximize new pairwise coverage. The fill order is not fixed: each step picks the (parameter, value) pair with the highest gain across all unfilled parameters. A cycled start offset breaks ties so that each parameter takes turns in the favored position.
 ///
-/// When any domain exceeds ``greedyThreshold`` after clamping, switches to a deterministic spread that cycles values via prime strides. This avoids allocating pairwise bit vectors and running greedy evaluation for domains where the coverage budget cannot meaningfully cover the pairwise space.
+/// Slices whose pair space exceeds the square of ``greedyThreshold`` are not tracked, and a parameter with no tracked slice is filled by a deterministic stride spread instead. A generator whose slices are all tracked behaves exactly as a greedy one; a generator with none behaves exactly as a spread.
 ///
-/// Supports strength 2 (pairwise) only. For exhaustive coverage at higher strengths, use ``PullBasedCoveringArrayGenerator``.
+/// - Important: ``next()`` returns `nil` only when every slice is tracked and every pair is covered. With any untracked slice the stream is infinite, and the caller bounds it.
+/// - Note: Supports strength 2 (pairwise) only. For exhaustive coverage at higher strengths, use ``PullBasedCoveringArrayGenerator``.
+/// - Note: Needs at least two parameters. With one parameter there are no pairs to cover, so the stream is empty.
 package final class BalancedCoveringArrayGenerator {
-    /// Per-parameter domain sizes above this value are clamped to keep pairwise bit vector allocations bounded.
+    /// Per-parameter domain sizes are clamped to this value divided by the parameter count.
+    ///
+    /// Slice tracking already bounds each bit vector to the slice threshold, so at the default threshold this clamp only truncates the value space a parameter can emit. It bounds allocation for a caller that raises the threshold far enough to track every slice.
     package static let maxDomainSize = 16384
 
-    // Greedy fill evaluates every candidate value for every unfilled parameter per row — O(params x domain x slices). For small domains this is fast and produces near-optimal covering arrays that exhaust all pairs early. For large domains the pairwise space (d^2 per slice) dwarfs any practical budget, so greedy optimization spends most of its time distinguishing between negligible coverage fractions. At domain 64 the pairwise space is 4,096 per slice; a typical budget of 200 covers ~5%, the point where adaptive selection stops outperforming uniform spread.
-    //
-    // Below the threshold: greedy fill with full pairwise tracking. Terminates when all pairs are covered.
-    // Above the threshold: deterministic spread via coprime strides plus a per-lap phase offset. No bit vectors, no coverage tracking. Each parameter cycles through all domain values (coprime stride guarantees full value coverage per lap), and the SplitMix64 lap offset re-phases each parameter every time it completes a lap. The offset is what makes pair coverage converge: bare stride cycling revisits the same lcm(d1, d2) pairs forever, so two parameters whose domain sizes share a factor never exceed 1/gcd(d1, d2) pair coverage. Uniform but not adaptive — may revisit covered pairs while others remain uncovered.
-
-    /// Domains above this threshold use deterministic spread instead of greedy pairwise optimization.
+    /// Slices whose pair space exceeds the square of this threshold are left untracked, and parameters with no tracked slice fall back to the deterministic spread.
     package static let greedyThreshold = 64
 
-    /// Seeds the value scan's starting offset in the greedy fill and the lap offset in the spread path.
+    /// Tolerance on the ceiling comparison that ends a candidate scan early.
     ///
-    /// In the greedy fill, the first pick of every row saturates `maxPossibleGain`, so `break search` takes whichever value it scans first. Scanning from a derived offset instead of always from zero picks an equally optimal value in a different place, which is what stops successive rows filling shells outward from the origin.
+    /// Gains accumulate as `Double(uncovered) * (1 / Double(domain))`, and that product is not exactly 1.0 for every domain size (49 is the smallest case, giving 0.99999999999999989), so an exact comparison against the ceiling silently stops firing for those domains. A gain genuinely below the ceiling is short by at least one uncovered tuple's worth, `1 / domain`, which is orders of magnitude above the accumulated rounding error this absorbs.
+    private static let ceilingTolerance = 1e-9
+
+    /// Seeds the value scan's starting offset in the greedy fill and the lap offset in the spread.
     ///
-    /// In the spread path, the seed joins the per-lap offset derivation, so a truncated run's row prefix varies per seed rather than testing the same leading points every run.
+    /// In the greedy fill, the first pick of every row saturates the gain ceiling, so `break search` takes whichever value it scans first. Scanning from a derived offset instead of always from zero picks an equally optimal value in a different place, which is what stops successive rows filling shells outward from the origin.
     ///
-    /// Zero means no offset in either path, preserving the unseeded array exactly.
+    /// In the spread, the seed joins the per-lap offset derivation, so a truncated run's row prefix varies per seed rather than testing the same leading points every run.
+    ///
+    /// Zero disables the greedy scan offset, reproducing the unseeded scan order exactly. The spread always applies its lap offset, and a zero seed reproduces the unseeded derivation.
     private let seed: UInt64
 
     private let paramCount: Int
     private let domainSizes: [Int]
-    private let useGreedy: Bool
+    /// Strides for the spread, one per parameter. Only read for parameters with no tracked slice.
     private let spreadStrides: [Int]
+    /// Tracked slices only. A slice above the threshold is never constructed, so nothing here needs an is-tracked test.
     private var slices: [PairwiseSlice]
     private let slicesByParam: [[Int]]
-    /// Scratch buffer for per-value gains during greedy fill, sized to the largest domain. Reused across rows to avoid per-row allocation.
+    /// Parameters with at least one tracked slice, in ascending order. The greedy fill iterates this; every other parameter is filled by the spread before the fill starts.
+    private let greedyParams: [Int]
+    /// True when at least one slice was left untracked, which is what makes the row stream infinite.
+    private let hasUntrackedSlices: Bool
+    /// Scratch buffer for per-value gains during greedy fill, sized to the largest greedy parameter's domain. Reused across rows to avoid per-row allocation.
     private let gainScratch: UnsafeMutablePointer<Double>
-    /// Total number of uncovered pairwise tuples across all slices. Always positive on the fast path.
+    /// Total number of uncovered pairwise tuples across all tracked slices.
     private(set) var totalRemaining: Int
     private var rowCount: Int
 
     /// Creates a balanced covering array generator for pairwise coverage.
     ///
-    /// Values above ``maxDomainSize`` are clamped to prevent excessive memory allocation in pairwise bit vectors. When any clamped domain exceeds the greedy threshold, the generator uses a deterministic spread instead of greedy pairwise optimization.
+    /// Values above ``maxDomainSize`` are clamped to prevent excessive memory allocation in pairwise bit vectors. Each slice is then tracked or not on its own: a slice whose pair space exceeds `greedyThreshold` squared is left untracked, and any parameter with no tracked slice is filled by a deterministic spread.
     ///
     /// - Parameters:
-    ///   - domainSizes: The number of distinct values for each parameter, in original order.
-    ///   - greedyThreshold: Per-domain size above which the generator falls back to deterministic spread. Defaults to ``greedyThreshold``. Pass a higher value when the parameter count is small enough that the pairwise bit vector memory (proportional to `paramCount² × maxDomain²`) is acceptable.
+    ///   - domainSizes: The number of distinct values for each parameter, in original order. Every entry must be at least 1.
+    ///   - seed: Rotates the greedy scan offset and the spread's lap offset. Zero reproduces the unseeded array.
+    ///   - greedyThreshold: The largest domain still worth tracking. Its square is the per-slice pair space above which a slice goes untracked. Defaults to ``greedyThreshold``. Pass the largest domain present to track every slice, which is what a caller needing a terminating stream must do.
     package init(domainSizes: [UInt64], seed: UInt64 = 0, greedyThreshold: Int? = nil) {
+        precondition(
+            domainSizes.allSatisfy { $0 >= 1 },
+            "A covering array parameter needs at least one value; an empty domain has no row to emit."
+        )
         self.seed = seed
         let effectiveThreshold = greedyThreshold ?? Self.greedyThreshold
+        let (squared, overflow) = effectiveThreshold.multipliedReportingOverflow(by: effectiveThreshold)
+        let sliceThreshold = overflow ? Int.max : squared
         paramCount = domainSizes.count
         let perParamCap = Self.maxDomainSize / max(paramCount, 1)
-        self.domainSizes = domainSizes.map { min(Int($0), perParamCap) }
+        let clamped = domainSizes.map { min(Int($0), perParamCap) }
+        self.domainSizes = clamped
 
-        let maxDomain = self.domainSizes.max() ?? 0
-        useGreedy = maxDomain <= effectiveThreshold
-
-        guard useGreedy else {
-            spreadStrides = self.domainSizes.enumerated().map { param, domain in
-                var stride = 2 &* param &+ 1
-                while Self.gcd(stride, domain) != 1 {
-                    stride &+= 2
-                }
-                return stride
+        spreadStrides = clamped.enumerated().map { param, domain in
+            var stride = 2 &* param &+ 1
+            while Self.gcd(stride, domain) != 1 {
+                stride &+= 2
             }
-            slices = []
-            slicesByParam = []
-            gainScratch = .allocate(capacity: 1)
-            gainScratch.initialize(to: 0)
-            totalRemaining = 1
-            rowCount = 0
-            return
+            return stride
         }
-        spreadStrides = []
-        gainScratch = .allocate(capacity: max(maxDomain, 1))
-        gainScratch.initialize(repeating: 0, count: max(maxDomain, 1))
 
         var allSlices: [PairwiseSlice] = []
-        allSlices.reserveCapacity(self.domainSizes.count * (self.domainSizes.count - 1) / 2)
+        allSlices.reserveCapacity(clamped.count * (clamped.count - 1) / 2)
         var total = 0
+        var anyUntracked = false
 
-        for first in 0 ..< self.domainSizes.count {
-            for second in (first + 1) ..< self.domainSizes.count {
-                let sizeA = self.domainSizes[first]
-                let sizeB = self.domainSizes[second]
+        for first in 0 ..< clamped.count {
+            for second in (first + 1) ..< clamped.count {
+                let sizeA = clamped[first]
+                let sizeB = clamped[second]
                 let tupleCount = sizeA * sizeB
+                guard tupleCount <= sliceThreshold else {
+                    anyUntracked = true
+                    continue
+                }
                 allSlices.append(PairwiseSlice(
                     paramA: first,
                     paramB: second,
@@ -111,25 +126,33 @@ package final class BalancedCoveringArrayGenerator {
         }
 
         slices = allSlices
+        hasUntrackedSlices = anyUntracked
 
-        var byParam = [[Int]](repeating: [], count: self.domainSizes.count)
+        var byParam = [[Int]](repeating: [], count: clamped.count)
         for (index, slice) in allSlices.enumerated() {
             byParam[slice.paramA].append(index)
             byParam[slice.paramB].append(index)
         }
         slicesByParam = byParam
+        let greedy = (0 ..< clamped.count).filter { byParam[$0].isEmpty == false }
+        greedyParams = greedy
+
+        let widestGreedyDomain = greedy.map { clamped[$0] }.max() ?? 0
+        gainScratch = .allocate(capacity: max(widestGreedyDomain, 1))
+        gainScratch.initialize(repeating: 0, count: max(widestGreedyDomain, 1))
+
         totalRemaining = total
         rowCount = 0
     }
 
-    /// Returns the next row, or `nil` if all pairs are covered (greedy path only).
+    /// Returns the next row, or `nil` once every tracked pair is covered and no untracked slice remains.
+    ///
+    /// A generator holding any untracked slice never returns `nil`: the spread that fills those parameters reports no exhaustion, and stopping on the tracked pairs alone would cut the stream short while the untracked parameters were still cycling usefully.
     package func next() -> CoveringArrayRow? {
-        if totalRemaining == 0 { return nil }
-
-        if useGreedy {
-            return nextGreedy()
+        if totalRemaining == 0, hasUntrackedSlices == false {
+            return nil
         }
-        return nextSpread()
+        return nextRow()
     }
 
     deinit {
@@ -141,17 +164,30 @@ package final class BalancedCoveringArrayGenerator {
         gainScratch.deallocate()
     }
 
-    // MARK: - Greedy Fill
+    // MARK: - Row Fill
 
-    private func nextGreedy() -> CoveringArrayRow {
+    /// Builds one row: the spread fills every parameter with no tracked slice, then the greedy fill takes the rest.
+    ///
+    /// Spread values do not depend on coverage state, so computing them first costs the greedy fill nothing. Their parameters are marked filled purely to keep them out of the scan, and no gain reads them: a spread parameter has no tracked slice, so it appears in no gain sum.
+    private func nextRow() -> CoveringArrayRow {
         var row = [UInt64](repeating: 0, count: paramCount)
         var filled = [Bool](repeating: false, count: paramCount)
         let startParam = rowCount % paramCount
-        // Each slice contributes at most 1 to a candidate's gain, so no candidate can exceed the number of slices its parameter participates in. Ties never replace an earlier best, so scanning can stop as soon as a candidate reaches this ceiling — the selected (parameter, value) is identical to a full scan.
-        let maxPossibleGain = Double(paramCount - 1)
+
+        for param in 0 ..< paramCount where slicesByParam[param].isEmpty {
+            row[param] = spreadValue(param: param)
+            filled[param] = true
+        }
 
         slices.withUnsafeBufferPointer { sliceBuffer in
-            for _ in 0 ..< paramCount {
+            for _ in 0 ..< greedyParams.count {
+                // Each tracked slice contributes at most 1 to a candidate's gain, so no candidate can exceed the number of tracked slices its parameter participates in. Ties never replace an earlier best, so scanning can stop as soon as a candidate reaches the highest ceiling any still-unfilled parameter could reach: the selected (parameter, value) is identical to a full scan.
+                var maxPossibleGain = 0.0
+                for param in greedyParams where filled[param] == false {
+                    maxPossibleGain = max(maxPossibleGain, Double(slicesByParam[param].count))
+                }
+                let exitThreshold = maxPossibleGain - Self.ceilingTolerance
+
                 var bestParam = -1
                 var bestValue = 0
                 var bestGain = -1.0
@@ -169,7 +205,7 @@ package final class BalancedCoveringArrayGenerator {
                     let valueOffset = seed == 0
                         ? 0
                         : Int(
-                            Xoshiro256.deriveSeed(from: seed &+ UInt64(rowCount), at: UInt64(param))
+                            Xoshiro256.deriveSeed(from: seed, at: Self.rotationIndex(step: rowCount, param: param))
                                 % UInt64(domain)
                         )
                     // Two contiguous passes rather than one wrapping scan: each pass is a plain monotone loop the optimizer can unroll, where a per-step wrap or modulo costs ~20% on large domains. An unseeded generator's first pass is exactly the full scan, and its second is empty.
@@ -181,7 +217,7 @@ package final class BalancedCoveringArrayGenerator {
                                 bestGain = gain
                                 bestParam = param
                                 bestValue = value
-                                if gain >= maxPossibleGain { break search }
+                                if gain >= exitThreshold { break search }
                             }
                         }
                     }
@@ -200,17 +236,22 @@ package final class BalancedCoveringArrayGenerator {
 
     // MARK: - Deterministic Spread
 
-    private func nextSpread() -> CoveringArrayRow {
-        var row = [UInt64](repeating: 0, count: paramCount)
-        for param in 0 ..< paramCount {
-            let domain = domainSizes[param]
-            // The lap offset is constant within a lap, so each parameter still sweeps its full domain every `domain` rows, and varies across laps to break the joint period: without it, any parameter pair repeats with period lcm(d1, d2), capping pair coverage at 1/gcd(d1, d2) regardless of budget. Mixing in the seed rotates which points a truncated run sees, and a zero seed reproduces the unseeded derivation exactly.
-            let lap = rowCount / domain
-            let lapOffset = Int(Xoshiro256.deriveSeed(from: seed &+ UInt64(lap), at: UInt64(param)) % UInt64(domain))
-            row[param] = UInt64((rowCount &* spreadStrides[param] &+ param &+ lapOffset) % domain)
-        }
-        rowCount += 1
-        return CoveringArrayRow(values: row)
+    /// Returns a parameter's spread value for the current row.
+    ///
+    /// The lap offset is constant within a lap, so each parameter still sweeps its full domain every `domain` rows, and varies across laps to break the joint period: without it, any parameter pair repeats with period lcm(d1, d2), capping pair coverage at 1/gcd(d1, d2) regardless of budget.
+    private func spreadValue(param: Int) -> UInt64 {
+        let domain = domainSizes[param]
+        let lap = rowCount / domain
+        let index = Self.rotationIndex(step: lap, param: param)
+        let lapOffset = Int(Xoshiro256.deriveSeed(from: seed, at: index) % UInt64(domain))
+        return UInt64((rowCount &* spreadStrides[param] &+ param &+ lapOffset) % domain)
+    }
+
+    /// Packs a step (a lap in the spread, a row in the greedy fill) and a parameter into one derivation index.
+    ///
+    /// Both offsets reach ``Xoshiro256/deriveSeed(from:at:)`` through its index argument rather than being folded into the base seed. Adding them to the seed instead makes seed *s* + 1 at lap *k* draw exactly seed *s*'s offset at lap *k* + 1: with equal domain sizes every parameter shares lap boundaries and a full lap advances the row value by `stride * domain`, which is zero modulo the domain, so consecutive seeds emit the same row stream one lap apart. Ten consecutive seeds at budget 200 and domain 100 then cover 1,100 distinct rows where ten independent rotations cover 2,000.
+    private static func rotationIndex(step: Int, param: Int) -> UInt64 {
+        (UInt64(bitPattern: Int64(step)) &<< 32) | (UInt64(bitPattern: Int64(param)) & 0xFFFF_FFFF)
     }
 
     private static func gcd(_ a: Int, _ b: Int) -> Int {
