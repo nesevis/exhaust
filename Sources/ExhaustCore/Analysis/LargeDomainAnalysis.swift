@@ -84,7 +84,7 @@ package struct LargeDomainProfile: @unchecked Sendable {
 
 extension LargeDomainProfile: ScreeningProfile {
     package var domainSizes: [UInt64] {
-        parameters.map(\.domainSize)
+        parameters.map { $0.domainSize }
     }
 
     package var parameterCount: Int {
@@ -228,7 +228,7 @@ package enum ProblematicValues {
                     Double.nan,
                     -Double(nan: 1, signaling: true), // Sign, signaling, and payload bits set: distinct from the default quiet NaN for bit-pattern comparisons and hashing
                 ]
-                return doubles.map(\.bitPattern64)
+                return doubles.map { $0.bitPattern64 }
             case .float:
                 let floats: [Float] = [
                     // First half: ordinary magnitudes (position 0 in two-element slots).
@@ -250,7 +250,7 @@ package enum ProblematicValues {
                     Float.nan,
                     -Float(nan: 1, signaling: true),
                 ]
-                return floats.map(\.bitPattern64)
+                return floats.map { $0.bitPattern64 }
             case .float16:
                 #if arch(arm64) || arch(arm64_32)
                     if #available(macOS 11, iOS 14, tvOS 14, watchOS 7, *) {
@@ -274,7 +274,7 @@ package enum ProblematicValues {
                             Float16.nan,
                             -Float16(nan: 1, signaling: true),
                         ]
-                        return floats.map(\.bitPattern64)
+                        return floats.map { $0.bitPattern64 }
                     }
                 #endif
                 return []

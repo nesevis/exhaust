@@ -54,7 +54,7 @@ struct BatchedCrossSequenceRemovalSource {
             entries.append((
                 target: SequenceRemovalTarget(
                     sequenceNodeID: parentID,
-                    elementNodeIDs: deletableChildren.map(\.nodeID)
+                    elementNodeIDs: deletableChildren.map { $0.nodeID }
                 ),
                 deletableCount: deletable,
                 yield: yield
@@ -153,7 +153,7 @@ struct BatchedCrossSequenceRemovalSource {
         lastEmittedRange = range
 
         let slice = sequences[range.start ..< range.end]
-        let targets = slice.map(\.target)
+        let targets = slice.map { $0.target }
         var totalYield = 0
         var maxElementYield = 0
         var maxBatch = 0
@@ -261,7 +261,7 @@ struct BatchRemovalSource {
         let scope = ElementRemovalScope(
             targets: [SequenceRemovalTarget(
                 sequenceNodeID: sequenceNodeID,
-                elementNodeIDs: slice.map(\.nodeID)
+                elementNodeIDs: slice.map { $0.nodeID }
             )],
             maxBatch: currentBatch,
             maxElementYield: batchYield

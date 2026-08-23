@@ -31,7 +31,7 @@ package enum SynthesisDiagnostics {
     ///   - type: The type whose reconstruction fell back to the example.
     ///   - codingPath: The coding path at which the missing value was requested.
     package static func recordFallback(type: Any.Type, codingPath: [any CodingKey]) {
-        let path = codingPath.map(\.stringValue).joined(separator: ".")
+        let path = codingPath.map { $0.stringValue }.joined(separator: ".")
         let site = Site(type: ObjectIdentifier(type), path: path)
 
         // Keep the logging call outside the critical section — only the insert-and-check needs the lock.

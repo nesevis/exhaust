@@ -111,9 +111,9 @@ extension ChoiceGraph {
 
     /// Pick-site detection that mirrors ``ChoiceGraphBuilder/detectPickSite(_:)``: every child must be `.branch`, and at least one must be selected.
     private static func isPickSite(_ array: [ChoiceTree]) -> Bool {
-        guard array.allSatisfy(\.isBranch) else {
+        guard array.allSatisfy({ $0.isBranch }) else {
             return false
         }
-        return array.contains(where: \.isSelected)
+        return array.contains(where: { $0.isSelected })
     }
 }

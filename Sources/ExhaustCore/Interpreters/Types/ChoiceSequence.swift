@@ -15,7 +15,7 @@ package typealias ChoiceSequence = ContiguousArray<ChoiceSequenceValue>
 
 package extension Collection<ChoiceSequenceValue> {
     var shortString: String {
-        map(\.shortString).joined()
+        map { $0.shortString }.joined()
     }
 }
 

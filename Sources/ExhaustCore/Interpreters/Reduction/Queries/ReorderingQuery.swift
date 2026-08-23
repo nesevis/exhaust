@@ -37,9 +37,9 @@ enum ReorderingQuery {
                     guard node.children.count >= 2 else { continue }
                     let childNodes = node.children.map { graph.nodes[$0] }
                     guard childNodes.allSatisfy({ $0.positionRange != nil }) else { continue }
-                    childRanges = childNodes.compactMap(\.positionRange)
+                    childRanges = childNodes.compactMap { $0.positionRange }
                     guard childRanges.count >= 2 else { continue }
-                    childKinds = childNodes.map(\.kind)
+                    childKinds = childNodes.map { $0.kind }
 
                 default:
                     continue

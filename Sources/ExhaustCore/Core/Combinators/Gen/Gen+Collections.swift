@@ -235,7 +235,7 @@ package extension Gen {
             .map { keys in
                 Swift.zip(array, keys)
                     .sorted { $0.1 < $1.1 }
-                    .map(\.0)
+                    .map { $0.0 }
             }
         }
     }

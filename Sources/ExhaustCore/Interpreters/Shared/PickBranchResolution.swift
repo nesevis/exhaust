@@ -39,8 +39,8 @@ package enum PickBranchResolution {
 
     /// Filters replay branches to only selected branches when any selection markers exist, passing through unchanged otherwise.
     package static func normalizeReplayBranches(_ branches: [ChoiceTree]) -> [ChoiceTree] {
-        if branches.contains(where: \.isSelected) {
-            return branches.filter(\.isSelected)
+        if branches.contains(where: { $0.isSelected }) {
+            return branches.filter { $0.isSelected }
         }
         return branches
     }

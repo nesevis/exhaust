@@ -31,11 +31,11 @@ func makeReconstructingGenerator<T: Decodable>(
     codingPath: [any CodingKey]
 ) -> AnyGenerator {
     if case let .keyed(children) = shape, children.isEmpty == false {
-        let generators = ContiguousArray(children.map(\.generator))
+        let generators = ContiguousArray(children.map { $0.generator })
         let state = KeyedExampleState(
-            keys: children.map(\.key),
-            producesExampleValue: children.map(\.producesExampleValue),
-            isOptional: children.map(\.isOptional)
+            keys: children.map { $0.key },
+            producesExampleValue: children.map { $0.producesExampleValue },
+            isOptional: children.map { $0.isOptional }
         )
         let decoder = ExampleDecoder(reusableState: state, codingPath: codingPath)
 

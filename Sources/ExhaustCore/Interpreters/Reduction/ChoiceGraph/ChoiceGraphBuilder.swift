@@ -583,10 +583,10 @@ struct ChoiceGraphBuilder {
     ///
     /// A pick site is a group where all children are `.branch`, with exactly one having `isSelected: true`. Mirrors the detection logic in ``ChoiceTree/flattenedEntryCount``.
     func detectPickSite(_ array: [ChoiceTree]) -> PickSiteInfo? {
-        guard array.allSatisfy(\.isBranch) else {
+        guard array.allSatisfy({ $0.isBranch }) else {
             return nil
         }
-        guard case let .branch(b) = array.first(where: \.isSelected), b.isSelected else {
+        guard case let .branch(b) = array.first(where: { $0.isSelected }), b.isSelected else {
             return nil
         }
         return PickSiteInfo(fingerprint: b.fingerprint, selectedID: b.id, branchCount: b.branchCount)

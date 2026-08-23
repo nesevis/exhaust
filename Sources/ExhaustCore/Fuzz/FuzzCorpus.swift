@@ -144,7 +144,7 @@ package final class FuzzCorpus {
 
     /// Signatures of entries whose property evaluation passed — the P(hit | pass) sample for report-time discrimination.
     package var passingSignatures: [BitSet] {
-        entries.filter { $0.propertyFailed == false }.map(\.signature)
+        entries.filter { $0.propertyFailed == false }.map { $0.signature }
     }
 
     /// Edges hit by exactly one non-duplicate attempt (Q₁), for the STADS estimators.

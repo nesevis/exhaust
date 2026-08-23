@@ -33,7 +33,7 @@ enum LaneCollapseQuery {
         entries.sort { $0.position < $1.position }
 
         return .laneCollapse(ValueMinimizationScope(
-            leaves: entries.map(\.entry),
+            leaves: entries.map { $0.entry },
             batchZeroEligible: entries.count > 1
         ))
     }

@@ -321,15 +321,15 @@ private struct SequenceAccumulator {
     }
 
     var minLength: Int {
-        sites.values.flatMap(\.self).map { Int($0) }.min() ?? 0
+        sites.values.flatMap { $0 }.map { Int($0) }.min() ?? 0
     }
 
     var maxLength: Int {
-        sites.values.flatMap(\.self).map { Int($0) }.max() ?? 0
+        sites.values.flatMap { $0 }.map { Int($0) }.max() ?? 0
     }
 
     var meanLength: Double {
-        let allLengths = sites.values.flatMap(\.self)
+        let allLengths = sites.values.flatMap { $0 }
         guard allLengths.isEmpty == false else { return 0 }
         return Double(allLengths.map { Int($0) }.reduce(0, +)) / Double(allLengths.count)
     }

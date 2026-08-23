@@ -37,7 +37,7 @@ package extension ChoiceTree {
                 return self
             case let .sequence(elements, metadata):
                 return .sequence(
-                    elements: elements.map(\.minimizingLeaves),
+                    elements: elements.map { $0.minimizingLeaves },
                     metadata: metadata
                 )
             case let .branch(b):
@@ -51,13 +51,13 @@ package extension ChoiceTree {
                 )
             case let .group(children, isOpaque, _):
                 return .group(
-                    children.map(\.minimizingLeaves),
+                    children.map { $0.minimizingLeaves },
                     isOpaque: isOpaque
                 )
             case let .resize(newSize, choices):
                 return .resize(
                     newSize: newSize,
-                    choices: choices.map(\.minimizingLeaves)
+                    choices: choices.map { $0.minimizingLeaves }
                 )
             case let .bind(fingerprint, inner, bound):
                 return .bind(

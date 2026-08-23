@@ -370,7 +370,7 @@ package enum LargeDomainCoveringArrayReplay {
         _ localIndex: UInt64,
         activeSlotParams: [[ScreeningParameter]]
     ) -> [UInt64] {
-        let flatParams = activeSlotParams.flatMap(\.self)
+        let flatParams = activeSlotParams.flatMap { $0 }
         guard flatParams.isEmpty == false else { return [] }
         var indices = [UInt64](repeating: 0, count: flatParams.count)
         var remainder = localIndex

@@ -84,7 +84,7 @@ package extension ChoiceTree {
             case let .branch(b):
                 b.choice.flattenedEntryCount
             case let .group(array, _, _):
-                if let selected = array.first(where: \.isSelected),
+                if let selected = array.first(where: { $0.isSelected }),
                    case let .branch(b) = selected
                 {
                     // group open + branch entry + choice + group close
@@ -166,11 +166,11 @@ package extension ChoiceTree {
             case let .branch(b):
                 return b.choice.containsBind
             case let .sequence(elements, _):
-                return elements.contains(where: \.containsBind)
+                return elements.contains(where: { $0.containsBind })
             case let .group(array, _, _):
-                return array.contains(where: \.containsBind)
+                return array.contains(where: { $0.containsBind })
             case let .resize(_, choices):
-                return choices.contains(where: \.containsBind)
+                return choices.contains(where: { $0.containsBind })
         }
     }
 
@@ -191,13 +191,13 @@ package extension ChoiceTree {
             case .choice, .just, .getSize:
                 false
             case let .sequence(elements, _):
-                elements.contains(where: \.containsPicks)
+                elements.contains(where: { $0.containsPicks })
             case let .group(array, _, _):
-                array.contains(where: \.containsPicks)
+                array.contains(where: { $0.containsPicks })
             case let .bind(_, inner, bound):
                 inner.containsPicks || bound.containsPicks
             case let .resize(_, choices):
-                choices.contains(where: \.containsPicks)
+                choices.contains(where: { $0.containsPicks })
         }
     }
 
@@ -378,17 +378,17 @@ extension ChoiceTree: CustomDebugStringConvertible {
             case .just:
                 "just"
             case let .sequence(elements, _):
-                "[" + elements.map(\.elementDescription).joined(separator: ", ") + "]"
+                "[" + elements.map { $0.elementDescription }.joined(separator: ", ") + "]"
             case let .branch(b):
                 "\(b.weight),\(b.id): \(b.choice.elementDescription)"
             case let .group(array, _, _):
-                "{" + array.map(\.elementDescription).joined() + "}"
+                "{" + array.map { $0.elementDescription }.joined() + "}"
             case let .bind(_, inner, bound):
                 "{" + inner.elementDescription + bound.elementDescription + "}"
             case let .getSize(size):
                 "getSize(\(size))"
             case let .resize(newSize, choices):
-                "resize(\(newSize): [\(choices.map(\.elementDescription).joined(separator: ", "))])"
+                "resize(\(newSize): [\(choices.map { $0.elementDescription }.joined(separator: ", "))])"
         }
     }
 

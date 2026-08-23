@@ -37,7 +37,7 @@ extension Interpreters {
 
         let matchingPaths = allPossibleOutcomes.compactMap { outputValue, path -> [ChoiceTree]? in
             return check(outputValue) ? path : nil
-        }.flatMap(\.self)
+        }.flatMap { $0 }
 
         switch matchingPaths.count {
             case 0:
@@ -331,7 +331,7 @@ extension Interpreters {
         let results = try choices.flatMap { choice -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
             do {
                 let reflectionPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput)
-                let value = reflectionPaths.firstNonNil(\.value)
+                let value = reflectionPaths.firstNonNil { $0.value }
 
                 var isPicked = false
                 if let equatableOutput = finalOutput as? any Equatable,

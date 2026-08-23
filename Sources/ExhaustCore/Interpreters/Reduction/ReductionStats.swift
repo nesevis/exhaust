@@ -122,37 +122,37 @@ public struct ReductionStats: Sendable {
 
     /// Per-encoder probe counts accumulated across all cycles. Total probes emitted by each encoder, including those that hit the reject cache.
     package var encoderProbes: [EncoderName: Int] {
-        encoderCounts.mapValues(\.emitted)
+        encoderCounts.mapValues { $0.emitted }
     }
 
     /// Per-encoder probe counts that were accepted (the decoder produced a valid reduction).
     package var encoderProbesAccepted: [EncoderName: Int] {
-        encoderCounts.mapValues(\.accepted)
+        encoderCounts.mapValues { $0.accepted }
     }
 
     /// Per-encoder probe counts that hit the reject cache before decoding (no materialization).
     package var encoderProbesRejectedByCache: [EncoderName: Int] {
-        encoderCounts.mapValues(\.rejectedByCache)
+        encoderCounts.mapValues { $0.rejectedByCache }
     }
 
     /// Per-encoder probes rejected during materialization before the property was invoked.
     package var encoderProbesRejectedDuringMaterialization: [EncoderName: Int] {
-        encoderCounts.mapValues(\.rejectedDuringMaterialization)
+        encoderCounts.mapValues { $0.rejectedDuringMaterialization }
     }
 
     /// Per-encoder probes whose materialized value satisfied the property.
     package var encoderProbesWherePropertyPassed: [EncoderName: Int] {
-        encoderCounts.mapValues(\.propertyPassed)
+        encoderCounts.mapValues { $0.propertyPassed }
     }
 
     /// Per-encoder probes whose materialized value falsified the property. Accepted probes are a subset of this count because later materialization and admission checks can still reject a proposal.
     package var encoderProbesWherePropertyFailed: [EncoderName: Int] {
-        encoderCounts.mapValues(\.propertyFailed)
+        encoderCounts.mapValues { $0.propertyFailed }
     }
 
     /// Combines per-encoder materialization rejection, property success, and property failure that was not admitted.
     package var encoderProbesRejectedByDecoder: [EncoderName: Int] {
-        encoderCounts.mapValues(\.decoderRejections)
+        encoderCounts.mapValues { $0.decoderRejections }
     }
 
     /// Total materialization attempts (decoder invocations) during reduction.

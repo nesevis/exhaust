@@ -84,7 +84,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
             reducedSequence = ChoiceSequenceCodec.encode(cluster.reducedSequence)
             reducedDescription = cluster.reducedDescription
             reducedKey = cluster.reducedKey
-            symptoms = cluster.symptoms.map(\.kind).sorted()
+            symptoms = cluster.symptoms.map { $0.kind }.sorted()
             instanceCount = cluster.instanceCount
             reducedCount = cluster.reducedCount
             discoveringPhase = cluster.discoveringPhase.rawValue
@@ -96,7 +96,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
                 : 0
             firstSeenAttempt = cluster.firstSeenAttempt
             unnormalizedMemberCount = cluster.unnormalizedMemberCount
-            signatureIndices = cluster.signatures.map(\.indices)
+            signatureIndices = cluster.signatures.map { $0.indices }
         }
     }
 
@@ -114,8 +114,8 @@ package struct FuzzProgressDocument: Codable, Sendable {
 
         package init(entry: CorpusEntry) {
             sequence = ChoiceSequenceCodec.encode(entry.sequence)
-            hitEdges = entry.hits.map(\.edge)
-            hitCounts = entry.hits.map(\.hitCount)
+            hitEdges = entry.hits.map { $0.edge }
+            hitCounts = entry.hits.map { $0.hitCount }
             convergence = entry.convergence
             generation = entry.generation
             phase = entry.phase.rawValue

@@ -133,7 +133,7 @@ private extension ReflectiveGenerator {
                         throw ReflectionError.contramapWasWrongType
                     }
                     // Accessing `tuple.0` crashes the Swift 6.2 compiler (signal 5) on tuples with parameter packs.
-                    return Mirror(reflecting: tuple).children.map(\.value)
+                    return Mirror(reflecting: tuple).children.map { $0.value }
                 },
                 inputType: [Any].self,
                 outputType: (Output, repeat each Transformed).self

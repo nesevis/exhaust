@@ -27,10 +27,10 @@ package enum ContainerShape {
     func lowering() -> (generators: ContiguousArray<AnyGenerator>, rebuild: ([Any]) -> ExampleValue)? {
         switch self {
             case let .keyed(children):
-                let generators = ContiguousArray(children.map(\.generator))
-                let keyStrings = children.map(\.key)
-                let replayFlags = children.map(\.producesExampleValue)
-                let optionalFlags = children.map(\.isOptional)
+                let generators = ContiguousArray(children.map { $0.generator })
+                let keyStrings = children.map { $0.key }
+                let replayFlags = children.map { $0.producesExampleValue }
+                let optionalFlags = children.map { $0.isOptional }
                 return (generators, { values in
                     .positionalKeyed(
                         keys: keyStrings,
@@ -40,7 +40,7 @@ package enum ContainerShape {
                     )
                 })
             case let .unkeyed(elements):
-                return (ContiguousArray(elements.map(\.generator)), { values in
+                return (ContiguousArray(elements.map { $0.generator }), { values in
                     .unkeyed(zip(elements, values).map { element, value in
                         element.producesExampleValue ? (value as! ExampleValue) : .leaf(value)
                     })

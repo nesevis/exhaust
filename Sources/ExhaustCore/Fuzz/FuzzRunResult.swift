@@ -186,7 +186,7 @@ package struct FuzzRunResult: Sendable {
 
     /// Time from the run's start to the last fault cluster that classified as new, or zero if none did.
     package var lastNewClusterNanoseconds: UInt64 {
-        let latest = clusters.map(\.firstSeenNanoseconds).max() ?? 0
+        let latest = clusters.map { $0.firstSeenNanoseconds }.max() ?? 0
         return latest > startNanoseconds ? latest - startNanoseconds : 0
     }
 

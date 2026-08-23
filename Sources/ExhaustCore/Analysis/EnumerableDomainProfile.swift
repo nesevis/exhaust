@@ -44,7 +44,7 @@ package struct EnumerableDomainProfile: @unchecked Sendable {
 
 extension EnumerableDomainProfile: ScreeningProfile {
     public var domainSizes: [UInt64] {
-        parameters.map(\.domainSize)
+        parameters.map { $0.domainSize }
     }
 
     public var parameterCount: Int {

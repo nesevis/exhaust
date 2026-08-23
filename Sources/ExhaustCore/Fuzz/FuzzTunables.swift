@@ -188,7 +188,7 @@ package struct FuzzExperiments: Sendable, Equatable {
                 continue
             }
             guard let keyPath = assignments.first(where: { $0.0 == parts[0] })?.1 else {
-                let known = (assignments.map(\.0) + ["swarmMode"]).joined(separator: ", ")
+                let known = (assignments.map { $0.0 } + ["swarmMode"]).joined(separator: ", ")
                 throw ParseError(description: "EXHAUST_FUZZ_EXPERIMENT names unknown knob '\(parts[0])'. Known knobs: \(known).")
             }
             switch parts[1] {

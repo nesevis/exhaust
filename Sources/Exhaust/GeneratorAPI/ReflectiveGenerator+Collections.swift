@@ -82,7 +82,7 @@ public extension ReflectiveGenerator {
     static func eachOf<Value>(
         _ generators: [ReflectiveGenerator<Value>]
     ) -> ReflectiveGenerator<[Value]> {
-        Gen.eachOf(generators.map(\.gen)).wrapped(isReflective: generators.allSatisfy(\.isReflective))
+        Gen.eachOf(generators.map { $0.gen }).wrapped(isReflective: generators.allSatisfy { $0.isReflective })
     }
 
     /// Generates one value for each element of a known collection, using a generator built from that element.
@@ -106,7 +106,7 @@ public extension ReflectiveGenerator {
         _ generator: (Elements.Element) throws -> ReflectiveGenerator<Value>
     ) rethrows -> ReflectiveGenerator<[Value]> {
         let builtGenerators = try elements.map { try generator($0) }
-        return Gen.eachOf(builtGenerators.map(\.gen)).wrapped(isReflective: builtGenerators.allSatisfy(\.isReflective))
+        return Gen.eachOf(builtGenerators.map { $0.gen }).wrapped(isReflective: builtGenerators.allSatisfy { $0.isReflective })
     }
 
     /// Creates a generator that produces sets of random elements with size-scaled count.

@@ -367,7 +367,7 @@ extension ReductionMachine {
             ])
         } else if diff.canReuseStructuralSourcesExceptPermutation {
             scopeRejectionCache.clear()
-            let reusableStructuralSources = sources.filter(\.canReuseAfterLeafKindChange)
+            let reusableStructuralSources = sources.filter { $0.canReuseAfterLeafKindChange }
             sources = reusableStructuralSources
                 + CandidateSourceBuilder.buildPermutationSources(from: graph)
                 + CandidateSourceBuilder.buildValueSources(
