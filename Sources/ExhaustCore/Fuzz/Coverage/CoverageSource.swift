@@ -19,7 +19,7 @@ package protocol CoverageSource: AnyObject, Sendable {
     /// Visits each edge hit during the attempt bracketed by ``beginAttempt()``, with its saturating 8-bit hit count.
     func forEachHitEdge(_ body: (_ edge: Int, _ hitCount: UInt8) -> Void)
 
-    /// Whether the source harvests comparison operands from the attempt. When false, the runner skips the capture bracket and ``forEachComparisonOperand(_:)`` entirely, and the operand-injection experiment has no pool to draw from.
+    /// Whether the source harvests comparison operands from the attempt. When false, the runner skips the capture bracket and ``forEachComparisonRecord(_:)`` entirely, and operand injection has no pool to draw from.
     var wantsComparisons: Bool { get }
 
     /// Starts recording comparison operands. Called immediately before the property evaluation, so the harvest excludes the generator's own instrumented comparisons — the framework is compiled with the same flags as the system under test, and its loop and bounds comparisons would otherwise flood the pool.
@@ -71,7 +71,7 @@ package final class SancovCoverageSource: CoverageSource, @unchecked Sendable {
     /// The total instrumented edge count across all regions.
     package let edgeCount: Int
 
-    /// Whether this source drains comparison operands each attempt. Set at init from the experiment knob and the hooks' presence, so the per-attempt path pays nothing when the channel is off or the build lacks `trace-cmp`.
+    /// Whether this source drains comparison operands each attempt. Set at init from the caller's request: the production path requests harvesting only when injection can place the operands, that is, when the generator is reflective. The per-attempt path therefore pays nothing when the channel is off or the build lacks `trace-cmp`.
     package let wantsComparisons: Bool
 
     /// Creates a source over the currently registered counter regions, or returns nil when no instrumented image registered — the caller surfaces the missing-instrumentation diagnostic.

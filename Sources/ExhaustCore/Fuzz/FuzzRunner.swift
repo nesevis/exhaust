@@ -78,13 +78,13 @@ package final class FuzzRunner<Output> {
     var prng: Xoshiro256
     var bandit = MutationBandit()
 
-    /// Comparison operands harvested from the system under test, drawn on during mutation when the injection experiment is on. Stays empty otherwise, so reads cost nothing.
+    /// Comparison operands harvested from the system under test, drawn on during mutation. Stays empty when the source does not harvest or the build lacks `trace-cmp` instrumentation, so reads cost nothing.
     var comparisonPool = ComparisonPool()
 
-    /// Rebuilds an output value from a harvested operand word, or nil when the word is not a natural value of the generator's type. When set and the injection experiment is on, the mutation phase reconstructs a value from the pool, reflects it through the generator to the choices that produce it, and evaluates that candidate — the trace-cmp path for a value that flows through the generator's leaves. Derived from ``OperandReconstructable`` at the typed boundary; the generator's type is the byte schema, reflection supplies the encoding.
+    /// Rebuilds an output value from a harvested operand word, or nil when the word is not a natural value of the generator's type. When set, the mutation phase reconstructs a value from the pool, reflects it through the generator to the choices that produce it, and evaluates that candidate: the trace-cmp path for a value that flows through the generator's leaves. Derived from ``OperandReconstructable`` at the typed boundary; the generator's type is the byte schema, reflection supplies the encoding.
     let reflectionReconstructor: (@Sendable (UInt64) -> Output?)?
 
-    /// Whether the generator is reflective, enabling the field-graft path. When set and the injection experiment is on, the mutation phase grafts a harvested operand into one field of a corpus parent and reflects the whole composite through the generator — the trace-cmp path for a struct or tuple whose fields are compared one at a time, which the whole-value reconstructor cannot reach because the composite type has no single natural byte encoding. Distinct from ``reflectionReconstructor``: a composite is reflective but not itself `OperandReconstructable`, so its reconstructor is nil while this stays true.
+    /// Whether the generator is reflective, enabling the field-graft path. When true, the mutation phase grafts a harvested operand into one field of a corpus parent and reflects the whole composite through the generator: the trace-cmp path for a struct or tuple whose fields are compared one at a time, which the whole-value reconstructor cannot reach because the composite type has no single natural byte encoding. Distinct from ``reflectionReconstructor``: a composite is reflective but not itself `OperandReconstructable`, so its reconstructor is nil while this stays true.
     private let graftReflective: Bool
 
     /// Renders a reduced counterexample for its cluster's report description. Injected because the render runs during reduction — the value never crosses back to a context that could render it later — while the runner's module must stay free of rendering dependencies. The default serves direct package-level construction (tests, harnesses); `runExploreTimeCore` supplies the production renderer.

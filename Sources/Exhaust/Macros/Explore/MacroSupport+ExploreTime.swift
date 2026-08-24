@@ -418,7 +418,7 @@ public extension __ExhaustRuntime {
         // Injection activates on the presence of trace-cmp instrumentation, not a knob: a reflective generator on a trace-cmp build harvests operands and places them (whole-value gates through the reconstructor, composites through the field graft), while a non-reflective generator has nothing to place and a build without trace-cmp never fills the pool, so the injection arms stay free. There is no init-time way to detect the flag — its presence shows up as a non-empty pool once a comparison fires.
         let usesInjection = generatorIsReflective
 
-        // Built after the experiment knobs are resolved: the sancov source enables comparison-operand harvesting at init only when injection can use the operands.
+        // The sancov source enables comparison-operand harvesting at init only when injection can use the operands.
         let source: any CoverageSource
         if let injectedSource {
             source = injectedSource
