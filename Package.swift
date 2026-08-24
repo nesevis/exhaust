@@ -51,6 +51,11 @@ let package = Package(
             name: "Exhaust",
             targets: ["Exhaust"]
         ),
+        // The app-safe generator surface: ReflectiveGenerator factories, #gen, and generator synthesis, with no Testing or XCTest anywhere in its dependency closure. App and CLI targets import this product without ENABLE_TESTING_SEARCH_PATHS; Exhaust re-exports it for test targets.
+        .library(
+            name: "ExhaustGenerators",
+            targets: ["ExhaustGenerators"]
+        ),
         // Consumed by the MetaFuzzHarness package (the self-fuzzing harness); not part of the supported public API.
         .library(
             name: "ExhaustMetaFuzz",
@@ -76,10 +81,24 @@ let package = Package(
             name: "ExhaustObjCSupport",
             publicHeadersPath: "include"
         ),
+        // The app-safe generator layer under Exhaust: factory shims over ExhaustCore's package Gen* API, #gen, generator synthesis, and the reporting chokepoints. Deliberately free of Testing and XCTest imports on Apple platforms so importing it never drags test-framework search paths into an app build.
+        .target(
+            name: "ExhaustGenerators",
+            dependencies: [
+                "ExhaustCore",
+                .product(name: "ExhaustMacroPlugin", package: "exhaust-macros"),
+                .product(name: "IssueReporting", package: "xctest-dynamic-overlay"),
+            ],
+            swiftSettings: strictConcurrencySettings + (usePrecompiled
+                ? [.unsafeFlags(["-Xfrontend", "-experimental-package-interface-load"])]
+                : []),
+            plugins: swiftLintPlugins
+        ),
         .target(
             name: "Exhaust",
             dependencies: [
                 "ExhaustCore",
+                "ExhaustGenerators",
                 .product(name: "ExhaustMacroPlugin", package: "exhaust-macros"),
                 .target(
                     name: "ExhaustObjCSupport",
