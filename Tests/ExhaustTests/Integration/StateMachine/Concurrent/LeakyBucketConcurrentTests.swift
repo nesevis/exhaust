@@ -1,4 +1,5 @@
 import Exhaust
+import ExhaustCore
 import ExhaustTestSupport
 import Testing
 
@@ -43,10 +44,10 @@ struct LeakyBucketConcurrentTests {
         #expect(report.reductionInvocations == 9)
         #expect(report.totalMaterializations == 11)
         #expect(report.cycles == 5)
-        #expect(report.encoderProbes[.laneCollapse] == 7)
-        #expect(report.encoderProbesAccepted[.laneCollapse] == 1)
-        #expect(report.encoderProbes[.deletion] == 10)
-        #expect(report.encoderProbesAccepted[.deletion] == 1)
+        #expect(report.encoderProbes[EncoderName.laneCollapse.rawValue] == 7)
+        #expect(report.encoderProbesAccepted[EncoderName.laneCollapse.rawValue] == 1)
+        #expect(report.encoderProbes[EncoderName.deletion.rawValue] == 10)
+        #expect(report.encoderProbesAccepted[EncoderName.deletion.rawValue] == 1)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)

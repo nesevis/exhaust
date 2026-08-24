@@ -120,26 +120,26 @@ public struct ExhaustReport: Sendable {
 
     /// Per-encoder probe counts from the reduction phase.
     ///
-    /// Each key is an `EncoderName` identifying a reduction encoder, and the value is the total number of probes that encoder generated across all cycles. Includes cache rejections that did not lead to a materialization.
-    public var encoderProbes: [EncoderName: Int] = [:]
+    /// Each key names a reduction encoder (for example `"deletion"` or `"valueSearch"`), and the value is the total number of probes that encoder generated across all cycles. Includes cache rejections that did not lead to a materialization.
+    public var encoderProbes: [String: Int] = [:]
 
     /// Per-encoder counts of probes that were accepted (decoder produced a valid reduction) during the reduction phase.
-    public var encoderProbesAccepted: [EncoderName: Int] = [:]
+    public var encoderProbesAccepted: [String: Int] = [:]
 
     /// Per-encoder counts of probes that were rejected by the scope rejection cache without materializing.
-    public var encoderProbesRejectedByCache: [EncoderName: Int] = [:]
+    public var encoderProbesRejectedByCache: [String: Int] = [:]
 
     /// Per-encoder counts of probes rejected during materialization before the property ran. Structural relax proposals have no encoder and appear only in the run-wide reduction counts.
-    public var encoderProbesRejectedDuringMaterialization: [EncoderName: Int] = [:]
+    public var encoderProbesRejectedDuringMaterialization: [String: Int] = [:]
 
     /// Per-encoder counts of probes whose materialized value satisfied the property. Structural relax proposals have no encoder and appear only in the run-wide reduction counts.
-    public var encoderProbesWherePropertyPassed: [EncoderName: Int] = [:]
+    public var encoderProbesWherePropertyPassed: [String: Int] = [:]
 
     /// Per-encoder counts of probes whose materialized value falsified the property. Structural relax proposals have no encoder and appear only in the run-wide reduction counts.
-    public var encoderProbesWherePropertyFailed: [EncoderName: Int] = [:]
+    public var encoderProbesWherePropertyFailed: [String: Int] = [:]
 
     /// Combines per-encoder materialization rejection, property success, and property failure that was not admitted. Use the separated per-encoder counts when the rejection stage matters.
-    public var encoderProbesRejectedByDecoder: [EncoderName: Int] = [:]
+    public var encoderProbesRejectedByDecoder: [String: Int] = [:]
 
     /// Total reduction cycles completed.
     public var cycles: Int = 0
@@ -220,7 +220,7 @@ public struct ExhaustReport: Sendable {
             let invocations = (encoderProbesWherePropertyPassed[name] ?? 0)
                 + (encoderProbesWherePropertyFailed[name] ?? 0)
             let acceptancePercentage = invocations > 0 ? accepted * 100 / invocations : 0
-            return "\(name.rawValue)=i\(invocations)/a\(accepted)/c\(cacheRejections)/d\(decoderRejections)/\(acceptancePercentage)%"
+            return "\(name)=i\(invocations)/a\(accepted)/c\(cacheRejections)/d\(decoderRejections)/\(acceptancePercentage)%"
         }.joined(separator: " ")
         let timingLabel: String
         if let timings = stepTimings {
@@ -242,7 +242,9 @@ public struct ExhaustReport: Sendable {
 
     /// Populates reduction statistics from a ``ReductionStats`` value. Each call overwrites the previous stats; the reducer runs a single reduction pass per report, so there is nothing to accumulate.
     package mutating func applyReductionStats(_ stats: ReductionStats) {
-        let counts = stats.encoderCounts
+        let counts = [String: ReductionProbeCounts](
+            uniqueKeysWithValues: stats.encoderCounts.map { ($0.key.rawValue, $0.value) }
+        )
         encoderProbes = counts.mapValues(\.emitted)
         encoderProbesAccepted = counts.mapValues(\.accepted)
         encoderProbesRejectedByCache = counts.mapValues(\.rejectedByCache)

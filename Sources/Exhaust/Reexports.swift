@@ -6,7 +6,6 @@ import ExhaustCore
 @_exported import struct ExhaustCore.CoOccurrenceMatrix
 @_exported import struct ExhaustCore.CouplingEdge
 @_exported import enum ExhaustCore.DateStride
-@_exported import enum ExhaustCore.EncoderName
 @_exported import struct ExhaustCore.FilterObservation
 @_exported import struct ExhaustCore.FilterSourceLocation
 @_exported import enum ExhaustCore.FilterType

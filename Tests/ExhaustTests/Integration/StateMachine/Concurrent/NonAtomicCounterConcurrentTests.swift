@@ -1,4 +1,5 @@
 import Exhaust
+import ExhaustCore
 import ExhaustTestSupport
 import Testing
 
@@ -97,10 +98,10 @@ struct NonAtomicCounterConcurrentTests {
         #expect(report.totalMilliseconds > 0)
         #expect(report.totalMaterializations == 9)
         #expect(report.cycles == 5)
-        #expect(report.encoderProbes[.laneCollapse] == 9)
-        #expect(report.encoderProbesAccepted[.laneCollapse] == 0)
-        #expect(report.encoderProbes[.deletion] == 11)
-        #expect(report.encoderProbesAccepted[.deletion] == 1)
+        #expect(report.encoderProbes[EncoderName.laneCollapse.rawValue] == 9)
+        #expect(report.encoderProbesAccepted[EncoderName.laneCollapse.rawValue] == 0)
+        #expect(report.encoderProbes[EncoderName.deletion.rawValue] == 11)
+        #expect(report.encoderProbesAccepted[EncoderName.deletion.rawValue] == 1)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
