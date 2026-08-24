@@ -1,6 +1,7 @@
 // Defines the protocol that `@StateMachine`-annotated types conform to.
 //
 // The macro synthesizes conformance. Users never implement this directly.
+import ExhaustCore
 import Foundation
 
 /// Drives spec tests with any asynchronous member, under every execution mode.

@@ -7,6 +7,7 @@
 
 import Benchmark
 import Exhaust
+import ExhaustCore
 
 // MARK: - Shared Generators
 

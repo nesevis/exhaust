@@ -1,5 +1,6 @@
 import Benchmark
 import Exhaust
+import ExhaustCore
 
 // MARK: - Configuration
 
@@ -19,8 +20,8 @@ registerECOOPBenchmarks()
 // registerInterpreterHappyPathPerformanceBenchmarks()
 // registerPreemptiveLoweHashMapBenchmarks()
 // registerComplexGrammarBenchmarks()
-// registerGenerationBenchmarks()
-// registerSynthesizedGeneratorBenchmarks()
+registerGenerationBenchmarks()
+registerSynthesizedGeneratorBenchmarks()
 // registerParallelGenerationBenchmarks()
 // registerStringGenerationBenchmarks()
 // registerCoveringArrayBenchmarks()

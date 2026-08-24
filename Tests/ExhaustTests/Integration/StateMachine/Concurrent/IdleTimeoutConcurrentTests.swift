@@ -1,3 +1,4 @@
+import ExhaustCore
 import ExhaustTestSupport
 import Foundation
 import IssueReporting

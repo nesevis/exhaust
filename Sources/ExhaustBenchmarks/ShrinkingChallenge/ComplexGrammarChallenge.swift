@@ -7,6 +7,7 @@
 // Property: trees with at least N operators must not contain a literal Div by zero. The artificial size floor is what keeps the counterexamples large enough to exercise the early shrink cycles where the rebuild tax should hurt.
 
 import Exhaust
+import ExhaustCore
 
 // MARK: - Type
 

@@ -7,6 +7,7 @@
 //
 
 import Exhaust
+import ExhaustCore
 import ExhaustTestSupport
 import Testing
 

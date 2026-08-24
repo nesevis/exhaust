@@ -5,6 +5,7 @@
 //  Created by Chris Kolbu on 9/6/2026.
 //
 
+import ExhaustCore
 import IssueReporting
 
 public extension __ExhaustRuntime {
