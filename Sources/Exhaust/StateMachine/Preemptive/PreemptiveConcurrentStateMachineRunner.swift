@@ -34,6 +34,7 @@ public extension __ExhaustRuntime {
             )
             return nil
         }
+        parsed.reportCommandLimitClampWarning(fileID: fileID, filePath: filePath, line: line, column: column)
         let config = parsed.config
 
         var regressionSeeds: [String] = []

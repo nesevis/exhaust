@@ -3,6 +3,9 @@ import ExhaustCore
 
 /// Flattened configuration produced by parsing a `[StateMachineSettings]` array for a concurrent spec. Holds all resolved values with defaults applied, ready for the concurrent runner to consume without re-interpreting the enum cases.
 struct ResolvedConcurrentConfig {
+    /// The largest `.commandLimit` a run accepts. Covering-array construction cost grows superlinearly with sequence length: an explicit `.commandLimit(20000)` on a passing sequential spec exceeded a 2-minute limit on a 5+5 budget where the raw command executions cost milliseconds. Parse clamps larger values here and records the request in ``ParseResult/clampedCommandLimit`` for the entry point to warn about, mirroring how `.tasks` caps its own estimate at 40.
+    static let maxCommandLimit = 200
+
     var commandLimit: Int?
     var concurrencyLevel: Int = 2
     var budget: ExhaustBudget = .standard
@@ -47,11 +50,31 @@ struct ResolvedConcurrentConfig {
     struct ParseResult {
         var config: ResolvedConcurrentConfig
         var invalidReplaySeed: ReplaySeed?
+        /// The `.commandLimit` value the caller requested when it exceeded ``ResolvedConcurrentConfig/maxCommandLimit``, or nil when no clamping occurred.
+        var clampedCommandLimit: Int?
+
+        /// Warns that an explicit `.commandLimit` was clamped. Call at the entry point, where the caller's source location is available; does nothing when no clamping occurred.
+        func reportCommandLimitClampWarning(
+            fileID: StaticString,
+            filePath: StaticString,
+            line: UInt,
+            column: UInt
+        ) {
+            guard let requested = clampedCommandLimit else { return }
+            reportWarning(
+                ".commandLimit(\(requested)) exceeds the supported maximum of \(ResolvedConcurrentConfig.maxCommandLimit) and was clamped. Covering-array construction cost grows superlinearly with sequence length, so longer sequences spend their budget building coverage rows instead of executing commands.",
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
+        }
     }
 
     static func parse(_ settings: [StateMachineSettings]) -> ParseResult {
         var config = ResolvedConcurrentConfig()
         var invalidSeed: ReplaySeed?
+        var clampedCommandLimit: Int?
         for setting in settings {
             switch setting {
                 case let .parallelize(level):
@@ -60,7 +83,12 @@ struct ResolvedConcurrentConfig {
                     config.budget = budget
                 case let .commandLimit(limit):
                     precondition(limit >= 1, "Command limit must be at least 1")
-                    config.commandLimit = limit
+                    if limit > maxCommandLimit {
+                        clampedCommandLimit = limit
+                        config.commandLimit = maxCommandLimit
+                    } else {
+                        config.commandLimit = limit
+                    }
                 case let .replay(replaySeed):
                     if let resolved = replaySeed.resolve() {
                         switch resolved {
@@ -108,6 +136,6 @@ struct ResolvedConcurrentConfig {
         #endif
         config.budget.preconditionValid()
 
-        return ParseResult(config: config, invalidReplaySeed: invalidSeed)
+        return ParseResult(config: config, invalidReplaySeed: invalidSeed, clampedCommandLimit: clampedCommandLimit)
     }
 }

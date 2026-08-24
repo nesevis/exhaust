@@ -94,6 +94,7 @@ public extension __ExhaustRuntime {
             )
             return nil
         }
+        parsed.reportCommandLimitClampWarning(fileID: fileID, filePath: filePath, line: line, column: column)
         let config = parsed.config
 
         // The trait-budget fallback is applied in `ResolvedConcurrentConfig.parse`, so `config.budget` already reflects a suite-level `.budget` trait here.

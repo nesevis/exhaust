@@ -70,6 +70,7 @@ public extension __ExhaustRuntime {
             reportError("Invalid replay seed", fileID: fileID, filePath: filePath, line: line, column: column)
             return nil
         }
+        parsed.reportCommandLimitClampWarning(fileID: fileID, filePath: filePath, line: line, column: column)
         var config = parsed.config
         config.concurrencyLevel = 1
 
@@ -155,6 +156,7 @@ public extension __ExhaustRuntime {
             reportError("Invalid replay seed", fileID: fileID, filePath: filePath, line: line, column: column)
             return nil
         }
+        parsed.reportCommandLimitClampWarning(fileID: fileID, filePath: filePath, line: line, column: column)
         var config = parsed.config
         config.concurrencyLevel = 1
 

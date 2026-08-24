@@ -43,3 +43,34 @@ struct EstimateCommandLimitTests {
         #expect(limit >= 6, "Should still produce exploration floor even with zero budget")
     }
 }
+
+@Suite(".commandLimit clamping", .tags(.stateMachine))
+struct CommandLimitClampTests {
+    @Test("A limit above the maximum is clamped and the request recorded")
+    func limitAboveMaximumIsClampedAndRequestRecorded() {
+        let parsed = ResolvedConcurrentConfig.parse([.commandLimit(20000)])
+        #expect(parsed.config.commandLimit == ResolvedConcurrentConfig.maxCommandLimit)
+        #expect(parsed.clampedCommandLimit == 20000)
+    }
+
+    @Test("A limit at the maximum passes through unclamped")
+    func limitAtMaximumPassesThroughUnclamped() {
+        let parsed = ResolvedConcurrentConfig.parse([.commandLimit(ResolvedConcurrentConfig.maxCommandLimit)])
+        #expect(parsed.config.commandLimit == ResolvedConcurrentConfig.maxCommandLimit)
+        #expect(parsed.clampedCommandLimit == nil)
+    }
+
+    @Test("A limit below the maximum passes through unclamped")
+    func limitBelowMaximumPassesThroughUnclamped() {
+        let parsed = ResolvedConcurrentConfig.parse([.commandLimit(64)])
+        #expect(parsed.config.commandLimit == 64)
+        #expect(parsed.clampedCommandLimit == nil)
+    }
+
+    @Test("An omitted limit records no clamp")
+    func omittedLimitRecordsNoClamp() {
+        let parsed = ResolvedConcurrentConfig.parse([.budget(.standard)])
+        #expect(parsed.config.commandLimit == nil)
+        #expect(parsed.clampedCommandLimit == nil)
+    }
+}
