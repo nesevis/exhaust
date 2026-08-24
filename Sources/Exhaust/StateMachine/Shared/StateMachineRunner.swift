@@ -48,7 +48,7 @@ public extension __ExhaustRuntime {
 
 // MARK: - Entry Point
 
-public extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Runs a `.tasks` spec test for the given spec type.
     ///
     /// Generates command sequences using the spec's synthesized ``commandGenerator``, executes each sequence against a fresh instance, and verifies that invariants hold after every step. When a violation is found, the failing command sequence is reduced to a minimal counterexample.
@@ -138,7 +138,7 @@ public extension __ExhaustRuntime {
 
 // MARK: - Async Sequential Entry Point
 
-public extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Runs a `.sequential` async spec test without requiring macOS 15.
     ///
     /// Dispatches the pipeline to a GCD thread and bridges async command execution via ``blockingAwait(_:)``. This avoids the cooperative executor (and its availability gate) while still running async commands sequentially.

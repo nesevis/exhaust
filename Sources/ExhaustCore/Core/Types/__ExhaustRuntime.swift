@@ -3,7 +3,7 @@
 /// The `__` prefix follows Swift Testing's convention (`Testing.__check`, `Testing.__Expression`) to signal that this is macro infrastructure, not public API.
 public enum __ExhaustRuntime { // swiftlint:disable:this type_name
     /// Maximum number of filter retry attempts before giving up on a single value.
-    public static var maxFilterRuns: UInt64 {
+    package static var maxFilterRuns: UInt64 {
         500
     }
 }

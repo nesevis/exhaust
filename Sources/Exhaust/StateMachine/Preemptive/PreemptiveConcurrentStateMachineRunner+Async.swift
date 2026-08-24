@@ -12,7 +12,7 @@ import IssueReporting
 
 // MARK: - Async Entry Point
 
-public extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Runs a preemptive concurrent spec test for the given async specification type.
     ///
     /// Dispatches commands across real GCD threads and bridges async command execution via Task+semaphore. This catches races in synchronous primitives (locks, dispatch queues, atomics) hidden behind async facades. The cooperative runner's deterministic interleaving only reaches `await` suspension points.

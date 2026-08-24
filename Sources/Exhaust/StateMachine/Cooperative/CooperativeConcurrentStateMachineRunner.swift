@@ -68,7 +68,7 @@ public extension __ExhaustRuntime {
 // MARK: - Runner Entry Point
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-public extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Runs a `.tasks` concurrent spec test for the given async spec type.
     ///
     /// Generates random tagged command sequences where each command carries a schedule marker assigning it to one of N concurrent lanes or the sequential prefix. The cooperative scheduler (``drainSchedule(taggedCommands:setupStep:specInit:concurrencyLevel:recordTrace:idleTimeoutMilliseconds:)``) executes the sequence with deterministic interleaving controlled by the marker order. When a failure is found, the choice-graph reducer reduces both the command sequence and the lane assignments.

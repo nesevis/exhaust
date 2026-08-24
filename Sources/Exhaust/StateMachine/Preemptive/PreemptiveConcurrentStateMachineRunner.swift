@@ -13,7 +13,7 @@ import IssueReporting
 
 // MARK: - Runner Entry Point
 
-public extension __ExhaustRuntime {
+package extension __ExhaustRuntime {
     /// Runs a preemptive concurrent spec test for the given synchronous specification type.
     ///
     /// Dispatches commands across real GCD threads and uses the spec's ``StateMachineSpec/equivalenceCheck(_:)`` to verify consistency with sequential behavior. Non-deterministic scheduling means the same seed does not guarantee the same interleaving, so bug detection is probabilistic and relies on repetition across the sampling budget.

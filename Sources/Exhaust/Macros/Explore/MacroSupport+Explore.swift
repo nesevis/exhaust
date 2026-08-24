@@ -261,7 +261,7 @@ public extension __ExhaustRuntime {
     /// Fails or warns on a passing explore run whose stated goals were not met.
     ///
     /// A run that never invoked the property asserts nothing and reports an error regardless of `.suppress(.issueReporting)`, matching the `#exhaust` pointless-run error. A direction the run never reached defeats the point of `#explore`, so it also reports an error; a direction whose tuning failed reports a warning, since that can be a tuning limitation rather than a generator or predicate defect. Both of those respect suppression so a caller asserting on the returned report can opt out.
-    static func reportExploreCoverageIssues(
+    package static func reportExploreCoverageIssues(
         report: ExploreReport<some Any>,
         suppressIssueReporting: Bool,
         fileID: StaticString,

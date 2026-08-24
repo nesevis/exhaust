@@ -13,7 +13,7 @@ public enum ExamineSeverity: Sendable {
     case error
     /// Reports the failure via `reportIssue` at warning severity. The issue appears in test output but does not cause the test to fail.
     case warning
-    /// Does not report the failure. The check still runs and its results appear in the returned ``ExamineReport``.
+    /// Does not report the failure. The check still runs and its results appear in the returned ``ExamineReport``. Integrity failures (replay divergence, no values generated) report regardless of severity settings; use ``ExamineSettings/suppress(_:)`` with `.issueReporting` to silence those too.
     case silent
 
     /// Maps to ``IssueReporting/IssueSeverity``, or `nil` for `.silent`.
@@ -65,7 +65,7 @@ public enum ExamineSettings: Sendable {
 
     /// Suppresses log output, issue reporting, or both.
     ///
-    /// Use `.suppress(.issueReporting)` when the test asserts on the returned ``ExamineReport`` rather than relying on the framework to record the failure. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
+    /// Use `.suppress(.issueReporting)` when the test asserts on the returned ``ExamineReport`` rather than relying on the framework to record the failure. Unlike `.severity(.silent)`, this also silences replay-divergence and no-values-generated failures, and it takes precedence over any severity setting. Use `.suppress(.logs)` to silence console output. Use `.suppress(.all)` for a completely silent run.
     /// ```swift
     /// #examine(gen, .suppress(.logs))
     /// #examine(gen, .suppress(.all))
