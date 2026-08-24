@@ -97,17 +97,24 @@ extension __ExhaustRuntime {
     /// Moves work off the cooperative thread pool so that synchronous blocking (drain loops, semaphore waits) inside `work` cannot starve the pool. GCD's global queue is far larger than the fixed cooperative pool, so it does not starve the way the cooperative pool does — but it is not unbounded (a top-level concurrent queue caps at 64 threads), so callers that fan out lanes reserve through ``LaneGate`` via `dispatchToGCD(reserving:)` to keep aggregate demand under that wall.
     ///
     /// The `nonisolated(unsafe)` annotations bridge non-Sendable generic values across the GCD boundary. Safety relies on the closure and its result being created and consumed by the same logical unit of work — no concurrent access is possible because the continuation resumes only after `work` returns.
+    ///
+    /// Every hop binds a ``DeferredIssueSink`` around `work` and replays it after the continuation resumes: issue recording resolves the current test from task-locals the GCD worker does not carry, so a report recorded inside `work` would misroute as a runtime warning. Deferring at the hop makes reporting placement inside dispatched bodies a non-decision for entry points.
     static func dispatchToGCD<Result>(
         _ work: @escaping () -> Result
     ) async -> Result {
+        let issueSink = DeferredIssueSink()
         nonisolated(unsafe) let unsafeWork = work
-        return await withCheckedContinuation { (continuation: CheckedContinuation<Result, Never>) in
+        let result = await withCheckedContinuation { (continuation: CheckedContinuation<Result, Never>) in
             DispatchQueue.global().async {
-                let result = unsafeWork()
+                let result = DeferredIssueSink.$current.withValue(issueSink) {
+                    unsafeWork()
+                }
                 nonisolated(unsafe) let unsafeResult = result
                 continuation.resume(returning: unsafeResult)
             }
         }
+        issueSink.replay()
+        return result
     }
 
     /// Acquires `lanes` from the process-global ``LaneGate``, performs the GCD hop, and releases on the way out.

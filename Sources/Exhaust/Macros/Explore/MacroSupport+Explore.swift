@@ -456,7 +456,7 @@ public extension __ExhaustRuntime {
             let traitConfig = ExhaustTraitConfiguration.current
         #endif
 
-        return await dispatchToGCD(reserving: LaneReservation.single) {
+        var report = await dispatchToGCD(reserving: LaneReservation.single) { () -> ExploreReport<Output> in
             nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
             // withExpectedIssue cannot be used on a GCD thread because Test.current is nil, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
             #if canImport(Testing)
@@ -489,7 +489,7 @@ public extension __ExhaustRuntime {
                 )
             #endif
 
-            guard var report = pipelineResult else {
+            guard let pipelineReport = pipelineResult else {
                 return __explore(
                     refGen,
                     settings: settings,
@@ -499,41 +499,41 @@ public extension __ExhaustRuntime {
                 )
             }
 
-            let suppressIssueReporting = settings.contains { setting in
-                if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
-                return false
-            }
-            if let counterexample = report.result {
-                if suppressIssueReporting == false {
-                    report.invocations.diagnostic += 1
-                    let valueBox = UnsafeSendableBox(counterexample)
-                    __ExhaustRuntime.blockingAwait {
-                        try? await property(valueBox.value)
-                    }
+            return pipelineReport
+        }
 
-                    let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: nil).encoded
-                    reportError(
-                        "Reproduce: .replay(\"\(encoded)\")",
-                        fileID: fileID,
-                        filePath: filePath,
-                        line: line,
-                        column: column
-                    )
-                }
-            } else {
-                // The pipeline ran with issue reporting suppressed inside withKnownIssue, so its coverage issues never surfaced. Re-report them here with the caller's own suppression setting.
-                reportExploreCoverageIssues(
-                    report: report,
-                    suppressIssueReporting: suppressIssueReporting,
+        // The diagnostic rerun and issue reporting run on the test task after the hop: issue recording resolves the current test from task-locals, so an #expect failure from the rerun records with the counterexample against the right test instead of «unknown».
+        let suppressIssueReporting = settings.contains { setting in
+            if case let .suppress(option) = setting, option == .issueReporting || option == .all { return true }
+            return false
+        }
+        if let counterexample = report.result {
+            if suppressIssueReporting == false {
+                report.invocations.diagnostic += 1
+                try? await property(counterexample)
+
+                let encoded = ReplaySeed.Resolved.sampling(seed: report.seed, iteration: nil).encoded
+                reportError(
+                    "Reproduce: .replay(\"\(encoded)\")",
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
                     column: column
                 )
             }
-
-            return report
+        } else {
+            // The pipeline ran with issue reporting suppressed inside withKnownIssue, so its coverage issues never surfaced. Re-report them here with the caller's own suppression setting.
+            reportExploreCoverageIssues(
+                report: report,
+                suppressIssueReporting: suppressIssueReporting,
+                fileID: fileID,
+                filePath: filePath,
+                line: line,
+                column: column
+            )
         }
+
+        return report
     }
 }
 
