@@ -2,9 +2,7 @@
 
 import ExhaustCore
 @_exported import enum ExhaustCore.__ExhaustRuntime
-@_exported import struct ExhaustCore.ChoiceGraphStats
 @_exported import struct ExhaustCore.CoOccurrenceMatrix
-@_exported import struct ExhaustCore.CouplingEdge
 @_exported import enum ExhaustCore.DateStride
 @_exported import struct ExhaustCore.FilterObservation
 @_exported import struct ExhaustCore.FilterSourceLocation
@@ -13,8 +11,6 @@ import ExhaustCore
 @_exported import enum ExhaustCore.LogFormat
 @_exported import enum ExhaustCore.LogLevel
 @_exported import struct ExhaustCore.NumericTypeCoverage
-@_exported import struct ExhaustCore.OpenPBTStatsLine
-@_exported import struct ExhaustCore.ReductionStats
 @_exported import enum ExhaustCore.ReflectionError
 @_exported import struct ExhaustCore.ReflectiveGenerator
 @_exported import enum ExhaustCore.ReplaySeed

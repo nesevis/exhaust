@@ -145,34 +145,34 @@ public struct ExhaustReport: Sendable {
     public var cycles: Int = 0
 
     /// Floor-motion events caused by structural changes (graph rebuild between old and new record).
-    public var structuralFloorMotionEvents: Int = 0
+    package var structuralFloorMotionEvents: Int = 0
 
     /// Floor-motion events caused by value coupling (same rebuild generation, partner coordinate shifted the boundary).
-    public var valueFloorMotionEvents: Int = 0
+    package var valueFloorMotionEvents: Int = 0
 
     /// Node IDs that experienced value floor motion during this run.
-    public var valueFloorMotionNodeIDs: Set<Int> = []
+    package var valueFloorMotionNodeIDs: Set<Int> = []
 
     /// Node IDs that were part of a redistribution scope when redistribution accepted during this run.
-    public var redistributionAcceptanceNodeIDs: Set<Int> = []
+    package var redistributionAcceptanceNodeIDs: Set<Int> = []
 
     /// Measured coupling edges from this run. Each edge records that one node's floor shifted after another node's value changed.
-    public var couplingEdges: [CouplingEdge: Int] = [:]
+    package var couplingEdges: [CouplingEdge: Int] = [:]
 
     /// Distribution of partner counts per value floor-motion event.
-    public var floorMotionPartnerCounts: [Int: Int] = [:]
+    package var floorMotionPartnerCounts: [Int: Int] = [:]
 
     /// Per-fingerprint filter predicate observations accumulated during reduction.
     public var filterObservations: [UInt64: FilterObservation] = [:]
 
     /// Leaves that ended reduction converged at their current value while short of their reduction target. Nonzero counts are normal for successful reductions; see ``reductionStalled`` for the warning condition.
-    public var stalledLeafCount: Int = 0
+    package var stalledLeafCount: Int = 0
 
     /// Sum of the gaps between each stalled leaf's terminal value and its reduction target, in bit-pattern space.
-    public var stalledLeafResidualDistance: Double = 0
+    package var stalledLeafResidualDistance: Double = 0
 
     /// True when the reducer accepted at least one improvement during reduction.
-    public var anyAcceptanceEverOccurred: Bool = false
+    package var anyAcceptanceEverOccurred: Bool = false
 
     /// True when reduction could not improve the counterexample even once while leaves sit short of their reduction targets. The counterexample may be far from minimal. Typically the failing values are linked by a relationship (for example `x == 2 * y + 1`) that no single-value change can preserve, so every reduction attempt un-fails the property. Deadline-capped runs are excluded: they report the time limit instead, because their lack of progress is explained by the budget rather than by the landscape. Runs that never reached the property are excluded too, and report ``reductionFailed`` instead: a landscape claim needs at least one verdict behind it.
     public var reductionStalled: Bool {

@@ -83,7 +83,7 @@ package struct ReductionProbeCounts: Sendable, Equatable {
 /// Statistics collected from a single reduction run.
 ///
 /// Captures per-encoder probe counts, materialization attempts, per-fingerprint filter validity observations, and profiling data for the reduction planning decision tree. Accumulated monotonically by ``ReductionMachine`` during reduction and extracted at the end of the pipeline.
-public struct ReductionStats: Sendable {
+package struct ReductionStats: Sendable {
     /// Run-wide reduction probe outcomes. Encoder passes and structural relax proposals merge into this value after their local work finishes.
     private var probeCounts = ReductionProbeCounts()
 
@@ -337,27 +337,27 @@ package struct DispatchRecord: Sendable {
 
 // MARK: - Step Timings
 
-public extension ReductionStats {
+package extension ReductionStats {
     /// Aggregate wall-time spent in each ``ReductionMachine`` step category.
     ///
     /// Times are in nanoseconds. Populated by the driver loop that calls ``ReductionMachine/next()`` and measures the elapsed time per step.
     struct StepTimings: Sendable {
-        public var dispatch: UInt64 = 0
-        public var buildSources: UInt64 = 0
-        public var encode: UInt64 = 0
-        public var decode: UInt64 = 0
-        public var rebuild: UInt64 = 0
-        public var convergenceConfirmation: UInt64 = 0
-        public var relaxRound: UInt64 = 0
-        public var relationPass: UInt64 = 0
-        public var reorder: UInt64 = 0
+        package var dispatch: UInt64 = 0
+        package var buildSources: UInt64 = 0
+        package var encode: UInt64 = 0
+        package var decode: UInt64 = 0
+        package var rebuild: UInt64 = 0
+        package var convergenceConfirmation: UInt64 = 0
+        package var relaxRound: UInt64 = 0
+        package var relationPass: UInt64 = 0
+        package var reorder: UInt64 = 0
 
-        public var dispatchCount: Int = 0
-        public var encodeCount: Int = 0
-        public var decodeCount: Int = 0
-        public var rebuildCount: Int = 0
-        public var rebuildGraphNanoseconds: UInt64 = 0
-        public var rebuildSourceNanoseconds: UInt64 = 0
+        package var dispatchCount: Int = 0
+        package var encodeCount: Int = 0
+        package var decodeCount: Int = 0
+        package var rebuildCount: Int = 0
+        package var rebuildGraphNanoseconds: UInt64 = 0
+        package var rebuildSourceNanoseconds: UInt64 = 0
 
         package init() {}
 
@@ -415,10 +415,10 @@ public extension ReductionStats {
 // MARK: - Coupling Edge
 
 /// A directed edge in the measured coupling graph: `motionNodeID`'s convergence floor shifted after `changedNodeID`'s value was accepted.
-public struct CouplingEdge: Hashable, Sendable {
+package struct CouplingEdge: Hashable, Sendable {
     /// The node whose convergence floor shifted.
-    public let motionNodeID: Int
+    package let motionNodeID: Int
 
     /// The node whose value change preceded the floor shift.
-    public let changedNodeID: Int
+    package let changedNodeID: Int
 }

@@ -54,7 +54,7 @@ package struct OpenPBTStatsFeatures: Codable, Sendable {
 /// - `status_reason`: required string (empty when no specific reason).
 /// - `coverage`: `null` (Exhaust does not provide per-example line coverage).
 /// - `metadata`: `null` (reserved for future use).
-public struct OpenPBTStatsLine: Sendable {
+package struct OpenPBTStatsLine: Sendable {
     /// Record type, always `"test_case"`.
     package let type: String
     /// Epoch timestamp when the test run started.
@@ -107,7 +107,7 @@ extension OpenPBTStatsLine: Codable {
         case type, runStart, property, status, statusReason, representation, features, howGenerated, timing, coverage, metadata, lane
     }
 
-    public func encode(to encoder: Encoder) throws {
+    package func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(type, forKey: .type)
         try container.encode(runStart, forKey: .runStart)
@@ -123,7 +123,7 @@ extension OpenPBTStatsLine: Codable {
         try container.encodeIfPresent(lane, forKey: .lane)
     }
 
-    public init(from decoder: Decoder) throws {
+    package init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         try self.init(
             type: container.decode(String.self, forKey: .type),
