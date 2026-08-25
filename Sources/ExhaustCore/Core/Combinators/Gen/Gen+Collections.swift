@@ -23,13 +23,7 @@ package extension Gen {
         )
         // Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOperation) { result in
-            guard let array = result as? [Output] else {
-                throw GeneratorError.typeMismatch(
-                    expected: String(describing: type(of: [Output].self)),
-                    actual: String(describing: type(of: result))
-                )
-            }
-            return .pure(array)
+            try .pure(sequenceElements(result, as: Output.self))
         }
     }
 
@@ -56,13 +50,7 @@ package extension Gen {
             gen: elementGenerator.erase()
         )
         return .impure(operation: sequenceOperation) { result in
-            guard let array = result as? [Output] else {
-                throw GeneratorError.typeMismatch(
-                    expected: String(describing: type(of: [Output].self)),
-                    actual: String(describing: type(of: result))
-                )
-            }
-            return .pure(array)
+            try .pure(sequenceElements(result, as: Output.self))
         }
     }
 
