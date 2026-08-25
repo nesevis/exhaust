@@ -304,9 +304,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         // MARK: sequence
 
-            case let .impure(operation: .sequence(lengthGen, elementGen, _), continuation):
+            case let .impure(operation: .sequence(lengthGen, elementGen, elementBatch), continuation):
                 return try handleSequence(
-                    lengthGen: lengthGen, elementGen: elementGen,
+                    lengthGen: lengthGen, elementGen: elementGen, elementBatch: elementBatch,
                     continuation: continuation, context: &context
                 )
 
@@ -502,6 +502,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     private static func handleSequence(
         lengthGen: Generator<UInt64>,
         elementGen: AnyGenerator,
+        elementBatch: ReflectiveOperation.SequenceElementBatch?,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
         guard let (lengthValue, lengthTrees) = try generateRecursiveAny(
@@ -531,7 +532,47 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         }
 
         // Hoist scaling out of the per-element loop: size is stable within a run, so applyScaling (which includes pow() for exponential) produces the same effective range for every element. Unscaled direct elements already optimize well under WMO; include them only when fusing away the contramap dispatch as well.
-        if case let .impure(
+        if let elementBatch, case let .impure(
+            operation: .chooseBits(min, max, tag, isRangeExplicit, scaling, typeTagPayload),
+            _
+        ) = fusedElementGen {
+            let effectiveRange: ClosedRange<UInt64>
+            if let scaling {
+                let size = SharedInterpreterHelpers.currentSize(&context)
+                effectiveRange = Gen.applyScaling(
+                    min: min, max: max, tag: tag, scaling: scaling, size: size
+                )
+            } else {
+                effectiveRange = min ... max
+            }
+            let metadata = ChoiceMetadata(
+                validRange: min ... max,
+                isRangeExplicit: isRangeExplicit,
+                typeTagPayload: typeTagPayload
+            )
+            // Batch loop: same draws and distribution step as the fused loop below, with the pure element continuation replaced by one conversion of the collected bits.
+            var bits: [UInt64] = []
+            bits.reserveCapacity(count)
+            for elementIndex in 0 ..< count {
+                try SharedInterpreterHelpers.checkGenerationDeadline(context.deadlineNanoseconds, elementIndex: elementIndex)
+                let rawBits = context.prng.next(in: effectiveRange)
+                let randomBits = tag.isFloatingPoint
+                    ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+                    : rawBits
+                bits.append(randomBits)
+                elements.append(.choice(ChoiceValue(randomBits, tag: tag), metadata))
+            }
+            let choiceTree = ChoiceTree.sequence(
+                elements: elements,
+                metadata: lengthTrees.metadata
+            )
+            return try runContinuation(
+                result: elementBatch.convert(bits),
+                calleeChoiceTree: choiceTree,
+                continuation: continuation,
+                context: &context
+            )
+        } else if case let .impure(
             operation: .chooseBits(min, max, tag, isRangeExplicit, scaling, typeTagPayload),
             continuation: elementContinuation
         ) = fusedElementGen, scaling != nil || contramapContinuation != nil {

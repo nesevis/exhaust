@@ -322,10 +322,10 @@ extension Materializer {
                     continuationFallback: continuationFallback
                 )
 
-            case let .impure(.sequence(lengthGen, elementGen, _), continuation):
+            case let .impure(.sequence(lengthGen, elementGen, elementBatch), continuation):
                 let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try handleSequence(
-                    lengthGen: lengthGen, elementGen: elementGen,
+                    lengthGen: lengthGen, elementGen: elementGen, elementBatch: elementBatch,
                     continuation: continuation, inputValue: inputValue,
                     context: &context, calleeFallback: calleeFallback,
                     continuationFallback: continuationFallback
