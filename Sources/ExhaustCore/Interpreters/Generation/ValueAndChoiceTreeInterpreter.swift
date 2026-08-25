@@ -304,7 +304,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
         // MARK: sequence
 
-            case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
+            case let .impure(operation: .sequence(lengthGen, elementGen, _), continuation):
                 return try handleSequence(
                     lengthGen: lengthGen, elementGen: elementGen,
                     continuation: continuation, context: &context

@@ -272,7 +272,7 @@ extension Interpreters {
                     finalOutput: finalOutput
                 )
 
-            case let .sequence(lengthGen, elementGen):
+            case let .sequence(lengthGen, elementGen, _):
                 return try reflectSequenceOperation(
                     lengthGen: lengthGen,
                     elementGen: elementGen,

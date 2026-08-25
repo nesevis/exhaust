@@ -178,7 +178,7 @@ package enum GeneratorTuning {
                     predicate: predicate
                 )
 
-            case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
+            case let .impure(operation: .sequence(lengthGen, elementGen, _), continuation):
                 return try tuneSequence(
                     lengthGen: lengthGen,
                     elementGen: elementGen,

@@ -370,14 +370,22 @@ private func stringGenerator(
     scaling: SizeScaling<UInt64> = .linear
 ) -> ReflectiveGenerator<String> {
     let charGen = characterGenerator(from: srs)
+    let batch = ReflectiveOperation.SequenceElementBatch { bits in
+        var characters: [Character] = []
+        characters.reserveCapacity(bits.count)
+        for bit in bits {
+            characters.append(Character(srs.scalar(at: Int(bit))))
+        }
+        return characters
+    }
     if let length {
-        return Gen.arrayOf(charGen, within: length, scaling: scaling).wrapped(isReflective: true)
+        return Gen.arrayOf(charGen, within: length, scaling: scaling, elementBatch: batch).wrapped(isReflective: true)
             .mapped(
                 forward: { String($0) },
                 backward: { $0.unicodeScalars.map { Character($0) } }
             )
     }
-    return Gen.arrayOf(charGen).wrapped(isReflective: true)
+    return Gen.arrayOf(charGen, elementBatch: batch).wrapped(isReflective: true)
         .mapped(
             forward: { String($0) },
             backward: { $0.unicodeScalars.map { Character($0) } }

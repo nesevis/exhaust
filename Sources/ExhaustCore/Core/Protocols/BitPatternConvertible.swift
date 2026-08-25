@@ -39,4 +39,20 @@ package protocol BitPatternConvertible: Equatable, Sendable {
 
     /// The preferred size-scaling distribution for this type when used with ``Gen/choose(in:scaling:)``. Override to control how ``arbitrary`` generators expand their range as the size parameter grows.
     static var defaultScaling: SizeScaling<Self> { get }
+
+    /// Converts drawn bit patterns into a typed array, boxed once as `Any`. Declared as a requirement so each conformance gets a specialized witness.
+    static func batchConverter() -> ([UInt64]) -> Any
+}
+
+package extension BitPatternConvertible {
+    static func batchConverter() -> ([UInt64]) -> Any {
+        { bits in
+            var values: [Self] = []
+            values.reserveCapacity(bits.count)
+            for bit in bits {
+                values.append(Self(bitPattern64: bit))
+            }
+            return values
+        }
+    }
 }

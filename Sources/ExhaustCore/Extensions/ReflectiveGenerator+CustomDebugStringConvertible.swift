@@ -109,7 +109,7 @@ extension Generator where Operation == ReflectiveOperation {
 
                 return header + "\n" + childDescriptions.joined(separator: "\n")
 
-            case let .sequence(length, gen):
+            case let .sequence(length, gen, _):
                 let lengthDesc = length.treeDescription(
                     prefix: childPrefix,
                     isLast: false,

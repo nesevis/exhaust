@@ -15,6 +15,10 @@ package func zipComponents(_ anyValues: Any, arity: Int) throws -> [Any] {
 /// - Throws: ``GeneratorError/typeMismatch(expected:actual:)`` when the result is not a `[Any]`. A wrong element type traps.
 @inline(__always)
 package func sequenceElements<Element>(_ result: Any, as _: Element.Type) throws -> [Element] {
+    if type(of: result) == [Element].self {
+        // swiftlint:disable:next force_cast
+        return result as! [Element]
+    }
     guard let anyValues = result as? [Any] else {
         throw GeneratorError.typeMismatch(expected: "[Any]", actual: String(describing: type(of: result)))
     }

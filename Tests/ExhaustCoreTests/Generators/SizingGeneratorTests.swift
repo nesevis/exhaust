@@ -86,7 +86,7 @@ struct SizingGeneratorTests {
     func defaultSequenceLengthUsesNonReifiedGetSize() {
         let generator = Gen.arrayOf(Gen.just(0))
 
-        guard case let .impure(.sequence(lengthGenerator, _), _) = generator else {
+        guard case let .impure(.sequence(lengthGenerator, _, _), _) = generator else {
             Issue.record("Expected arrayOf to produce a sequence operation")
             return
         }

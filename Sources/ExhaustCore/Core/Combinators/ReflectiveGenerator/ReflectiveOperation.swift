@@ -92,6 +92,18 @@ package enum ReflectiveOperation {
         }
     }
 
+    /// Converts the bit patterns drawn for a bare ``chooseBits`` element generator into the typed element array in one step.
+    ///
+    /// Attached by ``Gen/arrayOf(_:_:elementBatch:)`` when the element generator's continuation is known to be `Output(bitPattern64:)` for the node's tag, and by the string generators for characters. ``ValueInterpreter`` uses it to skip per-element boxing, continuation calls, and casts; every other interpreter ignores it. A rewrite that replaces the element generator must rebuild the node without it.
+    @usableFromInline
+    package struct SequenceElementBatch {
+        package let convert: ([UInt64]) -> Any
+
+        package init(convert: @escaping ([UInt64]) -> Any) {
+            self.convert = convert
+        }
+    }
+
     /// Focuses the reflection target on the subpart that the inner generator can reflect on. During generation, the transform is skipped: it affects only the backward pass. During reflection, `transform` narrows the target value; when it returns `nil`, the enclosing ``prune`` eliminates that branch.
     ///
     /// - Parameters:
@@ -147,7 +159,7 @@ package enum ReflectiveOperation {
     /// - Parameters:
     ///   - length: Generator that determines the sequence length.
     ///   - gen: Generator applied to each element position.
-    case sequence(length: Generator<UInt64>, gen: AnyGenerator)
+    case sequence(length: Generator<UInt64>, gen: AnyGenerator, elementBatch: SequenceElementBatch? = nil)
 
     /// Composes a fixed number of independent generators into a single tuple result.
     ///

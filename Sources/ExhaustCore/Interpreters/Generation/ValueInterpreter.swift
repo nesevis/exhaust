@@ -161,9 +161,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                     continuation: continuation, context: &context
                 )
 
-            case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
+            case let .impure(operation: .sequence(lengthGen, elementGen, elementBatch), continuation):
                 return try handleSequence(
-                    lengthGen: lengthGen, elementGen: elementGen,
+                    lengthGen: lengthGen, elementGen: elementGen, elementBatch: elementBatch,
                     continuation: continuation, context: &context
                 )
 
@@ -302,6 +302,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
     private static func handleSequence(
         lengthGen: Generator<UInt64>,
         elementGen: AnyGenerator,
+        elementBatch: ReflectiveOperation.SequenceElementBatch?,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> Any? {
         // The length spine is walked without the generic erase: erase() boxes a fresh impure node (operation copy included) on every sequence visit, and the two shapes the factories produce (getSize-wrapped and bare chooseBits) dispatch here directly. PRNG consumption is identical to the erased walk, preserving VI/VACTI parity. Unusual spines fall back to the erased walk unchanged.
@@ -368,6 +369,22 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 )
             } else {
                 effectiveRange = min ... max
+            }
+
+            // The batch path draws every element's bits first and converts once, skipping the per-element box, continuation call, and cast. Same draws, same distribution step.
+            if let elementBatch {
+                var bits: [UInt64] = []
+                bits.reserveCapacity(count)
+                for elementIndex in 0 ..< count {
+                    try SharedInterpreterHelpers.checkGenerationDeadline(context.deadlineNanoseconds, elementIndex: elementIndex)
+                    let rawBits = context.prng.next(in: effectiveRange)
+                    bits.append(tag.isFloatingPoint
+                        ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
+                        : rawBits)
+                }
+                let nextGen = try continuation(elementBatch.convert(bits))
+                if case let .pure(final) = nextGen { return final }
+                return try generateRecursiveAny(nextGen, context: &context)
             }
 
             for elementIndex in 0 ..< count {
