@@ -33,7 +33,7 @@ package extension Gen {
                 predicate: erasedPredicate,
                 sourceLocation: sourceLocation
             ),
-            continuation: { .pure($0 as! Output) }
+            continuation: { .pure($0) }
         )
     }
 
