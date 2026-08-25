@@ -60,7 +60,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator that produces Unicode strings.
     static func string(
         length: ClosedRange<Int>? = nil,
-        scaling: SizeScaling<Int> = .linear,
+        scaling: SizeScaling<Int>? = nil,
         unicodeVersion: UnicodeVersion = .v17
     ) -> ReflectiveGenerator<String> {
         Gen.string(
@@ -84,7 +84,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator that produces printable ASCII strings.
     static func asciiString(
         length: ClosedRange<Int>? = nil,
-        scaling: SizeScaling<Int> = .linear
+        scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<String> {
         Gen.asciiString(length: length.map(LengthConversion.uint64Range), scaling: LengthConversion.uint64Scaling(scaling))
     }
@@ -136,7 +136,7 @@ public extension ReflectiveGenerator {
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil,
         length: ClosedRange<Int>? = nil,
-        scaling: SizeScaling<Int> = .linear
+        scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<String> {
         Gen.string(
             from: characterSet,
@@ -164,7 +164,7 @@ public extension ReflectiveGenerator {
         in range: ClosedRange<Unicode.Scalar>,
         simplest: Unicode.Scalar? = nil,
         length: ClosedRange<Int>? = nil,
-        scaling: SizeScaling<Int> = .linear
+        scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<String> {
         Gen.string(
             in: range,

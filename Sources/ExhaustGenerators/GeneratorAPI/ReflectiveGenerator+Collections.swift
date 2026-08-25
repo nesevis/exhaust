@@ -38,7 +38,7 @@ public extension ReflectiveGenerator {
     static func array<Element>(
         _ gen: ReflectiveGenerator<Element>,
         length: ClosedRange<Int>,
-        scaling: SizeScaling<Int> = .linear
+        scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<[Element]> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         return Gen.arrayOf(
@@ -143,7 +143,7 @@ public extension ReflectiveGenerator {
     static func set<Element: Hashable>(
         _ gen: ReflectiveGenerator<Element>,
         count: ClosedRange<Int>,
-        scaling: SizeScaling<Int> = .linear
+        scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<Set<Element>> {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
         let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)
@@ -212,7 +212,7 @@ public extension ReflectiveGenerator {
         _ keyGen: ReflectiveGenerator<Key>,
         _ valueGen: ReflectiveGenerator<DictValue>,
         count: ClosedRange<Int>,
-        scaling: SizeScaling<Int> = .linear
+        scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<[Key: DictValue]> {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
         let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)
@@ -321,7 +321,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing arrays with length in the given range.
     func array(
         length: ClosedRange<Int>,
-        scaling: SizeScaling<Int> = .linear
+        scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<[Output]> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
@@ -368,7 +368,7 @@ public extension ReflectiveGenerator {
     /// - Note: `#exhaust(…, reflecting:)` cannot reduce a concrete set from this factory because set construction discards the order elements were drawn in and collapses duplicates. Exhaust still replays and reduces generated counterexamples from the recorded choices.
     func set(
         count: ClosedRange<Int>,
-        scaling: SizeScaling<Int> = .linear
+        scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<Set<Output>> where Output: Hashable {
         precondition(count.lowerBound >= 0, "Count must be non-negative")
         let range = UInt64(count.lowerBound) ... UInt64(count.upperBound)

@@ -21,6 +21,7 @@
 ///     }
 /// }
 /// ```
+/// - Important: Conformance is synthesized by the `@StateMachine` macro. Hand-written conformance is unsupported: the requirements exist for macro expansions and may change in any release.
 public protocol StateMachineSpec: StateMachineSpecBase, AnyObject {
     /// Executes a command against the model and SUT, returning a ``CommandResponse`` for linearizability checking.
     ///

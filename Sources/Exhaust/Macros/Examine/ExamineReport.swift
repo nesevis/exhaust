@@ -56,7 +56,7 @@ public struct ExamineReport: Sendable, CustomStringConvertible {
     /// Mean observed sequence length. Zero when the generator has no sequences.
     public fileprivate(set) var sequenceLengthMean = 0.0
     /// Per-domain character variety. Each entry reports the fraction covered and the domain size. Empty when the generator has no character parameters. The minimum variety across all domains is used for single-value assertions.
-    public fileprivate(set) var characterCoverage: [(domainSize: Int, variety: Double)] = []
+    package fileprivate(set) var characterCoverage: [(domainSize: Int, variety: Double)] = []
 
     /// Minimum character variety across all character domains. Returns 1.0 when the generator has no character parameters.
     public var characterVariety: Double {

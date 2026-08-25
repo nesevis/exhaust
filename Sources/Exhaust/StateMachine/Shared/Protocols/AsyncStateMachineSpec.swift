@@ -11,6 +11,7 @@ import Foundation
 /// ## Skip Identification
 ///
 /// The internal `skipIdentifier(specInit:)` helper obtains a synchronous closure for identifying skipped commands. The closure bridges async execution via `Task` and a semaphore, matching the pattern used by the async spec runner's property closure.
+/// - Important: Conformance is synthesized by the `@StateMachine` macro. Hand-written conformance is unsupported: the requirements exist for macro expansions and may change in any release.
 public protocol AsyncStateMachineSpec: StateMachineSpecBase, AnyObject {
     /// Executes a command against the model and SUT asynchronously, returning a ``CommandResponse`` for linearizability checking.
     ///

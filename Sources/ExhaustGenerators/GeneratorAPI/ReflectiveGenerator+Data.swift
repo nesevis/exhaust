@@ -32,7 +32,7 @@ public extension ReflectiveGenerator {
     /// - Returns: A generator producing `Data` with length in the given range.
     static func data(
         length: ClosedRange<Int>,
-        scaling: SizeScaling<Int> = .linear
+        scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<Data> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)
@@ -90,7 +90,7 @@ public extension ReflectiveGenerator {
     static func data(
         prefix: [UInt8],
         length: ClosedRange<Int>,
-        scaling: SizeScaling<Int> = .linear
+        scaling: SizeScaling<Int>? = nil
     ) -> ReflectiveGenerator<Data> {
         precondition(length.lowerBound >= 0, "Length must be non-negative")
         let range = UInt64(length.lowerBound) ... UInt64(length.upperBound)

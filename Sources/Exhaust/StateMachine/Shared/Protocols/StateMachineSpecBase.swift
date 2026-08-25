@@ -13,7 +13,7 @@ public extension __ExhaustRuntime {
 
 /// Shared requirements for both synchronous and asynchronous state machine specs.
 ///
-/// Users never conform to this protocol directly. Use ``StateMachineSpec`` or ``AsyncStateMachineSpec`` instead, both synthesized by the `@StateMachine` macro.
+/// Users never conform to this protocol directly. Use ``StateMachineSpec`` or ``AsyncStateMachineSpec`` instead, both synthesized by the `@StateMachine` macro. Hand-written conformance is unsupported: the requirements exist for macro expansions and may change in any release.
 public protocol StateMachineSpecBase: SendableMetatype {
     /// Creates a fresh instance with default model and SUT state.
     init()

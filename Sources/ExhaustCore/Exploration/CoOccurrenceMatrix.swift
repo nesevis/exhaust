@@ -82,7 +82,7 @@ public struct CoOccurrenceMatrix: Sendable {
     // MARK: - Diagnostics
 
     /// Computes pairwise mutual information normalized by the entropy of direction A. Returns pairs where `MI(A, B) / H(A) >= threshold`, sorted by descending normalized MI.
-    public func entangledPairs(threshold: Double = 0.5) -> [(directionA: Int, directionB: Int, normalizedMutualInformation: Double)] {
+    package func entangledPairs(threshold: Double = 0.5) -> [(directionA: Int, directionB: Int, normalizedMutualInformation: Double)] {
         let totalSamples = totalSampleCount
         guard totalSamples > 0 else { return [] }
 
@@ -117,7 +117,7 @@ public struct CoOccurrenceMatrix: Sendable {
     }
 
     /// Returns direction pairs with zero co-occurrence and their rule-of-three upper bounds on joint reach probability.
-    public func infeasibleConjunctionEvidence(totalWarmupSamples: Int) -> [(directionA: Int, directionB: Int, ruleOfThreeUpperBound: Double)] {
+    package func infeasibleConjunctionEvidence(totalWarmupSamples: Int) -> [(directionA: Int, directionB: Int, ruleOfThreeUpperBound: Double)] {
         guard totalWarmupSamples > 0 else { return [] }
         var results: [(directionA: Int, directionB: Int, ruleOfThreeUpperBound: Double)] = []
 

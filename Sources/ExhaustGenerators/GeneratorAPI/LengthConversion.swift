@@ -13,9 +13,9 @@ enum LengthConversion {
         return UInt64(length.lowerBound) ... UInt64(length.upperBound)
     }
 
-    /// Converts an `Int`-typed length scaling to the `UInt64` scaling the core generators consume.
-    static func uint64Scaling(_ scaling: SizeScaling<Int>) -> SizeScaling<UInt64> {
-        switch scaling {
+    /// Converts an `Int`-typed length scaling to the `UInt64` scaling the core generators consume. A nil scaling means the length default, linear.
+    static func uint64Scaling(_ scaling: SizeScaling<Int>?) -> SizeScaling<UInt64> {
+        switch scaling ?? .linear {
             case .constant:
                 return .constant
             case .linear:

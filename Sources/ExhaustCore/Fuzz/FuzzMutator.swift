@@ -1,7 +1,7 @@
 // Mutation operators over flattened choice sequences for the mutation phase.
 //
 // There is no operator catalog to keep correct: the materializer's three-tier resolution
-// (prefix → fallback tree → PRNG) makes any perturbation of the flattened sequence produce a
+// (prefix -> fallback tree -> PRNG) makes any perturbation of the flattened sequence produce a
 // valid value, so mutations here only need to be cheap and varied, not structurally sound.
 // A mutation that mangles marker pairing degrades to PRNG fallback with low convergence, and
 // the corpus tier split routes such children away from parent selection.

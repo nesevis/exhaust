@@ -49,9 +49,9 @@ public struct FilterSourceLocation: @unchecked Sendable {
     /// The `#column` of the filter call site.
     public let column: UInt
     /// Called when the filter exhausts its retry budget without producing a valid value.
-    public let onBudgetExhausted: (() -> Void)?
+    package let onBudgetExhausted: (() -> Void)?
 
-    public init(
+    package init(
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
