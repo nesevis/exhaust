@@ -493,14 +493,18 @@ private extension ReflectiveGenerator {
         in range: ClosedRange<Value>?,
         scaling: SizeScaling<Value>?
     ) -> ReflectiveGenerator<Value> {
-        let generator: Generator<Value> = switch (range, scaling) {
-            case let (range?, scaling?):
-                Gen.choose(in: range, scaling: scaling)
-            case let (range?, nil) where range == Value.min ... Value.max:
-                Gen.choose(in: range, scaling: Value.defaultScaling)
-            case let (range?, nil):
-                Gen.choose(in: range)
-            case (nil, _):
+        // Nested switches rather than a `(range, scaling)` tuple: the tuple instantiates metadata on every unspecialized call.
+        let generator: Generator<Value> = switch range {
+            case let range?:
+                switch scaling {
+                    case let scaling?:
+                        Gen.choose(in: range, scaling: scaling)
+                    case nil where range.lowerBound == Value.min && range.upperBound == Value.max:
+                        Gen.choose(in: range, scaling: Value.defaultScaling)
+                    case nil:
+                        Gen.choose(in: range)
+                }
+            case nil:
                 Gen.choose(in: Value.min ... Value.max, scaling: scaling ?? Value.defaultScaling)
         }
         return generator.wrapped(isReflective: true)
