@@ -37,15 +37,15 @@ struct ConvenienceOverloadTests {
         #expect(value.count == 3)
     }
 
-    @Test("set(_:count:) static accepts Int literal")
-    func staticSetIntCount() throws {
-        let value = try #example(.set(.int(in: 0 ... 1000), count: 3))
+    @Test("set(_:count:) static accepts an integer literal count")
+    func staticSetAcceptsIntegerLiteralCount() throws {
+        let value = try #example(.set(.uuid(), count: 3))
         #expect(value.count == 3)
     }
 
-    @Test("set(count:) instance accepts Int literal")
-    func instanceSetIntCount() throws {
-        let value = try #example(.int(in: 0 ... 1000).set(count: 3))
+    @Test("set(count:) instance accepts an integer literal count")
+    func instanceSetAcceptsIntegerLiteralCount() throws {
+        let value = try #example(.uuid().set(count: 3))
         #expect(value.count == 3)
     }
 
