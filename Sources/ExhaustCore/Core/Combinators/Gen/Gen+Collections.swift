@@ -14,22 +14,18 @@ package extension Gen {
     /// - Returns: A generator that produces an array of elements.
     static func arrayOf<Output>(
         _ elementGenerator: Generator<Output>,
-        _ length: Generator<UInt64>? = nil
+        _ length: Generator<UInt64>? = nil,
+        elementBatch: ReflectiveOperation.SequenceElementBatch? = nil
     ) -> Generator<[Output]> {
         // Use `bind` to get the result of the length generator.
         let sequenceOperation = ReflectiveOperation.sequence(
             length: length ?? Gen.nonReifiedGetSize { Gen.chooseDerived(in: 0 ... $0) },
-            gen: elementGenerator.erase()
+            gen: elementGenerator.erase(),
+            elementBatch: elementBatch ?? inferredElementBatch(for: elementGenerator)
         )
         // Lift the operation. The continuation will decode the `[Any]` result.
         return .impure(operation: sequenceOperation) { result in
-            guard let array = result as? [Output] else {
-                throw GeneratorError.typeMismatch(
-                    expected: String(describing: type(of: [Output].self)),
-                    actual: String(describing: type(of: result))
-                )
-            }
-            return .pure(array)
+            try .pure(sequenceElements(result, as: Output.self))
         }
     }
 
@@ -49,21 +45,32 @@ package extension Gen {
     static func arrayOf<Output>(
         _ elementGenerator: Generator<Output>,
         within range: ClosedRange<UInt64>,
-        scaling: SizeScaling<UInt64> = .linear
+        scaling: SizeScaling<UInt64> = .linear,
+        elementBatch: ReflectiveOperation.SequenceElementBatch? = nil
     ) -> Generator<[Output]> {
         let sequenceOperation = ReflectiveOperation.sequence(
             length: Gen.choose(in: range, scaling: scaling),
-            gen: elementGenerator.erase()
+            gen: elementGenerator.erase(),
+            elementBatch: elementBatch ?? inferredElementBatch(for: elementGenerator)
         )
         return .impure(operation: sequenceOperation) { result in
-            guard let array = result as? [Output] else {
-                throw GeneratorError.typeMismatch(
-                    expected: String(describing: type(of: [Output].self)),
-                    actual: String(describing: type(of: result))
-                )
-            }
-            return .pure(array)
+            try .pure(sequenceElements(result, as: Output.self))
         }
+    }
+
+    /// Returns a batch converter when the element generator is a bare `chooseBits` whose continuation is `Output(bitPattern64:)`.
+    ///
+    /// The tag check rejects nodes that share `Output` but not the conversion, such as depth-control and raw-bits draws typed as `UInt64`.
+    private static func inferredElementBatch<Output>(
+        for elementGenerator: Generator<Output>
+    ) -> ReflectiveOperation.SequenceElementBatch? {
+        guard case .impure(operation: .chooseBits(_, _, let tag, _, _, _), _) = elementGenerator,
+              let convertible = Output.self as? any BitPatternConvertible.Type,
+              convertible.tag == tag
+        else {
+            return nil
+        }
+        return ReflectiveOperation.SequenceElementBatch(convert: convertible.batchConverter())
     }
 
     /// Generates arrays of exactly the specified length.

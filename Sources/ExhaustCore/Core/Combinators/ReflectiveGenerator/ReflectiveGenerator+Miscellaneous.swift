@@ -114,14 +114,26 @@ public extension ReflectiveGenerator {
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
-        let activeChoices = choices.filter { $0.0 != 0 }
-        precondition(activeChoices.isEmpty == false, "At least one oneOf choice must have a nonzero weight")
-        // A list that starts with one entry keeps its pick node: the @StateMachine macro synthesizes single-command generators this way, and the concurrent runners require a top-level pick.
-        let zeroWeightRemovalOccurred = activeChoices.count < choices.count
-        if zeroWeightRemovalOccurred, activeChoices.count == 1, let onlyChoice = activeChoices.first {
-            return onlyChoice.1
+        var pickChoices: [(weight: Int, generator: Generator<Output>)] = []
+        pickChoices.reserveCapacity(choices.count)
+        var allReflective = true
+        var lastActiveGenerator: ReflectiveGenerator<Output>?
+        for index in 0 ..< choices.count {
+            let (weight, generator) = choices[index]
+            if weight == 0 {
+                continue
+            }
+            pickChoices.append((weight, generator.gen))
+            allReflective = allReflective && generator.isReflective
+            lastActiveGenerator = generator
         }
-        return Gen.pick(choices: activeChoices.map { ($0.0, $0.1.gen) }, fileID: fileID, line: line, column: column).wrapped(isReflective: activeChoices.allSatisfy { $0.1.isReflective })
+        precondition(pickChoices.isEmpty == false, "At least one oneOf choice must have a nonzero weight")
+        // A list that starts with one entry keeps its pick node: the @StateMachine macro synthesizes single-command generators this way, and the concurrent runners require a top-level pick.
+        let zeroWeightRemovalOccurred = pickChoices.count < choices.count
+        if zeroWeightRemovalOccurred, pickChoices.count == 1, let lastActiveGenerator {
+            return lastActiveGenerator
+        }
+        return Gen.pick(choices: pickChoices, fileID: fileID, line: line, column: column).wrapped(isReflective: allReflective)
     }
 
     /// Wraps this generator to produce optional values, choosing between `nil` and a generated value.

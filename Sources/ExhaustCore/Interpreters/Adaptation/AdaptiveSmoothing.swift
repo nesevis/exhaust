@@ -121,7 +121,7 @@ package enum AdaptiveSmoothing {
                     isOpaque: isOpaque
                 )
 
-            case let .sequence(length, gen):
+            case let .sequence(length, gen, _):
                 let smoothedLength = smoothGenerator(
                     length,
                     epsilon: epsilon,

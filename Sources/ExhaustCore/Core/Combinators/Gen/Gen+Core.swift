@@ -31,21 +31,15 @@ package enum Gen {
 package extension Gen {
     /// Injects a ``ReflectiveOperation`` into the ``FreerMonad`` spine as a single impure step.
     ///
-    /// Entry point for building new combinators: every generator primitive bottoms out in a `liftF` call. The continuation casts the interpreter's `Any` result back to `Output` and throws ``GeneratorError/typeMismatch`` on failure (which indicates a framework bug, not user error).
+    /// Entry point for building new combinators: every generator primitive bottoms out in a `liftF` call. The continuation passes the result through uncast. A cast here would unbox and rebox the same value, and in unspecialized callers `as?` instantiates `Optional<Output>` metadata per call. The interpreter boundary casts to `Output`.
     ///
     /// - Parameter operation: The low-level reflective operation to lift.
-    /// - Returns: A generator that executes the operation and validates the result type.
+    /// - Returns: A generator that executes the operation.
     static func liftF<Output>(
         _ operation: ReflectiveOperation
     ) -> Generator<Output> {
         .impure(operation: operation) { result in
-            if let typedResult = result as? Output {
-                return .pure(typedResult)
-            }
-            throw GeneratorError.typeMismatch(
-                expected: String(describing: Output.self),
-                actual: String(describing: type(of: result))
-            )
+            .pure(result)
         }
     }
 
@@ -84,14 +78,7 @@ package extension Gen {
             },
             next: generator.erase()
         )) { result in
-            if let typed = result as? Output {
-                // Backward pass - direct value
-                return .pure(typed)
-            }
-            throw GeneratorError.typeMismatch(
-                expected: String(describing: Output.self),
-                actual: String(describing: type(of: result))
-            )
+            .pure(result)
         }
     }
 

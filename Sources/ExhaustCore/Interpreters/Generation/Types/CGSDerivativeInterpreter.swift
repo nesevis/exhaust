@@ -61,7 +61,7 @@ package enum CGSDerivativeInterpreter {
                     inputValue: inputValue, rng: &rng, size: size
                 )
 
-            case let .impure(operation: .sequence(lengthGen, elementGen), continuation):
+            case let .impure(operation: .sequence(lengthGen, elementGen, _), continuation):
                 return try handleSequence(
                     lengthGen: lengthGen, elementGen: elementGen, continuation: continuation,
                     inputValue: inputValue, rng: &rng, size: size

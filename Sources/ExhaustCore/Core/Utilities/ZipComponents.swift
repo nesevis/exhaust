@@ -7,3 +7,32 @@ package func zipComponents(_ anyValues: Any, arity: Int) throws -> [Any] {
     }
     return values
 }
+
+/// Converts a sequence result from `[Any]` to `[Element]` for ``Gen/arrayOf(_:_:)`` continuations.
+///
+/// Short arrays loop explicitly, which skips the stdlib array cast's setup and second allocation; long arrays use the stdlib cast, which is cheaper per element. The threshold of 16 is measured: 64 regressed nested integer arrays.
+///
+/// - Throws: ``GeneratorError/typeMismatch(expected:actual:)`` when the result is not a `[Any]`. A wrong element type traps.
+@inline(__always)
+package func sequenceElements<Element>(_ result: Any, as _: Element.Type) throws -> [Element] {
+    if type(of: result) == [Element].self {
+        // swiftlint:disable:next force_cast
+        return result as! [Element]
+    }
+    guard let anyValues = result as? [Any] else {
+        throw GeneratorError.typeMismatch(expected: "[Any]", actual: String(describing: type(of: result)))
+    }
+    if anyValues.count > 16 {
+        guard let typed = anyValues as? [Element] else {
+            throw GeneratorError.typeMismatch(expected: String(describing: [Element].self), actual: "[Any]")
+        }
+        return typed
+    }
+    var typed: [Element] = []
+    typed.reserveCapacity(anyValues.count)
+    for value in anyValues {
+        // swiftlint:disable:next force_cast
+        typed.append(value as! Element)
+    }
+    return typed
+}

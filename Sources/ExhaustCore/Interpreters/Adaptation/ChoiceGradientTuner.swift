@@ -173,7 +173,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         })
                         return .impure(operation: .zip(bakedGens), continuation: continuation)
 
-                    case let .sequence(lengthGen, elementGen):
+                    case let .sequence(lengthGen, elementGen, _):
                         // The interpreter pushes one `.sequenceElement` derivative frame per element, so picks inside the element generator accumulate one depth deeper — bake the element at `depth + 1` to land on the same key. The length generator runs in a fresh context maxed at `maxDerivativeDepth`, so its picks hit handlePick's fast path and never record; its bake depth is immaterial, so leave it at `depth`.
                         return .impure(
                             operation: .sequence(
@@ -262,7 +262,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
             case let .impure(operation, continuation):
                 switch operation {
-                    case let .sequence(lengthGen, elementGen):
+                    case let .sequence(lengthGen, elementGen, _):
                         // 1. Recurse into element generator, then subdivide its chooseBits if thresholds allow
                         var subdividedElement = try subdivideForCGS(elementGen, context: context, thresholds: thresholds)
                         subdividedElement = try subdivideChooseBits(subdividedElement, context: context, thresholds: thresholds)
@@ -419,7 +419,7 @@ package enum ChoiceGradientTuner<FinalOutput> {
                         })
                         return .impure(operation: .pick(choices: recursed, totalWeight: recursed.reduce(0) { $0 &+ $1.weight }), continuation: continuation)
 
-                    case let .sequence(lengthGen, elementGen):
+                    case let .sequence(lengthGen, elementGen, _):
                         return .impure(
                             operation: .sequence(
                                 length: collapseUniformSubdivisions(lengthGen, subdivisionFingerprints: subdivisionFingerprints),

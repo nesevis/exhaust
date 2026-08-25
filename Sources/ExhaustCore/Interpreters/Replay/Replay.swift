@@ -87,7 +87,7 @@ extension Interpreters {
                     continuation: continuation,
                     choices: &choices
                 )
-            case let .sequence(_, elementGenerator):
+            case let .sequence(_, elementGenerator, _):
                 return try replayWithChoicesSequence(
                     elementGenerator: elementGenerator,
                     continuation: continuation,
@@ -504,7 +504,7 @@ extension Interpreters {
                 )
             case let .pick(choices, _):
                 return try replayRecursivePick(choices: choices, script: script)
-            case let .sequence(_, elementGenerator):
+            case let .sequence(_, elementGenerator, _):
                 return try replayRecursiveSequence(
                     elementGenerator: elementGenerator,
                     script: script,

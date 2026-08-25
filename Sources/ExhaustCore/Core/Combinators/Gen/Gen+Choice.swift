@@ -25,7 +25,6 @@ package extension Gen {
         column: UInt = #column
     ) -> Generator<Output> {
         precondition(choices.isEmpty == false, "At least one choice must be provided")
-        precondition(choices.allSatisfy { $0.weight > 0 }, "Weights must be greater than zero")
         // The nested generators must all have the same Output type.
         // We erase it to `Any` for the operation, but the `liftF` call ensures the final monad has the correct `Output` type.
         let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
@@ -33,8 +32,9 @@ package extension Gen {
         var array = ContiguousArray<ReflectiveOperation.PickTuple>()
         array.reserveCapacity(choices.count)
         var totalWeight: UInt64 = 0
-        for index in choices.indices {
+        for index in 0 ..< choices.count {
             let choice = choices[index]
+            precondition(choice.weight > 0, "Weights must be greater than zero")
             let (sum, overflowed) = totalWeight.addingReportingOverflow(choice.weight)
             precondition(overflowed == false, "Pick weights sum overflows UInt64")
             totalWeight = sum
@@ -61,13 +61,15 @@ package extension Gen {
         line: UInt = #line,
         column: UInt = #column
     ) -> Generator<Output> {
-        precondition(
-            choices.allSatisfy { $0.weight > 0 },
-            "Weights must be higher than zero"
-        )
-
+        var weightedChoices: [(weight: UInt64, generator: Generator<Output>)] = []
+        weightedChoices.reserveCapacity(choices.count)
+        for index in 0 ..< choices.count {
+            let choice = choices[index]
+            precondition(choice.weight > 0, "Weights must be higher than zero")
+            weightedChoices.append((UInt64(choice.weight), choice.generator))
+        }
         return pick(
-            choices: choices.map { (UInt64($0.weight), $0.generator) },
+            choices: weightedChoices,
             fileID: fileID,
             line: line,
             column: column

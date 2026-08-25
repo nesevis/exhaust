@@ -74,6 +74,31 @@ extension Materializer {
         calleeFallback: ChoiceTree? = nil,
         continuationFallback: ChoiceTree? = nil
     ) throws -> (Any, ChoiceTree)? {
+        let resolved = try resolveChooseBits(
+            min: min, max: max, tag: tag,
+            isRangeExplicit: isRangeExplicit,
+            scaling: scaling, typeTagPayload: typeTagPayload,
+            context: &context, calleeFallback: calleeFallback
+        )
+        return try runContinuation(
+            result: resolved.bits, calleeChoiceTree: resolved.tree, calleeStart: resolved.calleeStart,
+            continuation: continuation, inputValue: inputValue,
+            context: &context, continuationFallback: continuationFallback
+        )
+    }
+
+    /// Resolves a `chooseBits` bit pattern for the current mode, emits its flat entry, and builds its tree node, without running the continuation. The sequence batch path calls this per element and converts the collected bits once.
+    @inline(__always)
+    static func resolveChooseBits(
+        min: UInt64,
+        max: UInt64,
+        tag: TypeTag,
+        isRangeExplicit: Bool,
+        scaling: ChooseBitsScaling?,
+        typeTagPayload: TypeTagPayload?,
+        context: inout Context,
+        calleeFallback: ChoiceTree? = nil
+    ) throws -> (bits: UInt64, tree: ChoiceTree, calleeStart: Int) {
         let randomBits: UInt64
         var reusedChoice: ChoiceValue?
 
@@ -152,11 +177,7 @@ extension Materializer {
                 reusedChoice ?? ChoiceValue(randomBits, tag: tag),
                 .init(validRange: min ... max, isRangeExplicit: isRangeExplicit, typeTagPayload: typeTagPayload)
             )
-        return try runContinuation(
-            result: randomBits, calleeChoiceTree: choiceTree, calleeStart: calleeStart,
-            continuation: continuation, inputValue: inputValue,
-            context: &context, continuationFallback: continuationFallback
-        )
+        return (randomBits, choiceTree, calleeStart)
     }
 
     // MARK: - pick (with materialized alternatives)
@@ -350,6 +371,7 @@ extension Materializer {
     static func handleSequence(
         lengthGen: Generator<UInt64>,
         elementGen: AnyGenerator,
+        elementBatch: ReflectiveOperation.SequenceElementBatch? = nil,
         continuation: (Any) throws -> AnyGenerator,
         inputValue: Any,
         context: inout Context,
@@ -443,6 +465,47 @@ extension Materializer {
 
         var elementIndex = 0
         var remaining = length
+        if let elementBatch, case let .impure(
+            .chooseBits(elementMin, elementMax, elementTag, elementIsRangeExplicit, elementScaling, elementTypeTagPayload),
+            _
+        ) = fusedElementGen {
+            // Batch loop: resolves each element's bits and tree, then converts the bits once. The element continuation (and the contramap wrapper's) is pure by the batch's construction contract, so skipping it changes neither value nor tree.
+            var bits: [UInt64] = []
+            bits.reserveCapacity(Int(length))
+            while remaining > 0 {
+                let elementFallback: ChoiceTree? = elementFallbacks.flatMap { fallbacks in
+                    elementIndex < fallbacks.count ? fallbacks[elementIndex] : nil
+                }
+                let (elementCalleeFallback, _) = decomposeNonGroupFallback(elementFallback)
+                let resolved = try resolveChooseBits(
+                    min: elementMin, max: elementMax, tag: elementTag,
+                    isRangeExplicit: elementIsRangeExplicit,
+                    scaling: elementScaling, typeTagPayload: elementTypeTagPayload,
+                    context: &context, calleeFallback: elementCalleeFallback
+                )
+                bits.append(resolved.bits)
+                if context.skipTree == false {
+                    elements.append(resolved.tree)
+                }
+                elementIndex += 1
+                remaining -= 1
+            }
+            context.emitFlat(.sequence(false))
+            context.cursor.skipSequenceClose()
+
+            let choiceTree: ChoiceTree = context.skipTree
+                ? .just
+                : .sequence(elements: elements, metadata: lengthMeta)
+
+            if let continued = try runContinuation(
+                result: elementBatch.convert(bits), calleeChoiceTree: choiceTree, calleeStart: calleeStart,
+                continuation: continuation, inputValue: inputValue,
+                context: &context, continuationFallback: continuationFallback
+            ) {
+                return continued
+            }
+            return nil
+        }
         if case let .impure(
             .chooseBits(elementMin, elementMax, elementTag, elementIsRangeExplicit, elementScaling, elementTypeTagPayload),
             elementContinuation

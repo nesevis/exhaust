@@ -78,7 +78,7 @@ struct GeneratorTuningTests {
             seed: 42
         )
 
-        guard case let .impure(.sequence(_, elementGenerator), _) = tuned else {
+        guard case let .impure(.sequence(_, elementGenerator, _), _) = tuned else {
             Issue.record("Expected the tuned generator to be a sequence, got \(tuned)")
             return
         }
