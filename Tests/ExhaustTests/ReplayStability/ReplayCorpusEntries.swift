@@ -72,14 +72,14 @@ private var coreGraphicsEntries: [ReplayCorpusEntry] {
 
 // MARK: - Strings
 
+// `CharacterSet`-backed factories are deliberately absent: a set's membership comes from the platform's Foundation, so their streams are stable only per platform and Foundation version (see the factory docs), and this corpus pins cross-platform stability.
+
 private let stringEntries: [ReplayCorpusEntry] = [
     sampling("string.default", .string(), quoted),
     sampling("string.length", .string(length: 0 ... 5), quoted),
     sampling("string.asciiString", .asciiString(length: 1 ... 6), quoted),
-    sampling("string.characterSet", .string(from: .decimalDigits, length: 1 ... 4), quoted),
     sampling("string.scalarRange", .string(in: "a" ... "z", length: 1 ... 4), quoted),
     sampling("character.default", .character()) { quoted(String($0)) },
-    sampling("character.characterSet", .character(from: .lowercaseLetters)) { quoted(String($0)) },
     sampling("character.range", .character(in: "0" ... "9")) { quoted(String($0)) },
 ]
 

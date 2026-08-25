@@ -1,0 +1,2 @@
+# Recorded replay corpus: byte-stable across platforms so Windows checkouts compare the same lines.
+*.jsonl text eol=lf

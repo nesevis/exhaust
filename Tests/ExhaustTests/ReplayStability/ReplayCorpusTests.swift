@@ -86,7 +86,7 @@ enum ReplayCorpus {
         let text = try String(contentsOf: fileURL, encoding: .utf8)
         let decoder = JSONDecoder()
         var values: [Key: [String]] = [:]
-        for rawLine in text.split(separator: "\n") where rawLine.isEmpty == false {
+        for rawLine in text.split(whereSeparator: \.isNewline) where rawLine.isEmpty == false {
             let line = try decoder.decode(Line.self, from: Data(rawLine.utf8))
             values[Key(entry: line.entry, seed: line.seed)] = line.values
         }

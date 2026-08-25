@@ -103,6 +103,7 @@ public extension ReflectiveGenerator {
     ///   - characterSet: The set of Unicode scalars to draw from.
     ///   - simplest: The character that each generated character reduces to when the reducer minimizes the counterexample. Unlike integers, characters are code points with no naturally minimal value, so the reducer needs an explicit "zero" to drive toward. Any character not essential to the property failure will be replaced by this one. Defaults to space (U+0020) if the set contains it, otherwise the set's natural lower bound. Must be in the set if provided.
     /// - Returns: A generator that produces characters from the set.
+    /// - Note: A `CharacterSet`'s membership comes from the platform's Foundation, so the characters this generator draws from, and therefore the values a replay seed reproduces, can differ across platforms and Foundation versions. Replay stability for this generator holds only on the same platform and Foundation version. For cross-platform replay stability, draw from a `Unicode.Scalar` range instead.
     static func character(
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil
@@ -115,6 +116,8 @@ public extension ReflectiveGenerator {
     /// ```swift
     /// let gen = #gen(.character(from: .letters, .decimalDigits))
     /// ```
+    ///
+    /// - Note: A `CharacterSet`'s membership comes from the platform's Foundation, so the characters this generator draws from, and therefore the values a replay seed reproduces, can differ across platforms and Foundation versions. Replay stability for this generator holds only on the same platform and Foundation version. For cross-platform replay stability, draw from a `Unicode.Scalar` range instead.
     static func character(from first: CharacterSet, _ rest: CharacterSet...) -> ReflectiveGenerator<Character> {
         let combined = rest.reduce(first) { $0.union($1) }
         return character(from: combined)
@@ -132,6 +135,7 @@ public extension ReflectiveGenerator {
     ///   - length: The inclusive range of generated string lengths, or `nil` to scale from zero through 100 characters.
     ///   - scaling: The distribution used to scale the generated length.
     /// - Returns: A generator that produces strings from the set.
+    /// - Note: A `CharacterSet`'s membership comes from the platform's Foundation, so the characters this generator draws from, and therefore the values a replay seed reproduces, can differ across platforms and Foundation versions. Replay stability for this generator holds only on the same platform and Foundation version. For cross-platform replay stability, draw from a `Unicode.Scalar` range instead.
     static func string(
         from characterSet: CharacterSet,
         simplest: Unicode.Scalar? = nil,
