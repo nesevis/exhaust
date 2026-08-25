@@ -149,6 +149,9 @@ jobs:
             | tee "$RUNNER_TEMP/test-output-xcframework.txt"
           exit ${PIPESTATUS[0]}
 
+      - name: Smoke test artifact from an external package
+        run: bash Scripts/verify-xcframework.sh
+
       - name: Collect crash reports
         if: failure()
         run: |

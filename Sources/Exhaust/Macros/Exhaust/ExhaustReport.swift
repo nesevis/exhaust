@@ -157,7 +157,15 @@ public struct ExhaustReport: Sendable {
     package var redistributionAcceptanceNodeIDs: Set<Int> = []
 
     /// Measured coupling edges from this run. Each edge records that one node's floor shifted after another node's value changed.
-    package var couplingEdges: [CouplingEdge: Int] = [:]
+    package var couplingEdges: [CouplingEdge: Int] {
+        get {
+            diagnostics.couplingEdges
+        }
+        set {
+            ensureUniqueDiagnostics()
+            diagnostics.couplingEdges = newValue
+        }
+    }
 
     /// Distribution of partner counts per value floor-motion event.
     package var floorMotionPartnerCounts: [Int: Int] = [:]
@@ -194,10 +202,26 @@ public struct ExhaustReport: Sendable {
     // MARK: - Graph Reducer
 
     /// Graph structure and lifecycle statistics from the reduction phase. `nil` when the reduction phase did not run.
-    package var graphStats: ChoiceGraphStats?
+    package var graphStats: ChoiceGraphStats? {
+        get {
+            diagnostics.graphStats
+        }
+        set {
+            ensureUniqueDiagnostics()
+            diagnostics.graphStats = newValue
+        }
+    }
 
     /// Per-step aggregate wall-time from the reduction state machine. `nil` when the reduction phase did not run or stats collection was disabled.
-    package var stepTimings: ReductionStats.StepTimings?
+    package var stepTimings: ReductionStats.StepTimings? {
+        get {
+            diagnostics.stepTimings
+        }
+        set {
+            ensureUniqueDiagnostics()
+            diagnostics.stepTimings = newValue
+        }
+    }
 
     /// True when the reduction phase was terminated early by the wall-clock deadline. The counterexample may not be fully reduced.
     package var reductionWasCapped: Bool = false
@@ -205,7 +229,27 @@ public struct ExhaustReport: Sendable {
     /// OpenPBTStats records captured during the run.
     ///
     /// Empty when ``PropertySettings/collectOpenPBTStats`` is disabled or the run produced no records. For failing runs, the second-to-last element is the failing example and the last element is the reduced counterexample.
-    package var openPBTStatsLines: [OpenPBTStatsLine] = []
+    package var openPBTStatsLines: [OpenPBTStatsLine] {
+        get {
+            diagnostics.openPBTStatsLines
+        }
+        set {
+            ensureUniqueDiagnostics()
+            diagnostics.openPBTStatsLines = newValue
+        }
+    }
+
+    // MARK: - Diagnostics box
+
+    /// Fields whose types are `package` in ExhaustCore live behind this reference; see ``ExhaustReportDiagnostics``.
+    private var diagnostics = ExhaustReportDiagnostics()
+
+    /// Copies the box before a mutation when another report shares it, so reports keep value semantics.
+    private mutating func ensureUniqueDiagnostics() {
+        if isKnownUniquelyReferenced(&diagnostics) == false {
+            diagnostics = diagnostics.copy()
+        }
+    }
 
     /// Summarizes profiling data as a single line.
     public var profilingSummary: String {
@@ -273,5 +317,30 @@ public struct ExhaustReport: Sendable {
         graphStats = stats.graphStats
         stepTimings = stats.stepTimings
         reductionWasCapped = stats.reductionWasCapped
+    }
+}
+
+// MARK: - ExhaustReportDiagnostics
+
+/// Holds the ``ExhaustReport`` fields whose types are `package` in ExhaustCore.
+///
+/// A module outside this package computes ``ExhaustReport``'s layout from ExhaustCore's public interface, which does not declare these types. Embedding them directly gives that module a wrong layout and corrupts every copy of the report it makes. A class reference is one pointer whatever the class stores, and the class's own layout is computed here, where the package interface is visible.
+///
+/// `@unchecked Sendable` is safe because ``ExhaustReport`` copies the box before every mutation: an instance reachable from more than one report is never written again.
+package final class ExhaustReportDiagnostics: @unchecked Sendable {
+    var graphStats: ChoiceGraphStats?
+    var stepTimings: ReductionStats.StepTimings?
+    var couplingEdges: [CouplingEdge: Int] = [:]
+    var openPBTStatsLines: [OpenPBTStatsLine] = []
+
+    init() {}
+
+    func copy() -> ExhaustReportDiagnostics {
+        let copied = ExhaustReportDiagnostics()
+        copied.graphStats = graphStats
+        copied.stepTimings = stepTimings
+        copied.couplingEdges = couplingEdges
+        copied.openPBTStatsLines = openPBTStatsLines
+        return copied
     }
 }
