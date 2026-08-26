@@ -12,6 +12,8 @@
 /// .replay("3RT5GH8KM2-U3")   // screening row replay
 /// .replay("3RT5GH8KM2-U3L5") // spec screening row replay, length-5 tier
 /// ```
+///
+/// Replay stability is part of Exhaust's public contract. A seed recorded under one release reproduces the same run under every later release with the same major version. Any change that would make an existing seed produce a different run, or stop reproducing, ships only with a major version bump and is called out in the changelog.
 public enum ReplaySeed: Sendable {
     /// A raw numeric seed.
     case numeric(UInt64)
