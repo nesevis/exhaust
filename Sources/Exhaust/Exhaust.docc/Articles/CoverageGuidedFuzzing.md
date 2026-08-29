@@ -8,7 +8,9 @@ Give Exhaust a time budget and let it search for bugs by observing which branche
 
 `#exhaust` runs a property across boundary values and random samples, then stops. For most tests that's the right tradeoff: fast feedback, deterministic budget, done in well under a second. But the iteration budget is finite, and the values a generator usually produces may never reach some branches in your code.
 
-`#explore(time:)` takes a wall-clock time budget instead. You compile the target under test with coverage instrumentation (see below), and Exhaust watches which branches each generated input reaches. Inputs that reach a branch nothing else has reached become the starting points for the next inputs. A thrown error or a failed `#expect` is a failure, and when Exhaust finds one it keeps going. When the budget runs out, it reports every distinct fault it found, each reduced to a minimal counterexample.
+`#explore(time:)` takes a wall-clock time budget instead. You compile the target under test with coverage instrumentation (see below), and Exhaust watches which branches each generated input reaches. Inputs that reach a branch nothing else has reached become the starting points for the next inputs. A thrown error or a failed `#expect` is a failure, and when Exhaust finds one it keeps going. When the budget runs out, it reports the distinct counterexamples it found, each reduced to a minimal form.
+
+> Note: A run reports distinct reduced *counterexamples*, which is a lower bound on distinct faults rather than a count of them. Reduction keeps shrinking a failing input for as long as it keeps failing, and it does not require the smaller input to fail for the same reason. So a failure can reduce into a different bug's counterexample and disappear from the report. Two bugs whose minimal forms differ are reported separately; a bug reachable only through inputs that reduce toward another bug may not appear at all.
 
 ```swift
 @Test func parserHandlesAdversarialInput() async {
@@ -279,7 +281,7 @@ The generator form takes ``PropertyFuzzSettings``. The spec form takes ``StateMa
 | `.suppress(.attachments)` | Stops the run recording its per-cluster and summary attachments. Use when a test loops fuzz runs and the attachments would only accumulate noise in the result bundle. |
 | `.suppress(.all)` | All of the above. |
 | `.log(.info)` | Raises log verbosity (default is `.error`). |
-| `.failFast` | Stops the run at its first fault, after reducing it, instead of cataloguing every distinct fault. Use where any failure fails the run, such as a merge gate. |
+| `.failFast` | Stops the run at its first fault, after reducing it, instead of cataloguing further distinct counterexamples. Use where any failure fails the run, such as a merge gate. |
 | `.commandLimit(n)` | Maximum commands per generated sequence. Default 40. Spec form only. |
 | `.parallelize(lanes:)` | Lane count for `.tasks` specs. Default two. Spec form only. |
 

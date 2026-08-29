@@ -28,9 +28,9 @@ public enum PropertyFuzzSettings: Sendable {
     /// Defaults to `.log(.error)` when omitted, so only error-level messages appear.
     case log(LogLevel)
 
-    /// Stops the run as soon as its first fault is classified, instead of spending the remaining budget cataloging every distinct fault.
+    /// Stops the run as soon as its first fault is classified, instead of spending the remaining budget cataloging further distinct counterexamples.
     ///
-    /// The failing input is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is a complete fault inventory, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
+    /// The failing input is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is as complete a fault inventory as the mode offers, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
     case failFast
 }
 
@@ -57,9 +57,9 @@ public enum StateMachineFuzzSettings: Sendable {
     /// Defaults to `.log(.error)` when omitted, so only error-level messages appear.
     case log(LogLevel)
 
-    /// Stops the run as soon as its first fault is classified, instead of spending the remaining budget cataloging every distinct fault.
+    /// Stops the run as soon as its first fault is classified, instead of spending the remaining budget cataloging further distinct counterexamples.
     ///
-    /// The failing command sequence is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is a complete fault inventory, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
+    /// The failing command sequence is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is as complete a fault inventory as the mode offers, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
     case failFast
 
     /// Limits the maximum number of commands per generated sequence.
@@ -85,7 +85,7 @@ struct ParsedPropertyFuzzSettings {
     var invalidReplayMessage: String?
     var suppress = SuppressFlags()
     var logLevel: LogLevel = .error
-    /// Whether the run stops at its first classified fault instead of cataloging every distinct fault.
+    /// Whether the run stops at its first classified fault instead of cataloging further distinct counterexamples.
     var failFast = false
 
     init(_ settings: [PropertyFuzzSettings]) {

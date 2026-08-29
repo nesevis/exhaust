@@ -24,7 +24,7 @@ For the full guide, see <doc:StateMachineTesting>.
 
 ## Searching under a time budget
 
-`#execute` runs a fixed budget of sequences and stops at the first failure. To search command sequences under a wall-clock budget instead, cataloguing every distinct fault rather than stopping at one, pass the same spec to `#explore`:
+`#execute` runs a fixed budget of sequences and stops at the first failure. To search command sequences under a wall-clock budget instead, cataloguing distinct counterexamples rather than stopping at one, pass the same spec to `#explore`:
 
 ```swift
 @Test func boundedQueueDeepFaults() async {
