@@ -74,3 +74,32 @@ func withRoutedExpectedIssue(isIntermittent: Bool, _ body: () -> Void) {
         }
     #endif
 }
+
+/// Which test framework is actually running, asking Swift Testing before trusting the fallback.
+///
+/// ``TestContext/current`` reports `.xcTest` whenever Swift Testing's current test is not visible to it — it is a fallback, not a positive identification. Measured in a consumer package, that fallback fires unconditionally: a plain synchronous `@Test` body with `Test.current` set still resolved to `.xcTest`, as did an async body and a child task. Routing on it therefore sends Swift Testing runs down the XCTest path, where `XCTContext.runActivity` is main-actor only.
+///
+/// Reading `Test.current` answers the question directly. On Apple platforms the `Testing` import is `@_weakLinked`, so the read is guarded by `#_hasSymbol`: a process without Testing loaded skips it and falls back rather than faulting on a null symbol.
+enum ActiveTestFramework {
+    case swiftTesting
+    case xcTest
+    case none
+
+    static var current: ActiveTestFramework {
+        #if canImport(Testing)
+            if #_hasSymbol(Test.current), Test.current != nil {
+                return .swiftTesting
+            }
+        #endif
+        switch TestContext.current {
+            #if canImport(Testing)
+                case .swiftTesting:
+                    return .swiftTesting
+            #endif
+            case .xcTest:
+                return .xcTest
+            default:
+                return .none
+        }
+    }
+}

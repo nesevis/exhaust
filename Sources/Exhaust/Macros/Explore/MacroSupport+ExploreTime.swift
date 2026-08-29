@@ -50,7 +50,7 @@ enum FuzzRunExclusion {
 ///
 /// Counter regions register during image loading, before main, so the first read is already final and caching it is sound. The override exists because the test suite both lacks real instrumentation and registers synthetic regions from other suites running in the same process — a test asserting on either outcome of this check must not depend on suite ordering.
 package enum FuzzInstrumentationCheck {
-    private static let cachedIsInstrumented: Bool = SancovRuntime.isInstrumented
+    private static let cachedIsInstrumented: Bool = SancovRuntime.isInstrumented || TracePCGuardCoverageSource.isInstrumented
 
     /// Test seam: forces the check's outcome. Reset to nil after use.
     package static let overrideForTesting = SendableBox<Bool?>(nil)
@@ -419,16 +419,20 @@ public extension __ExhaustRuntime {
         let usesInjection = generatorIsReflective
 
         // The sancov source enables comparison-operand harvesting at init only when injection can use the operands.
+        // A trace-pc-guard build gets the isolated source: its edges route through a thread-bound context, so the run neither shares a table with another run nor pays an O(instrumented edges) clear-and-rescan per attempt. A counter build keeps the process-global source and the exclusion latch that goes with it.
         let source: any CoverageSource
+        var usesGlobalCounters = false
         if let injectedSource {
             source = injectedSource
-        } else {
-            guard FuzzInstrumentationCheck.isInstrumented,
+        } else if let guardSource = TracePCGuardCoverageSource(harvestsComparisons: usesInjection) {
+            source = guardSource
+        } else if FuzzInstrumentationCheck.isInstrumented,
                   let sancovSource = SancovCoverageSource(harvestsComparisons: usesInjection)
-            else {
-                return .empty(termination: .instrumentationMissing, seed: seed)
-            }
+        {
             source = sancovSource
+            usesGlobalCounters = true
+        } else {
+            return .empty(termination: .instrumentationMissing, seed: seed)
         }
 
         if let persistence {
@@ -443,8 +447,8 @@ public extension __ExhaustRuntime {
         }
         configure?(&configuration)
 
-        // Only the real coverage source reads the process-global counters; a synthetic source is a pure function of the value, so in-package tests can run concurrently without interfering.
-        let needsExclusiveCounters = injectedSource == nil
+        // Only the global-counter source needs the process to itself. A synthetic source is a pure function of the value, and a trace-pc-guard source routes to its own thread-bound context, so either can run alongside another run without interfering.
+        let needsExclusiveCounters = usesGlobalCounters
         if needsExclusiveCounters, FuzzRunExclusion.tryBeginRun() == false {
             return .empty(
                 termination: .invalidConfiguration(
@@ -592,6 +596,12 @@ public extension __ExhaustRuntime {
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
                 return
+            case .coverageUnreachable:
+                reportError(
+                    unreachableCoverageMessage,
+                    fileID: fileID, filePath: filePath, line: line, column: column
+                )
+                return
             case let .invalidConfiguration(message):
                 reportError(
                     message,
@@ -654,8 +664,10 @@ public extension __ExhaustRuntime {
     }
 
     /// Records one plain-text attachment through the current test context. The XCTest lifetime is `.keepAlways` — the default `.deleteOnSuccess` silently drops attachments from passing runs, and a passing fuzz run's report is still the product.
+    ///
+    /// `.xcTest` is what ``TestContext/current`` returns whenever Swift Testing's current test is not visible from the calling task, so it is a fallback rather than a positive identification: a Swift Testing run reaches this branch too. `XCTContext.runActivity` is main-actor only and `MainActor.assumeIsolated` traps rather than hops, so reaching it off the main thread killed the process. The main-thread gate is what makes the branch safe to reach from anywhere. An attachment is diagnostic output, so dropping one is always the better outcome than trapping a run that has already finished its work.
     private static func recordAttachment(_ text: String, named name: String) {
-        switch TestContext.current {
+        switch ActiveTestFramework.current {
             #if canImport(Testing)
                 case .swiftTesting:
                     Attachment.record(text, named: name)
@@ -665,16 +677,34 @@ public extension __ExhaustRuntime {
                     let attachment = XCTAttachment(data: Data(text.utf8), uniformTypeIdentifier: "public.plain-text")
                     attachment.name = name
                     attachment.lifetime = .keepAlways
-                    MainActor.assumeIsolated {
-                        XCTContext.runActivity(named: name) { activity in
-                            activity.add(attachment)
-                        }
-                    }
+                    addToActivity(attachment, named: name)
             #endif
             default:
                 break
         }
     }
+
+    #if canImport(XCTest) && canImport(ObjectiveC)
+        /// Adds one attachment to an XCTest activity, from any thread.
+        ///
+        /// `XCTContext.runActivity` is main-actor only and `MainActor.assumeIsolated` traps rather than hops, so calling it off the main thread killed the process. A synchronous `XCTestCase` method runs on the main thread and takes the direct path; an async one does not, and hops. The hop is asynchronous because a synchronous one would deadlock against a main thread waiting on this run, and it lands while the test is still live because attachments are recorded before the entry point returns.
+        private static func addToActivity(_ attachment: XCTAttachment, named name: String) {
+            let record = { @Sendable @MainActor in
+                XCTContext.runActivity(named: name) { activity in
+                    activity.add(attachment)
+                }
+            }
+            if Thread.isMainThread {
+                MainActor.assumeIsolated {
+                    record()
+                }
+            } else {
+                Task { @MainActor in
+                    record()
+                }
+            }
+        }
+    #endif
 
     // MARK: - Property Wrapping
 
