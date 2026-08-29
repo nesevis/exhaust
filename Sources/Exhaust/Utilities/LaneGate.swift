@@ -54,7 +54,7 @@ final class LaneGate: @unchecked Sendable {
 
     /// Suspends until `count` lanes are available, then reserves them. The run parks as a continuation holding no thread rather than blocking a GCD worker.
     ///
-    /// A request larger than ``limit`` is clamped to it rather than parked. Without the clamp such a request can never be satisfied — `free` never exceeds `limit` — and because ``release(_:)`` admits in FIFO order and stops at the first waiter that does not fit, one oversized request would hold the queue against every later run for the life of the process. Clamping degrades that run to "takes the whole budget" instead. ``release(_:)`` applies the same clamp so the accounting balances.
+    /// A request larger than ``limit`` is clamped to it rather than parked. Without the clamp such a request can never be satisfied, because `free` never exceeds `limit`. And since ``release(_:)`` admits in FIFO order and stops at the first waiter that does not fit, one oversized request would hold the queue against every later run for the life of the process. Clamping degrades that run to "takes the whole budget" instead. ``release(_:)`` applies the same clamp so the accounting balances.
     ///
     /// Cancellation is not handled: a unit test is never canceled, and the async entries reach the gate through a non-cancelable `dispatchToGCD` hop, so a parked continuation is always eventually resumed on admission.
     func acquire(_ count: Int) async {

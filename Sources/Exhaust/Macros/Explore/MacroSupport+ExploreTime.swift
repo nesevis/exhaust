@@ -663,9 +663,9 @@ public extension __ExhaustRuntime {
         recordAttachment(renderFuzzSummary(report), named: "explore-time-summary.txt")
     }
 
-    /// Records one plain-text attachment through the current test context. The XCTest lifetime is `.keepAlways` — the default `.deleteOnSuccess` silently drops attachments from passing runs, and a passing fuzz run's report is still the product.
+    /// Records one plain-text attachment through the current test context.
     ///
-    /// `.xcTest` is what ``TestContext/current`` returns whenever Swift Testing's current test is not visible from the calling task, so it is a fallback rather than a positive identification: a Swift Testing run reaches this branch too. `XCTContext.runActivity` is main-actor only and `MainActor.assumeIsolated` traps rather than hops, so reaching it off the main thread killed the process. The main-thread gate is what makes the branch safe to reach from anywhere. An attachment is diagnostic output, so dropping one is always the better outcome than trapping a run that has already finished its work.
+    /// The XCTest lifetime is `.keepAlways`, because the default `.deleteOnSuccess` silently drops attachments from passing runs and a passing fuzz run's report is still the product. ``ActiveTestFramework`` covers why the framework is identified the way it is, and ``addToActivity(_:named:)`` why the XCTest branch is safe off the main thread.
     private static func recordAttachment(_ text: String, named name: String) {
         switch ActiveTestFramework.current {
             #if canImport(Testing)
