@@ -30,6 +30,12 @@ package protocol CoverageSource: AnyObject, Sendable {
 
     /// Visits each comparison record — call site and both operands — captured between ``beginComparisonCapture()`` and ``endComparisonCapture()``. Only meaningful when ``wantsComparisons`` is true.
     func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void)
+
+    /// Whether the source reads process-global state, so a second run in the same process would corrupt its attribution. The driver serializes such runs through an exclusion latch and refuses a concurrent one.
+    var requiresExclusiveProcess: Bool { get }
+
+    /// Whether edges come from live instrumentation, so recording nothing means the property runs where the source cannot see. A synthetic source may map every value to no edges by design.
+    var reportsLiveCoverage: Bool { get }
 }
 
 package extension CoverageSource {
@@ -43,11 +49,35 @@ package extension CoverageSource {
         false
     }
 
-    func beginComparisonCapture() {}
+    /// The capture bracket over the process-global trace-cmp ring buffer in ``ComparisonRuntime``, shared by every live source because the buffer is one per process regardless of how edges are recorded. A source that does not want comparisons leaves the buffer disabled, so the bracket is a no-op for it.
+    func beginComparisonCapture() {
+        guard wantsComparisons else {
+            return
+        }
+        ComparisonRuntime.setEnabled(true)
+    }
 
-    func endComparisonCapture() {}
+    func endComparisonCapture() {
+        guard wantsComparisons else {
+            return
+        }
+        ComparisonRuntime.setEnabled(false)
+    }
 
-    func forEachComparisonRecord(_: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {}
+    func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {
+        guard wantsComparisons else {
+            return
+        }
+        ComparisonRuntime.forEachRecord(body)
+    }
+
+    var requiresExclusiveProcess: Bool {
+        false
+    }
+
+    var reportsLiveCoverage: Bool {
+        false
+    }
 
     /// The attempt's coverage signature as a ``BitSet`` of hit edges.
     func signature() -> BitSet {
@@ -96,19 +126,14 @@ package final class SancovCoverageSource: CoverageSource, @unchecked Sendable {
         }
     }
 
-    package func beginComparisonCapture() {
-        ComparisonRuntime.setEnabled(true)
+    /// True: the counter table is one per process, and every attempt zeroes all of it.
+    package var requiresExclusiveProcess: Bool {
+        true
     }
 
-    package func endComparisonCapture() {
-        ComparisonRuntime.setEnabled(false)
-    }
-
-    package func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {
-        guard wantsComparisons else {
-            return
-        }
-        ComparisonRuntime.forEachRecord(body)
+    /// True: the counters are written by instrumented code, so an attempt that lights none of them ran somewhere the table does not cover.
+    package var reportsLiveCoverage: Bool {
+        true
     }
 
     /// Reports every nonzero counter, scanning eight bytes at a time.

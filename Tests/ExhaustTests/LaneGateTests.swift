@@ -45,8 +45,6 @@ struct LaneGateTests {
     @Test("A request larger than the budget is clamped rather than parked forever")
     func oversizedRequestIsClamped() async {
         let gate = LaneGate(limit: 8)
-        // Without the clamp this never returns: `free` never exceeds `limit`, so the guard can never
-        // be satisfied and the continuation is enqueued permanently.
         await gate.acquire(64)
         #expect(gate.freeCount == 0, "an oversized request takes the whole budget")
         #expect(gate.waiterCount == 0, "and does not park")
@@ -60,11 +58,13 @@ struct LaneGateTests {
         await gate.acquire(64)
         let order = OrderRecorder()
 
-        let waiter = Task { await gate.acquire(2); order.record(2) }
+        let waiter = Task {
+            await gate.acquire(2)
+            order.record(2)
+        }
         try await waitForWaiters(gate, count: 1)
         #expect(order.snapshot() == [], "the later request waits while the budget is held")
 
-        // Release must apply the same clamp it acquired under, or the budget never comes back.
         gate.release(64)
         await waiter.value
         #expect(order.snapshot() == [2])

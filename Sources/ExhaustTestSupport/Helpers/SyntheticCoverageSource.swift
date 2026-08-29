@@ -14,19 +14,31 @@ public final class SyntheticCoverageSource<Value>: CoverageSource, @unchecked Se
         true
     }
 
+    /// Whether the source claims to be live instrumentation, so the runner's unreachable-coverage check applies to it. False by default: a synthetic edge function may map every value to no edges on purpose.
+    public let reportsLiveCoverage: Bool
+
     private let hitEdges: @Sendable (Value) -> [(edge: Int, hitCount: UInt8)]
     private let lock = NSLock()
     private var currentValue: Value?
 
     /// Creates a source reporting the exact (edge, hit count) pairs returned by `hitEdges`.
-    public init(edgeCount: Int, hitEdges: @escaping @Sendable (Value) -> [(edge: Int, hitCount: UInt8)]) {
+    public init(
+        edgeCount: Int,
+        reportsLiveCoverage: Bool = false,
+        hitEdges: @escaping @Sendable (Value) -> [(edge: Int, hitCount: UInt8)]
+    ) {
         self.edgeCount = edgeCount
+        self.reportsLiveCoverage = reportsLiveCoverage
         self.hitEdges = hitEdges
     }
 
     /// Creates a source where every reported edge has hit count 1, from a plain edge-set function.
-    public convenience init(edgeCount: Int, edges: @escaping @Sendable (Value) -> [Int]) {
-        self.init(edgeCount: edgeCount) { value in
+    public convenience init(
+        edgeCount: Int,
+        reportsLiveCoverage: Bool = false,
+        edges: @escaping @Sendable (Value) -> [Int]
+    ) {
+        self.init(edgeCount: edgeCount, reportsLiveCoverage: reportsLiveCoverage) { value in
             edges(value).map { (edge: $0, hitCount: 1) }
         }
     }

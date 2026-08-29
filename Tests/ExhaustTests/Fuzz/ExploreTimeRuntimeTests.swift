@@ -103,6 +103,40 @@ struct ExploreTimeRuntimeTests {
         #expect(report?.termination == .instrumentationMissing)
     }
 
+    @Test("A live source that records nothing stops the run at the reachability threshold")
+    func unreachableCoverageStopsEarly() {
+        let attemptLimit = FuzzTunables.coverageUnreachableAttemptThreshold + 200
+        let report = __ExhaustRuntime.runExploreTimeCore(
+            gen: Gen.choose(in: 0 ... 1000),
+            time: .seconds(60),
+            settings: [.replay(1), .suppress(.all)],
+            source: SyntheticCoverageSource<Int>(edgeCount: 4, reportsLiveCoverage: true, edges: { _ in [] }),
+            configure: { configuration in
+                configuration.attemptLimit = attemptLimit
+            },
+            property: { _ in .pass }
+        )
+        #expect(report.termination == .coverageUnreachable)
+        #expect(report.totalAttempts >= FuzzTunables.coverageUnreachableAttemptThreshold)
+        #expect(report.totalAttempts < attemptLimit)
+    }
+
+    @Test("A synthetic source that records nothing is not mistaken for unreachable coverage")
+    func syntheticSourceIsExemptFromReachabilityCheck() {
+        let attemptLimit = FuzzTunables.coverageUnreachableAttemptThreshold + 200
+        let report = __ExhaustRuntime.runExploreTimeCore(
+            gen: Gen.choose(in: 0 ... 1000),
+            time: .seconds(60),
+            settings: [.replay(1), .suppress(.all)],
+            source: SyntheticCoverageSource<Int>(edgeCount: 4, edges: { _ in [] }),
+            configure: { configuration in
+                configuration.attemptLimit = attemptLimit
+            },
+            property: { _ in .pass }
+        )
+        #expect(report.termination == .attemptLimitReached)
+    }
+
     @Test("An unresolvable replay seed is a configuration error, not a run")
     func invalidReplaySeed() {
         let report = __ExhaustRuntime.runExploreTimeCore(

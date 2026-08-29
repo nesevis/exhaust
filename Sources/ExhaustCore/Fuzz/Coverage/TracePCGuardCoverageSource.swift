@@ -24,6 +24,16 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
     /// Whether this source drains comparison operands each attempt, set at init from the caller's request exactly as ``SancovCoverageSource`` does.
     package let wantsComparisons: Bool
 
+    /// True: the guards are fired by instrumented code, so an attempt that lights none of them ran on a thread this context was not bound to.
+    package var reportsLiveCoverage: Bool {
+        true
+    }
+
+    /// Whether this source's context is the one bound on the calling thread, so edges fired here reach it. Test-only; production never asks, because `beginAttempt()` binds unconditionally.
+    package var isBoundOnCurrentThread: Bool {
+        exhaust_tpg_is_bound(context)
+    }
+
     /// Whether any instrumented image registered guard regions. False means the build lacks `trace-pc-guard`.
     package static var isInstrumented: Bool {
         exhaust_tpg_edge_total() > 0
@@ -53,21 +63,6 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
         }
     }
 
-    package func beginComparisonCapture() {
-        ComparisonRuntime.setEnabled(true)
-    }
-
-    package func endComparisonCapture() {
-        ComparisonRuntime.setEnabled(false)
-    }
-
-    package func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {
-        guard wantsComparisons else {
-            return
-        }
-        ComparisonRuntime.forEachRecord(body)
-    }
-
     /// Visits the edges this attempt lit, in first-hit order.
     ///
     /// Guard ids are 1-based, because zero marks an unassigned guard in the init callback. Edge indices are reported 0-based to match ``SancovCoverageSource``, so a signature means the same thing whichever source produced it within one build.
@@ -81,4 +76,26 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
             body(Int(edge) - 1, exhaust_tpg_hit_count(context, edge))
         }
     }
+
+    // MARK: - Test Support
+
+    /// Registers `count` synthetic guards as one image would, returning the guard array so a test can fire them through ``fireGuardForTesting(_:)``. The registry is process-global; pair with ``resetRegistryForTesting()``.
+    package static func registerGuardsForTesting(count: Int) -> UnsafeMutablePointer<UInt32> {
+        let guards = UnsafeMutablePointer<UInt32>.allocate(capacity: max(count, 1))
+        guards.update(repeating: 0, count: max(count, 1))
+        __sanitizer_cov_trace_pc_guard_init(guards, guards + count)
+        return guards
+    }
+
+    /// Fires one guard exactly as an instrumented edge would.
+    package static func fireGuardForTesting(_ guardPointer: UnsafeMutablePointer<UInt32>) {
+        __sanitizer_cov_trace_pc_guard(guardPointer)
+    }
+
+    #if DEBUG
+        /// Forgets every registered guard and unbinds the calling thread. Debug builds only; the C symbol does not exist in a release build, so the released binary cannot have its registry cleared.
+        package static func resetRegistryForTesting() {
+            exhaust_tpg_reset_registry_for_testing()
+        }
+    #endif
 }

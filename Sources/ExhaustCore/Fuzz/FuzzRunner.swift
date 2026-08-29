@@ -981,8 +981,8 @@ package final class FuzzRunner<Output> {
             return .budgetExhausted
         }
         // Fail fast rather than spend the budget: a run recording nothing is not searching, and the user asked for minutes.
-        if sawAnyEdge == false,
-           source.edgeCount > 0,
+        if source.reportsLiveCoverage,
+           sawAnyEdge == false,
            counts.totalAttempts >= FuzzTunables.coverageUnreachableAttemptThreshold
         {
             return .coverageUnreachable

@@ -59,6 +59,19 @@ package enum FuzzInstrumentationCheck {
     package static var isInstrumented: Bool {
         overrideForTesting.withValue { $0 } ?? cachedIsInstrumented
     }
+
+    /// The coverage source for this build, or nil when the build is uninstrumented (or the test override says so).
+    ///
+    /// A `trace-pc-guard` build gets the isolated source: its edges route through a thread-bound context, so the run neither shares a table with another run nor pays an O(instrumented edges) clear-and-rescan per attempt. A counter build gets the process-global source, which the driver serializes through ``FuzzRunExclusion``.
+    ///
+    /// - Parameter harvestsComparisons: Requests comparison-operand harvesting; the driver passes true only when injection can place the operands.
+    package static func productionSource(harvestsComparisons: Bool) -> (any CoverageSource)? {
+        guard isInstrumented else {
+            return nil
+        }
+        return TracePCGuardCoverageSource(harvestsComparisons: harvestsComparisons)
+            ?? SancovCoverageSource(harvestsComparisons: harvestsComparisons)
+    }
 }
 
 public extension __ExhaustRuntime {
@@ -418,20 +431,8 @@ public extension __ExhaustRuntime {
         // Injection activates on the presence of trace-cmp instrumentation, not a knob: a reflective generator on a trace-cmp build harvests operands and places them (whole-value gates through the reconstructor, composites through the field graft), while a non-reflective generator has nothing to place and a build without trace-cmp never fills the pool, so the injection arms stay free. There is no init-time way to detect the flag — its presence shows up as a non-empty pool once a comparison fires.
         let usesInjection = generatorIsReflective
 
-        // The sancov source enables comparison-operand harvesting at init only when injection can use the operands.
-        // A trace-pc-guard build gets the isolated source: its edges route through a thread-bound context, so the run neither shares a table with another run nor pays an O(instrumented edges) clear-and-rescan per attempt. A counter build keeps the process-global source and the exclusion latch that goes with it.
-        let source: any CoverageSource
-        var usesGlobalCounters = false
-        if let injectedSource {
-            source = injectedSource
-        } else if let guardSource = TracePCGuardCoverageSource(harvestsComparisons: usesInjection) {
-            source = guardSource
-        } else if FuzzInstrumentationCheck.isInstrumented,
-                  let sancovSource = SancovCoverageSource(harvestsComparisons: usesInjection)
-        {
-            source = sancovSource
-            usesGlobalCounters = true
-        } else {
+        // A live source enables comparison-operand harvesting at init only when injection can use the operands.
+        guard let source = injectedSource ?? FuzzInstrumentationCheck.productionSource(harvestsComparisons: usesInjection) else {
             return .empty(termination: .instrumentationMissing, seed: seed)
         }
 
@@ -447,8 +448,7 @@ public extension __ExhaustRuntime {
         }
         configure?(&configuration)
 
-        // Only the global-counter source needs the process to itself. A synthetic source is a pure function of the value, and a trace-pc-guard source routes to its own thread-bound context, so either can run alongside another run without interfering.
-        let needsExclusiveCounters = usesGlobalCounters
+        let needsExclusiveCounters = source.requiresExclusiveProcess
         if needsExclusiveCounters, FuzzRunExclusion.tryBeginRun() == false {
             return .empty(
                 termination: .invalidConfiguration(
@@ -663,48 +663,10 @@ public extension __ExhaustRuntime {
         recordAttachment(renderFuzzSummary(report), named: "explore-time-summary.txt")
     }
 
-    /// Records one plain-text attachment through the current test context.
-    ///
-    /// The XCTest lifetime is `.keepAlways`, because the default `.deleteOnSuccess` silently drops attachments from passing runs and a passing fuzz run's report is still the product. ``ActiveTestFramework`` covers why the framework is identified the way it is, and ``addToActivity(_:named:)`` why the XCTest branch is safe off the main thread.
+    /// Records one plain-text attachment through the current test context. Kept on a passing run, because the default XCTest lifetime silently drops attachments from passing runs and a passing fuzz run's report is still the product.
     private static func recordAttachment(_ text: String, named name: String) {
-        switch ActiveTestFramework.current {
-            #if canImport(Testing)
-                case .swiftTesting:
-                    Attachment.record(text, named: name)
-            #endif
-            #if canImport(XCTest) && canImport(ObjectiveC)
-                case .xcTest:
-                    let attachment = XCTAttachment(data: Data(text.utf8), uniformTypeIdentifier: "public.plain-text")
-                    attachment.name = name
-                    attachment.lifetime = .keepAlways
-                    addToActivity(attachment, named: name)
-            #endif
-            default:
-                break
-        }
+        recordTestAttachment(text, named: name, uniformTypeIdentifier: "public.plain-text", keepsOnPassingRun: true)
     }
-
-    #if canImport(XCTest) && canImport(ObjectiveC)
-        /// Adds one attachment to an XCTest activity, from any thread.
-        ///
-        /// `XCTContext.runActivity` is main-actor only and `MainActor.assumeIsolated` traps rather than hops, so calling it off the main thread killed the process. A synchronous `XCTestCase` method runs on the main thread and takes the direct path; an async one does not, and hops. The hop is asynchronous because a synchronous one would deadlock against a main thread waiting on this run, and it lands while the test is still live because attachments are recorded before the entry point returns.
-        private static func addToActivity(_ attachment: XCTAttachment, named name: String) {
-            let record = { @Sendable @MainActor in
-                XCTContext.runActivity(named: name) { activity in
-                    activity.add(attachment)
-                }
-            }
-            if Thread.isMainThread {
-                MainActor.assumeIsolated {
-                    record()
-                }
-            } else {
-                Task { @MainActor in
-                    record()
-                }
-            }
-        }
-    #endif
 
     // MARK: - Property Wrapping
 

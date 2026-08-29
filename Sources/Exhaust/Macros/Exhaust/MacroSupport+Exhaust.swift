@@ -375,35 +375,14 @@ public extension __ExhaustRuntime {
                     if lines.isEmpty == false {
                         // Suppression skips only the attachment write below; the lines still reach the report, so `.collectOpenPBTStats` with `.suppress(.attachments)` collects without attaching.
                         report.openPBTStatsLines = lines
-                        let attachmentName = "\(testName)-openpbtstats.jsonl"
-                        let attachmentContext: ActiveTestFramework = suppress.attachments ? .none : ActiveTestFramework.current
-                        switch attachmentContext {
-                            #if canImport(Testing)
-                                case .swiftTesting:
-                                    Attachment.record(lines.jsonlString(), named: attachmentName)
-                            #endif
-                            #if canImport(ObjectiveC)
-                                // `XCTContext.runActivity` is main-actor only and `MainActor.assumeIsolated` traps rather than hops, so an async `XCTestCase` method reaching this off the main thread killed the process. Hop rather than drop; see `recordAttachment` for the same treatment on the `time:` path.
-                                case .xcTest:
-                                    let xctAttachment = XCTAttachment(data: Data(lines.jsonlString().utf8), uniformTypeIdentifier: "public.json")
-                                    xctAttachment.name = attachmentName
-                                    let record = { @Sendable @MainActor in
-                                        XCTContext.runActivity(named: "OpenPBTStats") { activity in
-                                            activity.add(xctAttachment)
-                                        }
-                                    }
-                                    if Thread.isMainThread {
-                                        MainActor.assumeIsolated {
-                                            record()
-                                        }
-                                    } else {
-                                        Task { @MainActor in
-                                            record()
-                                        }
-                                    }
-                            #endif
-                            default:
-                                break
+                        if suppress.attachments == false {
+                            recordTestAttachment(
+                                lines.jsonlString(),
+                                named: "\(testName)-openpbtstats.jsonl",
+                                uniformTypeIdentifier: "public.json",
+                                keepsOnPassingRun: false,
+                                activityName: "OpenPBTStats"
+                            )
                         }
                     }
                 }

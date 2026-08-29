@@ -211,3 +211,14 @@ uint8_t exhaust_tpg_hit_count(struct exhaust_tpg_context *context, uint32_t edge
     }
     return context->hits[edge];
 }
+
+_Bool exhaust_tpg_is_bound(struct exhaust_tpg_context *context) {
+    return context != NULL && exhaust_tpg_current == context;
+}
+
+#ifdef DEBUG
+void exhaust_tpg_reset_registry_for_testing(void) {
+    exhaust_tpg_edge_count = 0;
+    exhaust_tpg_current = NULL;
+}
+#endif

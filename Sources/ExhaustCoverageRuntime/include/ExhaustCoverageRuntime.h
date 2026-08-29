@@ -46,5 +46,17 @@ const uint32_t *exhaust_tpg_covered(struct exhaust_tpg_context *context);
 size_t exhaust_tpg_covered_count(struct exhaust_tpg_context *context);
 uint8_t exhaust_tpg_hit_count(struct exhaust_tpg_context *context, uint32_t edge);
 
+// Whether the calling thread's binding is this context.
+_Bool exhaust_tpg_is_bound(struct exhaust_tpg_context *context);
+
+// MARK: - Test Support
+
+// The two SanitizerCoverage callbacks, declared so an uninstrumented test binary can drive the recorder with synthetic guards.
+void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop);
+void __sanitizer_cov_trace_pc_guard(uint32_t *guard);
+
+// Forgets every registered guard and clears the calling thread's binding. Defined in debug builds only: the production registry is append-only for the process lifetime, and a consumer of the released library must not be able to disable coverage for every later run. The declaration stays unconditional because the clang importer does not see the build configuration; the Swift caller is itself under `#if DEBUG`, so a release build never references the missing symbol.
+void exhaust_tpg_reset_registry_for_testing(void);
+
 
 #endif

@@ -1,5 +1,10 @@
 import ExhaustGenerators
+import Foundation
 import IssueReporting
+
+#if canImport(XCTest) && canImport(ObjectiveC)
+    @preconcurrency @_weakLinked import XCTest
+#endif
 
 #if canImport(Testing) && canImport(ObjectiveC)
     @_weakLinked import Testing
@@ -79,15 +84,19 @@ func withRoutedExpectedIssue(isIntermittent: Bool, _ body: () -> Void) {
 ///
 /// ``TestContext/current`` reports `.xcTest` whenever Swift Testing's current test is not visible to it, which makes it a fallback rather than a positive identification. Measured in a consumer package, that fallback fires unconditionally: a plain synchronous `@Test` body with `Test.current` set still resolved to `.xcTest`, as did an async body and a child task. Routing on it therefore sends Swift Testing runs down the XCTest path, where `XCTContext.runActivity` is main-actor only.
 ///
-/// Reading `Test.current` answers the question directly. On Apple platforms the `Testing` import is `@_weakLinked`, so the read is guarded by `#_hasSymbol`: a process without Testing loaded skips it and falls back rather than faulting on a null symbol.
+/// Reading `Test.current` answers the question directly. On Apple platforms the `Testing` import is `@_weakLinked`, so the read is guarded by `#_hasSymbol`: a process without Testing loaded skips it and falls back rather than faulting on a null symbol. Elsewhere the import is strong and the read is unconditional.
 enum ActiveTestFramework {
     case swiftTesting
     case xcTest
     case none
 
     static var current: ActiveTestFramework {
-        #if canImport(Testing)
+        #if canImport(Testing) && canImport(ObjectiveC)
             if #_hasSymbol(Test.current), Test.current != nil {
+                return .swiftTesting
+            }
+        #elseif canImport(Testing)
+            if Test.current != nil {
                 return .swiftTesting
             }
         #endif
@@ -101,5 +110,54 @@ enum ActiveTestFramework {
             default:
                 return .none
         }
+    }
+}
+
+/// Records one text attachment through whichever test framework is running, from any thread.
+///
+/// Under XCTest, `XCTContext.runActivity` is main-actor only and `MainActor.assumeIsolated` traps rather than hops, so calling it off the main thread killed the process. A synchronous `XCTestCase` method runs on the main thread and takes the direct path. An async one does not, and the hop is asynchronous because a synchronous one would deadlock against a main thread that is waiting on this run. That makes the async XCTest case best-effort: the hop is enqueued before the entry point returns, but if the test method finishes before it runs, XCTest has no current test to attach to and the attachment is dropped.
+///
+/// - Parameters:
+///   - text: The attachment body.
+///   - name: The attachment's name in the result bundle.
+///   - uniformTypeIdentifier: The XCTest attachment type, for example `public.plain-text`.
+///   - keepsOnPassingRun: Whether XCTest keeps the attachment when the test passes. The default XCTest lifetime deletes it.
+///   - activityName: The XCTest activity to attach under. Defaults to `name`.
+func recordTestAttachment(
+    _ text: String,
+    named name: String,
+    uniformTypeIdentifier: String,
+    keepsOnPassingRun: Bool,
+    activityName: String? = nil
+) {
+    switch ActiveTestFramework.current {
+        #if canImport(Testing)
+            case .swiftTesting:
+                Attachment.record(text, named: name)
+        #endif
+        #if canImport(XCTest) && canImport(ObjectiveC)
+            case .xcTest:
+                let attachment = XCTAttachment(data: Data(text.utf8), uniformTypeIdentifier: uniformTypeIdentifier)
+                attachment.name = name
+                if keepsOnPassingRun {
+                    attachment.lifetime = .keepAlways
+                }
+                let record = { @Sendable @MainActor in
+                    XCTContext.runActivity(named: activityName ?? name) { activity in
+                        activity.add(attachment)
+                    }
+                }
+                if Thread.isMainThread {
+                    MainActor.assumeIsolated {
+                        record()
+                    }
+                } else {
+                    Task { @MainActor in
+                        record()
+                    }
+                }
+        #endif
+        default:
+            break
     }
 }
