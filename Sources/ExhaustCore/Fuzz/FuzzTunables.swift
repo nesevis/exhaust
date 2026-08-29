@@ -114,6 +114,13 @@ package enum FuzzTunables {
 
     /// Upper bound on the adaptive escape interval. The interval doubles each time an escape reduction lands in an existing cluster, so without a cap a long run would stop escaping entirely — and the escape hatch exists precisely because symptom matching is a weak signal.
     package static let reductionEscapeIntervalCap = 3200
+
+    // MARK: - Coverage Reachability
+
+    /// Attempts to allow before concluding that an instrumented build is recording nothing.
+    ///
+    /// Comfortably past the screening phase, so a run is judged on evaluations spanning all three phases rather than on a handful of covering-array rows.
+    package static let coverageUnreachableAttemptThreshold = 1000
 }
 
 // MARK: - Experiment Knobs

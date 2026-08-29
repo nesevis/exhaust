@@ -25,6 +25,29 @@ The search holds one thread for the entire budget. Write the `async` form so tha
 
 > Important: Fuzz tests must run in isolation. Give them their own test target, mark the suite `.serialized`, and for the strongest signal filter each run down to one fuzz test (`swift test --filter FuzzTests.fuzzMyLibrary`). This also keeps minute-scale budgets out of everyday `swift test` runs. <doc:#Getting-a-clean-signal> explains why.
 
+## What the search can and cannot see
+
+Coverage is recorded against the lane the run owns. Work that executes on an executor the run did not bind is invisible to the search, and the two instrumentation modes differ in exactly this respect.
+
+`inline-8bit-counters` writes to a process-global table, so it records work wherever it runs. The cost is that the table is shared: two coverage-guided runs in one process clear each other's counters, which is why a counter build needs `swift test --no-parallel`.
+
+`trace-pc-guard` records through a context bound to the running lane. That is what lets separate runs share a process, and it is also the limitation: a `@MainActor` function, an actor with a custom executor, or work inside a detached task runs somewhere else, and its branches are not recorded.
+
+Measured on the same five-branch function reached four ways:
+
+| the property's work runs | counters | guards |
+|---|---|---|
+| directly, on the run's lane | recorded | recorded |
+| inside a default actor | recorded | recorded |
+| inside a `@MainActor` function | recorded | **not recorded** |
+| inside a detached task | recorded | **partly recorded** |
+
+A default actor is fine because it has no executor of its own and adopts the calling task's, which is the run's lane.
+
+Two shapes are prevented at compile time rather than left to fail quietly. A property closure cannot be marked `@MainActor`, because the parameter is nonisolated. A `@Command` cannot be marked `@MainActor`, because synthesised command dispatch is nonisolated. So this is reached by a nonisolated property that `await`s main-actor work, not by annotating the test.
+
+When a run records nothing at all, it stops early and says so rather than spending the budget, and names the counter flags as the way to record the work it could not see. Partial loss has no such signal: a property that does some work on the lane and some on the main actor reports plausible coverage while a region of the code is never searched. If the system under test is main-actor isolated, prefer counter-based instrumentation and give the run the process to itself.
+
 ## Setting up coverage instrumentation
 
 `#explore(time:)` requires the target under test to be compiled with coverage instrumentation. Without it, the test fails immediately with a diagnostic showing the flags to add. No budget is consumed.

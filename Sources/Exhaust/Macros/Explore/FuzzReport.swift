@@ -4,11 +4,11 @@ import ExhaustCore
 
 /// The outcome of a `#explore(time:)` coverage-guided run: a clustered fault inventory plus throughput and coverage statistics.
 ///
-/// A `time:` run catalogs failures instead of stopping at the first one, so the report carries every distinct fault cluster the run discovered. Assert on ``clusters`` when a run is expected to find bugs (combine with `.suppress(.issueReporting)`), or on ``termination`` and the attempt counts when validating search behavior.
+/// A `time:` run catalogs failures instead of stopping at the first one, so the report carries the fault clusters the run discovered. Cluster count is a lower bound on distinct bugs: reduction preserves failure rather than the *reason* for failure, so a fault whose inputs reduce toward another fault's counterexample is absorbed into it and never reported separately. Assert on ``clusters`` when a run is expected to find bugs (combine with `.suppress(.issueReporting)`), or on ``termination`` and the attempt counts when validating search behavior.
 ///
 /// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 public struct FuzzReport: Sendable {
-    /// One distinct fault the run discovered: a unique reduced counterexample with its membership counts.
+    /// One fault cluster the run discovered: a unique reduced counterexample with its membership counts. A cluster is an identity over reduced forms, not over root causes.
     ///
     /// Cluster identity is a canonical structural key over the reduced counterexample, so two failures that reduce to the same minimal form are the same cluster even when their surface symptoms differ, and distinct reduced forms are distinct clusters even when their symptoms match. ``isLikelySplit`` marks the middle taxonomy tier: one reduced form observed through more than one coverage signature.
     public struct Cluster: Sendable {
@@ -122,6 +122,9 @@ public struct FuzzReport: Sendable {
 
         /// The build lacks coverage instrumentation, so the run failed loudly before consuming any budget. The recorded issue carries the compiler flags to add.
         case instrumentationMissing
+
+        /// The build carries instrumentation, but the run recorded no coverage at all, so the search had nothing to follow and stopped rather than spending the budget. Reached when the property's work executes somewhere the coverage source does not observe; see <doc:CoverageGuidedFuzzing> on executor isolation.
+        case coverageUnreachable
 
         /// A setting was unusable (an invalid replay seed, a nonpositive time budget), so the run failed loudly before consuming any budget. The payload is the recorded issue's message.
         case invalidConfiguration(String)
@@ -483,6 +486,8 @@ package extension FuzzReport.Termination {
                 .attemptLimitReached
             case .firstFaultFound:
                 .firstFaultFound
+            case .coverageUnreachable:
+                .coverageUnreachable
             case let .generationError(message):
                 .generationFailed(message)
         }

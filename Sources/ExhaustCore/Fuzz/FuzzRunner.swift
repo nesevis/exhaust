@@ -209,6 +209,8 @@ package final class FuzzRunner<Output> {
     /// Executes the three phases and returns the final result. Synchronous; the caller owns GCD-lane placement.
     /// Scratch for ``evaluateInBracket``; see the note there.
     private var hitsBuffer: [(edge: Int, hitCount: UInt8)] = []
+    /// Whether any attempt has ever recorded an edge. False after a meaningful number of attempts means the source is reading a table the property never writes to, because the property's work is executing somewhere the source does not observe.
+    private var sawAnyEdge = false
 
     package func run() -> FuzzRunResult {
         startNanoseconds = monotonicNanoseconds()
@@ -659,6 +661,9 @@ package final class FuzzRunner<Output> {
         source.forEachHitEdge { edge, hitCount in
             hitsBuffer.append((edge, hitCount))
         }
+        if hitsBuffer.isEmpty == false {
+            sawAnyEdge = true
+        }
         if capturesComparisons {
             source.forEachComparisonRecord { site, arg1, arg2 in
                 comparisonPool.insert(site: site, value: arg1)
@@ -974,6 +979,13 @@ package final class FuzzRunner<Output> {
         }
         if monotonicNanoseconds() - startNanoseconds >= configuration.budgetNanoseconds {
             return .budgetExhausted
+        }
+        // Fail fast rather than spend the budget: a run recording nothing is not searching, and the user asked for minutes.
+        if sawAnyEdge == false,
+           source.edgeCount > 0,
+           counts.totalAttempts >= FuzzTunables.coverageUnreachableAttemptThreshold
+        {
+            return .coverageUnreachable
         }
         return nil
     }

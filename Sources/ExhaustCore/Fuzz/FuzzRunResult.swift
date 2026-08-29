@@ -27,6 +27,8 @@ package enum FuzzTermination: Equatable, Sendable {
     case attemptLimitReached
     /// A fault clustered and ``FuzzRunnerConfiguration/stopOnFirstFault`` was set.
     case firstFaultFound
+    /// Attempts ran against an instrumented build and recorded no edges at all, so the search has no signal to follow. Distinct from a build with no instrumentation: the counters exist, the run simply cannot see them from the lane it bound.
+    case coverageUnreachable
     /// Generation failed irrecoverably.
     case generationError(String)
 }

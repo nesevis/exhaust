@@ -329,6 +329,25 @@ extension __ExhaustRuntime {
         return String(format: "%.1fs", duration.seconds)
     }
 
+    /// The hard-failure diagnostic for an instrumented build whose coverage the run cannot observe, naming the instrumentation that does not have the limitation.
+    ///
+    /// `trace-pc-guard` records through a thread-bound context, which is what lets separate runs share a process. Work that executes on an executor the run did not bind is therefore invisible to it: a `@MainActor` function, an actor with a custom executor, a detached task. `inline-8bit-counters` writes to a process-global table and records that work, at the cost of requiring the run to have the process to itself.
+    package static var unreachableCoverageMessage: String {
+        """
+        #explore(time:) recorded no coverage after \(FuzzTunables.coverageUnreachableAttemptThreshold) attempts, so the search has no signal to follow and stopped rather than spending the budget.
+
+        The build is instrumented, so this is not a missing-flags problem. It means the property's work runs somewhere this run cannot observe. The usual cause is executor isolation under `trace-pc-guard`: a `@MainActor` property, an actor with a custom executor, or work inside a detached task executes off the lane the run bound.
+
+        Rebuild the target under test with counter-based instrumentation, which records regardless of executor:
+
+        .unsafeFlags(["-sanitize=undefined",
+                      "-sanitize-coverage=edge,inline-8bit-counters,pc-table"],
+                     .when(configuration: .debug))
+
+        Counter-based coverage is process-global, so give the run the process to itself: `swift test --no-parallel`, or filter down to the single fuzz test.
+        """
+    }
+
     /// The hard-failure diagnostic for a build without coverage instrumentation, with the flags ready to copy-paste.
     package static var missingInstrumentationMessage: String {
         """
