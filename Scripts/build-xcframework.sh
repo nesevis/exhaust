@@ -167,18 +167,19 @@ collect() {
 
     # Create static library from object files.
     #
-    # ExhaustCore depends on the ExhaustTraceCmp C target (the uninstrumented trace-cmp hooks
-    # that ComparisonRuntime.swift calls), whose objects land in a sibling .build directory. They must
-    # be archived alongside ExhaustCore's own, or the shipped library carries unresolved exhaust_cmp_*
-    # symbols and every binary consumer fails to link. This is ExhaustCore's only cross-target
-    # dependency; add another glob here if that ever changes.
-    if ! compgen -G "${build_products}/ExhaustTraceCmp.build/*.o" > /dev/null; then
-        echo "error: no ExhaustTraceCmp objects at ${build_products}/ExhaustTraceCmp.build/ — libExhaustCore.a would ship with undefined exhaust_cmp_* symbols." >&2
+    # ExhaustCore depends on the ExhaustCoverageRuntime C target (the uninstrumented sancov hooks that
+    # ComparisonRuntime.swift and TracePCGuardCoverageSource.swift call), whose objects land in a
+    # sibling .build directory. They must be archived alongside ExhaustCore's own, or the shipped
+    # library carries unresolved exhaust_cmp_* and exhaust_tpg_* symbols and every binary consumer
+    # fails to link. This is ExhaustCore's only cross-target dependency; add another glob here if that
+    # ever changes.
+    if ! compgen -G "${build_products}/ExhaustCoverageRuntime.build/*.o" > /dev/null; then
+        echo "error: no ExhaustCoverageRuntime objects at ${build_products}/ExhaustCoverageRuntime.build/ — libExhaustCore.a would ship with undefined exhaust_cmp_* and exhaust_tpg_* symbols." >&2
         exit 1
     fi
     ar rcs "${dest}/libExhaustCore.a" \
         "${build_products}/ExhaustCore.build/"*.o \
-        "${build_products}/ExhaustTraceCmp.build/"*.o
+        "${build_products}/ExhaustCoverageRuntime.build/"*.o
 
     # Compiled module (binary .swiftmodule)
     cp "${build_products}/Modules/ExhaustCore.swiftmodule" \

@@ -29,7 +29,7 @@ let coreTarget: Target = usePrecompiled
     ? .binaryTarget(name: "ExhaustCore", path: "Frameworks/ExhaustCore.xcframework")
     : .target(
         name: "ExhaustCore",
-        dependencies: ["ExhaustTraceCmp"],
+        dependencies: ["ExhaustCoverageRuntime"],
         swiftSettings: strictConcurrencySettings + [
             .unsafeFlags(["-whole-module-optimization"], .when(configuration: .release)),
         ],
@@ -72,9 +72,9 @@ let package = Package(
     ] + swiftLintDependency,
     targets: [
         coreTarget,
-        // Uninstrumented C home for the SanitizerCoverage trace-cmp hooks. Must not itself be built with -sanitize-coverage: an instrumented hook recurses into its own guard comparison. ExhaustCore links it so the comparison-operand harvest is available wherever the fuzz loop runs.
+        // Uninstrumented C home for the SanitizerCoverage callbacks: the trace-cmp operand harvest and the trace-pc-guard edge recorder. Must not itself be built with -sanitize-coverage: an instrumented hook recurses into its own guard comparison. ExhaustCore links it so both are available wherever the fuzz loop runs.
         .target(
-            name: "ExhaustTraceCmp",
+            name: "ExhaustCoverageRuntime",
             publicHeadersPath: "include"
         ),
         .target(

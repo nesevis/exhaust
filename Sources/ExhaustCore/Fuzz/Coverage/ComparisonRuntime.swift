@@ -1,9 +1,9 @@
-// Swift access to the SanitizerCoverage trace-cmp operand harvest defined in ExhaustTraceCmp.
+// Swift access to the SanitizerCoverage trace-cmp operand harvest defined in ExhaustCoverageRuntime.
 
 // Internal so the C module stays out of ExhaustCore's emitted `.swiftinterface`. The hooks appear only in function bodies here, never in a `package` or `public` signature, so nothing needs the clang module to read the interface — which matters for the binary xcframework, whose consumers cannot resolve a source C target. A plain `import` would land in the textual interface and break its verification.
-internal import ExhaustTraceCmp
+internal import ExhaustCoverageRuntime
 
-/// Reads the comparison operands harvested by the trace-cmp hooks in ``ExhaustTraceCmp``.
+/// Reads the comparison operands harvested by the trace-cmp hooks in ``ExhaustCoverageRuntime``.
 ///
 /// The hooks record every instrumented comparison's operand pair into a process-global ring buffer while harvesting is enabled. This type brackets one attempt: ``reset()`` and ``setEnabled(_:)`` frame the property evaluation, and ``forEachPair(_:)`` drains what fired. The bracket discipline mirrors the counter regions — one open attempt at a time, on the runner's single lane — so the operands read back belong to exactly one evaluation.
 package enum ComparisonRuntime {
