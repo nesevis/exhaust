@@ -24,7 +24,7 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
     /// Whether this source drains comparison operands each attempt, set at init from the caller's request exactly as ``SancovCoverageSource`` does.
     package let wantsComparisons: Bool
 
-    /// True: the guards are fired by instrumented code, so an attempt that lights none of them ran on a thread this context was not bound to.
+    /// True: the tracePCGuards are fired by instrumented code, so an attempt that lights none of them ran on a thread this context was not bound to.
     package var reportsLiveCoverage: Bool {
         true
     }
@@ -39,12 +39,12 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
         exhaust_tpg_is_bound(context)
     }
 
-    /// Whether any instrumented image registered guard regions. False means the build lacks `trace-pc-guard`.
+    /// Whether any instrumented image registered trace-pc-guard regions. False means the build lacks `trace-pc-guard`.
     package static var isInstrumented: Bool {
         exhaust_tpg_edge_total() > 0
     }
 
-    /// Creates a source over the registered guard regions, or returns nil when the build lacks `trace-pc-guard` instrumentation or the allocation fails.
+    /// Creates a source over the registered trace-pc-guard regions, or returns nil when the build lacks `trace-pc-guard` instrumentation or the allocation fails.
     package init?(harvestsComparisons: Bool = false) {
         let total = exhaust_tpg_edge_total()
         guard total > 0, let context = exhaust_tpg_create() else {
@@ -110,7 +110,7 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
 
     /// Visits the edges this attempt lit, in first-hit order.
     ///
-    /// Guard ids are 1-based, because zero marks an unassigned guard in the init callback. Edge indices are reported 0-based to match ``SancovCoverageSource``, so a signature means the same thing whichever source produced it within one build.
+    /// Trace-pc-guard ids are 1-based, because zero marks an unassigned trace-pc-guard in the init callback. Edge indices are reported 0-based to match ``SancovCoverageSource``, so a signature means the same thing whichever source produced it within one build.
     package func forEachHitEdge(_ body: (_ edge: Int, _ hitCount: UInt8) -> Void) {
         let count = exhaust_tpg_covered_count(context)
         guard count > 0, let covered = exhaust_tpg_covered(context) else {

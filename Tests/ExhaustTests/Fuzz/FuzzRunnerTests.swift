@@ -269,31 +269,31 @@ private func bucketedSource() -> SyntheticCoverageSource<Int> {
 }
 
 #if DEBUG
-    /// The guard registry is process-global, so this runs serialized with the other registry suites and resets it around use.
+    /// The trace-pc-guard registry is process-global, so this runs serialized with the other registry suites and resets it around use.
     extension CoverageRegistryTests {
         @Suite("FuzzRunner lane ownership under trace-pc-guard", .serialized)
         struct FuzzRunnerLaneOwnershipTests {
             @Test("Generator edges fired before the first bracket are not reported as off-lane")
             func preBracketGenerationIsNotOffLane() {
                 TracePCGuardCoverageSource.resetRegistryForTesting()
-                let guards = TracePCGuardCoverageSource.registerGuardsForTesting(count: 2)
-                defer { guards.deallocate() }
+                let tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: 2)
+                defer { tracePCGuards.deallocate() }
                 guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
                     Issue.record("expected a trace-pc-guard source on an instrumented registry")
                     return
                 }
                 // The pointer outlives both closures (deallocated after the run) and is only ever touched from the run's lane.
-                nonisolated(unsafe) let generatorGuard = guards
-                nonisolated(unsafe) let propertyGuard = guards + 1
+                nonisolated(unsafe) let generatorTracePCGuard = tracePCGuards
+                nonisolated(unsafe) let propertyTracePCGuard = tracePCGuards + 1
                 // An instrumented generator, as a `#gen` initializer closure in the module under test is: it fires an edge every time a value is produced, including for screening rows built before any bracket opens.
                 let generator = Gen.choose(in: 0 ... 1000 as ClosedRange<Int>).map { value in
-                    TracePCGuardCoverageSource.fireGuardForTesting(generatorGuard)
+                    TracePCGuardCoverageSource.fireTracePCGuardForTesting(generatorTracePCGuard)
                     return value
                 }
                 let runner = FuzzRunner(
                     gen: generator,
                     property: { _ in
-                        TracePCGuardCoverageSource.fireGuardForTesting(propertyGuard)
+                        TracePCGuardCoverageSource.fireTracePCGuardForTesting(propertyTracePCGuard)
                         return .pass
                     },
                     source: source,

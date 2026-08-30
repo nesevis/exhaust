@@ -19,8 +19,8 @@ import Testing
             @Test("Two harvesting trace-pc-guard sources keep their comparison operands apart")
             func comparisonHarvestIsPerSource() {
                 TracePCGuardCoverageSource.resetRegistryForTesting()
-                let guards = TracePCGuardCoverageSource.registerGuardsForTesting(count: 2)
-                defer { guards.deallocate() }
+                let tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: 2)
+                defer { tracePCGuards.deallocate() }
                 guard let first = TracePCGuardCoverageSource(harvestsComparisons: true),
                       let second = TracePCGuardCoverageSource(harvestsComparisons: true)
                 else {
@@ -51,8 +51,8 @@ import Testing
             @Test("Edges fired on a thread no run owns are counted as off-lane, edges on the run's own unbound lane are not")
             func offLaneHitsAreCounted() async {
                 TracePCGuardCoverageSource.resetRegistryForTesting()
-                let guards = TracePCGuardCoverageSource.registerGuardsForTesting(count: 2)
-                defer { guards.deallocate() }
+                let tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: 2)
+                defer { tracePCGuards.deallocate() }
                 guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
                     Issue.record("expected a trace-pc-guard source on an instrumented registry")
                     return
@@ -61,16 +61,16 @@ import Testing
                 source.beginAttempt()
                 source.endAttempt()
                 let before = source.offLaneHitCount
-                TracePCGuardCoverageSource.fireGuardForTesting(guards)
+                TracePCGuardCoverageSource.fireTracePCGuardForTesting(tracePCGuards)
                 #expect(source.offLaneHitCount == before, "the run's own lane between brackets is excluded by design")
 
                 // A thread the run never bound is where main-actor and custom-executor work lands; its edges are the loss the report must name.
                 // Foundation's Thread block is @Sendable on Linux; the pointer outlives the thread (deallocated after the await) and only the worker touches it.
-                nonisolated(unsafe) let offLaneGuard = guards + 1
+                nonisolated(unsafe) let offLaneTracePCGuard = tracePCGuards + 1
                 await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                     let worker = Thread {
-                        TracePCGuardCoverageSource.fireGuardForTesting(offLaneGuard)
-                        TracePCGuardCoverageSource.fireGuardForTesting(offLaneGuard)
+                        TracePCGuardCoverageSource.fireTracePCGuardForTesting(offLaneTracePCGuard)
+                        TracePCGuardCoverageSource.fireTracePCGuardForTesting(offLaneTracePCGuard)
                         continuation.resume()
                     }
                     worker.start()
@@ -81,8 +81,8 @@ import Testing
             @Test("Claiming the lane excludes pre-bracket edges on it without binding a context")
             func claimLaneExcludesPreBracketEdges() {
                 TracePCGuardCoverageSource.resetRegistryForTesting()
-                let guards = TracePCGuardCoverageSource.registerGuardsForTesting(count: 1)
-                defer { guards.deallocate() }
+                let tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: 1)
+                defer { tracePCGuards.deallocate() }
                 guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
                     Issue.record("expected a trace-pc-guard source on an instrumented registry")
                     return
@@ -90,7 +90,7 @@ import Testing
                 // The runner's screening prologue: the generator runs on the run's lane before the first bracket ever opens.
                 let before = source.offLaneHitCount
                 source.claimLane()
-                TracePCGuardCoverageSource.fireGuardForTesting(guards)
+                TracePCGuardCoverageSource.fireTracePCGuardForTesting(tracePCGuards)
                 #expect(source.offLaneHitCount == before)
                 #expect(source.isBoundOnCurrentThread == false, "claiming is not binding: nothing records until a bracket opens")
             }
@@ -100,15 +100,15 @@ import Testing
                 let gen = #gen(.int(in: 128 ... 5000))
                 #exhaust(gen) { repeatCount in
                     TracePCGuardCoverageSource.resetRegistryForTesting()
-                    let guards = TracePCGuardCoverageSource.registerGuardsForTesting(count: 1)
-                    defer { guards.deallocate() }
+                    let tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: 1)
+                    defer { tracePCGuards.deallocate() }
                     guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
                         Issue.record("expected a trace-pc-guard source on an instrumented registry")
                         return
                     }
                     source.beginAttempt()
                     for _ in 0 ..< repeatCount {
-                        TracePCGuardCoverageSource.fireGuardForTesting(guards)
+                        TracePCGuardCoverageSource.fireTracePCGuardForTesting(tracePCGuards)
                     }
                     var reported: [(edge: Int, hitCount: UInt8)] = []
                     source.forEachHitEdge { edge, hitCount in
@@ -122,29 +122,29 @@ import Testing
 
             @Test("Hit edges are reported in first-hit order with counts saturating at 128")
             func hitsReportFirstHitOrderAndSaturatingCounts() {
-                let guardCount = 8
+                let tracePCGuardCount = 8
                 // Each burst repeats one guard up to 300 times, so a single burst carries a guard past the saturation cap by construction.
-                let burstGen = #gen(.int(in: 0 ... guardCount - 1), .int(in: 1 ... 300)) { guardIndex, repeatCount in
-                    GuardBurst(guardIndex: guardIndex, repeatCount: repeatCount)
+                let burstGen = #gen(.int(in: 0 ... tracePCGuardCount - 1), .int(in: 1 ... 300)) { tracePCGuardIndex, repeatCount in
+                    TracePCGuardBurst(tracePCGuardIndex: tracePCGuardIndex, repeatCount: repeatCount)
                 }
                 let gen = #gen(burstGen.array(length: 0 ... 12))
                 #exhaust(gen, .budget(.extensive)) { bursts in
-                    let fixture = GuardFixture(count: guardCount)
+                    let fixture = TracePCGuardFixture(count: tracePCGuardCount)
                     defer { fixture.tearDown() }
                     fixture.source.beginAttempt()
                     for burst in bursts {
                         for _ in 0 ..< burst.repeatCount {
-                            fixture.fire(burst.guardIndex)
+                            fixture.fire(burst.tracePCGuardIndex)
                         }
                     }
 
                     var expectedOrder: [Int] = []
                     var expectedCounts: [Int: Int] = [:]
                     for burst in bursts {
-                        if expectedCounts[burst.guardIndex] == nil {
-                            expectedOrder.append(burst.guardIndex)
+                        if expectedCounts[burst.tracePCGuardIndex] == nil {
+                            expectedOrder.append(burst.tracePCGuardIndex)
                         }
-                        expectedCounts[burst.guardIndex, default: 0] += burst.repeatCount
+                        expectedCounts[burst.tracePCGuardIndex, default: 0] += burst.repeatCount
                     }
                     let reported = fixture.reportedHits()
                     #expect(reported.map(\.edge) == expectedOrder)
@@ -156,21 +156,21 @@ import Testing
 
             @Test("Reset clears the previous attempt without leaking into the next")
             func resetIsolatesAttempts() {
-                let guardCount = 6
+                let tracePCGuardCount = 6
                 let gen = #gen(
-                    .int(in: 0 ... guardCount - 1).array(length: 0 ... 40),
-                    .int(in: 0 ... guardCount - 1).array(length: 0 ... 40)
+                    .int(in: 0 ... tracePCGuardCount - 1).array(length: 0 ... 40),
+                    .int(in: 0 ... tracePCGuardCount - 1).array(length: 0 ... 40)
                 )
                 #exhaust(gen) { firstAttempt, secondAttempt in
-                    let fixture = GuardFixture(count: guardCount)
+                    let fixture = TracePCGuardFixture(count: tracePCGuardCount)
                     defer { fixture.tearDown() }
                     fixture.source.beginAttempt()
-                    for guardIndex in firstAttempt {
-                        fixture.fire(guardIndex)
+                    for tracePCGuardIndex in firstAttempt {
+                        fixture.fire(tracePCGuardIndex)
                     }
                     fixture.source.beginAttempt()
-                    for guardIndex in secondAttempt {
-                        fixture.fire(guardIndex)
+                    for tracePCGuardIndex in secondAttempt {
+                        fixture.fire(tracePCGuardIndex)
                     }
                     let reported = fixture.reportedHits()
                     #expect(Set(reported.map(\.edge)) == Set(secondAttempt))
@@ -180,7 +180,7 @@ import Testing
 
             @Test("Edges fired on an unbound thread are dropped, not misattributed")
             func unboundThreadDropsEdges() async {
-                let fixture = GuardFixture(count: 4)
+                let fixture = TracePCGuardFixture(count: 4)
                 defer { fixture.tearDown() }
                 fixture.source.beginAttempt()
                 #expect(fixture.source.isBoundOnCurrentThread)
@@ -199,15 +199,15 @@ import Testing
                 #expect(fixture.reportedHits().map(\.edge) == [3])
             }
 
-            @Test("Guards outside the registered range and the unassigned id zero are ignored")
-            func outOfRangeGuardsAreIgnored() {
-                let fixture = GuardFixture(count: 3)
+            @Test("Trace-pc-guards outside the registered range and the unassigned id zero are ignored")
+            func outOfRangeTracePCGuardsAreIgnored() {
+                let fixture = TracePCGuardFixture(count: 3)
                 defer { fixture.tearDown() }
                 fixture.source.beginAttempt()
-                var zeroGuard: UInt32 = 0
-                var oversizedGuard: UInt32 = 99
-                TracePCGuardCoverageSource.fireGuardForTesting(&zeroGuard)
-                TracePCGuardCoverageSource.fireGuardForTesting(&oversizedGuard)
+                var zeroTracePCGuard: UInt32 = 0
+                var oversizedTracePCGuard: UInt32 = 99
+                TracePCGuardCoverageSource.fireTracePCGuardForTesting(&zeroTracePCGuard)
+                TracePCGuardCoverageSource.fireTracePCGuardForTesting(&oversizedTracePCGuard)
                 fixture.fire(0)
                 #expect(fixture.reportedHits().map(\.edge) == [0])
             }
@@ -216,34 +216,34 @@ import Testing
 
     // MARK: - Supporting Types
 
-    private struct GuardBurst: Sendable {
-        var guardIndex: Int
+    private struct TracePCGuardBurst: Sendable {
+        var tracePCGuardIndex: Int
         var repeatCount: Int
     }
 
     // MARK: - Helpers
 
-    /// One registered guard image and a source over it. Guard ids are assigned 1-based by the init callback and reported 0-based by the source, so `fire(index)` and the reported edge agree.
+    /// One registered trace-pc-guard image and a source over it. Trace-pc-guard ids are assigned 1-based by the init callback and reported 0-based by the source, so `fire(index)` and the reported edge agree.
     ///
-    /// Construction resets the process-global registry, so two fixtures must never be alive at once. The `.serialized` suite covers tests, and the property tests here rely on `#exhaust` running single-lane: passing `.parallelize` to either would let two invocations reset each other's guards mid-attempt.
-    private final class GuardFixture: @unchecked Sendable {
+    /// Construction resets the process-global registry, so two fixtures must never be alive at once. The `.serialized` suite covers tests, and the property tests here rely on `#exhaust` running single-lane: passing `.parallelize` to either would let two invocations reset each other's tracePCGuards mid-attempt.
+    private final class TracePCGuardFixture: @unchecked Sendable {
         let source: TracePCGuardCoverageSource
-        private let guards: UnsafeMutablePointer<UInt32>
+        private let tracePCGuards: UnsafeMutablePointer<UInt32>
         private let count: Int
 
         init(count: Int) {
             TracePCGuardCoverageSource.resetRegistryForTesting()
             self.count = count
-            guards = TracePCGuardCoverageSource.registerGuardsForTesting(count: count)
+            tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: count)
             guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
-                fatalError("registering \(count) guards must yield a source")
+                fatalError("registering \(count) tracePCGuards must yield a source")
             }
             self.source = source
         }
 
         func fire(_ index: Int) {
             precondition(index >= 0 && index < count)
-            TracePCGuardCoverageSource.fireGuardForTesting(guards + index)
+            TracePCGuardCoverageSource.fireTracePCGuardForTesting(tracePCGuards + index)
         }
 
         func reportedHits() -> [(edge: Int, hitCount: UInt8)] {
@@ -256,7 +256,7 @@ import Testing
 
         func tearDown() {
             TracePCGuardCoverageSource.resetRegistryForTesting()
-            guards.deallocate()
+            tracePCGuards.deallocate()
         }
     }
 #endif
