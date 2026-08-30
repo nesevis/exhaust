@@ -213,6 +213,8 @@ package final class FuzzRunner<Output> {
     var sawAnyEdge = false
 
     package func run() -> FuzzRunResult {
+        // Before the baseline is read and before screening generates a row: the lane's own pre-bracket edges are excluded, not off-lane.
+        source.claimLane()
         startNanoseconds = monotonicNanoseconds()
         let offLaneHitsAtStart = source.offLaneHitCount
         setUpPersistence()

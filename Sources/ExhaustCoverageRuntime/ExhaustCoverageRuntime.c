@@ -223,6 +223,10 @@ void exhaust_tpg_destroy(struct exhaust_tpg_context *context) {
     free(context);
 }
 
+void exhaust_tpg_adopt_thread(void) {
+    exhaust_tpg_thread_owned = 1;
+}
+
 void exhaust_tpg_bind(struct exhaust_tpg_context *context) {
     exhaust_tpg_current = context;
     if (context != NULL) {

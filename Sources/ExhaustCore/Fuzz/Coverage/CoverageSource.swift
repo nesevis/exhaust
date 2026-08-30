@@ -40,6 +40,9 @@ package protocol CoverageSource: AnyObject, Sendable {
     /// Edges the source saw fire on threads no run owns, cumulative for the process. A run reads it at start and end; a nonzero difference means instrumented work ran where the source could not attribute it (an executor the run did not bind, or another test in the same process). Zero for sources that cannot tell.
     var offLaneHitCount: Int { get }
 
+    /// Declares the calling thread the run's lane, before any generation happens on it. A source that counts off-lane edges must not count the lane's own pre-bracket work (screening's first rows run the generator before the first ``beginAttempt()``), and the first bracket is too late to say so. The default does nothing.
+    func claimLane()
+
     /// Closes the bracket after ``forEachHitEdge(_:)`` has read the attempt. A source with per-run state detaches it here so instrumented code that runs between brackets (generation, reduction probes) records nothing; the default does nothing.
     func endAttempt()
 }
@@ -69,6 +72,8 @@ package extension CoverageSource {
     var reportsLiveCoverage: Bool {
         false
     }
+
+    func claimLane() {}
 
     func endAttempt() {}
 

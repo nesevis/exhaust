@@ -267,3 +267,47 @@ private func bucketedSource() -> SyntheticCoverageSource<Int> {
         return edges
     })
 }
+
+#if DEBUG
+    /// The guard registry is process-global, so this runs serialized with the other registry suites and resets it around use.
+    extension CoverageRegistryTests {
+        @Suite("FuzzRunner lane ownership under trace-pc-guard", .serialized)
+        struct FuzzRunnerLaneOwnershipTests {
+            @Test("Generator edges fired before the first bracket are not reported as off-lane")
+            func preBracketGenerationIsNotOffLane() {
+                TracePCGuardCoverageSource.resetRegistryForTesting()
+                let guards = TracePCGuardCoverageSource.registerGuardsForTesting(count: 2)
+                defer { guards.deallocate() }
+                guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
+                    Issue.record("expected a trace-pc-guard source on an instrumented registry")
+                    return
+                }
+                // The pointer outlives both closures (deallocated after the run) and is only ever touched from the run's lane.
+                nonisolated(unsafe) let generatorGuard = guards
+                nonisolated(unsafe) let propertyGuard = guards + 1
+                // An instrumented generator, as a `#gen` initializer closure in the module under test is: it fires an edge every time a value is produced, including for screening rows built before any bracket opens.
+                let generator = Gen.choose(in: 0 ... 1000 as ClosedRange<Int>).map { value in
+                    TracePCGuardCoverageSource.fireGuardForTesting(generatorGuard)
+                    return value
+                }
+                let runner = FuzzRunner(
+                    gen: generator,
+                    property: { _ in
+                        TracePCGuardCoverageSource.fireGuardForTesting(propertyGuard)
+                        return .pass
+                    },
+                    source: source,
+                    configuration: FuzzRunnerConfiguration(
+                        budgetNanoseconds: 60_000_000_000,
+                        seed: 7,
+                        attemptLimit: 200
+                    )
+                )
+                let result = runner.run()
+                #expect(result.counts.totalAttempts >= 200)
+                #expect(result.coveredEdgeCount == 1, "only the property's edge lands in a bracket")
+                #expect(result.offLaneEdgeHits == 0)
+            }
+        }
+    }
+#endif

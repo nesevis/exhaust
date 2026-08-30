@@ -76,6 +76,23 @@ import Testing
                 #expect(source.offLaneHitCount == before + 2)
             }
 
+            @Test("Claiming the lane excludes pre-bracket edges on it without binding a context")
+            func claimLaneExcludesPreBracketEdges() {
+                TracePCGuardCoverageSource.resetRegistryForTesting()
+                let guards = TracePCGuardCoverageSource.registerGuardsForTesting(count: 1)
+                defer { guards.deallocate() }
+                guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
+                    Issue.record("expected a trace-pc-guard source on an instrumented registry")
+                    return
+                }
+                // The runner's screening prologue: the generator runs on the run's lane before the first bracket ever opens.
+                let before = source.offLaneHitCount
+                source.claimLane()
+                TracePCGuardCoverageSource.fireGuardForTesting(guards)
+                #expect(source.offLaneHitCount == before)
+                #expect(source.isBoundOnCurrentThread == false, "claiming is not binding: nothing records until a bracket opens")
+            }
+
             @Test("A guard fired 128 or more times reports exactly 128")
             func hitCountSaturatesAtOneTwentyEight() {
                 let gen = #gen(.int(in: 128 ... 5000))

@@ -37,6 +37,9 @@ size_t exhaust_tpg_edge_total(void);
 struct exhaust_tpg_context *exhaust_tpg_create(void);
 void exhaust_tpg_destroy(struct exhaust_tpg_context *context);
 
+// Marks the calling thread as a run's lane without binding a context. A run calls this before it generates anything: edges its own lane fires outside a bracket (screening's first rows, reduction probes) are excluded by design and must not land in the off-lane count, and until the first bind nothing else would tell the hook the thread is a run's.
+void exhaust_tpg_adopt_thread(void);
+
 // Routes this thread's edges to the given context, or to nothing when the context is NULL. A run binds around each property evaluation and unbinds after reading it, so edges fired between brackets (generation, reduction probes) take the early return. exhaust_tpg_destroy also clears the binding when it is destroying the bound context, so no thread-local outlives its allocation.
 void exhaust_tpg_bind(struct exhaust_tpg_context *context);
 

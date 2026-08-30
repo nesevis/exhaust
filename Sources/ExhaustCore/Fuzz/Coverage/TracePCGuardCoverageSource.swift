@@ -59,6 +59,10 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
         exhaust_tpg_destroy(context)
     }
 
+    package func claimLane() {
+        exhaust_tpg_adopt_thread()
+    }
+
     package func beginAttempt() {
         // Binding here rather than at init keeps the thread key correct without assuming which thread constructed the source: `beginAttempt` always runs on the lane that owns the run.
         exhaust_tpg_bind(context)
