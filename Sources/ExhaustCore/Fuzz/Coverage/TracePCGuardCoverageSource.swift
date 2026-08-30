@@ -70,7 +70,7 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
 
     // MARK: - Comparison Harvest
 
-    // The operand ring lives inside the context, so the isolation the edge recorder gives a run holds for its comparisons too: two guard runs in one process harvest independently, and the process-global ring the counter source uses is never touched.
+    // The operand ring lives inside the context, so the isolation the edge recorder gives a run holds for its comparisons too: two `trace-pc-guard` runs in one process harvest independently, and the process-global ring the counter source uses is never touched.
 
     package func beginComparisonCapture() {
         guard wantsComparisons else {

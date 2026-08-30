@@ -54,7 +54,7 @@ _Bool exhaust_tpg_is_bound(struct exhaust_tpg_context *context);
 // Edges fired, while at least one context existed, on a thread that no run ever bound: property work that escaped to another executor, or another test exercising the instrumented code concurrently. Monotonic for the process; a run reads it at start and end and reports the difference.
 size_t exhaust_tpg_dropped_hit_count(void);
 
-// The context's own comparison-operand ring, with the same semantics as the process-global exhaust_cmp_* functions. Comparisons fired while the context is bound land here, so two guard runs in one process harvest independently.
+// The context's own comparison-operand ring, with the same semantics as the process-global exhaust_cmp_* functions. Comparisons fired while the context is bound land here, so two trace-pc-guard runs in one process harvest independently.
 void exhaust_tpg_cmp_set_enabled(struct exhaust_tpg_context *context, int enabled);
 void exhaust_tpg_cmp_reset(struct exhaust_tpg_context *context);
 size_t exhaust_tpg_cmp_record_count(struct exhaust_tpg_context *context);

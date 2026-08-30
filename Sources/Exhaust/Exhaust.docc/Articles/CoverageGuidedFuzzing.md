@@ -14,7 +14,7 @@ Give Exhaust a time budget and let it search for bugs by observing which branche
 
 ```swift
 @Test func parserHandlesAdversarialInput() async {
-    await #explore(myInputGenerator, time: .minutes(15)) { input in
+    await #explore(myInputGenerator, time: .seconds(20)) { input in
         let result = try MyParser.parse(input)
         #expect(result.isWellFormed)
     }
@@ -25,45 +25,13 @@ The test reads like any other `#exhaust` test: a generator, a property, and `#ex
 
 The search holds one thread for the entire budget. Write the `async` form so that thread is not one of the cooperative pool's.
 
-There are two ways to run it, and the setup differs between them:
-
-- **`#explore` in a wider test suite.** The fuzz test sits beside your other tests, runs for seconds on every `swift test`, and needs no special invocation. Use `trace-pc-guard` instrumentation, which records per run rather than per process, so nothing else in the suite has to be serialised or excluded.
-- **`#explore` in a dedicated target.** A fuzz-only target built in release configuration and run on its own, with minute- or hour-scale budgets. Release is several times faster per attempt than debug, and the rest of the setup (which targets carry the flags, keeping `assert` alive) follows from that.
-
-<doc:#Setting-up-coverage-instrumentation> gives the recipe for each.
-
-## What the search can and cannot see
-
-Coverage is recorded against the lane the run owns. Work that executes on an executor the run did not bind is invisible to the search, and the two instrumentation modes differ in exactly this respect.
-
-`inline-8bit-counters` writes to a process-global table, so it records work wherever it runs. The cost is that the table is shared: two coverage-guided runs in one process clear each other's counters, which is why a counter build needs `swift test --no-parallel`.
-
-`trace-pc-guard` records through a context bound to the running lane. That is what lets separate runs share a process, and it is also the limitation: a `@MainActor` function, an actor with a custom executor, or work inside a detached task runs somewhere else, and its branches are not recorded.
-
-Measured on the same five-branch function reached four ways:
-
-| the property's work runs | counters | guards |
-|---|---|---|
-| directly, on the run's lane | recorded | recorded |
-| inside a default actor | recorded | recorded |
-| inside a `@MainActor` function | recorded | **not recorded** |
-| inside a detached task | recorded | **partly recorded** |
-
-A default actor is fine because it has no executor of its own and adopts the calling task's, which is the run's lane.
-
-Two shapes are prevented at compile time rather than left to fail quietly. A property closure cannot be marked `@MainActor`, because the parameter is nonisolated. A `@Command` cannot be marked `@MainActor`, because synthesised command dispatch is nonisolated. So this is reached by a nonisolated property that `await`s main-actor work, not by annotating the test.
-
-When a run records nothing at all, it stops early and says so rather than spending the budget, and names the counter flags as the way to record the work it could not see. Partial loss has no such signal: a property that does some work on the lane and some on the main actor reports plausible coverage while a region of the code is never searched. If the system under test is main-actor isolated, prefer counter-based instrumentation and give the run the process to itself.
+Two ways to run it are covered here. The setup below puts a fuzz test in your ordinary suite with a budget of seconds; <doc:#Running-in-a-dedicated-target> covers a fuzz-only target with a release build and a long budget.
 
 ## Setting up coverage instrumentation
 
 `#explore(time:)` requires the code under test to be compiled with coverage instrumentation. Without it, the test fails immediately with a diagnostic showing the flags to add. No budget is consumed.
 
-The flags are `unsafeFlags`, which SwiftPM accepts only in a root package, so they belong in the manifest of the package you are testing. Choose the recipe for the way you run the test.
-
-### `#explore` in a wider test suite
-
-The fuzz test lives in an ordinary test target and runs whenever the suite runs. Add the flags to the library under test, gated on the debug configuration the suite builds in:
+The fuzz test lives in an ordinary test target and runs whenever the suite runs. Add the flags to the library under test, gated on the debug configuration the suite builds in. The flags are `unsafeFlags`, which SwiftPM accepts only in a root package, so they belong in the manifest of the package you are testing:
 
 ```swift
 // Package.swift
@@ -83,79 +51,7 @@ The fuzz test lives in an ordinary test target and runs whenever the suite runs.
 
 If the function under test lives in the test target itself, put the flags on the test target instead.
 
-### `#explore` in a dedicated target
-
-A fuzz-only test target, built in release configuration and run by itself with a long budget. Release runs several times more attempts per second than debug on the same property, which is the point of a dedicated run. Three things change relative to the suite recipe:
-
-1. **The flags apply in release and on both the library and the test target.** In an optimised build the compiler inlines small functions from the library into the module that calls them. An inlined copy is compiled as part of the calling module, so if only the library carries the flags, those copies have no instrumentation and the branches they contain are never recorded. Instrumenting the test target as well closes that gap.
-2. **`-assert-config Debug` keeps `assert` and `assertionFailure` active.** Release compiles them out; without this flag any oracle your code expresses through `assert` disappears from the fuzz run. `precondition` and `fatalError` are unaffected.
-3. **Build and run with `-c release`.**
-
-```swift
-// Package.swift
-let fuzzFlags: [SwiftSetting] = [
-    .unsafeFlags([
-        "-sanitize=undefined",
-        "-sanitize-coverage=edge,trace-pc-guard,pc-table",
-        "-assert-config", "Debug",
-    ]),
-]
-
-.target(name: "MyLibrary", swiftSettings: fuzzFlags),
-.testTarget(name: "MyLibraryFuzz", dependencies: ["MyLibrary"], swiftSettings: fuzzFlags),
-```
-
-```bash
-swift test -c release --filter MyLibraryFuzz
-```
-
-The flags are not gated on a configuration here because the dedicated target is only ever built for fuzzing. If the same library also serves the suite recipe, keep the debug-gated flags there too; the two do not conflict.
-
-### When the code under test is a dependency you cannot edit
-
-Pass the flags on the command line instead. This instruments every module in the build graph, Exhaust included, which costs roughly 8–30 µs per attempt on top of the property (more for complex generators) and makes the report's edge count describe the whole graph rather than your code:
-
-```bash
-swift test -c release \
-    -Xswiftc -sanitize=undefined \
-    -Xswiftc -sanitize-coverage=edge,trace-pc-guard,pc-table \
-    -Xswiftc -assert-config -Xswiftc Debug \
-    --filter MyLibraryFuzz
-```
-
-Use `trace-pc-guard` here; a whole-graph build with `inline-8bit-counters` spends most of each attempt clearing and rescanning a table of every module's counters and is not a usable configuration.
-
-### Counter-based instrumentation
-
-`inline-8bit-counters` in place of `trace-pc-guard` writes to a process-global table instead of a per-run context. It records work wherever it runs, including on executors the run did not bind (a `@MainActor` function, an actor with a custom executor, a detached task), which guards cannot see. The cost is that the table is shared by the whole process: two coverage-guided runs in one process clear each other's counters, and any other test executing instrumented code during an attempt pollutes the signal. A counter build therefore needs the process to itself: `swift test --no-parallel`, or a filter down to one fuzz test. Reach for counters only when the system under test does its work off the run's lane; <doc:#What-the-search-can-and-cannot-see> has the table.
-
-### Adding comparison tracing (optional)
-
-> Experiment: Comparison tracing is experimental and may change or be removed in any release.
-
-Some branches depend on a value the generator will almost never produce by chance: an equality against a wide constant (`token == 0x5F3759DF`), a parsed magic number, a specific string. Every wrong value takes the same branch, so coverage cannot tell the search it is getting closer. With `trace-cmp` in the coverage flags, Exhaust reads the operands of the code's own comparisons and works backward through the generator to the choices that produce the wanted constant (input-to-state solving, as in AFL++'s RedQueen). It works for whole values and for structs compared field by field.
-
-It helps only where the wanted value is rare. A byte or a printable character sees no benefit, because ordinary generation already produces every value there.
-
-Append `trace-cmp` to the coverage list, in the per-target flags:
-
-```swift
-.unsafeFlags(
-    ["-sanitize=undefined",
-     "-sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp"],
-    .when(configuration: .debug)
-)
-```
-
-or on the command line:
-
-```bash
-swift test \
-    -Xswiftc -sanitize=undefined \
-    -Xswiftc -sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp
-```
-
-Solving needs a reflective generator, one Exhaust can run backward from a value to the choices that produced it. `#examine` reports whether a generator is reflective. A forward-only `map` breaks the chain, and Exhaust then ignores the operand. The flag itself costs almost nothing in throughput.
+When the run cannot see the code it is testing, it says so: a run that records no coverage at all fails with a diagnostic naming the causes, and a run whose property does some of its work on another executor reports how many edge hits it missed. <doc:#When-the-run-cannot-see-the-code> explains both messages.
 
 ## How a time-bounded run works
 
@@ -166,56 +62,6 @@ Exhaust runs the property in three phases:
 3. **Mutation.** Exhaust modifies inputs that reached interesting branches (the corpus). A modified input that reaches a branch nothing in the corpus has reached joins the corpus and is modified in turn. This continues until the budget runs out or new branches stop appearing.
 
 Failures at any phase are reduced to minimal counterexamples and catalogued. The run does not stop at the first failure.
-
-## Getting a clean signal
-
-The search is driven by one signal: the set of branches each attempt reached (its coverage signature). It decides what enters the corpus, what gets mutated next, and when the run stops. Three conditions, all yours to control, decide how much of that signal is real.
-
-### Nothing else in the process (counter builds only)
-
-This condition applies to `inline-8bit-counters` builds. A `trace-pc-guard` build records through a per-run context, so other tests in the process cannot reach it and this section does not apply.
-
-The branch counters are shared by the whole process, and Exhaust measures one attempt at a time: it zeroes the counters, runs the property once, and reads back what was hit. Any other code executing in an instrumented module during that window is indistinguishable from the property's own behaviour.
-
-Only code running *during* an attempt matters. Each attempt re-zeroes the counters, so a test that finished earlier cannot affect it. `.serialized` alone does not give you that: it orders tests within one suite, but other suites still run concurrently and can cross-pollute.
-
-Either run the whole target with `swift test --no-parallel`, or filter each run down to a single fuzz test. Filtering is stronger: a finished test can still have background work running (a detached task, an unawaited timer), and an empty process has nothing to leak.
-
-Pollution only adds branches, never removes them. The result is inputs admitted for novelty they did not earn, a search that wanders, and a replay that cannot follow the original run.
-
-### Instrument only the code under test
-
-Coverage is recorded while the property runs and nowhere else, so generating the input costs nothing in signal. Everything the property itself executes inside an instrumented module counts. Instrumenting modules beyond the code under test adds branches (the report counts them as edges) that say nothing about the property, and an input can look novel for reaching one in a helper library. Prefer the per-target flags, on the narrowest set of targets that covers the code the property exercises. In a release build that set includes the module calling the code under test, for the inlining reason given under <doc:#explore-in-a-dedicated-target>.
-
-### Replay under the conditions of the original run
-
-The seed pins every decision the search makes: the screening rows, the sampling stream, and each mutation choice. What the search observes between decisions is environmental: coverage comes from the process counters, and phase transitions are wall-clock cuts. Give a replay the same build (recompiled code moves branches), the same isolation, and at least the original budget, and expect it to rediscover the same clusters rather than an attempt-for-attempt identical log.
-
-One exception: after a crash, the rerun resumes from the crash checkpoint even when `.replay` is passed, because a trapping input is worth more than a faithful rerun. Set `EXHAUST_RESUME=0` when reproduction matters more. The crash state is then discarded.
-
-## Fuzzing a state machine spec
-
-The same coverage-guided search works over `@StateMachine` specs. Pass the spec in place of the generator and add the `mode:` its commands should run under. Exhaust then mutates command sequences where it would otherwise mutate values, deleting, duplicating, and replacing commands as it searches.
-
-```swift
-@Test func boundedQueueDeepFaults() async {
-    await #explore(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
-}
-```
-
-The spec form skips screening, since the boundary catalogue describes values and a command sequence has none, and begins with random sampling. Exhaust prunes commands whose preconditions fail from the stored sequence, so mutation does not keep resurrecting operations that do nothing.
-
-Sequences carry up to 40 commands by default. Override with `.commandLimit(n)` when the default is too short to reach deep state, or to shorten sequences when each command is expensive.
-
-### Execution model support
-
-| Mode | Status |
-|-------|--------|
-| `mode: .sequential` | Supported, for both synchronous and async specs. `mode:` is required. Pass `.sequential` to run one command at a time. |
-| `mode: .tasks` | Supported for async specs. Requires macOS 15, iOS 18, tvOS 18, watchOS 11, or visionOS 2; no version requirement on Linux and Windows. The search mutates commands and their lane assignments, and reduction minimises concurrency back toward one command at a time. `.parallelize(lanes:)` sets the lane count (default two). |
-| `mode: .threads` | Not available; it does not compile. Coverage under thread scheduling depends on an OS schedule the run cannot replay. See below for alternatives. |
-
-Under `.threads` the same command sequence takes different branches depending on how the OS interleaves the lanes, so coverage stops describing the input and the search chases the scheduler. To search interleavings, use `mode: .tasks`, where the lane assignment is part of the generated input and is mutated, replayed, and reduced with it. To find data races, run the spec under `#execute` with `mode: .threads`, which relies on repetition rather than coverage.
 
 ## Reading the report
 
@@ -337,6 +183,150 @@ To assert on the outcome programmatically, suppress issue reporting and inspect 
     #expect(report.clusters.isEmpty)
 }
 ```
+
+## Fuzzing a state machine spec
+
+The same coverage-guided search works over `@StateMachine` specs. Pass the spec in place of the generator and add the `mode:` its commands should run under. Exhaust then mutates command sequences where it would otherwise mutate values, deleting, duplicating, and replacing commands as it searches.
+
+```swift
+@Test func boundedQueueDeepFaults() async {
+    await #explore(BoundedQueueSpec.self, mode: .sequential, time: .minutes(5))
+}
+```
+
+The spec form skips screening, since the boundary catalogue describes values and a command sequence has none, and begins with random sampling. Exhaust prunes commands whose preconditions fail from the stored sequence, so mutation does not keep resurrecting operations that do nothing.
+
+Sequences carry up to 40 commands by default. Override with `.commandLimit(n)` when the default is too short to reach deep state, or to shorten sequences when each command is expensive.
+
+### Execution model support
+
+| Mode | Status |
+|-------|--------|
+| `mode: .sequential` | Supported, for both synchronous and async specs. `mode:` is required. Pass `.sequential` to run one command at a time. |
+| `mode: .tasks` | Supported for async specs. Requires macOS 15, iOS 18, tvOS 18, watchOS 11, or visionOS 2; no version requirement on Linux and Windows. The search mutates commands and their lane assignments, and reduction minimises concurrency back toward one command at a time. `.parallelize(lanes:)` sets the lane count (default two). |
+| `mode: .threads` | Not available; it does not compile. Coverage under thread scheduling depends on an OS schedule the run cannot replay. See below for alternatives. |
+
+Under `.threads` the same command sequence takes different branches depending on how the OS interleaves the lanes, so coverage stops describing the input and the search chases the scheduler. To search interleavings, use `mode: .tasks`, where the lane assignment is part of the generated input and is mutated, replayed, and reduced with it. To find data races, run the spec under `#execute` with `mode: .threads`, which relies on repetition rather than coverage.
+
+## Running in a dedicated target
+
+A fuzz-only test target, built in release configuration and run by itself with a long budget. Release runs several times more attempts per second than debug on the same property, which is the point of a dedicated run. Three things change relative to the suite recipe:
+
+1. **The flags apply in release and on both the library and the test target.** In an optimised build the compiler inlines small functions from the library into the module that calls them. An inlined copy is compiled as part of the calling module, so if only the library carries the flags, those copies have no instrumentation and the branches they contain are never recorded. Instrumenting the test target as well closes that gap.
+2. **`-assert-config Debug` keeps `assert` and `assertionFailure` active.** Release compiles them out; without this flag any oracle your code expresses through `assert` disappears from the fuzz run. `precondition` and `fatalError` are unaffected.
+3. **Build and run with `-c release`.**
+
+```swift
+// Package.swift
+let fuzzFlags: [SwiftSetting] = [
+    .unsafeFlags([
+        "-sanitize=undefined",
+        "-sanitize-coverage=edge,trace-pc-guard,pc-table",
+        "-assert-config", "Debug",
+    ]),
+]
+
+.target(name: "MyLibrary", swiftSettings: fuzzFlags),
+.testTarget(name: "MyLibraryFuzz", dependencies: ["MyLibrary"], swiftSettings: fuzzFlags),
+```
+
+```bash
+swift test -c release --filter MyLibraryFuzz
+```
+
+The flags are not gated on a configuration here because the dedicated target is only ever built for fuzzing. If the same library also serves the suite recipe, keep the debug-gated flags there too; the two do not conflict.
+
+### When the code under test is a dependency you cannot edit
+
+Pass the flags on the command line instead. This instruments every module in the build graph, Exhaust included, which costs roughly 8–30 µs per attempt on top of the property (more for complex generators) and makes the report's edge count describe the whole graph rather than your code:
+
+```bash
+swift test -c release \
+    -Xswiftc -sanitize=undefined \
+    -Xswiftc -sanitize-coverage=edge,trace-pc-guard,pc-table \
+    -Xswiftc -assert-config -Xswiftc Debug \
+    --filter MyLibraryFuzz
+```
+
+Use `trace-pc-guard` here; a whole-graph build with `inline-8bit-counters` spends most of each attempt clearing and rescanning a table of every module's counters and is not a usable configuration.
+
+### Adding comparison tracing (optional)
+
+> Experiment: Comparison tracing is experimental and may change or be removed in any release.
+
+Some branches depend on a value the generator will almost never produce by chance: an equality against a wide constant (`token == 0x5F3759DF`), a parsed magic number, a specific string. Every wrong value takes the same branch, so coverage cannot tell the search it is getting closer. With `trace-cmp` in the coverage flags, Exhaust reads the operands of the code's own comparisons and works backward through the generator to the choices that produce the wanted constant (input-to-state solving, as in AFL++'s RedQueen). It works for whole values and for structs compared field by field.
+
+It helps only where the wanted value is rare. A byte or a printable character sees no benefit, because ordinary generation already produces every value there.
+
+Append `trace-cmp` to the coverage list, in the per-target flags:
+
+```swift
+.unsafeFlags(
+    ["-sanitize=undefined",
+     "-sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp"],
+    .when(configuration: .debug)
+)
+```
+
+or on the command line:
+
+```bash
+swift test \
+    -Xswiftc -sanitize=undefined \
+    -Xswiftc -sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp
+```
+
+Solving needs a reflective generator, one Exhaust can run backward from a value to the choices that produced it. `#examine` reports whether a generator is reflective. A forward-only `map` breaks the chain, and Exhaust then ignores the operand. The flag itself costs almost nothing in throughput.
+
+## When the run cannot see the code
+
+Two runtime messages cover this, so a run that is blind does not pass quietly.
+
+- **No coverage at all.** The run fails with a diagnostic. In a release build the usual cause is the compiler inlining the code under test into a module that has no coverage flags; the fix is to instrument the calling module too, as the dedicated-target recipe does. Otherwise the property's work ran on an executor the run did not bind.
+- **Some coverage missed.** The summary reports "N edge hits fired off the run's lane and were not searched". Either the property handed work to another executor, or another test exercised the same instrumented code at the same time; the count cannot tell which, so read it against what the suite was doing.
+
+Behind both: `trace-pc-guard` records through a context bound to the running lane. That is what lets separate runs share a process, and it is also the limitation: a `@MainActor` function, an actor with a custom executor, or work inside a detached task runs somewhere else, and its branches are not recorded. Measured on the same five-branch function reached four ways:
+
+| the property's work runs | counters | guards |
+|---|---|---|
+| directly, on the run's lane | recorded | recorded |
+| inside a default actor | recorded | recorded |
+| inside a `@MainActor` function | recorded | **not recorded** |
+| inside a detached task | recorded | **partly recorded** |
+
+A default actor is fine because it has no executor of its own and adopts the calling task's, which is the run's lane.
+
+Two shapes are prevented at compile time rather than left to fail quietly. A property closure cannot be marked `@MainActor`, because the parameter is nonisolated. A `@Command` cannot be marked `@MainActor`, because synthesised command dispatch is nonisolated. So this is reached by a nonisolated property that `await`s main-actor work, not by annotating the test.
+
+### Counter-based instrumentation
+
+`inline-8bit-counters`, added to the flag list beside `trace-pc-guard` or in its place, writes to a process-global table instead of a per-run context. When both recorders are compiled in, Exhaust uses the counters. It records work wherever it runs, including on executors the run did not bind (a `@MainActor` function, an actor with a custom executor, a detached task), which `trace-pc-guard` cannot see. The cost is that the table is shared by the whole process: two coverage-guided runs in one process clear each other's counters, and any other test executing instrumented code during an attempt pollutes the signal. A counter build therefore needs the process to itself: `swift test --no-parallel`, or a filter down to one fuzz test. Reach for counters only when the system under test does its work off the run's lane, as the table above shows.
+
+## Getting a clean signal
+
+The search is driven by one signal: the set of branches each attempt reached (its coverage signature). It decides what enters the corpus, what gets mutated next, and when the run stops. Three conditions, all yours to control, decide how much of that signal is real.
+
+### Nothing else in the process (counter builds only)
+
+This condition applies to `inline-8bit-counters` builds. A `trace-pc-guard` build records through a per-run context, so other tests in the process cannot reach it and this section does not apply.
+
+The branch counters are shared by the whole process, and Exhaust measures one attempt at a time: it zeroes the counters, runs the property once, and reads back what was hit. Any other code executing in an instrumented module during that window is indistinguishable from the property's own behaviour.
+
+Only code running *during* an attempt matters. Each attempt re-zeroes the counters, so a test that finished earlier cannot affect it. `.serialized` alone does not give you that: it orders tests within one suite, but other suites still run concurrently and can cross-pollute.
+
+Either run the whole target with `swift test --no-parallel`, or filter each run down to a single fuzz test. Filtering is stronger: a finished test can still have background work running (a detached task, an unawaited timer), and an empty process has nothing to leak.
+
+Pollution only adds branches, never removes them. The result is inputs admitted for novelty they did not earn, a search that wanders, and a replay that cannot follow the original run.
+
+### Instrument only the code under test
+
+Coverage is recorded while the property runs and nowhere else, so generating the input costs nothing in signal. Everything the property itself executes inside an instrumented module counts. Instrumenting modules beyond the code under test adds branches (the report counts them as edges) that say nothing about the property, and an input can look novel for reaching one in a helper library. Prefer the per-target flags, on the narrowest set of targets that covers the code the property exercises. In a release build that set includes the module calling the code under test, for the inlining reason given under <doc:#Running-in-a-dedicated-target>.
+
+### Replay under the conditions of the original run
+
+The seed pins every decision the search makes: the screening rows, the sampling stream, and each mutation choice. What the search observes between decisions is environmental: coverage comes from the process counters, and phase transitions are wall-clock cuts. Give a replay the same build (recompiled code moves branches), the same isolation, and at least the original budget, and expect it to rediscover the same clusters rather than an attempt-for-attempt identical log.
+
+One exception: after a crash, the rerun resumes from the crash checkpoint even when `.replay` is passed, because a trapping input is worth more than a faithful rerun. Set `EXHAUST_RESUME=0` when reproduction matters more. The crash state is then discarded.
 
 ## Crash recovery
 

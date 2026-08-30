@@ -31,7 +31,7 @@ package protocol CoverageSource: AnyObject, Sendable {
     /// Visits each comparison record — call site and both operands — captured between ``beginComparisonCapture()`` and ``endComparisonCapture()``. Only meaningful when ``wantsComparisons`` is true.
     func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void)
 
-    /// Whether the source reads process-global state (the counter table and the global operand ring), so a second run in the same process would corrupt its attribution. The driver serializes such runs through an exclusion latch and refuses a concurrent one. A guard source keeps both its edges and its operands in a per-run context and does not need the latch.
+    /// Whether the source reads process-global state (the counter table and the global operand ring), so a second run in the same process would corrupt its attribution. The driver serializes such runs through an exclusion latch and refuses a concurrent one. A `trace-pc-guard` source keeps both its edges and its operands in a per-run context and does not need the latch.
     var requiresExclusiveProcess: Bool { get }
 
     /// Whether edges come from live instrumentation, so recording nothing means the property runs where the source cannot see. A synthetic source may map every value to no edges by design.

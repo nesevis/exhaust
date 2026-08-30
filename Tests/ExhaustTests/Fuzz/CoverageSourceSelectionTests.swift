@@ -26,7 +26,7 @@ import Testing
                 // Guards alone: the isolated source.
                 #expect(FuzzInstrumentationCheck.productionSource(harvestsComparisons: false) is TracePCGuardCoverageSource)
 
-                // Both: the counters, because a build adds them beside guards only when the guard context cannot see the property's work.
+                // Both: the counters, because a build adds them beside `trace-pc-guard` only when the guard context cannot see the property's work.
                 SancovRuntime.registerCounters(start: counters, end: counters + 8)
                 #expect(FuzzInstrumentationCheck.productionSource(harvestsComparisons: false) is SancovCoverageSource)
             }

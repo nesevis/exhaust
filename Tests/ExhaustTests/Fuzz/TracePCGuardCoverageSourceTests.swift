@@ -16,7 +16,7 @@ import Testing
                 #expect(TracePCGuardCoverageSource(harvestsComparisons: false) == nil)
             }
 
-            @Test("Two harvesting guard sources keep their comparison operands apart")
+            @Test("Two harvesting trace-pc-guard sources keep their comparison operands apart")
             func comparisonHarvestIsPerSource() {
                 TracePCGuardCoverageSource.resetRegistryForTesting()
                 let guards = TracePCGuardCoverageSource.registerGuardsForTesting(count: 2)
@@ -24,7 +24,7 @@ import Testing
                 guard let first = TracePCGuardCoverageSource(harvestsComparisons: true),
                       let second = TracePCGuardCoverageSource(harvestsComparisons: true)
                 else {
-                    Issue.record("expected two guard sources on an instrumented registry")
+                    Issue.record("expected two trace-pc-guard sources on an instrumented registry")
                     return
                 }
                 // The first run brackets a property that fires one comparison. A second run in the same process opens its own bracket in between, exactly as a parallel fuzz test in the suite recipe would.
@@ -54,7 +54,7 @@ import Testing
                 let guards = TracePCGuardCoverageSource.registerGuardsForTesting(count: 2)
                 defer { guards.deallocate() }
                 guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
-                    Issue.record("expected a guard source on an instrumented registry")
+                    Issue.record("expected a trace-pc-guard source on an instrumented registry")
                     return
                 }
                 // One bracket on this thread makes it the run's lane. Between brackets the lane is unbound by design, and edges it fires there are excluded, not lost.
@@ -84,7 +84,7 @@ import Testing
                     let guards = TracePCGuardCoverageSource.registerGuardsForTesting(count: 1)
                     defer { guards.deallocate() }
                     guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
-                        Issue.record("expected a guard source on an instrumented registry")
+                        Issue.record("expected a trace-pc-guard source on an instrumented registry")
                         return
                     }
                     source.beginAttempt()

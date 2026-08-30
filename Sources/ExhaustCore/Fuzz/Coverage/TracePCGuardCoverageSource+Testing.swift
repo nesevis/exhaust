@@ -1,4 +1,4 @@
-// Debug-only seams that let an uninstrumented test binary drive the guard recorder with synthetic guards and comparisons.
+// Debug-only seams that let an uninstrumented test binary drive the trace-pc-guard recorder with synthetic guards and comparisons.
 
 internal import ExhaustCoverageRuntime
 

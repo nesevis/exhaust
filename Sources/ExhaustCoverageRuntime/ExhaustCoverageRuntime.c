@@ -6,7 +6,7 @@
 //
 // Past the capacity within one attempt, new records overwrite the oldest: last-N-wins. The alternative, dropping the tail, is the wrong bias for exactly the cascades the pool exists to solve: deep comparisons fire late in a comparison-heavy attempt, so a first-N policy would discard the frontier operands and keep the shallow decoys.
 //
-// There are two rings. A trace-pc-guard run owns one inside its context, so two guard runs in one process harvest independently, the same isolation the edge recorder gives them. The process-global ring serves the inline-8bit-counter model, which has no context and already requires the process to itself. The hooks write to the bound context when there is one and to the global ring otherwise.
+// There are two rings. A trace-pc-guard run owns one inside its context, so two trace-pc-guard runs in one process harvest independently, the same isolation the edge recorder gives them. The process-global ring serves the inline-8bit-counter model, which has no context and already requires the process to itself. The hooks write to the bound context when there is one and to the global ring otherwise.
 //
 // The cursor and writes are deliberately non-atomic, matching the inline-8bit-counter model: an instrumented SUT may run comparisons on more than one thread, and a lost or torn record is harmless.
 
