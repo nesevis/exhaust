@@ -29,6 +29,11 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
         true
     }
 
+    /// Edges fired on threads no run has bound, cumulative for the process; see ``CoverageSource/offLaneHitCount``.
+    package var offLaneHitCount: Int {
+        Int(exhaust_tpg_dropped_hit_count())
+    }
+
     /// Whether this source's context is the one bound on the calling thread, so edges fired here reach it. Test-only; production never asks, because `beginAttempt()` binds unconditionally.
     package var isBoundOnCurrentThread: Bool {
         exhaust_tpg_is_bound(context)
@@ -59,7 +64,38 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
         exhaust_tpg_bind(context)
         exhaust_tpg_reset(context)
         if wantsComparisons {
-            ComparisonRuntime.reset()
+            exhaust_tpg_cmp_reset(context)
+        }
+    }
+
+    // MARK: - Comparison Harvest
+
+    // The operand ring lives inside the context, so the isolation the edge recorder gives a run holds for its comparisons too: two guard runs in one process harvest independently, and the process-global ring the counter source uses is never touched.
+
+    package func beginComparisonCapture() {
+        guard wantsComparisons else {
+            return
+        }
+        exhaust_tpg_cmp_set_enabled(context, 1)
+    }
+
+    package func endComparisonCapture() {
+        guard wantsComparisons else {
+            return
+        }
+        exhaust_tpg_cmp_set_enabled(context, 0)
+    }
+
+    package func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {
+        guard wantsComparisons else {
+            return
+        }
+        let count = exhaust_tpg_cmp_record_count(context)
+        guard count > 0, let base = exhaust_tpg_cmp_records(context) else {
+            return
+        }
+        for index in 0 ..< count {
+            body(base[index * 3], base[index * 3 + 1], base[index * 3 + 2])
         }
     }
 
@@ -81,26 +117,4 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
             body(Int(edge) - 1, exhaust_tpg_hit_count(context, edge))
         }
     }
-
-    // MARK: - Test Support
-
-    /// Registers `count` synthetic guards as one image would, returning the guard array so a test can fire them through ``fireGuardForTesting(_:)``. The registry is process-global; pair with ``resetRegistryForTesting()``.
-    package static func registerGuardsForTesting(count: Int) -> UnsafeMutablePointer<UInt32> {
-        let guards = UnsafeMutablePointer<UInt32>.allocate(capacity: max(count, 1))
-        guards.update(repeating: 0, count: max(count, 1))
-        __sanitizer_cov_trace_pc_guard_init(guards, guards + count)
-        return guards
-    }
-
-    /// Fires one guard exactly as an instrumented edge would.
-    package static func fireGuardForTesting(_ guardPointer: UnsafeMutablePointer<UInt32>) {
-        __sanitizer_cov_trace_pc_guard(guardPointer)
-    }
-
-    #if DEBUG
-        /// Forgets every registered guard and unbinds the calling thread. Debug builds only; the C symbol does not exist in a release build, so the released binary cannot have its registry cleared.
-        package static func resetRegistryForTesting() {
-            exhaust_tpg_reset_registry_for_testing()
-        }
-    #endif
 }

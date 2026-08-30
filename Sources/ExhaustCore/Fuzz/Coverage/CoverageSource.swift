@@ -31,11 +31,14 @@ package protocol CoverageSource: AnyObject, Sendable {
     /// Visits each comparison record — call site and both operands — captured between ``beginComparisonCapture()`` and ``endComparisonCapture()``. Only meaningful when ``wantsComparisons`` is true.
     func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void)
 
-    /// Whether the source reads process-global state, so a second run in the same process would corrupt its attribution. The driver serializes such runs through an exclusion latch and refuses a concurrent one.
+    /// Whether the source reads process-global state (the counter table and the global operand ring), so a second run in the same process would corrupt its attribution. The driver serializes such runs through an exclusion latch and refuses a concurrent one. A guard source keeps both its edges and its operands in a per-run context and does not need the latch.
     var requiresExclusiveProcess: Bool { get }
 
     /// Whether edges come from live instrumentation, so recording nothing means the property runs where the source cannot see. A synthetic source may map every value to no edges by design.
     var reportsLiveCoverage: Bool { get }
+
+    /// Edges the source saw fire on threads no run owns, cumulative for the process. A run reads it at start and end; a nonzero difference means instrumented work ran where the source could not attribute it (an executor the run did not bind, or another test in the same process). Zero for sources that cannot tell.
+    var offLaneHitCount: Int { get }
 
     /// Closes the bracket after ``forEachHitEdge(_:)`` has read the attempt. A source with per-run state detaches it here so instrumented code that runs between brackets (generation, reduction probes) records nothing; the default does nothing.
     func endAttempt()
@@ -52,27 +55,12 @@ package extension CoverageSource {
         false
     }
 
-    /// The capture bracket over the process-global trace-cmp ring buffer in ``ComparisonRuntime``, shared by every live source because the buffer is one per process regardless of how edges are recorded. A source that does not want comparisons leaves the buffer disabled, so the bracket is a no-op for it.
-    func beginComparisonCapture() {
-        guard wantsComparisons else {
-            return
-        }
-        ComparisonRuntime.setEnabled(true)
-    }
+    /// Does nothing: a source that harvests comparisons owns the bracket over its own operand store and overrides all three; these defaults serve sources that do not harvest.
+    func beginComparisonCapture() {}
 
-    func endComparisonCapture() {
-        guard wantsComparisons else {
-            return
-        }
-        ComparisonRuntime.setEnabled(false)
-    }
+    func endComparisonCapture() {}
 
-    func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {
-        guard wantsComparisons else {
-            return
-        }
-        ComparisonRuntime.forEachRecord(body)
-    }
+    func forEachComparisonRecord(_: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {}
 
     var requiresExclusiveProcess: Bool {
         false
@@ -83,6 +71,10 @@ package extension CoverageSource {
     }
 
     func endAttempt() {}
+
+    var offLaneHitCount: Int {
+        0
+    }
 
     /// The attempt's coverage signature as a ``BitSet`` of hit edges.
     func signature() -> BitSet {
@@ -129,6 +121,31 @@ package final class SancovCoverageSource: CoverageSource, @unchecked Sendable {
         if wantsComparisons {
             ComparisonRuntime.reset()
         }
+    }
+
+    // MARK: - Comparison Harvest
+
+    // The counter model has no per-run context, so its operands land in the process-global ring in ``ComparisonRuntime``. That ring is shared exactly as the counter table is, which is one more reason this source requires the process to itself.
+
+    package func beginComparisonCapture() {
+        guard wantsComparisons else {
+            return
+        }
+        ComparisonRuntime.setEnabled(true)
+    }
+
+    package func endComparisonCapture() {
+        guard wantsComparisons else {
+            return
+        }
+        ComparisonRuntime.setEnabled(false)
+    }
+
+    package func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {
+        guard wantsComparisons else {
+            return
+        }
+        ComparisonRuntime.forEachRecord(body)
     }
 
     /// True: the counter table is one per process, and every attempt zeroes all of it.

@@ -9,6 +9,8 @@
 #include <stddef.h>
 
 // MARK: - Harvest Control (called from Swift)
+//
+// These four read the process-global ring, which serves the inline-8bit-counter model. A trace-pc-guard run reads its own ring through the exhaust_tpg_cmp_* functions below; the hooks write to whichever ring the calling thread's binding selects.
 
 // Enables or disables operand recording. Disabled between attempts so only the property evaluation's comparisons enter the buffer.
 void exhaust_cmp_set_enabled(int enabled);
@@ -35,7 +37,7 @@ size_t exhaust_tpg_edge_total(void);
 struct exhaust_tpg_context *exhaust_tpg_create(void);
 void exhaust_tpg_destroy(struct exhaust_tpg_context *context);
 
-// Routes this thread's edges to the given context. Edges on unbound threads are dropped, which is the correct attribution: they belong to no attempt. There is no unbind: exhaust_tpg_destroy clears the binding when it is destroying the bound context, so no thread-local outlives its allocation.
+// Routes this thread's edges to the given context, or to nothing when the context is NULL. A run binds around each property evaluation and unbinds after reading it, so edges fired between brackets (generation, reduction probes) take the early return. exhaust_tpg_destroy also clears the binding when it is destroying the bound context, so no thread-local outlives its allocation.
 void exhaust_tpg_bind(struct exhaust_tpg_context *context);
 
 // Clears the previous attempt in O(edges it lit), not O(edges the binary contains).
@@ -49,11 +51,21 @@ uint8_t exhaust_tpg_hit_count(struct exhaust_tpg_context *context, uint32_t edge
 // Whether the calling thread's binding is this context.
 _Bool exhaust_tpg_is_bound(struct exhaust_tpg_context *context);
 
+// Edges fired, while at least one context existed, on a thread that no run ever bound: property work that escaped to another executor, or another test exercising the instrumented code concurrently. Monotonic for the process; a run reads it at start and end and reports the difference.
+size_t exhaust_tpg_dropped_hit_count(void);
+
+// The context's own comparison-operand ring, with the same semantics as the process-global exhaust_cmp_* functions. Comparisons fired while the context is bound land here, so two guard runs in one process harvest independently.
+void exhaust_tpg_cmp_set_enabled(struct exhaust_tpg_context *context, int enabled);
+void exhaust_tpg_cmp_reset(struct exhaust_tpg_context *context);
+size_t exhaust_tpg_cmp_record_count(struct exhaust_tpg_context *context);
+const uint64_t *exhaust_tpg_cmp_records(struct exhaust_tpg_context *context);
+
 // MARK: - Test Support
 
-// The two SanitizerCoverage callbacks, declared so an uninstrumented test binary can drive the recorder with synthetic guards.
+// The SanitizerCoverage callbacks, declared so an uninstrumented test binary can drive the recorders with synthetic guards and comparisons.
 void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop);
 void __sanitizer_cov_trace_pc_guard(uint32_t *guard);
+void __sanitizer_cov_trace_cmp8(uint64_t arg1, uint64_t arg2);
 
 // Forgets every registered guard and clears the calling thread's binding. Defined in debug builds only: the production registry is append-only for the process lifetime, and a consumer of the released library must not be able to disable coverage for every later run. The declaration stays unconditional because the clang importer does not see the build configuration; the Swift caller is itself under `#if DEBUG`, so a release build never references the missing symbol.
 void exhaust_tpg_reset_registry_for_testing(void);
