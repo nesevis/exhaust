@@ -142,6 +142,11 @@ package final class FuzzCorpus {
         edgeIncidenceCounts = Array(repeating: 0, count: edgeCount)
     }
 
+    /// The number of (edge, entry) pairs the invalidation index holds. Package-visible so a test can pin that the index tracks parent-eligible entries rather than the whole corpus: on a low-edge target with many boundary-credit admissions, indexing every entry made admission quadratic.
+    package var invalidationIndexSize: Int {
+        coveringEntries.reduce(0) { $0 + $1.count }
+    }
+
     /// Signatures of entries whose property evaluation passed — the P(hit | pass) sample for report-time discrimination.
     package var passingSignatures: [BitSet] {
         entries.filter { $0.propertyFailed == false }.map { $0.signature }

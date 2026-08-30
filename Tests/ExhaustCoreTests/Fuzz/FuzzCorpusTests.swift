@@ -191,6 +191,31 @@ struct FuzzCorpusTests {
         #expect(rejected == .rejectedNotNovel)
     }
 
+    @Test("Boundary-credit admissions with one shared signature do not grow the invalidation index")
+    func invalidationIndexStaysBoundedUnderBoundaryCredit() {
+        // Screening rows enter on boundary credit without coverage novelty, so a low-edge target admits every row with the same signature. Indexing each of them for score invalidation made admission walk the whole corpus per edge; only parent-eligible entries (champion-cell holders) have a score anyone reads.
+        let corpus = FuzzCorpus(edgeCount: 16)
+        let sharedHits = (0 ..< 12).map { (edge: $0, hitCount: UInt8(1)) }
+        let rowCount = 2000
+        for row in 0 ..< rowCount {
+            let admission = corpus.offer(
+                sequence: distinctSequence(row),
+                tree: .just,
+                hits: sharedHits,
+                convergence: 1.0,
+                generation: 0,
+                phase: .screening,
+                isBoundaryDerived: true
+            )
+            #expect(admission.isAdmitted)
+        }
+        #expect(corpus.entries.count == rowCount)
+        #expect(corpus.coveredEdgeCount == 12)
+        // Every row covers the same 12 edges, so one shortlex-minimal champion holds every cell and the index carries at most that champion per edge. The bound allows every parent-eligible entry to be indexed once per edge; it must not scale with the corpus.
+        #expect(corpus.invalidationIndexSize <= corpus.mutableTierIndices.count * sharedHits.count)
+        #expect(corpus.invalidationIndexSize < rowCount)
+    }
+
     @Test("Rarity decays as more entries cover an edge")
     func rarityDecay() {
         let corpus = FuzzCorpus(edgeCount: 10)
@@ -329,6 +354,11 @@ struct FuzzCorpusTests {
 // MARK: - Helpers
 
 /// A distinct choice sequence per length, enough to give the corpus distinct Zobrist hashes.
+/// A sequence unique per `index`, so repeated offers are not rejected as duplicates.
+private func distinctSequence(_ index: Int) -> ChoiceSequence {
+    [.value(ChoiceSequenceValue.Value(choice: ChoiceValue(UInt64(index), tag: .uint64), validRange: nil, isRangeExplicit: false))]
+}
+
 private func sequence(length: Int) -> ChoiceSequence {
     ChoiceSequence(repeating: .just, count: length)
 }
