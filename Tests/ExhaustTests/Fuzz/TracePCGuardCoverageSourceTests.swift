@@ -65,10 +65,12 @@ import Testing
                 #expect(source.offLaneHitCount == before, "the run's own lane between brackets is excluded by design")
 
                 // A thread the run never bound is where main-actor and custom-executor work lands; its edges are the loss the report must name.
+                // Foundation's Thread block is @Sendable on Linux; the pointer outlives the thread (deallocated after the await) and only the worker touches it.
+                nonisolated(unsafe) let offLaneGuard = guards + 1
                 await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
                     let worker = Thread {
-                        TracePCGuardCoverageSource.fireGuardForTesting(guards + 1)
-                        TracePCGuardCoverageSource.fireGuardForTesting(guards + 1)
+                        TracePCGuardCoverageSource.fireGuardForTesting(offLaneGuard)
+                        TracePCGuardCoverageSource.fireGuardForTesting(offLaneGuard)
                         continuation.resume()
                     }
                     worker.start()
