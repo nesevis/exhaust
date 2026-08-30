@@ -63,6 +63,11 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
         }
     }
 
+    /// Unbinds the thread, so edges fired between brackets take the hook's early return instead of being recorded and then reset. Measured at about 1.1× on a whole-graph build and nothing on a per-target build; kept for attribution hygiene rather than speed.
+    package func endAttempt() {
+        exhaust_tpg_bind(nil)
+    }
+
     /// Visits the edges this attempt lit, in first-hit order.
     ///
     /// Guard ids are 1-based, because zero marks an unassigned guard in the init callback. Edge indices are reported 0-based to match ``SancovCoverageSource``, so a signature means the same thing whichever source produced it within one build.

@@ -317,10 +317,9 @@ package final class FuzzRunner<Output> {
             return verdict.isFailure == false
         }
 
-        // The bracket opens before the row is built, not before the property runs, so screening attributes generation the same way sampling and mutation do. Opening it inside the property instead would make a screening signature systematically smaller than a mutation signature over the same property path, turning corpus novelty into a response to which phase produced a candidate rather than to what it covered. The breadcrumb clears here for the same reason: screening evaluates before its tree reaches onExample, so the candidate cannot be identified pre-evaluation, and a cleared slot beats misattributing a trap to the previous attempt.
+        // The breadcrumb clears before the row is built: screening evaluates before its tree reaches onExample, so the candidate cannot be identified pre-evaluation, and a cleared slot beats misattributing a trap to the previous attempt. The attribution bracket itself opens inside evaluateInBracket, around the property call, for every phase alike.
         let beforeRow: () -> Void = { [self] in
             breadcrumb?.clear()
-            source.beginAttempt()
         }
 
         let result = ScreeningRunner.run(
@@ -485,7 +484,6 @@ package final class FuzzRunner<Output> {
         parentIndex: Int,
         armsMask: UInt8
     ) {
-        source.beginAttempt()
         // Phase 1: flat emission produces the value, the fresh sequence, and (below) its hash without building a ChoiceTree. The tree is rebuilt in phase 2 only for the rare candidates that consume it: corpus admission and failure dispatch.
         let guidedSeed = prng.next()
         let materializeStart = monotonicNanoseconds()
@@ -507,7 +505,7 @@ package final class FuzzRunner<Output> {
             recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent.hash)
         )
 
-        // Phase 2: rebuild the tree only when something downstream reads it. Admission stores the tree as the mutation fallback, and the prune hook consumes it on the same failure-or-would-admit condition it fires on, so both rebuild eagerly here (`wouldAdmit` and offer's admission share one novelty predicate, and mutation-phase offers are never boundary-derived, so a candidate that fails the check can never have its placeholder tree stored). A plain failure consumes the tree only if the failure gate dispatches a reduction — a small minority once a fault's clusters are known — so the failure path defers the rebuild to that dispatch instead of paying a second materialization for every failing candidate. Coverage from a rebuild cannot pollute the next attempt: an eager rebuild runs inside this attempt's bracket, a deferred one runs on the reduction dispatch's lane, and either way the next bracket begins with beginAttempt(), which clears attribution state (the same argument that covers inline reduction probes).
+        // Phase 2: rebuild the tree only when something downstream reads it. Admission stores the tree as the mutation fallback, and the prune hook consumes it on the same failure-or-would-admit condition it fires on, so both rebuild eagerly here (`wouldAdmit` and offer's admission share one novelty predicate, and mutation-phase offers are never boundary-derived, so a candidate that fails the check can never have its placeholder tree stored). A plain failure consumes the tree only if the failure gate dispatches a reduction — a small minority once a fault's clusters are known — so the failure path defers the rebuild to that dispatch instead of paying a second materialization for every failing candidate. Coverage from a rebuild cannot pollute the next attempt: rebuilds, like reduction probes, run outside any bracket, and the next bracket begins with beginAttempt(), which clears attribution state.
         let admissionNovel = corpus.wouldAdmit(hits: hits)
         var tree = ChoiceTree.just
         var deferredTreeRebuild: (() -> ChoiceTree?)?
@@ -597,12 +595,11 @@ package final class FuzzRunner<Output> {
         case generationError(String)
     }
 
-    /// Draws one fresh sample from `interpreter`, evaluates it under the attribution bracket, and records the attempt under `phase`.
+    /// Draws one fresh sample from `interpreter`, evaluates it in the attribution bracket, and records the attempt under `phase`.
     private func freshSample(
         interpreter: inout ValueAndChoiceTreeInterpreter<Output>,
         phase: FuzzPhase
     ) -> FreshSampleOutcome {
-        source.beginAttempt()
         let generated: (Output, ChoiceTree)?
         do {
             generated = try interpreter.next()
@@ -633,9 +630,9 @@ package final class FuzzRunner<Output> {
         return .evaluated(admission)
     }
 
-    /// The instrumented tail of one evaluation bracket: records the breadcrumb slot, notes the value, times the property, and collects the attempt's hits.
+    /// The one attribution bracket: records the breadcrumb slot, opens the source, notes the value, times the property, collects the attempt's hits, and closes the source.
     ///
-    /// Must run inside the attribution token, after `source.beginAttempt()` and after candidate production — generation and materialization can execute user code, and its coverage belongs to the attempt whose bracket is open.
+    /// The bracket encloses the property call and nothing else. Candidate production (generation, materialization, reflection) runs before it and reduction probes run outside it, so Exhaust's own instrumented code and the generator's transform closures never enter a signature. Every phase excludes its generation the same way, so a screening signature and a mutation signature over the same property path stay comparable. Code the system under test runs during generation (an initializer with validation called from a generator closure) is excluded with it.
     func evaluateInBracket(
         _ value: Output,
         recordingBreadcrumb slot: (candidateHash: UInt64, parentHash: UInt64)?
@@ -643,6 +640,7 @@ package final class FuzzRunner<Output> {
         if let slot {
             breadcrumb?.record(candidateHash: slot.candidateHash, parentHash: slot.parentHash)
         }
+        source.beginAttempt()
         if source.wantsValues {
             source.noteValue(value)
         }
@@ -670,6 +668,7 @@ package final class FuzzRunner<Output> {
                 comparisonPool.insert(site: site, value: arg2)
             }
         }
+        source.endAttempt()
         return (verdict, hitsBuffer)
     }
 
@@ -767,7 +766,6 @@ package final class FuzzRunner<Output> {
         let prunedSequence = ChoiceSequence.flatten(pruned.tree)
         let prunedSequenceHash = ZobristHash.hash(of: prunedSequence)
         let parentHash = parentIndex.map { corpus.entries[$0].hash } ?? 0
-        source.beginAttempt()
         let (prunedVerdict, prunedHits) = evaluateInBracket(
             pruned.value,
             recordingBreadcrumb: (
@@ -964,6 +962,7 @@ package final class FuzzRunner<Output> {
         source.forEachHitEdge { edge, _ in
             signature.insert(edge)
         }
+        source.endAttempt()
         return signature
     }
 

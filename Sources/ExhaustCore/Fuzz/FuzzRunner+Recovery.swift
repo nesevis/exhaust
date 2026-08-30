@@ -163,6 +163,7 @@ extension FuzzRunner {
                 source.forEachHitEdge { edge, hitCount in
                     reattributed.append((edge, hitCount))
                 }
+                source.endAttempt()
                 hits = reattributed
             }
             _ = corpus.offer(

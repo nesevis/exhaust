@@ -2,7 +2,7 @@
 ///
 /// The production conformance (``SancovCoverageSource``) reads the process-global SanitizerCoverage counter region. The synthetic test conformance computes a signature as a pure function of the generated value, which makes the entire search loop deterministic and runnable in an uninstrumented suite — corpus acceptance, plateau detection, and cluster taxonomy are all tested through this seam.
 ///
-/// Usage per attempt: `beginAttempt()`, optionally `noteValue(_:)` when ``wantsValues`` is true, evaluate the property, then ``forEachHitEdge(_:)``. The bracket discipline matters for the sancov conformance because the counters are process-global; the runner is single-threaded, so at most one bracketed evaluation is ever open, and nothing the runner controls executes instrumented code outside it.
+/// Usage per attempt: `beginAttempt()`, optionally `noteValue(_:)` when ``wantsValues`` is true, evaluate the property, ``forEachHitEdge(_:)``, then ``endAttempt()``. The bracket encloses the property call only. Generation, materialization, and reduction run outside it, so their coverage never enters a signature: measured on the harness fixtures, that is 1.1–1.5× more attempts per second on a per-target build and 3–4× on a whole-graph build, with identical fault inventories, because Exhaust's own instrumented code stops competing for novelty. Every phase excludes its generation the same way, so signatures stay comparable across screening, sampling, and mutation. The runner is single-threaded, so at most one bracket is ever open.
 package protocol CoverageSource: AnyObject, Sendable {
     /// The number of edges this source can report; signatures produced against it use this as their ``BitSet`` capacity.
     var edgeCount: Int { get }
@@ -10,7 +10,7 @@ package protocol CoverageSource: AnyObject, Sendable {
     /// Whether the source derives signatures from generated values rather than live counters. When false, the runner skips ``noteValue(_:)`` and its `Any` boxing on the hot path.
     var wantsValues: Bool { get }
 
-    /// Clears attribution state ahead of one property evaluation.
+    /// Clears attribution state immediately ahead of one property evaluation.
     func beginAttempt()
 
     /// Records the value about to be evaluated. Called between ``beginAttempt()`` and the evaluation, and only when ``wantsValues`` is true.
@@ -36,6 +36,9 @@ package protocol CoverageSource: AnyObject, Sendable {
 
     /// Whether edges come from live instrumentation, so recording nothing means the property runs where the source cannot see. A synthetic source may map every value to no edges by design.
     var reportsLiveCoverage: Bool { get }
+
+    /// Closes the bracket after ``forEachHitEdge(_:)`` has read the attempt. A source with per-run state detaches it here so instrumented code that runs between brackets (generation, reduction probes) records nothing; the default does nothing.
+    func endAttempt()
 }
 
 package extension CoverageSource {
@@ -78,6 +81,8 @@ package extension CoverageSource {
     var reportsLiveCoverage: Bool {
         false
     }
+
+    func endAttempt() {}
 
     /// The attempt's coverage signature as a ``BitSet`` of hit edges.
     func signature() -> BitSet {

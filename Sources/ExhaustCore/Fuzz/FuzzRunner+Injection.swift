@@ -10,8 +10,7 @@ extension FuzzRunner {
         else {
             return false
         }
-        // The bracket opens before reconstruction and reflection, matching evaluateFuzzCandidate: both can execute generator transform closures, which are user code that may live in an instrumented module, and their coverage belongs to the attempt. Opening it later would make an injected signature systematically smaller than a mutation signature over the same property path — the asymmetry the screening phase's bracket comment forbids. A reconstruct or reflect miss leaves the bracket dangling, which is harmless: the next bracket re-zeroes the counters, exactly as a rejected screening row does.
-        source.beginAttempt()
+        // Reconstruction and reflection run outside the bracket, like every other candidate production path; evaluateInjected opens it around the property call.
         guard let value = reflectionReconstructor(word),
               let tree = try? Interpreters.reflect(gen, with: value)
         else {
@@ -31,8 +30,6 @@ extension FuzzRunner {
         guard let (parentIndex, parent) = picked else {
             return false
         }
-        // Opened before the parent and candidate materializations, not just before the property: `.exact` materialization executes generator transform closures, and their coverage belongs to this attempt for the same reason reflectionInjectionAttempt brackets its reflection.
-        source.beginAttempt()
         let parentSequence = ChoiceSequence.flatten(parent.tree)
         guard case let .success(anyParent, _, _) = Materializer.materializeAny(
             erasedGen,
@@ -70,7 +67,7 @@ extension FuzzRunner {
         return evaluateInjected(sequence: sequence, tree: tree, value: value, parent: (parentIndex, parent))
     }
 
-    /// Evaluates a candidate produced by comparison-operand injection and records the attempt, sharing the tail of the reconstructor and graft paths. The caller has already opened the attribution bracket around its candidate production.
+    /// Evaluates a candidate produced by comparison-operand injection and records the attempt, sharing the tail of the reconstructor and graft paths.
     ///
     /// `parent` is nil for a whole-value candidate reflected from the operand alone, and the grafted corpus entry with its index for a field graft. It sources the breadcrumb's parent hash, the recorded generation, and the attribution index, so a graft counts against its parent the same way a normal mutation does. The whole-value path has no parent, so recordAttempt opens the mutation count for it.
     private func evaluateInjected(
