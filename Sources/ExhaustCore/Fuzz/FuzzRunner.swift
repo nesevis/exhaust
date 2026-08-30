@@ -210,10 +210,11 @@ package final class FuzzRunner<Output> {
     /// Scratch for ``evaluateInBracket``; see the note there.
     private var hitsBuffer: [(edge: Int, hitCount: UInt8)] = []
     /// Whether any attempt has ever recorded an edge. False after a meaningful number of attempts means the source is reading a table the property never writes to, because the property's work is executing somewhere the source does not observe.
-    private var sawAnyEdge = false
+    var sawAnyEdge = false
 
     package func run() -> FuzzRunResult {
         startNanoseconds = monotonicNanoseconds()
+        let offLaneHitsAtStart = source.offLaneHitCount
         setUpPersistence()
 
         // Sampling hands over to the mutation phase by returning nil (plateau or time backstop); a non-nil value is a hard stop that skips the mutation phase.
@@ -239,7 +240,11 @@ package final class FuzzRunner<Output> {
             termination = mutationMeasurement.result
         }
 
-        let finalTermination = termination ?? terminationDue() ?? .budgetExhausted
+        var finalTermination = termination ?? terminationDue() ?? .budgetExhausted
+        // A run that evaluated the property and never recorded an edge searched nothing, whichever condition ended it. The attempt threshold in terminationDue() only decides how early such a run is cut short; it must not let a short budget turn zero coverage into a green test.
+        if source.reportsLiveCoverage, sawAnyEdge == false, counts.evaluatedSearchCases > 0 {
+            finalTermination = .coverageUnreachable
+        }
 
         let clusters = inventory.snapshot()
         let unmatched = inventory.unmatchedUnreducedCounts
@@ -281,7 +286,8 @@ package final class FuzzRunner<Output> {
                 : 0,
             attemptsAtFirstFault: attemptsAtFirstFault,
             timing: timing,
-            seed: configuration.seed
+            seed: configuration.seed,
+            offLaneEdgeHits: max(0, source.offLaneHitCount - offLaneHitsAtStart)
         )
     }
 
@@ -630,9 +636,28 @@ package final class FuzzRunner<Output> {
         return .evaluated(admission)
     }
 
-    /// The one attribution bracket: records the breadcrumb slot, opens the source, notes the value, times the property, collects the attempt's hits, and closes the source.
+    /// The one attribution bracket: opens the source, notes the value, runs `evaluate`, reads the hits, and closes the source. Every attributed evaluation (search attempts, post-reduction classification, recovery re-attribution) goes through here, so the bracket is spelled out once and a later edit cannot leave one copy without its `endAttempt()`.
     ///
-    /// The bracket encloses the property call and nothing else. Candidate production (generation, materialization, reflection) runs before it and reduction probes run outside it, so Exhaust's own instrumented code and the generator's transform closures never enter a signature. Every phase excludes its generation the same way, so a screening signature and a mutation signature over the same property path stay comparable. Code the system under test runs during generation (an initializer with validation called from a generator closure) is excluded with it.
+    /// The bracket encloses `evaluate` and nothing else. Candidate production (generation, materialization, reflection) runs before it and reduction probes run outside it, so Exhaust's own instrumented code and the generator's transform closures never enter a signature. Every phase excludes its generation the same way, so a screening signature and a mutation signature over the same property path stay comparable. Code the system under test runs during generation (an initializer with validation called from a generator closure) is excluded with it.
+    func attribute(
+        _ value: Output,
+        evaluate: (Output) -> FuzzVerdict
+    ) -> (verdict: FuzzVerdict, hits: [(edge: Int, hitCount: UInt8)]) {
+        source.beginAttempt()
+        if source.wantsValues {
+            source.noteValue(value)
+        }
+        let verdict = evaluate(value)
+        // Reused across attempts: a fresh array grows through roughly eleven reallocations on the way to the few thousand edges a typical attempt lights. Admitted candidates retain the returned array in CorpusEntry.hits (for restore re-offer), so the removeAll after each admission triggers one CoW reallocation; every non-admitting attempt reuses the capacity.
+        hitsBuffer.removeAll(keepingCapacity: true)
+        source.forEachHitEdge { edge, hitCount in
+            hitsBuffer.append((edge, hitCount))
+        }
+        source.endAttempt()
+        return (verdict, hitsBuffer)
+    }
+
+    /// One search attempt's evaluation: records the breadcrumb slot, then runs the property inside the attribution bracket with comparison capture and property timing around it, and notes whether the run has seen an edge yet.
     func evaluateInBracket(
         _ value: Output,
         recordingBreadcrumb slot: (candidateHash: UInt64, parentHash: UInt64)?
@@ -640,36 +665,27 @@ package final class FuzzRunner<Output> {
         if let slot {
             breadcrumb?.record(candidateHash: slot.candidateHash, parentHash: slot.parentHash)
         }
-        source.beginAttempt()
-        if source.wantsValues {
-            source.noteValue(value)
-        }
         let capturesComparisons = source.wantsComparisons
-        if capturesComparisons {
-            source.beginComparisonCapture()
+        let (verdict, hits) = attribute(value) { value in
+            if capturesComparisons {
+                source.beginComparisonCapture()
+            }
+            let propertyStart = monotonicNanoseconds()
+            let verdict = property(value)
+            timing.propertyNanoseconds += monotonicNanoseconds() - propertyStart
+            if capturesComparisons {
+                source.endComparisonCapture()
+                source.forEachComparisonRecord { site, arg1, arg2 in
+                    comparisonPool.insert(site: site, value: arg1)
+                    comparisonPool.insert(site: site, value: arg2)
+                }
+            }
+            return verdict
         }
-        let propertyStart = monotonicNanoseconds()
-        let verdict = property(value)
-        timing.propertyNanoseconds += monotonicNanoseconds() - propertyStart
-        if capturesComparisons {
-            source.endComparisonCapture()
-        }
-        // Reused across attempts: a fresh array grows through roughly eleven reallocations on the way to the few thousand edges a typical attempt lights. Admitted candidates retain the returned array in CorpusEntry.hits (for restore re-offer), so the removeAll after each admission triggers one CoW reallocation; every non-admitting attempt reuses the capacity.
-        hitsBuffer.removeAll(keepingCapacity: true)
-        source.forEachHitEdge { edge, hitCount in
-            hitsBuffer.append((edge, hitCount))
-        }
-        if hitsBuffer.isEmpty == false {
+        if hits.isEmpty == false {
             sawAnyEdge = true
         }
-        if capturesComparisons {
-            source.forEachComparisonRecord { site, arg1, arg2 in
-                comparisonPool.insert(site: site, value: arg1)
-                comparisonPool.insert(site: site, value: arg2)
-            }
-        }
-        source.endAttempt()
-        return (verdict, hitsBuffer)
+        return (verdict, hits)
     }
 
     /// The shared post-evaluation epilogue: counts the attempt, offers the candidate to the corpus, tracks admission recency, and dispatches failure handling with the admission's coverage-novelty signal.
@@ -952,49 +968,15 @@ package final class FuzzRunner<Output> {
 
     /// Evaluates the reduced value once in a bracket of its own and returns its coverage signature.
     private func attributedSignature(of value: Output) -> BitSet {
-        source.beginAttempt()
-        if source.wantsValues {
-            source.noteValue(value)
+        let (_, hits) = attribute(value) { value in
+            counts.classificationInvocations += 1
+            return property(value)
         }
-        counts.classificationInvocations += 1
-        _ = property(value)
         var signature = BitSet(capacity: source.edgeCount)
-        source.forEachHitEdge { edge, _ in
+        for (edge, _) in hits {
             signature.insert(edge)
         }
-        source.endAttempt()
         return signature
-    }
-
-    // MARK: - Termination Checks
-
-    /// The run-wide stop conditions every phase checks: wall clock and the testing attempt limit.
-    private func terminationDue() -> FuzzTermination? {
-        if configuration.stopOnFirstFault, inventory.clusterCount > 0 {
-            return .firstFaultFound
-        }
-        if let limit = configuration.attemptLimit, counts.totalAttempts >= limit {
-            return .attemptLimitReached
-        }
-        if monotonicNanoseconds() - startNanoseconds >= configuration.budgetNanoseconds {
-            return .budgetExhausted
-        }
-        // Fail fast rather than spend the budget: a run recording nothing is not searching, and the user asked for minutes.
-        if source.reportsLiveCoverage,
-           sawAnyEdge == false,
-           counts.totalAttempts >= FuzzTunables.coverageUnreachableAttemptThreshold
-        {
-            return .coverageUnreachable
-        }
-        return nil
-    }
-
-    /// Remaining attempts under the testing limit, as a screening budget bound.
-    private func remainingAttemptBudget() -> UInt64 {
-        guard let limit = configuration.attemptLimit else {
-            return UInt64.max
-        }
-        return UInt64(max(0, limit - counts.totalAttempts))
     }
 
     /// One uniform draw in [0, 1) from the run PRNG (the top 53 bits of one 64-bit draw), so probability-space decisions replay deterministically under a pinned seed.

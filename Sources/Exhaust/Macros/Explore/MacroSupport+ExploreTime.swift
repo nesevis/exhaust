@@ -597,11 +597,11 @@ public extension __ExhaustRuntime {
                 )
                 return
             case .coverageUnreachable:
+                // The search was blind, but the property still ran: a failure on the unseen path (the inlined or off-executor code the message itself names) is a real finding and reports below like any other.
                 reportError(
                     unreachableCoverageMessage,
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
-                return
             case let .invalidConfiguration(message):
                 reportError(
                     message,

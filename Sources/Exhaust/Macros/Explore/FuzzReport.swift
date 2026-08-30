@@ -259,6 +259,11 @@ public struct FuzzReport: Sendable {
     /// The root seed. Pass to `.replay(_:)` to re-run the search deterministically.
     public let seed: UInt64
 
+    /// Instrumented edges that fired during the run on threads the run did not own, so the search never saw them.
+    ///
+    /// Under `trace-pc-guard` coverage is recorded on the run's own lane. Work the property hands to another executor (a `@MainActor` function, an actor with a custom executor, a detached task) fires its edges elsewhere, and so does another test exercising the same instrumented code concurrently. A nonzero count says one of those happened; it cannot say which. Zero under counter-based instrumentation, which records on every thread and cannot tell.
+    public let offLaneEdgeHits: Int
+
     /// Returns wall-clock time spent reducing, normalizing, and classifying failures, inline on the search's lane.
     ///
     /// Reduction displaces search opportunities, so a failure-dense run spends a visible share of its budget here. ``attemptsPerSecond`` and ``testingOverheadFraction`` are computed net of this time, so they keep describing the search pipeline rather than the failure rate.
@@ -421,6 +426,7 @@ package extension FuzzReport {
             )
             : 0
         seed = result.seed
+        offLaneEdgeHits = result.offLaneEdgeHits
     }
 
     /// The report for a run that never started: missing instrumentation or an invalid setting. Everything is zero except the termination reason.
@@ -460,6 +466,7 @@ package extension FuzzReport {
                 other: .zero
             ),
             seed: seed,
+            offLaneEdgeHits: 0,
             testingOverheadFraction: 0
         )
     }

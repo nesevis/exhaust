@@ -596,6 +596,8 @@ struct BenchmarkRecord: Codable {
                 "attemptLimitReached"
             case .firstFaultFound:
                 "firstFaultFound"
+            case .coverageUnreachable:
+                "coverageUnreachable"
         }
         clusters = report.clusters.map { cluster in
             ClusterRecord(

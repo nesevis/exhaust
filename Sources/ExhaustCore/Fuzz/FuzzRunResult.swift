@@ -180,6 +180,8 @@ package struct FuzzRunResult: Sendable {
     package var attemptsAtFirstFault: Int = 0
     package var timing: FuzzRunTiming
     package var seed: UInt64
+    /// Instrumented edges that fired during the run on threads the run did not own, so the search never saw them. Zero when the source cannot tell.
+    package var offLaneEdgeHits: Int = 0
 
     /// The elapsed time net of inline reduction — the denominator for throughput and overhead, so a failure-dense run does not read as a slow pipeline.
     package var searchNanoseconds: UInt64 {
