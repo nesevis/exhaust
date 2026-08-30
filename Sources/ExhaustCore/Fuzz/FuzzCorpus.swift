@@ -110,7 +110,7 @@ package final class FuzzCorpus {
     /// The denominator of the Bernoulli-product discovery probability. One input covers many edges, so the number of attempts is the wrong denominator for incidence data; `V` is the right one and aggregates online without ever materializing the matrix.
     private var incidenceTotalCount: Int = 0
 
-    /// Edge → indices of entries covering it, for O(affected) score invalidation on admission.
+    /// Edge → indices of parent-eligible entries covering it, for O(affected) score invalidation on admission. Entries that can never be picked as parents are not indexed, because their cached score is never read.
     private var coveringEntries: [[Int]]
 
     /// Cached parent-selection scores, parallel to `entries`; nil means dirty.
@@ -293,23 +293,28 @@ package final class FuzzCorpus {
         championCounts.append(0)
         seenHashes.insert(hash)
 
-        // Bump rarity denominators and dirty every entry whose score depends on a bumped edge.
-        signature.forEachIndex { edge in
-            coveringEntryCounts[edge] += 1
-            for coveringIndex in coveringEntries[edge] {
-                cachedScores[coveringIndex] = nil
-            }
-            coveringEntries[edge].append(index)
-        }
-
+        var isParentEligible = false
         if tier == .mutable, quarantinedHashes.contains(hash) == false {
             if experiments.championArchive {
                 claimChampionships(for: index, signature: signature)
                 if championCounts[index] > 0 {
                     mutableTierIndices.append(index)
+                    isParentEligible = true
                 }
             } else {
                 mutableTierIndices.append(index)
+                isParentEligible = true
+            }
+        }
+
+        // Bump rarity denominators and dirty every entry whose score depends on a bumped edge. Only parent-eligible entries ever have their score read, so only they are indexed for invalidation. Indexing every entry made admission cost O(corpus) per edge, and boundary-credit screening rows on a low-edge target turn that into a quadratic stall: 1.5 ms per row at -Onone on a 12-edge fixture, with the run never leaving screening. The rarity denominator still counts every entry.
+        signature.forEachIndex { edge in
+            coveringEntryCounts[edge] += 1
+            for coveringIndex in coveringEntries[edge] {
+                cachedScores[coveringIndex] = nil
+            }
+            if isParentEligible {
+                coveringEntries[edge].append(index)
             }
         }
         return .admitted(index: index, tier: tier)
