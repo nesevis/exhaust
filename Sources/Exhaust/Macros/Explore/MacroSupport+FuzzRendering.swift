@@ -329,20 +329,21 @@ extension __ExhaustRuntime {
         return String(format: "%.1fs", duration.seconds)
     }
 
-    /// The hard-failure diagnostic for an instrumented build whose coverage the run cannot observe, naming the instrumentation that does not have the limitation.
+    /// The hard-failure diagnostic for an instrumented build whose coverage the run cannot observe, naming the two causes in order of likelihood.
     ///
-    /// `trace-pc-guard` records through a thread-bound context, which is what lets separate runs share a process. Work that executes on an executor the run did not bind is therefore invisible to it: a `@MainActor` function, an actor with a custom executor, a detached task. `inline-8bit-counters` writes to a process-global table and records that work, at the cost of requiring the run to have the process to itself.
+    /// An optimized build inlines small functions from the instrumented library into an uninstrumented caller, and the inlined copies record nothing; that is the common case in a release fuzz target with flags on the library alone. The other cause is executor isolation under `trace-pc-guard`: work on an executor the run did not bind is invisible to the thread-bound context, and `inline-8bit-counters` records it at the cost of requiring the run to have the process to itself.
     package static var unreachableCoverageMessage: String {
         """
         #explore(time:) recorded no coverage after \(FuzzTunables.coverageUnreachableAttemptThreshold) attempts, so the search has no signal to follow and stopped rather than spending the budget.
 
-        The build is instrumented, so this is not a missing-flags problem. It means the property's work runs somewhere this run cannot observe. The usual cause is executor isolation under `trace-pc-guard`: a `@MainActor` property, an actor with a custom executor, or work inside a detached task executes off the lane the run bound.
+        The build is instrumented, so this is not a missing-flags problem. It means the code the property exercises runs without instrumentation. Two causes, in order of likelihood:
 
-        Rebuild the target under test with counter-based instrumentation, which records regardless of executor:
+        1. An optimized build inlined the code under test into a module that has no coverage flags. In release configuration the compiler copies small functions into their callers, and a copy compiled as part of an uninstrumented module records nothing. Add the coverage flags to the module that calls the code under test (usually the test target) as well as to the library, and keep `-assert-config Debug` alongside them so `assert` oracles survive.
+
+        2. The property's work runs on an executor the run did not bind: a `@MainActor` function, an actor with a custom executor, or a detached task. `trace-pc-guard` records only on the run's own thread. Rebuild the target under test with counter-based instrumentation, which records regardless of executor:
 
         .unsafeFlags(["-sanitize=undefined",
-                      "-sanitize-coverage=edge,inline-8bit-counters,pc-table"],
-                     .when(configuration: .debug))
+                      "-sanitize-coverage=edge,inline-8bit-counters,pc-table"])
 
         Counter-based coverage is process-global, so give the run the process to itself: `swift test --no-parallel`, or filter down to the single fuzz test.
         """
@@ -354,8 +355,10 @@ extension __ExhaustRuntime {
         #explore(time:) requires coverage instrumentation, and no instrumented module is loaded. Add the following to the swiftSettings of the target whose coverage you want tracked (typically the library under test):
 
         .unsafeFlags(["-sanitize=undefined",
-                      "-sanitize-coverage=edge,inline-8bit-counters,pc-table"],
+                      "-sanitize-coverage=edge,trace-pc-guard,pc-table"],
                      .when(configuration: .debug))
+
+        For a dedicated fuzz target built with `-c release`, drop the `.when(configuration:)` gate, add "-assert-config", "Debug" to the list, and apply the same flags to the test target that calls the code under test. The CoverageGuidedFuzzing article has both recipes.
         """
     }
 }

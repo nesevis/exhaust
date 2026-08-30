@@ -25,7 +25,12 @@ The test reads like any other `#exhaust` test: a generator, a property, and `#ex
 
 The search holds one thread for the entire budget. Write the `async` form so that thread is not one of the cooperative pool's.
 
-> Important: Fuzz tests must run in isolation. Give them their own test target, mark the suite `.serialized`, and for the strongest signal filter each run down to one fuzz test (`swift test --filter FuzzTests.fuzzMyLibrary`). This also keeps minute-scale budgets out of everyday `swift test` runs. <doc:#Getting-a-clean-signal> explains why.
+There are two ways to run it, and the setup differs between them:
+
+- **`#explore` in a wider test suite.** The fuzz test sits beside your other tests, runs for seconds on every `swift test`, and needs no special invocation. Use `trace-pc-guard` instrumentation, which records per run rather than per process, so nothing else in the suite has to be serialised or excluded.
+- **`#explore` in a dedicated target.** A fuzz-only target built in release configuration and run on its own, with minute- or hour-scale budgets. Release is several times faster per attempt than debug, and the rest of the setup (which targets carry the flags, keeping `assert` alive) follows from that.
+
+<doc:#Setting-up-coverage-instrumentation> gives the recipe for each.
 
 ## What the search can and cannot see
 
@@ -52,13 +57,13 @@ When a run records nothing at all, it stops early and says so rather than spendi
 
 ## Setting up coverage instrumentation
 
-`#explore(time:)` requires the target under test to be compiled with coverage instrumentation. Without it, the test fails immediately with a diagnostic showing the flags to add. No budget is consumed.
+`#explore(time:)` requires the code under test to be compiled with coverage instrumentation. Without it, the test fails immediately with a diagnostic showing the flags to add. No budget is consumed.
 
-Add the flags in your manifest when you control the target, or on the command line when you don't.
+The flags are `unsafeFlags`, which SwiftPM accepts only in a root package, so they belong in the manifest of the package you are testing. Choose the recipe for the way you run the test.
 
-### Per-target instrumentation (the common case)
+### `#explore` in a wider test suite
 
-When the library under test is a target in your own manifest, add the flags to its `swiftSettings`:
+The fuzz test lives in an ordinary test target and runs whenever the suite runs. Add the flags to the library under test, gated on the debug configuration the suite builds in:
 
 ```swift
 // Package.swift
@@ -67,48 +72,62 @@ When the library under test is a target in your own manifest, add the flags to i
     swiftSettings: [
         .unsafeFlags(
             ["-sanitize=undefined",
-             "-sanitize-coverage=edge,inline-8bit-counters,pc-table"],
+             "-sanitize-coverage=edge,trace-pc-guard,pc-table"],
             .when(configuration: .debug)
         ),
     ]
 )
 ```
 
-The flags go on the library target, not the test target: Exhaust tracks branches inside the instrumented code.
+`trace-pc-guard` records each run's coverage through a context bound to the run's own thread, so other tests running in the same process, and other `#explore(time:)` runs, do not disturb it. The suite needs no `.serialized` trait, no `--no-parallel`, and no filtering. Keep the budget short (a few seconds) so the suite stays fast; the search returns unused budget when it stops finding new branches.
 
-If you are testing a function that lives in the test target itself, put the flags on the test target instead.
+If the function under test lives in the test target itself, put the flags on the test target instead.
 
-### Whole-graph instrumentation via the CLI
+### `#explore` in a dedicated target
 
-When the target you want instrumented is a dependency you cannot add `swiftSettings` to, pass the flags at the command line instead:
+A fuzz-only test target, built in release configuration and run by itself with a long budget. Release runs several times more attempts per second than debug on the same property, which is the point of a dedicated run. Three things change relative to the suite recipe:
 
-```bash
-swift test --no-parallel \
-    -Xswiftc -sanitize=undefined \
-    -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table
-```
-
-This instruments every module in the build graph. `--no-parallel` keeps other suites out of the coverage counters mid-run (<doc:#Getting-a-clean-signal> explains why `.serialized` alone is not enough). Gate the fuzz suite on an environment variable so an uninstrumented `swift test` skips it instead of tripping the missing-instrumentation diagnostic:
+1. **The flags apply in release and on both the library and the test target.** In an optimised build the compiler inlines small functions from the library into the module that calls them. An inlined copy is compiled as part of the calling module, so if only the library carries the flags, those copies have no instrumentation and the branches they contain are never recorded. Instrumenting the test target as well closes that gap.
+2. **`-assert-config Debug` keeps `assert` and `assertionFailure` active.** Release compiles them out; without this flag any oracle your code expresses through `assert` disappears from the fuzz run. `precondition` and `fatalError` are unaffected.
+3. **Build and run with `-c release`.**
 
 ```swift
-@Suite(.serialized, .enabled(if: ProcessInfo.processInfo.environment["FUZZ"] == "1"))
-struct FuzzTests {
-    @Test func fuzzMyLibrary() async {
-        await #explore(gen, time: .minutes(5)) { value in
-            try myProperty(value)
-        }
-    }
-}
-```
+// Package.swift
+let fuzzFlags: [SwiftSetting] = [
+    .unsafeFlags([
+        "-sanitize=undefined",
+        "-sanitize-coverage=edge,trace-pc-guard,pc-table",
+        "-assert-config", "Debug",
+    ]),
+]
 
-Then invoke with:
+.target(name: "MyLibrary", swiftSettings: fuzzFlags),
+.testTarget(name: "MyLibraryFuzz", dependencies: ["MyLibrary"], swiftSettings: fuzzFlags),
+```
 
 ```bash
-FUZZ=1 swift test --no-parallel \
-    -Xswiftc -sanitize=undefined \
-    -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table \
-    --filter FuzzTests
+swift test -c release --filter MyLibraryFuzz
 ```
+
+The flags are not gated on a configuration here because the dedicated target is only ever built for fuzzing. If the same library also serves the suite recipe, keep the debug-gated flags there too; the two do not conflict.
+
+### When the code under test is a dependency you cannot edit
+
+Pass the flags on the command line instead. This instruments every module in the build graph, Exhaust included, which costs roughly 8–30 µs per attempt on top of the property (more for complex generators) and makes the report's edge count describe the whole graph rather than your code:
+
+```bash
+swift test -c release \
+    -Xswiftc -sanitize=undefined \
+    -Xswiftc -sanitize-coverage=edge,trace-pc-guard,pc-table \
+    -Xswiftc -assert-config -Xswiftc Debug \
+    --filter MyLibraryFuzz
+```
+
+Use `trace-pc-guard` here; a whole-graph build with `inline-8bit-counters` spends most of each attempt clearing and rescanning a table of every module's counters and is not a usable configuration.
+
+### Counter-based instrumentation
+
+`inline-8bit-counters` in place of `trace-pc-guard` writes to a process-global table instead of a per-run context. It records work wherever it runs, including on executors the run did not bind (a `@MainActor` function, an actor with a custom executor, a detached task), which guards cannot see. The cost is that the table is shared by the whole process: two coverage-guided runs in one process clear each other's counters, and any other test executing instrumented code during an attempt pollutes the signal. A counter build therefore needs the process to itself: `swift test --no-parallel`, or a filter down to one fuzz test. Reach for counters only when the system under test does its work off the run's lane; <doc:#What-the-search-can-and-cannot-see> has the table.
 
 ### Adding comparison tracing (optional)
 
@@ -123,7 +142,7 @@ Append `trace-cmp` to the coverage list, in the per-target flags:
 ```swift
 .unsafeFlags(
     ["-sanitize=undefined",
-     "-sanitize-coverage=edge,inline-8bit-counters,pc-table,trace-cmp"],
+     "-sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp"],
     .when(configuration: .debug)
 )
 ```
@@ -131,9 +150,9 @@ Append `trace-cmp` to the coverage list, in the per-target flags:
 or on the command line:
 
 ```bash
-swift test --no-parallel \
+swift test \
     -Xswiftc -sanitize=undefined \
-    -Xswiftc -sanitize-coverage=edge,inline-8bit-counters,pc-table,trace-cmp
+    -Xswiftc -sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp
 ```
 
 Solving needs a reflective generator, one Exhaust can run backward from a value to the choices that produced it. `#examine` reports whether a generator is reflective. A forward-only `map` breaks the chain, and Exhaust then ignores the operand. The flag itself costs almost nothing in throughput.
@@ -152,7 +171,9 @@ Failures at any phase are reduced to minimal counterexamples and catalogued. The
 
 The search is driven by one signal: the set of branches each attempt reached (its coverage signature). It decides what enters the corpus, what gets mutated next, and when the run stops. Three conditions, all yours to control, decide how much of that signal is real.
 
-### Nothing else in the process
+### Nothing else in the process (counter builds only)
+
+This condition applies to `inline-8bit-counters` builds. A `trace-pc-guard` build records through a per-run context, so other tests in the process cannot reach it and this section does not apply.
 
 The branch counters are shared by the whole process, and Exhaust measures one attempt at a time: it zeroes the counters, runs the property once, and reads back what was hit. Any other code executing in an instrumented module during that window is indistinguishable from the property's own behaviour.
 
@@ -164,7 +185,7 @@ Pollution only adds branches, never removes them. The result is inputs admitted 
 
 ### Instrument only the code under test
 
-Everything an attempt executes inside an instrumented module counts, including generating the input. Instrumenting modules beyond the code under test adds branches (the report counts them as edges) that say nothing about the property, and an input can look novel for reaching one in a helper library. Prefer the per-target flags, on the narrowest set of targets that covers the code the property exercises.
+Coverage is recorded while the property runs and nowhere else, so generating the input costs nothing in signal. Everything the property itself executes inside an instrumented module counts. Instrumenting modules beyond the code under test adds branches (the report counts them as edges) that say nothing about the property, and an input can look novel for reaching one in a helper library. Prefer the per-target flags, on the narrowest set of targets that covers the code the property exercises. In a release build that set includes the module calling the code under test, for the inlining reason given under <doc:#explore-in-a-dedicated-target>.
 
 ### Replay under the conditions of the original run
 
@@ -287,15 +308,15 @@ The generator form takes ``PropertyFuzzSettings``. The spec form takes ``StateMa
 
 ## Choosing a time budget
 
-Short budgets (seconds to a minute) confirm the instrumentation works and show what screening and sampling find. Keep them in the fuzz target. A short budget makes it cheap to run routinely.
+Short budgets (seconds to a minute) confirm the instrumentation works and show what screening and sampling find. They are the right size for a fuzz test that lives in the wider suite, where a short budget makes it cheap to run routinely.
 
 Longer budgets (five to thirty minutes) give mutation time to work. A fifteen-minute run on an M-series machine makes hundreds of thousands of attempts.
 
-Overnight budgets (hours) suit nightly CI. Steer by the "estimated chance the next attempt covers a new edge" line: below one in a million, the search has saturated. When it disagrees with the reachable-edge line, trust it. The other is more sensitive to the search's own bias.
+Overnight budgets (hours) suit nightly CI. Treat the budget as a maximum: the run returns whatever it does not need. The line that answers "would a longer run find more?" is the termination line. A run that stopped early on a plateau had stopped finding new branches and new faults well before it ended. A run that used the whole budget and was still admitting to the corpus is the one to give more time. The two estimate lines below the coverage count describe the same thing statistically and are unreliable on short runs, so do not steer by them alone.
 
 ## Early termination
 
-If the mutation phase goes a sustained window without reaching any new branches, the run terminates early and returns the unused budget. The summary states how much time was returned and why.
+If the mutation phase goes a sustained window without reaching a new branch or classifying a new fault, the run stops early and returns the unused budget. The window is at least thirty seconds and grows with the budget, so a long run waits longer after its last discovery before giving up. The summary states how much time was returned and why.
 
 A plateau does not mean the code is bug-free. Bugs on already-covered paths are still possible. The plateau means the search can no longer reach new branches from the inputs it has.
 

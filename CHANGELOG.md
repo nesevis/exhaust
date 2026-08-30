@@ -10,6 +10,7 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 - `#explore(…, time:)` records coverage only while the property runs. Generation, materialisation, and reduction probes no longer contribute to an attempt's signature, which raises throughput by 1.1–1.5× on a per-target build and 3–4× on a whole-graph build with the same fault inventories.
 - `#explore(…, time:)` corpus admission no longer walks every corpus entry per covered edge. Screening-heavy targets with few instrumented branches previously stalled in screening at debug optimisation levels (measured 57× slower on one fixture).
+- The coverage-guided fuzzing article now gives one recipe for a fuzz test that lives in the wider test suite (`trace-pc-guard`, debug) and one for a dedicated fuzz target (release, flags on the library and the calling target, `-assert-config Debug`). Both runtime diagnostics recommend `trace-pc-guard`, and the no-coverage diagnostic names release inlining into an uninstrumented caller as the first cause to check.
 
 ### Replay
 
