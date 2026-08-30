@@ -108,7 +108,7 @@ struct ExploreTimeRuntimeTests {
         )
         #expect(report.termination == .coverageUnreachable)
         #expect(report.clusters.count == 1)
-        #expect(report.renderedSummary().contains("cataloged 1 fault cluster"))
+        #expect(report.renderedSummary().contains("found at least 1 distinct failure"))
     }
 
     @Test("A live source that records nothing stops the run at the reachability threshold")
@@ -402,7 +402,7 @@ struct ExploreTimeRuntimeTests {
         }
 
         let summary = __ExhaustRuntime.renderFuzzSummary(report)
-        #expect(summary.contains("1 fault cluster"))
+        #expect(summary.contains("found at least 1 distinct failure"))
         #expect(summary.contains("42"))
         #expect(summary.contains(".replay(7)"))
     }

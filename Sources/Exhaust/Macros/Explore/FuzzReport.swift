@@ -253,6 +253,11 @@ public struct FuzzReport: Sendable {
     /// Wall-clock time the run consumed.
     public let elapsed: TimeSpan
 
+    /// Time from the run's start to its last discovery: a new edge or a newly classified fault cluster, whichever came later. Zero when the run never covered an edge.
+    ///
+    /// The gap to ``elapsed`` is how long the search ran without finding anything new, which is what a run that used its whole budget has to say about whether a longer one would help. Not the same question the plateau rule asks minute to minute, but the same two events feed both.
+    public let lastDiscovery: TimeSpan
+
     /// Provides a non-overlapping partition of ``elapsed`` for diagnosing where the run spends its budget.
     public let timing: TimingBreakdown
 
@@ -306,13 +311,20 @@ public struct FuzzReport: Sendable {
         return Double(evaluatedSearchCases) / seconds
     }
 
-    /// Renders the run's fault inventory as the multi-line text a failing run reports.
+    /// Renders the run's fault inventory as the multi-line text a failing run reports to the terminal.
     ///
     /// When the run clustered faults, this is the string `#explore(time:)` records as the test failure, so a run under `.suppress(.issueReporting)` can still assert on what a developer would have read. A run that stopped because of a configuration or instrumentation problem reports that separately, and none of that text appears here. Suspect edges appear in their compact form (`integrityCheck (Parser.swift:121)`), not as raw symbolizer output. The wording is diagnostic text and changes between releases, so match substrings rather than whole lines.
     ///
     /// - Complexity: Renders from scratch on every call, including a regular-expression pass per cluster. Bind the result rather than calling this repeatedly.
     public func renderedSummary() -> String {
         __ExhaustRuntime.renderFuzzSummary(self)
+    }
+
+    /// Renders the run's full inventory as the text of the `explore-time-summary.txt` attachment.
+    ///
+    /// Where ``renderedSummary()`` keeps to the reader's questions, this rendering carries the search's own figures: throughput, testing overhead, the instrumented and covered edge counts, the reachability estimate, per-cluster membership and discovery phase, and up to three suspects per cluster. Use it when a test asserts on those, or when a tool wants the numbers without parsing the report. The same wording caveat applies: match substrings, not whole lines.
+    public func renderedAttachmentSummary() -> String {
+        __ExhaustRuntime.renderFuzzAttachmentSummary(self)
     }
 }
 
@@ -409,6 +421,13 @@ package extension FuzzReport {
         edgeDoubletonCount = result.edgeDoubletonCount
         termination = Termination(termination: result.termination)
         elapsed = TimeSpan(nanoseconds: result.elapsedNanoseconds)
+        // Clamped like idleFraction: a resumed run's discoveries can predate this process.
+        lastDiscovery = TimeSpan(
+            nanoseconds: min(
+                max(result.lastNewEdgeNanoseconds, result.lastNewClusterNanoseconds),
+                result.elapsedNanoseconds
+            )
+        )
         timing = TimingBreakdown(
             property: TimeSpan(nanoseconds: result.timing.propertyNanoseconds),
             screeningOverhead: TimeSpan(nanoseconds: result.timing.screeningOverheadNanoseconds),
@@ -457,6 +476,7 @@ package extension FuzzReport {
             incidenceTotal: 0,
             termination: termination,
             elapsed: .zero,
+            lastDiscovery: .zero,
             timing: TimingBreakdown(
                 property: .zero,
                 screeningOverhead: .zero,

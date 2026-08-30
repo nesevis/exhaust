@@ -102,8 +102,8 @@ struct ExploreFuzzTests {
     /// One instrumented run for the whole suite. Swift Testing builds a fresh suite value per test, so a per-test call would spend the full wall-clock budget four times over and leave each test describing a different campaign.
     private static let report = fuzz()
 
-    /// The shared run's rendered inventory. ``FuzzReport/renderedSummary()`` re-renders on every call, and every assertion against it wants the same text.
-    private static let summary = ExploreFuzzTests.report.renderedSummary()
+    /// The shared run's rendered inventory, in the attachment form that carries every suspect. The terminal form names one suspect per cluster, which cannot separate the slippage pair; ``FuzzReport/renderedAttachmentSummary()`` re-renders on every call, and every assertion against it wants the same text.
+    private static let summary = ExploreFuzzTests.report.renderedAttachmentSummary()
 
     private static func fuzz() -> FuzzReport {
         // A throwing single-expression property, so each distinct fault type flows through as its own symptom rather than collapsing to a bare returnedFalse.

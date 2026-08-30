@@ -65,66 +65,50 @@ Failures at any phase are reduced to minimal counterexamples and catalogued. The
 
 ## Reading the report
 
-When a run discovers faults, the terminal shows a summary. This is real output from a run against an instrumented parser fixture:
+When a run discovers faults, the terminal shows a summary. This is real output from a run against an instrumented parser fixture, seed 1, with an eight-second budget:
 
 ```
-#explore(time:) cataloged 3 fault clusters in 4978 attempts (35650 evaluated/s; 97% Exhaust testing overhead).
-Coverage: 103 of 1171 instrumented edges hit; 1068 never hit (module-wide count,
-  includes code the property never calls).
-Estimated chance the next attempt covers a new edge: about 1 in 2489.
-At least 104 edges look reachable for this generator and property.
-At least 1 of those remains uncovered (scoped to this run's search space, not the module).
-Stopped 0.3s early: no coverage-novel corpus admission in the plateau window;
-  the unused budget was returned.
+#explore(time:) found at least 4 distinct failures in 4.2s (189233 inputs tried).
 
-Cluster 1 WindowError
-  7 reduced, 216 more attributed by symptom, found via sampling
-  Counterexample: Message(mode: .heartbeat, flags: 0, checksum: 0, region: 6, payload: [])
-  suspects:
-    - Parser.decode (Parser.swift)
-    - decodeHeartbeat (Parser.swift)
-    - validateWindow (Parser.swift)
+1. WindowError, first seen at 0.0s
+   Message(mode: .heartbeat, flags: 0, checksum: 0, region: 6, payload: [])
+   likely in Parser.decode, decodeHeartbeat, validateWindow (Parser.swift)
 
-Cluster 2 IntegrityError
-  6 reduced, 148 more attributed by symptom (1 normalized in), found via sampling
-  Counterexample: Message(mode: .data, flags: 3, checksum: 0, region: 5, payload: [0, 0])
-  suspects:
-    - integrityCheck (Parser.swift:121)
-    - Parser.decode (Parser.swift)
-    - decodeData (Parser.swift)
+2. IntegrityError, first seen at 0.0s
+   Message(mode: .data, flags: 3, checksum: 0, region: 5, payload: [0, 0])
+   likely in integrityCheck (Parser.swift:121)
 
-Cluster 3 ChecksumError
-  8 reduced, 446 more attributed by symptom, found via mutation
-  Counterexample: Message(mode: .handshake, flags: 0, checksum: 65535, region: 0, payload: [])
-  suspects:
-    - Parser.decode (Parser.swift)
-    - checkChecksum (Parser.swift)
-    - ChecksumError.init (Parser.swift:9)
+3. ChecksumError, first seen at 0.1s
+   Message(mode: .handshake, flags: 0, checksum: 65535, region: 0, payload: [])
+   likely in Parser.decode (Parser.swift), checkChecksum (Parser.swift), ChecksumError.init (Parser.swift:9)
 
-Full per-cluster detail is in the explore-time-cluster attachments.
+4. IntegrityError, first seen at 0.2s
+   Message(mode: .control, flags: 12, checksum: 0, region: 2, payload: [241])
+   likely in integrityCheck (Parser.swift:121)
+
+Stopped 3.8s early: the search had stopped reaching new code, so a longer run is unlikely to find more.
 Reproduce: .replay(1)
+Coverage, throughput, and full suspect lists are in the explore-time-summary.txt attachment.
 ```
 
-**Clusters group failures by their reduced form.** Failures that reduce to the same minimal counterexample are one cluster. That is the "reduced" count. The larger count beside it adds failures the run chose not to reduce (reduction per cluster is capped), attributed by matching error type, so read it as a rough weight. When a property returns `false` instead of throwing, every failure shares one symptom and the attribution carries no information. Throw distinct errors when you want distinct clusters.
+**Each numbered entry is one distinct failure.** Failures whose inputs reduce to the same minimal counterexample are counted once, so the count is a floor: two different bugs whose inputs happen to reduce to the same form appear as one entry. Entries 2 and 4 above throw the same error from the same line and are still listed separately, because their reduced inputs differ. Throw distinct errors when you want distinct entries; a property that returns `false` gives every failure the same name.
 
-**The attachments hold the full detail.** Each cluster's complete ranked suspect list is a test attachment named `explore-time-cluster-N.txt`, in Xcode's result bundle or wherever your runner collects attachments.
+**`first seen at` is when the search first hit that failure.** An entry found late in the run, marked `late`, is the strongest sign that a longer run would find more.
 
-**A high overhead figure usually means the property is cheap.** 97% here says generation, mutation, and coverage bookkeeping dominate because the parser fixture costs almost nothing. It deserves attention only when a property that does real work still reports a high fraction.
+**`likely in` names where to look.** When one function's branches separate this failure's inputs from passing ones and resolve to a line, that function is named alone. When no suspect resolves to a line, the top three are listed in rank order, outermost first, because without a line the ranking cannot tell an entry point from the branch beneath it. The attachment carries the ranked list for every entry.
 
-**The edge count is the module, not the run.** The 1171 edges include everything in the instrumented module, most of which this property can never reach. The reachable-edge estimate is scoped to what this run can reach. It is a lower bound with a known bias toward completeness, so treat a rising estimate as evidence and a flat one as weak evidence.
-
-**Late-discovered clusters come first.** A cluster found late with few instances is listed first and marked `discovered late at`. It is the strongest signal that extending the budget would find more.
+**The line before `Reproduce` answers "should I run longer?".** A run that stopped early had stopped reaching new branches. A run that used its whole budget says how long before the end it last reached new code: if that was recent, give it more time.
 
 **The seed is for replay.** Pass it as `.replay(1)` to rerun from the same starting point. Isolation matters doubly for replay: a replay that sees different coverage takes a different path.
 
-For the spec form the report has the same structure, but each cluster's reduced counterexample is a command sequence:
+**The attachments hold the numbers.** `explore-time-summary.txt` carries the search's own figures for the same run: attempts per second, the share of each attempt spent outside your property, how many of the module's instrumented branches the run reached, the estimated number it could reach, and each entry's membership and discovery phase. `explore-time-cluster-N.txt` has entry N's full ranked list of suspect branches. Find them in Xcode's result bundle or wherever your runner collects attachments. Two of those figures need a caveat. The branch count is the module's, most of which this property can never reach, so a low fraction is expected. The reachable estimate is a statistical lower bound that only prints once the run has seen enough repeat coverage; on short runs it usually does not.
+
+For the spec form the report has the same structure, but each entry's reduced counterexample is a command sequence:
 
 ```
-Cluster 1 BoundedQueueError
-  25 reduced, 11003 more attributed by symptom, found via sampling
-  Counterexample: [.enqueue(value: 0), .clear, .enqueue(value: 0), .clear]
-  suspect:
-    - BoundedQueue.clear (BoundedQueue.swift:123)
+1. BoundedQueueError, first seen at 0.3s
+   [.enqueue(value: 0), .clear, .enqueue(value: 0), .clear]
+   likely in BoundedQueue.clear (BoundedQueue.swift:123)
 ```
 
 ## Settings
@@ -158,7 +142,7 @@ Short budgets (seconds to a minute) confirm the instrumentation works and show w
 
 Longer budgets (five to thirty minutes) give mutation time to work. A fifteen-minute run on an M-series machine makes hundreds of thousands of attempts.
 
-Overnight budgets (hours) suit nightly CI. Treat the budget as a maximum: the run returns whatever it does not need. The line that answers "would a longer run find more?" is the termination line. A run that stopped early on a plateau had stopped finding new branches and new faults well before it ended. A run that used the whole budget and was still admitting to the corpus is the one to give more time. The two estimate lines below the coverage count describe the same thing statistically and are unreliable on short runs, so do not steer by them alone.
+Overnight budgets (hours) suit nightly CI. Treat the budget as a maximum: the run returns whatever it does not need. The line before `Reproduce` in the summary answers "would a longer run find more?". A run that stopped early had stopped reaching new branches and new faults well before it ended. A run that used the whole budget and was still reaching new code near the end is the one to give more time. The reachability estimate in the summary attachment describes the same thing statistically and is unreliable on short runs, so do not steer by it alone.
 
 ## Early termination
 

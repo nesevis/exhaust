@@ -15,6 +15,7 @@ Replay seeds are covered by semantic versioning: a seed recorded under one relea
 
 ### Changed
 
+- The `#explore(…, time:)` terminal summary now lists each distinct failure with its counterexample, the time it was first seen, and one suspect function, followed by a plain answer to whether a longer run would find more. Throughput, testing overhead, edge counts, and the reachability estimate move to the `explore-time-summary.txt` attachment, available as `FuzzReport.renderedAttachmentSummary()`; the reachability estimate prints only once the run has seen repeat coverage. `FuzzReport.lastDiscovery` records the time of the run's last new edge or fault cluster.
 - `#explore(…, time:)` records coverage only while the property runs. Generation, materialisation, and reduction probes no longer contribute to an attempt's signature, which raises throughput by 1.1–1.5× on a per-target build and 3–4× on a whole-graph build with the same fault inventories.
 - The uninstrumented C target `ExhaustTraceCmp` is now `ExhaustCoverageRuntime`, since it hosts the edge recorder as well as the comparison hooks. The `Exhaust` product is unchanged; only the xcframework build script and anyone depending on the target by name are affected.
 - Documentation for `stopOnFirstFault` and the fault inventory describes the cluster count as a lower bound on distinct faults rather than a census.

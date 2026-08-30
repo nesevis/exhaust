@@ -730,7 +730,7 @@ public extension __ExhaustRuntime {
                 named: "explore-time-cluster-\(cluster.id + 1).txt"
             )
         }
-        recordAttachment(renderFuzzSummary(report), named: "explore-time-summary.txt")
+        recordAttachment(renderFuzzAttachmentSummary(report), named: "explore-time-summary.txt")
     }
 
     /// Records one plain-text attachment through the current test context. Kept on a passing run, because the default XCTest lifetime silently drops attachments from passing runs and a passing fuzz run's report is still the product.
