@@ -15,7 +15,8 @@ struct ExploreSpecTimeRuntimeTests {
                 TasksCounterSpec.self,
                 mode: .tasks,
                 time: .seconds(60),
-                settings: []
+                settings: [],
+                coverage: .none
             )
         }
         let resolved = try #require(report)
@@ -33,7 +34,8 @@ struct ExploreSpecTimeRuntimeTests {
                 AsyncSequentialCounterSpec.self,
                 mode: .sequential,
                 time: .seconds(60),
-                settings: []
+                settings: [],
+                coverage: .none
             )
         }
         let resolved = try #require(report)
@@ -52,7 +54,8 @@ struct ExploreSpecTimeRuntimeTests {
                 NonAtomicCounterSpec.self,
                 mode: .tasks,
                 time: .seconds(60),
-                settings: [.parallelize(lanes: .two)]
+                settings: [.parallelize(lanes: .two)],
+                coverage: .none
             )
         }
         let resolved = try #require(report)
@@ -127,7 +130,7 @@ struct ExploreSpecTimeRuntimeTests {
             gen: adapter.generator,
             time: .seconds(5),
             settings: [.replay(7)],
-            source: source,
+            source: .injected(source),
             configure: { configuration in
                 configuration.skipScreening = true
                 configuration.attemptLimit = 500
@@ -157,7 +160,7 @@ struct ExploreSpecTimeRuntimeTests {
             gen: adapter.generator,
             time: .seconds(10),
             settings: [.replay(7)],
-            source: source,
+            source: .injected(source),
             configure: { configuration in
                 configuration.skipScreening = true
                 configuration.attemptLimit = 500
@@ -306,7 +309,7 @@ struct ExploreSpecTimeRuntimeTests {
             gen: adapter.generator,
             time: .milliseconds(100),
             settings: [.replay(3)],
-            source: source,
+            source: .injected(source),
             configure: { configuration in
                 configuration.skipScreening = true
             },

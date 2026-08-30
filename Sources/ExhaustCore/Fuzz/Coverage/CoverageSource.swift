@@ -86,6 +86,18 @@ package extension CoverageSource {
     }
 }
 
+/// Where a `time:` run gets its coverage source: the instrumented build, nothing, or a source the caller supplies.
+///
+/// Every entry point takes one of these explicitly, so a test never has to alter process-wide state to say "run without instrumentation" or "run against this synthetic source". The production check reads the coverage registries, which the loader populates before `main` and nothing mutates afterwards.
+package enum CoverageSourceSelection: Sendable {
+    /// The source for this build: guards when compiled in, otherwise counters, otherwise none (the run fails with the missing-instrumentation diagnostic).
+    case production
+    /// No source at all; the run fails as an uninstrumented build would.
+    case none
+    /// The given source. Report-time symbolization is skipped, because a synthetic source's edge indices do not address real program counters.
+    case injected(any CoverageSource)
+}
+
 // MARK: - Sancov-Backed Source
 
 /// Reads per-attempt coverage from the SanitizerCoverage inline 8-bit counter regions.

@@ -94,7 +94,7 @@ struct ExploreTimeResumeTests {
             gen: gen,
             time: .seconds(60),
             settings: [.replay(9), .suppress(.all)],
-            source: resumeSource(),
+            source: .injected(resumeSource()),
             configure: { configuration in
                 configuration.attemptLimit = 300
             },
@@ -164,7 +164,7 @@ struct ExploreTimeResumeTests {
             gen: gen,
             time: .seconds(60),
             settings: [.replay(9), .suppress(.all)],
-            source: liveSource,
+            source: .injected(liveSource),
             configure: { configuration in
                 configuration.attemptLimit = 50
             },
@@ -254,7 +254,7 @@ struct ExploreTimeResumeTests {
             gen: gen,
             time: .seconds(60),
             settings: [.replay(9), .suppress(.all)],
-            source: resumeSource(),
+            source: .injected(resumeSource()),
             configure: nil,
             persistence: context,
             property: { _ in .pass }

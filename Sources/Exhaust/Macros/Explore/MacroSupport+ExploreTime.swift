@@ -46,31 +46,16 @@ enum FuzzRunExclusion {
     }
 }
 
-/// Once-per-process instrumentation presence check for `#explore(time:)`, with a test-only override.
-///
-/// Counter regions register during image loading, before main, so the first read is already final and caching it is sound. The override exists because the test suite both lacks real instrumentation and registers synthetic regions from other suites running in the same process — a test asserting on either outcome of this check must not depend on suite ordering.
+/// Chooses the coverage source for a production run from the registries the loader populated before `main`.
 package enum FuzzInstrumentationCheck {
-    private static let cachedIsInstrumented: Bool = SancovRuntime.isInstrumented || TracePCGuardCoverageSource.isInstrumented
-
-    /// Test seam: forces the check's outcome. Reset to nil after use.
-    package static let overrideForTesting = SendableBox<Bool?>(nil)
-
-    /// Whether the process loaded at least one instrumented image.
-    package static var isInstrumented: Bool {
-        overrideForTesting.withValue { $0 } ?? cachedIsInstrumented
-    }
-
-    /// The coverage source for this build, or nil when the build is uninstrumented (or the test override says so).
+    /// The coverage source for this build, or nil when no instrumented image registered a region (the run then fails with the missing-instrumentation diagnostic).
     ///
-    /// A `trace-pc-guard` build gets the isolated source: its edges route through a thread-bound context, so the run neither shares a table with another run nor pays an O(instrumented edges) clear-and-rescan per attempt. A counter build gets the process-global source, which the driver serializes through ``FuzzRunExclusion``.
+    /// Both initializers return nil on an empty registry, so presence needs no separate check. A `trace-pc-guard` build gets the isolated source: its edges route through a thread-bound context, so the run neither shares a table with another run nor pays an O(instrumented edges) clear-and-rescan per attempt. A counter build gets the process-global source, which the driver serializes through ``FuzzRunExclusion``. When both recorders are compiled in, the counters win: the only reason to add `inline-8bit-counters` beside guards is that the guard context cannot see the property's work, and a build carrying both would otherwise get the guard source and the same diagnostic again.
     ///
     /// - Parameter harvestsComparisons: Requests comparison-operand harvesting; the driver passes true only when injection can place the operands.
     package static func productionSource(harvestsComparisons: Bool) -> (any CoverageSource)? {
-        guard isInstrumented else {
-            return nil
-        }
-        return TracePCGuardCoverageSource(harvestsComparisons: harvestsComparisons)
-            ?? SancovCoverageSource(harvestsComparisons: harvestsComparisons)
+        SancovCoverageSource(harvestsComparisons: harvestsComparisons)
+            ?? TracePCGuardCoverageSource(harvestsComparisons: harvestsComparisons)
     }
 }
 
@@ -144,7 +129,9 @@ public extension __ExhaustRuntime {
         )
     }
 
-    // MARK: - Explore Time (Bool)
+    // MARK: - Public Entry Points
+
+    // The macro expansions call these. Each forwards to its package twin with the production coverage source; the twins exist so a test can choose the source per call instead of altering process-wide state.
 
     /// Runs a coverage-guided `time:` fuzz run with a Bool-returning property. Runtime target of `#explore(time:)`.
     @discardableResult
@@ -152,6 +139,71 @@ public extension __ExhaustRuntime {
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
         settings: [PropertyFuzzSettings],
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        property: @escaping @Sendable (Output) throws -> Bool
+    ) -> FuzzReport {
+        __exploreTime(refGen, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column, property: property)
+    }
+
+    /// Runs a coverage-guided `time:` fuzz run with a Void/#expect/#require closure. Runtime target of `#explore(time:)`.
+    @discardableResult
+    static func __exploreTimeExpect<Output>(
+        _ refGen: ReflectiveGenerator<Output>,
+        time: TimeSpan,
+        settings: [PropertyFuzzSettings],
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        property: @escaping @Sendable (Output) throws -> Void,
+        detection: @escaping @Sendable (Output) throws -> Void
+    ) -> FuzzReport {
+        __exploreTimeExpect(refGen, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column, property: property, detection: detection)
+    }
+
+    /// Runs a coverage-guided `time:` fuzz run with an async Bool-returning property. Runtime target of `#explore(time:)`.
+    @discardableResult
+    static func __exploreTimeAsync<Output>(
+        _ refGen: ReflectiveGenerator<Output>,
+        time: TimeSpan,
+        settings: [PropertyFuzzSettings],
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        property: @escaping @Sendable (Output) async throws -> Bool
+    ) async -> FuzzReport {
+        await __exploreTimeAsync(refGen, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column, property: property)
+    }
+
+    /// Runs a coverage-guided `time:` fuzz run with an async Void/#expect/#require closure. Runtime target of `#explore(time:)`.
+    @discardableResult
+    static func __exploreTimeExpectAsync<Output>(
+        _ refGen: ReflectiveGenerator<Output>,
+        time: TimeSpan,
+        settings: [PropertyFuzzSettings],
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column,
+        property: @escaping @Sendable (Output) async throws -> Void,
+        detection: @escaping @Sendable (Output) async throws -> Void
+    ) async -> FuzzReport {
+        await __exploreTimeExpectAsync(refGen, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column, property: property, detection: detection)
+    }
+
+    // MARK: - Explore Time (Bool)
+
+    /// Runs a coverage-guided `time:` fuzz run with a Bool-returning property. Runtime target of `#explore(time:)`.
+    @discardableResult
+    package static func __exploreTime<Output>(
+        _ refGen: ReflectiveGenerator<Output>,
+        time: TimeSpan,
+        settings: [PropertyFuzzSettings],
+        coverage: CoverageSourceSelection,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -170,7 +222,7 @@ public extension __ExhaustRuntime {
                     generatorIsReflective: refGen.isReflective,
                     time: time,
                     settings: settings,
-                    source: nil,
+                    source: coverage,
                     configure: nil,
                     persistence: persistence,
                     property: wrapVerdictProperty(property)
@@ -185,10 +237,11 @@ public extension __ExhaustRuntime {
     ///
     /// The detection closure (the property with `#expect` rewritten to `#require`) records an issue on every failing attempt, and a fuzz run deliberately keeps failing past the first failure, so the whole run executes inside `withRoutedExpectedIssue(isIntermittent:_:)`. The fault inventory is reported afterwards, outside that scope, so it surfaces as a real failure.
     @discardableResult
-    static func __exploreTimeExpect<Output>(
+    package static func __exploreTimeExpect<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
         settings: [PropertyFuzzSettings],
+        coverage: CoverageSourceSelection,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -211,7 +264,7 @@ public extension __ExhaustRuntime {
                         generatorIsReflective: refGen.isReflective,
                         time: time,
                         settings: settings,
-                        source: nil,
+                        source: coverage,
                         configure: nil,
                         persistence: persistence,
                         property: verdictProperty
@@ -234,10 +287,11 @@ public extension __ExhaustRuntime {
 
     /// Runs a coverage-guided `time:` fuzz run with an async Bool-returning property.
     @discardableResult
-    static func __exploreTimeAsync<Output>(
+    package static func __exploreTimeAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
         settings: [PropertyFuzzSettings],
+        coverage: CoverageSourceSelection,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -257,7 +311,7 @@ public extension __ExhaustRuntime {
                     generatorIsReflective: refGen.isReflective,
                     time: time,
                     settings: settings,
-                    source: nil,
+                    source: coverage,
                     configure: nil,
                     persistence: persistence,
                     property: verdictProperty
@@ -270,10 +324,11 @@ public extension __ExhaustRuntime {
 
     /// Runs a coverage-guided `time:` fuzz run with an async Void/#expect/#require closure.
     @discardableResult
-    static func __exploreTimeExpectAsync<Output>(
+    package static func __exploreTimeExpectAsync<Output>(
         _ refGen: ReflectiveGenerator<Output>,
         time: TimeSpan,
         settings: [PropertyFuzzSettings],
+        coverage: CoverageSourceSelection,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -298,7 +353,7 @@ public extension __ExhaustRuntime {
                             generatorIsReflective: refGen.isReflective,
                             time: time,
                             settings: settings,
-                            source: nil,
+                            source: coverage,
                             configure: nil,
                             persistence: persistence,
                             property: verdictProperty
@@ -310,7 +365,7 @@ public extension __ExhaustRuntime {
                         generatorIsReflective: refGen.isReflective,
                         time: time,
                         settings: settings,
-                        source: nil,
+                        source: coverage,
                         configure: nil,
                         persistence: persistence,
                         property: verdictProperty
@@ -383,13 +438,13 @@ public extension __ExhaustRuntime {
 
     /// Parses settings, verifies instrumentation, and runs the three-phase ``FuzzRunner``. Records no issues — every entry point calls ``reportFuzzIssues(report:suppressIssueReporting:fileID:filePath:line:column:)`` itself so the expect variants can defer reporting until after their known-issue scope closes.
     ///
-    /// The `source` and `configure` parameters are test seams: in-package tests inject a synthetic coverage source (skipping the instrumentation check) and tighten the runner configuration (attempt limits, phase skips) for deterministic termination.
+    /// `source` says where coverage comes from; in-package tests pass `.injected` with a synthetic source or `.none` to exercise the uninstrumented path, and `configure` tightens the runner configuration (attempt limits, phase skips) for deterministic termination.
     package static func runExploreTimeCore<Output>(
         gen: Generator<Output>,
         generatorIsReflective: Bool = true,
         time: TimeSpan,
         settings: [PropertyFuzzSettings],
-        source injectedSource: (any CoverageSource)?,
+        source coverage: CoverageSourceSelection,
         configure: ((inout FuzzRunnerConfiguration) -> Void)?,
         hooks: FuzzHooks<Output>? = nil,
         persistence: FuzzPersistenceContext? = nil,
@@ -432,7 +487,15 @@ public extension __ExhaustRuntime {
         let usesInjection = generatorIsReflective
 
         // A live source enables comparison-operand harvesting at init only when injection can use the operands.
-        guard let source = injectedSource ?? FuzzInstrumentationCheck.productionSource(harvestsComparisons: usesInjection) else {
+        let resolvedSource: (any CoverageSource)? = switch coverage {
+            case .production:
+                FuzzInstrumentationCheck.productionSource(harvestsComparisons: usesInjection)
+            case .none:
+                nil
+            case let .injected(injected):
+                injected
+        }
+        guard let source = resolvedSource else {
             return .empty(termination: .instrumentationMissing, seed: seed)
         }
 
@@ -498,11 +561,18 @@ public extension __ExhaustRuntime {
             }
             return result
         }
-        var report = FuzzReport(result: result, symbolizeEdges: injectedSource == nil)
+        var report = FuzzReport(result: result, symbolizeEdges: isProduction(coverage))
         if configuration.persistence?.resumeDocument != nil {
             report.recordCrashResume()
         }
         return report
+    }
+
+    private static func isProduction(_ coverage: CoverageSourceSelection) -> Bool {
+        if case .production = coverage {
+            return true
+        }
+        return false
     }
 
     // MARK: - Crash Recovery

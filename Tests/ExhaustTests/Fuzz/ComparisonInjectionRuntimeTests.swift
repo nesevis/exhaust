@@ -63,7 +63,7 @@ struct ComparisonInjectionRuntimeTests {
             generatorIsReflective: generator.isReflective,
             time: .seconds(60),
             settings: [.replay(1), .suppress(.all)],
-            source: source,
+            source: .injected(source),
             configure: { configuration in
                 configuration.attemptLimit = 20000
             },
@@ -111,7 +111,7 @@ struct ComparisonInjectionRuntimeTests {
             generatorIsReflective: true,
             time: .seconds(60),
             settings: [.replay(1), .suppress(.all)],
-            source: source,
+            source: .injected(source),
             configure: { configuration in
                 configuration.attemptLimit = 20000
             },
@@ -133,7 +133,7 @@ struct ComparisonInjectionRuntimeTests {
             generatorIsReflective: generator.isReflective,
             time: .seconds(60),
             settings: [.replay(1), .suppress(.all)],
-            source: source,
+            source: .injected(source),
             configure: { configuration in
                 configuration.attemptLimit = 20000
             },

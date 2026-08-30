@@ -8,13 +8,14 @@ import Testing
 struct ExploreTimeRuntimeTests {
     @Test("Missing instrumentation fails immediately, before any budget is consumed")
     func missingInstrumentation() {
-        FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = false }
-        defer {
-            FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = nil }
-        }
         var report: FuzzReport?
         withKnownIssue {
-            report = #explore(#gen(.int(in: 0 ... 100)), time: .seconds(60)) { value in
+            report = __ExhaustRuntime.__exploreTime(
+                #gen(.int(in: 0 ... 100)),
+                time: .seconds(60),
+                settings: [],
+                coverage: .none
+            ) { value in
                 value >= 0
             }
         }
@@ -29,16 +30,13 @@ struct ExploreTimeRuntimeTests {
 
     @Test("The sync Bool entry point records its issue on the test task")
     func reportingChannelSyncBool() {
-        FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = false }
-        defer {
-            FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = nil }
-        }
         nonisolated(unsafe) var report: FuzzReport?
         withKnownIssue {
             report = __ExhaustRuntime.__exploreTime(
                 #gen(.int(in: 0 ... 100)),
                 time: .seconds(60),
-                settings: []
+                settings: [],
+                coverage: .none
             ) { value in
                 value >= 0
             }
@@ -48,16 +46,13 @@ struct ExploreTimeRuntimeTests {
 
     @Test("The sync expect entry point records its issue on the test task")
     func reportingChannelSyncExpect() {
-        FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = false }
-        defer {
-            FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = nil }
-        }
         nonisolated(unsafe) var report: FuzzReport?
         withKnownIssue {
             report = __ExhaustRuntime.__exploreTimeExpect(
                 #gen(.int(in: 0 ... 100)),
                 time: .seconds(60),
                 settings: [],
+                coverage: .none,
                 property: { _ in },
                 detection: { _ in }
             )
@@ -67,16 +62,13 @@ struct ExploreTimeRuntimeTests {
 
     @Test("The async Bool entry point records its issue on the test task, after the GCD hop")
     func reportingChannelAsyncBool() async {
-        FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = false }
-        defer {
-            FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = nil }
-        }
         nonisolated(unsafe) var report: FuzzReport?
         await withKnownIssue {
             report = await __ExhaustRuntime.__exploreTimeAsync(
                 #gen(.int(in: 0 ... 100)),
                 time: .seconds(60),
-                settings: []
+                settings: [],
+                coverage: .none
             ) { value in
                 value >= 0
             }
@@ -86,21 +78,37 @@ struct ExploreTimeRuntimeTests {
 
     @Test("The async expect entry point records its issue on the test task, after the GCD hop")
     func reportingChannelAsyncExpect() async {
-        FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = false }
-        defer {
-            FuzzInstrumentationCheck.overrideForTesting.withValue { $0 = nil }
-        }
         nonisolated(unsafe) var report: FuzzReport?
         await withKnownIssue {
             report = await __ExhaustRuntime.__exploreTimeExpectAsync(
                 #gen(.int(in: 0 ... 100)),
                 time: .seconds(60),
                 settings: [],
+                coverage: .none,
                 property: { _ in },
                 detection: { _ in }
             )
         }
         #expect(report?.termination == .instrumentationMissing)
+    }
+
+    @Test("A failure found on a path the run could not see is still reported beside the no-coverage error")
+    func unreachableCoverageKeepsTheInventory() {
+        // The unseen path is exactly where the message says the code may be running (inlined into an uninstrumented caller, or on another executor), so a fault there must not vanish behind the coverage diagnostic.
+        let source = SyntheticCoverageSource<Int>(edgeCount: 4, reportsLiveCoverage: true, edges: { _ in [] })
+        let report = __ExhaustRuntime.runExploreTimeCore(
+            gen: Gen.choose(in: 0 ... 100),
+            time: .seconds(60),
+            settings: [.replay(1), .suppress(.all)],
+            source: .injected(source),
+            configure: { configuration in
+                configuration.attemptLimit = 200
+            },
+            property: { value in value == 42 ? .fail(.returnedFalse) : .pass }
+        )
+        #expect(report.termination == .coverageUnreachable)
+        #expect(report.clusters.count == 1)
+        #expect(report.renderedSummary().contains("cataloged 1 fault cluster"))
     }
 
     @Test("A live source that records nothing stops the run at the reachability threshold")
@@ -110,7 +118,7 @@ struct ExploreTimeRuntimeTests {
             gen: Gen.choose(in: 0 ... 1000),
             time: .seconds(60),
             settings: [.replay(1), .suppress(.all)],
-            source: SyntheticCoverageSource<Int>(edgeCount: 4, reportsLiveCoverage: true, edges: { _ in [] }),
+            source: .injected(SyntheticCoverageSource<Int>(edgeCount: 4, reportsLiveCoverage: true, edges: { _ in [] })),
             configure: { configuration in
                 configuration.attemptLimit = attemptLimit
             },
@@ -121,6 +129,24 @@ struct ExploreTimeRuntimeTests {
         #expect(report.totalAttempts < attemptLimit)
     }
 
+    @Test("A live source that records nothing is reported even when the budget ends before the reachability threshold")
+    func unreachableCoverageReportedBelowThreshold() {
+        // The suite recipe pairs a few-seconds budget with a debug build; on a slow property the budget can expire before the early-stop threshold, and the run must still say it searched nothing rather than pass green.
+        let source = SyntheticCoverageSource<Int>(edgeCount: 4, reportsLiveCoverage: true, edges: { _ in [] })
+        let report = __ExhaustRuntime.runExploreTimeCore(
+            gen: Gen.choose(in: 0 ... 100),
+            time: .seconds(60),
+            settings: [.replay(1), .suppress(.all)],
+            source: .injected(source),
+            configure: { configuration in
+                configuration.attemptLimit = FuzzTunables.coverageUnreachableAttemptThreshold / 10
+            },
+            property: { _ in .pass }
+        )
+        #expect(report.termination == .coverageUnreachable)
+        #expect(report.evaluatedSearchCases > 0)
+    }
+
     @Test("A synthetic source that records nothing is not mistaken for unreachable coverage")
     func syntheticSourceIsExemptFromReachabilityCheck() {
         let attemptLimit = FuzzTunables.coverageUnreachableAttemptThreshold + 200
@@ -128,7 +154,7 @@ struct ExploreTimeRuntimeTests {
             gen: Gen.choose(in: 0 ... 1000),
             time: .seconds(60),
             settings: [.replay(1), .suppress(.all)],
-            source: SyntheticCoverageSource<Int>(edgeCount: 4, edges: { _ in [] }),
+            source: .injected(SyntheticCoverageSource<Int>(edgeCount: 4, edges: { _ in [] })),
             configure: { configuration in
                 configuration.attemptLimit = attemptLimit
             },
@@ -143,7 +169,7 @@ struct ExploreTimeRuntimeTests {
             gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
             time: .seconds(60),
             settings: [.replay("!!!not-a-seed!!!")],
-            source: passthroughSource(),
+            source: .injected(passthroughSource()),
             configure: nil,
             property: { _ in .pass }
         )
@@ -161,7 +187,7 @@ struct ExploreTimeRuntimeTests {
             gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
             time: .seconds(60),
             settings: [.replay(.encoded(encodedSeed))],
-            source: passthroughSource(),
+            source: .injected(passthroughSource()),
             configure: nil,
             property: { _ in .pass }
         )
@@ -178,7 +204,7 @@ struct ExploreTimeRuntimeTests {
             gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
             time: .zero,
             settings: [],
-            source: passthroughSource(),
+            source: .injected(passthroughSource()),
             configure: nil,
             property: { _ in .pass }
         )
@@ -195,7 +221,7 @@ struct ExploreTimeRuntimeTests {
             gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
             time: .seconds(60),
             settings: [.replay(7), .suppress(.all)],
-            source: passthroughSource(),
+            source: .injected(passthroughSource()),
             configure: { configuration in
                 configuration.attemptLimit = 800
             },
@@ -252,7 +278,7 @@ struct ExploreTimeRuntimeTests {
             gen: generator,
             time: .seconds(60),
             settings: [.replay(7), .suppress(.all)],
-            source: passthroughSource(),
+            source: .injected(passthroughSource()),
             configure: { configuration in
                 configuration.attemptLimit = 800
             },
@@ -284,7 +310,7 @@ struct ExploreTimeRuntimeTests {
             gen: generator,
             time: .seconds(60),
             settings: [.replay(7), .suppress(.all)],
-            source: passthroughSource(),
+            source: .injected(passthroughSource()),
             configure: { configuration in
                 configuration.attemptLimit = 800
             },
@@ -315,7 +341,7 @@ struct ExploreTimeRuntimeTests {
                 gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
                 time: .seconds(60),
                 settings: [.replay(11), .suppress(.all)],
-                source: passthroughSource(),
+                source: .injected(passthroughSource()),
                 configure: { configuration in
                     configuration.attemptLimit = 800
                 },
@@ -343,7 +369,7 @@ struct ExploreTimeRuntimeTests {
             gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
             time: .seconds(60),
             settings: [.replay(7), .suppress(.all)],
-            source: passthroughSource(),
+            source: .injected(passthroughSource()),
             configure: { configuration in
                 configuration.attemptLimit = 800
             },
@@ -459,7 +485,7 @@ struct ExploreTimeRuntimeTests {
             gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
             time: .seconds(60),
             settings: [.suppress(.all)],
-            source: passthroughSource(),
+            source: .injected(passthroughSource()),
             configure: { configuration in
                 configuration.attemptLimit = 0
             },

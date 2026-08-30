@@ -47,9 +47,10 @@ final class LaneGate: @unchecked Sendable {
         free = clamped
     }
 
-    /// The largest reservation the gate can ever satisfy, and at least one lane. Applied by both ``acquire(_:)`` and ``release(_:)`` so an oversized request balances.
+    /// The largest reservation the gate can ever satisfy. Applied by both ``acquire(_:)`` and ``release(_:)`` so an oversized request balances. A count below one is a caller bug, not a request to clamp: a silent floor would let `release(0)` credit a lane the caller never held.
     private func admissible(_ count: Int) -> Int {
-        min(max(count, 1), limit)
+        precondition(count >= 1, "a lane reservation needs at least one lane; got \(count)")
+        return min(count, limit)
     }
 
     /// Suspends until `count` lanes are available, then reserves them. The run parks as a continuation holding no thread rather than blocking a GCD worker.
