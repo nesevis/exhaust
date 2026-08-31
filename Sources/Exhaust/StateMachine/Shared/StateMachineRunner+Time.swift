@@ -266,7 +266,7 @@ public extension __ExhaustRuntime {
 // MARK: - Spec Adapter
 
 extension __ExhaustRuntime {
-    /// Builds the generator, property, and seam hooks for a sequential spec under `time:` mode.
+    /// Builds the generator and property hooks for a sequential spec under `time:` mode.
     ///
     /// The returned adapter is ready for `runExploreTimeCore`: the generator emits tagged command sequences, the property maps outcomes to verdicts, and the hooks carry the spec's skip pruning and reduction. The caller supplies the time budget, settings, and configuration overrides.
     static func buildSequentialSpecAdapter<Spec: StateMachineSpec>(
@@ -352,7 +352,7 @@ extension __ExhaustRuntime {
         }
     }
 
-    /// Builds the generator, property, and seam hooks for an async `.sequential` spec under `time:` mode.
+    /// Builds the generator and property hooks for an async `.sequential` spec under `time:` mode.
     ///
     /// The async twin of ``buildSequentialSpecAdapter(_:commandLimit:)``: the same tagged sequence shape, skip pruning, and property-only reduction, with the executor loop bridged through `_blockingAwaitSemaphore`. The blocking bridge is safe here because the fuzz loop owns a GCD lane — the cooperative pool runs the awaited commands while the lane waits.
     static func buildAsyncSequentialSpecAdapter<Spec: AsyncStateMachineSpec>(
@@ -403,7 +403,7 @@ extension __ExhaustRuntime {
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 extension __ExhaustRuntime {
-    /// Builds the generator, property, and seam hooks for a `.tasks` spec under `time:` mode.
+    /// Builds the generator and property hooks for a `.tasks` spec under `time:` mode.
     ///
     /// Unlike the sequential adapters, the generator draws a lane-assigning schedule marker as a choice ahead of each command (``zipScheduleMarker(onto:concurrencyLevel:)``), so the interleaving is searchable input: the byte mutators that move commands between lanes and reorder the schedule are the same ones that mutate command arguments, and reduction minimizes markers toward the sequential prefix. The property drains each sequence through the cooperative scheduler at the marker-directed interleaving.
     ///
@@ -515,7 +515,7 @@ extension __ExhaustRuntime {
 
 // MARK: - Adapter Type
 
-/// Bundles the generator, property, and seam hooks for one spec type under `time:` mode.
+/// Bundles the generator and property hooks for one spec type under `time:` mode.
 struct SpecFuzzAdapter<Output> {
     /// Generates tagged command sequences for the runner.
     let generator: Generator<Output>

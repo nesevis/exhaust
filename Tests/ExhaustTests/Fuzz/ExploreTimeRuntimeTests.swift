@@ -92,6 +92,28 @@ struct ExploreTimeRuntimeTests {
         #expect(report?.termination == .instrumentationMissing)
     }
 
+    @Test("The skipScreening setting starts the search at random sampling with no screening attempts")
+    func skipScreeningSetting() {
+        func run(settings: [PropertyFuzzSettings]) -> FuzzReport {
+            __ExhaustRuntime.runExploreTimeCore(
+                gen: Gen.choose(in: 0 ... 1000),
+                time: .seconds(60),
+                settings: settings,
+                source: .injected(SyntheticCoverageSource<Int>(edgeCount: 16, edges: { value in [value % 8] })),
+                configure: { configuration in
+                    configuration.attemptLimit = 400
+                },
+                property: { _ in .pass }
+            )
+        }
+        let skipped = run(settings: [.replay(1), .suppress(.all), .skipScreening])
+        #expect(skipped.screeningAttempts == 0)
+        #expect(skipped.samplingAttempts > 0)
+
+        let defaulted = run(settings: [.replay(1), .suppress(.all)])
+        #expect(defaulted.screeningAttempts > 0)
+    }
+
     @Test("A failure found on a path the run could not see is still reported beside the no-coverage error")
     func unreachableCoverageKeepsTheInventory() {
         // The unseen path is exactly where the message says the code may be running (inlined into an uninstrumented caller, or on another executor), so a fault there must not vanish behind the coverage diagnostic.

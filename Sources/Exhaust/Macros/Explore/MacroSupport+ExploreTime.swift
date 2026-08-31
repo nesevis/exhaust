@@ -468,8 +468,11 @@ public extension __ExhaustRuntime {
 
         var configuration = FuzzRunnerConfiguration(budgetNanoseconds: budgetNanoseconds, seed: seed)
         configuration.stopOnFirstFault = parsed.failFast
+        if parsed.skipScreening {
+            configuration.skipScreening = true
+        }
         #if DEBUG
-            // The benchmark arm seam: read once at run start, debug builds only. A malformed or unknown knob is a hard configuration error — a silently ignored typo would invalidate a benchmark arm.
+            // The benchmark arm: read once at run start, debug builds only. A malformed or unknown knob is a hard configuration error — a silently ignored typo would invalidate a benchmark arm.
             if let experimentValue = ProcessInfo.processInfo.environment["EXHAUST_FUZZ_EXPERIMENT"] {
                 do {
                     configuration.experiments = try FuzzExperiments.parse(environmentValue: experimentValue)
@@ -589,7 +592,7 @@ public extension __ExhaustRuntime {
 
     /// Builds the crash-recovery context for one `#explore(time:)` call site: `<base>/exhaust/<module>/<file>-L<line>/`, which is stable across runs of the same test. Construction is read-only; the runner creates files only once the run actually starts.
     ///
-    /// The base directory is the system temporary directory, or `EXHAUST_STATE_DIR` when set — a relocation seam for CI and for the trap probe, which needs the parent process to know where the crashed child's state landed. `EXHAUST_RESUME=0` opts out of recovery: predecessor state is ignored and overwritten.
+    /// The base directory is the system temporary directory, or `EXHAUST_STATE_DIR` when set for CI and for the trap probe, which needs the parent process to know where the crashed child's state landed. `EXHAUST_RESUME=0` opts out of recovery: predecessor state is ignored and overwritten.
     ///
     /// - Note: The store is keyed by file and line only, so two processes fuzzing the same test concurrently stomp each other's checkpoints and can misread each other's breadcrumbs as their own crash. Documented in the crash-recovery article; callers who overlap runs of one test point each process at its own `EXHAUST_STATE_DIR`.
     package static func makeFuzzPersistenceContext(

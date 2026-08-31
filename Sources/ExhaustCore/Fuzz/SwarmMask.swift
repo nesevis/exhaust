@@ -4,7 +4,7 @@
 //
 // The mask lives beside the choice sequence, derived from the root seed, never inside it. Whole-run replay reproduces the epoch schedule for free, and `.exact` re-materialization of any individual entry reads its branch selections from the sequence itself, so reproducers never need the mask. The mask is applied as a sequence rewrite in the mutation layer — the guided materializer then follows the pivoted branch and PRNG-fills its content, exactly as it does for the existing branch-pivot operator — so no interpreter or materializer code paths change.
 
-/// One epoch's branch mask, derived entirely from the epoch seed. See the file header for the seam decision.
+/// One epoch's branch mask, derived entirely from the epoch seed.
 package struct SwarmMask: Sendable {
     /// The epoch's identity; per-site masks derive from it and the site fingerprint, so the mask needs no site registry and is independent of encounter order.
     package let epochSeed: UInt64

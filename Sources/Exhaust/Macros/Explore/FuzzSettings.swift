@@ -32,6 +32,11 @@ public enum PropertyFuzzSettings: Sendable {
     ///
     /// The failing input is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is as complete a fault inventory as the mode offers, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
     case failFast
+
+    /// Skips the boundary-screening phase, so the search starts directly from random sampling.
+    ///
+    /// Screening probes covering-array rows built from each choice site's boundary values before any random search. On most properties those rows are the cheapest source of early faults and corpus seeds, so the default keeps them. Skip screening when boundary-shaped inputs cannot reach the property's interesting behavior — most commonly a sparse precondition that discards nearly every boundary row — or when comparing search strategies that must start from identical conditions, where screening would give one arm a head start the comparison is not measuring. The screening phase's budget flows to the remaining phases; nothing else about the search changes.
+    case skipScreening
 }
 
 /// Controls test behavior for `#explore(Spec.self, mode:, time:)` coverage-guided runs, passed as variadic arguments.
@@ -62,6 +67,11 @@ public enum StateMachineFuzzSettings: Sendable {
     /// The failing command sequence is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is as complete a fault inventory as the mode offers, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
     case failFast
 
+    /// Skips the boundary-screening phase, so the search starts directly from random sampling.
+    ///
+    /// Screening probes covering-array rows built from each choice site's boundary values before any random search. On most properties those rows are the cheapest source of early faults and corpus seeds, so the default keeps them. Skip screening when boundary-shaped inputs cannot reach the property's interesting behavior — most commonly a sparse precondition that discards nearly every boundary row — or when comparing search strategies that must start from identical conditions, where screening would give one arm a head start the comparison is not measuring. The screening phase's budget flows to the remaining phases; nothing else about the search changes.
+    case skipScreening
+
     /// Limits the maximum number of commands per generated sequence.
     ///
     /// When omitted, sequences carry up to 40 commands. Pass this when the default produces sequences too short to reach deep state (for example, a bounded data structure whose accumulation faults require capacity-many operations without interruption), or to shorten sequences when each command is expensive. Values below 1 are a configuration error.
@@ -87,6 +97,8 @@ struct ParsedPropertyFuzzSettings {
     var logLevel: LogLevel = .error
     /// Whether the run stops at its first classified fault instead of cataloging further distinct counterexamples.
     var failFast = false
+    /// Whether the boundary-screening phase is skipped, so the search starts from random sampling.
+    var skipScreening = false
 
     init(_ settings: [PropertyFuzzSettings]) {
         for setting in settings {
@@ -105,6 +117,8 @@ struct ParsedPropertyFuzzSettings {
                     logLevel = level
                 case .failFast:
                     failFast = true
+                case .skipScreening:
+                    skipScreening = true
             }
         }
     }
@@ -142,6 +156,8 @@ struct ParsedStateMachineFuzzSettings {
                     coreSettings.append(.log(level))
                 case .failFast:
                     coreSettings.append(.failFast)
+                case .skipScreening:
+                    coreSettings.append(.skipScreening)
                 case let .commandLimit(limit):
                     commandLimit = limit
                 case let .parallelize(lanes):

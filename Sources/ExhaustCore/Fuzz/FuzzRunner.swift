@@ -18,7 +18,7 @@ private struct PrunedCandidateSelection<Output> {
     let independentFailureCoverageNovel: Bool?
 }
 
-/// The spec-path seams carried through `runExploreTimeCore` into ``FuzzRunner`` as one unit.
+/// The spec-path carried through `runExploreTimeCore` into ``FuzzRunner`` as one unit.
 ///
 /// Nil on the value path. A spec adapter populates both fields: the prune hook keeps precondition-skipped commands out of the corpus, and the reduce strategy routes reduction through the spec's backend reducer (sequential specs reuse ``FuzzRunner/propertyOnlyReduceStrategy(gen:property:reducerConfiguration:)`` with the spec deadline; `.tasks` specs will wrap their two-pass reducer, which must run synchronously on the loop's lane: reduction is always inline so probes never pollute attempt coverage, and no concurrent dispatch context exists).
 package struct FuzzHooks<Output> {

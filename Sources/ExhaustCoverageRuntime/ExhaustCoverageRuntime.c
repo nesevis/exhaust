@@ -105,7 +105,7 @@ void __sanitizer_cov_trace_const_cmp8(uint64_t arg1, uint64_t arg2) {
 
 // The switch hook reports the switched value and a table: cases[0] is the case count, cases[1] the operand bit width, and cases[2..] the case constants. Each case constant is paired against the live value under the switch's own call-site key.
 void __sanitizer_cov_trace_switch(uint64_t value, uint64_t *cases) {
-    if (cases == 0) {
+    if (cases == NULL) {
         return;
     }
     uint64_t site = (uint64_t)__builtin_return_address(0);

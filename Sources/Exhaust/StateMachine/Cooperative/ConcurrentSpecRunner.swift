@@ -343,7 +343,7 @@ func drainSchedule<Spec: AsyncStateMachineSpec>(
     // The setup step is recorded as a finished TraceStep rather than a TraceEvent: it runs at the head of the prefix phase, so it needs none of the started/suspended post-processing, and every result construction prepends it with the command steps reindexed after.
     let setupTrace = UnsafeSendableBox<[TraceStep]>([])
     let failed = UnsafeSendableBox<String?>(nil)
-    // Travels beside `failed` rather than inside it: ScheduleDrain's failure flag is `String?`-typed and only checks nil-ness, so the symptom kind rides in its own box instead of widening that seam.
+    // Travels beside `failed` rather than inside it: ScheduleDrain's failure flag is `String?`-typed and only checks nil-ness, so the symptom kind rides in its own box.
     let failedSymptomKind = UnsafeSendableBox<String?>(nil)
     let trace = UnsafeSendableBox<[TraceEvent]>([])
     let gate = QuiescenceGate()

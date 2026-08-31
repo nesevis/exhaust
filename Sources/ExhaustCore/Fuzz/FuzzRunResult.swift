@@ -68,7 +68,7 @@ package struct FuzzRunnerConfiguration {
     package var stopOnFirstFault: Bool = false
     /// Crash-recovery configuration: where checkpoints go and what a crashed predecessor left. Nil disables persistence entirely.
     package var persistence: FuzzPersistenceContext?
-    /// Knobs for benchmark-gated mechanisms; see ``FuzzExperiments`` for the seam precedence.
+    /// Knobs for benchmark-gated mechanisms; see ``FuzzExperiments`` for more.
     package var experiments: FuzzExperiments
     /// Called once per attempt with its phase and the edges that attempt hit. Nil in production runs; coverage-harvest tooling uses it to build a first-hit timeline without re-reading the counter regions.
     package var onAttempt: ((FuzzPhase, [(edge: Int, hitCount: UInt8)]) -> Void)?

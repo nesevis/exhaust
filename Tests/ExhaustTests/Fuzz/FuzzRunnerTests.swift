@@ -262,9 +262,8 @@ struct FuzzRunnerTests {
         #expect(result.edgeDoubletonCount == 0)
     }
 
-    @Test("Seam defaults produce identical output across refactors")
-    func seamRegressionGuard() {
-        // Exercises the configuration seams (reduceStrategy, prune) at their defaults (nil). The pinned seed and attempt limit make the result deterministic; any behavioral change in the seam plumbing will shift these assertions.
+    @Test("Path defaults produce identical output across refactors")
+    func pathRegressionGuard() {
         let property: @Sendable (Int) -> FuzzVerdict = { value in
             (value > 40 && value < 60) || value > 940 ? .fail(.returnedFalse) : .pass
         }

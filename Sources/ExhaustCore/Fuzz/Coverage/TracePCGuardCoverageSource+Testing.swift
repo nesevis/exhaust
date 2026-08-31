@@ -1,5 +1,3 @@
-// Debug-only seams that let an uninstrumented test binary drive the trace-pc-guard recorder with synthetic tracePCGuards and comparisons.
-
 internal import ExhaustCoverageRuntime
 
 #if DEBUG

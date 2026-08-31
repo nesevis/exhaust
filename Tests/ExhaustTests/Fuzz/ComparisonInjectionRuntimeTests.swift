@@ -2,7 +2,7 @@
 //  ComparisonInjectionRuntimeTests.swift
 //  ExhaustTests
 //
-//  End-to-end coverage for comparison-operand injection through the production `runExploreTimeCore` path. A fake CoverageSource supplied through the existing `source:` seam scripts the operands a trace-cmp build would harvest, so the run exercises wantsComparisons, the capture bracket, forEachComparisonRecord, the reconstructor and graft candidate paths, and the evaluateInjected attribution together — the whole feature, not a leaf.
+//  End-to-end coverage for comparison-operand injection through the production `runExploreTimeCore` path. A fake CoverageSource supplied through the existing `source:` path scripts the operands a trace-cmp build would harvest, so the run exercises wantsComparisons, the capture bracket, forEachComparisonRecord, the reconstructor and graft candidate paths, and the evaluateInjected attribution together — the whole feature, not a leaf.
 //
 
 import Exhaust
