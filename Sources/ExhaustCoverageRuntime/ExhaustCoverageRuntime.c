@@ -82,20 +82,25 @@ void __sanitizer_cov_trace_cmp8(uint64_t arg1, uint64_t arg2) {
     exhaust_cmp_record((uint64_t)__builtin_return_address(0), arg1, arg2);
 }
 
+// The const_cmp hooks receive the comparison's compile-time constant as arg1. The runtime operand is the one value injection never needs — it already came from some input — so the constant is recorded into both operand slots: the record layout stays three words, and every pool draw from a constant-gate site yields the gate's constant.
 void __sanitizer_cov_trace_const_cmp1(uint8_t arg1, uint8_t arg2) {
-    exhaust_cmp_record((uint64_t)__builtin_return_address(0), (uint64_t)arg1, (uint64_t)arg2);
+    (void)arg2;
+    exhaust_cmp_record((uint64_t)__builtin_return_address(0), (uint64_t)arg1, (uint64_t)arg1);
 }
 
 void __sanitizer_cov_trace_const_cmp2(uint16_t arg1, uint16_t arg2) {
-    exhaust_cmp_record((uint64_t)__builtin_return_address(0), (uint64_t)arg1, (uint64_t)arg2);
+    (void)arg2;
+    exhaust_cmp_record((uint64_t)__builtin_return_address(0), (uint64_t)arg1, (uint64_t)arg1);
 }
 
 void __sanitizer_cov_trace_const_cmp4(uint32_t arg1, uint32_t arg2) {
-    exhaust_cmp_record((uint64_t)__builtin_return_address(0), (uint64_t)arg1, (uint64_t)arg2);
+    (void)arg2;
+    exhaust_cmp_record((uint64_t)__builtin_return_address(0), (uint64_t)arg1, (uint64_t)arg1);
 }
 
 void __sanitizer_cov_trace_const_cmp8(uint64_t arg1, uint64_t arg2) {
-    exhaust_cmp_record((uint64_t)__builtin_return_address(0), arg1, arg2);
+    (void)arg2;
+    exhaust_cmp_record((uint64_t)__builtin_return_address(0), arg1, arg1);
 }
 
 // The switch hook reports the switched value and a table: cases[0] is the case count, cases[1] the operand bit width, and cases[2..] the case constants. Each case constant is paired against the live value under the switch's own call-site key.
