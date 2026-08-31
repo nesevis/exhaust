@@ -60,6 +60,9 @@ package enum FuzzTunables {
     /// Parent-selection weight multiplier for corpus entries the property discarded. FuzzChick (Lampropoulos, Hicks, Pierce 2019, §3.1) gives discards one third of a valid seed's energy: mutations of a near-miss are still the likeliest route to a valid input on a sparse precondition, but valid seeds are preferred because their mutations are likelier to stay valid.
     package static let discardParentEnergy = 1.0 / 3.0
 
+    /// Fresh samples drawn in the reseed burst before a mutation plateau terminates the run. The burst checks whether the generator can still reach coverage the post-mutation corpus lacks; 1000 matches Phase 2's sampling plateau window.
+    package static let reseedBurstAttemptLimit = 1000
+
     // MARK: - Crash Recovery
 
     /// Interval between progress-log checkpoints. A crash loses at most this window of corpus growth; discovered clusters additionally force a checkpoint on classification.
@@ -147,6 +150,9 @@ package struct FuzzExperiments: Sendable, Equatable {
     /// AFLFast-style power schedule for the number of children drawn per picked parent.
     package var powerSchedule = false
 
+    /// Fresh-generation burst before a mutation plateau terminates the run: draws up to ``FuzzTunables/reseedBurstAttemptLimit`` fresh samples and resumes mutation if one discovers a new edge or fault cluster. The burst checks whether the generator can still reach coverage the post-mutation corpus lacks, since Phase 2's plateau fired against a smaller corpus.
+    package var reseedBurst = false
+
     /// Per-edge shortlex champion archive as the parent-selection domain. Default-on; the knob stays one release for A/B.
     package var championArchive = true
 
@@ -182,6 +188,7 @@ package struct FuzzExperiments: Sendable, Equatable {
             ("stackedMutation", \.stackedMutation),
             ("banditBands", \.banditBands),
             ("powerSchedule", \.powerSchedule),
+            ("reseedBurst", \.reseedBurst),
             ("championArchive", \.championArchive),
         ]
         for fragment in environmentValue.split(separator: ",") {

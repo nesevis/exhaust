@@ -417,6 +417,13 @@ package final class FuzzRunner<Output> {
             seed: configuration.seed ^ 0x5EED_FA11_BACC_0FFE,
             maxRuns: UInt64.max
         )
+        // Reseed burst interpreter, distinct from both Phase 2's seed and the empty-tier fallback's. Created once and advanced across bursts so each plateau escape sees fresh samples.
+        var reseedInterpreter = ValueAndChoiceTreeInterpreter(
+            gen,
+            materializePicks: false,
+            seed: configuration.seed ^ 0x2E_5EED_B005_7000,
+            maxRuns: UInt64.max
+        )
         // Floored, so a short budget does not buy a window too impatient to outlast the gap between a run's last new edge and its last new fault. Capped at half the budget, because a floor that outran the budget would leave the rule unable to fire at all, and a run should get at least two windows' worth of chance before the clock decides for it.
         let plateauWindowNanoseconds = max(
             min(FuzzTunables.plateauFloorNanoseconds, configuration.budgetNanoseconds / 2),
@@ -429,8 +436,14 @@ package final class FuzzRunner<Output> {
             }
             let now = monotonicNanoseconds()
             if now - lastDiscoveryNanoseconds >= plateauWindowNanoseconds {
+                if configuration.experiments.reseedBurst,
+                   runReseedBurst(interpreter: &reseedInterpreter)
+                {
+                    continue
+                }
+                let plateauNow = monotonicNanoseconds()
                 let deadline = startNanoseconds + configuration.budgetNanoseconds
-                return .plateau(unusedNanoseconds: deadline > now ? deadline - now : 0)
+                return .plateau(unusedNanoseconds: deadline > plateauNow ? deadline - plateauNow : 0)
             }
             checkpointIfDue()
 
@@ -494,6 +507,30 @@ package final class FuzzRunner<Output> {
                 evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: armsMask)
             }
         }
+    }
+
+    /// Draws fresh samples to break out of a mutation plateau, returning true when a new edge or fault cluster was discovered and mutation should resume.
+    ///
+    /// Phase 2's sampling plateau fired against a smaller corpus; after mutation expanded coverage, the generator may still reach edges nothing in the corpus covers. The burst is a fixed attempt budget rather than a consecutive-non-novel window, so a generator that produces only bucket-novel entries (no new edges) does not prolong the burst indefinitely.
+    private func runReseedBurst(
+        interpreter: inout ValueAndChoiceTreeInterpreter<Output>
+    ) -> Bool {
+        let discoveryAtEntry = lastDiscoveryNanoseconds
+        for _ in 0 ..< FuzzTunables.reseedBurstAttemptLimit {
+            if terminationDue() != nil {
+                return lastDiscoveryNanoseconds > discoveryAtEntry
+            }
+            checkpointIfDue()
+            switch freshSample(interpreter: &interpreter, phase: .mutation) {
+                case .evaluated:
+                    if lastDiscoveryNanoseconds > discoveryAtEntry {
+                        return true
+                    }
+                case .exhausted, .generationError:
+                    return lastDiscoveryNanoseconds > discoveryAtEntry
+            }
+        }
+        return lastDiscoveryNanoseconds > discoveryAtEntry
     }
 
     func evaluateFuzzCandidate(
