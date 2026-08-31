@@ -292,6 +292,45 @@ struct FuzzRunnerTests {
             #expect(cluster.reducedCount >= 1)
         }
     }
+
+    @Test("Comparand substitution finds a magic-number gate that random search cannot")
+    func comparandSubstitutionFindsMagicGate() {
+        // The property fails on exactly one value in a million. Random search inside the attempt limit essentially never finds it; the harvested comparison operand names it outright, and the substitution operator writes it into the one integer leaf. The generator is a bare Gen with no reflection support, so the reflective injection paths cannot be the ones finding it.
+        let magic = 777_777
+        func run(harvestingComparisons: Bool) -> FuzzRunResult {
+            let magicComparison: @Sendable (Int) -> [(site: UInt64, lhs: UInt64, rhs: UInt64)] = { value in
+                [(site: UInt64(1), lhs: UInt64(value), rhs: UInt64(magic))]
+            }
+            let comparisonModel = harvestingComparisons ? magicComparison : nil
+            var configuration = FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 7,
+                attemptLimit: 5000
+            )
+            configuration.stopOnFirstFault = true
+            let runner = FuzzRunner(
+                gen: Gen.choose(in: 0 ... 1_000_000 as ClosedRange<Int>),
+                property: { value in value == magic ? .fail(.returnedFalse) : .pass },
+                source: SyntheticCoverageSource<Int>(
+                    edgeCount: 16,
+                    edges: { value in [value % 8] },
+                    comparisons: comparisonModel
+                ),
+                configuration: configuration
+            )
+            return runner.run()
+        }
+
+        let withHarvest = run(harvestingComparisons: true)
+        guard let cluster = withHarvest.clusters.first else {
+            Issue.record("expected comparand substitution to reach the magic value")
+            return
+        }
+        #expect(cluster.reducedDescription == String(magic))
+
+        let withoutHarvest = run(harvestingComparisons: false)
+        #expect(withoutHarvest.clusters.isEmpty)
+    }
 }
 
 // MARK: - Helpers

@@ -67,6 +67,49 @@ extension FuzzRunner {
         return evaluateInjected(sequence: sequence, tree: tree, value: value, parent: (parentIndex, parent))
     }
 
+    /// Overwrites one tag-compatible value entry of a corpus parent's flat sequence with a harvested comparison operand and evaluates the result as an ordinary mutation candidate.
+    ///
+    /// This is the trace-cmp path that needs no reflection: the harvest names the operand but not the draw that fed the comparison — either side may be a generated value or the constant it was checked against — so the target is chosen uniformly among value entries whose tag can encode the operand and whose declared range contains the encoding. Overwriting in place preserves the sequence's length and structure, so the candidate rides the normal guided-materialization path; a value that fed a later structural decision diverges into its fallback handling like any other mutation. Integer tags only: strings, dates, and floating-point choices have no positional correspondence with a 64-bit operand word.
+    func comparandSubstitutionAttempt() -> Bool {
+        let parentStart = monotonicNanoseconds()
+        let picked = corpus.pickParent(random: randomUnit())
+        timing.parentSelectionNanoseconds += monotonicNanoseconds() - parentStart
+        guard let (parentIndex, parent) = picked,
+              let word = comparisonPool.drawValue(sitePick: randomUnit(), valuePick: randomUnit())
+        else {
+            return false
+        }
+        let sequence = ChoiceSequence.flatten(parent.tree)
+        var candidateIndices: [(index: Int, pattern: UInt64)] = []
+        for (index, element) in sequence.enumerated() {
+            guard case let .value(entry) = element,
+                  let pattern = entry.choice.tag.operandBitPattern(fromWord: word)
+            else {
+                continue
+            }
+            let range = entry.validRange ?? entry.choice.tag.bitPatternRange
+            if range.contains(pattern), entry.choice.bitPattern64 != pattern {
+                candidateIndices.append((index, pattern))
+            }
+        }
+        guard candidateIndices.isEmpty == false else {
+            return false
+        }
+        let target = candidateIndices[Int(prng.next(upperBound: UInt64(candidateIndices.count)))]
+        guard case let .value(entry) = sequence[target.index] else {
+            return false
+        }
+        var mutated = sequence
+        mutated[target.index] = .value(ChoiceSequenceValue.Value(
+            choice: ChoiceValue(target.pattern, tag: entry.choice.tag),
+            validRange: entry.validRange,
+            isRangeExplicit: entry.isRangeExplicit
+        ))
+        openMutationAttempt()
+        evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: 0)
+        return true
+    }
+
     /// Evaluates a candidate produced by comparison-operand injection and records the attempt, sharing the tail of the reconstructor and graft paths.
     ///
     /// `parent` is nil for a whole-value candidate reflected from the operand alone, and the grafted corpus entry with its index for a field graft. It sources the breadcrumb's parent hash, the recorded generation, and the attribution index, so a graft counts against its parent the same way a normal mutation does. The whole-value path has no parent, so recordAttempt opens the mutation count for it.

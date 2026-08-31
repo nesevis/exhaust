@@ -453,6 +453,14 @@ package final class FuzzRunner<Output> {
                 continue
             }
 
+            // Comparand substitution: overwrite one tag-compatible value entry of a parent's flat sequence with a harvested operand. Needs no reflection, so it is the only injection arm on a non-reflective generator; the empty-pool check keeps it free without trace-cmp instrumentation.
+            if comparisonPool.isEmpty == false,
+               prng.next(upperBound: 2) == 0,
+               comparandSubstitutionAttempt()
+            {
+                continue
+            }
+
             let parentStart = monotonicNanoseconds()
             let picked = corpus.pickParent(random: randomUnit())
             timing.parentSelectionNanoseconds += monotonicNanoseconds() - parentStart
@@ -488,7 +496,7 @@ package final class FuzzRunner<Output> {
         }
     }
 
-    private func evaluateFuzzCandidate(
+    func evaluateFuzzCandidate(
         _ candidate: ChoiceSequence,
         parent: CorpusEntry,
         parentIndex: Int,

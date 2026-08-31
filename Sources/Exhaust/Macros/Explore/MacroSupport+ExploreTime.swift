@@ -483,13 +483,12 @@ public extension __ExhaustRuntime {
         let reflectionReconstructor = generatorIsReflective
             ? OperandReconstruction.reconstructor(for: Output.self)
             : nil
-        // Injection activates on the presence of trace-cmp instrumentation, not a knob: a reflective generator on a trace-cmp build harvests operands and places them (whole-value gates through the reconstructor, composites through the field graft), while a non-reflective generator has nothing to place and a build without trace-cmp never fills the pool, so the injection arms stay free. There is no init-time way to detect the flag — its presence shows up as a non-empty pool once a comparison fires.
-        let usesInjection = generatorIsReflective
+        // Injection activates on the presence of trace-cmp instrumentation, not a knob: comparand substitution places operands directly into a parent's flat sequence and needs no reflection, so every run can use a harvested operand, and a build without trace-cmp never fills the pool, so the injection arms stay free. There is no init-time way to detect the flag — its presence shows up as a non-empty pool once a comparison fires. The reflective paths (whole-value through the reconstructor, composites through the field graft) additionally require a reflective generator, gated by their own capability flags.
 
-        // A live source enables comparison-operand harvesting at init only when injection can use the operands.
+        // A live source always enables comparison-operand harvesting: the drain is a no-op without trace-cmp instrumentation, and comparand substitution can place operands on any generator.
         let resolvedSource: (any CoverageSource)? = switch coverage {
             case .production:
-                FuzzInstrumentationCheck.productionSource(harvestsComparisons: usesInjection)
+                FuzzInstrumentationCheck.productionSource(harvestsComparisons: true)
             case .none:
                 nil
             case let .injected(injected):
@@ -538,9 +537,9 @@ public extension __ExhaustRuntime {
                 source: source,
                 configuration: configuration,
                 hooks: hooks,
-                reflectionReconstructor: usesInjection ? reflectionReconstructor : nil,
+                reflectionReconstructor: reflectionReconstructor,
                 // The graft only reaches a zip-shaped generator, so gate it on that static shape here — a non-composite generator otherwise materializes a parent every attempt before discovering it.
-                graftReflective: usesInjection && Interpreters.isZipShaped(gen),
+                graftReflective: generatorIsReflective && Interpreters.isZipShaped(gen),
                 renderValue: { value in
                     var description = ""
                     customDump(value, to: &description, maxDepth: 3)

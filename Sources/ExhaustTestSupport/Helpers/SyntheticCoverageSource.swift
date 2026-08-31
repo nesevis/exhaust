@@ -18,29 +18,40 @@ public final class SyntheticCoverageSource<Value>: CoverageSource, @unchecked Se
     public let reportsLiveCoverage: Bool
 
     private let hitEdges: @Sendable (Value) -> [(edge: Int, hitCount: UInt8)]
+    private let comparisons: (@Sendable (Value) -> [(site: UInt64, lhs: UInt64, rhs: UInt64)])?
     private let lock = NSLock()
     private var currentValue: Value?
 
-    /// Creates a source reporting the exact (edge, hit count) pairs returned by `hitEdges`.
+    public var wantsComparisons: Bool {
+        comparisons != nil
+    }
+
+    /// Creates a source reporting the exact (edge, hit count) pairs returned by `hitEdges`, and optionally the comparison records returned by `comparisons` — a deterministic model of the trace-cmp operand harvest, for testing operand injection without instrumentation.
     public init(
         edgeCount: Int,
         reportsLiveCoverage: Bool = false,
-        hitEdges: @escaping @Sendable (Value) -> [(edge: Int, hitCount: UInt8)]
+        hitEdges: @escaping @Sendable (Value) -> [(edge: Int, hitCount: UInt8)],
+        comparisons: (@Sendable (Value) -> [(site: UInt64, lhs: UInt64, rhs: UInt64)])? = nil
     ) {
         self.edgeCount = edgeCount
         self.reportsLiveCoverage = reportsLiveCoverage
         self.hitEdges = hitEdges
+        self.comparisons = comparisons
     }
 
     /// Creates a source where every reported edge has hit count 1, from a plain edge-set function.
     public convenience init(
         edgeCount: Int,
         reportsLiveCoverage: Bool = false,
-        edges: @escaping @Sendable (Value) -> [Int]
+        edges: @escaping @Sendable (Value) -> [Int],
+        comparisons: (@Sendable (Value) -> [(site: UInt64, lhs: UInt64, rhs: UInt64)])? = nil
     ) {
-        self.init(edgeCount: edgeCount, reportsLiveCoverage: reportsLiveCoverage) { value in
-            edges(value).map { (edge: $0, hitCount: 1) }
-        }
+        self.init(
+            edgeCount: edgeCount,
+            reportsLiveCoverage: reportsLiveCoverage,
+            hitEdges: { value in edges(value).map { (edge: $0, hitCount: 1) } },
+            comparisons: comparisons
+        )
     }
 
     public func beginAttempt() {
@@ -67,6 +78,18 @@ public final class SyntheticCoverageSource<Value>: CoverageSource, @unchecked Se
         }
         for (edge, hitCount) in hitEdges(value) {
             body(edge, hitCount)
+        }
+    }
+
+    public func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {
+        lock.lock()
+        let value = currentValue
+        lock.unlock()
+        guard let value, let comparisons else {
+            return
+        }
+        for record in comparisons(value) {
+            body(record.site, record.lhs, record.rhs)
         }
     }
 }
