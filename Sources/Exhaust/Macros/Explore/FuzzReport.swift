@@ -157,6 +157,9 @@ public struct FuzzReport: Sendable {
     /// Mutated candidates the materializer could not turn into a value. These attempts contribute to ``mutationAttempts`` but invoke the property zero times.
     public let discardedAttempts: Int
 
+    /// Evaluated search cases the property discarded by throwing a skip error (its precondition was not met). Counted inside ``evaluatedSearchCases``: the property ran and its coverage was recorded, and a coverage-novel discard stays in the corpus as a low-weight mutation parent so the search can climb toward valid inputs.
+    public let discardedEvaluations: Int
+
     /// Screening rows rejected while building or materializing their candidate before property entry.
     public let screeningRejectedAttempts: Int
 
@@ -402,6 +405,7 @@ package extension FuzzReport {
         samplingAttempts = result.counts.samplingAttempts
         mutationAttempts = result.counts.mutationAttempts
         discardedAttempts = result.counts.discardedAttempts
+        discardedEvaluations = result.counts.discardedEvaluations
         screeningRejectedAttempts = result.counts.screeningRejectedAttempts
         evaluatedSearchCases = result.counts.evaluatedSearchCases
         pruneInvocations = result.counts.pruneInvocations
@@ -457,6 +461,7 @@ package extension FuzzReport {
             samplingAttempts: 0,
             mutationAttempts: 0,
             discardedAttempts: 0,
+            discardedEvaluations: 0,
             screeningRejectedAttempts: 0,
             evaluatedSearchCases: 0,
             pruneInvocations: 0,

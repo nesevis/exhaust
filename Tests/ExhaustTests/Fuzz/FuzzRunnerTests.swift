@@ -27,6 +27,51 @@ struct FuzzRunnerTests {
         #expect(result.clusters.isEmpty)
     }
 
+    @Test("A fault found during screening records the attempt it was found on, not zero")
+    func screeningFaultAttemptIndex() {
+        var configuration = FuzzRunnerConfiguration(
+            budgetNanoseconds: 60_000_000_000,
+            seed: 7,
+            attemptLimit: 3000
+        )
+        configuration.stopOnFirstFault = true
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
+            property: { value in value == 1000 ? .fail(.returnedFalse) : .pass },
+            source: bucketedSource(),
+            configuration: configuration
+        )
+        let result = runner.run()
+        guard let cluster = result.clusters.first else {
+            Issue.record("expected the boundary value 1000 to fail during screening")
+            return
+        }
+        #expect(cluster.discoveringPhase == FuzzPhase.screening)
+        #expect(cluster.firstSeenAttempt >= 1)
+        #expect(cluster.firstSeenAttempt <= result.counts.screeningAttempts)
+    }
+
+    @Test("Discarded evaluations are counted, kept as corpus parents, and never reported as failures")
+    func discardAccounting() {
+        // Odd values do not meet the precondition; even ones pass. Nothing fails.
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
+            property: { value in value % 2 == 1 ? .discard : .pass },
+            source: bucketedSource(),
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 7,
+                attemptLimit: 2000
+            )
+        )
+        let result = runner.run()
+        #expect(result.clusters.isEmpty)
+        #expect(result.counts.discardedEvaluations > 0)
+        #expect(result.counts.discardedEvaluations < result.counts.evaluatedSearchCases)
+        #expect(runner.corpus.entries.contains { $0.propertyDiscarded })
+        #expect(runner.corpus.entries.contains { $0.propertyDiscarded == false })
+    }
+
     @Test("Rejected screening probes remain separate from evaluated search cases")
     func rejectedScreeningProbeAccounting() {
         let unfilteredGenerator = Gen.zip(

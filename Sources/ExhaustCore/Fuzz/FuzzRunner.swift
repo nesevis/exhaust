@@ -327,6 +327,8 @@ package final class FuzzRunner<Output> {
 
         // The breadcrumb clears before the row is built: screening evaluates before its tree reaches onExample, so the candidate cannot be identified pre-evaluation, and a cleared slot beats misattributing a trap to the previous attempt. The attribution bracket itself opens inside evaluateInBracket, around the property call, for every phase alike.
         let beforeRow: () -> Void = { [self] in
+            // Counted before the row runs, so a failure classified inside this row sees a 1-based attempt index like every other phase; the post-phase assignment below reconciles to the runner's own tally, which counts the same rows.
+            counts.screeningAttempts += 1
             breadcrumb?.clear()
         }
 
@@ -718,6 +720,9 @@ package final class FuzzRunner<Output> {
                 }
         }
         counts.evaluatedSearchCases += 1
+        if verdict.isDiscard {
+            counts.discardedEvaluations += 1
+        }
 
         let originalCandidate = EvaluatedFuzzCandidate(
             value: value,
@@ -741,6 +746,7 @@ package final class FuzzRunner<Output> {
             phase: phase,
             isBoundaryDerived: isBoundaryDerived,
             propertyFailed: candidates.corpus.verdict.isFailure,
+            propertyDiscarded: candidates.corpus.verdict.isDiscard,
             precomputedHash: candidates.corpus.sequenceHash
         )
         if case let .admitted(index, _) = admission, corpus.introducedNewEdges(at: index) {
@@ -815,13 +821,14 @@ package final class FuzzRunner<Output> {
                     failure: original,
                     independentFailureCoverageNovel: corpus.wouldAdmit(hits: original.hits)
                 )
-            case (.pass, .fail):
+            case (.pass, .fail), (.discard, .fail):
                 return PrunedCandidateSelection(
                     corpus: prunedCandidate,
                     failure: prunedCandidate,
                     independentFailureCoverageNovel: nil
                 )
-            case (.pass, .pass):
+            // A discard on either side is not a failure; the pruned candidate carries the corpus verdict either way. The prune hook is the spec path's, which never discards, so the discard arms exist for exhaustiveness.
+            case (.pass, .pass), (.pass, .discard), (.discard, .pass), (.discard, .discard):
                 return PrunedCandidateSelection(
                     corpus: prunedCandidate,
                     failure: nil,

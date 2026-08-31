@@ -57,6 +57,9 @@ package enum FuzzTunables {
     /// Capped at half the budget where that is smaller, so the rule stays able to fire on short runs.
     package static let plateauFloorNanoseconds: UInt64 = 30_000_000_000
 
+    /// Parent-selection weight multiplier for corpus entries the property discarded. FuzzChick (Lampropoulos, Hicks, Pierce 2019, §3.1) gives discards one third of a valid seed's energy: mutations of a near-miss are still the likeliest route to a valid input on a sparse precondition, but valid seeds are preferred because their mutations are likelier to stay valid.
+    package static let discardParentEnergy = 1.0 / 3.0
+
     // MARK: - Crash Recovery
 
     /// Interval between progress-log checkpoints. A crash loses at most this window of corpus growth; discovered clusters additionally force a checkpoint on classification.

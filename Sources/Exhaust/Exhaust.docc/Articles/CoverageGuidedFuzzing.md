@@ -111,6 +111,12 @@ For the spec form the report has the same structure, but each entry's reduced co
    likely in BoundedQueue.clear (BoundedQueue.swift:123)
 ```
 
+## Inputs the property cannot judge
+
+A property with a precondition should throw `PropertySkip` (or `XCTSkip`) for an input that does not meet it, the same way it would under `#exhaust`. Under `#explore(time:)` a skipped input is a *discard*: not a failure, not a pass, and not thrown away either. Its coverage is recorded, and when it reached a branch nothing else has, it stays in the corpus as a mutation parent at a third of the weight of a valid input. On a property whose precondition random generation rarely satisfies, this is how the search finds valid inputs at all: a near miss is mutated toward one, where fresh generation would keep missing. The summary reports the share of inputs the property skipped.
+
+Returning `true` for an input that does not meet the precondition hides it from the search and counts it as a pass; throw instead.
+
 ## Settings
 
 Pass settings as variadic arguments after the time budget:

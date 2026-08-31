@@ -19,6 +19,36 @@ struct FuzzCorpusTests {
         #expect(corpus.coveredEdgeCount == 1)
     }
 
+    @Test("A discarded entry is admitted on novelty and weighted at a third of a valid one for parent selection")
+    func discardedEntryEnergy() {
+        let corpus = FuzzCorpus(edgeCount: 10)
+        let valid = corpus.offer(
+            sequence: sequence(length: 1),
+            tree: .just,
+            hits: [(edge: 3, hitCount: 1)],
+            convergence: 1.0,
+            generation: 0,
+            phase: .sampling
+        )
+        let discarded = corpus.offer(
+            sequence: sequence(length: 2),
+            tree: .just,
+            hits: [(edge: 4, hitCount: 1)],
+            convergence: 1.0,
+            generation: 0,
+            phase: .sampling,
+            propertyDiscarded: true
+        )
+        guard case let .admitted(validIndex, _) = valid, case let .admitted(discardedIndex, .mutable) = discarded else {
+            Issue.record("expected both entries admitted, the discard to the mutable tier: \(valid), \(discarded)")
+            return
+        }
+        // Same rarity (one unique edge each), same novelty bonus, so the only difference is the discard energy.
+        #expect(corpus.score(at: discardedIndex) == corpus.score(at: validIndex) * FuzzTunables.discardParentEnergy)
+        #expect(corpus.entries[discardedIndex].propertyDiscarded)
+        #expect(corpus.passingSignatures.count == 1, "a discard is neither a pass nor a failure for discrimination")
+    }
+
     @Test("Duplicate choice sequences are rejected before coverage math")
     func duplicateRejection() {
         let corpus = FuzzCorpus(edgeCount: 10)

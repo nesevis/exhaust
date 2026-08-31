@@ -32,6 +32,9 @@ package struct CorpusEntry: Sendable {
     /// Whether the property failed on this entry. Report-time discrimination splits the corpus on this flag: passing entries form the P(hit | pass) denominator.
     package let propertyFailed: Bool
 
+    /// Whether the property discarded this entry (its precondition was not met). Admitted on coverage novelty like any other entry, but weighted down as a mutation parent and excluded from the passing sample.
+    package let propertyDiscarded: Bool
+
     /// Zobrist hash of `sequence`, the corpus-wide dedup key.
     package let hash: UInt64
 
@@ -147,9 +150,9 @@ package final class FuzzCorpus {
         coveringEntries.reduce(0) { $0 + $1.count }
     }
 
-    /// Signatures of entries whose property evaluation passed — the P(hit | pass) sample for report-time discrimination.
+    /// Signatures of entries whose property evaluation passed — the P(hit | pass) sample for report-time discrimination. Discarded entries are neither passing nor failing and stay out of the sample.
     package var passingSignatures: [BitSet] {
-        entries.filter { $0.propertyFailed == false }.map { $0.signature }
+        entries.filter { $0.propertyFailed == false && $0.propertyDiscarded == false }.map { $0.signature }
     }
 
     /// Edges hit by exactly one non-duplicate attempt (Q₁), for the STADS estimators.
@@ -236,6 +239,7 @@ package final class FuzzCorpus {
         phase: FuzzPhase,
         isBoundaryDerived: Bool = false,
         propertyFailed: Bool = false,
+        propertyDiscarded: Bool = false,
         precomputedHash: UInt64? = nil
     ) -> CorpusAdmission {
         let hash = precomputedHash ?? ZobristHash.hash(of: sequence)
@@ -290,6 +294,7 @@ package final class FuzzCorpus {
             generation: generation,
             phase: phase,
             propertyFailed: propertyFailed,
+            propertyDiscarded: propertyDiscarded,
             hash: hash,
             introducedEdges: introducedEdges
         )
@@ -498,7 +503,8 @@ package final class FuzzCorpus {
         for edge in entry.introducedEdges {
             noveltyBonus += 1.0 / Double(coveringEntryCounts[edge])
         }
-        let score = (rarity + FuzzTunables.noveltyBonusWeight * noveltyBonus) * entry.failureBoost
+        let energy = entry.propertyDiscarded ? FuzzTunables.discardParentEnergy : 1.0
+        let score = (rarity + FuzzTunables.noveltyBonusWeight * noveltyBonus) * entry.failureBoost * energy
         cachedScores[index] = score
         return score
     }

@@ -34,6 +34,10 @@ extension __ExhaustRuntime {
         for (symptom, count) in report.unreducedFailureCounts.sorted(by: { $0.key < $1.key }) {
             lines.append("\(count) more failure\(count == 1 ? "" : "s") (\(symptom)) could not be reduced to a form shown above.")
         }
+        if report.discardedEvaluations > 0 {
+            let percent = Int((Double(report.discardedEvaluations) / Double(max(report.evaluatedSearchCases, 1)) * 100).rounded())
+            lines.append("\(percent)% of inputs were skipped by the property (precondition not met); the search used them to find inputs that meet it.")
+        }
         lines.append("Reproduce: .replay(\(report.seed))")
         lines.append("Coverage, throughput, and full suspect lists are in the explore-time-summary.txt attachment.")
         return lines.joined(separator: "\n")
@@ -58,6 +62,11 @@ extension __ExhaustRuntime {
             "Coverage: \(report.coveredEdgeCount) of \(report.instrumentedEdgeCount) instrumented edges hit; \(uncovered) never hit (module-wide count, includes code the property never calls)."
         )
         lines.append(contentsOf: renderEstimatorLines(report))
+        if report.discardedEvaluations > 0 {
+            lines.append(
+                "Discarded: \(report.discardedEvaluations) of \(report.evaluatedSearchCases) evaluated cases threw a skip error; coverage-novel discards stay in the corpus as mutation parents at \(Int((FuzzTunables.discardParentEnergy * 100).rounded()))% weight."
+            )
+        }
         if report.offLaneEdgeHits > 0 {
             lines.append(
                 "\(report.offLaneEdgeHits) edge hits fired off the run's lane and were not searched: property work on another executor (a @MainActor function, a custom-executor actor, a detached task) or another test exercising the instrumented code at the same time. For main-actor or custom-executor work, add inline-8bit-counters to the coverage flags."

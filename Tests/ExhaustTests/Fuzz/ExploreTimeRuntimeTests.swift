@@ -524,8 +524,9 @@ struct ExploreTimeRuntimeTests {
             return
         }
         #expect(symptom.kind == "MarkerError")
-        #expect(boolProperty(2).isFailure == false)
+        #expect(boolProperty(2).isDiscard)
         #expect(boolProperty(3).isFailure == false)
+        #expect(boolProperty(3).isDiscard == false)
 
         let detectionProperty = __ExhaustRuntime.wrapVerdictDetection { (value: Int) in
             if value == 0 {

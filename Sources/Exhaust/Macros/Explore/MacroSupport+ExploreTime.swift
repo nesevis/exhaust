@@ -740,7 +740,7 @@ public extension __ExhaustRuntime {
 
     // MARK: - Property Wrapping
 
-    /// Wraps a Bool-returning property into a ``FuzzVerdict`` evaluation: `false` and thrown errors become symptomed failures, skip errors pass, and on Apple platforms an NSException is caught in-process and treated as an ordinary failure.
+    /// Wraps a Bool-returning property into a ``FuzzVerdict`` evaluation: `false` and thrown errors become symptomed failures, skip errors discard, and on Apple platforms an NSException is caught in-process and treated as an ordinary failure.
     package static func wrapVerdictProperty<Output>(
         _ property: @escaping @Sendable (Output) throws -> Bool
     ) -> @Sendable (Output) -> FuzzVerdict {
@@ -751,7 +751,7 @@ public extension __ExhaustRuntime {
                 do {
                     verdict = try property(value) ? .pass : .fail(.returnedFalse)
                 } catch {
-                    verdict = isSkipError(error) ? .pass : .fail(.thrown(error))
+                    verdict = isSkipError(error) ? .discard : .fail(.thrown(error))
                 }
             }, &caught)
             if completed == false {
@@ -772,7 +772,7 @@ public extension __ExhaustRuntime {
                 do {
                     try detection(value)
                 } catch {
-                    verdict = isSkipError(error) ? .pass : .fail(.thrown(error))
+                    verdict = isSkipError(error) ? .discard : .fail(.thrown(error))
                 }
             }, &caught)
             if completed == false {
@@ -794,7 +794,7 @@ public extension __ExhaustRuntime {
                 do {
                     return try await property(valueBox.value) ? .pass : .fail(.returnedFalse)
                 } catch {
-                    return isSkipError(error) ? FuzzVerdict.pass : .fail(.thrown(error))
+                    return isSkipError(error) ? FuzzVerdict.discard : .fail(.thrown(error))
                 }
             }
         }
@@ -811,7 +811,7 @@ public extension __ExhaustRuntime {
                     try await detection(valueBox.value)
                     return FuzzVerdict.pass
                 } catch {
-                    return isSkipError(error) ? .pass : .fail(.thrown(error))
+                    return isSkipError(error) ? .discard : .fail(.thrown(error))
                 }
             }
         }

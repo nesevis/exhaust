@@ -6,14 +6,23 @@
 package enum FuzzVerdict: Sendable {
     case pass
     case fail(FailureSymptom)
+    /// The property declined to judge the input (a skip error): the precondition was not met. Not a failure and not evidence of passing; the corpus keeps coverage-novel discards as low-energy mutation parents, because a mutation of a near-miss is the likeliest route to a valid input on a sparse precondition.
+    case discard
 
     package var isFailure: Bool {
         switch self {
-            case .pass:
+            case .pass, .discard:
                 false
             case .fail:
                 true
         }
+    }
+
+    package var isDiscard: Bool {
+        if case .discard = self {
+            return true
+        }
+        return false
     }
 }
 
@@ -98,6 +107,8 @@ package struct FuzzRunCounts: Sendable {
     package var mutationAttempts = 0
     package var screeningRejectedAttempts = 0
     package var discardedAttempts = 0
+    /// Evaluated search cases the property discarded (a skip error). Counted inside `evaluatedSearchCases`, since the property ran.
+    package var discardedEvaluations = 0
     package var evaluatedSearchCases = 0
     package var pruneInvocations = 0
     package var reductionInvocations = 0
