@@ -101,6 +101,14 @@ package enum CoverageSourceSelection: Sendable {
     case none
     /// The given source. Report-time symbolization is skipped, because a synthetic source's edge indices do not address real program counters.
     case injected(any CoverageSource)
+
+    /// Whether this selection resolves through the production registries, so edge indices address real program counters and symbolization makes sense.
+    package var isProduction: Bool {
+        if case .production = self {
+            return true
+        }
+        return false
+    }
 }
 
 // MARK: - Sancov-Backed Source

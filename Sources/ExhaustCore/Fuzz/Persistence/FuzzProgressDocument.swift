@@ -20,7 +20,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
         self.snapshot = snapshot
     }
 
-    package static let currentVersion = 3
+    package static let currentVersion = 2
 
     /// Run parameters and checkpoint bookkeeping.
     package struct Metadata: Codable, Sendable {
@@ -111,7 +111,8 @@ package struct FuzzProgressDocument: Codable, Sendable {
         package var phase: String
         package var isBoundaryDerived: Bool
         package var propertyFailed: Bool
-        package var propertyDiscarded: Bool
+        /// Whether the property discarded this entry. Optional so logs written before the field existed (version 2) still decode; restore treats a missing value as false.
+        package var propertyDiscarded: Bool?
 
         package init(entry: CorpusEntry) {
             sequence = ChoiceSequenceCodec.encode(entry.sequence)

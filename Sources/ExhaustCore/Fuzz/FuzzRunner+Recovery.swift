@@ -168,7 +168,7 @@ extension FuzzRunner {
                 phase: phase,
                 isBoundaryDerived: record.isBoundaryDerived,
                 propertyFailed: record.propertyFailed,
-                propertyDiscarded: record.propertyDiscarded
+                propertyDiscarded: record.propertyDiscarded ?? false
             )
         }
     }

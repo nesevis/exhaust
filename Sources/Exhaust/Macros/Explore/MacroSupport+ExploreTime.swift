@@ -560,18 +560,11 @@ public extension __ExhaustRuntime {
             }
             return result
         }
-        var report = FuzzReport(result: result, symbolizeEdges: isProduction(coverage))
+        var report = FuzzReport(result: result, symbolizeEdges: coverage.isProduction)
         if configuration.persistence?.resumeDocument != nil {
             report.recordCrashResume()
         }
         return report
-    }
-
-    private static func isProduction(_ coverage: CoverageSourceSelection) -> Bool {
-        if case .production = coverage {
-            return true
-        }
-        return false
     }
 
     // MARK: - Crash Recovery
