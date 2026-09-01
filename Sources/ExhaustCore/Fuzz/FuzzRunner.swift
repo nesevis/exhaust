@@ -566,7 +566,7 @@ package final class FuzzRunner<Output> {
         _ candidate: ChoiceSequence,
         parent: CorpusEntry,
         parentIndex: Int,
-        armsMask: UInt8
+        armsMask: UInt32
     ) {
         // Phase 1: flat emission produces the value, the fresh sequence, and (below) its hash without building a ChoiceTree. The tree is rebuilt in phase 2 only for the rare candidates that consume it: corpus admission and failure dispatch.
         let guidedSeed = prng.next()
@@ -630,7 +630,7 @@ package final class FuzzRunner<Output> {
             parentIndex: parentIndex
         )
         if admission.isAdmitted, configuration.experiments.banditBands {
-            for arm in MutationArm.allCases where armsMask & (1 << UInt8(arm.rawValue)) != 0 {
+            for arm in MutationArm.allCases where armsMask & (1 << UInt32(arm.rawValue)) != 0 {
                 bandit.reward(arm)
             }
         }

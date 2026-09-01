@@ -3,6 +3,20 @@
 //  Exhaust
 //
 
+// MARK: - Mixed Redistribution Context
+
+/// Holds the rational-arithmetic context for a single redistribution pair, including the LCM denominator and scaled numerators needed to redistribute value between heterogeneous-type nodes.
+///
+/// `sourceMovesUpward` and `distanceInSteps` carry the pair's movement direction and delta bound, so the context is the whole transfer plan.
+package struct MixedRedistributionContext {
+    let sourceNumerator: Int64
+    let sinkNumerator: Int64
+    let denominator: UInt64
+    let intStepSize: UInt64
+    let sourceMovesUpward: Bool
+    let distanceInSteps: UInt64
+}
+
 // MARK: - Graph Redistribution Encoder
 
 /// Moves magnitude between type-compatible leaf pairs to enable future structural operations.
@@ -23,16 +37,6 @@ struct GraphRedistributionEncoder: GraphEncoder {
     enum Mode {
         case idle
         case active(RedistributionState)
-    }
-
-    /// Holds the rational-arithmetic context for a single redistribution pair, including the LCM denominator and scaled numerators needed to redistribute value between heterogeneous-type nodes.
-    struct MixedRedistributionContext {
-        let sourceNumerator: Int64
-        let sinkNumerator: Int64
-        let denominator: UInt64
-        let intStepSize: UInt64
-        let sourceMovesUpward: Bool
-        let distanceInSteps: UInt64
     }
 
     /// Tracks the binary search state for redistribution magnitude and the current pair iteration across probes.

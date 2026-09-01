@@ -4,7 +4,7 @@ extension FuzzRunner {
     // MARK: - Candidate Production
 
     /// Produces one mutated candidate from `parent` plus the bitmask of ``MutationArm``s that shaped it (for bandit credit on admission). Two orthogonal knobs, applied in sequence: the mutation strategy (legacy single-operator or composed experiment stack), then the swarm rewrite of the result's disallowed branch selections.
-    func nextCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt8) {
+    func nextCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt32) {
         let experiments = configuration.experiments
         var (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands
             ? composedCandidate(from: parent)
@@ -28,7 +28,7 @@ extension FuzzRunner {
     }
 
     /// The original single-operator mutation path, kept verbatim so knob-off runs replay identically under a pinned seed: usually an intensity-band mutation, occasionally a bind-boundary splice with a random donor.
-    private func legacyCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt8) {
+    private func legacyCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt32) {
         if randomUnit() < FuzzTunables.spliceProbability, corpus.entries.count > 1 {
             let donorIndex = Int(prng.next(upperBound: UInt64(corpus.entries.count)))
             let donor = corpus.entries[donorIndex]
@@ -41,7 +41,7 @@ extension FuzzRunner {
                    prng: &prng
                )
             {
-                return (spliced, 1 << UInt8(MutationArm.splice.rawValue))
+                return (spliced, 1 << UInt32(MutationArm.splice.rawValue))
             }
         }
         let intensityDraw = prng.next(upperBound: UInt64(MutationIntensity.allCases.count))
@@ -53,23 +53,23 @@ extension FuzzRunner {
                 layout: parent.mutationLayout,
                 prng: &prng
             ),
-            1 << UInt8(MutationArm(intensity: intensity).rawValue)
+            1 << UInt32(MutationArm(intensity: intensity).rawValue)
         )
     }
 
     /// The experiment mutation path: one child composed from `stackedMutation`'s operator stack with each operator drawn from the bandit's distribution (or the legacy fixed one when only stacking is on).
     ///
     /// The stack draw is 2^0...2^2 ({1, 2, 4} operators), not AFL's 2^1...2^7: Exhaust's band operators are each already multi-perturbation (a low-band step moves up to three values, a high-band step corrupts a quarter of the sequence), and the AFL-depth stacks measured on `DeepParser` destroyed parent structure outright (deep-fault discovery 4/20 versus 20/20, throughput −42%).
-    private func composedCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt8) {
+    private func composedCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt32) {
         let experiments = configuration.experiments
         let stackSize = 1 << Int(prng.next(upperBound: 3))
         let stackCount = experiments.stackedMutation ? stackSize : 1
         var candidate = parent.sequence
-        var armsMask: UInt8 = 0
+        var armsMask: UInt32 = 0
         for mutationIndex in 0 ..< stackCount {
             let layout = mutationIndex == 0 ? parent.mutationLayout : nil
             let arm = experiments.banditBands ? bandit.pick(random: randomUnit()) : fixedDistributionArm()
-            armsMask |= 1 << UInt8(arm.rawValue)
+            armsMask |= 1 << UInt32(arm.rawValue)
             switch arm {
                 case .low:
                     candidate = FuzzMutator.mutate(
@@ -105,7 +105,7 @@ extension FuzzRunner {
             // Nothing perturbed the parent (splice arms found no usable bind region or donor, or a band mutation was a no-op on this sequence), and the corpus would reject the duplicate. Fall back to one band mutation so the attempt always explores.
             let intensityDraw = prng.next(upperBound: UInt64(MutationIntensity.allCases.count))
             let intensity = MutationIntensity.allCases[Int(intensityDraw)]
-            armsMask |= 1 << UInt8(MutationArm(intensity: intensity).rawValue)
+            armsMask |= 1 << UInt32(MutationArm(intensity: intensity).rawValue)
             candidate = FuzzMutator.mutate(
                 candidate,
                 intensity: intensity,

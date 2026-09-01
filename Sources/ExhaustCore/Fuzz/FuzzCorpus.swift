@@ -11,6 +11,18 @@ package struct CorpusEntry: Sendable {
     /// The choice tree behind `sequence`, kept as the guided-materialization fallback for mutations of this entry.
     package let tree: ChoiceTree
 
+    /// The choice graph behind `sequence`, resolving node IDs to position ranges without a tree walk. Nil for discovery-tier entries. Read-only for the entry's lifetime: entries never change in place, so the graph is never rebuilt and never has `apply` called on it.
+    package let choiceGraph: ChoiceGraph?
+
+    /// Same-tag leaf groups from ``ExchangeQuery``. Nil for discovery-tier entries or when the graph has no group of two or more leaves.
+    let tandemScope: TandemScope?
+
+    /// Type-compatible source-sink pairs from ``ExchangeQuery``. Nil for discovery-tier entries or when the graph has no pairs.
+    let redistributionScope: RedistributionScope?
+
+    /// Same-shaped zip sibling groups from ``PermutationQuery``. Empty for discovery-tier entries.
+    let permutationScopes: [PermutationScope]
+
     /// The edges hit during this entry's property evaluation.
     package let signature: BitSet
 
@@ -297,11 +309,37 @@ package final class FuzzCorpus {
             ? .mutable
             : .discovery
         let index = entries.count
+
+        // Mutation targeting tables, paid for only by mutable-tier entries like the layout index below. The scopes are cached because query construction walks the whole graph; the graph itself resolves their node IDs to position ranges. Relation scopes are convergence-gated and always empty on a fresh graph, so they are not cached. Construction consumes no PRNG draws, so seeded replay streams are unchanged.
+        var choiceGraph: ChoiceGraph?
+        var tandemScope: TandemScope?
+        var redistributionScope: RedistributionScope?
+        var permutationScopes: [PermutationScope] = []
+        if tier == .mutable {
+            let graph = ChoiceGraphBuilder.build(from: tree)
+            for exchangeScope in ExchangeQuery.build(graph: graph) {
+                switch exchangeScope {
+                    case let .tandem(scope):
+                        tandemScope = scope
+                    case let .redistribution(scope):
+                        redistributionScope = scope
+                    case .relation:
+                        break
+                }
+            }
+            permutationScopes = PermutationQuery.build(graph: graph)
+            choiceGraph = graph
+        }
+
         let entry = CorpusEntry(
             sequence: sequence,
             // Only mutable-tier entries become mutation parents, so only they pay for and retain the layout index.
             mutationLayout: tier == .mutable ? FuzzMutator.layout(of: sequence, tree: tree) : nil,
             tree: tree,
+            choiceGraph: choiceGraph,
+            tandemScope: tandemScope,
+            redistributionScope: redistributionScope,
+            permutationScopes: permutationScopes,
             signature: signature,
             hits: hits,
             isBoundaryDerived: isBoundaryDerived,
