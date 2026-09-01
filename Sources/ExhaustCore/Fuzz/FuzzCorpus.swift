@@ -11,8 +11,10 @@ package struct CorpusEntry: Sendable {
     /// The choice tree behind `sequence`, kept as the guided-materialization fallback for mutations of this entry.
     package let tree: ChoiceTree
 
-    /// The graph and scope caches the graph-targeted mutation operators resolve their positions through. Nil for discovery-tier entries, which are never mutation parents.
-    package let mutationTargets: MutationTargets?
+    /// The graph and scope caches the graph-targeted mutation operators resolve their positions through.
+    ///
+    /// Nil until something needs them: construction walks the whole graph, so it is deferred to the first parent draw that consumes it. Stays nil forever for discovery-tier entries, which are never mutation parents, and for runs whose experiment knobs consume no targeting tables. Read it through ``FuzzCorpus/mutationTargets(forParentAt:)``, which fills it on demand — a direct read sees nil for an entry that has not been drawn yet.
+    package fileprivate(set) var mutationTargets: MutationTargets?
 
     /// The edges hit during this entry's property evaluation.
     package let signature: BitSet
@@ -304,14 +306,13 @@ package final class FuzzCorpus {
             : .discovery
         let index = entries.count
 
-        // Only mutable-tier entries become mutation parents, so only they pay for and retain the layout index and the targeting tables.
-        let mutationTargets = tier == .mutable ? MutationTargets(tree: tree) : nil
-
         let entry = CorpusEntry(
             sequence: sequence,
+            // Only mutable-tier entries become mutation parents, so only they pay for and retain the layout index.
             mutationLayout: tier == .mutable ? FuzzMutator.layout(of: sequence, tree: tree) : nil,
             tree: tree,
-            mutationTargets: mutationTargets,
+            // Deferred to the first parent draw that consumes it; see `mutationTargets(forParentAt:)`.
+            mutationTargets: nil,
             signature: signature,
             hits: hits,
             isBoundaryDerived: isBoundaryDerived,
@@ -342,8 +343,11 @@ package final class FuzzCorpus {
                 isParentEligible = true
             }
         }
-        if isParentEligible, let mutationTargets {
-            registerDonorSpans(forEntryAt: index, graph: mutationTargets.graph)
+        // Typed crossover is the one consumer that cannot wait for this entry's own first parent draw: its donor pool is corpus-wide, read by every *other* entry's crossover, so an entry that has not yet been mutated must already be donatable. That forces the graph build eagerly under `pairMutation` — the other targeting consumers defer.
+        if isParentEligible, experiments.pairMutation {
+            let targets = MutationTargets(tree: tree)
+            entries[index].mutationTargets = targets
+            registerDonorSpans(forEntryAt: index, graph: targets.graph)
         }
 
         // Bump rarity denominators and dirty every entry whose score depends on a bumped edge. Only parent-eligible entries ever have their score read, so only they are indexed for invalidation. Indexing every entry made admission cost O(corpus) per edge, and boundary-credit screening rows on a low-edge target turn that into a quadratic stall: 1.5 ms per row at -Onone on a 12-edge fixture, with the run never leaving screening. The rarity denominator still counts every entry.
@@ -468,6 +472,34 @@ package final class FuzzCorpus {
     }
 
     private var quarantinedHashes: Set<UInt64> = []
+
+    // MARK: - Mutation Targets
+
+    /// Whether any enabled experiment consumes the graph-targeted mutation tables. False means no entry ever builds a graph.
+    private var consumesMutationTargets: Bool {
+        experiments.graphMutation || experiments.pairMutation || experiments.campaignMutation
+    }
+
+    /// The parent's graph-targeted mutation tables, built on first use and cached for the entry's lifetime.
+    ///
+    /// Construction walks the whole graph four times, so it is deferred to the first draw that consumes it: a run with the targeting knobs off never builds one, and an entry admitted and evicted without ever being drawn as a parent never pays. Returns nil when no enabled experiment consumes the tables or the entry is not a mutation parent.
+    ///
+    /// Construction consumes no PRNG draws, so deferring it leaves seeded replay streams unchanged.
+    package func mutationTargets(forParentAt index: Int) -> MutationTargets? {
+        guard consumesMutationTargets, entries.indices.contains(index) else {
+            return nil
+        }
+        if let existing = entries[index].mutationTargets {
+            return existing
+        }
+        // A nil layout marks the discovery tier, whose entries are never mutation parents and hold no targetable positions.
+        guard entries[index].mutationLayout != nil else {
+            return nil
+        }
+        let targets = MutationTargets(tree: entries[index].tree)
+        entries[index].mutationTargets = targets
+        return targets
+    }
 
     // MARK: - Donor Index
 

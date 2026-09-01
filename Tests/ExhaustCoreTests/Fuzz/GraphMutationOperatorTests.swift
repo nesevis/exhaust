@@ -171,60 +171,60 @@ struct GraphMutationOperatorTests {
         }
     }
 
-    // MARK: - Admission Caching
+    // MARK: - Target Construction
 
-    @Test("Mutable-tier admission caches the graph and scopes; discovery tier does not")
-    func admissionCachesScopes() throws {
+    @Test("Targeting tables are built on the first parent draw, not at admission")
+    func targetsBuildOnFirstDraw() throws {
         let fixture = try #require(zipFixture())
-        let corpus = FuzzCorpus(edgeCount: 4)
+        let corpus = FuzzCorpus(edgeCount: 4, experiments: targetingExperiments(graph: true, pair: false))
+        let index = try admitMutable(fixture, into: corpus)
 
-        let mutableAdmission = corpus.offer(
-            sequence: fixture.sequence,
-            tree: fixture.tree,
-            hits: [(edge: 0, hitCount: 1)],
-            convergence: 1.0,
-            generation: 0,
-            phase: .mutation
-        )
-        guard case let .admitted(index, tier) = mutableAdmission else {
-            Issue.record("Mutable-tier candidate was not admitted")
-            return
-        }
-        #expect(tier == .mutable)
-        let targets = try #require(corpus.entries[index].mutationTargets)
+        #expect(corpus.entries[index].mutationTargets == nil, "Admission built the tables eagerly")
+        let targets = try #require(corpus.mutationTargets(forParentAt: index))
         #expect(targets.tandem != nil)
         #expect(targets.permutationScopes.isEmpty == false)
         #expect(targets.twinSpanGroups.isEmpty == false)
+        #expect(corpus.entries[index].mutationTargets != nil, "The first draw did not cache its build")
+    }
 
-        var discoverySequence = fixture.sequence
-        let firstValueIndex = try #require(discoverySequence.firstIndex { element in
-            if case .value = element {
-                return true
-            }
-            return false
-        })
-        guard case let .value(first) = discoverySequence[firstValueIndex] else {
-            return
-        }
-        discoverySequence[firstValueIndex] = .value(.init(
-            choice: ChoiceValue(first.choice.bitPattern64 ^ 1, tag: first.choice.tag),
-            validRange: first.validRange,
-            isRangeExplicit: first.isRangeExplicit
-        ))
-        let discoveryAdmission = corpus.offer(
-            sequence: discoverySequence,
+    @Test("A run whose knobs consume no targeting tables never builds one")
+    func targetsSkippedWhenKnobsOff() throws {
+        let fixture = try #require(zipFixture())
+        let corpus = FuzzCorpus(edgeCount: 4, experiments: targetingExperiments(graph: false, pair: false))
+        let index = try admitMutable(fixture, into: corpus)
+
+        #expect(corpus.mutationTargets(forParentAt: index) == nil)
+        #expect(corpus.entries[index].mutationTargets == nil)
+    }
+
+    @Test("The crossover donor pool forces an eager build, since other entries read it")
+    func pairMutationBuildsEagerly() throws {
+        let fixture = try #require(zipFixture())
+        let corpus = FuzzCorpus(edgeCount: 4, experiments: targetingExperiments(graph: false, pair: true))
+        let index = try admitMutable(fixture, into: corpus)
+
+        #expect(corpus.entries[index].mutationTargets != nil)
+    }
+
+    @Test("A discovery-tier entry never builds targeting tables")
+    func discoveryTierBuildsNoTargets() throws {
+        let fixture = try #require(zipFixture())
+        let corpus = FuzzCorpus(edgeCount: 4, experiments: targetingExperiments(graph: true, pair: true))
+        let admission = corpus.offer(
+            sequence: fixture.sequence,
             tree: fixture.tree,
-            hits: [(edge: 1, hitCount: 1)],
+            hits: [(edge: 0, hitCount: 1)],
             convergence: 0.1,
             generation: 0,
             phase: .mutation
         )
-        guard case let .admitted(discoveryIndex, discoveryTier) = discoveryAdmission else {
+        guard case let .admitted(index, tier) = admission else {
             Issue.record("Discovery-tier candidate was not admitted")
             return
         }
-        #expect(discoveryTier == .discovery)
-        #expect(corpus.entries[discoveryIndex].mutationTargets == nil)
+        #expect(tier == .discovery)
+        #expect(corpus.mutationTargets(forParentAt: index) == nil)
+        #expect(corpus.entries[index].mutationTargets == nil)
     }
 
     // MARK: - Twin Splice
@@ -424,6 +424,31 @@ struct GraphMutationOperatorTests {
 }
 
 // MARK: - Helpers
+
+/// Experiment knobs with only the two targeting consumers under test set, so a change to the shipped defaults cannot alter what these tests assert.
+private func targetingExperiments(graph: Bool, pair: Bool) -> FuzzExperiments {
+    var experiments = FuzzExperiments()
+    experiments.graphMutation = graph
+    experiments.pairMutation = pair
+    experiments.campaignMutation = false
+    return experiments
+}
+
+/// Admits the fixture at mutable-tier convergence, returning its corpus index.
+private func admitMutable(_ fixture: ZipFixture, into corpus: FuzzCorpus) throws -> Int {
+    let admission = corpus.offer(
+        sequence: fixture.sequence,
+        tree: fixture.tree,
+        hits: [(edge: 0, hitCount: 1)],
+        convergence: 1.0,
+        generation: 0,
+        phase: .mutation
+    )
+    guard case let .admitted(index, tier) = admission, tier == .mutable else {
+        throw MutationOperatorTestError.admissionFailed
+    }
+    return index
+}
 
 /// A zip of three single-element sequences of distinct `uint64` leaves: one swappable group of three same-shaped siblings, one tandem group over the leaves.
 private struct ZipFixture {

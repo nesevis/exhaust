@@ -4,11 +4,11 @@ extension FuzzRunner {
     // MARK: - Candidate Production
 
     /// Produces one mutated candidate from `parent` plus the bitmask of ``MutationArm``s that shaped it (for bandit credit on admission). Two orthogonal knobs, applied in sequence: the mutation strategy (legacy single-operator or composed experiment stack), then the swarm rewrite of the result's disallowed branch selections.
-    func nextCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt32) {
+    func nextCandidate(from parent: CorpusEntry, parentIndex: Int) -> (candidate: ChoiceSequence, armsMask: UInt32) {
         let experiments = configuration.experiments
         var (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands
             || experiments.graphMutation || experiments.pairMutation
-            ? composedCandidate(from: parent)
+            ? composedCandidate(from: parent, parentIndex: parentIndex)
             : legacyCandidate(from: parent)
         switch experiments.swarmMode {
             case .off:
@@ -61,7 +61,7 @@ extension FuzzRunner {
     /// The experiment mutation path: one child composed from `stackedMutation`'s operator stack with each operator drawn from the bandit's distribution (or the legacy fixed one when only stacking is on).
     ///
     /// The stack draw is 2^0...2^2 ({1, 2, 4} operators), not AFL's 2^1...2^7: Exhaust's band operators are each already multi-perturbation (a low-band step moves up to three values, a high-band step corrupts a quarter of the sequence), and the AFL-depth stacks measured on `DeepParser` destroyed parent structure outright (deep-fault discovery 4/20 versus 20/20, throughput −42%).
-    private func composedCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt32) {
+    private func composedCandidate(from parent: CorpusEntry, parentIndex: Int) -> (candidate: ChoiceSequence, armsMask: UInt32) {
         let experiments = configuration.experiments
         let stackSize = 1 << Int(prng.next(upperBound: 3))
         let stackCount = experiments.stackedMutation ? stackSize : 1
@@ -83,7 +83,7 @@ extension FuzzRunner {
                 case .high:
                     candidate = FuzzMutator.mutate(candidate, intensity: .high, prng: &prng)
                 case .swap, .shuffle, .move, .lockstepDelta, .twinSplice, .typedCrossover:
-                    guard let targeted = graphArmCandidate(arm, candidate, parent: parent) else {
+                    guard let targeted = graphArmCandidate(arm, candidate, parent: parent, parentIndex: parentIndex) else {
                         continue
                     }
                     candidate = targeted
@@ -124,13 +124,14 @@ extension FuzzRunner {
         return (candidate, armsMask)
     }
 
-    /// Applies one graph-targeted operator to the candidate, or nil when the parent carries no targeting tables (a discovery-tier parent) or the operator found nothing to target.
+    /// Applies one graph-targeted operator to the candidate, or nil when the parent carries no targeting tables (a discovery-tier parent) or the operator found nothing to target. The tables are built on the first draw that reaches here.
     private func graphArmCandidate(
         _ arm: MutationArm,
         _ candidate: ChoiceSequence,
-        parent: CorpusEntry
+        parent: CorpusEntry,
+        parentIndex: Int
     ) -> ChoiceSequence? {
-        guard let targets = parent.mutationTargets else {
+        guard let targets = corpus.mutationTargets(forParentAt: parentIndex) else {
             return nil
         }
         switch arm {

@@ -7,7 +7,7 @@ extension FuzzRunner {
     ///
     /// The campaign kind is a fair draw; a kind that cannot target the parent (no eligible leaf, no bind region) falls through to the other.
     func runCampaign(parent: CorpusEntry, parentIndex: Int, budget: Int) -> Bool {
-        guard let graph = parent.mutationTargets?.graph else {
+        guard let graph = corpus.mutationTargets(forParentAt: parentIndex)?.graph else {
             return false
         }
         switch FuzzTunables.campaignKindOverride {

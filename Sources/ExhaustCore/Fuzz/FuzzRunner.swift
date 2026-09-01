@@ -538,7 +538,7 @@ package final class FuzzRunner<Output> {
                     break
                 }
                 let mutatorStart = monotonicNanoseconds()
-                let (mutated, armsMask) = nextCandidate(from: parent)
+                let (mutated, armsMask) = nextCandidate(from: parent, parentIndex: parentIndex)
                 timing.mutatorNanoseconds += monotonicNanoseconds() - mutatorStart
                 openMutationAttempt()
                 evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: armsMask)
