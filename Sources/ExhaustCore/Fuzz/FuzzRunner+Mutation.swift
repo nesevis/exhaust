@@ -70,7 +70,7 @@ extension FuzzRunner {
         for mutationIndex in 0 ..< stackCount {
             let layout = mutationIndex == 0 ? parent.mutationLayout : nil
             let arm = experiments.banditBands ? bandit.pick(random: randomUnit()) : fixedDistributionArm()
-            armsMask |= 1 << UInt32(arm.rawValue)
+            let beforeArm = candidate
             switch arm {
                 case .low:
                     candidate = FuzzMutator.mutate(
@@ -108,6 +108,10 @@ extension FuzzRunner {
                     {
                         candidate = spliced
                     }
+            }
+            // Credit only a change. A missing arm rides the stack alongside arms that worked, and would otherwise take weight from them.
+            if candidate != beforeArm {
+                armsMask |= 1 << UInt32(arm.rawValue)
             }
         }
         if candidate == parent.sequence {
