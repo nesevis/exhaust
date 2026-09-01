@@ -167,6 +167,11 @@ package final class FuzzRunner<Output> {
         corpus = FuzzCorpus(edgeCount: source.edgeCount, experiments: configuration.experiments)
         gate = ReductionGate(experiments: configuration.experiments)
         prng = Xoshiro256(seed: configuration.seed)
+        bandit = MutationBandit(
+            armCount: configuration.experiments.graphMutation
+                ? MutationArm.allCases.count
+                : MutationArm.legacyArmCount
+        )
     }
 
     /// The default reduce strategy: property-only `choiceGraphReduce`, reducing while the property fails exactly as `#exhaust` does. Reduction probes run inline on the loop's lane, outside any attempt bracket; their coverage is never read.

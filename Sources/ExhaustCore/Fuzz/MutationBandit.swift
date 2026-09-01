@@ -10,12 +10,19 @@
 
 import Foundation
 
-/// One selectable mutation operator: the three intensity bands plus the bind-boundary splice.
+/// One selectable mutation operator: the three intensity bands, the bind-boundary splice, and the graph-targeted operators behind the `graphMutation` knob.
 package enum MutationArm: Int, CaseIterable, Sendable {
     case low = 0
     case medium = 1
     case high = 2
     case splice = 3
+    case swap = 4
+    case shuffle = 5
+    case move = 6
+    case lockstepDelta = 7
+
+    /// The size of the inventory without the `graphMutation` knob: the three intensity bands and splice. Raw values order the graph-targeted arms after these, so a bandit sized to this count draws only the legacy set.
+    package static let legacyArmCount = 4
 
     /// The arm credited for a band mutation of this intensity.
     ///
@@ -37,9 +44,12 @@ package struct MutationBandit: Sendable {
     /// The exploration mixture γ: every arm keeps at least γ/4 selection probability no matter how the weights move, so a band can always win back weight after the search moves to a region where it pays again.
     package static let explorationRate = 0.1
 
-    private var weights: [Double] = Array(repeating: 1.0, count: MutationArm.allCases.count)
+    private var weights: [Double]
 
-    package init() {}
+    /// Creates a bandit over the first `armCount` arms in ``MutationArm``'s raw-value order. The default covers the legacy inventory; a run with the `graphMutation` knob on passes `MutationArm.allCases.count`.
+    package init(armCount: Int = MutationArm.legacyArmCount) {
+        weights = Array(repeating: 1.0, count: armCount)
+    }
 
     /// The current selection probability of each arm: the exploration-smoothed, weight-proportional EXP3 distribution.
     package var probabilities: [Double] {
@@ -64,8 +74,11 @@ package struct MutationBandit: Sendable {
         return .splice
     }
 
-    /// Credits an arm with one admission reward (x = 1), applying the EXP3 importance-weighted exponential update. Unrewarded picks need no call — a zero reward leaves EXP3 weights unchanged.
+    /// Credits an arm with one admission reward (x = 1), applying the EXP3 importance-weighted exponential update. Unrewarded picks need no call — a zero reward leaves EXP3 weights unchanged. An arm outside this bandit's inventory is ignored.
     package mutating func reward(_ arm: MutationArm) {
+        guard arm.rawValue < weights.count else {
+            return
+        }
         let probability = probabilities[arm.rawValue]
         let armCount = Double(weights.count)
         weights[arm.rawValue] *= exp(Self.explorationRate / (armCount * probability))

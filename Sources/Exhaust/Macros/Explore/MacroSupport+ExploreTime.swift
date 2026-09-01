@@ -471,16 +471,14 @@ public extension __ExhaustRuntime {
         if parsed.skipScreening {
             configuration.skipScreening = true
         }
-        #if DEBUG
-            // The benchmark arm: read once at run start, debug builds only. A malformed or unknown knob is a hard configuration error — a silently ignored typo would invalidate a benchmark arm.
-            if let experimentValue = ProcessInfo.processInfo.environment["EXHAUST_FUZZ_EXPERIMENT"] {
-                do {
-                    configuration.experiments = try FuzzExperiments.parse(environmentValue: experimentValue)
-                } catch {
-                    return .empty(termination: .invalidConfiguration(String(describing: error)), seed: seed)
-                }
+        // The benchmark arm: read once at run start, release builds included, since the measurement venue is a release binary. Setting the variable is the explicit opt-in; a malformed or unknown knob is a hard configuration error — a silently ignored typo would invalidate a benchmark arm.
+        if let experimentValue = ProcessInfo.processInfo.environment["EXHAUST_FUZZ_EXPERIMENT"] {
+            do {
+                configuration.experiments = try FuzzExperiments.parse(environmentValue: experimentValue)
+            } catch {
+                return .empty(termination: .invalidConfiguration(String(describing: error)), seed: seed)
             }
-        #endif
+        }
 
         // The whole-value operand reconstructor, derived from the output type's OperandReconstructable conformance and gated on reflectivity: a non-reflective generator means reflection cannot place a reconstructed value. A reflective composite (a struct) has no whole-type conformance, so this is nil there and the field graft handles it instead.
         let reflectionReconstructor = generatorIsReflective

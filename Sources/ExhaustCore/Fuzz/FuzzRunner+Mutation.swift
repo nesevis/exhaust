@@ -6,7 +6,7 @@ extension FuzzRunner {
     /// Produces one mutated candidate from `parent` plus the bitmask of ``MutationArm``s that shaped it (for bandit credit on admission). Two orthogonal knobs, applied in sequence: the mutation strategy (legacy single-operator or composed experiment stack), then the swarm rewrite of the result's disallowed branch selections.
     func nextCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt32) {
         let experiments = configuration.experiments
-        var (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands
+        var (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands || experiments.graphMutation
             ? composedCandidate(from: parent)
             : legacyCandidate(from: parent)
         switch experiments.swarmMode {
@@ -81,6 +81,55 @@ extension FuzzRunner {
                     )
                 case .high:
                     candidate = FuzzMutator.mutate(candidate, intensity: .high, prng: &prng)
+                case .swap:
+                    guard let graph = parent.choiceGraph,
+                          let swapped = FuzzMutator.swapSiblingSpans(
+                              candidate,
+                              scopes: parent.permutationScopes,
+                              graph: graph,
+                              prng: &prng
+                          )
+                    else {
+                        continue
+                    }
+                    candidate = swapped
+                case .shuffle:
+                    guard let graph = parent.choiceGraph,
+                          let shuffled = FuzzMutator.shuffleSiblingSpans(
+                              candidate,
+                              scopes: parent.permutationScopes,
+                              graph: graph,
+                              prng: &prng
+                          )
+                    else {
+                        continue
+                    }
+                    candidate = shuffled
+                case .move:
+                    guard let graph = parent.choiceGraph,
+                          let moved = FuzzMutator.moveSiblingSpan(
+                              candidate,
+                              scopes: parent.permutationScopes,
+                              graph: graph,
+                              prng: &prng
+                          )
+                    else {
+                        continue
+                    }
+                    candidate = moved
+                case .lockstepDelta:
+                    guard let graph = parent.choiceGraph,
+                          let tandem = parent.tandemScope,
+                          let shifted = FuzzMutator.lockstepDelta(
+                              candidate,
+                              tandem: tandem,
+                              graph: graph,
+                              prng: &prng
+                          )
+                    else {
+                        continue
+                    }
+                    candidate = shifted
                 case .splice:
                     guard corpus.entries.count > 1 else {
                         continue
@@ -115,11 +164,15 @@ extension FuzzRunner {
         return (candidate, armsMask)
     }
 
-    /// The legacy operator distribution (splice at its fixed probability, otherwise a uniform band) expressed as one draw, for the stacked-without-bandit arm.
+    /// The fixed operator distribution for arm draws without the bandit: splice at its fixed probability, otherwise a uniform draw over the remaining enabled inventory (the three bands, plus the graph-targeted arms under the `graphMutation` knob).
     private func fixedDistributionArm() -> MutationArm {
         if randomUnit() < FuzzTunables.spliceProbability {
             return .splice
         }
-        return MutationArm(rawValue: Int(prng.next(upperBound: 3))) ?? .low
+        guard configuration.experiments.graphMutation else {
+            return MutationArm(rawValue: Int(prng.next(upperBound: 3))) ?? .low
+        }
+        let nonSpliceArms = MutationArm.allCases.filter { $0 != .splice }
+        return nonSpliceArms[Int(prng.next(upperBound: UInt64(nonSpliceArms.count)))]
     }
 }

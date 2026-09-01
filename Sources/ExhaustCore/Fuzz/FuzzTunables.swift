@@ -142,6 +142,11 @@ package enum FuzzTunables {
     /// Upper bound on the adaptive escape interval. The interval doubles each time an escape reduction lands in an existing cluster, so without a cap a long run would stop escaping entirely — and the escape hatch exists precisely because symptom matching is a weak signal.
     package static let reductionEscapeIntervalCap = 3200
 
+    // MARK: - Graph Mutation (Experiment: graphMutation)
+
+    /// Exclusive upper bound on the log-uniform exponent draw for the lockstep delta: `delta = 1 + next(2^exponent)` with `exponent < 11`, so most deltas are small agreement-preserving steps and the occasional draw jumps by up to ~2^10.
+    package static let lockstepDeltaExponentLimit: UInt64 = 11
+
     // MARK: - Coverage Reachability
 
     /// Attempts to allow before concluding that an instrumented build is recording nothing.
@@ -165,8 +170,11 @@ package struct FuzzExperiments: Sendable, Equatable {
     /// Stacked mutation: one mutation-phase child may compose several mutation operators instead of exactly one.
     package var stackedMutation = false
 
-    /// Bandit-tuned mutation band weights over {low, medium, high, splice}, rewarded by corpus admission.
+    /// Bandit-tuned mutation band weights over the enabled arm inventory, rewarded by corpus admission.
     package var banditBands = false
+
+    /// Graph-targeted mutation operators (sibling-span swap, shuffle, and move plus the tandem lockstep delta) drawn from the admission-time scope caches. Adds the four arms to the pick inventory: the bandit's when `banditBands` is on, the fixed distribution's otherwise.
+    package var graphMutation = false
 
     /// AFLFast-style power schedule for the number of children drawn per picked parent.
     package var powerSchedule = false
@@ -208,6 +216,7 @@ package struct FuzzExperiments: Sendable, Equatable {
             ("escapeBackoff", \.escapeBackoff),
             ("stackedMutation", \.stackedMutation),
             ("banditBands", \.banditBands),
+            ("graphMutation", \.graphMutation),
             ("powerSchedule", \.powerSchedule),
             ("reseedBurst", \.reseedBurst),
             ("championArchive", \.championArchive),

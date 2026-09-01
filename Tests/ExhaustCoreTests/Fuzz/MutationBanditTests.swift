@@ -19,9 +19,10 @@ struct MutationBanditTests {
         }
         let probabilities = bandit.probabilities
         // The exploration mixture caps any arm at 0.925; fifty rewards get most of the way there.
-        #expect(probabilities[MutationArm.medium.rawValue] > 0.7)
-        for arm in MutationArm.allCases where arm != .medium {
-            #expect(probabilities[arm.rawValue] < probabilities[MutationArm.medium.rawValue])
+        let favored = probabilities[MutationArm.medium.rawValue]
+        #expect(favored > 0.7)
+        for (index, probability) in probabilities.enumerated() where index != MutationArm.medium.rawValue {
+            #expect(probability < favored)
         }
         // Sanity on the distribution itself.
         #expect(abs(probabilities.reduce(0, +) - 1.0) < 1e-9)
@@ -33,8 +34,9 @@ struct MutationBanditTests {
         for _ in 0 ..< 10000 {
             bandit.reward(.splice)
         }
-        let floor = MutationBandit.explorationRate / Double(MutationArm.allCases.count)
-        for probability in bandit.probabilities {
+        let probabilities = bandit.probabilities
+        let floor = MutationBandit.explorationRate / Double(probabilities.count)
+        for probability in probabilities {
             #expect(probability >= floor - 1e-12)
         }
         // pick honors the floor: a draw landing in the tail of the cumulative distribution returns a non-favored arm.
