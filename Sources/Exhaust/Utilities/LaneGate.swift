@@ -47,19 +47,28 @@ final class LaneGate: @unchecked Sendable {
         free = clamped
     }
 
+    /// The largest reservation the gate can ever satisfy. Applied by both ``acquire(_:)`` and ``release(_:)`` so an oversized request balances. A count below one is a caller bug, not a request to clamp: a silent floor would let `release(0)` credit a lane the caller never held.
+    private func admissible(_ count: Int) -> Int {
+        precondition(count >= 1, "a lane reservation needs at least one lane; got \(count)")
+        return min(count, limit)
+    }
+
     /// Suspends until `count` lanes are available, then reserves them. The run parks as a continuation holding no thread rather than blocking a GCD worker.
+    ///
+    /// A request larger than ``limit`` is clamped to it rather than parked. Without the clamp such a request can never be satisfied, because `free` never exceeds `limit`. And since ``release(_:)`` admits in FIFO order and stops at the first waiter that does not fit, one oversized request would hold the queue against every later run for the life of the process. Clamping degrades that run to "takes the whole budget" instead. ``release(_:)`` applies the same clamp so the accounting balances.
     ///
     /// Cancellation is not handled: a unit test is never canceled, and the async entries reach the gate through a non-cancelable `dispatchToGCD` hop, so a parked continuation is always eventually resumed on admission.
     func acquire(_ count: Int) async {
+        let wanted = admissible(count)
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             lock.lock()
             // Enqueue-under-the-lock closes the lost-wakeup race: the check and the enqueue are atomic against a concurrent `release`.
-            if waiters.isEmpty, free >= count {
-                free -= count
+            if waiters.isEmpty, free >= wanted {
+                free -= wanted
                 lock.unlock()
                 continuation.resume()
             } else {
-                waiters.insert((count: count, continuation: continuation), at: 0)
+                waiters.insert((count: wanted, continuation: continuation), at: 0)
                 lock.unlock()
             }
         }
@@ -71,7 +80,7 @@ final class LaneGate: @unchecked Sendable {
     func release(_ count: Int) {
         var resumptions: [CheckedContinuation<Void, Never>] = []
         lock.lock()
-        free += count
+        free += admissible(count)
         while let head = waiters.last, free >= head.count {
             waiters.removeLast()
             free -= head.count

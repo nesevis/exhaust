@@ -375,25 +375,14 @@ public extension __ExhaustRuntime {
                     if lines.isEmpty == false {
                         // Suppression skips only the attachment write below; the lines still reach the report, so `.collectOpenPBTStats` with `.suppress(.attachments)` collects without attaching.
                         report.openPBTStatsLines = lines
-                        let attachmentName = "\(testName)-openpbtstats.jsonl"
-                        let attachmentContext: TestContext? = suppress.attachments ? nil : TestContext.current
-                        switch attachmentContext {
-                            #if canImport(Testing)
-                                case .swiftTesting:
-                                    Attachment.record(lines.jsonlString(), named: attachmentName)
-                            #endif
-                            #if canImport(ObjectiveC)
-                                case .xcTest:
-                                    let xctAttachment = XCTAttachment(data: Data(lines.jsonlString().utf8), uniformTypeIdentifier: "public.json")
-                                    xctAttachment.name = attachmentName
-                                    MainActor.assumeIsolated {
-                                        XCTContext.runActivity(named: "OpenPBTStats") { activity in
-                                            activity.add(xctAttachment)
-                                        }
-                                    }
-                            #endif
-                            default:
-                                break
+                        if suppress.attachments == false {
+                            recordTestAttachment(
+                                lines.jsonlString(),
+                                named: "\(testName)-openpbtstats.jsonl",
+                                uniformTypeIdentifier: "public.json",
+                                keepsOnPassingRun: false,
+                                activityName: "OpenPBTStats"
+                            )
                         }
                     }
                 }

@@ -33,10 +33,9 @@ extension GraphSwapEncoder {
 
         // Find the first adjacent pair whose swap improves shortlex.
         for slotIndex in 0 ..< slots.count - 1 {
-            let built = Self.buildSwapCandidate(
-                sequence: sequence,
-                rangeA: slots[slotIndex].range,
-                rangeB: slots[slotIndex + 1].range
+            let built = sequence.swappingSpans(
+                slots[slotIndex].range,
+                slots[slotIndex + 1].range
             )
             guard built.shortLexPrecedes(sequence) else { continue }
 
@@ -61,25 +60,6 @@ extension GraphSwapEncoder {
             )
         }
         return nil
-    }
-
-    /// Builds a candidate sequence by exchanging the entries at two position ranges.
-    static func buildSwapCandidate(
-        sequence: ChoiceSequence,
-        rangeA: ClosedRange<Int>,
-        rangeB: ClosedRange<Int>
-    ) -> ChoiceSequence {
-        let (first, second) = rangeA.lowerBound < rangeB.lowerBound
-            ? (rangeA, rangeB)
-            : (rangeB, rangeA)
-
-        let entriesFirst = Array(sequence[first.lowerBound ... first.upperBound])
-        let entriesSecond = Array(sequence[second.lowerBound ... second.upperBound])
-
-        var result = sequence
-        result.replaceSubrange(second.lowerBound ... second.upperBound, with: entriesFirst)
-        result.replaceSubrange(first.lowerBound ... first.upperBound, with: entriesSecond)
-        return result
     }
 }
 
@@ -153,10 +133,9 @@ extension GraphSwapEncoder {
             return nil
         }
 
-        let built = Self.buildSwapCandidate(
-            sequence: state.runningSequence,
-            rangeA: state.slots[state.contentSlotIndex].range,
-            rangeB: state.slots[nextTarget].range
+        let built = state.runningSequence.swappingSpans(
+            state.slots[state.contentSlotIndex].range,
+            state.slots[nextTarget].range
         )
         guard built.shortLexPrecedes(state.runningSequence) else {
             // Swap doesn't improve shortlex — treat as rejection.
@@ -191,10 +170,9 @@ extension GraphSwapEncoder {
         }
 
         let mid = lowBound + (highBound - lowBound) / 2
-        let built = Self.buildSwapCandidate(
-            sequence: state.runningSequence,
-            rangeA: state.slots[state.contentSlotIndex].range,
-            rangeB: state.slots[mid].range
+        let built = state.runningSequence.swappingSpans(
+            state.slots[state.contentSlotIndex].range,
+            state.slots[mid].range
         )
         guard built.shortLexPrecedes(state.runningSequence) else {
             state.bisectHi = mid

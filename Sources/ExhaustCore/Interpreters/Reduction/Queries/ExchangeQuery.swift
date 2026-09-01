@@ -74,11 +74,18 @@ enum ExchangeQuery {
             if node.scopeAnnotation.isDepthControl || node.scopeAnnotation.isLaneControl { continue }
             leafGroups[metadata.typeTag, default: []].append(nodeID)
         }
-        let tandemGroups = leafGroups.compactMap { tag, leafIDs -> TandemGroup? in
-            guard leafIDs.count >= 2 else { return nil }
-            let entries = leafIDs.map { leafEntry(for: $0, graph: graph) }
-            return TandemGroup(leaves: entries, typeTag: tag)
-        }
+        // Sorted because `leafGroups` is keyed by `TypeTag`, so its iteration order varies with the per-process hash seed. `FuzzMutator.lockstepDelta` maps a seeded draw through this order and would pick a different group after a restart.
+        let tandemGroups = leafGroups
+            .compactMap { tag, leafIDs -> TandemGroup? in
+                guard leafIDs.count >= 2 else { return nil }
+                let entries = leafIDs.map { leafEntry(for: $0, graph: graph) }
+                return TandemGroup(leaves: entries, typeTag: tag)
+            }
+            .sorted { groupA, groupB in
+                let positionA = graph.nodes[groupA.leaves[0].nodeID].positionRange?.lowerBound ?? 0
+                let positionB = graph.nodes[groupB.leaves[0].nodeID].positionRange?.lowerBound ?? 0
+                return positionA < positionB
+            }
         if tandemGroups.isEmpty == false {
             scopes.append(.tandem(TandemScope(groups: tandemGroups)))
         }

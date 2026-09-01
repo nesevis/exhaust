@@ -4,11 +4,11 @@ import ExhaustCore
 
 /// The outcome of a `#explore(time:)` coverage-guided run: a clustered fault inventory plus throughput and coverage statistics.
 ///
-/// A `time:` run catalogs failures instead of stopping at the first one, so the report carries every distinct fault cluster the run discovered. Assert on ``clusters`` when a run is expected to find bugs (combine with `.suppress(.issueReporting)`), or on ``termination`` and the attempt counts when validating search behavior.
+/// A `time:` run catalogs failures instead of stopping at the first one, so the report carries the fault clusters the run discovered. Cluster count is a lower bound on distinct bugs: reduction preserves failure rather than the *reason* for failure, so a fault whose inputs reduce toward another fault's counterexample is absorbed into it and never reported separately. Assert on ``clusters`` when a run is expected to find bugs (combine with `.suppress(.issueReporting)`), or on ``termination`` and the attempt counts when validating search behavior.
 ///
 /// - Important: This mode is experimental. Its settings, report format, and search behavior may change in any release; every call site emits a build warning until the mode stabilizes.
 public struct FuzzReport: Sendable {
-    /// One distinct fault the run discovered: a unique reduced counterexample with its membership counts.
+    /// One fault cluster the run discovered: a unique reduced counterexample with its membership counts. A cluster is an identity over reduced forms, not over root causes.
     ///
     /// Cluster identity is a canonical structural key over the reduced counterexample, so two failures that reduce to the same minimal form are the same cluster even when their surface symptoms differ, and distinct reduced forms are distinct clusters even when their symptoms match. ``isLikelySplit`` marks the middle taxonomy tier: one reduced form observed through more than one coverage signature.
     public struct Cluster: Sendable {
@@ -123,6 +123,9 @@ public struct FuzzReport: Sendable {
         /// The build lacks coverage instrumentation, so the run failed loudly before consuming any budget. The recorded issue carries the compiler flags to add.
         case instrumentationMissing
 
+        /// The build carries instrumentation, but the run recorded no coverage at all, so the search had nothing to follow and stopped rather than spending the budget. Reached when the property's work executes somewhere the coverage source does not observe; see <doc:CoverageGuidedFuzzing> on executor isolation.
+        case coverageUnreachable
+
         /// A setting was unusable (an invalid replay seed, a nonpositive time budget), so the run failed loudly before consuming any budget. The payload is the recorded issue's message.
         case invalidConfiguration(String)
 
@@ -153,6 +156,9 @@ public struct FuzzReport: Sendable {
 
     /// Mutated candidates the materializer could not turn into a value. These attempts contribute to ``mutationAttempts`` but invoke the property zero times.
     public let discardedAttempts: Int
+
+    /// Evaluated search cases the property discarded by throwing a skip error (its precondition was not met). Counted inside ``evaluatedSearchCases``: the property ran and its coverage was recorded, and a coverage-novel discard stays in the corpus as a low-weight mutation parent so the search can climb toward valid inputs.
+    public let discardedEvaluations: Int
 
     /// Screening rows rejected while building or materializing their candidate before property entry.
     public let screeningRejectedAttempts: Int
@@ -250,11 +256,21 @@ public struct FuzzReport: Sendable {
     /// Wall-clock time the run consumed.
     public let elapsed: TimeSpan
 
+    /// Time from the run's start to its last discovery: a new edge or a newly classified fault cluster, whichever came later. Zero when the run never covered an edge.
+    ///
+    /// The gap to ``elapsed`` is how long the search ran without finding anything new, which is what a run that used its whole budget has to say about whether a longer one would help. Not the same question the plateau rule asks minute to minute, but the same two events feed both.
+    public let lastDiscovery: TimeSpan
+
     /// Provides a non-overlapping partition of ``elapsed`` for diagnosing where the run spends its budget.
     public let timing: TimingBreakdown
 
     /// The root seed. Pass to `.replay(_:)` to re-run the search deterministically.
     public let seed: UInt64
+
+    /// Instrumented edges that fired during the run on threads the run did not own, so the search never saw them.
+    ///
+    /// Under `trace-pc-guard` coverage is recorded on the run's own lane. Work the property hands to another executor (a `@MainActor` function, an actor with a custom executor, a detached task) fires its edges elsewhere, and so does another test exercising the same instrumented code concurrently. A nonzero count says one of those happened; it cannot say which. Zero under counter-based instrumentation, which records on every thread and cannot tell.
+    public let offLaneEdgeHits: Int
 
     /// Returns wall-clock time spent reducing, normalizing, and classifying failures, inline on the search's lane.
     ///
@@ -298,13 +314,20 @@ public struct FuzzReport: Sendable {
         return Double(evaluatedSearchCases) / seconds
     }
 
-    /// Renders the run's fault inventory as the multi-line text a failing run reports.
+    /// Renders the run's fault inventory as the multi-line text a failing run reports to the terminal.
     ///
     /// When the run clustered faults, this is the string `#explore(time:)` records as the test failure, so a run under `.suppress(.issueReporting)` can still assert on what a developer would have read. A run that stopped because of a configuration or instrumentation problem reports that separately, and none of that text appears here. Suspect edges appear in their compact form (`integrityCheck (Parser.swift:121)`), not as raw symbolizer output. The wording is diagnostic text and changes between releases, so match substrings rather than whole lines.
     ///
     /// - Complexity: Renders from scratch on every call, including a regular-expression pass per cluster. Bind the result rather than calling this repeatedly.
     public func renderedSummary() -> String {
         __ExhaustRuntime.renderFuzzSummary(self)
+    }
+
+    /// Renders the run's full inventory as the text of the `explore-time-summary.txt` attachment.
+    ///
+    /// Where ``renderedSummary()`` keeps to the reader's questions, this rendering carries the search's own figures: throughput, testing overhead, the instrumented and covered edge counts, the reachability estimate, per-cluster membership and discovery phase, and up to three suspects per cluster. Use it when a test asserts on those, or when a tool wants the numbers without parsing the report. The same wording caveat applies: match substrings, not whole lines.
+    public func renderedAttachmentSummary() -> String {
+        __ExhaustRuntime.renderFuzzAttachmentSummary(self)
     }
 }
 
@@ -382,6 +405,7 @@ package extension FuzzReport {
         samplingAttempts = result.counts.samplingAttempts
         mutationAttempts = result.counts.mutationAttempts
         discardedAttempts = result.counts.discardedAttempts
+        discardedEvaluations = result.counts.discardedEvaluations
         screeningRejectedAttempts = result.counts.screeningRejectedAttempts
         evaluatedSearchCases = result.counts.evaluatedSearchCases
         pruneInvocations = result.counts.pruneInvocations
@@ -401,6 +425,13 @@ package extension FuzzReport {
         edgeDoubletonCount = result.edgeDoubletonCount
         termination = Termination(termination: result.termination)
         elapsed = TimeSpan(nanoseconds: result.elapsedNanoseconds)
+        // Clamped like idleFraction: a resumed run's discoveries can predate this process.
+        lastDiscovery = TimeSpan(
+            nanoseconds: min(
+                max(result.lastNewEdgeNanoseconds, result.lastNewClusterNanoseconds),
+                result.elapsedNanoseconds
+            )
+        )
         timing = TimingBreakdown(
             property: TimeSpan(nanoseconds: result.timing.propertyNanoseconds),
             screeningOverhead: TimeSpan(nanoseconds: result.timing.screeningOverheadNanoseconds),
@@ -418,6 +449,7 @@ package extension FuzzReport {
             )
             : 0
         seed = result.seed
+        offLaneEdgeHits = result.offLaneEdgeHits
     }
 
     /// The report for a run that never started: missing instrumentation or an invalid setting. Everything is zero except the termination reason.
@@ -429,6 +461,7 @@ package extension FuzzReport {
             samplingAttempts: 0,
             mutationAttempts: 0,
             discardedAttempts: 0,
+            discardedEvaluations: 0,
             screeningRejectedAttempts: 0,
             evaluatedSearchCases: 0,
             pruneInvocations: 0,
@@ -448,6 +481,7 @@ package extension FuzzReport {
             incidenceTotal: 0,
             termination: termination,
             elapsed: .zero,
+            lastDiscovery: .zero,
             timing: TimingBreakdown(
                 property: .zero,
                 screeningOverhead: .zero,
@@ -457,6 +491,7 @@ package extension FuzzReport {
                 other: .zero
             ),
             seed: seed,
+            offLaneEdgeHits: 0,
             testingOverheadFraction: 0
         )
     }
@@ -483,6 +518,8 @@ package extension FuzzReport.Termination {
                 .attemptLimitReached
             case .firstFaultFound:
                 .firstFaultFound
+            case .coverageUnreachable:
+                .coverageUnreachable
             case let .generationError(message):
                 .generationFailed(message)
         }

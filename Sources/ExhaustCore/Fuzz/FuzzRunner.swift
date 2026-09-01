@@ -18,7 +18,7 @@ private struct PrunedCandidateSelection<Output> {
     let independentFailureCoverageNovel: Bool?
 }
 
-/// The spec-path seams carried through `runExploreTimeCore` into ``FuzzRunner`` as one unit.
+/// The spec-path carried through `runExploreTimeCore` into ``FuzzRunner`` as one unit.
 ///
 /// Nil on the value path. A spec adapter populates both fields: the prune hook keeps precondition-skipped commands out of the corpus, and the reduce strategy routes reduction through the spec's backend reducer (sequential specs reuse ``FuzzRunner/propertyOnlyReduceStrategy(gen:property:reducerConfiguration:)`` with the spec deadline; `.tasks` specs will wrap their two-pass reducer, which must run synchronously on the loop's lane: reduction is always inline so probes never pollute attempt coverage, and no concurrent dispatch context exists).
 package struct FuzzHooks<Output> {
@@ -78,6 +78,9 @@ package final class FuzzRunner<Output> {
     var prng: Xoshiro256
     var bandit = MutationBandit()
 
+    /// The non-splice arms the fixed distribution draws from, assembled once at init from the experiment knobs.
+    var fixedDrawArms: [MutationArm] = []
+
     /// Comparison operands harvested from the system under test, drawn on during mutation. Stays empty when the source does not harvest or the build lacks `trace-cmp` instrumentation, so reads cost nothing.
     var comparisonPool = ComparisonPool()
 
@@ -100,6 +103,9 @@ package final class FuzzRunner<Output> {
     private var lastNewClusterNanoseconds: UInt64 = 0
     /// Attempts evaluated when the first cluster classified.
     private var attemptsAtFirstFault = 0
+
+    /// Evaluated attempts since the corpus last admitted an entry, driving the adaptive fresh-draw mixture. Reset on every admission. Package-visible so tests can pin the ramp against a driven counter.
+    package var attemptsSinceAdmission = 0
 
     /// The later of the two discoveries, falling back to the run's start before anything is found.
     ///
@@ -164,6 +170,15 @@ package final class FuzzRunner<Output> {
         corpus = FuzzCorpus(edgeCount: source.edgeCount, experiments: configuration.experiments)
         gate = ReductionGate(experiments: configuration.experiments)
         prng = Xoshiro256(seed: configuration.seed)
+        var arms = MutationArm.legacyArms
+        if configuration.experiments.graphMutation {
+            arms += [.swap, .shuffle, .move, .lockstepDelta]
+        }
+        if configuration.experiments.pairMutation {
+            arms += [.twinSplice, .typedCrossover]
+        }
+        bandit = MutationBandit(arms: arms)
+        fixedDrawArms = arms.filter { $0 != .splice }
     }
 
     /// The default reduce strategy: property-only `choiceGraphReduce`, reducing while the property fails exactly as `#exhaust` does. Reduction probes run inline on the loop's lane, outside any attempt bracket; their coverage is never read.
@@ -209,9 +224,14 @@ package final class FuzzRunner<Output> {
     /// Executes the three phases and returns the final result. Synchronous; the caller owns GCD-lane placement.
     /// Scratch for ``evaluateInBracket``; see the note there.
     private var hitsBuffer: [(edge: Int, hitCount: UInt8)] = []
+    /// Whether any attempt has ever recorded an edge. False after a meaningful number of attempts means the source is reading a table the property never writes to, because the property's work is executing somewhere the source does not observe.
+    var sawAnyEdge = false
 
     package func run() -> FuzzRunResult {
+        // Before the baseline is read and before screening generates a row: the lane's own pre-bracket edges are excluded, not off-lane.
+        source.claimLane()
         startNanoseconds = monotonicNanoseconds()
+        let offLaneHitsAtStart = source.offLaneHitCount
         setUpPersistence()
 
         // Sampling hands over to the mutation phase by returning nil (plateau or time backstop); a non-nil value is a hard stop that skips the mutation phase.
@@ -223,6 +243,8 @@ package final class FuzzRunner<Output> {
             timing.screeningOverheadNanoseconds += screeningMeasurement.overheadNanoseconds
         }
         if terminationDue() == nil, configuration.skipSampling == false {
+            // Screening's coverage must not bind search admission: without this reset, boundary rows that light most of the map on a sparse precondition leave sampling and mutation nothing novel to admit, and the run plateaus empty. A screening-free run reaches here with untouched masks, so the call is a no-op there.
+            corpus.resetNoveltyBaseline()
             let samplingMeasurement = measureSearchPhase {
                 runSamplingPhase()
             }
@@ -237,7 +259,11 @@ package final class FuzzRunner<Output> {
             termination = mutationMeasurement.result
         }
 
-        let finalTermination = termination ?? terminationDue() ?? .budgetExhausted
+        var finalTermination = termination ?? terminationDue() ?? .budgetExhausted
+        // A run that evaluated the property and never recorded an edge searched nothing, whichever condition ended it. The attempt threshold in terminationDue() only decides how early such a run is cut short; it must not let a short budget turn zero coverage into a green test.
+        if source.reportsLiveCoverage, sawAnyEdge == false, counts.evaluatedSearchCases > 0 {
+            finalTermination = .coverageUnreachable
+        }
 
         let clusters = inventory.snapshot()
         let unmatched = inventory.unmatchedUnreducedCounts
@@ -279,7 +305,8 @@ package final class FuzzRunner<Output> {
                 : 0,
             attemptsAtFirstFault: attemptsAtFirstFault,
             timing: timing,
-            seed: configuration.seed
+            seed: configuration.seed,
+            offLaneEdgeHits: max(0, source.offLaneHitCount - offLaneHitsAtStart)
         )
     }
 
@@ -315,10 +342,11 @@ package final class FuzzRunner<Output> {
             return verdict.isFailure == false
         }
 
-        // The bracket opens before the row is built, not before the property runs, so screening attributes generation the same way sampling and mutation do. Opening it inside the property instead would make a screening signature systematically smaller than a mutation signature over the same property path, turning corpus novelty into a response to which phase produced a candidate rather than to what it covered. The breadcrumb clears here for the same reason: screening evaluates before its tree reaches onExample, so the candidate cannot be identified pre-evaluation, and a cleared slot beats misattributing a trap to the previous attempt.
+        // The breadcrumb clears before the row is built: screening evaluates before its tree reaches onExample, so the candidate cannot be identified pre-evaluation, and a cleared slot beats misattributing a trap to the previous attempt. The attribution bracket itself opens inside evaluateInBracket, around the property call, for every phase alike.
         let beforeRow: () -> Void = { [self] in
+            // Counted before the row runs, so a failure classified inside this row sees a 1-based attempt index like every other phase; the post-phase assignment below reconciles to the runner's own tally, which counts the same rows.
+            counts.screeningAttempts += 1
             breadcrumb?.clear()
-            source.beginAttempt()
         }
 
         let result = ScreeningRunner.run(
@@ -396,6 +424,37 @@ package final class FuzzRunner<Output> {
         }
     }
 
+    /// Whether the estimated chance that the next attempt covers a new edge has fallen below ``FuzzTunables/saturationNextEdgeProbability``.
+    ///
+    /// The estimate is scoped to what this generator and property can reach, so it answers "is there anything left for this search to find" rather than "is there anything left in the module". A run with no singletons estimates no undiscovered edges and reads as saturated, which is the intended reading: nothing has been seen exactly once, so nothing suggests more remains.
+    ///
+    /// The estimator is denominated in incidences; the mean edges an attempt covers converts it to the per-attempt figure the threshold and the report both speak in.
+    private func isSaturated() -> Bool {
+        let attempts = counts.evaluatedSearchCases
+        let incidenceTotal = corpus.incidenceTotal
+        guard attempts > 0, incidenceTotal > 0 else {
+            return false
+        }
+        let singletons = corpus.edgeSingletonCount
+        let covered = corpus.coveredEdgeCount
+        let reachable = CoverageEstimators.iChao2ReachableEdges(
+            covered: covered,
+            singletons: singletons,
+            doubletons: corpus.edgeDoubletonCount,
+            tripletons: corpus.edgeTripletonCount,
+            quadrupletons: corpus.edgeQuadrupletonCount,
+            attempts: attempts
+        )
+        let perIncidence = CoverageEstimators.nextDiscoveryProbability(
+            singletons: singletons,
+            incidenceTotal: incidenceTotal,
+            undiscovered: reachable - Double(covered),
+            attempts: attempts
+        )
+        let edgesPerAttempt = Double(incidenceTotal) / Double(attempts)
+        return perIncidence * edgesPerAttempt < FuzzTunables.saturationNextEdgeProbability
+    }
+
     // MARK: - Phase 3: Mutation
 
     private func runFuzzPhase() -> FuzzTermination {
@@ -406,20 +465,32 @@ package final class FuzzRunner<Output> {
             seed: configuration.seed ^ 0x5EED_FA11_BACC_0FFE,
             maxRuns: UInt64.max
         )
-        // Floored, so a short budget does not buy a window too impatient to outlast the gap between a run's last new edge and its last new fault. Capped at half the budget, because a floor that outran the budget would leave the rule unable to fire at all, and a run should get at least two windows' worth of chance before the clock decides for it.
-        let plateauWindowNanoseconds = max(
-            min(FuzzTunables.plateauFloorNanoseconds, configuration.budgetNanoseconds / 2),
-            UInt64(Double(configuration.budgetNanoseconds) * FuzzTunables.plateauBudgetFraction)
+        // Reseed burst interpreter, distinct from both Phase 2's seed and the empty-tier fallback's. Created once and advanced across bursts so each plateau escape sees fresh samples.
+        var reseedInterpreter = ValueAndChoiceTreeInterpreter(
+            gen,
+            materializePicks: false,
+            seed: configuration.seed ^ 0x2E_5EED_B005_7000,
+            maxRuns: UInt64.max
         )
+        // Saturation stop, opt-in only: the run ends early when the discovery-probability estimate says the search has stopped reaching new code, never on a stopwatch. Sampled on an attempt interval because the estimate scans the per-edge incidence counters.
+        var nextSaturationCheckAttempt = configuration.saturationMinimumAttempts
 
         while true {
             if let termination = terminationDue() {
                 return termination
             }
-            let now = monotonicNanoseconds()
-            if now - lastDiscoveryNanoseconds >= plateauWindowNanoseconds {
-                let deadline = startNanoseconds + configuration.budgetNanoseconds
-                return .plateau(unusedNanoseconds: deadline > now ? deadline - now : 0)
+            if configuration.stopWhenSaturated, counts.evaluatedSearchCases >= nextSaturationCheckAttempt {
+                nextSaturationCheckAttempt = counts.evaluatedSearchCases + configuration.saturationCheckInterval
+                if isSaturated() {
+                    if configuration.experiments.reseedBurst,
+                       runReseedBurst(interpreter: &reseedInterpreter)
+                    {
+                        continue
+                    }
+                    let plateauNow = monotonicNanoseconds()
+                    let deadline = startNanoseconds + configuration.budgetNanoseconds
+                    return .plateau(unusedNanoseconds: deadline > plateauNow ? deadline - plateauNow : 0)
+                }
             }
             checkpointIfDue()
 
@@ -440,6 +511,25 @@ package final class FuzzRunner<Output> {
                reflectionGraftAttempt()
             {
                 continue
+            }
+
+            // Comparand substitution: overwrite one tag-compatible value entry of a parent's flat sequence with a harvested operand. Needs no reflection, so it is the only injection arm on a non-reflective generator; the empty-pool check keeps it free without trace-cmp instrumentation.
+            if comparisonPool.isEmpty == false,
+               prng.next(upperBound: 2) == 0,
+               comparandSubstitutionAttempt()
+            {
+                continue
+            }
+
+            // Fresh-draw mixture: with the current mixture probability, spend this iteration on one fresh generator draw instead of a parent batch, keeping sampling alive as a background rate. Fresh draws reach basins no corpus entry has visited, which corpus-uniform exploration cannot. The adaptive ramp (floor to cap over a starvation window of non-admitting attempts) responds to corpus health; with the ramp disabled the fixed epsilon governs alone.
+            let freshEpsilon = currentFreshMixture(attemptsSinceAdmission: attemptsSinceAdmission)
+            if freshEpsilon > 0, randomUnit() < freshEpsilon {
+                switch freshSample(interpreter: &fallbackInterpreter, phase: .mutation) {
+                    case .evaluated, .exhausted:
+                        continue
+                    case let .generationError(message):
+                        return .generationError(message)
+                }
             }
 
             let parentStart = monotonicNanoseconds()
@@ -464,12 +554,21 @@ package final class FuzzRunner<Output> {
             let childBudget = configuration.experiments.powerSchedule
                 ? corpus.powerScheduleChildren(forParentAt: parentIndex, base: FuzzTunables.childrenPerParent)
                 : FuzzTunables.childrenPerParent
+
+            // Campaign dispatch: a gate-open parent spends this visit's child budget on one coordinated probe session instead of independent draws. Campaign candidates bypass the swarm rewrite deliberately — scrambling branch selections would break the session's coordination.
+            if configuration.experiments.campaignMutation,
+               corpus.childrenSinceAdmission(forParentAt: parentIndex) >= FuzzTunables.campaignStallThreshold,
+               randomUnit() < FuzzTunables.campaignShare,
+               runCampaign(parent: parent, parentIndex: parentIndex, budget: childBudget)
+            {
+                continue
+            }
             for _ in 0 ..< childBudget {
                 if terminationDue() != nil {
                     break
                 }
                 let mutatorStart = monotonicNanoseconds()
-                let (mutated, armsMask) = nextCandidate(from: parent)
+                let (mutated, armsMask) = nextCandidate(from: parent, parentIndex: parentIndex)
                 timing.mutatorNanoseconds += monotonicNanoseconds() - mutatorStart
                 openMutationAttempt()
                 evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: armsMask)
@@ -477,13 +576,60 @@ package final class FuzzRunner<Output> {
         }
     }
 
-    private func evaluateFuzzCandidate(
+    /// The fresh-draw mixture in effect for the current iteration: the adaptive starvation ramp when configured, the fixed epsilon otherwise.
+    ///
+    /// The ramp climbs linearly from ``FuzzTunables/freshMixtureFloor`` to ``FuzzTunables/freshMixtureCap`` as attempts accumulate without a corpus admission, and any admission resets it to the floor, so the mixture responds to corpus health the way FuzzChick's queue-energy scheduler does instead of betting on one constant. A cap at or below the floor disables the ramp.
+    package func currentFreshMixture(attemptsSinceAdmission: Int) -> Double {
+        let floor = FuzzTunables.freshMixtureFloor
+        let cap = FuzzTunables.freshMixtureCap
+        guard cap > floor else {
+            return FuzzTunables.freshDrawEpsilon
+        }
+        let progress = min(1, Double(attemptsSinceAdmission) / FuzzTunables.freshMixtureRampAttempts)
+        return floor + (cap - floor) * progress
+    }
+
+    /// Draws fresh samples to break out of a mutation plateau, returning true when a new edge or fault cluster was discovered and mutation should resume.
+    ///
+    /// Phase 2's sampling plateau fired against a smaller corpus; after mutation expanded coverage, the generator may still reach edges nothing in the corpus covers. The burst is a fixed attempt budget rather than a consecutive-non-novel window, so a generator that produces only bucket-novel entries (no new edges) does not prolong the burst indefinitely.
+    private func runReseedBurst(
+        interpreter: inout ValueAndChoiceTreeInterpreter<Output>
+    ) -> Bool {
+        let discoveryAtEntry = lastDiscoveryNanoseconds
+        for _ in 0 ..< FuzzTunables.reseedBurstAttemptLimit {
+            if terminationDue() != nil {
+                return lastDiscoveryNanoseconds > discoveryAtEntry
+            }
+            checkpointIfDue()
+            switch freshSample(interpreter: &interpreter, phase: .mutation) {
+                case .evaluated:
+                    if lastDiscoveryNanoseconds > discoveryAtEntry {
+                        return true
+                    }
+                case .exhausted, .generationError:
+                    return lastDiscoveryNanoseconds > discoveryAtEntry
+            }
+        }
+        return lastDiscoveryNanoseconds > discoveryAtEntry
+    }
+
+    /// Per-candidate outcome handed back to the producing arm. Campaigns steer their next probe on it; single-shot arms discard it.
+    struct CandidateFeedback {
+        /// Whether guided materialization produced a value and the property ran.
+        let materialized: Bool
+        /// Whether the property declined to judge the value (its precondition was not met).
+        let discarded: Bool
+        /// Whether the corpus admitted the candidate.
+        let admitted: Bool
+    }
+
+    @discardableResult
+    func evaluateFuzzCandidate(
         _ candidate: ChoiceSequence,
         parent: CorpusEntry,
         parentIndex: Int,
-        armsMask: UInt8
-    ) {
-        source.beginAttempt()
+        armsMask: UInt32
+    ) -> CandidateFeedback {
         // Phase 1: flat emission produces the value, the fresh sequence, and (below) its hash without building a ChoiceTree. The tree is rebuilt in phase 2 only for the rare candidates that consume it: corpus admission and failure dispatch.
         let guidedSeed = prng.next()
         let materializeStart = monotonicNanoseconds()
@@ -495,7 +641,8 @@ package final class FuzzRunner<Output> {
         timing.candidateMaterializationNanoseconds += monotonicNanoseconds() - materializeStart
         guard case let .success(anyValue, sequence, decodingReport) = result else {
             counts.discardedAttempts += 1
-            return
+            corpus.noteChild(forParentAt: parentIndex, admitted: false)
+            return CandidateFeedback(materialized: false, discarded: true, admitted: false)
         }
         // swiftlint:disable:next force_cast
         let value = anyValue as! Output
@@ -505,7 +652,7 @@ package final class FuzzRunner<Output> {
             recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent.hash)
         )
 
-        // Phase 2: rebuild the tree only when something downstream reads it. Admission stores the tree as the mutation fallback, and the prune hook consumes it on the same failure-or-would-admit condition it fires on, so both rebuild eagerly here (`wouldAdmit` and offer's admission share one novelty predicate, and mutation-phase offers are never boundary-derived, so a candidate that fails the check can never have its placeholder tree stored). A plain failure consumes the tree only if the failure gate dispatches a reduction — a small minority once a fault's clusters are known — so the failure path defers the rebuild to that dispatch instead of paying a second materialization for every failing candidate. Coverage from a rebuild cannot pollute the next attempt: an eager rebuild runs inside this attempt's bracket, a deferred one runs on the reduction dispatch's lane, and either way the next bracket begins with beginAttempt(), which clears attribution state (the same argument that covers inline reduction probes).
+        // Phase 2: rebuild the tree only when something downstream reads it. Admission stores the tree as the mutation fallback, and the prune hook consumes it on the same failure-or-would-admit condition it fires on, so both rebuild eagerly here (`wouldAdmit` and offer's admission share one novelty predicate, and mutation-phase offers are never boundary-derived, so a candidate that fails the check can never have its placeholder tree stored). A plain failure consumes the tree only if the failure gate dispatches a reduction — a small minority once a fault's clusters are known — so the failure path defers the rebuild to that dispatch instead of paying a second materialization for every failing candidate. Coverage from a rebuild cannot pollute the next attempt: rebuilds, like reduction probes, run outside any bracket, and the next bracket begins with beginAttempt(), which clears attribution state.
         let admissionNovel = corpus.wouldAdmit(hits: hits)
         var tree = ChoiceTree.just
         var deferredTreeRebuild: (() -> ChoiceTree?)?
@@ -517,7 +664,8 @@ package final class FuzzRunner<Output> {
                 expecting: sequence
             ) else {
                 counts.discardedAttempts += 1
-                return
+                corpus.noteChild(forParentAt: parentIndex, admitted: false)
+                return CandidateFeedback(materialized: false, discarded: true, admitted: false)
             }
             tree = rebuilt
         } else if verdict.isFailure {
@@ -546,10 +694,16 @@ package final class FuzzRunner<Output> {
             parentIndex: parentIndex
         )
         if admission.isAdmitted, configuration.experiments.banditBands {
-            for arm in MutationArm.allCases where armsMask & (1 << UInt8(arm.rawValue)) != 0 {
+            for arm in MutationArm.allCases where armsMask & (1 << UInt32(arm.rawValue)) != 0 {
                 bandit.reward(arm)
             }
         }
+        corpus.noteChild(forParentAt: parentIndex, admitted: admission.isAdmitted)
+        return CandidateFeedback(
+            materialized: true,
+            discarded: verdict.isDiscard,
+            admitted: admission.isAdmitted
+        )
     }
 
     /// Re-materializes the guided tree for a flat-emission candidate and verifies it flattens to the phase-1 sequence.
@@ -595,12 +749,11 @@ package final class FuzzRunner<Output> {
         case generationError(String)
     }
 
-    /// Draws one fresh sample from `interpreter`, evaluates it under the attribution bracket, and records the attempt under `phase`.
+    /// Draws one fresh sample from `interpreter`, evaluates it in the attribution bracket, and records the attempt under `phase`.
     private func freshSample(
         interpreter: inout ValueAndChoiceTreeInterpreter<Output>,
         phase: FuzzPhase
     ) -> FreshSampleOutcome {
-        source.beginAttempt()
         let generated: (Output, ChoiceTree)?
         do {
             generated = try interpreter.next()
@@ -631,9 +784,28 @@ package final class FuzzRunner<Output> {
         return .evaluated(admission)
     }
 
-    /// The instrumented tail of one evaluation bracket: records the breadcrumb slot, notes the value, times the property, and collects the attempt's hits.
+    /// The one attribution bracket: opens the source, notes the value, runs `evaluate`, reads the hits, and closes the source. Every attributed evaluation (search attempts, post-reduction classification, recovery re-attribution) goes through here, so the bracket is spelled out once and a later edit cannot leave one copy without its `endAttempt()`.
     ///
-    /// Must run inside the attribution token, after `source.beginAttempt()` and after candidate production — generation and materialization can execute user code, and its coverage belongs to the attempt whose bracket is open.
+    /// The bracket encloses `evaluate` and nothing else. Candidate production (generation, materialization, reflection) runs before it and reduction probes run outside it, so Exhaust's own instrumented code and the generator's transform closures never enter a signature. Every phase excludes its generation the same way, so a screening signature and a mutation signature over the same property path stay comparable. Code the system under test runs during generation (an initializer with validation called from a generator closure) is excluded with it.
+    func attribute(
+        _ value: Output,
+        evaluate: (Output) -> FuzzVerdict
+    ) -> (verdict: FuzzVerdict, hits: [(edge: Int, hitCount: UInt8)]) {
+        source.beginAttempt()
+        if source.wantsValues {
+            source.noteValue(value)
+        }
+        let verdict = evaluate(value)
+        // Reused across attempts: a fresh array grows through roughly eleven reallocations on the way to the few thousand edges a typical attempt lights. Admitted candidates retain the returned array in CorpusEntry.hits (for restore re-offer), so the removeAll after each admission triggers one CoW reallocation; every non-admitting attempt reuses the capacity.
+        hitsBuffer.removeAll(keepingCapacity: true)
+        source.forEachHitEdge { edge, hitCount in
+            hitsBuffer.append((edge, hitCount))
+        }
+        source.endAttempt()
+        return (verdict, hitsBuffer)
+    }
+
+    /// One search attempt's evaluation: records the breadcrumb slot, then runs the property inside the attribution bracket with comparison capture and property timing around it, and notes whether the run has seen an edge yet.
     func evaluateInBracket(
         _ value: Output,
         recordingBreadcrumb slot: (candidateHash: UInt64, parentHash: UInt64)?
@@ -641,31 +813,27 @@ package final class FuzzRunner<Output> {
         if let slot {
             breadcrumb?.record(candidateHash: slot.candidateHash, parentHash: slot.parentHash)
         }
-        if source.wantsValues {
-            source.noteValue(value)
-        }
         let capturesComparisons = source.wantsComparisons
-        if capturesComparisons {
-            source.beginComparisonCapture()
-        }
-        let propertyStart = monotonicNanoseconds()
-        let verdict = property(value)
-        timing.propertyNanoseconds += monotonicNanoseconds() - propertyStart
-        if capturesComparisons {
-            source.endComparisonCapture()
-        }
-        // Reused across attempts: a fresh array grows through roughly eleven reallocations on the way to the few thousand edges a typical attempt lights. Admitted candidates retain the returned array in CorpusEntry.hits (for restore re-offer), so the removeAll after each admission triggers one CoW reallocation; every non-admitting attempt reuses the capacity.
-        hitsBuffer.removeAll(keepingCapacity: true)
-        source.forEachHitEdge { edge, hitCount in
-            hitsBuffer.append((edge, hitCount))
-        }
-        if capturesComparisons {
-            source.forEachComparisonRecord { site, arg1, arg2 in
-                comparisonPool.insert(site: site, value: arg1)
-                comparisonPool.insert(site: site, value: arg2)
+        let (verdict, hits) = attribute(value) { value in
+            if capturesComparisons {
+                source.beginComparisonCapture()
             }
+            let propertyStart = monotonicNanoseconds()
+            let verdict = property(value)
+            timing.propertyNanoseconds += monotonicNanoseconds() - propertyStart
+            if capturesComparisons {
+                source.endComparisonCapture()
+                source.forEachComparisonRecord { site, arg1, arg2 in
+                    comparisonPool.insert(site: site, value: arg1)
+                    comparisonPool.insert(site: site, value: arg2)
+                }
+            }
+            return verdict
         }
-        return (verdict, hitsBuffer)
+        if hits.isEmpty == false {
+            sawAnyEdge = true
+        }
+        return (verdict, hits)
     }
 
     /// The shared post-evaluation epilogue: counts the attempt, offers the candidate to the corpus, tracks admission recency, and dispatches failure handling with the admission's coverage-novelty signal.
@@ -696,6 +864,9 @@ package final class FuzzRunner<Output> {
                 }
         }
         counts.evaluatedSearchCases += 1
+        if verdict.isDiscard {
+            counts.discardedEvaluations += 1
+        }
 
         let originalCandidate = EvaluatedFuzzCandidate(
             value: value,
@@ -719,10 +890,16 @@ package final class FuzzRunner<Output> {
             phase: phase,
             isBoundaryDerived: isBoundaryDerived,
             propertyFailed: candidates.corpus.verdict.isFailure,
+            propertyDiscarded: candidates.corpus.verdict.isDiscard,
             precomputedHash: candidates.corpus.sequenceHash
         )
         if case let .admitted(index, _) = admission, corpus.introducedNewEdges(at: index) {
             lastNewEdgeNanoseconds = monotonicNanoseconds()
+        }
+        if admission.isAdmitted {
+            attemptsSinceAdmission = 0
+        } else {
+            attemptsSinceAdmission += 1
         }
         if let failure = candidates.failure,
            case let .fail(symptom) = failure.verdict
@@ -762,7 +939,6 @@ package final class FuzzRunner<Output> {
         let prunedSequence = ChoiceSequence.flatten(pruned.tree)
         let prunedSequenceHash = ZobristHash.hash(of: prunedSequence)
         let parentHash = parentIndex.map { corpus.entries[$0].hash } ?? 0
-        source.beginAttempt()
         let (prunedVerdict, prunedHits) = evaluateInBracket(
             pruned.value,
             recordingBreadcrumb: (
@@ -794,13 +970,14 @@ package final class FuzzRunner<Output> {
                     failure: original,
                     independentFailureCoverageNovel: corpus.wouldAdmit(hits: original.hits)
                 )
-            case (.pass, .fail):
+            case (.pass, .fail), (.discard, .fail):
                 return PrunedCandidateSelection(
                     corpus: prunedCandidate,
                     failure: prunedCandidate,
                     independentFailureCoverageNovel: nil
                 )
-            case (.pass, .pass):
+            // A discard on either side is not a failure; the pruned candidate carries the corpus verdict either way. The prune hook is the spec path's, which never discards, so the discard arms exist for exhaustiveness.
+            case (.pass, .pass), (.pass, .discard), (.discard, .pass), (.discard, .discard):
                 return PrunedCandidateSelection(
                     corpus: prunedCandidate,
                     failure: nil,
@@ -949,41 +1126,15 @@ package final class FuzzRunner<Output> {
 
     /// Evaluates the reduced value once in a bracket of its own and returns its coverage signature.
     private func attributedSignature(of value: Output) -> BitSet {
-        source.beginAttempt()
-        if source.wantsValues {
-            source.noteValue(value)
+        let (_, hits) = attribute(value) { value in
+            counts.classificationInvocations += 1
+            return property(value)
         }
-        counts.classificationInvocations += 1
-        _ = property(value)
         var signature = BitSet(capacity: source.edgeCount)
-        source.forEachHitEdge { edge, _ in
+        for (edge, _) in hits {
             signature.insert(edge)
         }
         return signature
-    }
-
-    // MARK: - Termination Checks
-
-    /// The run-wide stop conditions every phase checks: wall clock and the testing attempt limit.
-    private func terminationDue() -> FuzzTermination? {
-        if configuration.stopOnFirstFault, inventory.clusterCount > 0 {
-            return .firstFaultFound
-        }
-        if let limit = configuration.attemptLimit, counts.totalAttempts >= limit {
-            return .attemptLimitReached
-        }
-        if monotonicNanoseconds() - startNanoseconds >= configuration.budgetNanoseconds {
-            return .budgetExhausted
-        }
-        return nil
-    }
-
-    /// Remaining attempts under the testing limit, as a screening budget bound.
-    private func remainingAttemptBudget() -> UInt64 {
-        guard let limit = configuration.attemptLimit else {
-            return UInt64.max
-        }
-        return UInt64(max(0, limit - counts.totalAttempts))
     }
 
     /// One uniform draw in [0, 1) from the run PRNG (the top 53 bits of one 64-bit draw), so probability-space decisions replay deterministically under a pinned seed.

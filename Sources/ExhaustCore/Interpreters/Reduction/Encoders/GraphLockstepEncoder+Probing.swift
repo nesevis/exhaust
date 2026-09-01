@@ -168,74 +168,20 @@ extension GraphLockstepEncoder {
     }
 
     /// Produces a candidate sequence by shifting all window values toward their reduction target by `delta`.
+    ///
+    /// Only candidates whose first difference is a shortlex improvement are returned.
     func makeLockstepCandidate(plan: LockstepWindowPlan, delta: UInt64) -> ChoiceSequence? {
-        guard delta > 0 else { return nil }
-
-        var candidate = valueState.sequence
-        var firstDifferenceOrder: ShortlexOrder = .eq
-        var hasDifference = false
-
-        var entryOffset = 0
-        while entryOffset < plan.originalEntries.count {
-            let pair = plan.originalEntries[entryOffset]
-            let i = pair.index
-            let originalEntry = pair.entry
-            guard let value = originalEntry.value else {
-                entryOffset += 1
-                continue
-            }
-
-            let newChoice: ChoiceValue
-            if plan.usesFloatingSteps {
-                let currentFloat = value.choice.decodedDoubleValue
-                let signedDelta = plan.searchUpward ? Double(delta) : -Double(delta)
-                let candidateFloat = currentFloat + signedDelta
-                guard let floatChoice = plan.tag.floatingChoice(
-                    from: candidateFloat
-                ) else { return nil }
-                newChoice = floatChoice
-            } else {
-                guard plan.searchUpward
-                    ? UInt64.max - delta >= value.choice.bitPattern64
-                    : value.choice.bitPattern64 >= delta
-                else { return nil }
-
-                let newBitPattern = plan.searchUpward
-                    ? value.choice.bitPattern64 + delta
-                    : value.choice.bitPattern64 - delta
-                newChoice = ChoiceValue(
-                    plan.tag.makeConvertible(bitPattern64: newBitPattern),
-                    tag: plan.tag
-                )
-            }
-
-            // Skip values that fall outside an explicit range.
-            guard value.isRangeExplicit == false || newChoice.fits(in: value.validRange) else {
-                entryOffset += 1
-                continue
-            }
-
-            let newEntry = ChoiceSequenceValue.value(.init(
-                choice: newChoice,
-                validRange: value.validRange,
-                isRangeExplicit: value.isRangeExplicit
-            ))
-            let order = newEntry.shortLexCompare(originalEntry)
-            guard order != .eq else {
-                entryOffset += 1
-                continue
-            }
-
-            if hasDifference == false {
-                hasDifference = true
-                firstDifferenceOrder = order
-            }
-            candidate[i] = newEntry
-            entryOffset += 1
+        guard let (candidate, firstDifferenceOrder) = valueState.sequence.shiftingGroup(
+            entries: plan.originalEntries,
+            tag: plan.tag,
+            shiftUpward: plan.searchUpward,
+            delta: delta,
+            usesFloatingSteps: plan.usesFloatingSteps,
+            policy: .skipUnmovable
+        ) else {
+            return nil
         }
-
-        // Only accept candidates whose first difference is a shortlex improvement.
-        guard hasDifference, firstDifferenceOrder == .lt else { return nil }
+        guard firstDifferenceOrder == .lt else { return nil }
         return candidate
     }
 }

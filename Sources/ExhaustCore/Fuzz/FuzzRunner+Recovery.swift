@@ -152,16 +152,10 @@ extension FuzzRunner {
             if signaturesValid {
                 hits = zip(record.hitEdges, record.hitCounts).map { (edge: $0.0, hitCount: $0.1) }
             } else {
-                source.beginAttempt()
-                if source.wantsValues {
-                    source.noteValue(value)
-                }
                 // Attribution only — a failing entry's cluster was already restored, so no failure dispatch here.
-                counts.recoveryInvocations += 1
-                _ = property(value)
-                var reattributed: [(edge: Int, hitCount: UInt8)] = []
-                source.forEachHitEdge { edge, hitCount in
-                    reattributed.append((edge, hitCount))
+                let (_, reattributed) = attribute(value) { value in
+                    counts.recoveryInvocations += 1
+                    return property(value)
                 }
                 hits = reattributed
             }
@@ -173,7 +167,8 @@ extension FuzzRunner {
                 generation: record.generation,
                 phase: phase,
                 isBoundaryDerived: record.isBoundaryDerived,
-                propertyFailed: record.propertyFailed
+                propertyFailed: record.propertyFailed,
+                propertyDiscarded: record.propertyDiscarded ?? false
             )
         }
     }

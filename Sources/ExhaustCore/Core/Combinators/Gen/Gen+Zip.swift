@@ -84,18 +84,20 @@ package extension Gen {
 
     /// Builds the zip node and the transform that packages its positional `[Any]` payload into `Packed`.
     ///
-    /// The two public forms differ only in how that payload is packed and unpacked, so the node construction, the arity capture the forward pass validates against, and the `.isomorph` scaffold live here. A change to how a zip reflects then lands in one place rather than in two that have to be kept in step.
+    /// Every zip-shaped construction in the framework differs only in how that payload is packed and unpacked, so the node construction, the arity capture the forward pass validates against, and the `.isomorph` scaffold live here. A change to how a zip reflects then lands in one place rather than in every form that has to be kept in step. The macro infrastructure in ``__ExhaustRuntime`` calls this directly so that an initializer or enum case reaches its output in a single transform node, without a tuple hop in between.
+    ///
+    /// `unpack` throws rather than returning an optional because reflection probes pick branches against a shared final output: an extraction that cannot recognise the value is a normal rejection, surfaced as ``ReflectionError/contramapWasWrongType``.
     ///
     /// - Parameters:
     ///   - erased: One type-erased generator per position, in output order.
-    ///   - isOpaque: When `true`, the resulting zip node is treated as a single unit during screening analysis.
+    ///   - isOpaque: When `true`, the resulting zip node is treated as a single unit during screening analysis. Defaults to `false`.
     ///   - pack: Builds the result from the positional values. Must be the exact inverse of `unpack`, since the pair is declared as an isomorphism rather than a forward-only map.
-    ///   - unpack: Decomposes a result back into positional values.
-    private static func zipped<Packed>(
+    ///   - unpack: Decomposes a result back into positional values, throwing when the value does not match the shape `pack` produces.
+    static func zipped<Packed>(
         _ erased: ContiguousArray<AnyGenerator>,
-        isOpaque: Bool,
+        isOpaque: Bool = false,
         pack: @escaping ([Any]) -> Packed,
-        unpack: @escaping (Packed) -> [Any]
+        unpack: @escaping (Packed) throws -> [Any]
     ) -> Generator<Packed> {
         let zipNode: AnyGenerator = .impure(
             operation: .zip(erased, isOpaque: isOpaque),
@@ -115,7 +117,7 @@ package extension Gen {
                     guard let packed = anyPacked as? Packed else {
                         throw ReflectionError.contramapWasWrongType
                     }
-                    return unpack(packed)
+                    return try unpack(packed)
                 },
                 inputType: [Any].self,
                 outputType: Packed.self

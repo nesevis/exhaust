@@ -1,8 +1,8 @@
 /// Supplies per-attempt coverage signatures to the fuzz loop.
 ///
-/// The production conformance (``SancovCoverageSource``) reads the process-global SanitizerCoverage counter region. The synthetic test conformance computes a signature as a pure function of the generated value, which makes the entire search loop deterministic and runnable in an uninstrumented suite — corpus acceptance, plateau detection, and cluster taxonomy are all tested through this seam.
+/// The production conformance (``SancovCoverageSource``) reads the process-global SanitizerCoverage counter region. The synthetic test conformance computes a signature as a pure function of the generated value, which makes the entire search loop deterministic and runnable in an uninstrumented suite — corpus acceptance, plateau detection, and cluster taxonomy are all tested through this.
 ///
-/// Usage per attempt: `beginAttempt()`, optionally `noteValue(_:)` when ``wantsValues`` is true, evaluate the property, then ``forEachHitEdge(_:)``. The bracket discipline matters for the sancov conformance because the counters are process-global; the runner is single-threaded, so at most one bracketed evaluation is ever open, and nothing the runner controls executes instrumented code outside it.
+/// Usage per attempt: `beginAttempt()`, optionally `noteValue(_:)` when ``wantsValues`` is true, evaluate the property, ``forEachHitEdge(_:)``, then ``endAttempt()``. The bracket encloses the property call only. Generation, materialization, and reduction run outside it, so their coverage never enters a signature: measured on the harness fixtures, that is 1.1–1.5× more attempts per second on a per-target build and 3–4× on a whole-graph build, with identical fault inventories, because Exhaust's own instrumented code stops competing for novelty. Every phase excludes its generation the same way, so signatures stay comparable across screening, sampling, and mutation. The runner is single-threaded, so at most one bracket is ever open.
 package protocol CoverageSource: AnyObject, Sendable {
     /// The number of edges this source can report; signatures produced against it use this as their ``BitSet`` capacity.
     var edgeCount: Int { get }
@@ -10,7 +10,7 @@ package protocol CoverageSource: AnyObject, Sendable {
     /// Whether the source derives signatures from generated values rather than live counters. When false, the runner skips ``noteValue(_:)`` and its `Any` boxing on the hot path.
     var wantsValues: Bool { get }
 
-    /// Clears attribution state ahead of one property evaluation.
+    /// Clears attribution state immediately ahead of one property evaluation.
     func beginAttempt()
 
     /// Records the value about to be evaluated. Called between ``beginAttempt()`` and the evaluation, and only when ``wantsValues`` is true.
@@ -30,6 +30,21 @@ package protocol CoverageSource: AnyObject, Sendable {
 
     /// Visits each comparison record — call site and both operands — captured between ``beginComparisonCapture()`` and ``endComparisonCapture()``. Only meaningful when ``wantsComparisons`` is true.
     func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void)
+
+    /// Whether the source reads process-global state (the counter table and the global operand ring), so a second run in the same process would corrupt its attribution. The driver serializes such runs through an exclusion latch and refuses a concurrent one. A `trace-pc-guard` source keeps both its edges and its operands in a per-run context and does not need the latch.
+    var requiresExclusiveProcess: Bool { get }
+
+    /// Whether edges come from live instrumentation, so recording nothing means the property runs where the source cannot see. A synthetic source may map every value to no edges by design.
+    var reportsLiveCoverage: Bool { get }
+
+    /// Edges the source saw fire on threads no run owns, cumulative for the process. A run reads it at start and end; a nonzero difference means instrumented work ran where the source could not attribute it (an executor the run did not bind, or another test in the same process). Zero for sources that cannot tell.
+    var offLaneHitCount: Int { get }
+
+    /// Declares the calling thread the run's lane, before any generation happens on it. A source that counts off-lane edges must not count the lane's own pre-bracket work (screening's first rows run the generator before the first ``beginAttempt()``), and the first bracket is too late to say so. The default does nothing.
+    func claimLane()
+
+    /// Closes the bracket after ``forEachHitEdge(_:)`` has read the attempt. A source with per-run state detaches it here so instrumented code that runs between brackets (generation, reduction probes) records nothing; the default does nothing.
+    func endAttempt()
 }
 
 package extension CoverageSource {
@@ -43,11 +58,28 @@ package extension CoverageSource {
         false
     }
 
+    /// Does nothing: a source that harvests comparisons owns the bracket over its own operand store and overrides all three; these defaults serve sources that do not harvest.
     func beginComparisonCapture() {}
 
     func endComparisonCapture() {}
 
     func forEachComparisonRecord(_: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {}
+
+    var requiresExclusiveProcess: Bool {
+        false
+    }
+
+    var reportsLiveCoverage: Bool {
+        false
+    }
+
+    func claimLane() {}
+
+    func endAttempt() {}
+
+    var offLaneHitCount: Int {
+        0
+    }
 
     /// The attempt's coverage signature as a ``BitSet`` of hit edges.
     func signature() -> BitSet {
@@ -56,6 +88,26 @@ package extension CoverageSource {
             signature.insert(edge)
         }
         return signature
+    }
+}
+
+/// Where a `time:` run gets its coverage source: the instrumented build, nothing, or a source the caller supplies.
+///
+/// Every entry point takes one of these explicitly, so a test never has to alter process-wide state to say "run without instrumentation" or "run against this synthetic source". The production check reads the coverage registries, which the loader populates before `main` and nothing mutates afterwards.
+package enum CoverageSourceSelection: Sendable {
+    /// The source for this build: trace-pc-guards when compiled in, otherwise counters, otherwise none (the run fails with the missing-instrumentation diagnostic).
+    case production
+    /// No source at all; the run fails as an uninstrumented build would.
+    case none
+    /// The given source. Report-time symbolization is skipped, because a synthetic source's edge indices do not address real program counters.
+    case injected(any CoverageSource)
+
+    /// Whether this selection resolves through the production registries, so edge indices address real program counters and symbolization makes sense.
+    package var isProduction: Bool {
+        if case .production = self {
+            return true
+        }
+        return false
     }
 }
 
@@ -96,11 +148,21 @@ package final class SancovCoverageSource: CoverageSource, @unchecked Sendable {
         }
     }
 
+    // MARK: - Comparison Harvest
+
+    // The counter model has no per-run context, so its operands land in the process-global ring in ``ComparisonRuntime``. That ring is shared exactly as the counter table is, which is one more reason this source requires the process to itself.
+
     package func beginComparisonCapture() {
+        guard wantsComparisons else {
+            return
+        }
         ComparisonRuntime.setEnabled(true)
     }
 
     package func endComparisonCapture() {
+        guard wantsComparisons else {
+            return
+        }
         ComparisonRuntime.setEnabled(false)
     }
 
@@ -109,6 +171,16 @@ package final class SancovCoverageSource: CoverageSource, @unchecked Sendable {
             return
         }
         ComparisonRuntime.forEachRecord(body)
+    }
+
+    /// True: the counter table is one per process, and every attempt zeroes all of it.
+    package var requiresExclusiveProcess: Bool {
+        true
+    }
+
+    /// True: the counters are written by instrumented code, so an attempt that lights none of them ran somewhere the table does not cover.
+    package var reportsLiveCoverage: Bool {
+        true
     }
 
     /// Reports every nonzero counter, scanning eight bytes at a time.

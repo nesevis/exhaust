@@ -42,6 +42,35 @@ struct LaneGateTests {
         #expect(gate.waiterCount == 0)
     }
 
+    @Test("A request larger than the budget is clamped rather than parked forever")
+    func oversizedRequestIsClamped() async {
+        let gate = LaneGate(limit: 8)
+        await gate.acquire(64)
+        #expect(gate.freeCount == 0, "an oversized request takes the whole budget")
+        #expect(gate.waiterCount == 0, "and does not park")
+        gate.release(64)
+        #expect(gate.freeCount == 8, "release applies the same clamp, so the budget balances")
+    }
+
+    @Test("An oversized request does not wedge the queue against later runs")
+    func oversizedRequestDoesNotBlockTheQueue() async throws {
+        let gate = LaneGate(limit: 8)
+        await gate.acquire(64)
+        let order = OrderRecorder()
+
+        let waiter = Task {
+            await gate.acquire(2)
+            order.record(2)
+        }
+        try await waitForWaiters(gate, count: 1)
+        #expect(order.snapshot() == [], "the later request waits while the budget is held")
+
+        gate.release(64)
+        await waiter.value
+        #expect(order.snapshot() == [2])
+        #expect(gate.freeCount == 6)
+    }
+
     @Test("A large request holds the line against a later small one")
     func fifoLargeRequestHoldsTheLine() async throws {
         let gate = LaneGate(limit: 5)

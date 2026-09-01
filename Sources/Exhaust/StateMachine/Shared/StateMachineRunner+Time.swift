@@ -7,9 +7,7 @@ import IssueReporting
 // MARK: - Dispatch
 
 public extension __ExhaustRuntime {
-    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#explore(Spec.self, mode:, time:)`.
-    ///
-    /// Async for the same reason plain `#execute` is: the run occupies its thread for the whole time budget, so it hops to a GCD worker instead of starving the cooperative pool. Every path, configuration errors included, funnels through the shared reporting epilogue, so findings, configuration errors, and the summary attachment surface exactly as they do for `#explore(time:)`.
+    /// Dispatches a synchronous spec to the coverage-guided runner. Runtime target of `#explore(Spec.self, mode:, time:)`; forwards to the package twin with the production coverage source.
     @discardableResult
     static func __runStateMachineTimeDispatch(
         _ specType: (some StateMachineSpec).Type,
@@ -21,11 +19,45 @@ public extension __ExhaustRuntime {
         line: UInt = #line,
         column: UInt = #column
     ) async -> FuzzReport {
+        await __runStateMachineTimeDispatch(specType, mode: mode, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column)
+    }
+
+    /// Dispatches an asynchronous spec to the coverage-guided runner. Runtime target of `#explore(AsyncSpec.self, mode:, time:)`; forwards to the package twin with the production coverage source.
+    @discardableResult
+    static func __runStateMachineTimeDispatchAsync(
+        _ specType: (some AsyncStateMachineSpec).Type,
+        mode: SearchableExecutionModel,
+        time: TimeSpan,
+        settings: [StateMachineFuzzSettings],
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column
+    ) async -> FuzzReport {
+        await __runStateMachineTimeDispatchAsync(specType, mode: mode, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column)
+    }
+
+    /// Dispatches a synchronous spec to the coverage-guided runner based on its execution model. Runtime target of `#explore(Spec.self, mode:, time:)`.
+    ///
+    /// Async for the same reason plain `#execute` is: the run occupies its thread for the whole time budget, so it hops to a GCD worker instead of starving the cooperative pool. Every path, configuration errors included, funnels through the shared reporting epilogue, so findings, configuration errors, and the summary attachment surface exactly as they do for `#explore(time:)`.
+    @discardableResult
+    package static func __runStateMachineTimeDispatch(
+        _ specType: (some StateMachineSpec).Type,
+        mode: SearchableExecutionModel,
+        time: TimeSpan,
+        settings: [StateMachineFuzzSettings],
+        coverage: CoverageSourceSelection,
+        fileID: StaticString = #fileID,
+        filePath: StaticString = #filePath,
+        line: UInt = #line,
+        column: UInt = #column
+    ) async -> FuzzReport {
         let report = await stateMachineTimeReport(
             specType,
             mode: mode,
             time: time,
             settings: settings,
+            coverage: coverage,
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -51,6 +83,7 @@ public extension __ExhaustRuntime {
         mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [StateMachineFuzzSettings],
+        coverage: CoverageSourceSelection,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -70,6 +103,7 @@ public extension __ExhaustRuntime {
                     makeAdapter: { buildSequentialSpecAdapter(specType, commandLimit: commandLimit) },
                     time: time,
                     settings: coreSettings,
+                    coverage: coverage,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -82,11 +116,12 @@ public extension __ExhaustRuntime {
     ///
     /// The same shape as ``__runStateMachineTimeDispatch(_:mode:time:settings:fileID:filePath:line:column:)``: the run occupies a GCD worker for the whole budget, and reporting happens here on the test task after the hop.
     @discardableResult
-    static func __runStateMachineTimeDispatchAsync(
+    package static func __runStateMachineTimeDispatchAsync(
         _ specType: (some AsyncStateMachineSpec).Type,
         mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [StateMachineFuzzSettings],
+        coverage: CoverageSourceSelection,
         fileID: StaticString = #fileID,
         filePath: StaticString = #filePath,
         line: UInt = #line,
@@ -97,6 +132,7 @@ public extension __ExhaustRuntime {
             mode: mode,
             time: time,
             settings: settings,
+            coverage: coverage,
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -121,6 +157,7 @@ public extension __ExhaustRuntime {
         mode: SearchableExecutionModel,
         time: TimeSpan,
         settings: [StateMachineFuzzSettings],
+        coverage: CoverageSourceSelection,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -138,6 +175,7 @@ public extension __ExhaustRuntime {
                     makeAdapter: { buildAsyncSequentialSpecAdapter(specType, commandLimit: commandLimit) },
                     time: time,
                     settings: parsed.coreSettings,
+                    coverage: coverage,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -163,6 +201,7 @@ public extension __ExhaustRuntime {
                     },
                     time: time,
                     settings: parsed.coreSettings,
+                    coverage: coverage,
                     fileID: fileID,
                     filePath: filePath,
                     line: line,
@@ -187,6 +226,7 @@ public extension __ExhaustRuntime {
         makeAdapter: @escaping () -> SpecFuzzAdapter<some Any>?,
         time: TimeSpan,
         settings: [PropertyFuzzSettings],
+        coverage: CoverageSourceSelection,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -210,7 +250,7 @@ public extension __ExhaustRuntime {
                 gen: adapter.generator,
                 time: time,
                 settings: settings,
-                source: nil,
+                source: coverage,
                 configure: { configuration in
                     configuration.skipScreening = true
                     configuration.samplingPlateauWindow = FuzzTunables.specSamplingPlateauWindow
@@ -226,7 +266,7 @@ public extension __ExhaustRuntime {
 // MARK: - Spec Adapter
 
 extension __ExhaustRuntime {
-    /// Builds the generator, property, and seam hooks for a sequential spec under `time:` mode.
+    /// Builds the generator and property hooks for a sequential spec under `time:` mode.
     ///
     /// The returned adapter is ready for `runExploreTimeCore`: the generator emits tagged command sequences, the property maps outcomes to verdicts, and the hooks carry the spec's skip pruning and reduction. The caller supplies the time budget, settings, and configuration overrides.
     static func buildSequentialSpecAdapter<Spec: StateMachineSpec>(
@@ -312,7 +352,7 @@ extension __ExhaustRuntime {
         }
     }
 
-    /// Builds the generator, property, and seam hooks for an async `.sequential` spec under `time:` mode.
+    /// Builds the generator and property hooks for an async `.sequential` spec under `time:` mode.
     ///
     /// The async twin of ``buildSequentialSpecAdapter(_:commandLimit:)``: the same tagged sequence shape, skip pruning, and property-only reduction, with the executor loop bridged through `_blockingAwaitSemaphore`. The blocking bridge is safe here because the fuzz loop owns a GCD lane — the cooperative pool runs the awaited commands while the lane waits.
     static func buildAsyncSequentialSpecAdapter<Spec: AsyncStateMachineSpec>(
@@ -363,7 +403,7 @@ extension __ExhaustRuntime {
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 extension __ExhaustRuntime {
-    /// Builds the generator, property, and seam hooks for a `.tasks` spec under `time:` mode.
+    /// Builds the generator and property hooks for a `.tasks` spec under `time:` mode.
     ///
     /// Unlike the sequential adapters, the generator draws a lane-assigning schedule marker as a choice ahead of each command (``zipScheduleMarker(onto:concurrencyLevel:)``), so the interleaving is searchable input: the byte mutators that move commands between lanes and reorder the schedule are the same ones that mutate command arguments, and reduction minimizes markers toward the sequential prefix. The property drains each sequence through the cooperative scheduler at the marker-directed interleaving.
     ///
@@ -475,7 +515,7 @@ extension __ExhaustRuntime {
 
 // MARK: - Adapter Type
 
-/// Bundles the generator, property, and seam hooks for one spec type under `time:` mode.
+/// Bundles the generator and property hooks for one spec type under `time:` mode.
 struct SpecFuzzAdapter<Output> {
     /// Generates tagged command sequences for the runner.
     let generator: Generator<Output>

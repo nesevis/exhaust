@@ -127,5 +127,7 @@ private func describe(_ termination: FuzzReport.Termination) -> String {
             "attempt limit reached"
         case .firstFaultFound:
             "first fault found"
+        case .coverageUnreachable:
+            "coverage unreachable"
     }
 }

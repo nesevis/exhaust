@@ -19,6 +19,36 @@ struct FuzzCorpusTests {
         #expect(corpus.coveredEdgeCount == 1)
     }
 
+    @Test("A discarded entry is admitted on novelty and weighted at a third of a valid one for parent selection")
+    func discardedEntryEnergy() {
+        let corpus = FuzzCorpus(edgeCount: 10)
+        let valid = corpus.offer(
+            sequence: sequence(length: 1),
+            tree: .just,
+            hits: [(edge: 3, hitCount: 1)],
+            convergence: 1.0,
+            generation: 0,
+            phase: .sampling
+        )
+        let discarded = corpus.offer(
+            sequence: sequence(length: 2),
+            tree: .just,
+            hits: [(edge: 4, hitCount: 1)],
+            convergence: 1.0,
+            generation: 0,
+            phase: .sampling,
+            propertyDiscarded: true
+        )
+        guard case let .admitted(validIndex, _) = valid, case let .admitted(discardedIndex, .mutable) = discarded else {
+            Issue.record("expected both entries admitted, the discard to the mutable tier: \(valid), \(discarded)")
+            return
+        }
+        // Same rarity (one unique edge each), same novelty bonus, so the only difference is the discard energy.
+        #expect(corpus.score(at: discardedIndex) == corpus.score(at: validIndex) * FuzzTunables.discardParentEnergy)
+        #expect(corpus.entries[discardedIndex].propertyDiscarded)
+        #expect(corpus.passingSignatures.count == 1, "a discard is neither a pass nor a failure for discrimination")
+    }
+
     @Test("Duplicate choice sequences are rejected before coverage math")
     func duplicateRejection() {
         let corpus = FuzzCorpus(edgeCount: 10)
@@ -191,6 +221,31 @@ struct FuzzCorpusTests {
         #expect(rejected == .rejectedNotNovel)
     }
 
+    @Test("Boundary-credit admissions with one shared signature do not grow the invalidation index")
+    func invalidationIndexStaysBoundedUnderBoundaryCredit() {
+        // Screening rows enter on boundary credit without coverage novelty, so a low-edge target admits every row with the same signature. Indexing each of them for score invalidation made admission walk the whole corpus per edge; only parent-eligible entries (champion-cell holders) have a score anyone reads.
+        let corpus = FuzzCorpus(edgeCount: 16)
+        let sharedHits = (0 ..< 12).map { (edge: $0, hitCount: UInt8(1)) }
+        let rowCount = 2000
+        for row in 0 ..< rowCount {
+            let admission = corpus.offer(
+                sequence: distinctSequence(row),
+                tree: .just,
+                hits: sharedHits,
+                convergence: 1.0,
+                generation: 0,
+                phase: .screening,
+                isBoundaryDerived: true
+            )
+            #expect(admission.isAdmitted)
+        }
+        #expect(corpus.entries.count == rowCount)
+        #expect(corpus.coveredEdgeCount == 12)
+        // Every row covers the same 12 edges, so one shortlex-minimal champion holds every cell and the index carries at most that champion per edge. The bound allows every parent-eligible entry to be indexed once per edge; it must not scale with the corpus.
+        #expect(corpus.invalidationIndexSize <= corpus.mutableTierIndices.count * sharedHits.count)
+        #expect(corpus.invalidationIndexSize < rowCount)
+    }
+
     @Test("Rarity decays as more entries cover an edge")
     func rarityDecay() {
         let corpus = FuzzCorpus(edgeCount: 10)
@@ -329,6 +384,11 @@ struct FuzzCorpusTests {
 // MARK: - Helpers
 
 /// A distinct choice sequence per length, enough to give the corpus distinct Zobrist hashes.
+/// A sequence unique per `index`, so repeated offers are not rejected as duplicates.
+private func distinctSequence(_ index: Int) -> ChoiceSequence {
+    [.value(ChoiceSequenceValue.Value(choice: ChoiceValue(UInt64(index), tag: .uint64), validRange: nil, isRangeExplicit: false))]
+}
+
 private func sequence(length: Int) -> ChoiceSequence {
     ChoiceSequence(repeating: .just, count: length)
 }

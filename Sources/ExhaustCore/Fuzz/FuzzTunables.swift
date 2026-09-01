@@ -46,16 +46,47 @@ package enum FuzzTunables {
 
     // MARK: - Phase 3 (Mutation) Stopping
 
-    /// Fraction of the wall-clock budget without a discovery before the run ends early and returns the unused budget.
+    /// Per-attempt probability of covering a new edge below which an opt-in run is considered saturated and ends early. At 1e-4, the run stops once the next attempt has worse than a 1 in 10,000 chance of reaching an edge nothing has reached yet.
     ///
-    /// A discovery is a new edge or a newly classified fault cluster, not a corpus admission. Admission also fires on a new hit-count bucket for an already-covered edge, which is right for keeping a mutation parent and wrong for deciding a run is finished: on a fixed generator the last new edge can arrive within a second while admissions trickle in for minutes afterwards.
-    package static let plateauBudgetFraction = 0.25
+    /// Denominated per attempt, the same unit the report prints as "estimated chance the next attempt covers a new edge", so the setting and the line a reader acts on cannot disagree. The underlying estimator is per incidence; the conversion multiplies by the mean edges an attempt covers.
+    ///
+    /// Böhme's STADS (§2.1) is why an estimate replaced a stopwatch here. Time since the last discovery swings by four orders of magnitude within a single campaign and is not a consistent estimator of anything; this form is consistent as the sample grows.
+    ///
+    /// Calibrated against a scheduled MetaFuzz run that catalogued no fault clusters in 1,519,713 evaluated attempts and reported 1 in 10,064, with 676 of 9,381 reachable edges still uncovered. That run sits just inside the threshold, which is the intended reading: a campaign that unproductive should hand its remaining budget back.
+    package static let saturationNextEdgeProbability = 1e-4
 
-    /// Floor on the plateau window, whatever the budget.
-    ///
-    /// Without it the window is purely proportional, so a short budget is impatient exactly when it can least afford to be. A 60-second run allowed 15 seconds and abandoned a fault that arrived at 15.14; the same seed under a 300-second budget found it. Faults also outlive coverage by a wide margin — one target's last new edge landed at 0.65 seconds and its last new cluster at 18.98 — so the floor is set above the largest such gap observed rather than tuned to a single case.
-    /// Capped at half the budget where that is smaller, so the rule stays able to fire on short runs.
-    package static let plateauFloorNanoseconds: UInt64 = 30_000_000_000
+    /// Attempts between saturation checks. The estimate scans the per-edge incidence counters, which is O(edges), so it is sampled rather than computed per iteration.
+    package static let saturationCheckInterval = 50000
+
+    /// Attempts before the first saturation check. Below it the incidence sample is too small for the estimator to mean anything, and an empty incidence matrix reads as zero discovery probability, which would end a run on its first iteration.
+    package static let saturationMinimumAttempts = 200_000
+
+    /// Parent-selection weight multiplier for corpus entries the property discarded. FuzzChick (Lampropoulos, Hicks, Pierce 2019, §3.1) gives discards one third of a valid seed's energy: mutations of a near-miss are still the likeliest route to a valid input on a sparse precondition, but valid seeds are preferred because their mutations are likelier to stay valid.
+    package static let discardParentEnergy = 1.0 / 3.0
+
+    /// Fresh samples drawn in the reseed burst before a mutation plateau terminates the run. The burst checks whether the generator can still reach coverage the post-mutation corpus lacks; 1000 matches Phase 2's sampling plateau window.
+    package static let reseedBurstAttemptLimit = 1000
+
+    /// Maximum slots one comparand-substitution candidate may overwrite with the drawn operand. The count is drawn uniformly in 1...min(span, compatible slots): 1 preserves the single-slot magic-gate move, larger counts perform the agreement move for preconditions that require many positions to match at once. Kept small: each extra slot halves the chance that every overwritten position was one the comparison actually constrained.
+    package static let comparandSubstitutionSlotSpan = 8
+
+    /// Probability that parent selection picks a uniformly random mutable-tier entry instead of a score-weighted one, guaranteeing every basin a floor escape probability no score distribution can squeeze out. Experimental, read once from `EXHAUST_PARENT_EPSILON`; 0 (the default) disables the floor. See the basin-escape survey in ExhaustDocs.
+    package static let parentSelectionEpsilon: Double = ProcessInfo.processInfo.environment["EXHAUST_PARENT_EPSILON"].flatMap(Double.init) ?? 0
+
+    /// Age-decay coefficient for parent scores: an entry's effective score is its base score divided by `1 + k × timesDrawn`, so a basin's founders lose priority as they are milked (the AFLFast idea). Experimental, read once from `EXHAUST_PARENT_AGE_K`; 0 (the default) disables decay. At 0.01 a parent's weight halves after 100 draws.
+    package static let parentAgeDecayCoefficient: Double = ProcessInfo.processInfo.environment["EXHAUST_PARENT_AGE_K"].flatMap(Double.init) ?? 0
+
+    /// Probability that a mutation-loop iteration spends one fresh generator draw instead of a parent pick, keeping the sampling phase alive as a background rate through the whole run. Fresh draws restore ergodicity the corpus cannot (they reach basins no entry has visited) at fresh-generation cost. Experimental, read once from `EXHAUST_FRESH_EPSILON`; 0 (the default) disables the mixture.
+    package static let freshDrawEpsilon: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_EPSILON"].flatMap(Double.init) ?? 0
+
+    /// Floor of the adaptive fresh-draw mixture: the background sampling rate a healthy, admitting corpus keeps. Overridable via `EXHAUST_FRESH_FLOOR`.
+    package static let freshMixtureFloor: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_FLOOR"].flatMap(Double.init) ?? 0.05
+
+    /// Cap of the adaptive fresh-draw mixture, reached when the corpus has admitted nothing for a full ramp. A cap at or below the floor disables the ramp and the fixed `freshDrawEpsilon` governs alone. The default sits at the measured dose-response knee: on basin-fragmented workloads a starved run climbs to spending most of its budget on fresh draws, matching the exploration share FuzzChick reaches through queue starvation. Overridable via `EXHAUST_FRESH_CAP`; 0 disables the ramp.
+    package static let freshMixtureCap: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_CAP"].flatMap(Double.init) ?? 0.6
+
+    /// Attempts without a corpus admission over which the mixture climbs linearly from floor to cap. Overridable via `EXHAUST_FRESH_RAMP`.
+    package static let freshMixtureRampAttempts: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_RAMP"].flatMap(Double.init) ?? 2000
 
     // MARK: - Crash Recovery
 
@@ -114,13 +145,36 @@ package enum FuzzTunables {
 
     /// Upper bound on the adaptive escape interval. The interval doubles each time an escape reduction lands in an existing cluster, so without a cap a long run would stop escaping entirely — and the escape hatch exists precisely because symptom matching is a weak signal.
     package static let reductionEscapeIntervalCap = 3200
+
+    // MARK: - Graph Mutation (Experiment: graphMutation)
+
+    /// Exclusive upper bound on the log-uniform exponent draw for the lockstep delta: `delta = 1 + next(2^exponent)` with `exponent < 11`, so most deltas are small agreement-preserving steps and the occasional draw jumps by up to ~2^10.
+    package static let lockstepDeltaExponentLimit: UInt64 = 11
+
+    // MARK: - Campaigns (Experiment: campaignMutation)
+
+    /// Children of one parent evaluated without an admission before that parent's campaign gate opens. Campaigns are multi-probe spends, so they unlock only where the cheap arms have gone quiet; at the default `childrenPerParent` of 4 this is 8 quiet visits.
+    package static let campaignStallThreshold = 32
+
+    /// Probability that a gate-open parent visit runs a campaign instead of its ordinary child batch. Below 1 so stalled parents keep receiving ordinary mutations between campaigns.
+    package static let campaignShare = 0.5
+
+    /// Restricts the campaign draw to one kind for ablation arms: `sweep` or `walk`, read once from `EXHAUST_CAMPAIGN`; unset runs both on a fair draw.
+    package static let campaignKindOverride: String? = ProcessInfo.processInfo.environment["EXHAUST_CAMPAIGN"]
+
+    // MARK: - Coverage Reachability
+
+    /// Attempts to allow before concluding that an instrumented build is recording nothing.
+    ///
+    /// Comfortably past the screening phase, so a run is judged on evaluations spanning all three phases rather than on a handful of covering-array rows.
+    package static let coverageUnreachableAttemptThreshold = 1000
 }
 
 // MARK: - Experiment Knobs
 
 /// Per-run switches for mechanisms that land benchmark-gated.
 ///
-/// Every new search-side mechanism ships behind one of these knobs, default-off, and flips on only when its measured gate passes (the knob-gate-default pattern). In-package tests reach them through the `configure:` seam on `runExploreTimeCore`; cross-package benchmark arms ride the `EXHAUST_FUZZ_EXPERIMENT` environment variable, which debug builds parse once at run start via ``parse(environmentValue:)``.
+/// Every new search-side mechanism ships behind one of these knobs, default-off, and flips on only when its measured gate passes (the knob-gate-default pattern). In-package tests reach them through the `configure:` option on `runExploreTimeCore`; cross-package benchmark arms ride the `EXHAUST_FUZZ_EXPERIMENT` environment variable, which debug builds parse once at run start via ``parse(environmentValue:)``.
 package struct FuzzExperiments: Sendable, Equatable {
     /// Post-reduction cluster normalization: re-drive each value of a would-be-new cluster's reduced form toward its minimal still-failing bit pattern before minting the cluster. Default-on; the knob stays one release for A/B.
     package var normalization = true
@@ -131,14 +185,26 @@ package struct FuzzExperiments: Sendable, Equatable {
     /// Stacked mutation: one mutation-phase child may compose several mutation operators instead of exactly one.
     package var stackedMutation = false
 
-    /// Bandit-tuned mutation band weights over {low, medium, high, splice}, rewarded by corpus admission.
-    package var banditBands = false
+    /// Bandit-tuned mutation band weights over the enabled arm inventory, rewarded by corpus admission.
+    package var banditBands = true
+
+    /// Graph-targeted mutation operators (sibling-span swap, shuffle, and move plus the tandem lockstep delta) drawn from the admission-time scope caches. Adds the four arms to the pick inventory: the bandit's when `banditBands` is on, the fixed distribution's otherwise.
+    package var graphMutation = true
+
+    /// Pair mutation operators: the twin splice (copy one zip twin's span over its sibling's, creating structural agreement) and the typed crossover (replace a pick subtree with a same-fingerprint span from a different corpus entry). Adds the two arms to the pick inventory the same way `graphMutation` adds its four.
+    package var pairMutation = true
 
     /// AFLFast-style power schedule for the number of children drawn per picked parent.
     package var powerSchedule = false
 
+    /// Fresh-generation burst before a mutation plateau terminates the run: draws up to ``FuzzTunables/reseedBurstAttemptLimit`` fresh samples and resumes mutation if one discovers a new edge or fault cluster. The burst checks whether the generator can still reach coverage the post-mutation corpus lacks, since Phase 2's plateau fired against a smaller corpus.
+    package var reseedBurst = true
+
     /// Per-edge shortlex champion archive as the parent-selection domain. Default-on; the knob stays one release for A/B.
     package var championArchive = true
+
+    /// Multi-probe campaigns: the adaptive one-leaf walk and the bind-region covering sweep. A campaign replaces one gate-open parent visit's child batch, spending the same child budget on a coordinated probe session instead of independent draws; the gate opens after ``FuzzTunables/campaignStallThreshold`` children without an admission.
+    package var campaignMutation = false
 
     /// How swarm generation rewrites a mutated child's branch selections.
     package enum SwarmMode: String, Sendable {
@@ -171,7 +237,11 @@ package struct FuzzExperiments: Sendable, Equatable {
             ("escapeBackoff", \.escapeBackoff),
             ("stackedMutation", \.stackedMutation),
             ("banditBands", \.banditBands),
+            ("graphMutation", \.graphMutation),
+            ("pairMutation", \.pairMutation),
+            ("campaignMutation", \.campaignMutation),
             ("powerSchedule", \.powerSchedule),
+            ("reseedBurst", \.reseedBurst),
             ("championArchive", \.championArchive),
         ]
         for fragment in environmentValue.split(separator: ",") {

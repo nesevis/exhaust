@@ -27,6 +27,51 @@ struct FuzzRunnerTests {
         #expect(result.clusters.isEmpty)
     }
 
+    @Test("A fault found during screening records the attempt it was found on, not zero")
+    func screeningFaultAttemptIndex() {
+        var configuration = FuzzRunnerConfiguration(
+            budgetNanoseconds: 60_000_000_000,
+            seed: 7,
+            attemptLimit: 3000
+        )
+        configuration.stopOnFirstFault = true
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
+            property: { value in value == 1000 ? .fail(.returnedFalse) : .pass },
+            source: bucketedSource(),
+            configuration: configuration
+        )
+        let result = runner.run()
+        guard let cluster = result.clusters.first else {
+            Issue.record("expected the boundary value 1000 to fail during screening")
+            return
+        }
+        #expect(cluster.discoveringPhase == FuzzPhase.screening)
+        #expect(cluster.firstSeenAttempt >= 1)
+        #expect(cluster.firstSeenAttempt <= result.counts.screeningAttempts)
+    }
+
+    @Test("Discarded evaluations are counted, kept as corpus parents, and never reported as failures")
+    func discardAccounting() {
+        // Odd values do not meet the precondition; even ones pass. Nothing fails.
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 1000 as ClosedRange<Int>),
+            property: { value in value % 2 == 1 ? .discard : .pass },
+            source: bucketedSource(),
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 7,
+                attemptLimit: 2000
+            )
+        )
+        let result = runner.run()
+        #expect(result.clusters.isEmpty)
+        #expect(result.counts.discardedEvaluations > 0)
+        #expect(result.counts.discardedEvaluations < result.counts.evaluatedSearchCases)
+        #expect(runner.corpus.entries.contains { $0.propertyDiscarded })
+        #expect(runner.corpus.entries.contains { $0.propertyDiscarded == false })
+    }
+
     @Test("Rejected screening probes remain separate from evaluated search cases")
     func rejectedScreeningProbeAccounting() {
         let unfilteredGenerator = Gen.zip(
@@ -173,18 +218,23 @@ struct FuzzRunnerTests {
 
     @Test("Saturated coverage ends the run on plateau and returns unused budget")
     func plateauTermination() {
-        // Four reachable edges saturate within a handful of attempts; the mutation-phase plateau window (25% of a 400ms budget) then fires long before the budget ends.
+        // Four reachable edges saturate within a handful of attempts, so the discovery-probability estimate collapses and the saturation stop fires long before the budget ends. The stop is opt-in, so the configuration sets it.
         let source = SyntheticCoverageSource<Int>(edgeCount: 8, edges: { value in
             [value & 0b11]
         })
+        var configuration = FuzzRunnerConfiguration(
+            budgetNanoseconds: 400_000_000,
+            seed: 5
+        )
+        configuration.stopWhenSaturated = true
+        // The estimate needs a sample; production waits 200k attempts, which a 400ms budget cannot reach.
+        configuration.saturationMinimumAttempts = 500
+        configuration.saturationCheckInterval = 500
         let runner = FuzzRunner(
-            gen: Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
+            gen: Gen.choose(in: 0 ... 100_000 as ClosedRange<Int>),
             property: { _ in .pass },
             source: source,
-            configuration: FuzzRunnerConfiguration(
-                budgetNanoseconds: 400_000_000,
-                seed: 5
-            )
+            configuration: configuration
         )
         let result = runner.run()
         guard case let .plateau(unusedNanoseconds) = result.termination else {
@@ -217,9 +267,8 @@ struct FuzzRunnerTests {
         #expect(result.edgeDoubletonCount == 0)
     }
 
-    @Test("Seam defaults produce identical output across refactors")
-    func seamRegressionGuard() {
-        // Exercises the configuration seams (reduceStrategy, prune) at their defaults (nil). The pinned seed and attempt limit make the result deterministic; any behavioral change in the seam plumbing will shift these assertions.
+    @Test("Path defaults produce identical output across refactors")
+    func pathRegressionGuard() {
         let property: @Sendable (Int) -> FuzzVerdict = { value in
             (value > 40 && value < 60) || value > 940 ? .fail(.returnedFalse) : .pass
         }
@@ -247,6 +296,134 @@ struct FuzzRunnerTests {
             #expect(cluster.reducedCount >= 1)
         }
     }
+
+    @Test("Comparand substitution finds a magic-number gate that random search cannot")
+    func comparandSubstitutionFindsMagicGate() {
+        // The property fails on exactly one value in a million. Random search inside the attempt limit essentially never finds it; the harvested comparison operand names it outright, and the substitution operator writes it into the one integer leaf. The generator is a bare Gen with no reflection support, so the reflective injection paths cannot be the ones finding it.
+        let magic = 777_777
+        func run(harvestingComparisons: Bool) -> FuzzRunResult {
+            let magicComparison: @Sendable (Int) -> [(site: UInt64, lhs: UInt64, rhs: UInt64)] = { value in
+                [(site: UInt64(1), lhs: UInt64(value), rhs: UInt64(magic))]
+            }
+            let comparisonModel = harvestingComparisons ? magicComparison : nil
+            var configuration = FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 7,
+                attemptLimit: 5000
+            )
+            configuration.stopOnFirstFault = true
+            let runner = FuzzRunner(
+                gen: Gen.choose(in: 0 ... 1_000_000 as ClosedRange<Int>),
+                property: { value in value == magic ? .fail(.returnedFalse) : .pass },
+                source: SyntheticCoverageSource<Int>(
+                    edgeCount: 16,
+                    edges: { value in [value % 8] },
+                    comparisons: comparisonModel
+                ),
+                configuration: configuration
+            )
+            return runner.run()
+        }
+
+        let withHarvest = run(harvestingComparisons: true)
+        guard let cluster = withHarvest.clusters.first else {
+            Issue.record("expected comparand substitution to reach the magic value")
+            return
+        }
+        #expect(cluster.reducedDescription == String(magic))
+
+        let withoutHarvest = run(harvestingComparisons: false)
+        #expect(withoutHarvest.clusters.isEmpty)
+    }
+
+    @Test("Multi-slot comparand substitution satisfies an agreement gate no single slot can")
+    func comparandMultiSlotAgreement() {
+        // The property fails only when BOTH halves equal the magic value, and coverage offers no gradient (every input maps to one edge), so the corpus cannot climb one slot at a time: a single-slot substitution leaves the other half random at one in a million. Only a candidate that writes the operand into both compatible slots at once can fail the property inside the attempt budget.
+        let magic = 777_777
+        func run(harvestingComparisons: Bool) -> FuzzRunResult {
+            let agreementComparisons: @Sendable ((Int, Int)) -> [(site: UInt64, lhs: UInt64, rhs: UInt64)] = { value in
+                [
+                    (site: UInt64(1), lhs: UInt64(value.0), rhs: UInt64(magic)),
+                    (site: UInt64(2), lhs: UInt64(value.1), rhs: UInt64(magic)),
+                ]
+            }
+            var configuration = FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 9,
+                attemptLimit: 5000
+            )
+            configuration.stopOnFirstFault = true
+            let runner = FuzzRunner(
+                gen: Gen.zip(
+                    Gen.choose(in: 0 ... 1_000_000 as ClosedRange<Int>),
+                    Gen.choose(in: 0 ... 1_000_000 as ClosedRange<Int>)
+                ),
+                property: { value in value.0 == magic && value.1 == magic ? .fail(.returnedFalse) : .pass },
+                source: SyntheticCoverageSource<(Int, Int)>(
+                    edgeCount: 4,
+                    edges: { _ in [0] },
+                    comparisons: harvestingComparisons ? agreementComparisons : nil
+                ),
+                configuration: configuration
+            )
+            return runner.run()
+        }
+
+        let withHarvest = run(harvestingComparisons: true)
+        guard let cluster = withHarvest.clusters.first else {
+            Issue.record("expected the agreement gate to fall to multi-slot substitution")
+            return
+        }
+        #expect(cluster.reducedDescription.contains("777777"))
+
+        let withoutHarvest = run(harvestingComparisons: false)
+        #expect(withoutHarvest.clusters.isEmpty)
+    }
+
+    @Test("Screening coverage does not spend the search phases' novelty gradient")
+    func screeningDoesNotCaptureNoveltyBaseline() {
+        // Every value lights the whole four-edge map, so the first screening row saturates it. Without the novelty reset at the screening-to-sampling handover, no search-phase candidate is ever coverage-novel, the corpus holds only boundary-derived screening entries, and the run plateaus empty, which is the corpus-capture failure mode observed on sparse preconditions. With the reset, sampling admits entries against a fresh map and the mutation phase runs, while the report's covered-edge tally stays cumulative.
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 1_000_000 as ClosedRange<Int>),
+            property: { _ in .pass },
+            source: SyntheticCoverageSource<Int>(edgeCount: 4, edges: { _ in [0, 1, 2, 3] }),
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 5,
+                attemptLimit: 1500
+            )
+        )
+        let result = runner.run()
+        #expect(result.counts.screeningAttempts > 0)
+        #expect(runner.corpus.entries.contains { $0.phase == FuzzPhase.sampling })
+        #expect(result.counts.mutationAttempts > 0)
+        #expect(result.coveredEdgeCount == 4)
+    }
+
+    @Test("The adaptive fresh mixture ramps with starvation and resets on admission")
+    func adaptiveFreshMixtureRamp() {
+        // The ramp formula is deterministic given the tunables, so the test drives the counter directly against the default floor/cap/ramp.
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
+            property: { _ in .pass },
+            source: bucketedSource(),
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 1,
+                seed: 1,
+                attemptLimit: 1
+            )
+        )
+        let floor = FuzzTunables.freshMixtureFloor
+        let cap = FuzzTunables.freshMixtureCap
+        let ramp = FuzzTunables.freshMixtureRampAttempts
+        #expect(cap > floor)
+        #expect(runner.currentFreshMixture(attemptsSinceAdmission: 0) == floor)
+        let halfway = Int(ramp / 2)
+        #expect(runner.currentFreshMixture(attemptsSinceAdmission: halfway) == floor + (cap - floor) * (Double(halfway) / ramp))
+        #expect(runner.currentFreshMixture(attemptsSinceAdmission: Int(ramp)) == cap)
+        #expect(runner.currentFreshMixture(attemptsSinceAdmission: Int(ramp) * 5) == cap)
+        #expect(runner.attemptsSinceAdmission == 0)
+    }
 }
 
 // MARK: - Helpers
@@ -267,3 +444,47 @@ private func bucketedSource() -> SyntheticCoverageSource<Int> {
         return edges
     })
 }
+
+#if DEBUG
+    /// The trace-pc-guard registry is process-global, so this runs serialized with the other registry suites and resets it around use.
+    extension CoverageRegistryTests {
+        @Suite("FuzzRunner lane ownership under trace-pc-guard", .serialized)
+        struct FuzzRunnerLaneOwnershipTests {
+            @Test("Generator edges fired before the first bracket are not reported as off-lane")
+            func preBracketGenerationIsNotOffLane() {
+                TracePCGuardCoverageSource.resetRegistryForTesting()
+                let tracePCGuards = TracePCGuardCoverageSource.registerTracePCGuardsForTesting(count: 2)
+                defer { tracePCGuards.deallocate() }
+                guard let source = TracePCGuardCoverageSource(harvestsComparisons: false) else {
+                    Issue.record("expected a trace-pc-guard source on an instrumented registry")
+                    return
+                }
+                // The pointer outlives both closures (deallocated after the run) and is only ever touched from the run's lane.
+                nonisolated(unsafe) let generatorTracePCGuard = tracePCGuards
+                nonisolated(unsafe) let propertyTracePCGuard = tracePCGuards + 1
+                // An instrumented generator, as a `#gen` initializer closure in the module under test is: it fires an edge every time a value is produced, including for screening rows built before any bracket opens.
+                let generator = Gen.choose(in: 0 ... 1000 as ClosedRange<Int>).map { value in
+                    TracePCGuardCoverageSource.fireTracePCGuardForTesting(generatorTracePCGuard)
+                    return value
+                }
+                let runner = FuzzRunner(
+                    gen: generator,
+                    property: { _ in
+                        TracePCGuardCoverageSource.fireTracePCGuardForTesting(propertyTracePCGuard)
+                        return .pass
+                    },
+                    source: source,
+                    configuration: FuzzRunnerConfiguration(
+                        budgetNanoseconds: 60_000_000_000,
+                        seed: 7,
+                        attemptLimit: 200
+                    )
+                )
+                let result = runner.run()
+                #expect(result.counts.totalAttempts >= 200)
+                #expect(result.coveredEdgeCount == 1, "only the property's edge lands in a bracket")
+                #expect(result.offLaneEdgeHits == 0)
+            }
+        }
+    }
+#endif

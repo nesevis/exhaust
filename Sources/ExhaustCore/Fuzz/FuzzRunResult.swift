@@ -6,14 +6,23 @@
 package enum FuzzVerdict: Sendable {
     case pass
     case fail(FailureSymptom)
+    /// The property declined to judge the input (a skip error): the precondition was not met. Not a failure and not evidence of passing; the corpus keeps coverage-novel discards as low-energy mutation parents, because a mutation of a near-miss is the likeliest route to a valid input on a sparse precondition.
+    case discard
 
     package var isFailure: Bool {
         switch self {
-            case .pass:
+            case .pass, .discard:
                 false
             case .fail:
                 true
         }
+    }
+
+    package var isDiscard: Bool {
+        if case .discard = self {
+            return true
+        }
+        return false
     }
 }
 
@@ -27,6 +36,8 @@ package enum FuzzTermination: Equatable, Sendable {
     case attemptLimitReached
     /// A fault clustered and ``FuzzRunnerConfiguration/stopOnFirstFault`` was set.
     case firstFaultFound
+    /// Attempts ran against an instrumented build and recorded no edges at all, so the search has no signal to follow. Distinct from a build with no instrumentation: the counters exist, the run simply cannot see them from the lane it bound.
+    case coverageUnreachable
     /// Generation failed irrecoverably.
     case generationError(String)
 }
@@ -49,6 +60,14 @@ package struct FuzzRunnerConfiguration {
     ///
     /// Also disables the plateau window and the sampling time backstop: both exist solely to decide when to hand over to mutation, and with no phase to hand over to they would end the run early instead. Sampling then runs until the budget or the attempt limit stops it, which is what a non-guided control arm needs.
     package var skipMutation: Bool = false
+    /// Ends the run early once the STADS discovery-probability estimate falls below ``FuzzTunables/saturationDiscoveryProbability``, returning the unused budget. Set by the public `.stopWhenSaturated` setting.
+    ///
+    /// Off by default, so a run spends the budget it was given. Coverage saturation is not fault exhaustion: measurement on the Etna IFC protocol found roughly a fifth of all detections arriving after the search stopped reaching new edges, which is why this cannot be the default.
+    package var stopWhenSaturated: Bool = false
+    /// Attempts before the first saturation check, and the floor on sample size the estimate needs to mean anything. Defaults to ``FuzzTunables/saturationMinimumAttempts``; lowered by tests that need the path on a small sample, and the field a calibration harness varies.
+    package var saturationMinimumAttempts: Int = FuzzTunables.saturationMinimumAttempts
+    /// Attempts between saturation checks once the minimum is reached. Defaults to ``FuzzTunables/saturationCheckInterval``.
+    package var saturationCheckInterval: Int = FuzzTunables.saturationCheckInterval
     /// Hard cap on total attempts across all phases, for deterministic tests. Nil means time-bounded only.
     package var attemptLimit: Int?
     /// Ends the run as soon as one fault clusters, rather than continuing to search. Set by the public `.failFast` setting, and by measurement harnesses.
@@ -57,7 +76,7 @@ package struct FuzzRunnerConfiguration {
     package var stopOnFirstFault: Bool = false
     /// Crash-recovery configuration: where checkpoints go and what a crashed predecessor left. Nil disables persistence entirely.
     package var persistence: FuzzPersistenceContext?
-    /// Knobs for benchmark-gated mechanisms; see ``FuzzExperiments`` for the seam precedence.
+    /// Knobs for benchmark-gated mechanisms; see ``FuzzExperiments`` for more.
     package var experiments: FuzzExperiments
     /// Called once per attempt with its phase and the edges that attempt hit. Nil in production runs; coverage-harvest tooling uses it to build a first-hit timeline without re-reading the counter regions.
     package var onAttempt: ((FuzzPhase, [(edge: Int, hitCount: UInt8)]) -> Void)?
@@ -96,7 +115,11 @@ package struct FuzzRunCounts: Sendable {
     package var mutationAttempts = 0
     package var screeningRejectedAttempts = 0
     package var discardedAttempts = 0
+    /// Evaluated search cases the property discarded (a skip error). Counted inside `evaluatedSearchCases`, since the property ran.
+    package var discardedEvaluations = 0
     package var evaluatedSearchCases = 0
+    /// Candidates evaluated inside campaign probe sessions (counted inside `mutationAttempts` too). Zero whenever the `campaignMutation` knob is off or no parent's stall gate opened.
+    package var campaignAttempts = 0
     package var pruneInvocations = 0
     package var reductionInvocations = 0
     package var normalizationInvocations = 0
@@ -178,6 +201,8 @@ package struct FuzzRunResult: Sendable {
     package var attemptsAtFirstFault: Int = 0
     package var timing: FuzzRunTiming
     package var seed: UInt64
+    /// Instrumented edges that fired during the run on threads the run did not own, so the search never saw them. Zero when the source cannot tell.
+    package var offLaneEdgeHits: Int = 0
 
     /// The elapsed time net of inline reduction — the denominator for throughput and overhead, so a failure-dense run does not read as a slow pipeline.
     package var searchNanoseconds: UInt64 {

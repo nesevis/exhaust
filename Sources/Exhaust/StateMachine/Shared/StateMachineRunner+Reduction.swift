@@ -133,7 +133,7 @@ extension __ExhaustRuntime {
         let noRelax = SchedulerTuning(relaxMaterializationBudget: 0)
         var currentOutput = output
         var currentTree = tree
-        // The reducer canonicalizes its sequence at init, so the sequence each pass returns is the one that reproduces its value through `.exact` materialization — re-flattening the tree afterwards is not guaranteed to. Track it so callers on the `(sequence, tree, value)` seam get the authoritative one.
+        // The reducer canonicalizes its sequence at init, so the sequence each pass returns is the one that reproduces its value through `.exact` materialization — re-flattening the tree afterwards is not guaranteed to. Track it so callers on the `(sequence, tree, value)` path get the authoritative one.
         var currentSequence = ChoiceSequence.flatten(tree)
         var mergedStats = ReductionStats()
         nonisolated(unsafe) var lastEvidence: Evidence?
@@ -232,7 +232,7 @@ extension __ExhaustRuntime {
     struct ConcurrentTwoPassResult<Value, Evidence> {
         let value: Value
         let tree: ChoiceTree
-        /// The reducer's own choice sequence for `value` — the one that reproduces it through `.exact` materialization. `ChoiceSequence.flatten(tree)` is not guaranteed to, because the reducer canonicalizes at init; consumers on the `(sequence, tree, value)` seam must carry this instead of re-flattening.
+        /// The reducer's own choice sequence for `value` — the one that reproduces it through `.exact` materialization. `ChoiceSequence.flatten(tree)` is not guaranteed to, because the reducer canonicalizes at init; consumers on the `(sequence, tree, value)` path must carry this instead of re-flattening.
         let sequence: ChoiceSequence
         let stats: ReductionStats
         let lastEvidence: Evidence?

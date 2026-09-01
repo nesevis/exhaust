@@ -2,7 +2,7 @@
 //  ComparisonInjectionRuntimeTests.swift
 //  ExhaustTests
 //
-//  End-to-end coverage for comparison-operand injection through the production `runExploreTimeCore` path. A fake CoverageSource supplied through the existing `source:` seam scripts the operands a trace-cmp build would harvest, so the run exercises wantsComparisons, the capture bracket, forEachComparisonRecord, the reconstructor and graft candidate paths, and the evaluateInjected attribution together — the whole feature, not a leaf.
+//  End-to-end coverage for comparison-operand injection through the production `runExploreTimeCore` path. A fake CoverageSource supplied through the existing `source:` path scripts the operands a trace-cmp build would harvest, so the run exercises wantsComparisons, the capture bracket, forEachComparisonRecord, the reconstructor and graft candidate paths, and the evaluateInjected attribution together — the whole feature, not a leaf.
 //
 
 import Exhaust
@@ -41,9 +41,9 @@ struct ComparisonInjectionRuntimeTests {
         #expect(report.clusters.isEmpty)
     }
 
-    @Test("Graft candidate production runs inside its attribution bracket")
-    func graftProductionInsideBracket() {
-        // The graft's `.exact` materializations execute the generator transform closure — user code that may be instrumented — so its coverage must land in the injected attempt's own bracket. Both the transform and the property record the count of opened brackets at the moment they run; if production ran before the bracket opened, the injected candidate's transform snapshot would belong to the previous bracket and its signature would be systematically smaller than a mutation candidate's.
+    @Test("Graft candidate production runs outside the attribution bracket that evaluates it")
+    func graftProductionOutsideBracket() {
+        // The attribution bracket encloses the property call only. The graft's `.exact` materializations execute the generator transform closure before the bracket opens, so their coverage never enters the injected attempt's signature, the same as every other candidate production path. Both the transform and the property record the count of opened brackets at the moment they run; the transform snapshot must predate the bracket that evaluated the candidate.
         let source = OperandScriptedSource(target: UInt64(target), emitsComparisons: true) { value in
             (value as? BracketProbePair).map { $0.first % 40 }
         }
@@ -63,7 +63,7 @@ struct ComparisonInjectionRuntimeTests {
             generatorIsReflective: generator.isReflective,
             time: .seconds(60),
             settings: [.replay(1), .suppress(.all)],
-            source: source,
+            source: .injected(source),
             configure: { configuration in
                 configuration.attemptLimit = 20000
             },
@@ -91,7 +91,7 @@ struct ComparisonInjectionRuntimeTests {
             }
             return false
         }
-        #expect(producedInsideBracket, "The injected candidate's materialization ran outside the attribution bracket that evaluated it")
+        #expect(producedInsideBracket == false, "The injected candidate's materialization ran inside the attribution bracket that evaluated it")
     }
 
     // MARK: - Fixture
@@ -111,7 +111,7 @@ struct ComparisonInjectionRuntimeTests {
             generatorIsReflective: true,
             time: .seconds(60),
             settings: [.replay(1), .suppress(.all)],
-            source: source,
+            source: .injected(source),
             configure: { configuration in
                 configuration.attemptLimit = 20000
             },
@@ -133,7 +133,7 @@ struct ComparisonInjectionRuntimeTests {
             generatorIsReflective: generator.isReflective,
             time: .seconds(60),
             settings: [.replay(1), .suppress(.all)],
-            source: source,
+            source: .injected(source),
             configure: { configuration in
                 configuration.attemptLimit = 20000
             },

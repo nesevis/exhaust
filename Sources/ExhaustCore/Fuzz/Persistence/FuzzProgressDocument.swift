@@ -111,6 +111,8 @@ package struct FuzzProgressDocument: Codable, Sendable {
         package var phase: String
         package var isBoundaryDerived: Bool
         package var propertyFailed: Bool
+        /// Whether the property discarded this entry. Optional so logs written before the field existed (version 2) still decode; restore treats a missing value as false.
+        package var propertyDiscarded: Bool?
 
         package init(entry: CorpusEntry) {
             sequence = ChoiceSequenceCodec.encode(entry.sequence)
@@ -121,6 +123,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
             phase = entry.phase.rawValue
             isBoundaryDerived = entry.isBoundaryDerived
             propertyFailed = entry.propertyFailed
+            propertyDiscarded = entry.propertyDiscarded
         }
     }
 }

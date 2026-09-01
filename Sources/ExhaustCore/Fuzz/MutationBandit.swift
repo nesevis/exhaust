@@ -10,12 +10,28 @@
 
 import Foundation
 
-/// One selectable mutation operator: the three intensity bands plus the bind-boundary splice.
+/// One selectable mutation operator: the three intensity bands, the bind-boundary splice, the graph-targeted operators behind the `graphMutation` knob, and the pair operators behind the `pairMutation` knob.
 package enum MutationArm: Int, CaseIterable, Sendable {
     case low = 0
     case medium = 1
     case high = 2
     case splice = 3
+    case swap = 4
+    case shuffle = 5
+    case move = 6
+    case lockstepDelta = 7
+    case twinSplice = 8
+    case typedCrossover = 9
+    /// The adaptive one-leaf walk campaign under the `campaignMutation` knob. Dispatched at parent level when the stall gate opens, never in the bandit's own draw; the case exists so admissions credit the arm's statistics.
+    case valueWalk = 10
+    /// The bind-region covering-sweep campaign under the `campaignMutation` knob. Dispatched at parent level when the stall gate opens, never in the bandit's own draw; the case exists so admissions credit the arm's statistics.
+    case regionSweep = 11
+
+    /// The size of the inventory with every experiment knob off: the three intensity bands and splice. Raw values order the knob-gated arms after these, so the legacy inventory is the raw-value prefix of this length.
+    package static let legacyArmCount = 4
+
+    /// The inventory with every experiment knob off, in raw-value order.
+    package static let legacyArms = Array(MutationArm.allCases.prefix(legacyArmCount))
 
     /// The arm credited for a band mutation of this intensity.
     ///
@@ -37,9 +53,21 @@ package struct MutationBandit: Sendable {
     /// The exploration mixture γ: every arm keeps at least γ/4 selection probability no matter how the weights move, so a band can always win back weight after the search moves to a region where it pays again.
     package static let explorationRate = 0.1
 
-    private var weights: [Double] = Array(repeating: 1.0, count: MutationArm.allCases.count)
+    private var weights: [Double]
 
-    package init() {}
+    /// The arms this bandit draws from, in the order `probabilities` indexes them. Knob-gated inventories are not always a raw-value prefix (the `pairMutation` arms can be enabled without the `graphMutation` arms), so the bandit holds the arm list rather than a count.
+    private let arms: [MutationArm]
+
+    /// Creates a bandit over the given arm inventory. The default covers the legacy inventory.
+    package init(arms: [MutationArm] = MutationArm.legacyArms) {
+        self.arms = arms
+        weights = Array(repeating: 1.0, count: arms.count)
+    }
+
+    /// Creates a bandit over the first `armCount` arms in ``MutationArm``'s raw-value order.
+    package init(armCount: Int) {
+        self.init(arms: Array(MutationArm.allCases.prefix(armCount)))
+    }
 
     /// The current selection probability of each arm: the exploration-smoothed, weight-proportional EXP3 distribution.
     package var probabilities: [Double] {
@@ -58,17 +86,20 @@ package struct MutationBandit: Sendable {
         for (index, probability) in probabilities.enumerated() {
             remaining -= probability
             if remaining < 0 {
-                return MutationArm.allCases[index]
+                return arms[index]
             }
         }
-        return .splice
+        return arms[arms.count - 1]
     }
 
-    /// Credits an arm with one admission reward (x = 1), applying the EXP3 importance-weighted exponential update. Unrewarded picks need no call — a zero reward leaves EXP3 weights unchanged.
+    /// Credits an arm with one admission reward (x = 1), applying the EXP3 importance-weighted exponential update. Unrewarded picks need no call — a zero reward leaves EXP3 weights unchanged. An arm outside this bandit's inventory is ignored.
     package mutating func reward(_ arm: MutationArm) {
-        let probability = probabilities[arm.rawValue]
+        guard let index = arms.firstIndex(of: arm) else {
+            return
+        }
+        let probability = probabilities[index]
         let armCount = Double(weights.count)
-        weights[arm.rawValue] *= exp(Self.explorationRate / (armCount * probability))
+        weights[index] *= exp(Self.explorationRate / (armCount * probability))
         // Rescale before the exponential weights can overflow; the distribution is scale-invariant.
         let totalWeight = weights.reduce(0, +)
         if totalWeight > 1e12 {

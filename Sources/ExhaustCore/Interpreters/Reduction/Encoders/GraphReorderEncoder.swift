@@ -48,10 +48,9 @@ struct GraphReorderEncoder: GraphEncoder {
             }
             guard sortedIndices != Array(keys.indices) else { continue }
 
-            candidate = rebuildWithPermutation(
-                sequence: currentSequence,
+            candidate = currentSequence.permutingSpans(
                 ranges: ranges,
-                sortedIndices: sortedIndices
+                permutation: sortedIndices
             )
 
             return .sequenceReordered
@@ -61,36 +60,6 @@ struct GraphReorderEncoder: GraphEncoder {
 }
 
 // MARK: - Private Helpers
-
-/// Reconstructs a sequence with siblings rearranged according to the given permutation.
-private func rebuildWithPermutation(
-    sequence: ChoiceSequence,
-    ranges: [ClosedRange<Int>],
-    sortedIndices: [Int]
-) -> ChoiceSequence {
-    let slices = ranges.map { Array(sequence[$0]) }
-    let spanStart = ranges[0].lowerBound
-    let spanEnd = ranges[ranges.count - 1].upperBound
-
-    var rebuilt = ContiguousArray(sequence[..<spanStart])
-    var index = 0
-    while index < ranges.count {
-        if index > 0 {
-            let gapStart = ranges[index - 1].upperBound + 1
-            let gapEnd = ranges[index].lowerBound
-            if gapStart < gapEnd {
-                rebuilt.append(contentsOf: sequence[gapStart ..< gapEnd])
-            }
-        }
-        rebuilt.append(contentsOf: slices[sortedIndices[index]])
-        index += 1
-    }
-    if spanEnd + 1 < sequence.count {
-        rebuilt.append(contentsOf: sequence[(spanEnd + 1)...])
-    }
-
-    return ChoiceSequence(rebuilt)
-}
 
 /// Compares two arrays of ``ChoiceValue`` by natural numeric order.
 ///

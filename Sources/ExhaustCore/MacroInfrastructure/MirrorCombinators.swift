@@ -96,39 +96,24 @@ public extension __ExhaustRuntime {
             allReflective = allReflective && generator.isReflective
         }
 
-        let zipNode: AnyGenerator = .impure(
-            operation: .zip(erased),
-            continuation: { .pure($0) }
-        )
-
-        let arity = erased.count
-
-        // The macro expands an initializer call to the forward closure and derives the backward from the same member labels, so the pair inverts by construction of the expansion and the `.isomorph` guarantee holds without user involvement.
-        return Gen.liftF(.transform(
-            kind: .isomorph(
-                forward: { anyValues in
-                    let values = try zipComponents(anyValues, arity: arity)
-                    var index = 0
-                    func next<Element>(_: Element.Type) -> Element {
-                        defer { index += 1 }
-                        return values[index] as! Element
-                    }
-                    return forward((repeat next((each T).self)))
-                },
-                backward: { output in
-                    // Reflection probes pick branches against a shared final output, so a mismatched value is a normal rejection. Throw instead of trapping.
-                    guard let typed = output as? NewOutput,
-                          let values = Self._mirrorExtractAll(typed, labels: labels)
-                    else {
-                        throw ReflectionError.contramapWasWrongType
-                    }
-                    return values
-                },
-                inputType: [Any].self,
-                outputType: NewOutput.self
-            ),
-            inner: zipNode
-        )).wrapped(isReflective: allReflective)
+        // The macro expands an initializer call to the forward closure and derives the backward from the same member labels, so the pair inverts by construction of the expansion and the `.isomorph` guarantee `Gen.zipped` relies on holds without user involvement.
+        return Gen.zipped(
+            erased,
+            pack: { values in
+                var index = 0
+                func next<Element>(_: Element.Type) -> Element {
+                    defer { index += 1 }
+                    return values[index] as! Element
+                }
+                return forward((repeat next((each T).self)))
+            },
+            unpack: { output in
+                guard let values = Self._mirrorExtractAll(output, labels: labels) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
     }
 
     /// Zips generators through a qualified enum-case or static-factory call, validating the output shape during reflection.
@@ -140,22 +125,9 @@ public extension __ExhaustRuntime {
         parameterOrder: [Int],
         forward: @Sendable @escaping ((repeat each Input)) -> Output
     ) -> ReflectiveGenerator<Output> {
-        let backward: @Sendable (Output) -> [Any]? = { output in
-            guard let payloadValues = _mirrorExtractEnumCase(
-                output,
-                caseName: caseName,
-                associatedValueCount: parameterOrder.count
-            ),
-                payloadValues.count == parameterOrder.count,
-                parameterOrder.allSatisfy(payloadValues.indices.contains)
-            else {
-                return nil
-            }
-            return parameterOrder.map { payloadValues[$0] }
-        }
-        return _macroZip(
+        _macroZip(
             repeat each generators,
-            backward: backward,
+            backward: _enumCaseBackward(caseName: caseName, parameterOrder: parameterOrder),
             forward: forward
         )
     }
@@ -176,38 +148,453 @@ public extension __ExhaustRuntime {
             allReflective = allReflective && generator.isReflective
         }
 
-        let zipNode: AnyGenerator = .impure(
-            operation: .zip(erased),
-            continuation: { .pure($0) }
-        )
-
-        let arity = erased.count
-
         // The macro expands an enum case constructor to the forward closure and a pattern match over the same case to the backward, so the pair inverts by construction of the expansion. A `nil` from the pattern match means the value is a different case: a normal rejection during pick-branch probing, surfaced as a throw.
-        return Gen.liftF(.transform(
-            kind: .isomorph(
-                forward: { anyValues in
-                    let values = try zipComponents(anyValues, arity: arity)
-                    var index = 0
-                    func next<Element>(_: Element.Type) -> Element {
-                        defer { index += 1 }
-                        return values[index] as! Element
-                    }
-                    return forward((repeat next((each T).self)))
-                },
-                backward: { output in
-                    guard let typed = output as? NewOutput,
-                          let values = backward(typed)
-                    else {
-                        throw ReflectionError.contramapWasWrongType
-                    }
-                    return values
-                },
-                inputType: [Any].self,
-                outputType: NewOutput.self
+        return Gen.zipped(
+            erased,
+            pack: { values in
+                var index = 0
+                func next<Element>(_: Element.Type) -> Element {
+                    defer { index += 1 }
+                    return values[index] as! Element
+                }
+                return forward((repeat next((each T).self)))
+            },
+            unpack: { output in
+                guard let values = backward(output) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    /// Builds the backward extraction for a qualified enum-case call, shared by every arity.
+    ///
+    /// Returns `nil` for a value of a different case, a different associated-value count, or a `parameterOrder` that does not address the payload. Each is a normal reflection rejection rather than a programmer error, so the caller turns it into a throw.
+    private static func _enumCaseBackward<Output>(
+        caseName: String,
+        parameterOrder: [Int]
+    ) -> @Sendable (Output) -> [Any]? {
+        { output in
+            guard let payloadValues = _mirrorExtractEnumCase(
+                output,
+                caseName: caseName,
+                associatedValueCount: parameterOrder.count
             ),
-            inner: zipNode
-        )).wrapped(isReflective: allReflective)
+                payloadValues.count == parameterOrder.count,
+                parameterOrder.allSatisfy(payloadValues.indices.contains)
+            else {
+                return nil
+            }
+            return parameterOrder.map { payloadValues[$0] }
+        }
+    }
+
+    // MARK: - Arity-Specialised Overloads
+
+    // Concrete-arity overloads that avoid parameter pack expansion and tuple metadata construction.
+    // ExhaustCore ships as a precompiled WMO xcframework, so the client cannot monomorphise
+    // the variadic versions — every pack expansion runs through the generic runtime. These
+    // overloads use individual type parameters and direct positional casts instead.
+
+    // MARK: Arity 2
+
+    static func _macroZip<T0, T1, NewOutput>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        labels: [String],
+        forward: @Sendable @escaping (T0, T1) -> NewOutput
+    ) -> ReflectiveGenerator<NewOutput> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in forward(values[0] as! T0, values[1] as! T1) },
+            unpack: { output in
+                guard let values = Self._mirrorExtractAll(output, labels: labels) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    static func _macroZip<T0, T1, NewOutput>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        backward: @Sendable @escaping (NewOutput) -> [Any]?,
+        forward: @Sendable @escaping (T0, T1) -> NewOutput
+    ) -> ReflectiveGenerator<NewOutput> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in forward(values[0] as! T0, values[1] as! T1) },
+            unpack: { output in
+                guard let values = backward(output) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    static func _macroZipEnumCase<T0, T1, Output>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        caseName: String,
+        parameterOrder: [Int],
+        forward: @Sendable @escaping (T0, T1) -> Output
+    ) -> ReflectiveGenerator<Output> {
+        _macroZip(
+            gen0, gen1,
+            backward: _enumCaseBackward(caseName: caseName, parameterOrder: parameterOrder),
+            forward: forward
+        )
+    }
+
+    static func __zip<T0, T1>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>
+    ) -> ReflectiveGenerator<(T0, T1)> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in (values[0] as! T0, values[1] as! T1) },
+            unpack: { packed in [packed.0 as Any, packed.1 as Any] }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    // MARK: Arity 3
+
+    static func _macroZip<T0, T1, T2, NewOutput>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        labels: [String],
+        forward: @Sendable @escaping (T0, T1, T2) -> NewOutput
+    ) -> ReflectiveGenerator<NewOutput> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2) },
+            unpack: { output in
+                guard let values = Self._mirrorExtractAll(output, labels: labels) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    static func _macroZip<T0, T1, T2, NewOutput>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        backward: @Sendable @escaping (NewOutput) -> [Any]?,
+        forward: @Sendable @escaping (T0, T1, T2) -> NewOutput
+    ) -> ReflectiveGenerator<NewOutput> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2) },
+            unpack: { output in
+                guard let values = backward(output) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    static func _macroZipEnumCase<T0, T1, T2, Output>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        caseName: String,
+        parameterOrder: [Int],
+        forward: @Sendable @escaping (T0, T1, T2) -> Output
+    ) -> ReflectiveGenerator<Output> {
+        _macroZip(
+            gen0, gen1, gen2,
+            backward: _enumCaseBackward(caseName: caseName, parameterOrder: parameterOrder),
+            forward: forward
+        )
+    }
+
+    static func __zip<T0, T1, T2>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>
+    ) -> ReflectiveGenerator<(T0, T1, T2)> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in (values[0] as! T0, values[1] as! T1, values[2] as! T2) },
+            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any] }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    // MARK: Arity 4
+
+    static func _macroZip<T0, T1, T2, T3, NewOutput>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>,
+        labels: [String],
+        forward: @Sendable @escaping (T0, T1, T2, T3) -> NewOutput
+    ) -> ReflectiveGenerator<NewOutput> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3) },
+            unpack: { output in
+                guard let values = Self._mirrorExtractAll(output, labels: labels) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    static func _macroZip<T0, T1, T2, T3, NewOutput>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>,
+        backward: @Sendable @escaping (NewOutput) -> [Any]?,
+        forward: @Sendable @escaping (T0, T1, T2, T3) -> NewOutput
+    ) -> ReflectiveGenerator<NewOutput> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3) },
+            unpack: { output in
+                guard let values = backward(output) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    static func _macroZipEnumCase<T0, T1, T2, T3, Output>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>,
+        caseName: String,
+        parameterOrder: [Int],
+        forward: @Sendable @escaping (T0, T1, T2, T3) -> Output
+    ) -> ReflectiveGenerator<Output> {
+        _macroZip(
+            gen0, gen1, gen2, gen3,
+            backward: _enumCaseBackward(caseName: caseName, parameterOrder: parameterOrder),
+            forward: forward
+        )
+    }
+
+    static func __zip<T0, T1, T2, T3>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>
+    ) -> ReflectiveGenerator<(T0, T1, T2, T3)> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in (values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3) },
+            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any, packed.3 as Any] }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    // MARK: Arity 5
+
+    static func _macroZip<T0, T1, T2, T3, T4, NewOutput>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>,
+        _ gen4: ReflectiveGenerator<T4>,
+        labels: [String],
+        forward: @Sendable @escaping (T0, T1, T2, T3, T4) -> NewOutput
+    ) -> ReflectiveGenerator<NewOutput> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4) },
+            unpack: { output in
+                guard let values = Self._mirrorExtractAll(output, labels: labels) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    static func _macroZip<T0, T1, T2, T3, T4, NewOutput>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>,
+        _ gen4: ReflectiveGenerator<T4>,
+        backward: @Sendable @escaping (NewOutput) -> [Any]?,
+        forward: @Sendable @escaping (T0, T1, T2, T3, T4) -> NewOutput
+    ) -> ReflectiveGenerator<NewOutput> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4) },
+            unpack: { output in
+                guard let values = backward(output) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    static func _macroZipEnumCase<T0, T1, T2, T3, T4, Output>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>,
+        _ gen4: ReflectiveGenerator<T4>,
+        caseName: String,
+        parameterOrder: [Int],
+        forward: @Sendable @escaping (T0, T1, T2, T3, T4) -> Output
+    ) -> ReflectiveGenerator<Output> {
+        _macroZip(
+            gen0, gen1, gen2, gen3, gen4,
+            backward: _enumCaseBackward(caseName: caseName, parameterOrder: parameterOrder),
+            forward: forward
+        )
+    }
+
+    static func __zip<T0, T1, T2, T3, T4>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>,
+        _ gen4: ReflectiveGenerator<T4>
+    ) -> ReflectiveGenerator<(T0, T1, T2, T3, T4)> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in (values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4) },
+            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any, packed.3 as Any, packed.4 as Any] }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    // MARK: Arity 6
+
+    static func _macroZip<T0, T1, T2, T3, T4, T5, NewOutput>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>,
+        _ gen4: ReflectiveGenerator<T4>,
+        _ gen5: ReflectiveGenerator<T5>,
+        labels: [String],
+        forward: @Sendable @escaping (T0, T1, T2, T3, T4, T5) -> NewOutput
+    ) -> ReflectiveGenerator<NewOutput> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase(), gen5.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective && gen5.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4, values[5] as! T5) },
+            unpack: { output in
+                guard let values = Self._mirrorExtractAll(output, labels: labels) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    static func _macroZip<T0, T1, T2, T3, T4, T5, NewOutput>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>,
+        _ gen4: ReflectiveGenerator<T4>,
+        _ gen5: ReflectiveGenerator<T5>,
+        backward: @Sendable @escaping (NewOutput) -> [Any]?,
+        forward: @Sendable @escaping (T0, T1, T2, T3, T4, T5) -> NewOutput
+    ) -> ReflectiveGenerator<NewOutput> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase(), gen5.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective && gen5.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in forward(values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4, values[5] as! T5) },
+            unpack: { output in
+                guard let values = backward(output) else {
+                    throw ReflectionError.contramapWasWrongType
+                }
+                return values
+            }
+        ).wrapped(isReflective: allReflective)
+    }
+
+    static func _macroZipEnumCase<T0, T1, T2, T3, T4, T5, Output>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>,
+        _ gen4: ReflectiveGenerator<T4>,
+        _ gen5: ReflectiveGenerator<T5>,
+        caseName: String,
+        parameterOrder: [Int],
+        forward: @Sendable @escaping (T0, T1, T2, T3, T4, T5) -> Output
+    ) -> ReflectiveGenerator<Output> {
+        _macroZip(
+            gen0, gen1, gen2, gen3, gen4, gen5,
+            backward: _enumCaseBackward(caseName: caseName, parameterOrder: parameterOrder),
+            forward: forward
+        )
+    }
+
+    static func __zip<T0, T1, T2, T3, T4, T5>(
+        _ gen0: ReflectiveGenerator<T0>,
+        _ gen1: ReflectiveGenerator<T1>,
+        _ gen2: ReflectiveGenerator<T2>,
+        _ gen3: ReflectiveGenerator<T3>,
+        _ gen4: ReflectiveGenerator<T4>,
+        _ gen5: ReflectiveGenerator<T5>
+    ) -> ReflectiveGenerator<(T0, T1, T2, T3, T4, T5)> {
+        let erased: ContiguousArray<AnyGenerator> = [gen0.gen.erase(), gen1.gen.erase(), gen2.gen.erase(), gen3.gen.erase(), gen4.gen.erase(), gen5.gen.erase()]
+        let allReflective = gen0.isReflective && gen1.isReflective && gen2.isReflective && gen3.isReflective && gen4.isReflective && gen5.isReflective
+
+        return Gen.zipped(
+            erased,
+            pack: { values in (values[0] as! T0, values[1] as! T1, values[2] as! T2, values[3] as! T3, values[4] as! T4, values[5] as! T5) },
+            unpack: { packed in [packed.0 as Any, packed.1 as Any, packed.2 as Any, packed.3 as Any, packed.4 as Any, packed.5 as Any] }
+        ).wrapped(isReflective: allReflective)
     }
 
     // MARK: - Scalar conversion overloads

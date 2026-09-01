@@ -130,7 +130,7 @@ The `.metamorph` generator combinator builds the relation into the generator, pa
 
 The search has three phases. Screening and random sampling run first, the same as `#exhaust`. Then **mutation** takes over: Exhaust modifies inputs from the corpus, keeps those that reach new branches, and discards those that don't. When the time budget runs out or new branches stop appearing, the run terminates.
 
-Unlike `#exhaust`, a coverage-guided run does not stop at the first failure. Failures are reduced to minimal counterexamples and grouped into **fault clusters**. Two failures that reduce to the same minimal form are one cluster. The report lists each distinct fault with its reduced counterexample.
+Unlike `#exhaust`, a coverage-guided run does not stop at the first failure. Failures are reduced to minimal counterexamples and grouped into **fault clusters**. Two failures that reduce to the same minimal form are one cluster. The report lists each cluster with its reduced counterexample. Because reduction only requires that the input keeps failing, and not that it keeps failing for the same reason, the cluster count is a lower bound on the number of distinct bugs.
 
 `#explore(MySpec.self, mode:, time:)` applies the same search to `@StateMachine` specs, mutating command sequences instead of values. <doc:CoverageGuidedFuzzing> covers instrumentation setup, isolation requirements, and how to read the report.
 

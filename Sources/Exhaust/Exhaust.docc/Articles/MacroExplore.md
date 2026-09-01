@@ -30,7 +30,7 @@ Returns an ``ExploreReport`` with per-direction coverage and the counterexample 
 
 For the full guide, see <doc:DirectedExploration>.
 
-**Coverage-guided fuzzing** (`time:`) gives Exhaust a wall-clock time budget. It watches which branches your code takes, uses that feedback to generate inputs that reach new branches, and catalogues every distinct fault it finds rather than stopping at the first.
+**Coverage-guided fuzzing** (`time:`) gives Exhaust a wall-clock time budget. It watches which branches your code takes, uses that feedback to generate inputs that reach new branches, and catalogues the distinct counterexamples it finds rather than stopping at the first.
 
 > Experiment: This mode is experimental. Settings, report format, and search behaviour may change in any release.
 

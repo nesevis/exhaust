@@ -28,10 +28,22 @@ public enum PropertyFuzzSettings: Sendable {
     /// Defaults to `.log(.error)` when omitted, so only error-level messages appear.
     case log(LogLevel)
 
-    /// Stops the run as soon as its first fault is classified, instead of spending the remaining budget cataloging every distinct fault.
+    /// Stops the run as soon as its first fault is classified, instead of spending the remaining budget cataloging further distinct counterexamples.
     ///
-    /// The failing input is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is a complete fault inventory, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
+    /// The failing input is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is as complete a fault inventory as the mode offers, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
     case failFast
+
+    /// Skips the boundary-screening phase, so the search starts directly from random sampling.
+    ///
+    /// Screening probes covering-array rows built from each choice site's boundary values before any random search. On most properties those rows are the cheapest source of early faults and corpus seeds, so the default keeps them. Skip screening when boundary-shaped inputs cannot reach the property's interesting behavior — most commonly a sparse precondition that discards nearly every boundary row — or when comparing search strategies that must start from identical conditions, where screening would give one arm a head start the comparison is not measuring. The screening phase's budget flows to the remaining phases; nothing else about the search changes.
+    case skipScreening
+
+    /// Ends the run early once the search stops reaching new code, returning the unused budget instead of spending it.
+    ///
+    /// Saturation is judged from the run's own coverage statistics: the estimated probability that the next attempt reaches an edge nothing has reached yet, scoped to what this generator and property can actually cover. That is the same figure the report prints as "estimated chance the next attempt covers a new edge". Once it falls below 1 in 10,000, the run stops and the report's termination reads ``FuzzReport/Termination/coveragePlateau(unused:)``.
+    ///
+    /// Off by default, and worth understanding before switching on. Coverage saturation is not the same as having found every fault: a failure on an already-covered path stays reachable long after the last new edge, and on a sparse-precondition workload roughly a fifth of all detections arrived after coverage stopped growing. Use this where the budget is long, the machine is shared, and returning unspent time is worth more than the tail of the search. Keep the default where finding faults matters more than finishing early.
+    case stopWhenSaturated
 }
 
 /// Controls test behavior for `#explore(Spec.self, mode:, time:)` coverage-guided runs, passed as variadic arguments.
@@ -57,10 +69,22 @@ public enum StateMachineFuzzSettings: Sendable {
     /// Defaults to `.log(.error)` when omitted, so only error-level messages appear.
     case log(LogLevel)
 
-    /// Stops the run as soon as its first fault is classified, instead of spending the remaining budget cataloging every distinct fault.
+    /// Stops the run as soon as its first fault is classified, instead of spending the remaining budget cataloging further distinct counterexamples.
     ///
-    /// The failing command sequence is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is a complete fault inventory, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
+    /// The failing command sequence is still reduced before the run stops, so the report carries one reduced cluster and the recorded issue names a minimal counterexample. Use this where any failure fails the run and further faults would not change the outcome, such as a merge gate; keep the default full-duration run when the goal is as complete a fault inventory as the mode offers, because faults beyond the first are exactly what the remaining budget buys. The report's termination reads ``FuzzReport/Termination/firstFaultFound``.
     case failFast
+
+    /// Skips the boundary-screening phase, so the search starts directly from random sampling.
+    ///
+    /// Screening probes covering-array rows built from each choice site's boundary values before any random search. On most properties those rows are the cheapest source of early faults and corpus seeds, so the default keeps them. Skip screening when boundary-shaped inputs cannot reach the property's interesting behavior — most commonly a sparse precondition that discards nearly every boundary row — or when comparing search strategies that must start from identical conditions, where screening would give one arm a head start the comparison is not measuring. The screening phase's budget flows to the remaining phases; nothing else about the search changes.
+    case skipScreening
+
+    /// Ends the run early once the search stops reaching new code, returning the unused budget instead of spending it.
+    ///
+    /// Saturation is judged from the run's own coverage statistics: the estimated probability that the next attempt reaches an edge nothing has reached yet, scoped to what this generator and property can actually cover. That is the same figure the report prints as "estimated chance the next attempt covers a new edge". Once it falls below 1 in 10,000, the run stops and the report's termination reads ``FuzzReport/Termination/coveragePlateau(unused:)``.
+    ///
+    /// Off by default, and worth understanding before switching on. Coverage saturation is not the same as having found every fault: a failure on an already-covered path stays reachable long after the last new edge, and on a sparse-precondition workload roughly a fifth of all detections arrived after coverage stopped growing. Use this where the budget is long, the machine is shared, and returning unspent time is worth more than the tail of the search. Keep the default where finding faults matters more than finishing early.
+    case stopWhenSaturated
 
     /// Limits the maximum number of commands per generated sequence.
     ///
@@ -85,8 +109,12 @@ struct ParsedPropertyFuzzSettings {
     var invalidReplayMessage: String?
     var suppress = SuppressFlags()
     var logLevel: LogLevel = .error
-    /// Whether the run stops at its first classified fault instead of cataloging every distinct fault.
+    /// Whether the run stops at its first classified fault instead of cataloging further distinct counterexamples.
     var failFast = false
+    /// Whether the boundary-screening phase is skipped, so the search starts from random sampling.
+    var skipScreening = false
+    /// Whether the run ends early once its discovery-probability estimate says coverage has saturated.
+    var stopWhenSaturated = false
 
     init(_ settings: [PropertyFuzzSettings]) {
         for setting in settings {
@@ -105,6 +133,10 @@ struct ParsedPropertyFuzzSettings {
                     logLevel = level
                 case .failFast:
                     failFast = true
+                case .skipScreening:
+                    skipScreening = true
+                case .stopWhenSaturated:
+                    stopWhenSaturated = true
             }
         }
     }
@@ -142,6 +174,10 @@ struct ParsedStateMachineFuzzSettings {
                     coreSettings.append(.log(level))
                 case .failFast:
                     coreSettings.append(.failFast)
+                case .skipScreening:
+                    coreSettings.append(.skipScreening)
+                case .stopWhenSaturated:
+                    coreSettings.append(.stopWhenSaturated)
                 case let .commandLimit(limit):
                     commandLimit = limit
                 case let .parallelize(lanes):

@@ -112,7 +112,7 @@ enum MinimizationScope {
 /// Carries the leaf's node ID plus a marker that tells the graph (on acceptance) whether mutating this leaf might trigger a downstream bind subtree rebuild. The encoder ignores ``mayReshapeOnAcceptance`` and minimizes the leaf value identically for both kinds. The marker rides along into the encoder's ``ProjectedMutation`` report so that ``ChoiceGraph/apply(_:)`` can route on a per-leaf basis.
 ///
 /// Source builders populate ``mayReshapeOnAcceptance`` from graph metadata: the marker is true when the leaf is the inner child of a non-structurally-constant bind. On acceptance, ``ChoiceGraph/apply(_:)`` reads the marker: a value-only change is written in place, while a reshape change sets ``ChangeApplication/requiresFullRebuild`` so the scheduler rebuilds the graph from the fresh tree.
-struct LeafEntry {
+struct LeafEntry: Sendable {
     /// Identifier of the leaf node.
     let nodeID: Int
 
@@ -176,13 +176,13 @@ enum ExchangeScope {
 }
 
 /// Scope for redistribution along type-compatibility edges.
-struct RedistributionScope {
+struct RedistributionScope: Sendable {
     /// Source-sink pairs from type-compatibility edges. Unordered at the query level; ``GraphRedistributionEncoder`` orders them by full-delta candidate shortlex.
     let pairs: [RedistributionPair]
 }
 
 /// A single source-sink pair for redistribution.
-struct RedistributionPair {
+struct RedistributionPair: Sendable {
     /// The source leaf (non-zero, can donate magnitude).
     let source: LeafEntry
 
@@ -225,13 +225,13 @@ struct RelationPair {
 }
 
 /// Scope for tandem lockstep reduction.
-struct TandemScope {
+struct TandemScope: Sendable {
     /// Groups of same-typed leaves eligible for lockstep reduction.
     let groups: [TandemGroup]
 }
 
 /// A group of same-typed leaves for tandem reduction.
-struct TandemGroup {
+struct TandemGroup: Sendable {
     /// Leaves in this group, each carrying the bind-inner reshape marker.
     let leaves: [LeafEntry]
 
@@ -244,7 +244,7 @@ struct TandemGroup {
 /// Defines the scope of a permutation operation.
 ///
 /// Permutation reorders children at a node without modifying structure or values. It is an exact reduction with zero structural and value yield, accepted purely on shortlex improvement.
-struct PermutationScope {
+struct PermutationScope: Sendable {
     /// The parent node whose children are reordered.
     let parentNodeID: Int
 

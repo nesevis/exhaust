@@ -6,8 +6,45 @@ import Foundation
 extension __ExhaustRuntime {
     // MARK: - Summary
 
-    /// Renders the fault inventory for the terminal: throughput header, gap-framed coverage, early-stop accounting, and one compact block per cluster with late discoveries foregrounded. The terminal's job is orientation; full per-cluster detail ships in the checkpoint attachments.
+    /// Renders the terminal summary in the order a reader asks their questions: how many failures, what input, where, whether a longer run would help, and how to reproduce. Every fuzzing-specific figure (throughput, overhead, edge counts, the estimators, phase and attribution counts) is left to ``renderFuzzAttachmentSummary(_:)``, so the terminal never asks the reader to know what an edge is.
     package static func renderFuzzSummary(_ report: FuzzReport) -> String {
+        var lines: [String] = []
+
+        // "At least": clusters are keyed by reduced form, and two faults whose inputs reduce to the same form merge into one, so the count is a floor on distinct faults.
+        let failureWord = report.clusters.count == 1 ? "distinct failure" : "distinct failures"
+        lines.append(
+            "#explore(time:) found at least \(report.clusters.count) \(failureWord) in \(renderDuration(report.elapsed)) (\(report.evaluatedSearchCases) inputs tried)."
+        )
+
+        let isFrontier = frontierPredicate(for: report)
+        for cluster in frontierFirst(report.clusters, isFrontier: isFrontier) {
+            lines.append("")
+            lines.append(contentsOf: renderClusterBrief(cluster, isFrontier: isFrontier(cluster)))
+        }
+
+        lines.append("")
+        if let verdict = renderContinuationVerdict(report) {
+            lines.append(verdict)
+        }
+        if report.offLaneEdgeHits > 0 {
+            lines.append(
+                "\(report.offLaneEdgeHits) times, code under test ran somewhere the search could not observe (a @MainActor function, a custom-executor actor, a detached task, or another test running at the same time), so those runs were not searched. For main-actor or custom-executor work, add inline-8bit-counters to the coverage flags."
+            )
+        }
+        for (symptom, count) in report.unreducedFailureCounts.sorted(by: { $0.key < $1.key }) {
+            lines.append("\(count) more failure\(count == 1 ? "" : "s") (\(symptom)) could not be reduced to a form shown above.")
+        }
+        if report.discardedEvaluations > 0 {
+            let percent = Int((Double(report.discardedEvaluations) / Double(max(report.evaluatedSearchCases, 1)) * 100).rounded())
+            lines.append("\(percent)% of inputs were skipped by the property (precondition not met); the search used them to find inputs that meet it.")
+        }
+        lines.append("Reproduce: .replay(\(report.seed))")
+        lines.append("Coverage, throughput, and full suspect lists are in the explore-time-summary.txt attachment.")
+        return lines.joined(separator: "\n")
+    }
+
+    /// Renders the full inventory for the summary attachment: throughput header, gap-framed coverage, the estimators, early-stop accounting, and one block per cluster with membership, discovery phase, and up to three suspects. This is the maintainer's view; the terminal shows ``renderFuzzSummary(_:)``.
+    package static func renderFuzzAttachmentSummary(_ report: FuzzReport) -> String {
         var lines: [String] = []
 
         let clusterWord = report.clusters.count == 1 ? "fault cluster" : "fault clusters"
@@ -25,6 +62,16 @@ extension __ExhaustRuntime {
             "Coverage: \(report.coveredEdgeCount) of \(report.instrumentedEdgeCount) instrumented edges hit; \(uncovered) never hit (module-wide count, includes code the property never calls)."
         )
         lines.append(contentsOf: renderEstimatorLines(report))
+        if report.discardedEvaluations > 0 {
+            lines.append(
+                "Discarded: \(report.discardedEvaluations) of \(report.evaluatedSearchCases) evaluated cases threw a skip error; coverage-novel discards stay in the corpus as mutation parents at \(Int((FuzzTunables.discardParentEnergy * 100).rounded()))% weight."
+            )
+        }
+        if report.offLaneEdgeHits > 0 {
+            lines.append(
+                "\(report.offLaneEdgeHits) edge hits fired off the run's lane and were not searched: property work on another executor (a @MainActor function, a custom-executor actor, a detached task) or another test exercising the instrumented code at the same time. For main-actor or custom-executor work, add inline-8bit-counters to the coverage flags."
+            )
+        }
 
         if case let .coveragePlateau(unused) = report.termination {
             lines.append(
@@ -32,15 +79,8 @@ extension __ExhaustRuntime {
             )
         }
 
-        // A cluster discovered late with few instances marks a fault region the search frontier had only just reached — the strongest signal to extend the budget. Those lead the inventory.
-        let frontierThreshold = report.elapsed * 3 / 4
-        let isFrontier: (FuzzReport.Cluster) -> Bool = { cluster in
-            cluster.firstSeen >= frontierThreshold
-                && cluster.instanceCount <= FuzzTunables.perClusterReductionCap
-        }
-        let ordered = report.clusters.filter(isFrontier).sorted { $0.firstSeen > $1.firstSeen }
-            + report.clusters.filter { isFrontier($0) == false }
-
+        let isFrontier = frontierPredicate(for: report)
+        let ordered = frontierFirst(report.clusters, isFrontier: isFrontier)
         if ordered.isEmpty == false {
             lines.append("")
         }
@@ -48,9 +88,7 @@ extension __ExhaustRuntime {
             if index > 0 {
                 lines.append("")
             }
-            lines.append(
-                contentsOf: renderClusterBrief(cluster, isFrontier: isFrontier(cluster))
-            )
+            lines.append(contentsOf: renderClusterDetail(cluster, isFrontier: isFrontier(cluster)))
         }
         if ordered.contains(where: \.isLikelySplit) {
             lines.append("~paths: one reduced form reached through multiple coverage signatures, possibly distinct paths to one fault.")
@@ -67,6 +105,52 @@ extension __ExhaustRuntime {
         }
         lines.append("Reproduce: .replay(\(report.seed))")
         return lines.joined(separator: "\n")
+    }
+
+    /// Answers "should I run longer?" from the termination reason and the run's own discovery estimate, without naming the saturation rule or the estimators. Nil when the run ended for a reason that says nothing about the search (an attempt limit, unreachable coverage, a failed generator) or never covered an edge.
+    private static func renderContinuationVerdict(_ report: FuzzReport) -> String? {
+        switch report.termination {
+            case let .coveragePlateau(unused):
+                return "Stopped \(renderDuration(unused)) early: the search had stopped reaching new code, so a longer run is unlikely to find more."
+            case .firstFaultFound:
+                return "Stopped at the first failure (.failFast)."
+            case .budgetExhausted:
+                guard report.coveredEdgeCount > 0 else {
+                    return nil
+                }
+                guard report.evaluatedSearchCases > 0, report.incidenceTotal > 0 else {
+                    return nil
+                }
+                let idle = TimeSpan(
+                    nanoseconds: report.elapsed.nanoseconds - min(report.lastDiscovery.nanoseconds, report.elapsed.nanoseconds)
+                )
+                // The same estimate the saturation stop reads, so "still reaching new code" and "would have stopped early" cannot both be true of one run. The idle duration stays in the sentence because it is what a reader can picture; it no longer decides the verdict, because time since the last discovery is not a consistent estimator of anything.
+                let edgesPerAttempt = Double(report.incidenceTotal) / Double(report.evaluatedSearchCases)
+                let newEdgeProbability = report.estimatedNextEdgeProbability * edgesPerAttempt
+                if newEdgeProbability >= FuzzTunables.saturationNextEdgeProbability {
+                    return "Used the whole budget and was still reaching new code \(renderDuration(idle)) before the end; a longer run may find more."
+                }
+                return "Used the whole budget; the last new code was reached \(renderDuration(idle)) before the end, so a longer run is unlikely to find more."
+            case .attemptLimitReached, .coverageUnreachable, .instrumentationMissing, .invalidConfiguration, .generationFailed:
+                return nil
+        }
+    }
+
+    /// A cluster discovered late with few instances marks a fault region the search frontier had only just reached, the strongest signal to extend the budget. Those lead the inventory in both renderings.
+    private static func frontierPredicate(for report: FuzzReport) -> (FuzzReport.Cluster) -> Bool {
+        let frontierThreshold = report.elapsed * 3 / 4
+        return { cluster in
+            cluster.firstSeen >= frontierThreshold
+                && cluster.instanceCount <= FuzzTunables.perClusterReductionCap
+        }
+    }
+
+    private static func frontierFirst(
+        _ clusters: [FuzzReport.Cluster],
+        isFrontier: (FuzzReport.Cluster) -> Bool
+    ) -> [FuzzReport.Cluster] {
+        clusters.filter(isFrontier).sorted { $0.firstSeen > $1.firstSeen }
+            + clusters.filter { isFrontier($0) == false }
     }
 
     /// Renders the estimator lines: the price of one more edge and the completeness fraction against the run's own reachable set. The reachable-set scoping is stated inline so the fraction cannot be read as module coverage.
@@ -89,6 +173,13 @@ extension __ExhaustRuntime {
                 "No edge was hit by only a single evaluated case, so the estimated chance of a new edge on the next evaluated case is below 1 in \(report.evaluatedSearchCases)."
             )
         }
+        // With no doubleton the Chao2 ratio never runs and the estimate degenerates to the covered count or the singleton fallback: a number that looks like a verdict and is not one.
+        guard report.edgeDoubletonCount > 0 else {
+            lines.append(
+                "Too few repeat observations to estimate how many edges this generator and property can reach."
+            )
+            return lines
+        }
         let reachable = report.estimatedReachableEdgeCount
         let remaining = max(0, Int(reachable.rounded()) - report.coveredEdgeCount)
         lines.append(
@@ -102,8 +193,41 @@ extension __ExhaustRuntime {
 
     // MARK: - Clusters
 
-    /// Renders one cluster's terminal block: a name line, an attribute line, the reduced counterexample (collapsed onto one line when it stays readable), and the single strongest user-code suspect. The full ranked edge list lives in the cluster's attachment.
+    /// Renders one cluster for the terminal: a numbered symptom line with the time of first sighting, the reduced counterexample, and the single strongest user-code suspect. The number is the cluster's attachment number, so `explore-time-cluster-N.txt` matches.
     private static func renderClusterBrief(
+        _ cluster: FuzzReport.Cluster,
+        isFrontier: Bool
+    ) -> [String] {
+        let symptoms = cluster.symptoms.joined(separator: ", ")
+        let lateSuffix = isFrontier ? " (late: the search had only just reached this code)" : ""
+        var lines = ["\(cluster.id + 1). \(symptoms), first seen at \(renderDuration(cluster.firstSeen))\(lateSuffix)"]
+        let counterexample = collapsedCounterexample(cluster.reducedDescription)
+        lines.append(contentsOf: counterexample.map { "   \($0)" })
+        if let suspectLine = renderLikelyLocation(for: cluster) {
+            lines.append("   likely in \(suspectLine)")
+        }
+        return lines
+    }
+
+    /// The terminal's one-line location: the top suspect alone when it carries a line number, otherwise every ranked suspect (at most three), because without a line the ranking cannot tell an entry point from the branch beneath it and the reader is better served by the chain. Suspects sharing one file print the file once.
+    private static func renderLikelyLocation(for cluster: FuzzReport.Cluster) -> String? {
+        let suspects = terminalSuspectLocations(for: cluster)
+        guard let first = suspects.first else {
+            return nil
+        }
+        if (first.line ?? 0) > 0 || suspects.count == 1 {
+            return first.rendered
+        }
+        let files = Set(suspects.map(\.file))
+        let hasAnyLine = suspects.contains { ($0.line ?? 0) > 0 }
+        if files.count == 1, hasAnyLine == false, let file = first.file {
+            return "\(suspects.map(\.symbol).joined(separator: ", ")) (\(file))"
+        }
+        return suspects.map(\.rendered).joined(separator: ", ")
+    }
+
+    /// Renders one cluster's attachment-summary block: a name line, an attribute line, the reduced counterexample (collapsed onto one line when it stays readable), and up to three user-code suspects. The full ranked edge list lives in the cluster's own attachment.
+    private static func renderClusterDetail(
         _ cluster: FuzzReport.Cluster,
         isFrontier: Bool
     ) -> [String] {
@@ -209,6 +333,10 @@ extension __ExhaustRuntime {
 
     /// Picks up to three discriminating edges worth a terminal line, from the edges that symbolized into user code. Locations with a resolved line number lead (function-entry edges name a specific location; interior `:0` edges collapse to the enclosing function's name and read generic), and symbols that restate the symptom's own error type trail. Candidates naming the same function collapse into one unless both carry resolved lines that differ — `audit (RacyLedger.swift:45)` absorbs `audit (RacyLedger.swift)` and a file-less `audit` (the line-first ordering makes the line-bearing form the survivor), while `audit (RacyLedger.swift:52)` stays a separate suspect. Empty when nothing symbolized usefully.
     static func terminalSuspects(for cluster: FuzzReport.Cluster) -> [String] {
+        terminalSuspectLocations(for: cluster).map(\.rendered)
+    }
+
+    private static func terminalSuspectLocations(for cluster: FuzzReport.Cluster) -> [SuspectLocation] {
         let candidates: [SuspectLocation] = cluster.discriminatingEdges.compactMap { edge in
             guard let location = edge.location, location.contains("/<compiler-generated>") == false else {
                 return nil
@@ -249,7 +377,7 @@ extension __ExhaustRuntime {
                 break
             }
         }
-        return kept.map(\.rendered)
+        return kept
     }
 
     /// One suspect edge's location, split back out of the symbolizer's composed string for compact terminal rendering.
@@ -329,14 +457,36 @@ extension __ExhaustRuntime {
         return String(format: "%.1fs", duration.seconds)
     }
 
+    /// The hard-failure diagnostic for an instrumented build whose coverage the run cannot observe, naming the two causes in order of likelihood.
+    ///
+    /// An optimized build inlines small functions from the instrumented library into an uninstrumented caller, and the inlined copies record nothing; that is the common case in a release fuzz target with flags on the library alone. The other cause is executor isolation under `trace-pc-guard`: work on an executor the run did not bind is invisible to the thread-bound context, and `inline-8bit-counters` records it at the cost of requiring the run to have the process to itself.
+    package static var unreachableCoverageMessage: String {
+        """
+        #explore(time:) evaluated the property and recorded no coverage at all, so the search had no signal to follow. A run that reaches \(FuzzTunables.coverageUnreachableAttemptThreshold) attempts this way stops early rather than spending the budget; a shorter run reports it when it ends.
+
+        The build is instrumented, so this is not a missing-flags problem. It means the code the property exercises runs without instrumentation. Two causes, in order of likelihood:
+
+        1. An optimized build inlined the code under test into a module that has no coverage flags. In release configuration the compiler copies small functions into their callers, and a copy compiled as part of an uninstrumented module records nothing. Add the coverage flags to the module that calls the code under test (usually the test target) as well as to the library, and keep `-assert-config Debug` alongside them so `assert` oracles survive.
+
+        2. The property's work runs on an executor the run did not bind: a `@MainActor` function, an actor with a custom executor, or a detached task. `trace-pc-guard` records only on the run's own thread. Add counter-based instrumentation, which records regardless of executor; when both recorders are present the counters are used:
+
+        .unsafeFlags(["-sanitize=undefined",
+                      "-sanitize-coverage=edge,trace-pc-guard,inline-8bit-counters,pc-table"])
+
+        Counter-based coverage is process-global, so give the run the process to itself: `swift test --no-parallel`, or filter down to the single fuzz test.
+        """
+    }
+
     /// The hard-failure diagnostic for a build without coverage instrumentation, with the flags ready to copy-paste.
     package static var missingInstrumentationMessage: String {
         """
         #explore(time:) requires coverage instrumentation, and no instrumented module is loaded. Add the following to the swiftSettings of the target whose coverage you want tracked (typically the library under test):
 
         .unsafeFlags(["-sanitize=undefined",
-                      "-sanitize-coverage=edge,inline-8bit-counters,pc-table"],
+                      "-sanitize-coverage=edge,trace-pc-guard,pc-table"],
                      .when(configuration: .debug))
+
+        For a dedicated fuzz target built with `-c release`, drop the `.when(configuration:)` gate, add "-assert-config", "Debug" to the list, and apply the same flags to the test target that calls the code under test. The CoverageGuidedFuzzing article has both recipes.
         """
     }
 }

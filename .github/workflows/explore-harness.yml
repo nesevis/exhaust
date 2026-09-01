@@ -8,12 +8,13 @@ on:
 # The `#explore(time:)` validation harness is a separate package with coverage `.unsafeFlags` on its
 # fixture. It runs on its own lane, macOS only, and is excluded from the default `swift test` run.
 #
-# The whole harness runs serially (--no-parallel): coverage counters are process-global, so a test
-# executing instrumented fixture code concurrently with a fuzz attempt would land its edges in the
-# open attempt's signature and distort the feedback signal the assertions validate. Serial
-# execution closes that window — each attempt re-zeroes the counters, so tests that ran *before* a
-# fuzz run cannot affect it. The residual assumption is that no test leaks background work past its
-# own completion; a test that starts doing so must move to a filtered invocation of its own.
+# The harness runs twice. The serial pass (--no-parallel) is the baseline every assertion was
+# written against. The parallel pass is the suite recipe the documentation recommends: the fixture
+# is instrumented with `trace-pc-guard`, whose per-run context keeps one test's edges out of
+# another's attempt, so the suites should pass unserialized with the same inventories and in less
+# wall-clock time. A parallel failure with a serial pass points at cross-run leakage (an escaped
+# thread, a process-global table) rather than at the search. Both durations land in the job summary
+# so the wall-clock gain, or its absence, is visible per run.
 jobs:
   explore-harness:
     runs-on: macos-26
@@ -24,8 +25,41 @@ jobs:
       - name: Select Xcode 26.5
         run: sudo xcode-select -s /Applications/Xcode_26.5.app/Contents/Developer
 
+      - name: Build harness
+        run: swift build --package-path ExploreHarness --build-tests
+
       - name: Run harness serially
-        run: swift test --package-path ExploreHarness --no-parallel
+        id: serial
+        run: |
+          START=$(date +%s)
+          swift test --package-path ExploreHarness --skip-build --no-parallel
+          echo "elapsed=$(( $(date +%s) - START ))" >> "$GITHUB_OUTPUT"
+
+      - name: Run harness in parallel
+        id: parallel
+        if: always()
+        run: |
+          START=$(date +%s)
+          swift test --package-path ExploreHarness --skip-build --parallel
+          echo "elapsed=$(( $(date +%s) - START ))" >> "$GITHUB_OUTPUT"
+
+      - name: Report elapsed time
+        if: always()
+        run: |
+          SERIAL="${{ steps.serial.outputs.elapsed }}"
+          PARALLEL="${{ steps.parallel.outputs.elapsed }}"
+          {
+            echo "### Explore harness wall clock"
+            echo ""
+            echo "| pass | outcome | elapsed |"
+            echo "|---|---|---|"
+            echo "| serial (\`--no-parallel\`) | ${{ steps.serial.outcome }} | ${SERIAL:-n/a} s |"
+            echo "| parallel | ${{ steps.parallel.outcome }} | ${PARALLEL:-n/a} s |"
+            if [ -n "$SERIAL" ] && [ -n "$PARALLEL" ] && [ "$PARALLEL" -gt 0 ]; then
+              echo ""
+              echo "Serial / parallel: $(awk "BEGIN { printf \"%.2f\", $SERIAL / $PARALLEL }")×"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Collect crash reports
         if: failure()

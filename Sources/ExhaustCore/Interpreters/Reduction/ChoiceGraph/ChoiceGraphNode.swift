@@ -8,7 +8,7 @@
 /// A node in the ``ChoiceGraph`` representing a value-structural operation in the generator.
 ///
 /// Inactive (unselected) branches carry a nil ``positionRange`` and do not address live entries in the ``ChoiceSequence``. Encoders must skip these nodes. Only nodes with a non-nil position range correspond to mutable sequence positions.
-package struct ChoiceGraphNode {
+package struct ChoiceGraphNode: Sendable {
     /// Assigned sequentially during graph construction. Unstable across rebuilds—a corresponding structural position can receive a different ID after any structural change.
     package let id: Int
 
@@ -61,7 +61,7 @@ package struct ChoiceGraphNode {
 /// ## sequence Dynamic element children with an optional length constraint. The element count depends on the current counterexample. The materializer derives actual length from element count, not from the length generator's output.
 ///
 /// ## just Constant leaf with no value choices — corresponds to `.pure` in the Freer Monad. Position range covers its single sequence entry. No metadata needed. Treated like `chooseBits` for dependency-edge purposes (no edges) but excluded from leaf-position and value-minimization passes.
-package enum ChoiceGraphNodeKind {
+package enum ChoiceGraphNodeKind: Sendable {
     /// Leaf value with type, range, and current value.
     case chooseBits(ChooseBitsMetadata)
 
@@ -88,7 +88,7 @@ package enum ChoiceGraphNodeKind {
 /// These properties are consumed by scope query files (``MinimizationQuery``, ``ExchangeQuery``, ``ReorderingQuery``) to classify leaves without re-deriving the information via full-graph traversals. Each field replaces a specific ``QueryHelpers`` computation that previously required an O(N) walk of the assembled graph.
 ///
 /// Two orthogonal axes: ``bindRole`` determines whether a node is inside a bind's inner subtree (and if so, which bind controls it), while ``controlKind`` classifies special-purpose leaves that are excluded from most encoder operations.
-package struct ScopeAnnotation {
+package struct ScopeAnnotation: Sendable {
     package let bindRole: BindRole
     package let controlKind: ControlKind
 
@@ -116,7 +116,7 @@ package struct ScopeAnnotation {
 }
 
 /// Whether a node is inside a bind's inner subtree.
-package enum BindRole {
+package enum BindRole: Sendable {
     /// Not inside any bind's inner subtree.
     case independent
     /// Inside a bind's inner subtree. Any mutation of this leaf triggers a bound subtree rebuild. Outermost-wins semantics: when binds are nested, descendant leaves are claimed by the outermost enclosing bind, matching the reshape cost that the scheduler must account for.
@@ -124,7 +124,7 @@ package enum BindRole {
 }
 
 /// Special-purpose leaf classification for leaves excluded from most encoder operations.
-package enum ControlKind {
+package enum ControlKind: Sendable {
     /// A regular leaf participating in all encoder operations.
     case standard
     /// A ``TypeTag/depthControl`` chooseBits leaf. Recursive depth markers excluded from lockstep, redistribution, swap, reorder, and composed downstream operations.
@@ -134,7 +134,7 @@ package enum ControlKind {
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/chooseBits(_:)`` leaf node.
-package struct ChooseBitsMetadata {
+package struct ChooseBitsMetadata: Sendable {
     /// Semantic type of the value.
     package let typeTag: TypeTag
 
@@ -149,7 +149,7 @@ package struct ChooseBitsMetadata {
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/pick(_:)`` branch selector node.
-package struct PickMetadata {
+package struct PickMetadata: Sendable {
     /// Pick site fingerprint. Two picks with matching values belong to the same recursive generator (possibly at different depths).
     package let fingerprint: UInt64
 
@@ -167,7 +167,7 @@ package struct PickMetadata {
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/bind(_:)`` dependency node.
-package struct BindMetadata {
+package struct BindMetadata: Sendable {
     /// Stable hash of the originating `.bind` source location, carried through from ``ReflectiveOperation/transform(kind:inner:)`` (via ``ChoiceTree/bind(fingerprint:inner:bound:)``) to identify this bind site across graph rebuilds. Used by ``ChoiceGraph/bindClassifications`` to cache the classification verdict — the same source location always produces the same closure shape, so the verdict is invariant under graph rebuilds.
     package let fingerprint: UInt64
 
@@ -210,13 +210,13 @@ package struct BindMetadata {
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/zip(_:)`` parallel composition node.
-package struct ZipMetadata {
+package struct ZipMetadata: Sendable {
     /// When true, screening analysis skips this subtree.
     package let isOpaque: Bool
 }
 
 /// Metadata for a ``ChoiceGraphNodeKind/sequence(_:)`` node.
-package struct SequenceMetadata {
+package struct SequenceMetadata: Sendable {
     /// Explicit length range from ``ChoiceMetadata``, if any. Constrains deletion — the reducer cannot delete below the lower bound. This is metadata on the node, not a containment edge to a child.
     package let lengthConstraint: ClosedRange<UInt64>?
 
