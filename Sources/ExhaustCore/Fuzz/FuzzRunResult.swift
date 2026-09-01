@@ -60,6 +60,14 @@ package struct FuzzRunnerConfiguration {
     ///
     /// Also disables the plateau window and the sampling time backstop: both exist solely to decide when to hand over to mutation, and with no phase to hand over to they would end the run early instead. Sampling then runs until the budget or the attempt limit stops it, which is what a non-guided control arm needs.
     package var skipMutation: Bool = false
+    /// Ends the run early once the STADS discovery-probability estimate falls below ``FuzzTunables/saturationDiscoveryProbability``, returning the unused budget. Set by the public `.stopWhenSaturated` setting.
+    ///
+    /// Off by default, so a run spends the budget it was given. Coverage saturation is not fault exhaustion: measurement on the Etna IFC protocol found roughly a fifth of all detections arriving after the search stopped reaching new edges, which is why this cannot be the default.
+    package var stopWhenSaturated: Bool = false
+    /// Attempts before the first saturation check, and the floor on sample size the estimate needs to mean anything. Defaults to ``FuzzTunables/saturationMinimumAttempts``; lowered by tests that need the path on a small sample, and the field a calibration harness varies.
+    package var saturationMinimumAttempts: Int = FuzzTunables.saturationMinimumAttempts
+    /// Attempts between saturation checks once the minimum is reached. Defaults to ``FuzzTunables/saturationCheckInterval``.
+    package var saturationCheckInterval: Int = FuzzTunables.saturationCheckInterval
     /// Hard cap on total attempts across all phases, for deterministic tests. Nil means time-bounded only.
     package var attemptLimit: Int?
     /// Ends the run as soon as one fault clusters, rather than continuing to search. Set by the public `.failFast` setting, and by measurement harnesses.

@@ -218,18 +218,23 @@ struct FuzzRunnerTests {
 
     @Test("Saturated coverage ends the run on plateau and returns unused budget")
     func plateauTermination() {
-        // Four reachable edges saturate within a handful of attempts; the mutation-phase plateau window (25% of a 400ms budget) then fires long before the budget ends.
+        // Four reachable edges saturate within a handful of attempts, so the discovery-probability estimate collapses and the saturation stop fires long before the budget ends. The stop is opt-in, so the configuration sets it.
         let source = SyntheticCoverageSource<Int>(edgeCount: 8, edges: { value in
             [value & 0b11]
         })
+        var configuration = FuzzRunnerConfiguration(
+            budgetNanoseconds: 400_000_000,
+            seed: 5
+        )
+        configuration.stopWhenSaturated = true
+        // The estimate needs a sample; production waits 200k attempts, which a 400ms budget cannot reach.
+        configuration.saturationMinimumAttempts = 500
+        configuration.saturationCheckInterval = 500
         let runner = FuzzRunner(
-            gen: Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
+            gen: Gen.choose(in: 0 ... 100_000 as ClosedRange<Int>),
             property: { _ in .pass },
             source: source,
-            configuration: FuzzRunnerConfiguration(
-                budgetNanoseconds: 400_000_000,
-                seed: 5
-            )
+            configuration: configuration
         )
         let result = runner.run()
         guard case let .plateau(unusedNanoseconds) = result.termination else {

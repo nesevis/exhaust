@@ -107,7 +107,7 @@ extension __ExhaustRuntime {
         return lines.joined(separator: "\n")
     }
 
-    /// Answers "should I run longer?" from the termination reason and the time since the last discovery, without naming the plateau rule or the estimators. Nil when the run ended for a reason that says nothing about the search (an attempt limit, unreachable coverage, a failed generator) or never covered an edge.
+    /// Answers "should I run longer?" from the termination reason and the run's own discovery estimate, without naming the saturation rule or the estimators. Nil when the run ended for a reason that says nothing about the search (an attempt limit, unreachable coverage, a failed generator) or never covered an edge.
     private static func renderContinuationVerdict(_ report: FuzzReport) -> String? {
         switch report.termination {
             case let .coveragePlateau(unused):
@@ -118,12 +118,16 @@ extension __ExhaustRuntime {
                 guard report.coveredEdgeCount > 0 else {
                     return nil
                 }
+                guard report.evaluatedSearchCases > 0, report.incidenceTotal > 0 else {
+                    return nil
+                }
                 let idle = TimeSpan(
                     nanoseconds: report.elapsed.nanoseconds - min(report.lastDiscovery.nanoseconds, report.elapsed.nanoseconds)
                 )
-                // The same fraction the plateau rule uses, so "still reaching new code" and "stopped early" cannot both be true of one run.
-                let idleFraction = Double(idle.nanoseconds) / Double(max(report.elapsed.nanoseconds, 1))
-                if idleFraction < FuzzTunables.plateauBudgetFraction {
+                // The same estimate the saturation stop reads, so "still reaching new code" and "would have stopped early" cannot both be true of one run. The idle duration stays in the sentence because it is what a reader can picture; it no longer decides the verdict, because time since the last discovery is not a consistent estimator of anything.
+                let edgesPerAttempt = Double(report.incidenceTotal) / Double(report.evaluatedSearchCases)
+                let newEdgeProbability = report.estimatedNextEdgeProbability * edgesPerAttempt
+                if newEdgeProbability >= FuzzTunables.saturationNextEdgeProbability {
                     return "Used the whole budget and was still reaching new code \(renderDuration(idle)) before the end; a longer run may find more."
                 }
                 return "Used the whole budget; the last new code was reached \(renderDuration(idle)) before the end, so a longer run is unlikely to find more."

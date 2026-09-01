@@ -46,16 +46,20 @@ package enum FuzzTunables {
 
     // MARK: - Phase 3 (Mutation) Stopping
 
-    /// Fraction of the wall-clock budget without a discovery before the run ends early and returns the unused budget.
+    /// Per-attempt probability of covering a new edge below which an opt-in run is considered saturated and ends early. At 1e-4, the run stops once the next attempt has worse than a 1 in 10,000 chance of reaching an edge nothing has reached yet.
     ///
-    /// A discovery is a new edge or a newly classified fault cluster, not a corpus admission. Admission also fires on a new hit-count bucket for an already-covered edge, which is right for keeping a mutation parent and wrong for deciding a run is finished: on a fixed generator the last new edge can arrive within a second while admissions trickle in for minutes afterwards.
-    package static let plateauBudgetFraction = 0.25
+    /// Denominated per attempt, the same unit the report prints as "estimated chance the next attempt covers a new edge", so the setting and the line a reader acts on cannot disagree. The underlying estimator is per incidence; the conversion multiplies by the mean edges an attempt covers.
+    ///
+    /// Böhme's STADS (§2.1) is why an estimate replaced a stopwatch here. Time since the last discovery swings by four orders of magnitude within a single campaign and is not a consistent estimator of anything; this form is consistent as the sample grows.
+    ///
+    /// Calibrated against a scheduled MetaFuzz run that catalogued no fault clusters in 1,519,713 evaluated attempts and reported 1 in 10,064, with 676 of 9,381 reachable edges still uncovered. That run sits just inside the threshold, which is the intended reading: a campaign that unproductive should hand its remaining budget back.
+    package static let saturationNextEdgeProbability = 1e-4
 
-    /// Floor on the plateau window, whatever the budget.
-    ///
-    /// Without it the window is purely proportional, so a short budget is impatient exactly when it can least afford to be. A 60-second run allowed 15 seconds and abandoned a fault that arrived at 15.14; the same seed under a 300-second budget found it. Faults also outlive coverage by a wide margin — one target's last new edge landed at 0.65 seconds and its last new cluster at 18.98 — so the floor is set above the largest such gap observed rather than tuned to a single case.
-    /// Capped at half the budget where that is smaller, so the rule stays able to fire on short runs.
-    package static let plateauFloorNanoseconds: UInt64 = 30_000_000_000
+    /// Attempts between saturation checks. The estimate scans the per-edge incidence counters, which is O(edges), so it is sampled rather than computed per iteration.
+    package static let saturationCheckInterval = 50000
+
+    /// Attempts before the first saturation check. Below it the incidence sample is too small for the estimator to mean anything, and an empty incidence matrix reads as zero discovery probability, which would end a run on its first iteration.
+    package static let saturationMinimumAttempts = 200_000
 
     /// Parent-selection weight multiplier for corpus entries the property discarded. FuzzChick (Lampropoulos, Hicks, Pierce 2019, §3.1) gives discards one third of a valid seed's energy: mutations of a near-miss are still the likeliest route to a valid input on a sparse precondition, but valid seeds are preferred because their mutations are likelier to stay valid.
     package static let discardParentEnergy = 1.0 / 3.0

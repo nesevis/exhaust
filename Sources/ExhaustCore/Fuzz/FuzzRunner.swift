@@ -424,6 +424,37 @@ package final class FuzzRunner<Output> {
         }
     }
 
+    /// Whether the estimated chance that the next attempt covers a new edge has fallen below ``FuzzTunables/saturationNextEdgeProbability``.
+    ///
+    /// The estimate is scoped to what this generator and property can reach, so it answers "is there anything left for this search to find" rather than "is there anything left in the module". A run with no singletons estimates no undiscovered edges and reads as saturated, which is the intended reading: nothing has been seen exactly once, so nothing suggests more remains.
+    ///
+    /// The estimator is denominated in incidences; the mean edges an attempt covers converts it to the per-attempt figure the threshold and the report both speak in.
+    private func isSaturated() -> Bool {
+        let attempts = counts.evaluatedSearchCases
+        let incidenceTotal = corpus.incidenceTotal
+        guard attempts > 0, incidenceTotal > 0 else {
+            return false
+        }
+        let singletons = corpus.edgeSingletonCount
+        let covered = corpus.coveredEdgeCount
+        let reachable = CoverageEstimators.iChao2ReachableEdges(
+            covered: covered,
+            singletons: singletons,
+            doubletons: corpus.edgeDoubletonCount,
+            tripletons: corpus.edgeTripletonCount,
+            quadrupletons: corpus.edgeQuadrupletonCount,
+            attempts: attempts
+        )
+        let perIncidence = CoverageEstimators.nextDiscoveryProbability(
+            singletons: singletons,
+            incidenceTotal: incidenceTotal,
+            undiscovered: reachable - Double(covered),
+            attempts: attempts
+        )
+        let edgesPerAttempt = Double(incidenceTotal) / Double(attempts)
+        return perIncidence * edgesPerAttempt < FuzzTunables.saturationNextEdgeProbability
+    }
+
     // MARK: - Phase 3: Mutation
 
     private func runFuzzPhase() -> FuzzTermination {
@@ -441,26 +472,25 @@ package final class FuzzRunner<Output> {
             seed: configuration.seed ^ 0x2E_5EED_B005_7000,
             maxRuns: UInt64.max
         )
-        // Floored, so a short budget does not buy a window too impatient to outlast the gap between a run's last new edge and its last new fault. Capped at half the budget, because a floor that outran the budget would leave the rule unable to fire at all, and a run should get at least two windows' worth of chance before the clock decides for it.
-        let plateauWindowNanoseconds = max(
-            min(FuzzTunables.plateauFloorNanoseconds, configuration.budgetNanoseconds / 2),
-            UInt64(Double(configuration.budgetNanoseconds) * FuzzTunables.plateauBudgetFraction)
-        )
+        // Saturation stop, opt-in only: the run ends early when the discovery-probability estimate says the search has stopped reaching new code, never on a stopwatch. Sampled on an attempt interval because the estimate scans the per-edge incidence counters.
+        var nextSaturationCheckAttempt = configuration.saturationMinimumAttempts
 
         while true {
             if let termination = terminationDue() {
                 return termination
             }
-            let now = monotonicNanoseconds()
-            if now - lastDiscoveryNanoseconds >= plateauWindowNanoseconds {
-                if configuration.experiments.reseedBurst,
-                   runReseedBurst(interpreter: &reseedInterpreter)
-                {
-                    continue
+            if configuration.stopWhenSaturated, counts.evaluatedSearchCases >= nextSaturationCheckAttempt {
+                nextSaturationCheckAttempt = counts.evaluatedSearchCases + configuration.saturationCheckInterval
+                if isSaturated() {
+                    if configuration.experiments.reseedBurst,
+                       runReseedBurst(interpreter: &reseedInterpreter)
+                    {
+                        continue
+                    }
+                    let plateauNow = monotonicNanoseconds()
+                    let deadline = startNanoseconds + configuration.budgetNanoseconds
+                    return .plateau(unusedNanoseconds: deadline > plateauNow ? deadline - plateauNow : 0)
                 }
-                let plateauNow = monotonicNanoseconds()
-                let deadline = startNanoseconds + configuration.budgetNanoseconds
-                return .plateau(unusedNanoseconds: deadline > plateauNow ? deadline - plateauNow : 0)
             }
             checkpointIfDue()
 
