@@ -112,6 +112,30 @@ struct ExchangeQueryTests {
         #expect(tandemScopes.count == 1, "A pair of same-type leaves should produce exactly one tandem scope")
     }
 
+    @Test("Tandem groups are ordered by first-leaf position, not by type-tag hash order")
+    func tandemGroupsOrderedByPosition() throws {
+        // Six groups, so an unsorted build has a 1-in-720 chance of landing in position order by luck.
+        let tags: [TypeTag] = [.uint64, .uint32, .int64, .int32, .uint16, .int16]
+        let tree = ChoiceTree.group(
+            (tags + tags).enumerated().map { offset, tag in
+                leaf(UInt64(30000 + offset * 1000), tag: tag)
+            }
+        )
+        let graph = ChoiceGraph.build(from: tree)
+        let scopes = ExchangeQuery.build(graph: graph)
+        var tandem: TandemScope?
+        for scope in scopes {
+            if case let .tandem(found) = scope {
+                tandem = found
+            }
+        }
+        let groups = try #require(tandem).groups
+        #expect(groups.count == tags.count, "Each type tag with two leaves should form one group")
+
+        let firstPositions = groups.map { graph.nodes[$0.leaves[0].nodeID].positionRange?.lowerBound ?? -1 }
+        #expect(firstPositions == firstPositions.sorted())
+    }
+
     @Test("No scopes for single leaf")
     func noScopesForSingleLeaf() {
         let graph = GraphFixture(.uint64(10, in: 0 ... 100)).graph
@@ -241,4 +265,14 @@ struct LaneCollapseQueryTests {
 
         #expect(scope == nil, "No lane-control leaves means no lane collapse scope")
     }
+}
+
+// MARK: - Helpers
+
+/// A `chooseBits` leaf carrying the given value under the given tag.
+private func leaf(_ value: UInt64, tag: TypeTag) -> ChoiceTree {
+    .choice(
+        ChoiceValue(value, tag: tag),
+        .init(validRange: 0 ... 1_000_000, isRangeExplicit: true)
+    )
 }
