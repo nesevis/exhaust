@@ -176,7 +176,8 @@ extension GraphLockstepEncoder {
             tag: plan.tag,
             shiftUpward: plan.searchUpward,
             delta: delta,
-            usesFloatingSteps: plan.usesFloatingSteps
+            usesFloatingSteps: plan.usesFloatingSteps,
+            policy: .skipUnmovable
         ) else {
             return nil
         }

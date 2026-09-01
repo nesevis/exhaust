@@ -2,6 +2,15 @@
 //
 // Every writer is a pure function of the receiver: positions and movement direction come from the caller, no tree or graph is consulted, and acceptance policy (shortlex gating, delta bounds) is the caller's.
 
+/// What ``ChoiceSequence/shiftingGroup(entries:tag:shiftUpward:delta:usesFloatingSteps:policy:)`` does with a member the delta cannot move.
+package enum GroupShiftPolicy {
+    /// Leave it and shift the rest. The reducer's probe: it validates every candidate on shortlex order and a property re-run, so a partial shift that breaks a relationship is rejected there.
+    case skipUnmovable
+
+    /// Abort the candidate. The mutator's contract: it has no validator, and the operator exists to preserve agreement across the group.
+    case requireWholeGroup
+}
+
 package extension ChoiceSequence {
     // MARK: - Span Writers
 
@@ -87,16 +96,19 @@ package extension ChoiceSequence {
 
     /// Builds a candidate sequence by shifting every entry of a same-tag group by one shared delta.
     ///
-    /// Entries the shift cannot change are skipped rather than failing the whole candidate: nil values, values whose shifted result escapes an explicit range, and values the delta leaves shortlex-equal. A float that fails to encode or an integer shift that would wrap `UInt64` aborts the candidate entirely, because a partial group shift is not the move the caller asked for.
+    /// A member the delta cannot move is a nil value, a value whose shifted result escapes an explicit range, or a value the delta leaves shortlex-equal. `policy` decides what that costs. A float that fails to encode or an integer shift that would wrap `UInt64` aborts under either policy.
     ///
-    /// - Parameter entries: The group's positions with their original entries. Positions must address the receiver.
+    /// - Parameters:
+    ///   - entries: The group's positions with their original entries. Positions must address the receiver.
+    ///   - policy: What to do with a member the delta cannot move.
     /// - Returns: The candidate and the shortlex order of the first changed entry against its original, or nil when no entry changed or the shift aborted.
     func shiftingGroup(
         entries: [(index: Int, entry: ChoiceSequenceValue)],
         tag: TypeTag,
         shiftUpward: Bool,
         delta: UInt64,
-        usesFloatingSteps: Bool
+        usesFloatingSteps: Bool,
+        policy: GroupShiftPolicy
     ) -> (candidate: ChoiceSequence, firstDifferenceOrder: ShortlexOrder)? {
         guard delta > 0 else { return nil }
 
@@ -110,6 +122,7 @@ package extension ChoiceSequence {
             let position = pair.index
             let originalEntry = pair.entry
             guard let value = originalEntry.value else {
+                if policy == .requireWholeGroup { return nil }
                 entryOffset += 1
                 continue
             }
@@ -138,8 +151,8 @@ package extension ChoiceSequence {
                 )
             }
 
-            // Skip values that fall outside an explicit range.
             guard value.isRangeExplicit == false || newChoice.fits(in: value.validRange) else {
+                if policy == .requireWholeGroup { return nil }
                 entryOffset += 1
                 continue
             }
@@ -151,6 +164,7 @@ package extension ChoiceSequence {
             ))
             let order = newEntry.shortLexCompare(originalEntry)
             guard order != .eq else {
+                if policy == .requireWholeGroup { return nil }
                 entryOffset += 1
                 continue
             }

@@ -91,6 +91,58 @@ struct GraphMutationOperatorTests {
         #expect(deltas.count == 1, "Group members moved by differing deltas: \(deltas)")
     }
 
+    @Test("Lockstep misses rather than shifting part of a group when one member is boundary-pinned")
+    func lockstepRefusesPartialGroup() throws {
+        // Three same-tag leaves, one pinned to a single-value range so no nonzero delta keeps it inside.
+        let tree = ChoiceTree.group([
+            boundedLeaf(500, in: 0 ... 1000),
+            boundedLeaf(600, in: 0 ... 1000),
+            boundedLeaf(7, in: 7 ... 7),
+        ])
+        let targets = MutationTargets(tree: tree)
+        let sequence = ChoiceSequence.flatten(tree)
+        try #require(targets.tandem != nil)
+
+        var prng = Xoshiro256(seed: 19)
+        for _ in 0 ..< 200 {
+            guard let shifted = FuzzMutator.lockstepDelta(sequence, targets: targets, prng: &prng) else {
+                continue
+            }
+            Issue.record("Shifted a group whose pinned member cannot move: \(shifted)")
+            return
+        }
+    }
+
+    @Test("Lockstep shifts every member by one delta when all can move")
+    func lockstepShiftsWholeGroup() throws {
+        let tree = ChoiceTree.group([
+            boundedLeaf(500, in: 0 ... 1000),
+            boundedLeaf(600, in: 0 ... 1000),
+            boundedLeaf(700, in: 0 ... 1000),
+        ])
+        let targets = MutationTargets(tree: tree)
+        let sequence = ChoiceSequence.flatten(tree)
+
+        var prng = Xoshiro256(seed: 23)
+        var shifted: ChoiceSequence?
+        for _ in 0 ..< 200 where shifted == nil {
+            shifted = FuzzMutator.lockstepDelta(sequence, targets: targets, prng: &prng)
+        }
+        let moved = try #require(shifted, "No draw over 200 rounds produced a shift")
+
+        var deltas: Set<UInt64> = []
+        for index in sequence.indices {
+            guard case let .value(original) = sequence[index],
+                  case let .value(mutated) = moved[index]
+            else {
+                continue
+            }
+            deltas.insert(mutated.choice.bitPattern64 &- original.choice.bitPattern64)
+        }
+        #expect(deltas.count == 1, "Members moved by differing deltas: \(deltas)")
+        #expect(deltas.contains(0) == false, "A member did not move")
+    }
+
     // MARK: - Determinism
 
     @Test("Every operator is deterministic under a pinned seed")
@@ -424,6 +476,14 @@ struct GraphMutationOperatorTests {
 }
 
 // MARK: - Helpers
+
+/// A `uint64` leaf with an explicit valid range.
+private func boundedLeaf(_ value: UInt64, in range: ClosedRange<UInt64>) -> ChoiceTree {
+    .choice(
+        ChoiceValue(value, tag: .uint64),
+        .init(validRange: range, isRangeExplicit: true)
+    )
+}
 
 /// Experiment knobs with only the two targeting consumers under test set, so a change to the shipped defaults cannot alter what these tests assert.
 private func targetingExperiments(graph: Bool, pair: Bool) -> FuzzExperiments {

@@ -122,7 +122,9 @@ extension FuzzMutator {
 
     /// Shifts every member of one same-tag tandem group by a shared delta in a shared direction.
     ///
-    /// The direction is a fair draw and the delta is log-uniform under ``FuzzTunables/lockstepDeltaExponentLimit``, so agreement between the members (equal values, fixed differences) survives the shift. Returns nil when the graph has no tandem scope, no group has two members inside the candidate, or the shift changes nothing.
+    /// The direction is a fair draw and the delta is log-uniform under ``FuzzTunables/lockstepDeltaExponentLimit``, so agreement between the members (equal values, fixed differences) survives the shift.
+    ///
+    /// All or nothing: a group with one member the delta cannot move is a miss, not a partial shift. Moving a subset breaks the very agreement the operator exists to preserve, and nothing downstream would catch it.
     static func lockstepDelta(
         _ candidate: ChoiceSequence,
         targets: MutationTargets,
@@ -136,14 +138,13 @@ extension FuzzMutator {
         var entries: [(index: Int, entry: ChoiceSequenceValue)] = []
         entries.reserveCapacity(group.leaves.count)
         for leaf in group.leaves {
-            guard let range = targets.graph.nodes[leaf.nodeID].positionRange else {
-                continue
+            // A member the candidate cannot address makes the whole group unshiftable, not a smaller group.
+            guard let range = targets.graph.nodes[leaf.nodeID].positionRange,
+                  range.lowerBound < candidate.count
+            else {
+                return nil
             }
-            let position = range.lowerBound
-            guard position < candidate.count else {
-                continue
-            }
-            entries.append((index: position, entry: candidate[position]))
+            entries.append((index: range.lowerBound, entry: candidate[range.lowerBound]))
         }
         guard entries.count >= 2 else {
             return nil
@@ -156,7 +157,8 @@ extension FuzzMutator {
             tag: group.typeTag,
             shiftUpward: shiftUpward,
             delta: delta,
-            usesFloatingSteps: group.typeTag.isFloatingPoint
+            usesFloatingSteps: group.typeTag.isFloatingPoint,
+            policy: .requireWholeGroup
         ) else {
             return nil
         }
