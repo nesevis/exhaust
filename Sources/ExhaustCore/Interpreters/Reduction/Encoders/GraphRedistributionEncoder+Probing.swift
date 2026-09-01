@@ -280,7 +280,7 @@ extension GraphRedistributionEncoder {
 
     /// Builds a redistribution candidate by transferring `delta` units from source to sink.
     ///
-    /// For same-tag integer pairs the source moves toward its own reduction target, so its new bit pattern stays inside `[min(currentBP, targetBP), max(currentBP, targetBP)]` and never leaves the source's valid range regardless of whether that range is narrow or full-width. Mixed pairs move in their context's direction.
+    /// For pairs with a ``MixedRedistributionContext`` (cross-type or floating-point), uses rational arithmetic with a common denominator. For same-tag integer pairs, operates in UInt64 bit-pattern space — modular wraparound when the sink's declared domain equals its natural type width, validation-with-rejection when the sink has an explicit narrow range.
     func buildRedistributionCandidate(
         sourceIndex: Int,
         sinkIndex: Int,
@@ -289,27 +289,116 @@ extension GraphRedistributionEncoder {
         delta: UInt64,
         mixedContext: MixedRedistributionContext?
     ) -> ChoiceSequence? {
+        guard delta > 0 else { return nil }
+
+        let sourceEntry = valueState.sequence[sourceIndex]
+        let sinkEntry = valueState.sequence[sinkIndex]
+        guard let sourceValue = sourceEntry.value else { return nil }
+        guard let sinkValue = sinkEntry.value else { return nil }
+
+        // Mixed/rational path for cross-type or float pairs.
         if let context = mixedContext {
-            return valueState.sequence.transferringMagnitude(
-                sourceIndex: sourceIndex,
-                sinkIndex: sinkIndex,
-                sourceTag: sourceTag,
+            guard let (newSourceChoice, newSinkChoice) = Self.mixedRedistributedPairChoices(
+                sourceChoice: sourceValue.choice,
+                sinkChoice: sinkValue.choice,
                 delta: delta,
-                sourceMovesUpward: context.sourceMovesUpward,
-                mixedContext: context
-            )
+                context: context
+            ) else { return nil }
+
+            // Validate against valid ranges.
+            if sourceValue.isRangeExplicit,
+               newSourceChoice.fits(in: sourceValue.validRange) == false { return nil }
+            if sinkValue.isRangeExplicit,
+               newSinkChoice.fits(in: sinkValue.validRange) == false { return nil }
+
+            var candidate = valueState.sequence
+            candidate[sourceIndex] = .value(.init(
+                choice: newSourceChoice,
+                validRange: sourceValue.validRange,
+                isRangeExplicit: sourceValue.isRangeExplicit
+            ))
+            candidate[sinkIndex] = .value(.init(
+                choice: newSinkChoice,
+                validRange: sinkValue.validRange,
+                isRangeExplicit: sinkValue.isRangeExplicit
+            ))
+            return candidate
         }
 
-        guard let sourceValue = valueState.sequence[sourceIndex].value else { return nil }
+        // Same-tag integer path.
+        //
+        // The gate is on the sink, not the source. The source moves toward its own reduction target, so its new bit pattern stays inside `[min(currentBP, targetBP), max(currentBP, targetBP)]` and never leaves the source's own valid range regardless of whether that range is narrow or full-width. The sink is the side that can escape its valid range as it absorbs the opposing delta, so the sink is the side that determines which sub-path we take.
+        //
+        // When the sink's declared domain equals the natural type width, we use bit-pattern modular arithmetic with a width-aware mask. This matches the wrapping arithmetic (`&+`/`&-`) the property under test likely uses for the same type and lets redistribution reach boundary counterexamples like `(Int16.min, -1)` that semantic-space arithmetic would reject as overflow.
+        //
+        // When the sink carries an explicit narrow range, we still operate in UInt64 bit-pattern space (signed types are biased via the
+        // `signBitMask` XOR in their `BitPatternConvertible` conformance, so additive arithmetic in biased space matches semantic arithmetic), but we use overflow-checked operations and reject — rather than wrap — any candidate that lands outside the sink's `validRange` or the type's natural bounds.
         let sourceBitPattern = sourceValue.choice.bitPattern64
+        let sinkBitPattern = sinkValue.choice.bitPattern64
         let targetBitPattern = sourceValue.choice.reductionTarget(in: sourceValue.validRange)
-        return valueState.sequence.transferringMagnitude(
-            sourceIndex: sourceIndex,
-            sinkIndex: sinkIndex,
-            sourceTag: sourceTag,
-            delta: delta,
-            sourceMovesUpward: sourceBitPattern <= targetBitPattern,
-            mixedContext: nil
-        )
+
+        if sinkValue.allowsModularArithmetic {
+            let mask = sinkValue.choice.tag.bitPatternRange.upperBound
+            let newSourceBitPattern: UInt64
+            let newSinkBitPattern: UInt64
+            if sourceBitPattern > targetBitPattern {
+                newSourceBitPattern = (sourceBitPattern &- delta) & mask
+                newSinkBitPattern = (sinkBitPattern &+ delta) & mask
+            } else {
+                newSourceBitPattern = (sourceBitPattern &+ delta) & mask
+                newSinkBitPattern = (sinkBitPattern &- delta) & mask
+            }
+
+            var candidate = valueState.sequence
+            candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBitPattern)
+            candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBitPattern)
+            return candidate
+        }
+
+        // Narrow-sink fallback: UInt64 bit-pattern arithmetic with explicit bounds enforcement.
+        let newSourceBitPattern: UInt64
+        let newSinkBitPattern: UInt64
+        if sourceBitPattern > targetBitPattern {
+            // Source moves down (toward target), sink moves up.
+            // The encoder bounds delta to `currentMaxDelta`'s `distance = sourceBitPattern - targetBitPattern`, and `targetBitPattern >= 0`, so this subtraction cannot underflow. Defensive guard against stale state.
+            guard sourceBitPattern >= delta else { return nil }
+            newSourceBitPattern = sourceBitPattern - delta
+            let (sinkSum, sinkOverflow) = sinkBitPattern.addingReportingOverflow(delta)
+            guard sinkOverflow == false else { return nil }
+            newSinkBitPattern = sinkSum
+        } else {
+            // Source moves up (toward target), sink moves down.
+            let (sourceSum, sourceOverflow) = sourceBitPattern.addingReportingOverflow(delta)
+            guard sourceOverflow == false else { return nil }
+            newSourceBitPattern = sourceSum
+            guard sinkBitPattern >= delta else { return nil }
+            newSinkBitPattern = sinkBitPattern - delta
+        }
+
+        // Enforce natural type bounds via `tag.bitPatternRange`.
+        guard sourceTag.bitPatternRange.contains(newSourceBitPattern),
+              sinkValue.choice.tag.bitPatternRange.contains(newSinkBitPattern)
+        else {
+            return nil
+        }
+
+        // Enforce explicit `validRange` so candidates stay within the user's declared domain.
+        if sourceValue.isRangeExplicit,
+           let range = sourceValue.validRange,
+           range.contains(newSourceBitPattern) == false
+        {
+            return nil
+        }
+        if sinkValue.isRangeExplicit,
+           let range = sinkValue.validRange,
+           range.contains(newSinkBitPattern) == false
+        {
+            return nil
+        }
+
+        var candidate = valueState.sequence
+        candidate[sourceIndex] = candidate[sourceIndex].withBitPattern(newSourceBitPattern)
+        candidate[sinkIndex] = candidate[sinkIndex].withBitPattern(newSinkBitPattern)
+        return candidate
     }
 }

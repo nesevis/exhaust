@@ -2,6 +2,42 @@
 //
 // Each operator resolves its positions through the parent's stored ChoiceGraph and edits the candidate with the shared sequence writers. Positions are admission-time facts about the parent, so a candidate that has already drifted structurally under a stacked mutation may be mis-targeted; every range is therefore bounds-checked against the candidate, an out-of-range operator is a cheap miss, and guided materialization absorbs any structural error a blind application introduces.
 
+// MARK: - Mutation Targets
+
+/// The graph and scope caches one corpus entry's graph-targeted operators resolve their positions through.
+///
+/// Built once at admission and read-only for the entry's lifetime: entries never change in place, so the graph is never rebuilt and never has `apply` called on it. The scopes are cached rather than rebuilt per mutation because each query walks the whole graph. Only mutable-tier entries become mutation parents, so only they pay for these — a discovery-tier entry carries no targets at all.
+package struct MutationTargets: Sendable {
+    /// Resolves the scopes' node IDs to position ranges without a tree walk.
+    package let graph: ChoiceGraph
+
+    /// Same-tag leaf groups from ``ExchangeQuery``. Nil when the graph has no group of two or more leaves.
+    let tandem: TandemScope?
+
+    /// Same-shaped zip sibling groups from ``PermutationQuery``.
+    let permutationScopes: [PermutationScope]
+
+    /// Position ranges of twin spans under a common zip, grouped by twin key: siblings the generator drew from the same site, in position order within each group.
+    let twinSpanGroups: [[ClosedRange<Int>]]
+
+    /// Builds the targeting tables for one entry's tree.
+    ///
+    /// Relation scopes are convergence-gated and always empty on a fresh graph, so they are not cached. Construction consumes no PRNG draws, so seeded replay streams are unchanged.
+    init(tree: ChoiceTree) {
+        let graph = ChoiceGraphBuilder.build(from: tree)
+        var tandem: TandemScope?
+        for exchangeScope in ExchangeQuery.build(graph: graph) {
+            if case let .tandem(scope) = exchangeScope {
+                tandem = scope
+            }
+        }
+        self.graph = graph
+        self.tandem = tandem
+        permutationScopes = PermutationQuery.build(graph: graph)
+        twinSpanGroups = FuzzMutator.twinSpanGroups(graph: graph)
+    }
+}
+
 extension FuzzMutator {
     // MARK: - Sibling-Span Operators
 
@@ -10,12 +46,11 @@ extension FuzzMutator {
     /// Returns nil when no group has two or more members or the group's positions do not fit the candidate.
     static func swapSiblingSpans(
         _ candidate: ChoiceSequence,
-        scopes: [PermutationScope],
-        graph: ChoiceGraph,
+        targets: MutationTargets,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
-        guard let group = pickSwappableGroup(scopes: scopes, minimumSize: 2, prng: &prng),
-              let slots = positionSlots(of: group, graph: graph, within: candidate.count)
+        guard let group = pickSwappableGroup(scopes: targets.permutationScopes, minimumSize: 2, prng: &prng),
+              let slots = positionSlots(of: group, graph: targets.graph, within: candidate.count)
         else {
             return nil
         }
@@ -30,12 +65,11 @@ extension FuzzMutator {
     /// Returns nil when no group qualifies or the drawn permutation is the identity; the identity has probability 1/n! and is a cheap miss rather than a redraw, keeping PRNG consumption fixed per call.
     static func shuffleSiblingSpans(
         _ candidate: ChoiceSequence,
-        scopes: [PermutationScope],
-        graph: ChoiceGraph,
+        targets: MutationTargets,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
-        guard let group = pickSwappableGroup(scopes: scopes, minimumSize: 2, prng: &prng),
-              let slots = positionSlots(of: group, graph: graph, within: candidate.count)
+        guard let group = pickSwappableGroup(scopes: targets.permutationScopes, minimumSize: 2, prng: &prng),
+              let slots = positionSlots(of: group, graph: targets.graph, within: candidate.count)
         else {
             return nil
         }
@@ -57,12 +91,11 @@ extension FuzzMutator {
     /// Requires a group of three or more members: within a pair, a move is a swap. Returns nil when no group qualifies or the group's positions do not fit the candidate.
     static func moveSiblingSpan(
         _ candidate: ChoiceSequence,
-        scopes: [PermutationScope],
-        graph: ChoiceGraph,
+        targets: MutationTargets,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
-        guard let group = pickSwappableGroup(scopes: scopes, minimumSize: 3, prng: &prng),
-              let slots = positionSlots(of: group, graph: graph, within: candidate.count)
+        guard let group = pickSwappableGroup(scopes: targets.permutationScopes, minimumSize: 3, prng: &prng),
+              let slots = positionSlots(of: group, graph: targets.graph, within: candidate.count)
         else {
             return nil
         }
@@ -89,20 +122,21 @@ extension FuzzMutator {
 
     /// Shifts every member of one same-tag tandem group by a shared delta in a shared direction.
     ///
-    /// The direction is a fair draw and the delta is log-uniform under ``FuzzTunables/lockstepDeltaExponentLimit``, so agreement between the members (equal values, fixed differences) survives the shift. Returns nil when no group has two members inside the candidate or the shift changes nothing.
+    /// The direction is a fair draw and the delta is log-uniform under ``FuzzTunables/lockstepDeltaExponentLimit``, so agreement between the members (equal values, fixed differences) survives the shift. Returns nil when the graph has no tandem scope, no group has two members inside the candidate, or the shift changes nothing.
     static func lockstepDelta(
         _ candidate: ChoiceSequence,
-        tandem: TandemScope,
-        graph: ChoiceGraph,
+        targets: MutationTargets,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
-        guard let group = pickTandemGroup(tandem, prng: &prng) else {
+        guard let tandem = targets.tandem,
+              let group = pickTandemGroup(tandem, prng: &prng)
+        else {
             return nil
         }
         var entries: [(index: Int, entry: ChoiceSequenceValue)] = []
         entries.reserveCapacity(group.leaves.count)
         for leaf in group.leaves {
-            guard let range = graph.nodes[leaf.nodeID].positionRange else {
+            guard let range = targets.graph.nodes[leaf.nodeID].positionRange else {
                 continue
             }
             let position = range.lowerBound
@@ -197,13 +231,13 @@ extension FuzzMutator {
 
     /// Copies one twin span over a sibling twin span, creating structural agreement between them.
     ///
-    /// The one-directional counterpart of ``swapSiblingSpans(_:scopes:graph:prng:)``: after the splice both spans hold the source content. Twin spans of different lengths shift the positions after the target; guided materialization absorbs the drift. Returns nil when the entry has no twin group or a chosen span does not fit the candidate.
+    /// The one-directional counterpart of ``swapSiblingSpans(_:targets:prng:)``: after the splice both spans hold the source content. Twin spans of different lengths shift the positions after the target; guided materialization absorbs the drift. Returns nil when the entry has no twin group or a chosen span does not fit the candidate.
     static func twinSplice(
         _ candidate: ChoiceSequence,
-        twinSpanGroups: [[ClosedRange<Int>]],
+        targets: MutationTargets,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
-        guard let group = pickRangeGroup(twinSpanGroups, prng: &prng) else {
+        guard let group = pickRangeGroup(targets.twinSpanGroups, prng: &prng) else {
             return nil
         }
         let sourceIndex = Int(prng.next(upperBound: UInt64(group.count)))
@@ -225,23 +259,23 @@ extension FuzzMutator {
     static func typedCrossover(
         _ candidate: ChoiceSequence,
         parentHash: UInt64,
-        graph: ChoiceGraph,
+        targets: MutationTargets,
         corpus: FuzzCorpus,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
         // Fingerprint order is explicit rather than dictionary order so seeded runs replay identically across processes.
-        var eligible: [(fingerprint: UInt64, targets: [Int])] = []
+        var eligible: [(fingerprint: UInt64, recipients: [Int])] = []
         var totalWeight: UInt64 = 0
-        for fingerprint in graph.selfSimilarityGroups.keys.sorted() {
-            guard let targets = graph.selfSimilarityGroups[fingerprint],
-                  targets.isEmpty == false,
+        for fingerprint in targets.graph.selfSimilarityGroups.keys.sorted() {
+            guard let recipients = targets.graph.selfSimilarityGroups[fingerprint],
+                  recipients.isEmpty == false,
                   let donors = corpus.donorSpansByFingerprint[fingerprint],
                   donors.isEmpty == false
             else {
                 continue
             }
-            eligible.append((fingerprint: fingerprint, targets: targets))
-            totalWeight += UInt64(targets.count)
+            eligible.append((fingerprint: fingerprint, recipients: recipients))
+            totalWeight += UInt64(recipients.count)
         }
         guard totalWeight > 0 else {
             return nil
@@ -250,7 +284,7 @@ extension FuzzMutator {
         var remaining = prng.next(upperBound: totalWeight)
         var chosen = eligible[eligible.count - 1]
         for entry in eligible {
-            let weight = UInt64(entry.targets.count)
+            let weight = UInt64(entry.recipients.count)
             if remaining < weight {
                 chosen = entry
                 break
@@ -258,12 +292,12 @@ extension FuzzMutator {
             remaining -= weight
         }
 
-        let targetNodeID = chosen.targets[Int(prng.next(upperBound: UInt64(chosen.targets.count)))]
+        let targetNodeID = chosen.recipients[Int(prng.next(upperBound: UInt64(chosen.recipients.count)))]
         guard let donors = corpus.donorSpansByFingerprint[chosen.fingerprint] else {
             return nil
         }
         let donor = donors[Int(prng.next(upperBound: UInt64(donors.count)))]
-        guard let target = graph.nodes[targetNodeID].positionRange,
+        guard let target = targets.graph.nodes[targetNodeID].positionRange,
               target.upperBound < candidate.count,
               corpus.entries[donor.entryIndex].hash != parentHash
         else {

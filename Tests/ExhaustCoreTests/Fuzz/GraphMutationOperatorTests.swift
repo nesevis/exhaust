@@ -11,8 +11,7 @@ struct GraphMutationOperatorTests {
         var prng = Xoshiro256(seed: 7)
         let swapped = try #require(FuzzMutator.swapSiblingSpans(
             fixture.sequence,
-            scopes: fixture.permutationScopes,
-            graph: fixture.graph,
+            targets: fixture.targets,
             prng: &prng
         ))
         #expect(swapped.count == fixture.sequence.count)
@@ -30,8 +29,7 @@ struct GraphMutationOperatorTests {
         for _ in 0 ..< 20 {
             guard let shuffled = FuzzMutator.shuffleSiblingSpans(
                 fixture.sequence,
-                scopes: fixture.permutationScopes,
-                graph: fixture.graph,
+                targets: fixture.targets,
                 prng: &prng
             ) else {
                 // The identity permutation is a declared cheap miss.
@@ -53,8 +51,7 @@ struct GraphMutationOperatorTests {
         var prng = Xoshiro256(seed: 11)
         let moved = try #require(FuzzMutator.moveSiblingSpan(
             fixture.sequence,
-            scopes: fixture.permutationScopes,
-            graph: fixture.graph,
+            targets: fixture.targets,
             prng: &prng
         ))
         #expect(moved.count == fixture.sequence.count)
@@ -68,11 +65,9 @@ struct GraphMutationOperatorTests {
     func lockstepSharedDelta() throws {
         let fixture = try #require(zipFixture())
         var prng = Xoshiro256(seed: 5)
-        let tandem = try #require(fixture.tandemScope)
         let shifted = try #require(FuzzMutator.lockstepDelta(
             fixture.sequence,
-            tandem: tandem,
-            graph: fixture.graph,
+            targets: fixture.targets,
             prng: &prng
         ))
         #expect(shifted.count == fixture.sequence.count)
@@ -101,25 +96,24 @@ struct GraphMutationOperatorTests {
     @Test("Every operator is deterministic under a pinned seed")
     func determinism() throws {
         let fixture = try #require(zipFixture())
-        let tandem = try #require(fixture.tandemScope)
         for seed in [1, 9, 42] as [UInt64] {
             var firstPRNG = Xoshiro256(seed: seed)
             var secondPRNG = Xoshiro256(seed: seed)
             #expect(
-                FuzzMutator.swapSiblingSpans(fixture.sequence, scopes: fixture.permutationScopes, graph: fixture.graph, prng: &firstPRNG)
-                    == FuzzMutator.swapSiblingSpans(fixture.sequence, scopes: fixture.permutationScopes, graph: fixture.graph, prng: &secondPRNG)
+                FuzzMutator.swapSiblingSpans(fixture.sequence, targets: fixture.targets, prng: &firstPRNG)
+                    == FuzzMutator.swapSiblingSpans(fixture.sequence, targets: fixture.targets, prng: &secondPRNG)
             )
             #expect(
-                FuzzMutator.shuffleSiblingSpans(fixture.sequence, scopes: fixture.permutationScopes, graph: fixture.graph, prng: &firstPRNG)
-                    == FuzzMutator.shuffleSiblingSpans(fixture.sequence, scopes: fixture.permutationScopes, graph: fixture.graph, prng: &secondPRNG)
+                FuzzMutator.shuffleSiblingSpans(fixture.sequence, targets: fixture.targets, prng: &firstPRNG)
+                    == FuzzMutator.shuffleSiblingSpans(fixture.sequence, targets: fixture.targets, prng: &secondPRNG)
             )
             #expect(
-                FuzzMutator.moveSiblingSpan(fixture.sequence, scopes: fixture.permutationScopes, graph: fixture.graph, prng: &firstPRNG)
-                    == FuzzMutator.moveSiblingSpan(fixture.sequence, scopes: fixture.permutationScopes, graph: fixture.graph, prng: &secondPRNG)
+                FuzzMutator.moveSiblingSpan(fixture.sequence, targets: fixture.targets, prng: &firstPRNG)
+                    == FuzzMutator.moveSiblingSpan(fixture.sequence, targets: fixture.targets, prng: &secondPRNG)
             )
             #expect(
-                FuzzMutator.lockstepDelta(fixture.sequence, tandem: tandem, graph: fixture.graph, prng: &firstPRNG)
-                    == FuzzMutator.lockstepDelta(fixture.sequence, tandem: tandem, graph: fixture.graph, prng: &secondPRNG)
+                FuzzMutator.lockstepDelta(fixture.sequence, targets: fixture.targets, prng: &firstPRNG)
+                    == FuzzMutator.lockstepDelta(fixture.sequence, targets: fixture.targets, prng: &secondPRNG)
             )
             #expect(firstPRNG.currentState == secondPRNG.currentState)
         }
@@ -133,11 +127,10 @@ struct GraphMutationOperatorTests {
         // A candidate truncated below every group position: the span operators must return nil rather than trap.
         let truncated = ChoiceSequence(fixture.sequence.prefix(1))
         var prng = Xoshiro256(seed: 2)
-        #expect(FuzzMutator.swapSiblingSpans(truncated, scopes: fixture.permutationScopes, graph: fixture.graph, prng: &prng) == nil)
-        #expect(FuzzMutator.shuffleSiblingSpans(truncated, scopes: fixture.permutationScopes, graph: fixture.graph, prng: &prng) == nil)
-        #expect(FuzzMutator.moveSiblingSpan(truncated, scopes: fixture.permutationScopes, graph: fixture.graph, prng: &prng) == nil)
-        let tandem = try #require(fixture.tandemScope)
-        #expect(FuzzMutator.lockstepDelta(truncated, tandem: tandem, graph: fixture.graph, prng: &prng) == nil)
+        #expect(FuzzMutator.swapSiblingSpans(truncated, targets: fixture.targets, prng: &prng) == nil)
+        #expect(FuzzMutator.shuffleSiblingSpans(truncated, targets: fixture.targets, prng: &prng) == nil)
+        #expect(FuzzMutator.moveSiblingSpan(truncated, targets: fixture.targets, prng: &prng) == nil)
+        #expect(FuzzMutator.lockstepDelta(truncated, targets: fixture.targets, prng: &prng) == nil)
     }
 
     // MARK: - Materialization
@@ -152,18 +145,14 @@ struct GraphMutationOperatorTests {
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: seed, maxRuns: 1)
         let (_, tree) = try #require(try interpreter.next())
         let sequence = ChoiceSequence.flatten(tree)
-        let graph = ChoiceGraph.build(from: tree)
-        let permutationScopes = PermutationQuery.build(graph: graph)
-        let tandemScope = tandemScope(fromGraph: graph)
+        let targets = MutationTargets(tree: tree)
 
         var prng = Xoshiro256(seed: seed)
         var candidates: [ChoiceSequence] = []
-        if let swapped = FuzzMutator.swapSiblingSpans(sequence, scopes: permutationScopes, graph: graph, prng: &prng) {
+        if let swapped = FuzzMutator.swapSiblingSpans(sequence, targets: targets, prng: &prng) {
             candidates.append(swapped)
         }
-        if let tandem = tandemScope,
-           let shifted = FuzzMutator.lockstepDelta(sequence, tandem: tandem, graph: graph, prng: &prng)
-        {
+        if let shifted = FuzzMutator.lockstepDelta(sequence, targets: targets, prng: &prng) {
             candidates.append(shifted)
         }
         #expect(candidates.isEmpty == false)
@@ -202,11 +191,10 @@ struct GraphMutationOperatorTests {
             return
         }
         #expect(tier == .mutable)
-        let entry = corpus.entries[index]
-        #expect(entry.choiceGraph != nil)
-        #expect(entry.tandemScope != nil)
-        #expect(entry.permutationScopes.isEmpty == false)
-        #expect(entry.twinSpanGroups.isEmpty == false)
+        let targets = try #require(corpus.entries[index].mutationTargets)
+        #expect(targets.tandem != nil)
+        #expect(targets.permutationScopes.isEmpty == false)
+        #expect(targets.twinSpanGroups.isEmpty == false)
 
         var discoverySequence = fixture.sequence
         let firstValueIndex = try #require(discoverySequence.firstIndex { element in
@@ -236,11 +224,7 @@ struct GraphMutationOperatorTests {
             return
         }
         #expect(discoveryTier == .discovery)
-        let discoveryEntry = corpus.entries[discoveryIndex]
-        #expect(discoveryEntry.choiceGraph == nil)
-        #expect(discoveryEntry.tandemScope == nil)
-        #expect(discoveryEntry.permutationScopes.isEmpty)
-        #expect(discoveryEntry.twinSpanGroups.isEmpty)
+        #expect(corpus.entries[discoveryIndex].mutationTargets == nil)
     }
 
     // MARK: - Twin Splice
@@ -248,7 +232,7 @@ struct GraphMutationOperatorTests {
     @Test("Twin detection groups the zip's same-site siblings")
     func twinDetection() throws {
         let fixture = try #require(zipFixture())
-        let groups = FuzzMutator.twinSpanGroups(graph: fixture.graph)
+        let groups = fixture.targets.twinSpanGroups
         #expect(groups.count == 1)
         #expect(groups[0].count == 3)
         #expect(groups[0] == groups[0].sorted { $0.lowerBound < $1.lowerBound })
@@ -257,11 +241,10 @@ struct GraphMutationOperatorTests {
     @Test("Twin splice copies one twin span over a sibling, creating agreement")
     func twinSpliceCreatesAgreement() throws {
         let fixture = try #require(zipFixture())
-        let groups = FuzzMutator.twinSpanGroups(graph: fixture.graph)
         var prng = Xoshiro256(seed: 13)
         let spliced = try #require(FuzzMutator.twinSplice(
             fixture.sequence,
-            twinSpanGroups: groups,
+            targets: fixture.targets,
             prng: &prng
         ))
         #expect(spliced != fixture.sequence)
@@ -285,14 +268,14 @@ struct GraphMutationOperatorTests {
         _ = try admitPickPair(into: corpus, fingerprint: 7, values: (333, 444), edge: 1)
 
         let recipient = corpus.entries[recipientIndex]
-        let graph = try #require(recipient.choiceGraph)
+        let recipientTargets = try #require(recipient.mutationTargets)
         var prng = Xoshiro256(seed: 3)
         var grafted = 0
         for _ in 0 ..< 20 {
             guard let crossed = FuzzMutator.typedCrossover(
                 recipient.sequence,
                 parentHash: recipient.hash,
-                graph: graph,
+                targets: recipientTargets,
                 corpus: corpus,
                 prng: &prng
             ) else {
@@ -317,13 +300,13 @@ struct GraphMutationOperatorTests {
             edge: 0
         )
         let recipient = corpus.entries[recipientIndex]
-        let graph = try #require(recipient.choiceGraph)
+        let recipientTargets = try #require(recipient.mutationTargets)
         var prng = Xoshiro256(seed: 3)
         for _ in 0 ..< 20 {
             #expect(FuzzMutator.typedCrossover(
                 recipient.sequence,
                 parentHash: recipient.hash,
-                graph: graph,
+                targets: recipientTargets,
                 corpus: corpus,
                 prng: &prng
             ) == nil)
@@ -343,13 +326,13 @@ struct GraphMutationOperatorTests {
         corpus.quarantine(sequenceHash: corpus.entries[donorIndex].hash)
 
         let recipient = corpus.entries[recipientIndex]
-        let graph = try #require(recipient.choiceGraph)
+        let recipientTargets = try #require(recipient.mutationTargets)
         var prng = Xoshiro256(seed: 3)
         for _ in 0 ..< 20 {
             #expect(FuzzMutator.typedCrossover(
                 recipient.sequence,
                 parentHash: recipient.hash,
-                graph: graph,
+                targets: recipientTargets,
                 corpus: corpus,
                 prng: &prng
             ) == nil)
@@ -359,7 +342,6 @@ struct GraphMutationOperatorTests {
     @Test("Twin splice and typed crossover are deterministic under a pinned seed")
     func pairOperatorDeterminism() throws {
         let fixture = try #require(zipFixture())
-        let groups = FuzzMutator.twinSpanGroups(graph: fixture.graph)
         let corpus = FuzzCorpus(edgeCount: 4)
         let recipientIndex = try admitPickPair(
             into: corpus,
@@ -369,18 +351,18 @@ struct GraphMutationOperatorTests {
         )
         _ = try admitPickPair(into: corpus, fingerprint: 7, values: (333, 444), edge: 1)
         let recipient = corpus.entries[recipientIndex]
-        let graph = try #require(recipient.choiceGraph)
+        let recipientTargets = try #require(recipient.mutationTargets)
 
         for seed in [1, 9, 42] as [UInt64] {
             var firstPRNG = Xoshiro256(seed: seed)
             var secondPRNG = Xoshiro256(seed: seed)
             #expect(
-                FuzzMutator.twinSplice(fixture.sequence, twinSpanGroups: groups, prng: &firstPRNG)
-                    == FuzzMutator.twinSplice(fixture.sequence, twinSpanGroups: groups, prng: &secondPRNG)
+                FuzzMutator.twinSplice(fixture.sequence, targets: fixture.targets, prng: &firstPRNG)
+                    == FuzzMutator.twinSplice(fixture.sequence, targets: fixture.targets, prng: &secondPRNG)
             )
             #expect(
-                FuzzMutator.typedCrossover(recipient.sequence, parentHash: recipient.hash, graph: graph, corpus: corpus, prng: &firstPRNG)
-                    == FuzzMutator.typedCrossover(recipient.sequence, parentHash: recipient.hash, graph: graph, corpus: corpus, prng: &secondPRNG)
+                FuzzMutator.typedCrossover(recipient.sequence, parentHash: recipient.hash, targets: recipientTargets, corpus: corpus, prng: &firstPRNG)
+                    == FuzzMutator.typedCrossover(recipient.sequence, parentHash: recipient.hash, targets: recipientTargets, corpus: corpus, prng: &secondPRNG)
             )
             #expect(firstPRNG.currentState == secondPRNG.currentState)
         }
@@ -447,9 +429,7 @@ struct GraphMutationOperatorTests {
 private struct ZipFixture {
     let tree: ChoiceTree
     let sequence: ChoiceSequence
-    let graph: ChoiceGraph
-    let permutationScopes: [PermutationScope]
-    let tandemScope: TandemScope?
+    let targets: MutationTargets
 }
 
 private func zipFixture() -> ZipFixture? {
@@ -463,28 +443,15 @@ private func zipFixture() -> ZipFixture? {
         )
     }
     let tree = ChoiceTree.group(children)
-    let graph = ChoiceGraph.build(from: tree)
-    let permutationScopes = PermutationQuery.build(graph: graph)
-    guard permutationScopes.isEmpty == false else {
+    let targets = MutationTargets(tree: tree)
+    guard targets.permutationScopes.isEmpty == false else {
         return nil
     }
     return ZipFixture(
         tree: tree,
         sequence: ChoiceSequence.flatten(tree),
-        graph: graph,
-        permutationScopes: permutationScopes,
-        tandemScope: tandemScope(fromGraph: graph)
+        targets: targets
     )
-}
-
-/// Extracts the tandem scope from ``ExchangeQuery``'s scope list, or nil when the graph has none.
-private func tandemScope(fromGraph graph: ChoiceGraph) -> TandemScope? {
-    for scope in ExchangeQuery.build(graph: graph) {
-        if case let .tandem(tandem) = scope {
-            return tandem
-        }
-    }
-    return nil
 }
 
 /// Admits a mutable-tier entry whose tree holds two same-fingerprint pick sites with the given selected values, returning its corpus index.

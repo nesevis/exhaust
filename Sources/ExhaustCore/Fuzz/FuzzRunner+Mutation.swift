@@ -82,77 +82,11 @@ extension FuzzRunner {
                     )
                 case .high:
                     candidate = FuzzMutator.mutate(candidate, intensity: .high, prng: &prng)
-                case .swap:
-                    guard let graph = parent.choiceGraph,
-                          let swapped = FuzzMutator.swapSiblingSpans(
-                              candidate,
-                              scopes: parent.permutationScopes,
-                              graph: graph,
-                              prng: &prng
-                          )
-                    else {
+                case .swap, .shuffle, .move, .lockstepDelta, .twinSplice, .typedCrossover:
+                    guard let targeted = graphArmCandidate(arm, candidate, parent: parent) else {
                         continue
                     }
-                    candidate = swapped
-                case .shuffle:
-                    guard let graph = parent.choiceGraph,
-                          let shuffled = FuzzMutator.shuffleSiblingSpans(
-                              candidate,
-                              scopes: parent.permutationScopes,
-                              graph: graph,
-                              prng: &prng
-                          )
-                    else {
-                        continue
-                    }
-                    candidate = shuffled
-                case .move:
-                    guard let graph = parent.choiceGraph,
-                          let moved = FuzzMutator.moveSiblingSpan(
-                              candidate,
-                              scopes: parent.permutationScopes,
-                              graph: graph,
-                              prng: &prng
-                          )
-                    else {
-                        continue
-                    }
-                    candidate = moved
-                case .lockstepDelta:
-                    guard let graph = parent.choiceGraph,
-                          let tandem = parent.tandemScope,
-                          let shifted = FuzzMutator.lockstepDelta(
-                              candidate,
-                              tandem: tandem,
-                              graph: graph,
-                              prng: &prng
-                          )
-                    else {
-                        continue
-                    }
-                    candidate = shifted
-                case .twinSplice:
-                    guard let spliced = FuzzMutator.twinSplice(
-                        candidate,
-                        twinSpanGroups: parent.twinSpanGroups,
-                        prng: &prng
-                    ) else {
-                        continue
-                    }
-                    candidate = spliced
-                case .typedCrossover:
-                    guard let graph = parent.choiceGraph,
-                          let crossed = FuzzMutator.typedCrossover(
-                              candidate,
-                              parentHash: parent.hash,
-                              graph: graph,
-                              corpus: corpus,
-                              prng: &prng
-                          )
-                    else {
-                        continue
-                    }
-                    candidate = crossed
+                    candidate = targeted
                 case .valueWalk, .regionSweep:
                     // Unreachable from the bandit draw and the fixed distribution (campaigns dispatch at parent level), kept for switch exhaustiveness.
                     continue
@@ -188,6 +122,39 @@ extension FuzzRunner {
             )
         }
         return (candidate, armsMask)
+    }
+
+    /// Applies one graph-targeted operator to the candidate, or nil when the parent carries no targeting tables (a discovery-tier parent) or the operator found nothing to target.
+    private func graphArmCandidate(
+        _ arm: MutationArm,
+        _ candidate: ChoiceSequence,
+        parent: CorpusEntry
+    ) -> ChoiceSequence? {
+        guard let targets = parent.mutationTargets else {
+            return nil
+        }
+        switch arm {
+            case .swap:
+                return FuzzMutator.swapSiblingSpans(candidate, targets: targets, prng: &prng)
+            case .shuffle:
+                return FuzzMutator.shuffleSiblingSpans(candidate, targets: targets, prng: &prng)
+            case .move:
+                return FuzzMutator.moveSiblingSpan(candidate, targets: targets, prng: &prng)
+            case .lockstepDelta:
+                return FuzzMutator.lockstepDelta(candidate, targets: targets, prng: &prng)
+            case .twinSplice:
+                return FuzzMutator.twinSplice(candidate, targets: targets, prng: &prng)
+            case .typedCrossover:
+                return FuzzMutator.typedCrossover(
+                    candidate,
+                    parentHash: parent.hash,
+                    targets: targets,
+                    corpus: corpus,
+                    prng: &prng
+                )
+            case .low, .medium, .high, .splice, .valueWalk, .regionSweep:
+                return nil
+        }
     }
 
     /// The fixed operator distribution for arm draws without the bandit: splice at its fixed probability, otherwise a uniform draw over the remaining enabled inventory (the three bands, plus the arms the `graphMutation` and `pairMutation` knobs add).
