@@ -63,6 +63,27 @@ package enum FuzzTunables {
     /// Fresh samples drawn in the reseed burst before a mutation plateau terminates the run. The burst checks whether the generator can still reach coverage the post-mutation corpus lacks; 1000 matches Phase 2's sampling plateau window.
     package static let reseedBurstAttemptLimit = 1000
 
+    /// Maximum slots one comparand-substitution candidate may overwrite with the drawn operand. The count is drawn uniformly in 1...min(span, compatible slots): 1 preserves the single-slot magic-gate move, larger counts perform the agreement move for preconditions that require many positions to match at once. Kept small: each extra slot halves the chance that every overwritten position was one the comparison actually constrained.
+    package static let comparandSubstitutionSlotSpan = 8
+
+    /// Probability that parent selection picks a uniformly random mutable-tier entry instead of a score-weighted one, guaranteeing every basin a floor escape probability no score distribution can squeeze out. Experimental, read once from `EXHAUST_PARENT_EPSILON`; 0 (the default) disables the floor. See the basin-escape survey in ExhaustDocs.
+    package static let parentSelectionEpsilon: Double = ProcessInfo.processInfo.environment["EXHAUST_PARENT_EPSILON"].flatMap(Double.init) ?? 0
+
+    /// Age-decay coefficient for parent scores: an entry's effective score is its base score divided by `1 + k × timesDrawn`, so a basin's founders lose priority as they are milked (the AFLFast idea). Experimental, read once from `EXHAUST_PARENT_AGE_K`; 0 (the default) disables decay. At 0.01 a parent's weight halves after 100 draws.
+    package static let parentAgeDecayCoefficient: Double = ProcessInfo.processInfo.environment["EXHAUST_PARENT_AGE_K"].flatMap(Double.init) ?? 0
+
+    /// Probability that a mutation-loop iteration spends one fresh generator draw instead of a parent pick, keeping the sampling phase alive as a background rate through the whole run. Fresh draws restore ergodicity the corpus cannot (they reach basins no entry has visited) at fresh-generation cost. Experimental, read once from `EXHAUST_FRESH_EPSILON`; 0 (the default) disables the mixture.
+    package static let freshDrawEpsilon: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_EPSILON"].flatMap(Double.init) ?? 0
+
+    /// Floor of the adaptive fresh-draw mixture: the background sampling rate a healthy, admitting corpus keeps. Overridable via `EXHAUST_FRESH_FLOOR`.
+    package static let freshMixtureFloor: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_FLOOR"].flatMap(Double.init) ?? 0.05
+
+    /// Cap of the adaptive fresh-draw mixture, reached when the corpus has admitted nothing for a full ramp. A cap at or below the floor disables the ramp and the fixed `freshDrawEpsilon` governs alone. The default sits at the measured dose-response knee: on basin-fragmented workloads a starved run climbs to spending most of its budget on fresh draws, matching the exploration share FuzzChick reaches through queue starvation. Overridable via `EXHAUST_FRESH_CAP`; 0 disables the ramp.
+    package static let freshMixtureCap: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_CAP"].flatMap(Double.init) ?? 0.6
+
+    /// Attempts without a corpus admission over which the mixture climbs linearly from floor to cap. Overridable via `EXHAUST_FRESH_RAMP`.
+    package static let freshMixtureRampAttempts: Double = ProcessInfo.processInfo.environment["EXHAUST_FRESH_RAMP"].flatMap(Double.init) ?? 2000
+
     // MARK: - Crash Recovery
 
     /// Interval between progress-log checkpoints. A crash loses at most this window of corpus growth; discovered clusters additionally force a checkpoint on classification.
@@ -151,7 +172,7 @@ package struct FuzzExperiments: Sendable, Equatable {
     package var powerSchedule = false
 
     /// Fresh-generation burst before a mutation plateau terminates the run: draws up to ``FuzzTunables/reseedBurstAttemptLimit`` fresh samples and resumes mutation if one discovers a new edge or fault cluster. The burst checks whether the generator can still reach coverage the post-mutation corpus lacks, since Phase 2's plateau fired against a smaller corpus.
-    package var reseedBurst = false
+    package var reseedBurst = true
 
     /// Per-edge shortlex champion archive as the parent-selection domain. Default-on; the knob stays one release for A/B.
     package var championArchive = true

@@ -101,6 +101,9 @@ package final class FuzzRunner<Output> {
     /// Attempts evaluated when the first cluster classified.
     private var attemptsAtFirstFault = 0
 
+    /// Evaluated attempts since the corpus last admitted an entry, driving the adaptive fresh-draw mixture. Reset on every admission. Package-visible so tests can pin the ramp against a driven counter.
+    package var attemptsSinceAdmission = 0
+
     /// The later of the two discoveries, falling back to the run's start before anything is found.
     ///
     /// This is what the mutation phase measures its plateau against. Corpus admission is the wrong signal for it: a candidate also enters on a new hit-count bucket for an edge already covered, so admissions keep arriving long after the run has stopped finding anything, and the window ends up timing something nobody cares about.
@@ -228,6 +231,8 @@ package final class FuzzRunner<Output> {
             timing.screeningOverheadNanoseconds += screeningMeasurement.overheadNanoseconds
         }
         if terminationDue() == nil, configuration.skipSampling == false {
+            // Screening's coverage must not bind search admission: without this reset, boundary rows that light most of the map on a sparse precondition leave sampling and mutation nothing novel to admit, and the run plateaus empty. A screening-free run reaches here with untouched masks, so the call is a no-op there.
+            corpus.resetNoveltyBaseline()
             let samplingMeasurement = measureSearchPhase {
                 runSamplingPhase()
             }
@@ -474,6 +479,17 @@ package final class FuzzRunner<Output> {
                 continue
             }
 
+            // Fresh-draw mixture: with the current mixture probability, spend this iteration on one fresh generator draw instead of a parent batch, keeping sampling alive as a background rate. Fresh draws reach basins no corpus entry has visited, which corpus-uniform exploration cannot. The adaptive ramp (floor to cap over a starvation window of non-admitting attempts) responds to corpus health; with the ramp disabled the fixed epsilon governs alone.
+            let freshEpsilon = currentFreshMixture(attemptsSinceAdmission: attemptsSinceAdmission)
+            if freshEpsilon > 0, randomUnit() < freshEpsilon {
+                switch freshSample(interpreter: &fallbackInterpreter, phase: .mutation) {
+                    case .evaluated, .exhausted:
+                        continue
+                    case let .generationError(message):
+                        return .generationError(message)
+                }
+            }
+
             let parentStart = monotonicNanoseconds()
             let picked = corpus.pickParent(random: randomUnit())
             timing.parentSelectionNanoseconds += monotonicNanoseconds() - parentStart
@@ -507,6 +523,19 @@ package final class FuzzRunner<Output> {
                 evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: armsMask)
             }
         }
+    }
+
+    /// The fresh-draw mixture in effect for the current iteration: the adaptive starvation ramp when configured, the fixed epsilon otherwise.
+    ///
+    /// The ramp climbs linearly from ``FuzzTunables/freshMixtureFloor`` to ``FuzzTunables/freshMixtureCap`` as attempts accumulate without a corpus admission, and any admission resets it to the floor, so the mixture responds to corpus health the way FuzzChick's queue-energy scheduler does instead of betting on one constant. A cap at or below the floor disables the ramp.
+    package func currentFreshMixture(attemptsSinceAdmission: Int) -> Double {
+        let floor = FuzzTunables.freshMixtureFloor
+        let cap = FuzzTunables.freshMixtureCap
+        guard cap > floor else {
+            return FuzzTunables.freshDrawEpsilon
+        }
+        let progress = min(1, Double(attemptsSinceAdmission) / FuzzTunables.freshMixtureRampAttempts)
+        return floor + (cap - floor) * progress
     }
 
     /// Draws fresh samples to break out of a mutation plateau, returning true when a new edge or fault cluster was discovered and mutation should resume.
@@ -796,6 +825,11 @@ package final class FuzzRunner<Output> {
         )
         if case let .admitted(index, _) = admission, corpus.introducedNewEdges(at: index) {
             lastNewEdgeNanoseconds = monotonicNanoseconds()
+        }
+        if admission.isAdmitted {
+            attemptsSinceAdmission = 0
+        } else {
+            attemptsSinceAdmission += 1
         }
         if let failure = candidates.failure,
            case let .fail(symptom) = failure.verdict

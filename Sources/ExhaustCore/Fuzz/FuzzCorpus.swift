@@ -101,6 +101,8 @@ package final class FuzzCorpus {
 
     /// Per-edge bitmask of hit-count buckets seen corpus-wide; novelty is a set bit not yet present.
     private var seenBucketMasks: [UInt8]
+    /// Cumulative record of every edge an admitted entry has covered, kept apart from the admission masks so ``coveredEdgeCount`` keeps reporting the whole run after ``resetNoveltyBaseline()``.
+    private var everCoveredEdges: [Bool]
 
     /// Per-edge count of entries whose signature covers the edge; the rarity denominator.
     private var coveringEntryCounts: [Int]
@@ -118,6 +120,8 @@ package final class FuzzCorpus {
 
     /// Cached parent-selection scores, parallel to `entries`; nil means dirty.
     private var cachedScores: [Double?] = []
+    /// Times each entry has been returned by ``pickParent(random:)``, feeding the experimental age decay. Grows with `entries`.
+    private var parentDrawCounts: [Int] = []
 
     private var seenHashes: Set<UInt64> = []
 
@@ -139,6 +143,7 @@ package final class FuzzCorpus {
         self.edgeCount = edgeCount
         self.experiments = experiments
         seenBucketMasks = Array(repeating: 0, count: edgeCount)
+        everCoveredEdges = Array(repeating: false, count: edgeCount)
         coveringEntryCounts = Array(repeating: 0, count: edgeCount)
         coveringEntries = Array(repeating: [], count: edgeCount)
         edgeChampions = Array(repeating: nil, count: edgeCount)
@@ -180,16 +185,25 @@ package final class FuzzCorpus {
         incidenceTotalCount
     }
 
-    /// The number of edges any corpus entry has covered.
+    /// The number of edges any corpus entry has covered. Cumulative across the whole run: a novelty reset clears the admission masks, not this tally.
     package var coveredEdgeCount: Int {
         var total = 0
-        for mask in seenBucketMasks where mask != 0 {
+        for covered in everCoveredEdges where covered {
             total += 1
         }
         return total
     }
 
     // MARK: - Admission
+
+    /// Clears the admission-novelty baseline while keeping every entry, statistic, and report tally.
+    ///
+    /// Called once at the screening-to-sampling handover. Screening's covering-array rows are an analysis pass, and letting their coverage bind search admission can spend the entire novelty gradient before search begins: on a sparse precondition the boundary rows light most of the map, no search-phase candidate is ever coverage-novel, and the run plateaus having admitted nothing, which is the corpus-capture failure mode. After the reset the search phases start with the fresh map a screening-free run has, while screening's admitted entries keep competing as mutation parents and ``coveredEdgeCount`` keeps reporting the whole run.
+    package func resetNoveltyBaseline() {
+        for index in seenBucketMasks.indices {
+            seenBucketMasks[index] = 0
+        }
+    }
 
     /// Whether the (edge, hit count) pair lands in a bucket no admitted entry has produced for that edge. The single admission-novelty predicate: ``offer(sequence:tree:hits:convergence:generation:phase:isBoundaryDerived:propertyFailed:)`` and ``wouldAdmit(hits:)`` both build on it, so the pre-check cannot drift from real admission. An unseen edge has mask 0 and is therefore always novel.
     private func isNovelBucket(edge: Int, hitCount: UInt8) -> Bool {
@@ -276,6 +290,7 @@ package final class FuzzCorpus {
             }
             signature.insert(edge)
             seenBucketMasks[edge] |= HitCountBucket.bucketMask(for: hitCount)
+            everCoveredEdges[edge] = true
         }
 
         let tier: CorpusTier = convergence >= FuzzTunables.mutableTierConvergenceThreshold
@@ -300,6 +315,7 @@ package final class FuzzCorpus {
         )
         entries.append(entry)
         cachedScores.append(nil)
+        parentDrawCounts.append(0)
         championCounts.append(0)
         seenHashes.insert(hash)
 
@@ -489,6 +505,16 @@ package final class FuzzCorpus {
 
     // MARK: - Parent Selection
 
+    /// The entry's score with the experimental age decay applied: base score over `1 + k × timesDrawn`, so founders lose priority as they are milked. With the coefficient at its default 0 this is exactly ``score(at:)``.
+    private func agedScore(at index: Int) -> Double {
+        let base = score(at: index)
+        let decayCoefficient = FuzzTunables.parentAgeDecayCoefficient
+        guard decayCoefficient > 0 else {
+            return base
+        }
+        return base / (1 + decayCoefficient * Double(parentDrawCounts[index]))
+    }
+
     /// The parent-selection score of the entry at `index`, computing and caching it if dirty.
     package func score(at index: Int) -> Double {
         if let cached = cachedScores[index] {
@@ -516,21 +542,37 @@ package final class FuzzCorpus {
         guard mutableTierIndices.isEmpty == false else {
             return nil
         }
+        // Epsilon floor. With probability epsilon, a uniformly random mutable entry, reusing the caller's draw by rescaling it: below epsilon the draw addresses the tier uniformly, above it the remainder rescales onto score-weighted selection. Every basin keeps a floor escape probability regardless of the score distribution.
+        let epsilon = FuzzTunables.parentSelectionEpsilon
+        var random = random
+        if epsilon > 0 {
+            if random < epsilon {
+                let uniformIndex = mutableTierIndices[min(
+                    Int(random / epsilon * Double(mutableTierIndices.count)),
+                    mutableTierIndices.count - 1
+                )]
+                parentDrawCounts[uniformIndex] += 1
+                return (uniformIndex, entries[uniformIndex])
+            }
+            random = (random - epsilon) / (1 - epsilon)
+        }
         var totalWeight = 0.0
         for index in mutableTierIndices {
-            totalWeight += score(at: index)
+            totalWeight += agedScore(at: index)
         }
         guard totalWeight > 0 else {
             let fallbackIndex = mutableTierIndices[min(
                 Int(random * Double(mutableTierIndices.count)),
                 mutableTierIndices.count - 1
             )]
+            parentDrawCounts[fallbackIndex] += 1
             return (fallbackIndex, entries[fallbackIndex])
         }
         var remaining = random * totalWeight
         for index in mutableTierIndices {
-            remaining -= score(at: index)
+            remaining -= agedScore(at: index)
             if remaining < 0 {
+                parentDrawCounts[index] += 1
                 return (index, entries[index])
             }
         }

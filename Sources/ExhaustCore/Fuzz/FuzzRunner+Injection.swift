@@ -67,9 +67,9 @@ extension FuzzRunner {
         return evaluateInjected(sequence: sequence, tree: tree, value: value, parent: (parentIndex, parent))
     }
 
-    /// Overwrites one tag-compatible value entry of a corpus parent's flat sequence with a harvested comparison operand and evaluates the result as an ordinary mutation candidate.
+    /// Overwrites one or several tag-compatible value entries of a corpus parent's flat sequence with the same harvested comparison operand and evaluates the result as an ordinary mutation candidate.
     ///
-    /// This is the trace-cmp path that needs no reflection: the harvest names the operand but not the draw that fed the comparison — either side may be a generated value or the constant it was checked against — so the target is chosen uniformly among value entries whose tag can encode the operand and whose declared range contains the encoding. Overwriting in place preserves the sequence's length and structure, so the candidate rides the normal guided-materialization path; a value that fed a later structural decision diverges into its fallback handling like any other mutation. Integer tags only: strings, dates, and floating-point choices have no positional correspondence with a 64-bit operand word.
+    /// This is the trace-cmp path that needs no reflection: the harvest names the operand but not the draw that fed the comparison (either side may be a generated value or the constant it was checked against), so targets are chosen uniformly among value entries whose tag can encode the operand and whose declared range contains the encoding. The slot count is drawn per attempt: a single slot serves the magic-constant gate, while writing the same operand into several slots of one tag group is the agreement move. A property whose precondition demands that many components match (indistinguishability of two independently drawn states, for example) is climbed one comparison at a time by single slots but only satisfied when the matching positions agree at once. Multi-slot writes never mix tags: agreement is the same kind of value in the same kind of place. Overwriting in place preserves the sequence's length and structure, so the candidate rides the normal guided-materialization path; a value that fed a later structural decision diverges into its fallback handling like any other mutation. Integer tags only: strings, dates, and floating-point choices have no positional correspondence with a 64-bit operand word.
     func comparandSubstitutionAttempt() -> Bool {
         let parentStart = monotonicNanoseconds()
         let picked = corpus.pickParent(random: randomUnit())
@@ -95,16 +95,34 @@ extension FuzzRunner {
         guard candidateIndices.isEmpty == false else {
             return false
         }
-        let target = candidateIndices[Int(prng.next(upperBound: UInt64(candidateIndices.count)))]
-        guard case let .value(entry) = sequence[target.index] else {
+        // An anchor slot is drawn uniformly over every compatible position; a multi-slot write then stays within the anchor's tag group. Agreement means the same kind of value in the same kind of place: writing one operand across positions of different types is not a coherent agreement candidate, and the restriction keeps the operator independent of any particular generator's shape.
+        let anchor = candidateIndices[Int(prng.next(upperBound: UInt64(candidateIndices.count)))]
+        guard case let .value(anchorEntry) = sequence[anchor.index] else {
             return false
         }
+        let anchorTag = anchorEntry.choice.tag
+        var group: [(index: Int, pattern: UInt64)] = []
+        for candidate in candidateIndices {
+            if case let .value(entry) = sequence[candidate.index], entry.choice.tag == anchorTag {
+                group.append(candidate)
+            }
+        }
+        let slotCount = 1 + Int(prng.next(upperBound: UInt64(min(group.count, FuzzTunables.comparandSubstitutionSlotSpan))))
         var mutated = sequence
-        mutated[target.index] = .value(ChoiceSequenceValue.Value(
-            choice: ChoiceValue(target.pattern, tag: entry.choice.tag),
-            validRange: entry.validRange,
-            isRangeExplicit: entry.isRangeExplicit
-        ))
+        // Partial Fisher-Yates over the tag group: the first `slotCount` entries end up a uniform distinct sample.
+        for slot in 0 ..< slotCount {
+            let pickIndex = slot + Int(prng.next(upperBound: UInt64(group.count - slot)))
+            group.swapAt(slot, pickIndex)
+            let target = group[slot]
+            guard case let .value(entry) = mutated[target.index] else {
+                continue
+            }
+            mutated[target.index] = .value(ChoiceSequenceValue.Value(
+                choice: ChoiceValue(target.pattern, tag: entry.choice.tag),
+                validRange: entry.validRange,
+                isRangeExplicit: entry.isRangeExplicit
+            ))
+        }
         openMutationAttempt()
         evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: 0)
         return true

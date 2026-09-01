@@ -59,7 +59,7 @@ Exhaust runs the property in three phases:
 
 1. **Screening.** The boundary catalogue `#exhaust` tries first (integer min/max/zero, IEEE 754 sentinels, Unicode edge cases), combined by the covering-array sampler. Screening stops at its own row cap, the end of the covering array, or the time budget, whichever comes first. Inputs that reach new branches are kept.
 2. **Sampling.** Random generation, as in `#exhaust`, until new branches stop appearing or 10% of the budget has elapsed.
-3. **Mutation.** Exhaust modifies inputs that reached interesting branches (the corpus). A modified input that reaches a branch nothing in the corpus has reached joins the corpus and is modified in turn. This continues until the budget runs out or new branches stop appearing.
+3. **Mutation.** Exhaust modifies inputs that reached interesting branches (the corpus). A modified input that reaches a branch nothing in the corpus has reached joins the corpus and is modified in turn. A fraction of attempts is spent on fresh generation rather than mutation, and that fraction grows while the corpus stops admitting new inputs and falls back once discoveries resume, so the search keeps probing beyond the corpus's neighbourhood for the whole run. This continues until the budget runs out or new branches stop appearing.
 
 Failures at any phase are reduced to minimal counterexamples and catalogued. The run does not stop at the first failure.
 
@@ -139,6 +139,7 @@ The generator form takes ``PropertyFuzzSettings``. The spec form takes ``StateMa
 | `.suppress(.all)` | All of the above. |
 | `.log(.info)` | Raises log verbosity (default is `.error`). |
 | `.failFast` | Stops the run at its first fault, after reducing it, instead of cataloguing further distinct counterexamples. Use where any failure fails the run, such as a merge gate. |
+| `.skipScreening` | Starts the search at random sampling, skipping the boundary catalogue. Use for a property whose precondition discards nearly every boundary row, or to compare runs from identical starting conditions. The spec form always skips screening, so there it changes nothing. |
 | `.commandLimit(n)` | Maximum commands per generated sequence. Default 40. Spec form only. |
 | `.parallelize(lanes:)` | Lane count for `.tasks` specs. Default two. Spec form only. |
 
@@ -226,6 +227,12 @@ swift test -c release --filter MyLibraryFuzz
 
 The flags are not gated on a configuration here because the dedicated target is only ever built for fuzzing. If the same library also serves the suite recipe, keep the debug-gated flags there too; the two do not conflict.
 
+### When the fuzz target and the code under test share a build
+
+If the fuzzing code and the code under test live in the same package — or the code under test is any dependency built from source in the same build — instrumenting only the library has a silent failure mode under release optimisation. The compiler inlines small public functions from the instrumented library into the uninstrumented caller, and each inlined copy is compiled under the caller's flags: no guards, no comparison callbacks. The functions still compute correctly; they just vanish from the coverage signal. If everything the property touches is inlined away, the run fails with the no-coverage diagnostic. If only some helpers are, nothing fails: the search runs on a partial signal and comparison tracing sees none of the swallowed comparisons, with no indication anything is missing. Only a prebuilt binary dependency is out of the optimiser's reach.
+
+What makes the scoped configuration sound is marking the instrumented library's public entry points `@inline(never)`, so the boundary stays a real call into instrumented code. A cheap way to verify is a canary property: an equality check against a wide constant inside the instrumented module, run under `trace-cmp` for a few seconds. Solved almost immediately means edges and comparison operands are flowing end to end; unsolved means the boundary is being inlined away.
+
 ### When the code under test is a dependency you cannot edit
 
 Pass the flags on the command line instead. This instruments every module in the build graph, Exhaust included, which costs roughly 8–30 µs per attempt on top of the property (more for complex generators) and makes the report's edge count describe the whole graph rather than your code:
@@ -244,9 +251,9 @@ Use `trace-pc-guard` here; a whole-graph build with `inline-8bit-counters` spend
 
 > Experiment: Comparison tracing is experimental and may change or be removed in any release.
 
-Some branches depend on a value the generator will almost never produce by chance: an equality against a wide constant (`token == 0x5F3759DF`), a parsed magic number, a specific string. Every wrong value takes the same branch, so coverage cannot tell the search it is getting closer. With `trace-cmp` in the coverage flags, Exhaust reads the operands of the code's own comparisons and works backward through the generator to the choices that produce the wanted constant (input-to-state solving, as in AFL++'s RedQueen). It works for whole values and for structs compared field by field.
+Some branches depend on a value the generator will almost never produce by chance: an equality against a wide constant (`token == 0x5F3759DF`), a parsed magic number, a specific string. Every wrong value takes the same branch, so coverage cannot tell the search it is getting closer. With `trace-cmp` in the coverage flags, Exhaust reads the operands of the code's own comparisons and feeds them back into the search in two ways. Where a stored input contains an integer choice whose type and declared range can hold the operand, Exhaust writes the operand into that choice directly and tries the result — or into several matching choices at once, for a precondition that needs many positions to agree before it is satisfied. Where the generator is reflective, Exhaust also works backward through the generator to the choices that produce the wanted value (input-to-state solving, as in AFL++'s RedQueen), which covers whole values, strings, and structs compared field by field.
 
-It helps only where the wanted value is rare. A byte or a printable character sees no benefit, because ordinary generation already produces every value there.
+It helps where the wanted value is rare — a byte or a printable character sees no benefit on its own, because ordinary generation already produces every value there — and where several generated values must agree at once, which random draws rarely deliver even over a small domain.
 
 Append `trace-cmp` to the coverage list, in the per-target flags:
 
@@ -266,7 +273,7 @@ swift test \
     -Xswiftc -sanitize-coverage=edge,trace-pc-guard,pc-table,trace-cmp
 ```
 
-Solving needs a reflective generator, one Exhaust can run backward from a value to the choices that produced it. `#examine` reports whether a generator is reflective. A forward-only `map` breaks the chain, and Exhaust then ignores the operand. The flag itself costs almost nothing in throughput.
+Backward solving needs a reflective generator, one Exhaust can run backward from a value to the choices that produced it; `#examine` reports whether a generator is reflective. A forward-only `map` breaks the chain, and direct substitution then carries the operands alone, reaching integer choices only. The flag itself costs almost nothing in throughput.
 
 ## When the run cannot see the code
 

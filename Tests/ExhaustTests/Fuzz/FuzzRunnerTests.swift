@@ -330,6 +330,95 @@ struct FuzzRunnerTests {
         let withoutHarvest = run(harvestingComparisons: false)
         #expect(withoutHarvest.clusters.isEmpty)
     }
+
+    @Test("Multi-slot comparand substitution satisfies an agreement gate no single slot can")
+    func comparandMultiSlotAgreement() {
+        // The property fails only when BOTH halves equal the magic value, and coverage offers no gradient (every input maps to one edge), so the corpus cannot climb one slot at a time: a single-slot substitution leaves the other half random at one in a million. Only a candidate that writes the operand into both compatible slots at once can fail the property inside the attempt budget.
+        let magic = 777_777
+        func run(harvestingComparisons: Bool) -> FuzzRunResult {
+            let agreementComparisons: @Sendable ((Int, Int)) -> [(site: UInt64, lhs: UInt64, rhs: UInt64)] = { value in
+                [
+                    (site: UInt64(1), lhs: UInt64(value.0), rhs: UInt64(magic)),
+                    (site: UInt64(2), lhs: UInt64(value.1), rhs: UInt64(magic)),
+                ]
+            }
+            var configuration = FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 9,
+                attemptLimit: 5000
+            )
+            configuration.stopOnFirstFault = true
+            let runner = FuzzRunner(
+                gen: Gen.zip(
+                    Gen.choose(in: 0 ... 1_000_000 as ClosedRange<Int>),
+                    Gen.choose(in: 0 ... 1_000_000 as ClosedRange<Int>)
+                ),
+                property: { value in value.0 == magic && value.1 == magic ? .fail(.returnedFalse) : .pass },
+                source: SyntheticCoverageSource<(Int, Int)>(
+                    edgeCount: 4,
+                    edges: { _ in [0] },
+                    comparisons: harvestingComparisons ? agreementComparisons : nil
+                ),
+                configuration: configuration
+            )
+            return runner.run()
+        }
+
+        let withHarvest = run(harvestingComparisons: true)
+        guard let cluster = withHarvest.clusters.first else {
+            Issue.record("expected the agreement gate to fall to multi-slot substitution")
+            return
+        }
+        #expect(cluster.reducedDescription.contains("777777"))
+
+        let withoutHarvest = run(harvestingComparisons: false)
+        #expect(withoutHarvest.clusters.isEmpty)
+    }
+
+    @Test("Screening coverage does not spend the search phases' novelty gradient")
+    func screeningDoesNotCaptureNoveltyBaseline() {
+        // Every value lights the whole four-edge map, so the first screening row saturates it. Without the novelty reset at the screening-to-sampling handover, no search-phase candidate is ever coverage-novel, the corpus holds only boundary-derived screening entries, and the run plateaus empty, which is the corpus-capture failure mode observed on sparse preconditions. With the reset, sampling admits entries against a fresh map and the mutation phase runs, while the report's covered-edge tally stays cumulative.
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 1_000_000 as ClosedRange<Int>),
+            property: { _ in .pass },
+            source: SyntheticCoverageSource<Int>(edgeCount: 4, edges: { _ in [0, 1, 2, 3] }),
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 5,
+                attemptLimit: 1500
+            )
+        )
+        let result = runner.run()
+        #expect(result.counts.screeningAttempts > 0)
+        #expect(runner.corpus.entries.contains { $0.phase == FuzzPhase.sampling })
+        #expect(result.counts.mutationAttempts > 0)
+        #expect(result.coveredEdgeCount == 4)
+    }
+
+    @Test("The adaptive fresh mixture ramps with starvation and resets on admission")
+    func adaptiveFreshMixtureRamp() {
+        // The ramp formula is deterministic given the tunables, so the test drives the counter directly against the default floor/cap/ramp.
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
+            property: { _ in .pass },
+            source: bucketedSource(),
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 1,
+                seed: 1,
+                attemptLimit: 1
+            )
+        )
+        let floor = FuzzTunables.freshMixtureFloor
+        let cap = FuzzTunables.freshMixtureCap
+        let ramp = FuzzTunables.freshMixtureRampAttempts
+        #expect(cap > floor)
+        #expect(runner.currentFreshMixture(attemptsSinceAdmission: 0) == floor)
+        let halfway = Int(ramp / 2)
+        #expect(runner.currentFreshMixture(attemptsSinceAdmission: halfway) == floor + (cap - floor) * (Double(halfway) / ramp))
+        #expect(runner.currentFreshMixture(attemptsSinceAdmission: Int(ramp)) == cap)
+        #expect(runner.currentFreshMixture(attemptsSinceAdmission: Int(ramp) * 5) == cap)
+        #expect(runner.attemptsSinceAdmission == 0)
+    }
 }
 
 // MARK: - Helpers
