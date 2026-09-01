@@ -328,6 +328,7 @@ package final class FuzzCorpus {
         cachedScores.append(nil)
         parentDrawCounts.append(0)
         championCounts.append(0)
+        donorFingerprints.append([])
         seenHashes.insert(hash)
 
         var isParentEligible = false
@@ -512,9 +513,14 @@ package final class FuzzCorpus {
     /// Pick-subtree spans of parent-eligible entries, keyed by pick-site fingerprint. Rows are admission-time facts about immutable sequences, so a row stays valid for the entry's lifetime; an entry's rows are removed when it leaves parent selection (champion dethroning or quarantine) so the donor set tracks the parent-selection domain.
     private(set) var donorSpansByFingerprint: [UInt64: [DonorSpan]] = [:]
 
+    /// The fingerprints each entry contributed rows under, so eviction visits only that entry's keys. Parallel to `entries`.
+    private var donorFingerprints: [[UInt64]] = []
+
     /// Registers the entry's active pick subtrees as crossover donors.
     private func registerDonorSpans(forEntryAt index: Int, graph: ChoiceGraph) {
+        var fingerprints: [UInt64] = []
         for (fingerprint, nodeIDs) in graph.selfSimilarityGroups {
+            var didRegister = false
             for nodeID in nodeIDs {
                 guard let range = graph.nodes[nodeID].positionRange else {
                     continue
@@ -522,20 +528,26 @@ package final class FuzzCorpus {
                 donorSpansByFingerprint[fingerprint, default: []].append(
                     DonorSpan(entryIndex: index, range: range)
                 )
+                didRegister = true
+            }
+            if didRegister {
+                fingerprints.append(fingerprint)
             }
         }
+        donorFingerprints[index] = fingerprints
     }
 
     /// Removes every donor row belonging to the entry, on its eviction from parent selection.
+    ///
+    /// Touches only the entry's own keys. Scanning the whole index made eviction O(donor population), and champion dethroning fires often enough under `championArchive` to make that quadratic.
     private func removeDonorSpans(forEntryAt index: Int) {
-        for (fingerprint, spans) in donorSpansByFingerprint {
-            let remaining = spans.filter { $0.entryIndex != index }
-            if remaining.isEmpty {
+        for fingerprint in donorFingerprints[index] {
+            donorSpansByFingerprint[fingerprint]?.removeAll { $0.entryIndex == index }
+            if donorSpansByFingerprint[fingerprint]?.isEmpty == true {
                 donorSpansByFingerprint.removeValue(forKey: fingerprint)
-            } else if remaining.count != spans.count {
-                donorSpansByFingerprint[fingerprint] = remaining
             }
         }
+        donorFingerprints[index] = []
     }
 
     // MARK: - Failure Weights

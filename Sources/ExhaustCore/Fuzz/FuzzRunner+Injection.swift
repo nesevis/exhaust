@@ -90,7 +90,7 @@ extension FuzzRunner {
         else {
             return nil
         }
-        let sequence = ChoiceSequence.flatten(parent.tree)
+        let sequence = parent.sequence
         var candidateIndices: [(index: Int, pattern: UInt64)] = []
         for (index, element) in sequence.enumerated() {
             guard case let .value(entry) = element,
