@@ -23,6 +23,9 @@ package struct CorpusEntry: Sendable {
     /// Same-shaped zip sibling groups from ``PermutationQuery``. Empty for discovery-tier entries.
     let permutationScopes: [PermutationScope]
 
+    /// Position ranges of twin spans under a common zip, grouped by twin key: siblings the generator drew from the same site, in position order within each group. Empty for discovery-tier entries.
+    let twinSpanGroups: [[ClosedRange<Int>]]
+
     /// The edges hit during this entry's property evaluation.
     package let signature: BitSet
 
@@ -315,6 +318,7 @@ package final class FuzzCorpus {
         var tandemScope: TandemScope?
         var redistributionScope: RedistributionScope?
         var permutationScopes: [PermutationScope] = []
+        var twinSpanGroups: [[ClosedRange<Int>]] = []
         if tier == .mutable {
             let graph = ChoiceGraphBuilder.build(from: tree)
             for exchangeScope in ExchangeQuery.build(graph: graph) {
@@ -328,6 +332,7 @@ package final class FuzzCorpus {
                 }
             }
             permutationScopes = PermutationQuery.build(graph: graph)
+            twinSpanGroups = FuzzMutator.twinSpanGroups(graph: graph)
             choiceGraph = graph
         }
 
@@ -340,6 +345,7 @@ package final class FuzzCorpus {
             tandemScope: tandemScope,
             redistributionScope: redistributionScope,
             permutationScopes: permutationScopes,
+            twinSpanGroups: twinSpanGroups,
             signature: signature,
             hits: hits,
             isBoundaryDerived: isBoundaryDerived,
@@ -369,6 +375,9 @@ package final class FuzzCorpus {
                 mutableTierIndices.append(index)
                 isParentEligible = true
             }
+        }
+        if isParentEligible, let graph = choiceGraph {
+            registerDonorSpans(forEntryAt: index, graph: graph)
         }
 
         // Bump rarity denominators and dirty every entry whose score depends on a bumped edge. Only parent-eligible entries ever have their score read, so only they are indexed for invalidation. Indexing every entry made admission cost O(corpus) per edge, and boundary-credit screening rows on a low-edge target turn that into a quadratic stall: 1.5 ms per row at -Onone on a 12-edge fixture, with the run never leaving screening. The rarity denominator still counts every entry.
@@ -406,6 +415,7 @@ package final class FuzzCorpus {
             if championCounts[incumbentIndex] == 0 {
                 // Linear scan, deliberately: the weighted parent pick maps its random draw through this array's cumulative order, so tier membership must stay an ordered array — a Set's per-process iteration order would break seeded replay. Eviction fires only when an entry loses its last championship, and the scan is cheap at realistic tier sizes; revisit with a measurement, not a Set.
                 mutableTierIndices.removeAll { $0 == incumbentIndex }
+                removeDonorSpans(forEntryAt: incumbentIndex)
             }
         }
     }
@@ -473,6 +483,9 @@ package final class FuzzCorpus {
     package func quarantine(sequenceHash: UInt64) {
         quarantinedHashes.insert(sequenceHash)
         mutableTierIndices.removeAll { entries[$0].hash == sequenceHash }
+        for index in entries.indices where entries[index].hash == sequenceHash {
+            removeDonorSpans(forEntryAt: index)
+        }
         guard experiments.championArchive else {
             return
         }
@@ -489,6 +502,43 @@ package final class FuzzCorpus {
     }
 
     private var quarantinedHashes: Set<UInt64> = []
+
+    // MARK: - Donor Index
+
+    /// One donor span for typed crossover: a pick subtree's position range within the sequence of the entry at `entryIndex`.
+    struct DonorSpan {
+        let entryIndex: Int
+        let range: ClosedRange<Int>
+    }
+
+    /// Pick-subtree spans of parent-eligible entries, keyed by pick-site fingerprint. Rows are admission-time facts about immutable sequences, so a row stays valid for the entry's lifetime; an entry's rows are removed when it leaves parent selection (champion dethroning or quarantine) so the donor set tracks the parent-selection domain.
+    private(set) var donorSpansByFingerprint: [UInt64: [DonorSpan]] = [:]
+
+    /// Registers the entry's active pick subtrees as crossover donors.
+    private func registerDonorSpans(forEntryAt index: Int, graph: ChoiceGraph) {
+        for (fingerprint, nodeIDs) in graph.selfSimilarityGroups {
+            for nodeID in nodeIDs {
+                guard let range = graph.nodes[nodeID].positionRange else {
+                    continue
+                }
+                donorSpansByFingerprint[fingerprint, default: []].append(
+                    DonorSpan(entryIndex: index, range: range)
+                )
+            }
+        }
+    }
+
+    /// Removes every donor row belonging to the entry, on its eviction from parent selection.
+    private func removeDonorSpans(forEntryAt index: Int) {
+        for (fingerprint, spans) in donorSpansByFingerprint {
+            let remaining = spans.filter { $0.entryIndex != index }
+            if remaining.isEmpty {
+                donorSpansByFingerprint.removeValue(forKey: fingerprint)
+            } else if remaining.count != spans.count {
+                donorSpansByFingerprint[fingerprint] = remaining
+            }
+        }
+    }
 
     // MARK: - Failure Weights
 

@@ -78,6 +78,9 @@ package final class FuzzRunner<Output> {
     var prng: Xoshiro256
     var bandit = MutationBandit()
 
+    /// The non-splice arms the fixed distribution draws from, assembled once at init from the experiment knobs.
+    var fixedDrawArms: [MutationArm] = []
+
     /// Comparison operands harvested from the system under test, drawn on during mutation. Stays empty when the source does not harvest or the build lacks `trace-cmp` instrumentation, so reads cost nothing.
     var comparisonPool = ComparisonPool()
 
@@ -167,11 +170,15 @@ package final class FuzzRunner<Output> {
         corpus = FuzzCorpus(edgeCount: source.edgeCount, experiments: configuration.experiments)
         gate = ReductionGate(experiments: configuration.experiments)
         prng = Xoshiro256(seed: configuration.seed)
-        bandit = MutationBandit(
-            armCount: configuration.experiments.graphMutation
-                ? MutationArm.allCases.count
-                : MutationArm.legacyArmCount
-        )
+        var arms = MutationArm.legacyArms
+        if configuration.experiments.graphMutation {
+            arms += [.swap, .shuffle, .move, .lockstepDelta]
+        }
+        if configuration.experiments.pairMutation {
+            arms += [.twinSplice, .typedCrossover]
+        }
+        bandit = MutationBandit(arms: arms)
+        fixedDrawArms = arms.filter { $0 != .splice }
     }
 
     /// The default reduce strategy: property-only `choiceGraphReduce`, reducing while the property fails exactly as `#exhaust` does. Reduction probes run inline on the loop's lane, outside any attempt bracket; their coverage is never read.

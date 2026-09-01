@@ -206,6 +206,7 @@ struct GraphMutationOperatorTests {
         #expect(entry.choiceGraph != nil)
         #expect(entry.tandemScope != nil)
         #expect(entry.permutationScopes.isEmpty == false)
+        #expect(entry.twinSpanGroups.isEmpty == false)
 
         var discoverySequence = fixture.sequence
         let firstValueIndex = try #require(discoverySequence.firstIndex { element in
@@ -239,6 +240,150 @@ struct GraphMutationOperatorTests {
         #expect(discoveryEntry.choiceGraph == nil)
         #expect(discoveryEntry.tandemScope == nil)
         #expect(discoveryEntry.permutationScopes.isEmpty)
+        #expect(discoveryEntry.twinSpanGroups.isEmpty)
+    }
+
+    // MARK: - Twin Splice
+
+    @Test("Twin detection groups the zip's same-site siblings")
+    func twinDetection() throws {
+        let fixture = try #require(zipFixture())
+        let groups = FuzzMutator.twinSpanGroups(graph: fixture.graph)
+        #expect(groups.count == 1)
+        #expect(groups[0].count == 3)
+        #expect(groups[0] == groups[0].sorted { $0.lowerBound < $1.lowerBound })
+    }
+
+    @Test("Twin splice copies one twin span over a sibling, creating agreement")
+    func twinSpliceCreatesAgreement() throws {
+        let fixture = try #require(zipFixture())
+        let groups = FuzzMutator.twinSpanGroups(graph: fixture.graph)
+        var prng = Xoshiro256(seed: 13)
+        let spliced = try #require(FuzzMutator.twinSplice(
+            fixture.sequence,
+            twinSpanGroups: groups,
+            prng: &prng
+        ))
+        #expect(spliced != fixture.sequence)
+        // The fixture's three twins carry distinct values; a splice duplicates one of them.
+        let originalDistinct = Set(valueMultiset(of: fixture.sequence)).count
+        let splicedDistinct = Set(valueMultiset(of: spliced)).count
+        #expect(splicedDistinct == originalDistinct - 1)
+    }
+
+    // MARK: - Typed Crossover
+
+    @Test("Typed crossover grafts a same-fingerprint span from a different entry")
+    func typedCrossoverGraftsDonorSpan() throws {
+        let corpus = FuzzCorpus(edgeCount: 4)
+        let recipientIndex = try admitPickPair(
+            into: corpus,
+            fingerprint: 7,
+            values: (111, 222),
+            edge: 0
+        )
+        _ = try admitPickPair(into: corpus, fingerprint: 7, values: (333, 444), edge: 1)
+
+        let recipient = corpus.entries[recipientIndex]
+        let graph = try #require(recipient.choiceGraph)
+        var prng = Xoshiro256(seed: 3)
+        var grafted = 0
+        for _ in 0 ..< 20 {
+            guard let crossed = FuzzMutator.typedCrossover(
+                recipient.sequence,
+                parentHash: recipient.hash,
+                graph: graph,
+                corpus: corpus,
+                prng: &prng
+            ) else {
+                // A draw that lands on the recipient's own donor rows is a declared cheap miss.
+                continue
+            }
+            grafted += 1
+            #expect(crossed != recipient.sequence)
+            let donorValues: Set<UInt64> = [333, 444]
+            #expect(valueMultiset(of: crossed).contains { donorValues.contains($0) })
+        }
+        #expect(grafted > 0, "Every draw over 20 rounds hit the recipient's own donor rows")
+    }
+
+    @Test("Typed crossover never donates from the recipient's own entry")
+    func typedCrossoverExcludesSelf() throws {
+        let corpus = FuzzCorpus(edgeCount: 4)
+        let recipientIndex = try admitPickPair(
+            into: corpus,
+            fingerprint: 7,
+            values: (111, 222),
+            edge: 0
+        )
+        let recipient = corpus.entries[recipientIndex]
+        let graph = try #require(recipient.choiceGraph)
+        var prng = Xoshiro256(seed: 3)
+        for _ in 0 ..< 20 {
+            #expect(FuzzMutator.typedCrossover(
+                recipient.sequence,
+                parentHash: recipient.hash,
+                graph: graph,
+                corpus: corpus,
+                prng: &prng
+            ) == nil)
+        }
+    }
+
+    @Test("Quarantine removes an entry's donor rows")
+    func quarantineRemovesDonorRows() throws {
+        let corpus = FuzzCorpus(edgeCount: 4)
+        let recipientIndex = try admitPickPair(
+            into: corpus,
+            fingerprint: 7,
+            values: (111, 222),
+            edge: 0
+        )
+        let donorIndex = try admitPickPair(into: corpus, fingerprint: 7, values: (333, 444), edge: 1)
+        corpus.quarantine(sequenceHash: corpus.entries[donorIndex].hash)
+
+        let recipient = corpus.entries[recipientIndex]
+        let graph = try #require(recipient.choiceGraph)
+        var prng = Xoshiro256(seed: 3)
+        for _ in 0 ..< 20 {
+            #expect(FuzzMutator.typedCrossover(
+                recipient.sequence,
+                parentHash: recipient.hash,
+                graph: graph,
+                corpus: corpus,
+                prng: &prng
+            ) == nil)
+        }
+    }
+
+    @Test("Twin splice and typed crossover are deterministic under a pinned seed")
+    func pairOperatorDeterminism() throws {
+        let fixture = try #require(zipFixture())
+        let groups = FuzzMutator.twinSpanGroups(graph: fixture.graph)
+        let corpus = FuzzCorpus(edgeCount: 4)
+        let recipientIndex = try admitPickPair(
+            into: corpus,
+            fingerprint: 7,
+            values: (111, 222),
+            edge: 0
+        )
+        _ = try admitPickPair(into: corpus, fingerprint: 7, values: (333, 444), edge: 1)
+        let recipient = corpus.entries[recipientIndex]
+        let graph = try #require(recipient.choiceGraph)
+
+        for seed in [1, 9, 42] as [UInt64] {
+            var firstPRNG = Xoshiro256(seed: seed)
+            var secondPRNG = Xoshiro256(seed: seed)
+            #expect(
+                FuzzMutator.twinSplice(fixture.sequence, twinSpanGroups: groups, prng: &firstPRNG)
+                    == FuzzMutator.twinSplice(fixture.sequence, twinSpanGroups: groups, prng: &secondPRNG)
+            )
+            #expect(
+                FuzzMutator.typedCrossover(recipient.sequence, parentHash: recipient.hash, graph: graph, corpus: corpus, prng: &firstPRNG)
+                    == FuzzMutator.typedCrossover(recipient.sequence, parentHash: recipient.hash, graph: graph, corpus: corpus, prng: &secondPRNG)
+            )
+            #expect(firstPRNG.currentState == secondPRNG.currentState)
+        }
     }
 
     // MARK: - Bandit Inventory
@@ -313,6 +458,50 @@ private func tandemScope(fromGraph graph: ChoiceGraph) -> TandemScope? {
         }
     }
     return nil
+}
+
+/// Admits a mutable-tier entry whose tree holds two same-fingerprint pick sites with the given selected values, returning its corpus index.
+private func admitPickPair(
+    into corpus: FuzzCorpus,
+    fingerprint: UInt64,
+    values: (UInt64, UInt64),
+    edge: Int
+) throws -> Int {
+    let tree = ChoiceTree.group([
+        pickSite(fingerprint: fingerprint, selectedValue: values.0),
+        pickSite(fingerprint: fingerprint, selectedValue: values.1),
+    ])
+    let admission = corpus.offer(
+        sequence: ChoiceSequence.flatten(tree),
+        tree: tree,
+        hits: [(edge: edge, hitCount: 1)],
+        convergence: 1.0,
+        generation: 0,
+        phase: .mutation
+    )
+    guard case let .admitted(index, tier) = admission, tier == .mutable else {
+        throw MutationOperatorTestError.admissionFailed
+    }
+    return index
+}
+
+/// A two-branch pick site with the second branch selected, carrying the given leaf value.
+private func pickSite(fingerprint: UInt64, selectedValue: UInt64) -> ChoiceTree {
+    .group([
+        .branch(
+            fingerprint: fingerprint, weight: 1, id: 0, branchCount: 2,
+            choice: .choice(ChoiceValue(0 as UInt64, tag: .uint64), .init(validRange: 0 ... 1_000_000))
+        ),
+        .branch(
+            fingerprint: fingerprint, weight: 1, id: 1, branchCount: 2,
+            choice: .choice(ChoiceValue(selectedValue, tag: .uint64), .init(validRange: 0 ... 1_000_000)),
+            isSelected: true
+        ),
+    ])
+}
+
+private enum MutationOperatorTestError: Error {
+    case admissionFailed
 }
 
 /// The sorted bit patterns of every `.value` entry, for permutation-invariance assertions.

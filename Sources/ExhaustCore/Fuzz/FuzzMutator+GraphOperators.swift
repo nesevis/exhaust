@@ -129,6 +129,153 @@ extension FuzzMutator {
         return shifted.candidate
     }
 
+    // MARK: - Twin Detection
+
+    /// Discriminates zip children the generator drew from the same site, so twin spans can be spliced onto one another.
+    ///
+    /// Picks and binds match by their site fingerprint. Sequences match by element type tag rather than shape, so twins of different lengths (two instruction lists) still group. Leaves match by type tag, zips by child count.
+    private enum TwinKey: Hashable {
+        case pick(UInt64)
+        case bind(UInt64)
+        case value(TypeTag)
+        case elementSequence(TypeTag)
+        case zip(childCount: Int)
+    }
+
+    /// Computes the twin-span groups of every zip node: position ranges of siblings sharing a twin key, in position order, groups ordered by first position.
+    ///
+    /// Group and member ordering is explicit rather than dictionary order so seeded runs replay identically across processes.
+    static func twinSpanGroups(graph: ChoiceGraph) -> [[ClosedRange<Int>]] {
+        var groups: [[ClosedRange<Int>]] = []
+        for nodeID in graph.liveNodeIDs {
+            let node = graph.nodes[nodeID]
+            guard case .zip = node.kind, node.children.count >= 2 else {
+                continue
+            }
+            var rangesByKey: [TwinKey: [ClosedRange<Int>]] = [:]
+            for childID in node.children {
+                let child = graph.nodes[childID]
+                guard let range = child.positionRange else {
+                    continue
+                }
+                if child.scopeAnnotation.isDepthControl || child.scopeAnnotation.isLaneControl {
+                    continue
+                }
+                guard let key = twinKey(of: child) else {
+                    continue
+                }
+                rangesByKey[key, default: []].append(range)
+            }
+            let zipGroups = rangesByKey.values
+                .filter { $0.count >= 2 }
+                .map { $0.sorted { $0.lowerBound < $1.lowerBound } }
+                .sorted { $0[0].lowerBound < $1[0].lowerBound }
+            groups.append(contentsOf: zipGroups)
+        }
+        return groups
+    }
+
+    /// The twin key of one zip child, or nil for kinds with no twin identity (`just`, untagged sequences).
+    private static func twinKey(of node: ChoiceGraphNode) -> TwinKey? {
+        switch node.kind {
+            case let .pick(metadata):
+                .pick(metadata.fingerprint)
+            case let .bind(metadata):
+                .bind(metadata.fingerprint)
+            case let .chooseBits(metadata):
+                .value(metadata.typeTag)
+            case let .sequence(metadata):
+                metadata.elementTypeTag.map { .elementSequence($0) }
+            case let .zip(metadata):
+                metadata.isOpaque ? nil : .zip(childCount: node.children.count)
+            case .just:
+                nil
+        }
+    }
+
+    // MARK: - Twin Splice
+
+    /// Copies one twin span over a sibling twin span, creating structural agreement between them.
+    ///
+    /// The one-directional counterpart of ``swapSiblingSpans(_:scopes:graph:prng:)``: after the splice both spans hold the source content. Twin spans of different lengths shift the positions after the target; guided materialization absorbs the drift. Returns nil when the entry has no twin group or a chosen span does not fit the candidate.
+    static func twinSplice(
+        _ candidate: ChoiceSequence,
+        twinSpanGroups: [[ClosedRange<Int>]],
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        guard let group = pickRangeGroup(twinSpanGroups, prng: &prng) else {
+            return nil
+        }
+        let sourceIndex = Int(prng.next(upperBound: UInt64(group.count)))
+        let offset = 1 + Int(prng.next(upperBound: UInt64(group.count - 1)))
+        let targetIndex = (sourceIndex + offset) % group.count
+        let source = group[sourceIndex]
+        let target = group[targetIndex]
+        guard source.upperBound < candidate.count, target.upperBound < candidate.count else {
+            return nil
+        }
+        return candidate.copyingSpan(from: source, onto: target)
+    }
+
+    // MARK: - Typed Crossover
+
+    /// Replaces one pick subtree with a same-fingerprint span from a different corpus entry.
+    ///
+    /// The donor span is an admission-time fact about the donor's immutable sequence, so it always addresses the donor validly; only the recipient's target range is bounds-checked against the candidate. A drawn donor from the recipient's own entry is a cheap miss rather than a redraw, keeping PRNG consumption fixed per call. Returns nil when no fingerprint has both an active recipient pick and a donor row.
+    static func typedCrossover(
+        _ candidate: ChoiceSequence,
+        parentHash: UInt64,
+        graph: ChoiceGraph,
+        corpus: FuzzCorpus,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence? {
+        // Fingerprint order is explicit rather than dictionary order so seeded runs replay identically across processes.
+        var eligible: [(fingerprint: UInt64, targets: [Int])] = []
+        var totalWeight: UInt64 = 0
+        for fingerprint in graph.selfSimilarityGroups.keys.sorted() {
+            guard let targets = graph.selfSimilarityGroups[fingerprint],
+                  targets.isEmpty == false,
+                  let donors = corpus.donorSpansByFingerprint[fingerprint],
+                  donors.isEmpty == false
+            else {
+                continue
+            }
+            eligible.append((fingerprint: fingerprint, targets: targets))
+            totalWeight += UInt64(targets.count)
+        }
+        guard totalWeight > 0 else {
+            return nil
+        }
+
+        var remaining = prng.next(upperBound: totalWeight)
+        var chosen = eligible[eligible.count - 1]
+        for entry in eligible {
+            let weight = UInt64(entry.targets.count)
+            if remaining < weight {
+                chosen = entry
+                break
+            }
+            remaining -= weight
+        }
+
+        let targetNodeID = chosen.targets[Int(prng.next(upperBound: UInt64(chosen.targets.count)))]
+        guard let donors = corpus.donorSpansByFingerprint[chosen.fingerprint] else {
+            return nil
+        }
+        let donor = donors[Int(prng.next(upperBound: UInt64(donors.count)))]
+        guard let target = graph.nodes[targetNodeID].positionRange,
+              target.upperBound < candidate.count,
+              corpus.entries[donor.entryIndex].hash != parentHash
+        else {
+            return nil
+        }
+        return candidate.graftingSpan(
+            from: corpus.entries[donor.entryIndex].sequence,
+            at: donor.range,
+            onto: target
+        )
+    }
+
     // MARK: - Scope Selection
 
     /// Picks one swap-eligible sibling group with `minimumSize` or more members, weighted by member count.
@@ -157,6 +304,29 @@ extension FuzzMutator {
             remaining -= weight
         }
         return eligible[eligible.count - 1]
+    }
+
+    /// Picks one range group with two or more members, weighted by member count.
+    private static func pickRangeGroup(
+        _ groups: [[ClosedRange<Int>]],
+        prng: inout Xoshiro256
+    ) -> [ClosedRange<Int>]? {
+        var totalWeight: UInt64 = 0
+        for group in groups where group.count >= 2 {
+            totalWeight += UInt64(group.count)
+        }
+        guard totalWeight > 0 else {
+            return nil
+        }
+        var remaining = prng.next(upperBound: totalWeight)
+        for group in groups where group.count >= 2 {
+            let weight = UInt64(group.count)
+            if remaining < weight {
+                return group
+            }
+            remaining -= weight
+        }
+        return groups[groups.count - 1]
     }
 
     /// Picks one tandem group with two or more leaves, weighted by leaf count.

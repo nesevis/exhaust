@@ -67,6 +67,22 @@ package extension ChoiceSequence {
         return ChoiceSequence(rebuilt)
     }
 
+    /// Builds a candidate sequence by writing a span from a different sequence over the entries at `target`.
+    ///
+    /// The cross-sequence variant of ``copyingSpan(from:onto:)``. `donorRange` must address `donor`; spans of different lengths shift every position after `target`.
+    func graftingSpan(
+        from donor: ChoiceSequence,
+        at donorRange: ClosedRange<Int>,
+        onto target: ClosedRange<Int>
+    ) -> ChoiceSequence {
+        var result = self
+        result.replaceSubrange(
+            target.lowerBound ... target.upperBound,
+            with: donor[donorRange.lowerBound ... donorRange.upperBound]
+        )
+        return result
+    }
+
     // MARK: - Value Writers
 
     /// Builds a candidate sequence by shifting every entry of a same-tag group by one shared delta.

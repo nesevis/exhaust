@@ -6,7 +6,8 @@ extension FuzzRunner {
     /// Produces one mutated candidate from `parent` plus the bitmask of ``MutationArm``s that shaped it (for bandit credit on admission). Two orthogonal knobs, applied in sequence: the mutation strategy (legacy single-operator or composed experiment stack), then the swarm rewrite of the result's disallowed branch selections.
     func nextCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt32) {
         let experiments = configuration.experiments
-        var (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands || experiments.graphMutation
+        var (candidate, armsMask) = experiments.stackedMutation || experiments.banditBands
+            || experiments.graphMutation || experiments.pairMutation
             ? composedCandidate(from: parent)
             : legacyCandidate(from: parent)
         switch experiments.swarmMode {
@@ -130,6 +131,28 @@ extension FuzzRunner {
                         continue
                     }
                     candidate = shifted
+                case .twinSplice:
+                    guard let spliced = FuzzMutator.twinSplice(
+                        candidate,
+                        twinSpanGroups: parent.twinSpanGroups,
+                        prng: &prng
+                    ) else {
+                        continue
+                    }
+                    candidate = spliced
+                case .typedCrossover:
+                    guard let graph = parent.choiceGraph,
+                          let crossed = FuzzMutator.typedCrossover(
+                              candidate,
+                              parentHash: parent.hash,
+                              graph: graph,
+                              corpus: corpus,
+                              prng: &prng
+                          )
+                    else {
+                        continue
+                    }
+                    candidate = crossed
                 case .splice:
                     guard corpus.entries.count > 1 else {
                         continue
@@ -164,15 +187,11 @@ extension FuzzRunner {
         return (candidate, armsMask)
     }
 
-    /// The fixed operator distribution for arm draws without the bandit: splice at its fixed probability, otherwise a uniform draw over the remaining enabled inventory (the three bands, plus the graph-targeted arms under the `graphMutation` knob).
+    /// The fixed operator distribution for arm draws without the bandit: splice at its fixed probability, otherwise a uniform draw over the remaining enabled inventory (the three bands, plus the arms the `graphMutation` and `pairMutation` knobs add).
     private func fixedDistributionArm() -> MutationArm {
         if randomUnit() < FuzzTunables.spliceProbability {
             return .splice
         }
-        guard configuration.experiments.graphMutation else {
-            return MutationArm(rawValue: Int(prng.next(upperBound: 3))) ?? .low
-        }
-        let nonSpliceArms = MutationArm.allCases.filter { $0 != .splice }
-        return nonSpliceArms[Int(prng.next(upperBound: UInt64(nonSpliceArms.count)))]
+        return fixedDrawArms[Int(prng.next(upperBound: UInt64(fixedDrawArms.count)))]
     }
 }

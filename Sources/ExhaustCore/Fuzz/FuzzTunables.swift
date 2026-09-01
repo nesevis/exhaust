@@ -176,6 +176,9 @@ package struct FuzzExperiments: Sendable, Equatable {
     /// Graph-targeted mutation operators (sibling-span swap, shuffle, and move plus the tandem lockstep delta) drawn from the admission-time scope caches. Adds the four arms to the pick inventory: the bandit's when `banditBands` is on, the fixed distribution's otherwise.
     package var graphMutation = false
 
+    /// Pair mutation operators: the twin splice (copy one zip twin's span over its sibling's, creating structural agreement) and the typed crossover (replace a pick subtree with a same-fingerprint span from a different corpus entry). Adds the two arms to the pick inventory the same way `graphMutation` adds its four.
+    package var pairMutation = false
+
     /// AFLFast-style power schedule for the number of children drawn per picked parent.
     package var powerSchedule = false
 
@@ -217,6 +220,7 @@ package struct FuzzExperiments: Sendable, Equatable {
             ("stackedMutation", \.stackedMutation),
             ("banditBands", \.banditBands),
             ("graphMutation", \.graphMutation),
+            ("pairMutation", \.pairMutation),
             ("powerSchedule", \.powerSchedule),
             ("reseedBurst", \.reseedBurst),
             ("championArchive", \.championArchive),
