@@ -147,6 +147,17 @@ package enum FuzzTunables {
     /// Exclusive upper bound on the log-uniform exponent draw for the lockstep delta: `delta = 1 + next(2^exponent)` with `exponent < 11`, so most deltas are small agreement-preserving steps and the occasional draw jumps by up to ~2^10.
     package static let lockstepDeltaExponentLimit: UInt64 = 11
 
+    // MARK: - Campaigns (Experiment: campaignMutation)
+
+    /// Children of one parent evaluated without an admission before that parent's campaign gate opens. Campaigns are multi-probe spends, so they unlock only where the cheap arms have gone quiet; at the default `childrenPerParent` of 4 this is 8 quiet visits.
+    package static let campaignStallThreshold = 32
+
+    /// Probability that a gate-open parent visit runs a campaign instead of its ordinary child batch. Below 1 so stalled parents keep receiving ordinary mutations between campaigns.
+    package static let campaignShare = 0.5
+
+    /// Restricts the campaign draw to one kind for ablation arms: `sweep` or `walk`, read once from `EXHAUST_CAMPAIGN`; unset runs both on a fair draw.
+    package static let campaignKindOverride: String? = ProcessInfo.processInfo.environment["EXHAUST_CAMPAIGN"]
+
     // MARK: - Coverage Reachability
 
     /// Attempts to allow before concluding that an instrumented build is recording nothing.
@@ -188,6 +199,9 @@ package struct FuzzExperiments: Sendable, Equatable {
     /// Per-edge shortlex champion archive as the parent-selection domain. Default-on; the knob stays one release for A/B.
     package var championArchive = true
 
+    /// Multi-probe campaigns: the adaptive one-leaf walk and the bind-region covering sweep. A campaign replaces one gate-open parent visit's child batch, spending the same child budget on a coordinated probe session instead of independent draws; the gate opens after ``FuzzTunables/campaignStallThreshold`` children without an admission.
+    package var campaignMutation = false
+
     /// How swarm generation rewrites a mutated child's branch selections.
     package enum SwarmMode: String, Sendable {
         /// No swarm rewrite: mutated children keep the uniform branch mix.
@@ -221,6 +235,7 @@ package struct FuzzExperiments: Sendable, Equatable {
             ("banditBands", \.banditBands),
             ("graphMutation", \.graphMutation),
             ("pairMutation", \.pairMutation),
+            ("campaignMutation", \.campaignMutation),
             ("powerSchedule", \.powerSchedule),
             ("reseedBurst", \.reseedBurst),
             ("championArchive", \.championArchive),

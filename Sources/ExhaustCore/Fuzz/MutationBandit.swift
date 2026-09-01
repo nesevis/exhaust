@@ -22,6 +22,10 @@ package enum MutationArm: Int, CaseIterable, Sendable {
     case lockstepDelta = 7
     case twinSplice = 8
     case typedCrossover = 9
+    /// The adaptive one-leaf walk campaign under the `campaignMutation` knob. Dispatched at parent level when the stall gate opens, never in the bandit's own draw; the case exists so admissions credit the arm's statistics.
+    case valueWalk = 10
+    /// The bind-region covering-sweep campaign under the `campaignMutation` knob. Dispatched at parent level when the stall gate opens, never in the bandit's own draw; the case exists so admissions credit the arm's statistics.
+    case regionSweep = 11
 
     /// The size of the inventory with every experiment knob off: the three intensity bands and splice. Raw values order the knob-gated arms after these, so the legacy inventory is the raw-value prefix of this length.
     package static let legacyArmCount = 4

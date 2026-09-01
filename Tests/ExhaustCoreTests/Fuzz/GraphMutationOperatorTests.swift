@@ -386,6 +386,33 @@ struct GraphMutationOperatorTests {
         }
     }
 
+    // MARK: - Stall Gate
+
+    @Test("The quiet-child counter increments per child and resets on admission")
+    func quietChildCounter() throws {
+        let fixture = try #require(zipFixture())
+        let corpus = FuzzCorpus(edgeCount: 4)
+        let admission = corpus.offer(
+            sequence: fixture.sequence,
+            tree: fixture.tree,
+            hits: [(edge: 0, hitCount: 1)],
+            convergence: 1.0,
+            generation: 0,
+            phase: .mutation
+        )
+        guard case let .admitted(index, _) = admission else {
+            Issue.record("Fixture entry was not admitted")
+            return
+        }
+        #expect(corpus.childrenSinceAdmission(forParentAt: index) == 0)
+        for count in 1 ... 5 {
+            corpus.noteChild(forParentAt: index, admitted: false)
+            #expect(corpus.childrenSinceAdmission(forParentAt: index) == count)
+        }
+        corpus.noteChild(forParentAt: index, admitted: true)
+        #expect(corpus.childrenSinceAdmission(forParentAt: index) == 0)
+    }
+
     // MARK: - Bandit Inventory
 
     @Test("A legacy-sized bandit never picks a graph arm and ignores its rewards")

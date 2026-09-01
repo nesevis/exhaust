@@ -75,9 +75,20 @@ extension FuzzRunner {
         let picked = corpus.pickParent(random: randomUnit())
         timing.parentSelectionNanoseconds += monotonicNanoseconds() - parentStart
         guard let (parentIndex, parent) = picked,
-              let word = comparisonPool.drawValue(sitePick: randomUnit(), valuePick: randomUnit())
+              let mutated = comparandSubstitutionCandidate(parent: parent)
         else {
             return false
+        }
+        openMutationAttempt()
+        evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: 0)
+        return true
+    }
+
+    /// Builds one comparand-substitution candidate from `parent`, or nil when the pool is empty or no tag-compatible slot exists.
+    func comparandSubstitutionCandidate(parent: CorpusEntry) -> ChoiceSequence? {
+        guard let word = comparisonPool.drawValue(sitePick: randomUnit(), valuePick: randomUnit())
+        else {
+            return nil
         }
         let sequence = ChoiceSequence.flatten(parent.tree)
         var candidateIndices: [(index: Int, pattern: UInt64)] = []
@@ -93,12 +104,12 @@ extension FuzzRunner {
             }
         }
         guard candidateIndices.isEmpty == false else {
-            return false
+            return nil
         }
         // An anchor slot is drawn uniformly over every compatible position; a multi-slot write then stays within the anchor's tag group. Agreement means the same kind of value in the same kind of place: writing one operand across positions of different types is not a coherent agreement candidate, and the restriction keeps the operator independent of any particular generator's shape.
         let anchor = candidateIndices[Int(prng.next(upperBound: UInt64(candidateIndices.count)))]
         guard case let .value(anchorEntry) = sequence[anchor.index] else {
-            return false
+            return nil
         }
         let anchorTag = anchorEntry.choice.tag
         var group: [(index: Int, pattern: UInt64)] = []
@@ -123,9 +134,7 @@ extension FuzzRunner {
                 isRangeExplicit: entry.isRangeExplicit
             ))
         }
-        openMutationAttempt()
-        evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: 0)
-        return true
+        return mutated
     }
 
     /// Evaluates a candidate produced by comparison-operand injection and records the attempt, sharing the tail of the reconstructor and graft paths.

@@ -153,6 +153,9 @@ extension FuzzRunner {
                         continue
                     }
                     candidate = crossed
+                case .valueWalk, .regionSweep:
+                    // Unreachable from the bandit draw and the fixed distribution (campaigns dispatch at parent level), kept for switch exhaustiveness.
+                    continue
                 case .splice:
                     guard corpus.entries.count > 1 else {
                         continue

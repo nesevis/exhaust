@@ -524,6 +524,15 @@ package final class FuzzRunner<Output> {
             let childBudget = configuration.experiments.powerSchedule
                 ? corpus.powerScheduleChildren(forParentAt: parentIndex, base: FuzzTunables.childrenPerParent)
                 : FuzzTunables.childrenPerParent
+
+            // Campaign dispatch: a gate-open parent spends this visit's child budget on one coordinated probe session instead of independent draws. Campaign candidates bypass the swarm rewrite deliberately — scrambling branch selections would break the session's coordination.
+            if configuration.experiments.campaignMutation,
+               corpus.childrenSinceAdmission(forParentAt: parentIndex) >= FuzzTunables.campaignStallThreshold,
+               randomUnit() < FuzzTunables.campaignShare,
+               runCampaign(parent: parent, parentIndex: parentIndex, budget: childBudget)
+            {
+                continue
+            }
             for _ in 0 ..< childBudget {
                 if terminationDue() != nil {
                     break
@@ -574,12 +583,23 @@ package final class FuzzRunner<Output> {
         return lastDiscoveryNanoseconds > discoveryAtEntry
     }
 
+    /// Per-candidate outcome handed back to the producing arm. Campaigns steer their next probe on it; single-shot arms discard it.
+    struct CandidateFeedback {
+        /// Whether guided materialization produced a value and the property ran.
+        let materialized: Bool
+        /// Whether the property declined to judge the value (its precondition was not met).
+        let discarded: Bool
+        /// Whether the corpus admitted the candidate.
+        let admitted: Bool
+    }
+
+    @discardableResult
     func evaluateFuzzCandidate(
         _ candidate: ChoiceSequence,
         parent: CorpusEntry,
         parentIndex: Int,
         armsMask: UInt32
-    ) {
+    ) -> CandidateFeedback {
         // Phase 1: flat emission produces the value, the fresh sequence, and (below) its hash without building a ChoiceTree. The tree is rebuilt in phase 2 only for the rare candidates that consume it: corpus admission and failure dispatch.
         let guidedSeed = prng.next()
         let materializeStart = monotonicNanoseconds()
@@ -591,7 +611,8 @@ package final class FuzzRunner<Output> {
         timing.candidateMaterializationNanoseconds += monotonicNanoseconds() - materializeStart
         guard case let .success(anyValue, sequence, decodingReport) = result else {
             counts.discardedAttempts += 1
-            return
+            corpus.noteChild(forParentAt: parentIndex, admitted: false)
+            return CandidateFeedback(materialized: false, discarded: true, admitted: false)
         }
         // swiftlint:disable:next force_cast
         let value = anyValue as! Output
@@ -613,7 +634,8 @@ package final class FuzzRunner<Output> {
                 expecting: sequence
             ) else {
                 counts.discardedAttempts += 1
-                return
+                corpus.noteChild(forParentAt: parentIndex, admitted: false)
+                return CandidateFeedback(materialized: false, discarded: true, admitted: false)
             }
             tree = rebuilt
         } else if verdict.isFailure {
@@ -646,6 +668,12 @@ package final class FuzzRunner<Output> {
                 bandit.reward(arm)
             }
         }
+        corpus.noteChild(forParentAt: parentIndex, admitted: admission.isAdmitted)
+        return CandidateFeedback(
+            materialized: true,
+            discarded: verdict.isDiscard,
+            admitted: admission.isAdmitted
+        )
     }
 
     /// Re-materializes the guided tree for a flat-emission candidate and verifies it flattens to the phase-1 sequence.

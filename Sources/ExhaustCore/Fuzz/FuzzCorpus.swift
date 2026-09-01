@@ -66,6 +66,9 @@ package struct CorpusEntry: Sendable {
 
     /// Children spawned from this entry across all picks — the frequency denominator in the energy formula.
     var childrenSpawned: Int = 0
+
+    /// Children of this entry evaluated since one was last admitted. Drives the campaign stall gate: a parent whose cheap mutations have gone quiet is worth a coordinated multi-probe spend.
+    var childrenSinceAdmission: Int = 0
 }
 
 /// Which tier an admitted entry landed in.
@@ -574,6 +577,26 @@ package final class FuzzCorpus {
         }
         entries[index].failureBoost = boost
         cachedScores[index] = nil
+    }
+
+    /// Advances the parent's quiet-child counter: an admitted child resets it, any other child increments it.
+    package func noteChild(forParentAt index: Int, admitted: Bool) {
+        guard entries.indices.contains(index) else {
+            return
+        }
+        if admitted {
+            entries[index].childrenSinceAdmission = 0
+        } else {
+            entries[index].childrenSinceAdmission += 1
+        }
+    }
+
+    /// The parent's quiet-child count, for the campaign stall gate.
+    package func childrenSinceAdmission(forParentAt index: Int) -> Int {
+        guard entries.indices.contains(index) else {
+            return 0
+        }
+        return entries[index].childrenSinceAdmission
     }
 
     // MARK: - Power Schedule

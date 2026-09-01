@@ -110,6 +110,8 @@ package struct FuzzRunCounts: Sendable {
     /// Evaluated search cases the property discarded (a skip error). Counted inside `evaluatedSearchCases`, since the property ran.
     package var discardedEvaluations = 0
     package var evaluatedSearchCases = 0
+    /// Candidates evaluated inside campaign probe sessions (counted inside `mutationAttempts` too). Zero whenever the `campaignMutation` knob is off or no parent's stall gate opened.
+    package var campaignAttempts = 0
     package var pruneInvocations = 0
     package var reductionInvocations = 0
     package var normalizationInvocations = 0
