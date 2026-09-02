@@ -563,7 +563,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             }
         }
         if winner == nil {
-            let absent = try BacktrackAudition.resolveExhaustion(of: choices, reportingDiagnostic: true)
+            let absent = try BacktrackAudition.resolveExhaustion(of: choices, reportingDiagnostic: context.isSpeculative == false)
             guard let result = try generateRecursiveAny(absent.generator, context: &context) else {
                 throw GeneratorError.choiceTreeConstructionFailed
             }

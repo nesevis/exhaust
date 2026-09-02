@@ -136,6 +136,61 @@ struct BacktrackTests {
         #expect(value == nil)
     }
 
+    @Test("Reflecting nil reserves absence for the absent arm even when a user arm reflects nil")
+    func reflectingNilSkipsWithdrawingUserArm() throws {
+        let gen = failableGen(arms: [(1, Gen.just(Int?.none)), (1, Gen.choose(in: 1 ... 10).liftToOptional())])
+        let tree = try #require(try Interpreters.reflect(gen, with: nil))
+        let branch = try #require(branches(in: tree).first)
+        #expect(branch.id == 2)
+
+        let result = Materializer.materialize(gen, prefix: ChoiceSequence.flatten(tree), mode: .exact)
+        guard case let .success(value, _, _) = result else {
+            Issue.record("Expected exact replay of the reflected absence to succeed, got \(result)")
+            return
+        }
+        #expect(value == nil)
+    }
+
+    @Test("Reflecting nil through an always node yields no candidates")
+    func reflectingNilThroughAlwaysNodeHasNoCandidates() throws {
+        // The unwrap wrapper never admits nil, so the probe reaches the pick only when the wrapper is bypassed; the pick itself must still refuse.
+        let pick: Generator<Int?> = Gen.backtrack(failable: [(1, Gen.just(Int?.none))])
+        let always: Generator<Int> = alwaysGen(arms: [(1, Gen.just(Int?.none)), (1, Gen.just(Int?.some(1)))])
+        guard case let .impure(operation: .transform(_, inner), _) = always else {
+            Issue.record("Expected the always: node to be an isomorph over the pick")
+            return
+        }
+        #expect(try Interpreters.reflect(inner, with: Int?.none as Any) == nil)
+        #expect(try Interpreters.reflect(pick, with: nil) != nil)
+    }
+
+    @Test("An unselected backtrack branch that exhausts does not fire the call-site hook")
+    func speculativeExhaustionIsSilent() throws {
+        var sawPlainBranch = false
+        var sawExhaustingBranch = false
+        for seed in 0 ..< 32 as Range<UInt64> {
+            let hook = Flag()
+            let exhausting: Generator<Int> = Gen.backtrack(
+                always: [(1, Gen.just(Int?.none))],
+                onExhausted: { hook.raise() }
+            )
+            let outer: Generator<Int> = Gen.pick(choices: [(1, exhausting), (1, Gen.just(1))])
+            var iterator = ValueAndChoiceTreeInterpreter(outer, materializePicks: true, seed: seed, maxRuns: 1)
+            if let (value, _) = try iterator.next() {
+                // The plain branch won; the exhausting branch ran only as a recorded alternative.
+                #expect(value == 1)
+                #expect(hook.isRaised == false)
+                sawPlainBranch = true
+            } else {
+                // The exhausting branch was selected, so its failure is the run's failure.
+                #expect(hook.isRaised)
+                sawExhaustingBranch = true
+            }
+        }
+        #expect(sawPlainBranch)
+        #expect(sawExhaustingBranch)
+    }
+
     @Test("Exact materialization rejects a recorded arm that no longer produces; guided re-auditions")
     func exactRejectsGuidedReauditions() throws {
         let gen = alwaysGen(arms: [(1, Gen.just(Int?.none)), (1, Gen.choose(in: 1 ... 10).liftToOptional())])

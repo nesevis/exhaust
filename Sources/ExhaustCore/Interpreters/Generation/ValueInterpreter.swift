@@ -332,7 +332,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             }
         }
         if winner == nil {
-            let absent = try BacktrackAudition.resolveExhaustion(of: choices, reportingDiagnostic: true)
+            let absent = try BacktrackAudition.resolveExhaustion(of: choices, reportingDiagnostic: context.isSpeculative == false)
             guard let value = try generateRecursiveAny(absent.generator, context: &context) else {
                 return nil
             }

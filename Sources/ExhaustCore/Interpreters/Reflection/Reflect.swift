@@ -339,8 +339,18 @@ extension Interpreters {
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         let branchCount = UInt64(choices.count)
         let fingerprint = choices[0].fingerprint
+        // On a backtrack node only the framework-built absent arm may record an outer nil: a user arm that reflects nil is a withdrawn arm, and exact materialization rejects a recorded arm that replays nil. An always node has no absent arm and cannot have produced nil at all.
+        let candidates: ContiguousArray<ReflectiveOperation.PickTuple>
+        if choices[0].isBacktrack, isNilOptional(finalOutput) {
+            guard let absent = BacktrackAudition.absentArm(in: choices) else {
+                return []
+            }
+            candidates = [absent]
+        } else {
+            candidates = choices
+        }
         var deferredBranchError: ReflectionError?
-        let results = try choices.flatMap { choice -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
+        let results = try candidates.flatMap { choice -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
             do {
                 let reflectionPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput, probingPickArm: true)
                 let value = reflectionPaths.firstNonNil { $0.value }
