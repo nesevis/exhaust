@@ -148,13 +148,6 @@ package struct FuzzRunTiming: Sendable {
     package var screeningOverheadNanoseconds: UInt64 = 0
     package var samplingOverheadNanoseconds: UInt64 = 0
     package var mutationOverheadNanoseconds: UInt64 = 0
-    /// Mutation overhead decomposed. These are subsets of mutationOverheadNanoseconds, not additions to it, so they are excluded from the accounted total below.
-    /// Time inside the weighted parent draw.
-    package var parentSelectionNanoseconds: UInt64 = 0
-    /// Time inside the sequence mutators.
-    package var mutatorNanoseconds: UInt64 = 0
-    /// Time materializing a mutated candidate back through the generator.
-    package var candidateMaterializationNanoseconds: UInt64 = 0
     package var reductionNanoseconds: UInt64 = 0
 
     /// Returns elapsed time not attributed to a property invocation, search phase, or reduction, clamping inconsistent input rather than underflowing.

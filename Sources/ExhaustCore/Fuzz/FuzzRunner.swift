@@ -122,6 +122,9 @@ package final class FuzzRunner<Output> {
     /// Deliberately not `counts.mutationAttempts`: that counter is a report statistic whose increment sites serve attempt accounting, and deriving the mask schedule from it made any reordering of bookkeeping against candidate production a silent change to every activated-swarm run. This index has one meaning and one increment site.
     var swarmDerivationIndex = 0
 
+    /// Scratch the activated swarm rewrite reuses across candidates, so the per-candidate mask allocates nothing.
+    var swarmScratch = SwarmMask.ActivationScratch()
+
     // MARK: - Crash-Recovery State
 
     // Owned by the recovery extension (see FuzzRunner+Recovery.swift); declared here because stored properties cannot live in an extension.
@@ -532,10 +535,7 @@ package final class FuzzRunner<Output> {
                 }
             }
 
-            let parentStart = monotonicNanoseconds()
-            let picked = corpus.pickParent(random: randomUnit())
-            timing.parentSelectionNanoseconds += monotonicNanoseconds() - parentStart
-            guard let (parentIndex, parent) = picked else {
+            guard let (parentIndex, parent) = corpus.pickParent(random: randomUnit()) else {
                 // Empty mutable tier: fall back to fresh sampling until something is mutable.
                 switch freshSample(interpreter: &fallbackInterpreter, phase: .mutation) {
                     case .evaluated:
@@ -567,9 +567,7 @@ package final class FuzzRunner<Output> {
                 if terminationDue() != nil {
                     break
                 }
-                let mutatorStart = monotonicNanoseconds()
                 let (mutated, armsMask) = nextCandidate(from: parent, parentIndex: parentIndex)
-                timing.mutatorNanoseconds += monotonicNanoseconds() - mutatorStart
                 openMutationAttempt()
                 evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: armsMask)
             }
@@ -632,13 +630,11 @@ package final class FuzzRunner<Output> {
     ) -> CandidateFeedback {
         // Phase 1: flat emission produces the value, the fresh sequence, and (below) its hash without building a ChoiceTree. The tree is rebuilt in phase 2 only for the rare candidates that consume it: corpus admission and failure dispatch.
         let guidedSeed = prng.next()
-        let materializeStart = monotonicNanoseconds()
         let result = Materializer.materializeAnyFlat(
             erasedGen,
             prefix: candidate,
             mode: .guided(seed: guidedSeed, fallbackTree: parent.tree)
         )
-        timing.candidateMaterializationNanoseconds += monotonicNanoseconds() - materializeStart
         guard case let .success(anyValue, sequence, decodingReport) = result else {
             counts.discardedAttempts += 1
             corpus.noteChild(forParentAt: parentIndex, admitted: false)
@@ -750,25 +746,35 @@ package final class FuzzRunner<Output> {
     }
 
     /// Draws one fresh sample from `interpreter`, evaluates it in the attribution bracket, and records the attempt under `phase`.
+    ///
+    /// The draw is flat: the interpreter emits the sequence the loop hashes and offers on every attempt and builds no tree. The tree is read only by admission (the mutation fallback), the prune hook, and reduction, so it is rebuilt just for the candidates that fail or would be admitted, the discipline ``evaluateFuzzCandidate(_:parent:parentIndex:armsMask:)`` applies to mutated candidates. Building a tree to flatten and drop it was 6% of a mutation-phase run under the adaptive fresh mixture.
     private func freshSample(
         interpreter: inout ValueAndChoiceTreeInterpreter<Output>,
         phase: FuzzPhase
     ) -> FreshSampleOutcome {
-        let generated: (Output, ChoiceTree)?
+        let generated: (value: Output, sequence: ChoiceSequence)?
         do {
-            generated = try interpreter.next()
+            generated = try interpreter.nextFlat()
         } catch {
             return .generationError(String(describing: error))
         }
-        guard let (value, tree) = generated else {
+        guard let (value, sequence) = generated else {
             return .exhausted
         }
-        let sequence = ChoiceSequence.flatten(tree)
         let sequenceHash = ZobristHash.hash(of: sequence)
         let (verdict, hits) = evaluateInBracket(
             value,
             recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: 0)
         )
+
+        var tree = ChoiceTree.just
+        if verdict.isFailure || corpus.wouldAdmit(hits: hits) {
+            guard let rebuilt = rebuildFreshTree(interpreter: &interpreter, expecting: sequence) else {
+                counts.discardedAttempts += 1
+                return .evaluated(.rejectedNotNovel)
+            }
+            tree = rebuilt
+        }
 
         let admission = recordAttempt(
             value: value,
@@ -782,6 +788,27 @@ package final class FuzzRunner<Output> {
             phase: phase
         )
         return .evaluated(admission)
+    }
+
+    /// Rebuilds the tree of the interpreter's most recent flat draw by replaying the run from its seed, and verifies it flattens to the sequence the draw emitted.
+    ///
+    /// The replay is deterministic for the same run index, seed, and unique-site decisions, so a nil return marks an impossible parity break between the flat and tree-building walks; the caller drops the attempt rather than admitting a placeholder tree.
+    private func rebuildFreshTree(
+        interpreter: inout ValueAndChoiceTreeInterpreter<Output>,
+        expecting sequence: ChoiceSequence
+    ) -> ChoiceTree? {
+        guard let (_, tree) = try? interpreter.reproduceWithTree(),
+              ChoiceSequence.flatten(tree) == sequence
+        else {
+            ExhaustLog.error(
+                category: .propertyTest,
+                event: "flat_draw_rebuild_divergence",
+                "tree rebuild diverged from the flat draw's sequence for an identical run and seed"
+            )
+            assertionFailure("flat draw parity break: tree rebuild diverged for an identical run and seed")
+            return nil
+        }
+        return tree
     }
 
     /// The one attribution bracket: opens the source, notes the value, runs `evaluate`, reads the hits, and closes the source. Every attributed evaluation (search attempts, post-reduction classification, recovery re-attribution) goes through here, so the bracket is spelled out once and a later edit cannot leave one copy without its `endAttempt()`.
@@ -798,9 +825,7 @@ package final class FuzzRunner<Output> {
         let verdict = evaluate(value)
         // Reused across attempts: a fresh array grows through roughly eleven reallocations on the way to the few thousand edges a typical attempt lights. Admitted candidates retain the returned array in CorpusEntry.hits (for restore re-offer), so the removeAll after each admission triggers one CoW reallocation; every non-admitting attempt reuses the capacity.
         hitsBuffer.removeAll(keepingCapacity: true)
-        source.forEachHitEdge { edge, hitCount in
-            hitsBuffer.append((edge, hitCount))
-        }
+        source.appendHitEdges(to: &hitsBuffer)
         source.endAttempt()
         return (verdict, hitsBuffer)
     }
@@ -823,10 +848,8 @@ package final class FuzzRunner<Output> {
             timing.propertyNanoseconds += monotonicNanoseconds() - propertyStart
             if capturesComparisons {
                 source.endComparisonCapture()
-                source.forEachComparisonRecord { site, arg1, arg2 in
-                    comparisonPool.insert(site: site, value: arg1)
-                    comparisonPool.insert(site: site, value: arg2)
-                }
+                // One call for the whole harvest: the per-record closure form cost a dictionary lookup and a dynamic exclusivity check on the pool per operand, 7% of a run on a comparison-heavy target.
+                source.drainComparisonRecords(into: &comparisonPool)
             }
             return verdict
         }
@@ -868,6 +891,36 @@ package final class FuzzRunner<Output> {
             counts.discardedEvaluations += 1
         }
 
+        // Value path: no prune hook, so the candidate offered and the candidate dispatched are both the original. Offering it directly skips the two generic carrier structs below, whose construction and teardown retained and released every field of the output type on every attempt.
+        guard prune != nil else {
+            let admission = corpus.offer(
+                sequence: sequence,
+                tree: tree,
+                hits: hits,
+                convergence: convergence,
+                generation: generation,
+                phase: phase,
+                isBoundaryDerived: isBoundaryDerived,
+                propertyFailed: verdict.isFailure,
+                propertyDiscarded: verdict.isDiscard,
+                precomputedHash: sequenceHash
+            )
+            noteAdmission(admission)
+            if case let .fail(symptom) = verdict {
+                handleFailure(
+                    value: value,
+                    tree: tree,
+                    deferredTreeRebuild: deferredTreeRebuild,
+                    sequence: sequence,
+                    symptom: symptom,
+                    parentIndex: parentIndex,
+                    phase: phase,
+                    coverageNovel: admission.isAdmitted
+                )
+            }
+            return admission
+        }
+
         let originalCandidate = EvaluatedFuzzCandidate(
             value: value,
             tree: tree,
@@ -893,14 +946,7 @@ package final class FuzzRunner<Output> {
             propertyDiscarded: candidates.corpus.verdict.isDiscard,
             precomputedHash: candidates.corpus.sequenceHash
         )
-        if case let .admitted(index, _) = admission, corpus.introducedNewEdges(at: index) {
-            lastNewEdgeNanoseconds = monotonicNanoseconds()
-        }
-        if admission.isAdmitted {
-            attemptsSinceAdmission = 0
-        } else {
-            attemptsSinceAdmission += 1
-        }
+        noteAdmission(admission)
         if let failure = candidates.failure,
            case let .fail(symptom) = failure.verdict
         {
@@ -918,6 +964,18 @@ package final class FuzzRunner<Output> {
             )
         }
         return admission
+    }
+
+    /// Tracks discovery recency and the admission-starvation counter behind the adaptive fresh mixture.
+    private func noteAdmission(_ admission: CorpusAdmission) {
+        if case let .admitted(index, _) = admission, corpus.introducedNewEdges(at: index) {
+            lastNewEdgeNanoseconds = monotonicNanoseconds()
+        }
+        if admission.isAdmitted {
+            attemptsSinceAdmission = 0
+        } else {
+            attemptsSinceAdmission += 1
+        }
     }
 
     /// Re-evaluates a pruned corpus candidate without allowing a changed verdict to erase the failure observed by the original attempt.

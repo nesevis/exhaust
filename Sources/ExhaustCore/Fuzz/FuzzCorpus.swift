@@ -128,6 +128,10 @@ package final class FuzzCorpus {
 
     /// Cached parent-selection scores, parallel to `entries`; nil means dirty.
     private var cachedScores: [Double?] = []
+
+    /// Running sums of the mutable tier's scores in tier order, so a pick is one binary search instead of two passes over the tier. Rebuilt lazily on the first pick after anything that can move a score or the tier: an admission, a failure boost, a champion eviction, or a quarantine. Only read with the age-decay knob off; with it on every draw moves a score, so the pick walks the tier as before.
+    private var tierPrefixSums: [Double] = []
+    private var tierPrefixSumsValid = false
     /// Times each entry has been returned by ``pickParent(random:)``, feeding the experimental age decay. Grows with `entries`.
     private var parentDrawCounts: [Int] = []
 
@@ -361,6 +365,7 @@ package final class FuzzCorpus {
                 coveringEntries[edge].append(index)
             }
         }
+        tierPrefixSumsValid = false
         return .admitted(index: index, tier: tier)
     }
 
@@ -387,6 +392,7 @@ package final class FuzzCorpus {
                 // Linear scan, deliberately: the weighted parent pick maps its random draw through this array's cumulative order, so tier membership must stay an ordered array — a Set's per-process iteration order would break seeded replay. Eviction fires only when an entry loses its last championship, and the scan is cheap at realistic tier sizes; revisit with a measurement, not a Set.
                 mutableTierIndices.removeAll { $0 == incumbentIndex }
                 removeDonorSpans(forEntryAt: incumbentIndex)
+                tierPrefixSumsValid = false
             }
         }
     }
@@ -454,6 +460,7 @@ package final class FuzzCorpus {
     package func quarantine(sequenceHash: UInt64) {
         quarantinedHashes.insert(sequenceHash)
         mutableTierIndices.removeAll { entries[$0].hash == sequenceHash }
+        tierPrefixSumsValid = false
         for index in entries.indices where entries[index].hash == sequenceHash {
             removeDonorSpans(forEntryAt: index)
         }
@@ -584,6 +591,7 @@ package final class FuzzCorpus {
         }
         entries[index].failureBoost = boost
         cachedScores[index] = nil
+        tierPrefixSumsValid = false
     }
 
     /// Advances the parent's quiet-child counter: an admitted child resets it, any other child increments it.
@@ -655,6 +663,8 @@ package final class FuzzCorpus {
 
     /// Picks a mutation parent by weighted random draw over the mutable tier, or nil when the tier is empty.
     ///
+    /// The draw lands on the first tier position whose running score sum exceeds `random` times the total, found by binary search over ``tierPrefixSums``. Walking the tier twice per pick (once to sum, once to locate) was 2.4% of a mutation-phase run at a tier of 230 entries, almost all of it the per-entry dynamic exclusivity check on the score cache. Summing the scores in tier order and subtracting them from the draw one by one are not the same floating-point computation, so a draw within an ulp of a boundary can land differently than the walk did; the walk survives only for the experimental age-decay knob, under which every draw moves a score.
+    ///
     /// - Parameter random: A uniform draw in [0, 1), supplied by the caller so runs stay deterministic under a pinned seed.
     package func pickParent(random: Double) -> (index: Int, entry: CorpusEntry)? {
         guard mutableTierIndices.isEmpty == false else {
@@ -674,6 +684,51 @@ package final class FuzzCorpus {
             }
             random = (random - epsilon) / (1 - epsilon)
         }
+        if FuzzTunables.parentAgeDecayCoefficient > 0 || FuzzTunables.parentPickUsesWalk {
+            return pickParentByWalk(random: random)
+        }
+        if tierPrefixSumsValid == false {
+            rebuildTierPrefixSums()
+        }
+        let totalWeight = tierPrefixSums[tierPrefixSums.count - 1]
+        guard totalWeight > 0 else {
+            let fallbackIndex = mutableTierIndices[min(
+                Int(random * Double(mutableTierIndices.count)),
+                mutableTierIndices.count - 1
+            )]
+            parentDrawCounts[fallbackIndex] += 1
+            return (fallbackIndex, entries[fallbackIndex])
+        }
+        let target = random * totalWeight
+        var low = 0
+        var high = tierPrefixSums.count - 1
+        while low < high {
+            let middle = (low + high) / 2
+            if tierPrefixSums[middle] > target {
+                high = middle
+            } else {
+                low = middle + 1
+            }
+        }
+        let index = mutableTierIndices[low]
+        parentDrawCounts[index] += 1
+        return (index, entries[index])
+    }
+
+    /// Recomputes ``tierPrefixSums`` from the current scores in tier order.
+    private func rebuildTierPrefixSums() {
+        tierPrefixSums.removeAll(keepingCapacity: true)
+        tierPrefixSums.reserveCapacity(mutableTierIndices.count)
+        var running = 0.0
+        for index in mutableTierIndices {
+            running += score(at: index)
+            tierPrefixSums.append(running)
+        }
+        tierPrefixSumsValid = true
+    }
+
+    /// The two-pass weighted walk, kept for the age-decay knob (a decayed score changes on every draw of its entry, so no prefix sum stays valid between picks) and for ``FuzzTunables/parentPickUsesWalk``. Takes the draw after the epsilon rescale. Package-visible so a test can drive both picks with the same draws and count disagreements.
+    package func pickParentByWalk(random: Double) -> (index: Int, entry: CorpusEntry)? {
         var totalWeight = 0.0
         for index in mutableTierIndices {
             totalWeight += agedScore(at: index)

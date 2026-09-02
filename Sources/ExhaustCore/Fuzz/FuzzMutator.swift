@@ -23,7 +23,8 @@ package enum FuzzMutator {
     /// branches, and bind regions once at admission avoids rediscovering the same structure for
     /// every child.
     package struct Layout: Sendable {
-        fileprivate let valueIndices: [Int]
+        /// Positions of every `.value` entry, ascending. Package-visible so comparand substitution can walk the leaves without rescanning the sequence.
+        package let valueIndices: [Int]
         fileprivate let branchIndices: [Int]
         fileprivate let bindRegions: [BindRegion]
         package let problematicValues: [CatalogKey: [UInt64]]

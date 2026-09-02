@@ -16,7 +16,7 @@ extension FuzzRunner {
             case .activated:
                 // Per-candidate weights, so the activation distribution roams every produced candidate rather than every epoch.
                 let mask = SwarmMask.forIndex(swarmDerivationIndex, rootSeed: configuration.seed)
-                candidate = mask.applyActivated(to: candidate, prng: &prng)
+                candidate = mask.applyActivated(to: candidate, scratch: &swarmScratch, prng: &prng)
             case .binary:
                 let epoch = SwarmMask.forIndex(
                     swarmDerivationIndex / FuzzTunables.swarmEpochAttempts,

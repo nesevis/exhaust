@@ -65,35 +65,96 @@ package struct SwarmMask: Sendable {
         return weights
     }
 
+    /// Appends the per-branch activation weights of a pick site to `weights`, or appends nothing and returns false when the site is unweighted. The storage form of ``branchWeights(fingerprint:branchCount:)``, so the activated rewrite can keep every site's weights in one reusable buffer.
+    private func appendBranchWeights(fingerprint: UInt64, branchCount: UInt64, into weights: inout [Double]) -> Bool {
+        guard fingerprint != 0, branchCount > 1 else {
+            return false
+        }
+        var siteState = Self.splitMix64(epochSeed ^ fingerprint)
+        for _ in 0 ..< branchCount {
+            siteState = Self.splitMix64(siteState)
+            weights.append(Self.unit(siteState))
+        }
+        return true
+    }
+
+    /// Reusable storage for ``applyActivated(to:scratch:prng:)``.
+    ///
+    /// A mask is derived per candidate, so nothing carries over between calls but the capacity: a per-call dictionary and one `[Double]` per pick site were 1% of a mutation-phase run in allocation alone. Sites are kept in a short list searched linearly, because a sequence repeats a handful of fingerprints many times.
+    package struct ActivationScratch {
+        fileprivate var sites: [(fingerprint: UInt64, offset: Int, count: Int, total: Double)] = []
+        fileprivate var weights: [Double] = []
+
+        package init() {}
+    }
+
+    /// Rewrites branch selections toward each site's activation weights, allocating scratch for the call. See ``applyActivated(to:scratch:prng:)``.
+    package func applyActivated(to sequence: ChoiceSequence, prng: inout Xoshiro256) -> ChoiceSequence {
+        var scratch = ActivationScratch()
+        return applyActivated(to: sequence, scratch: &scratch, prng: &prng)
+    }
+
     /// Rewrites branch selections toward each site's activation weights: a selected branch is pivoted away with probability `1 - weight`, and the replacement is drawn from the weighted distribution over branches.
     ///
     /// A low-activation branch is pivoted away most of the time, so it appears rarely in the mix; a high-activation branch usually survives untouched. Over a sequence this pulls the branch mix toward the epoch's activation ratios — the mixes a binary mask cannot reach, because it can only include or exclude a branch, never thin it. The activation weights are deterministic from the epoch seed; the pivot rolls and weighted draws consume the run PRNG, so the sampling replays under a pinned seed.
-    package func applyActivated(to sequence: ChoiceSequence, prng: inout Xoshiro256) -> ChoiceSequence {
+    package func applyActivated(
+        to sequence: ChoiceSequence,
+        scratch: inout ActivationScratch,
+        prng: inout Xoshiro256
+    ) -> ChoiceSequence {
         var result = sequence
-        // All entries from one pick site share a fingerprint, so a sequence typically repeats a handful of fingerprints many times. Weights are deterministic from the fingerprint, so memoize them and their sum for the call rather than reallocating a `[Double]` per branch entry. The PRNG is untouched, so a pinned seed still replays.
-        var cache: [UInt64: (weights: [Double], total: Double)] = [:]
+        // All entries from one pick site share a fingerprint, so a sequence typically repeats a handful of fingerprints many times. Weights are deterministic from the fingerprint, so memoize them and their sum for the call. The PRNG is untouched, so a pinned seed still replays.
+        scratch.sites.removeAll(keepingCapacity: true)
+        scratch.weights.removeAll(keepingCapacity: true)
         for index in result.indices {
             guard case let .branch(branch) = result[index] else {
                 continue
             }
-            let entry: (weights: [Double], total: Double)
-            if let cached = cache[branch.fingerprint] {
-                entry = cached
-            } else {
-                guard let weights = branchWeights(fingerprint: branch.fingerprint, branchCount: branch.branchCount) else {
+            var siteIndex = -1
+            var searchIndex = 0
+            while searchIndex < scratch.sites.count {
+                if scratch.sites[searchIndex].fingerprint == branch.fingerprint {
+                    siteIndex = searchIndex
+                    break
+                }
+                searchIndex += 1
+            }
+            if siteIndex < 0 {
+                let offset = scratch.weights.count
+                guard appendBranchWeights(
+                    fingerprint: branch.fingerprint,
+                    branchCount: branch.branchCount,
+                    into: &scratch.weights
+                ) else {
                     continue
                 }
-                entry = (weights, weights.reduce(0, +))
-                cache[branch.fingerprint] = entry
+                var total = 0.0
+                for weightIndex in offset ..< scratch.weights.count {
+                    total += scratch.weights[weightIndex]
+                }
+                scratch.sites.append((
+                    fingerprint: branch.fingerprint,
+                    offset: offset,
+                    count: scratch.weights.count - offset,
+                    total: total
+                ))
+                siteIndex = scratch.sites.count - 1
             }
+            let site = scratch.sites[siteIndex]
             // An out-of-range id (a resumed persistence document is not validated on this path) is left untouched rather than trapping, mirroring how ``apply(to:prng:)`` skips a selection its allowed set cannot contain.
-            guard Int(branch.id) < entry.weights.count else {
+            guard Int(branch.id) < site.count else {
                 continue
             }
-            guard Self.unit(prng.next()) >= entry.weights[Int(branch.id)] else {
+            guard Self.unit(prng.next()) >= scratch.weights[site.offset + Int(branch.id)] else {
                 continue
             }
-            let replacement = Self.weightedBranch(entry.weights, total: entry.total, prng: &prng)
+            let replacement = Self.weightedBranch(
+                scratch.weights,
+                offset: site.offset,
+                count: site.count,
+                total: site.total,
+                prng: &prng
+            )
             result[index] = .branch(.init(
                 id: replacement,
                 branchCount: branch.branchCount,
@@ -103,19 +164,25 @@ package struct SwarmMask: Sendable {
         return result
     }
 
-    /// Draws a branch identifier from the weighted distribution, falling back to a uniform draw when every weight is near zero. `total` is the pre-summed weight, passed by the caller so a sequence that repeats a site does not re-sum its ring per entry.
-    private static func weightedBranch(_ weights: [Double], total: Double, prng: inout Xoshiro256) -> UInt64 {
+    /// Draws a branch identifier from the weighted distribution held at `weights[offset ..< offset + count]`, falling back to a uniform draw when every weight is near zero. `total` is the pre-summed weight, passed by the caller so a sequence that repeats a site does not re-sum its ring per entry.
+    private static func weightedBranch(
+        _ weights: [Double],
+        offset: Int,
+        count: Int,
+        total: Double,
+        prng: inout Xoshiro256
+    ) -> UInt64 {
         guard total > 0 else {
-            return prng.next(upperBound: UInt64(weights.count))
+            return prng.next(upperBound: UInt64(count))
         }
         var remaining = unit(prng.next()) * total
-        for (index, weight) in weights.enumerated() {
-            remaining -= weight
+        for index in 0 ..< count {
+            remaining -= weights[offset + index]
             if remaining < 0 {
                 return UInt64(index)
             }
         }
-        return UInt64(weights.count - 1)
+        return UInt64(count - 1)
     }
 
     /// One uniform draw in [0, 1) from a 64-bit value (its top 53 bits).

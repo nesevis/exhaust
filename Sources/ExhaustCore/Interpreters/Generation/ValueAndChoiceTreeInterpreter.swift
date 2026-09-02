@@ -136,6 +136,73 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         }
     }
 
+    // MARK: - Flat Emission
+
+    /// Generates the next value and its flattened choice sequence without constructing a ``ChoiceTree``.
+    ///
+    /// The sequence is entry for entry what `ChoiceSequence.flatten` produces from ``next()``'s tree for the same run, and PRNG consumption, size, and `unique` decisions match exactly, so ``reproduceWithTree()`` afterwards rebuilds that tree on demand. Use this where the tree is read rarely: the fuzz loop's fresh draws hash and offer the sequence on every attempt but read the tree only for the few candidates that are admitted or fail, and building a tree only to flatten and drop it was 6% of a mutation-phase run.
+    ///
+    /// Requires `materializePicks == false`: flatten emits only the selected branch, so there is no flat form for materialized alternatives.
+    public mutating func nextFlat() throws -> (value: FinalOutput, sequence: ChoiceSequence)? {
+        precondition(context.materializePicks == false, "flat emission has no form for materialized pick alternatives")
+        guard context.runs < context.maxRuns else {
+            context.printClassifications()
+            return nil
+        }
+        context.beginUniqueDecisionRecording()
+
+        if context.isFixed == false {
+            context.prng = Xoshiro256.derive(from: context.baseSeed, at: context.runs)
+        }
+        context.deadlineNanoseconds = monotonicNanoseconds() + SharedInterpreterHelpers.perValueGenerationBudgetNanoseconds
+
+        defer {
+            context.runs += 1
+        }
+
+        if erasedGenerator == nil {
+            erasedGenerator = generator.erase()
+        }
+
+        context.flatOutput = ChoiceSequence()
+        context.flatOutput!.reserveCapacity(64)
+        defer {
+            context.flatOutput = nil
+        }
+
+        do {
+            guard let (value, _) = try Self.generateRecursiveAny(
+                erasedGenerator!, context: &context
+            ) else {
+                return nil
+            }
+            let sequence = context.flatOutput ?? ChoiceSequence()
+            // swiftlint:disable:next force_cast
+            return (value as! FinalOutput, sequence)
+        } catch GeneratorError.uniqueBudgetExhausted {
+            ExhaustLog.warning(
+                category: .generation,
+                event: "uniqueness_budget_exhausted",
+                metadata: [
+                    "unique_count": "\(context.runs)",
+                    "requested": "\(context.maxRuns)",
+                ]
+            )
+            uniqueExhaustionTruncatedRun = true
+            context.runs = context.maxRuns
+            return nil
+        } catch GeneratorError.sparseValidityCondition {
+            ExhaustLog.warning(
+                category: .generation,
+                event: "sparse_validity_condition",
+                metadata: [
+                    "run": "\(context.runs)",
+                ]
+            )
+            return nil
+        }
+    }
+
     // MARK: - Value-Only Generation
 
     /// Generates the next value without constructing a ``ChoiceTree``.
@@ -272,6 +339,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     ) throws -> (Any, ChoiceTree)? {
         switch gen {
             case let .pure(value):
+                context.emitFlat(.just)
                 return (value, .just)
 
         // MARK: chooseBits
@@ -286,8 +354,10 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         // MARK: just
 
             case let .impure(operation: .just(value), continuation):
+                let calleeStart = context.flatCount
+                context.emitFlat(.just)
                 return try runContinuation(
-                    result: value, calleeChoiceTree: .just,
+                    result: value, calleeChoiceTree: .just, calleeStart: calleeStart,
                     continuation: continuation, context: &context
                 )
 
@@ -295,8 +365,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
             case .impure(operation: .getSize, let continuation):
                 let size = SharedInterpreterHelpers.currentSize(&context)
+                // A getSize leaf flattens to nothing and survives flat emission as a real node, so the bind handler can tell a getSize-bind (group markers) from a value bind.
                 return try runContinuation(
-                    result: size, calleeChoiceTree: .getSize(size),
+                    result: size, calleeChoiceTree: .getSize(size), calleeStart: context.flatCount,
                     continuation: continuation, context: &context
                 )
 
@@ -384,16 +455,30 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
 
     // MARK: - Run Continuation
 
+    /// Feeds the callee's result into the continuation and pair-groups the two subtrees when the continuation makes choices of its own.
+    ///
+    /// `calleeStart` is the flat-buffer index the callee's first entry occupies. Under flat emission the pair group's open marker has to precede entries that are already emitted, and everything from `calleeStart` on is exactly the callee's span, so retro-inserting there shifts only that span.
     @inline(__always)
     private static func runContinuation(
         result: Any,
         calleeChoiceTree: ChoiceTree,
+        calleeStart: Int,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
         let nextGen = try continuation(result)
 
         if case let .pure(value) = nextGen {
             return (value, calleeChoiceTree)
+        }
+        if context.emitsFlat {
+            context.flatOutput!.insert(.group(true), at: calleeStart)
+            guard let (continuationResult, _) = try generateRecursiveAny(
+                nextGen, context: &context
+            ) else {
+                return nil
+            }
+            context.emitFlat(.group(false))
+            return (continuationResult, .just)
         }
         guard let (continuationResult, innerChoiceTree) = try generateRecursiveAny(
             nextGen, context: &context
@@ -422,7 +507,15 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         let jumpSeed = context.prng.next()
         let fingerprint = choices[0].fingerprint
 
-        if context.materializePicks == false {
+        if context.emitsFlat {
+            // Mirrors flatten's selected-branch group: group open, branch marker, branch body plus continuation (pair-grouped by runContinuation when the continuation is impure), group close.
+            context.emitFlat(.group(true))
+            context.emitFlat(.branch(.init(
+                id: selectedChoice.id,
+                branchCount: branchCount,
+                fingerprint: fingerprint
+            )))
+            let branchBodyStart = context.flatCount
             guard let result = try generateRecursiveAny(
                 selectedChoice.generator,
                 context: &context
@@ -430,6 +523,27 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 let final = try runContinuation(
                     result: result.0,
                     calleeChoiceTree: result.1,
+                    calleeStart: branchBodyStart,
+                    continuation: continuation,
+                    context: &context
+                )
+            else {
+                throw GeneratorError.choiceTreeConstructionFailed
+            }
+            context.emitFlat(.group(false))
+            return (final.0, .just)
+        }
+
+        if context.materializePicks == false {
+            let branchBodyStart = context.flatCount
+            guard let result = try generateRecursiveAny(
+                selectedChoice.generator,
+                context: &context
+            ),
+                let final = try runContinuation(
+                    result: result.0,
+                    calleeChoiceTree: result.1,
+                    calleeStart: branchBodyStart,
                     continuation: continuation,
                     context: &context
                 )
@@ -463,6 +577,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     let final = try runContinuation(
                         result: result.0,
                         calleeChoiceTree: result.1,
+                        calleeStart: 0,
                         continuation: continuation, context: &context
                     )
                 {
@@ -522,6 +637,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 let final = try runContinuation(
                     result: result.0,
                     calleeChoiceTree: result.1,
+                    calleeStart: branchContext.flatCount,
                     continuation: continuation, context: &branchContext
                 )
             {
@@ -550,6 +666,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         var audition = BacktrackAudition(choices)
         var lastJumpSeed: UInt64 = 0
         var winner: (arm: ReflectiveOperation.PickTuple, result: (Any, ChoiceTree))?
+        // Every arm's entries start here: a failed arm's are truncated by `restore`, so the winner's body begins at the same index whichever arm it is.
+        let groupStart = context.flatCount
         while winner == nil, let (arm, jumpSeed) = audition.drawNext(using: &context.prng) {
             lastJumpSeed = jumpSeed
             let snapshot = context.auditionSnapshot()
@@ -570,13 +688,29 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             winner = (absent, result)
         }
         let (arm, result) = winner!
+        var calleeStart = groupStart
+        if context.emitsFlat {
+            // Mirrors flatten's selected-branch group, as in handlePick. The winner is only known after its body is emitted, so the group open and branch marker are inserted ahead of it rather than emitted before it.
+            context.flatOutput!.insert(.branch(.init(
+                id: arm.id,
+                branchCount: branchCount,
+                fingerprint: fingerprint
+            )), at: groupStart)
+            context.flatOutput!.insert(.group(true), at: groupStart)
+            calleeStart = groupStart + 2
+        }
         guard let final = try runContinuation(
             result: result.0,
             calleeChoiceTree: result.1,
+            calleeStart: calleeStart,
             continuation: continuation,
             context: &context
         ) else {
             throw GeneratorError.choiceTreeConstructionFailed
+        }
+        if context.emitsFlat {
+            context.emitFlat(.group(false))
+            return (final.0, .just)
         }
         let selectedBranch = ChoiceTree.branch(
             fingerprint: fingerprint,
@@ -615,9 +749,15 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         elementBatch: ReflectiveOperation.SequenceElementBatch?,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
-        guard let (lengthValue, lengthTrees) = try generateRecursiveAny(
-            lengthGen.erase(), context: &context
-        ) else {
+        // The length walk builds a real tree even under flat emission: flatten never contains length entries, and the open marker below carries the length tree's metadata, which the tree path reads off the node.
+        let lengthResult: (Any, ChoiceTree)?
+        do {
+            let savedSuspension = context.flatEmissionSuspended
+            context.flatEmissionSuspended = true
+            defer { context.flatEmissionSuspended = savedSuspension }
+            lengthResult = try generateRecursiveAny(lengthGen.erase(), context: &context)
+        }
+        guard let (lengthValue, lengthTrees) = lengthResult else {
             return nil
         }
         // The length spine is `UInt64`-typed by construction; a non-`UInt64` value is a malformed generator, not a recoverable condition.
@@ -625,10 +765,20 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         let length = lengthValue as! UInt64
 
         let count = try SharedInterpreterHelpers.sequenceElementCount(length)
+        let lengthMetadata = lengthTrees.metadata
+        let emitsFlat = context.emitsFlat
+        let calleeStart = context.flatCount
+        context.emitFlat(.sequence(
+            true,
+            validRange: lengthMetadata.validRange,
+            isLengthExplicit: lengthMetadata.isRangeExplicit
+        ))
         var results: [Any] = []
         var elements: [ChoiceTree] = []
         results.reserveCapacity(count)
-        elements.reserveCapacity(count)
+        if emitsFlat == false {
+            elements.reserveCapacity(count)
+        }
 
         // Unwrap a forward-inert contramap layer before matching so character generators and similar wrappers can use the fused chooseBits loop.
         var fusedElementGen = elementGen
@@ -670,15 +820,24 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
                     : rawBits
                 bits.append(randomBits)
-                elements.append(.choice(ChoiceValue(randomBits, tag: tag), metadata))
+                if emitsFlat {
+                    context.flatOutput!.append(.value(.init(
+                        choice: ChoiceValue(randomBits, tag: tag),
+                        validRange: metadata.validRange,
+                        isRangeExplicit: metadata.isRangeExplicit
+                    )))
+                } else {
+                    elements.append(.choice(ChoiceValue(randomBits, tag: tag), metadata))
+                }
             }
-            let choiceTree = ChoiceTree.sequence(
-                elements: elements,
-                metadata: lengthTrees.metadata
-            )
+            context.emitFlat(.sequence(false))
+            let choiceTree: ChoiceTree = emitsFlat
+                ? .just
+                : .sequence(elements: elements, metadata: lengthMetadata)
             return try runContinuation(
                 result: elementBatch.convert(bits),
                 calleeChoiceTree: choiceTree,
+                calleeStart: calleeStart,
                 continuation: continuation,
                 context: &context
             )
@@ -707,17 +866,30 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 let randomBits = tag.isFloatingPoint
                     ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
                     : rawBits
-                let calleeTree = ChoiceTree.choice(ChoiceValue(randomBits, tag: tag), metadata)
+                let elementStart = context.flatCount
+                let calleeTree: ChoiceTree
+                if emitsFlat {
+                    context.flatOutput!.append(.value(.init(
+                        choice: ChoiceValue(randomBits, tag: tag),
+                        validRange: metadata.validRange,
+                        isRangeExplicit: metadata.isRangeExplicit
+                    )))
+                    calleeTree = .just
+                } else {
+                    calleeTree = .choice(ChoiceValue(randomBits, tag: tag), metadata)
+                }
                 guard var (result, elementTree) = try runContinuation(
-                    result: randomBits, calleeChoiceTree: calleeTree,
+                    result: randomBits, calleeChoiceTree: calleeTree, calleeStart: elementStart,
                     continuation: elementContinuation, context: &context
                 ) else {
                     return nil
                 }
                 if let contramapContinuation {
+                    // The wrapper's callee is the whole element span, so its pair group opens at the element's start.
                     guard let continued = try runContinuation(
                         result: result,
                         calleeChoiceTree: elementTree,
+                        calleeStart: elementStart,
                         continuation: contramapContinuation,
                         context: &context
                     ) else {
@@ -726,7 +898,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     (result, elementTree) = continued
                 }
                 results.append(result)
-                elements.append(elementTree)
+                if emitsFlat == false {
+                    elements.append(elementTree)
+                }
             }
         } else {
             for elementIndex in 0 ..< count {
@@ -737,18 +911,21 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     return nil
                 }
                 results.append(result)
-                elements.append(element)
+                if emitsFlat == false {
+                    elements.append(element)
+                }
             }
         }
 
-        let choiceTree = ChoiceTree.sequence(
-            elements: elements,
-            metadata: lengthTrees.metadata
-        )
+        context.emitFlat(.sequence(false))
+        let choiceTree: ChoiceTree = emitsFlat
+            ? .just
+            : .sequence(elements: elements, metadata: lengthMetadata)
 
         if let continued = try runContinuation(
             result: results,
             calleeChoiceTree: choiceTree,
+            calleeStart: calleeStart,
             continuation: continuation,
             context: &context
         ) {
@@ -766,7 +943,12 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         var results = [Any]()
         results.reserveCapacity(generators.count)
         var choiceTrees = [ChoiceTree]()
-        choiceTrees.reserveCapacity(generators.count)
+        let emitsFlat = context.emitsFlat
+        if emitsFlat == false {
+            choiceTrees.reserveCapacity(generators.count)
+        }
+        let calleeStart = context.flatCount
+        context.emitFlat(.zip(true))
 
         for gen in generators {
             guard let (result, tree) = try generateRecursiveAny(
@@ -776,11 +958,18 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 throw GeneratorError.choiceTreeConstructionFailed
             }
             results.append(result)
-            choiceTrees.append(tree)
+            if emitsFlat == false {
+                choiceTrees.append(tree)
+            }
         }
+        context.emitFlat(.zip(false))
+        let calleeTree: ChoiceTree = emitsFlat
+            ? .just
+            : .group(choiceTrees, isOpaque: isOpaque, isZip: true)
         return try runContinuation(
             result: results,
-            calleeChoiceTree: .group(choiceTrees, isOpaque: isOpaque, isZip: true),
+            calleeChoiceTree: calleeTree,
+            calleeStart: calleeStart,
             continuation: continuation,
             context: &context
         )
@@ -794,6 +983,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     ) throws -> (Any, ChoiceTree)? {
         let result: Any
         let resultTree: ChoiceTree
+        let calleeStart = context.flatCount
         switch kind {
             case let .map(forward, _, _, _), let .isomorph(forward, _, _, _):
                 guard let (innerValue, innerTree) = try generateRecursiveAny(
@@ -809,6 +999,11 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 ) else {
                     return nil
                 }
+                // The marker kind depends on the inner's shape, known only after its walk, so the open marker is retro-inserted before the inner's span (empty for a getSize inner). Matches flatten's getSize-bind group rewrite.
+                let isGetSizeBind = innerTree.isGetSize
+                if context.emitsFlat {
+                    context.flatOutput!.insert(isGetSizeBind ? .group(true) : .bind(true), at: calleeStart)
+                }
                 let boundGen = try forward(innerValue)
                 let savedMaterializePicks = context.materializePicks
                 context.materializePicks = false
@@ -818,8 +1013,11 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 ) else {
                     return nil
                 }
+                context.emitFlat(isGetSizeBind ? .group(false) : .bind(false))
                 result = boundValue
-                resultTree = .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)
+                resultTree = context.emitsFlat
+                    ? .just
+                    : .bind(fingerprint: fingerprint, inner: innerTree, bound: boundTree)
             case let .metamorphic(transforms, _):
                 let savedState = (context.prng.seed, context.prng.currentState)
                 let seenSnapshot = (context.uniqueSeenKeys, context.uniqueSeenSequences)
@@ -831,13 +1029,18 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 let seenAfterOriginal = (context.uniqueSeenKeys, context.uniqueSeenSequences)
                 var results: [Any] = [original]
                 results.reserveCapacity(transforms.count + 1)
-                // Copies replay against the original's starting dedup state; see ReflectiveOperation.metamorphic.
+                // Copies replay against the original's starting dedup state; see ReflectiveOperation.metamorphic. Their walks emit nothing: flatten carries the original's entries only.
                 for transform in transforms {
                     context.prng = Xoshiro256(seed: savedState.0, state: savedState.1)
                     (context.uniqueSeenKeys, context.uniqueSeenSequences) = seenSnapshot
-                    guard let (copy, _) = try generateRecursiveAny(
-                        inner, context: &context
-                    ) else {
+                    let copyResult: (Any, ChoiceTree)?
+                    do {
+                        let savedSuspension = context.flatEmissionSuspended
+                        context.flatEmissionSuspended = true
+                        defer { context.flatEmissionSuspended = savedSuspension }
+                        copyResult = try generateRecursiveAny(inner, context: &context)
+                    }
+                    guard let (copy, _) = copyResult else {
                         return nil
                     }
                     try results.append(transform(copy))
@@ -849,6 +1052,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         return try runContinuation(
             result: result,
             calleeChoiceTree: resultTree,
+            calleeStart: calleeStart,
             continuation: continuation,
             context: &context
         )
@@ -877,12 +1081,23 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         let randomBits = tag.isFloatingPoint
             ? tag.linearlyDistributed(rawBits: rawBits, in: effectiveRange)
             : rawBits
-        let calleeTree = ChoiceTree.choice(
-            ChoiceValue(randomBits, tag: tag),
-            .init(validRange: min ... max, isRangeExplicit: isRangeExplicit, typeTagPayload: typeTagPayload)
-        )
+        let calleeStart = context.flatCount
+        let calleeTree: ChoiceTree
+        if context.emitsFlat {
+            context.flatOutput!.append(.value(.init(
+                choice: ChoiceValue(randomBits, tag: tag),
+                validRange: min ... max,
+                isRangeExplicit: isRangeExplicit
+            )))
+            calleeTree = .just
+        } else {
+            calleeTree = .choice(
+                ChoiceValue(randomBits, tag: tag),
+                .init(validRange: min ... max, isRangeExplicit: isRangeExplicit, typeTagPayload: typeTagPayload)
+            )
+        }
         return try runContinuation(
-            result: randomBits, calleeChoiceTree: calleeTree,
+            result: randomBits, calleeChoiceTree: calleeTree, calleeStart: calleeStart,
             continuation: continuation, context: &context
         )
     }
@@ -892,11 +1107,12 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         innerGen: AnyGenerator,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
+        let calleeStart = context.flatCount
         guard let (result, tree) = try generateRecursiveAny(
             innerGen, context: &context
         ) else { return nil }
         return try runContinuation(
-            result: result, calleeChoiceTree: tree,
+            result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
             continuation: continuation, context: &context
         )
     }
@@ -907,11 +1123,12 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
         // Forward generation never prunes (reflection-only), so the operation is a pass-through here.
+        let calleeStart = context.flatCount
         guard let (result, tree) = try generateRecursiveAny(
             innerGen, context: &context
         ) else { return nil }
         return try runContinuation(
-            result: result, calleeChoiceTree: tree,
+            result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
             continuation: continuation, context: &context
         )
     }
@@ -923,6 +1140,8 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
         let previousSizeOverride = context.sizeOverride
+        let calleeStart = context.flatCount
+        context.emitFlat(.group(true))
         let innerResult: (Any, ChoiceTree)?
         do {
             context.sizeOverride = newSize
@@ -933,9 +1152,12 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             )
         }
         guard let innerResult else { return nil }
-        let calleeTree = ChoiceTree.resize(newSize: newSize, choices: [innerResult.1])
+        context.emitFlat(.group(false))
+        let calleeTree: ChoiceTree = context.emitsFlat
+            ? .just
+            : .resize(newSize: newSize, choices: [innerResult.1])
         return try runContinuation(
-            result: innerResult.0, calleeChoiceTree: calleeTree,
+            result: innerResult.0, calleeChoiceTree: calleeTree, calleeStart: calleeStart,
             continuation: continuation, context: &context
         )
     }
@@ -978,6 +1200,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             }
         }
         while attempts < GenerationContext.maxFilterRuns {
+            let calleeStart = context.flatCount
             guard let (result, tree) = try Self.generateRecursiveAny(
                 filteredGen, context: &context
             ) else { return nil }
@@ -986,10 +1209,12 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             if passed { filterPasses += 1 }
             if passed {
                 return try runContinuation(
-                    result: result, calleeChoiceTree: tree,
+                    result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
                     continuation: continuation, context: &context
                 )
             }
+            // A rejected attempt's tree is dropped on the tree path; drop its emissions the same way so the retry re-emits from the same index.
+            context.flatOutput?.removeSubrange(calleeStart...)
             attempts += 1
         }
         sourceLocation.onBudgetExhausted?()
@@ -1003,6 +1228,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         classifiers: [(label: String, predicate: (Any) -> Bool)],
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
+        let calleeStart = context.flatCount
         guard let (result, tree) = try generateRecursiveAny(
             classifyGen, context: &context
         ) else { return nil }
@@ -1010,7 +1236,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             context.classifications[fingerprint, default: [:]][label, default: []].insert(context.runs)
         }
         return try runContinuation(
-            result: result, calleeChoiceTree: tree,
+            result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
             continuation: continuation, context: &context
         )
     }
@@ -1024,6 +1250,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
     ) throws -> (Any, ChoiceTree)? {
         var attempts = 0 as UInt64
         while attempts < GenerationContext.maxFilterRuns {
+            let calleeStart = context.flatCount
             guard let (result, tree) = try Self.generateRecursiveAny(
                 uniqueGen, context: &context
             ) else { return nil }
@@ -1032,7 +1259,10 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 let key = keyExtractor(result)
                 accepted = context.acceptUniqueKey(key, fingerprint: fingerprint)
             } else {
-                let sequence = ChoiceSequence.flatten(tree)
+                // Under flat emission the inner's entries are already in the buffer from calleeStart on, and rebasing them at zero matches flattening the subtree on its own.
+                let sequence = context.emitsFlat
+                    ? ChoiceSequence(context.flatOutput![calleeStart...])
+                    : ChoiceSequence.flatten(tree)
                 accepted = context.acceptUniqueChoiceSequence(
                     hash: sequence.operativeHash,
                     fingerprint: fingerprint
@@ -1040,10 +1270,11 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             }
             if accepted {
                 return try runContinuation(
-                    result: result, calleeChoiceTree: tree,
+                    result: result, calleeChoiceTree: tree, calleeStart: calleeStart,
                     continuation: continuation, context: &context
                 )
             }
+            context.flatOutput?.removeSubrange(calleeStart...)
             attempts += 1
         }
         throw GeneratorError.uniqueBudgetExhausted

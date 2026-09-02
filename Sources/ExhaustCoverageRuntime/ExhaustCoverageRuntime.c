@@ -268,6 +268,10 @@ uint8_t exhaust_tpg_hit_count(struct exhaust_tpg_context *context, uint32_t edge
     return context->hits[edge];
 }
 
+const uint8_t *exhaust_tpg_hits(struct exhaust_tpg_context *context) {
+    return context == NULL ? NULL : context->hits;
+}
+
 _Bool exhaust_tpg_is_bound(struct exhaust_tpg_context *context) {
     return context != NULL && exhaust_tpg_current == context;
 }

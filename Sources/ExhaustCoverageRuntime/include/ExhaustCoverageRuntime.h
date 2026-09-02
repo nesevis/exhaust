@@ -51,6 +51,9 @@ const uint32_t *exhaust_tpg_covered(struct exhaust_tpg_context *context);
 size_t exhaust_tpg_covered_count(struct exhaust_tpg_context *context);
 uint8_t exhaust_tpg_hit_count(struct exhaust_tpg_context *context, uint32_t edge);
 
+// The saturating count table itself, indexed by guard id, valid until the next reset. Lets a reader copy every covered edge's count in one loop instead of one call per edge.
+const uint8_t *exhaust_tpg_hits(struct exhaust_tpg_context *context);
+
 // Whether the calling thread's binding is this context.
 _Bool exhaust_tpg_is_bound(struct exhaust_tpg_context *context);
 

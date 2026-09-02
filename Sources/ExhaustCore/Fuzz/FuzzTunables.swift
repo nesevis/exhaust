@@ -73,6 +73,9 @@ package enum FuzzTunables {
     /// Probability that parent selection picks a uniformly random mutable-tier entry instead of a score-weighted one, guaranteeing every basin a floor escape probability no score distribution can squeeze out. Experimental, read once from `EXHAUST_PARENT_EPSILON`; 0 (the default) disables the floor. See the basin-escape survey in ExhaustDocs.
     package static let parentSelectionEpsilon: Double = ProcessInfo.processInfo.environment["EXHAUST_PARENT_EPSILON"].flatMap(Double.init) ?? 0
 
+    /// Whether parent selection uses the two-pass weighted walk instead of the prefix-sum binary search. Experimental, read once from `EXHAUST_PARENT_PICK=walk`; the two agree except when a draw lands within a rounding error of a boundary, and the knob exists so a benchmark arm can hold trajectories bit-identical to a build without the prefix sums.
+    package static let parentPickUsesWalk: Bool = ProcessInfo.processInfo.environment["EXHAUST_PARENT_PICK"] == "walk"
+
     /// Age-decay coefficient for parent scores: an entry's effective score is its base score divided by `1 + k × timesDrawn`, so a basin's founders lose priority as they are milked (the AFLFast idea). Experimental, read once from `EXHAUST_PARENT_AGE_K`; 0 (the default) disables decay. At 0.01 a parent's weight halves after 100 draws.
     package static let parentAgeDecayCoefficient: Double = ProcessInfo.processInfo.environment["EXHAUST_PARENT_AGE_K"].flatMap(Double.init) ?? 0
 

@@ -379,6 +379,43 @@ struct FuzzCorpusTests {
             #expect(pick.index != 2)
         }
     }
+
+    @Test("Prefix-sum pick agrees with the weighted walk on the same draws")
+    func prefixSumPickAgreesWithWalk() throws {
+        // A corpus of varied rarity: every entry covers its own edge plus a few shared ones at random hit counts, so scores spread across orders of magnitude and the archive evicts some champions along the way.
+        let corpus = FuzzCorpus(edgeCount: 64)
+        var prng = Xoshiro256(seed: 0xF3)
+        for index in 0 ..< 300 {
+            var hits: [(edge: Int, hitCount: UInt8)] = [(edge: index % 64, hitCount: 1)]
+            for _ in 0 ..< Int(prng.next(upperBound: 4)) {
+                hits.append((edge: Int(prng.next(upperBound: 64)), hitCount: UInt8(1 + prng.next(upperBound: 200))))
+            }
+            _ = corpus.offer(
+                sequence: distinctSequence(index),
+                tree: .just,
+                hits: hits,
+                convergence: 1.0,
+                generation: 0,
+                phase: .sampling
+            )
+        }
+        #expect(corpus.mutableTierIndices.count > 10)
+
+        // Both picks see the same draw; a failure boost every so often dirties scores so the prefix sums rebuild mid-stream.
+        var disagreements = 0
+        for draw in 0 ..< 200_000 {
+            if draw % 10000 == 9999 {
+                corpus.applyProvisionalFailureBoost(toParentAt: Int(prng.next(upperBound: UInt64(corpus.entries.count))))
+            }
+            let unit = Double(prng.next() >> 11) / Double(1 << 53)
+            let byPrefixSums = try #require(corpus.pickParent(random: unit))
+            let byWalk = try #require(corpus.pickParentByWalk(random: unit))
+            if byPrefixSums.index != byWalk.index {
+                disagreements += 1
+            }
+        }
+        #expect(disagreements == 0)
+    }
 }
 
 // MARK: - Helpers
