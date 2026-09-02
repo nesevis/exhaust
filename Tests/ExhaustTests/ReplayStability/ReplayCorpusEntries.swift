@@ -171,7 +171,7 @@ private let combinatorEntries: [ReplayCorpusEntry] = [
     sampling("lazy", .lazy { .int(in: 0 ... 9) }, integer),
     sampling(
         "backtrack.always",
-        .backtrack(
+        .anyNonNil(
             always: (1, .just(nil)),
             (2, .int(in: 0 ... 9).map { $0.isMultiple(of: 2) ? $0 : nil }),
             (1, .int(in: 100 ... 109).map { Optional($0) })
@@ -180,7 +180,7 @@ private let combinatorEntries: [ReplayCorpusEntry] = [
     ),
     sampling(
         "backtrack.failable",
-        .backtrack(failable: (1, .int(in: 0 ... 9).map { $0.isMultiple(of: 3) ? $0 : nil })),
+        .anyNonNil((1, .int(in: 0 ... 9).map { $0.isMultiple(of: 3) ? $0 : nil })),
         { $0.map(integer) ?? "null" }
     ),
 ]

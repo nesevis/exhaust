@@ -77,28 +77,28 @@ let suit = #gen(.element(from: Suit.allCases))
 
 ## Backtracking
 
-`.oneOf` commits to the branch it draws. `.backtrack` tries the branch it draws and, if that branch produces `nil`, draws again among the branches it has not tried yet. Use it when a branch can only discover that it does not apply by attempting its own sub-generation, such as a typing rule whose premises must all be satisfiable. When applicability is cheap to decide up front, filter the candidates and use `.oneOf`.
+`.oneOf` commits to the branch it draws. `.anyNonNil` tries the branch it draws and, if that branch produces `nil`, draws again among the branches it has not tried yet. Use it when a branch can only discover that it does not apply by attempting its own sub-generation, such as a typing rule whose premises must all be satisfiable. When applicability is cheap to decide up front, filter the candidates and use `.oneOf`.
 
-Each branch produces an optional. A `nil` withdraws the branch; a value wins.
+Each branch produces an optional. A `nil` withdraws the branch; a value wins. Branches are drawn by weight, not in declaration order.
 
 ```swift
-let term = #gen(.backtrack(always: [
+let term = #gen(.anyNonNil(always: [
     (1, literalGen(matching: type)),
     (3, applicationGen(producing: type, in: context)),
     (2, variableGen(of: type, in: context)),
 ]))
 ```
 
-The two forms differ in what happens when every branch withdraws. `always:` throws, ends the current run, and records an issue at the call site, so it belongs on nodes where at least one branch cannot fail in any context the node is reached from, typically a base case. `failable:` produces `nil` instead. Absence is then an ordinary outcome that Exhaust records, reduces towards, and can reflect, which suits an optional subterm or an annotation that may be omitted.
+The two forms differ in what happens when every branch withdraws. `always:` throws, ends the current run, and records an issue at the call site, so it belongs on nodes where at least one branch cannot fail in any context the node is reached from, typically a base case. The unlabelled form produces `nil` instead. Absence is then an ordinary outcome that Exhaust records, reduces towards, and can reflect, which suits an optional subterm or an annotation that may be omitted.
 
 ```swift
-let annotation = #gen(.backtrack(failable: [
+let annotation = #gen(.anyNonNil([
     (1, explicitAnnotationGen(for: binding)),
     (1, inferredAnnotationGen(for: binding)),
 ]))
 ```
 
-Failed attempts consume randomness but are never recorded. The choice sequence holds only the winning branch, so reduction, replay, and reflection see an ordinary weighted choice. A branch that always produces `nil` is dead weight in either form; to retry from the top with fresh draws, wrap a `failable:` node in a `.filter` that rejects `nil`. A node costs up to the sum of its branches' attempts rather than the average, and Exhaust leaves the declared weights of a backtracking node untouched when it tunes a filtered generator.
+Failed attempts consume randomness but are never recorded. The choice sequence holds only the winning branch, so reduction, replay, and reflection see an ordinary weighted choice. A branch that always produces `nil` is dead weight in either form; to retry from the top with fresh draws, wrap an unlabelled node in a `.filter` that rejects `nil`. A node costs up to the sum of its branches' attempts rather than the average, and Exhaust leaves the declared weights of a backtracking node untouched when it tunes a filtered generator.
 
 ## Composing generators
 

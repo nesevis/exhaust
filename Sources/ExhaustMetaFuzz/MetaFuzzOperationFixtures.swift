@@ -149,7 +149,7 @@ package let metaFuzzOperationFixtures: [MetaFuzzOperationFixture] = [
             .init(weight: 1, recipe: .leaf(.int(-10 ... 10)), predicate: .isEven),
             .init(weight: 1, recipe: .leaf(.justInt(3)), predicate: .always),
         ], failable: false)),
-        publicConstruction: .direct(entryPoint: "ReflectiveGenerator.backtrack(always:)"),
+        publicConstruction: .direct(entryPoint: "ReflectiveGenerator.anyNonNil(always:)"),
         interpreterCapabilities: .init(
             backward: .partial,
             screening: .supported

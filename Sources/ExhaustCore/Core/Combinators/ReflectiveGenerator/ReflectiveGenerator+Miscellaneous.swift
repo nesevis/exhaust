@@ -71,7 +71,7 @@ public extension ReflectiveGenerator {
 
     /// Creates a generator that randomly selects from weighted generators.
     ///
-    /// Entries with weight zero are removed before the pick is built, so `oneOf` never carries a branch that cannot be drawn. (``backtrack(failable:fileID:line:column:)`` is the one combinator that does: its zero-weight arm records absence.) When that removal leaves exactly one entry, its generator is returned directly with no pick node; a list that starts with a single entry keeps its pick. At least one entry must have a nonzero weight.
+    /// Entries with weight zero are removed before the pick is built, so `oneOf` never carries a branch that cannot be drawn. (``anyNonNil(_:fileID:line:column:)`` is the one combinator that does: its zero-weight arm records absence.) When that removal leaves exactly one entry, its generator is returned directly with no pick node; a list that starts with a single entry keeps its pick. At least one entry must have a nonzero weight.
     ///
     /// ```swift
     /// let gen = #gen(.oneOf(weighted: (1, .just(0)), (5, .int(in: 1...100))))
@@ -102,7 +102,7 @@ public extension ReflectiveGenerator {
 
     /// Selects from an array of weighted generators.
     ///
-    /// Entries with weight zero are removed before the pick is built, so `oneOf` never carries a branch that cannot be drawn. (``backtrack(failable:fileID:line:column:)`` is the one combinator that does: its zero-weight arm records absence.) When that removal leaves exactly one entry, its generator is returned directly with no pick node; a list that starts with a single entry keeps its pick. At least one entry must have a nonzero weight.
+    /// Entries with weight zero are removed before the pick is built, so `oneOf` never carries a branch that cannot be drawn. (``anyNonNil(_:fileID:line:column:)`` is the one combinator that does: its zero-weight arm records absence.) When that removal leaves exactly one entry, its generator is returned directly with no pick node; a list that starts with a single entry keeps its pick. At least one entry must have a nonzero weight.
     ///
     /// ```swift
     /// let choices: [(Int, ReflectiveGenerator<Int>)] = [(1, .just(0)), (5, .int(in: 1...100))]

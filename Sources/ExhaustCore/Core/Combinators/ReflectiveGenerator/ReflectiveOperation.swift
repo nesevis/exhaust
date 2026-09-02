@@ -81,10 +81,10 @@ package enum ReflectiveOperation {
         /// Marks a `backtrack` node. Generation interpreters audition the branches without replacement instead of committing to one draw; every other pass reads the node as a plain pick, which is what keeps the recorded artifact identical to a committed pick's. Uniform across a node's tuples and read from the first, like `fingerprint`. Tuning passes must return a node carrying this flag unchanged: rebuilding its tuples with the public initializer drops the flag and turns the node into a committed pick over nil-producing branches.
         public let isBacktrack: Bool
 
-        /// Marks a `backtrack(failable:)` node, whose last tuple is a framework-built zero-weight `.just(nil)` branch with `id == choices.count - 1`. Exhaustion records that branch as the winner instead of throwing, so absence is an ordinary branch id that reduction, mutation, and reflection handle with no special case. Zero weight keeps it out of the audition draw while leaving it reachable for reflection and index flips.
+        /// Marks an `anyNonNil(_:)` node, whose last tuple is a framework-built zero-weight `.just(nil)` branch with `id == choices.count - 1`. Exhaustion records that branch as the winner instead of throwing, so absence is an ordinary branch id that reduction, mutation, and reflection handle with no special case. Zero weight keeps it out of the audition draw while leaving it reachable for reflection and index flips.
         public let isFailable: Bool
 
-        /// Fires before a `backtrack(always:)` node throws on exhaustion, so the diagnostic can point at the call site rather than the macro. Only the generation interpreters call it; materializer failures are silent candidate rejections.
+        /// Fires before an `anyNonNil(always:)` node throws on exhaustion, so the diagnostic can point at the call site rather than the macro. Only the generation interpreters call it; materializer failures are silent candidate rejections.
         package let onBacktrackExhausted: (() -> Void)?
 
         /// Creates a pick tuple with the given fingerprint, identifier, weight, and generator.
