@@ -126,19 +126,7 @@ private func buildCombinator(
             let innerGen = buildNestedGenerator(from: inner)
             let someBranch = AnyGenerator.impure(
                 operation: .contramap(
-                    transform: { result in
-                        let mirror = Mirror(reflecting: result)
-                        guard mirror.displayStyle == .optional else {
-                            return result
-                        }
-                        guard let child = mirror.children.first else {
-                            throw ReflectionError.reflectedNil(
-                                type: "Any",
-                                resultType: String(describing: type(of: result))
-                            )
-                        }
-                        return child.value
-                    },
+                    transform: unwrapOneOptionalLayer,
                     next: innerGen
                 ),
                 continuation: { .pure(Any?.some($0) as Any) }
@@ -260,7 +248,41 @@ private func buildCombinator(
                 ),
                 continuation: { .pure($0) }
             )
+
+        case let .backtrack(arms, failable):
+            // An arm withdraws when its predicate rejects the inner value. Every value an arm produces satisfies its predicate, so the backward direction is the same one-layer optional unwrap `.optional` uses and never consults the predicate.
+            let built: [(weight: UInt64, generator: Generator<Any?>)] = arms.map { arm in
+                let lifted: Generator<Any?> = .impure(
+                    operation: .contramap(
+                        transform: unwrapOneOptionalLayer,
+                        next: buildNestedGenerator(from: arm.recipe)
+                    ),
+                    continuation: { value in
+                        .pure((arm.predicate.evaluate(value) ? Any?.some(value) : Any?.none) as Any)
+                    }
+                )
+                return (arm.weight, lifted)
+            }
+            if failable {
+                return Gen.backtrack(failable: built, fileID: fileID, line: line, column: column).erase()
+            }
+            return Gen.backtrack(always: built, fileID: fileID, line: line, column: column)
     }
+}
+
+/// Unwraps one optional layer of a reflected value, throwing `reflectedNil` for nil so `reflectPickOperation` treats the value as belonging to another branch. A plain forward-only `.map` in this position makes any nil-bearing nested optional unreflectable.
+private func unwrapOneOptionalLayer(_ result: Any) throws -> Any {
+    let mirror = Mirror(reflecting: result)
+    guard mirror.displayStyle == .optional else {
+        return result
+    }
+    guard let child = mirror.children.first else {
+        throw ReflectionError.reflectedNil(
+            type: "Any",
+            resultType: String(describing: type(of: result))
+        )
+    }
+    return child.value
 }
 
 /// A per-recipe fingerprint for filter and unique sites. One `buildCombinator` call site constructs every recipe of a kind, so a bare source fingerprint would give structurally different recipes one shared tuned-filter cache slot (handing one recipe's tuned generator to another) or one shared unique seen-set. Folding the recipe structure in models what distinct user call sites get, the same way `Gen.filterFingerprint` folds in the output type.

@@ -75,6 +75,31 @@ let pet = #gen(.oneOf(weighted: (3, catGen), (1, dogGen)))
 let suit = #gen(.element(from: Suit.allCases))
 ```
 
+## Backtracking
+
+`.oneOf` commits to the branch it draws. `.backtrack` tries the branch it draws and, if that branch produces `nil`, draws again among the branches it has not tried yet. Use it when a branch can only discover that it does not apply by attempting its own sub-generation, such as a typing rule whose premises must all be satisfiable. When applicability is cheap to decide up front, filter the candidates and use `.oneOf`.
+
+Each branch produces an optional. A `nil` withdraws the branch; a value wins.
+
+```swift
+let term = #gen(.backtrack(always: [
+    (1, literalGen(matching: type)),
+    (3, applicationGen(producing: type, in: context)),
+    (2, variableGen(of: type, in: context)),
+]))
+```
+
+The two forms differ in what happens when every branch withdraws. `always:` throws, ends the current run, and records an issue at the call site, so it belongs on nodes where at least one branch cannot fail in any context the node is reached from, typically a base case. `failable:` produces `nil` instead. Absence is then an ordinary outcome that Exhaust records, reduces towards, and can reflect, which suits an optional subterm or an annotation that may be omitted.
+
+```swift
+let annotation = #gen(.backtrack(failable: [
+    (1, explicitAnnotationGen(for: binding)),
+    (1, inferredAnnotationGen(for: binding)),
+]))
+```
+
+Failed attempts consume randomness but are never recorded. The choice sequence holds only the winning branch, so reduction, replay, and reflection see an ordinary weighted choice. A branch that always produces `nil` is dead weight in either form; to retry from the top with fresh draws, wrap a `failable:` node in a `.filter` that rejects `nil`. A node costs up to the sum of its branches' attempts rather than the average, and Exhaust leaves the declared weights of a backtracking node untouched when it tunes a filtered generator.
+
 ## Composing generators
 
 Real code tests structured values. Exhaust composes multiple generators and attempts to automatically synthesise a bidirectional mapping from a trailing closure.

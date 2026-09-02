@@ -296,6 +296,18 @@ package struct OnlineCGSInterpreter<FinalOutput>: ~Copyable, ExhaustIterator {
                     cgsState: &cgsState, derivativeContext: derivativeContext
                 )
 
+            case let .impure(operation: .pick(choices, _), continuation) where choices[0].isBacktrack:
+                return try handleBacktrack(
+                    choices,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    context: &context,
+                    predicate: predicate,
+                    sampleCount: sampleCount,
+                    cgsState: &cgsState,
+                    derivativeContext: derivativeContext
+                )
+
             case let .impure(operation: .pick(choices, totalWeight), continuation):
                 return try handlePick(
                     choices, totalWeight: totalWeight,

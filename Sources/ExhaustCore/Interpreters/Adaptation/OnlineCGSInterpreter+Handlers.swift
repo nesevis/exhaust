@@ -518,6 +518,52 @@ extension OnlineCGSInterpreter {
         return finalValue as? Output
     }
 
+    // MARK: - Backtrack
+
+    /// Executes a backtrack node without tuning it: the arms are auditioned with their declared weights and their bodies run through the plain value interpreter, so no derivative evaluation, vocabulary elimination, or fitness record touches the node or anything nested inside its arms. The continuation resumes CGS execution, so nodes after the backtrack are tuned as usual.
+    @inline(__always)
+    static func handleBacktrack<Output>(
+        _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        continuation: @escaping (Any) throws -> AnyGenerator,
+        inputValue: some Any,
+        context: inout GenerationContext,
+        predicate: @escaping (FinalOutput) -> Bool,
+        sampleCount: UInt64,
+        cgsState: inout CGSState,
+        derivativeContext: DerivativeContext
+    ) throws -> Output? {
+        var audition = BacktrackAudition(choices)
+        var winner: Any?
+        while winner == nil, let (arm, _) = audition.drawNext(using: &context.prng) {
+            let snapshot = context.auditionSnapshot()
+            guard let value = try ValueInterpreter<Any>.generateRecursiveAny(arm.generator, context: &context) else {
+                return nil
+            }
+            if isNilOptional(value) {
+                context.restore(snapshot)
+            } else {
+                winner = value
+            }
+        }
+        if winner == nil {
+            let absent = try BacktrackAudition.resolveExhaustion(of: choices, reportingDiagnostic: context.isSpeculative == false)
+            guard let value = try ValueInterpreter<Any>.generateRecursiveAny(absent.generator, context: &context) else {
+                return nil
+            }
+            winner = value
+        }
+        return try runContinuation(
+            result: winner!,
+            continuation: continuation,
+            inputValue: inputValue,
+            context: &context,
+            predicate: predicate,
+            sampleCount: sampleCount,
+            cgsState: &cgsState,
+            derivativeContext: derivativeContext
+        )
+    }
+
     // MARK: - Pick (CGS Core)
 
     @inline(__always)

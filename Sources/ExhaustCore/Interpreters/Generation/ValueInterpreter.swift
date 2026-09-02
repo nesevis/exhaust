@@ -89,6 +89,15 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 ]
             )
             return nil
+        } catch GeneratorError.backtrackExhausted {
+            ExhaustLog.warning(
+                category: .generation,
+                event: "backtrack_exhausted",
+                metadata: [
+                    "run": "\(context.runs)",
+                ]
+            )
+            return nil
         }
     }
 
@@ -284,6 +293,9 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         totalWeight: UInt64,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> Any? {
+        if choices[0].isBacktrack {
+            return try handleBacktrack(choices: choices, continuation: continuation, context: &context)
+        }
         guard let selectedChoice = WeightedPickSelection.draw(
             from: choices, totalWeight: totalWeight, using: &context.prng
         ) else {
@@ -294,6 +306,39 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
             return nil
         }
         let nextGen = try continuation(value)
+        if case let .pure(final) = nextGen { return final }
+        return try generateRecursiveAny(nextGen, context: &context)
+    }
+
+    /// Auditions the arms of a backtrack pick without replacement until one produces a non-nil value.
+    ///
+    /// A failed arm's draws stay consumed, so the next draw is independent of it, but its value-side traces (unique keys, classifications, filter observations) are rolled back because the value never reached the output. Exhaustion resolves through ``BacktrackAudition/resolveExhaustion(of:reportingDiagnostic:)``: the absent arm on a failable node, a throw that ends the run on an always node.
+    @inline(__always)
+    private static func handleBacktrack(
+        choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
+    ) throws -> Any? {
+        var audition = BacktrackAudition(choices)
+        var winner: Any?
+        while winner == nil, let (arm, _) = audition.drawNext(using: &context.prng) {
+            let snapshot = context.auditionSnapshot()
+            guard let value = try generateRecursiveAny(arm.generator, context: &context) else {
+                return nil
+            }
+            if isNilOptional(value) {
+                context.restore(snapshot)
+            } else {
+                winner = value
+            }
+        }
+        if winner == nil {
+            let absent = try BacktrackAudition.resolveExhaustion(of: choices, reportingDiagnostic: context.isSpeculative == false)
+            guard let value = try generateRecursiveAny(absent.generator, context: &context) else {
+                return nil
+            }
+            winner = value
+        }
+        let nextGen = try continuation(winner!)
         if case let .pure(final) = nextGen { return final }
         return try generateRecursiveAny(nextGen, context: &context)
     }

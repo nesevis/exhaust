@@ -303,6 +303,15 @@ extension Materializer {
                     continuationFallback: continuationFallback
                 )
 
+            case let .impure(.pick(choices, _), continuation) where choices[0].isBacktrack:
+                let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
+                return try handleBacktrack(
+                    choices,
+                    continuation: continuation, inputValue: inputValue,
+                    context: &context, calleeFallback: calleeFallback,
+                    continuationFallback: continuationFallback
+                )
+
             case let .impure(.pick(choices, totalWeight), continuation):
                 let (calleeFallback, continuationFallback) = decomposeNonGroupFallback(fallbackTree)
                 return try handlePick(
@@ -521,5 +530,37 @@ extension Materializer {
                 flatOutput!.append(entry)
             }
         }
+
+        // MARK: - Backtrack audition rollback
+
+        func auditionSnapshot() -> AuditionSnapshot {
+            AuditionSnapshot(
+                cursor: cursor.checkpoint,
+                flatCount: flatCount,
+                filterObservations: filterObservations,
+                decodingReport: decodingReport
+            )
+        }
+
+        mutating func restore(_ snapshot: AuditionSnapshot) {
+            cursor.rewind(to: snapshot.cursor)
+            if let emitted = flatOutput?.count, emitted > snapshot.flatCount {
+                flatOutput!.removeLast(emitted - snapshot.flatCount)
+            }
+            filterObservations = snapshot.filterObservations
+            decodingReport = snapshot.decodingReport
+        }
+    }
+}
+
+// MARK: - Audition Snapshot
+
+extension Materializer {
+    /// The context state a failed backtrack arm must not leave behind: what it read from the prefix, what it emitted to the flat buffer, and what it observed. The PRNG is excluded so the next draw is independent of the failed attempt.
+    struct AuditionSnapshot {
+        let cursor: CursorCheckpoint
+        let flatCount: Int
+        let filterObservations: [UInt64: FilterObservation]
+        let decodingReport: DecodingReport?
     }
 }

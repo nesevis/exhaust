@@ -66,6 +66,8 @@ package struct GenerationContext: ~Copyable {
 
     /// Whether to record materialized pick metadata in the choice tree.
     package var materializePicks: Bool = false
+    /// Whether this context materializes an unselected pick branch. Such branches are best-effort alternatives recorded for structural encoders, never the run's output, so a generator failure inside one is swallowed by the caller and must not reach the user as a diagnostic.
+    package var isSpeculative: Bool = false
     /// Number of property invocations completed so far.
     package var runs: UInt64 = 0
     /// Per-site classification label sets, keyed by site fingerprint then label string.
@@ -83,6 +85,7 @@ package struct GenerationContext: ~Copyable {
             sizeOverride: sizeOverride,
             prng: .init(seed: seed),
             materializePicks: materializePicks,
+            isSpeculative: true,
             runs: runs
         )
     }
@@ -114,6 +117,34 @@ package struct GenerationContext: ~Copyable {
     /// Returns the size parameter for a given run index, cycling through 1 to 100 independently of ``maxRuns``.
     package static func scaledSize(forRun runIndex: UInt64) -> UInt64 {
         (runIndex % 100) + 1
+    }
+
+    // MARK: - Backtrack audition rollback
+
+    /// The value-side state a failed backtrack arm must not leave behind.
+    ///
+    /// The PRNG is deliberately absent: the draws a failed arm consumed are what make the next attempt independent of it. The unique decision trace is absent for the opposite reason: failure reproduction re-walks the run with the same seed, so the failed arm runs again and consumes its own decisions in order. Rolling those back would leave reproduction reading the winning arm's decision at the failed arm's site and diverging.
+    package struct AuditionSnapshot {
+        let uniqueSeenKeys: [UInt64: Set<AnyHashable>]
+        let uniqueSeenSequences: [UInt64: Set<UInt64>]
+        let filterObservations: [UInt64: FilterObservation]
+        let classifications: [UInt64: [String: Set<UInt64>]]
+    }
+
+    package func auditionSnapshot() -> AuditionSnapshot {
+        AuditionSnapshot(
+            uniqueSeenKeys: uniqueSeenKeys,
+            uniqueSeenSequences: uniqueSeenSequences,
+            filterObservations: filterObservations,
+            classifications: classifications
+        )
+    }
+
+    package mutating func restore(_ snapshot: AuditionSnapshot) {
+        uniqueSeenKeys = snapshot.uniqueSeenKeys
+        uniqueSeenSequences = snapshot.uniqueSeenSequences
+        filterObservations = snapshot.filterObservations
+        classifications = snapshot.classifications
     }
 
     // MARK: - Unique decision replay

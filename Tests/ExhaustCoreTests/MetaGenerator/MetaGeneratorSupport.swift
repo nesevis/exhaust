@@ -121,6 +121,8 @@ func recipeContains(_ recipe: GenRecipe, where predicate: (GenRecipe.CombinatorK
             return recipes.contains { recipeContains($0, where: predicate) }
         case let .weightedOneOf(branches):
             return branches.contains { recipeContains($0.recipe, where: predicate) }
+        case let .backtrack(arms, _):
+            return arms.contains { recipeContains($0.recipe, where: predicate) }
         case let .zipped(first, second):
             return recipeContains(first, where: predicate) || recipeContains(second, where: predicate)
         case let .eachOf(recipes):
@@ -209,6 +211,13 @@ let reflectableCombinatorFixtures: [CombinatorFixture] = [
     .init(name: "reifiedBind", recipe: .combinator(.reifiedBind(.leaf(.int(0 ... 10))))),
     .init(name: "getSized", recipe: .combinator(.getSized)),
     .init(name: "isomorphed", recipe: .combinator(.isomorphed(.leaf(.int(0 ... 10)), .increment))),
+    .init(name: "backtrack.always", recipe: .combinator(.backtrack([
+        .init(weight: 1, recipe: .leaf(.int(-10 ... 10)), predicate: .isEven),
+        .init(weight: 1, recipe: .leaf(.int(0 ... 5)), predicate: .always),
+    ], failable: false))),
+    .init(name: "backtrack.failable", recipe: .combinator(.backtrack([
+        .init(weight: 1, recipe: .leaf(.int(-10 ... 10)), predicate: .isPositive),
+    ], failable: true))),
 ]
 
 /// Node-count ceiling for recipes fed to the invariants. Debug builds give each interpreter recursion level a fat stack frame, so total recipe size, not nesting depth alone, is what overflows the 512 KiB test-thread stack. Calibrated empirically with the ExhaustStackProbe executable (2026-07-07, arm64 debug, interpreter case handlers outlined): nested filter chains are the worst shape because every level stacks a CGS tuning pass, crashing between 80 and 96 nodes; mapped, optional, unique, and classified chains all clear 112. The constant is the worst ceiling with a ~2x margin for platform and toolchain variance. Recalibrate with the probe after changing any interpreter's recursion frames or adding a recipe kind with a new nesting shape.

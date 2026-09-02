@@ -154,6 +154,10 @@ package enum GeneratorTuning {
             case .pure:
                 return gen
 
+            case let .impure(operation: .pick(choices, _), _) where choices[0].isBacktrack:
+                // Backtrack nodes are opaque to tuning, arms included: rebuilding their tuples would drop the audition flags.
+                return gen
+
             case let .impure(operation: .pick(choices, _), continuation):
                 return try measureAndTunePick(
                     choices: choices,

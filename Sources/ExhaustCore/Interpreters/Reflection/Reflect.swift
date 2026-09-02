@@ -33,7 +33,7 @@ extension Interpreters {
     ) throws -> ChoiceTree? {
         // The public API doesn't need to change. We start the process here.
         // We only care about the final output of the generator for the check.
-        let allPossibleOutcomes = try reflectRecursive(gen, onFinalOutput: outputValue)
+        let allPossibleOutcomes = try reflectRecursive(gen, onFinalOutput: outputValue, probingPickArm: false)
 
         let matchingPaths = allPossibleOutcomes.compactMap { outputValue, path -> [ChoiceTree]? in
             return check(outputValue) ? path : nil
@@ -77,7 +77,7 @@ extension Interpreters {
         }
         var modified = components
         modified[index] = newComponent
-        let results = try reflectZipOperation(generators: children, finalOutput: modified)
+        let results = try reflectZipOperation(generators: children, finalOutput: modified, probingPickArm: false)
         guard let path = results.first?.path, path.count == 1 else {
             return nil
         }
@@ -185,10 +185,13 @@ extension Interpreters {
     ///
     /// Walks the ``FreerMonad`` spine in reverse: for `.pure`, returns the value directly; for `.impure`, calls ``interpretOperationBackward(_:onFinalOutput:outputType:)`` to determine which intermediate values could have produced the target, then recurses through the continuation for each candidate. The `finalOutput` is threaded unchanged through the entire recursion — each operation extracts its own intermediate from it.
     ///
+    /// `probingPickArm` is true while reflecting inside a pick arm, where a node's reported value decides which arm the pick selects. Nodes whose reported value would otherwise echo the target unchanged (`metamorphic`) rebuild it from the reflected original there, and only there, so top-level reflection keeps its contract of never running user transforms.
+    ///
     /// - Returns: The reflected value and its path when the generator can produce `finalOutput`, or an empty array when it cannot.
     private static func reflectRecursive<Output>(
         _ gen: Generator<Output>,
-        onFinalOutput finalOutput: Any
+        onFinalOutput finalOutput: Any,
+        probingPickArm: Bool
     ) throws -> [(value: Output, path: [ChoiceTree])] {
         switch gen {
             case let .pure(value):
@@ -199,14 +202,15 @@ extension Interpreters {
                 // 1. Interpret the operation against the final output value.
                 let intermediateResults = try interpretOperationBackward(
                     operation,
-                    onFinalOutput: finalOutput
+                    onFinalOutput: finalOutput,
+                    probingPickArm: probingPickArm
                 )
 
                 // 2. For each successful intermediate result...
                 return try intermediateResults.flatMap { (intermediateValue: Any, partialPath: [ChoiceTree]) in
                     let nextGen = try continuation(intermediateValue)
                     // The `finalOutput` is passed down UNCHANGED. This is the crucial part.
-                    let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
+                    let finalResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput, probingPickArm: probingPickArm)
                     return finalResults.compactMap { finalValue, restOfPath in
                         (finalValue as? Output).map { (value: $0, path: partialPath + restOfPath) }
                     }
@@ -221,7 +225,8 @@ extension Interpreters {
     /// For chooseBits: inverts the bit-pattern encoding to recover the original value. For pick: tries each branch's sub-generator via ``reflectRecursive`` and returns the branch whose output matches `finalOutput`. For sequence: reflects each element independently. For contramap: applies the backward transform to extract the inner value from `finalOutput`.
     private static func interpretOperationBackward(
         _ op: ReflectiveOperation,
-        onFinalOutput finalOutput: Any
+        onFinalOutput finalOutput: Any,
+        probingPickArm: Bool
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         switch op {
             // A nil onFinalOutput at this point means the generator produces an Optional type.
@@ -229,14 +234,15 @@ extension Interpreters {
                 return try reflectContramapOperation(
                     transform: transform,
                     nextGen: nextGen,
-                    finalOutput: finalOutput
+                    finalOutput: finalOutput,
+                    probingPickArm: probingPickArm
                 )
 
             case let .prune(nextGen):
-                return try reflectPruneOperation(nextGen: nextGen, finalOutput: finalOutput)
+                return try reflectPruneOperation(nextGen: nextGen, finalOutput: finalOutput, probingPickArm: probingPickArm)
 
             case let .pick(choices, _):
-                return try reflectPickOperation(choices: choices, finalOutput: finalOutput)
+                return try reflectPickOperation(choices: choices, finalOutput: finalOutput, probingPickArm: probingPickArm)
 
             case let .chooseBits(min, max, tag, isRangeExplicit, _, typeTagPayload):
                 return try reflectChooseBitsOperation(
@@ -245,7 +251,8 @@ extension Interpreters {
                     tag: tag,
                     isRangeExplicit: isRangeExplicit,
                     typeTagPayload: typeTagPayload,
-                    finalOutput: finalOutput
+                    finalOutput: finalOutput,
+                    probingPickArm: probingPickArm
                 )
 
             case let .just(value):
@@ -269,50 +276,54 @@ extension Interpreters {
                 return try reflectResizeOperation(
                     newSize: newSize,
                     nextGen: nextGen,
-                    finalOutput: finalOutput
+                    finalOutput: finalOutput,
+                    probingPickArm: probingPickArm
                 )
 
             case let .sequence(lengthGen, elementGen, _):
                 return try reflectSequenceOperation(
                     lengthGen: lengthGen,
                     elementGen: elementGen,
-                    finalOutput: finalOutput
+                    finalOutput: finalOutput,
+                    probingPickArm: probingPickArm
                 )
 
             case let .zip(generators, _):
-                return try reflectZipOperation(generators: generators, finalOutput: finalOutput)
+                return try reflectZipOperation(generators: generators, finalOutput: finalOutput, probingPickArm: probingPickArm)
 
             case let .filter(gen, _, _, _, _):
-                return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
+                return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput, probingPickArm: probingPickArm)
 
             case let .classify(gen, _, _):
-                return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
+                return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput, probingPickArm: probingPickArm)
 
             case let .unique(gen, _, _):
-                return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput)
+                return try reflectPassthroughOperation(gen: gen, finalOutput: finalOutput, probingPickArm: probingPickArm)
 
             case let .transform(kind, inner):
-                return try reflectTransformOperation(kind: kind, inner: inner, finalOutput: finalOutput)
+                return try reflectTransformOperation(kind: kind, inner: inner, finalOutput: finalOutput, probingPickArm: probingPickArm)
         }
     }
 
     private static func reflectContramapOperation(
         transform: (Any) throws -> Any?,
         nextGen: AnyGenerator,
-        finalOutput: Any
+        finalOutput: Any,
+        probingPickArm: Bool
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         guard let subValue = try transform(finalOutput) else {
             throw ReflectionError.contramapWasWrongType
         }
-        return try reflectRecursive(nextGen, onFinalOutput: subValue).map { ($0.value, $0.path) }
+        return try reflectRecursive(nextGen, onFinalOutput: subValue, probingPickArm: probingPickArm).map { ($0.value, $0.path) }
     }
 
     private static func reflectPruneOperation(
         nextGen: AnyGenerator,
-        finalOutput: Any
+        finalOutput: Any,
+        probingPickArm: Bool
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         do {
-            return try reflectRecursive(nextGen, onFinalOutput: finalOutput)
+            return try reflectRecursive(nextGen, onFinalOutput: finalOutput, probingPickArm: probingPickArm)
                 .map { ($0.value, $0.path) }
         } catch ReflectionError.reflectedNil {
             return []
@@ -323,14 +334,25 @@ extension Interpreters {
 
     private static func reflectPickOperation(
         choices: ContiguousArray<ReflectiveOperation.PickTuple>,
-        finalOutput: Any
+        finalOutput: Any,
+        probingPickArm _: Bool
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         let branchCount = UInt64(choices.count)
         let fingerprint = choices[0].fingerprint
+        // On a backtrack node only the framework-built absent arm may record an outer nil: a user arm that reflects nil is a withdrawn arm, and exact materialization rejects a recorded arm that replays nil. An always node has no absent arm and cannot have produced nil at all.
+        let candidates: ContiguousArray<ReflectiveOperation.PickTuple>
+        if choices[0].isBacktrack, isNilOptional(finalOutput) {
+            guard let absent = BacktrackAudition.absentArm(in: choices) else {
+                return []
+            }
+            candidates = [absent]
+        } else {
+            candidates = choices
+        }
         var deferredBranchError: ReflectionError?
-        let results = try choices.flatMap { choice -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
+        let results = try candidates.flatMap { choice -> [(value: Any, fingerprint: UInt64, weight: UInt64, id: UInt64, isPicked: Bool, path: ChoiceTree)] in
             do {
-                let reflectionPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput)
+                let reflectionPaths = try reflectRecursive(choice.generator, onFinalOutput: finalOutput, probingPickArm: true)
                 let value = reflectionPaths.firstNonNil { $0.value }
 
                 var isPicked = false
@@ -398,7 +420,8 @@ extension Interpreters {
         tag: TypeTag,
         isRangeExplicit: Bool,
         typeTagPayload: TypeTagPayload?,
-        finalOutput: Any
+        finalOutput: Any,
+        probingPickArm _: Bool
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         var convertibleValue: (any BitPatternConvertible)?
         if let convertible = finalOutput as? any BitPatternConvertible {
@@ -450,9 +473,10 @@ extension Interpreters {
     private static func reflectResizeOperation(
         newSize: UInt64,
         nextGen: AnyGenerator,
-        finalOutput: Any
+        finalOutput: Any,
+        probingPickArm: Bool
     ) throws -> [(value: Any, path: [ChoiceTree])] {
-        let nestedResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput)
+        let nestedResults = try reflectRecursive(nextGen, onFinalOutput: finalOutput, probingPickArm: probingPickArm)
         return nestedResults.map { result in
             (value: result.value, path: [.resize(newSize: newSize, choices: result.path)])
         }
@@ -461,7 +485,8 @@ extension Interpreters {
     private static func reflectSequenceOperation(
         lengthGen: Generator<UInt64>,
         elementGen: AnyGenerator,
-        finalOutput: Any
+        finalOutput: Any,
+        probingPickArm: Bool
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         guard let targetArray = finalOutput as? any Sequence else {
             throw ReflectionError.inputWasWrongForSequence("\(finalOutput)")
@@ -473,10 +498,7 @@ extension Interpreters {
         let isLengthRangeExplicit = lengthGen.associatedRange != nil
 
         for elementTarget in targetArray {
-            let elementResults = try reflectRecursive(
-                elementGen,
-                onFinalOutput: elementTarget
-            )
+            let elementResults = try reflectRecursive(elementGen, onFinalOutput: elementTarget, probingPickArm: probingPickArm)
             guard let (value, path) = elementResults.first else {
                 throw ReflectionError.couldNotReflectOnSequenceElement("\(elementTarget)")
             }
@@ -489,10 +511,7 @@ extension Interpreters {
             validRange = lengthRange
         } else {
             let targetLength = UInt64(combinedPath.count)
-            let lengthReflection = try reflectRecursive(
-                lengthGen,
-                onFinalOutput: targetLength
-            )
+            let lengthReflection = try reflectRecursive(lengthGen, onFinalOutput: targetLength, probingPickArm: probingPickArm)
             validRange = lengthReflection
                 .firstNonNil { $0.path.firstNonNil { $0.metadata.validRange } }
                 ?? UInt64.bitPatternRange
@@ -510,7 +529,8 @@ extension Interpreters {
 
     private static func reflectZipOperation(
         generators: ContiguousArray<AnyGenerator>,
-        finalOutput: Any
+        finalOutput: Any,
+        probingPickArm: Bool
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         guard let outputs = finalOutput as? [Any], outputs.count == generators.count else {
             throw ReflectionError.zipWasWrongLengthOrType
@@ -519,7 +539,7 @@ extension Interpreters {
         var paths = [ChoiceTree]()
 
         for (generator, output) in zip(generators, outputs) {
-            let candidates = try Self.reflectRecursive(generator, onFinalOutput: output)
+            let candidates = try Self.reflectRecursive(generator, onFinalOutput: output, probingPickArm: probingPickArm)
             // Exactly one value per generator. Consumers read `results` positionally against the declared arity, so a component contributing zero or several entries shifts every later slot onto the wrong generator, and the type-erased read then force-casts across types.
             guard let (value, path) = candidates.first else {
                 throw ReflectionError.couldNotReflectOnZipElement("\(output)")
@@ -533,22 +553,24 @@ extension Interpreters {
 
     private static func reflectPassthroughOperation(
         gen: AnyGenerator,
-        finalOutput: Any
+        finalOutput: Any,
+        probingPickArm: Bool
     ) throws -> [(value: Any, path: [ChoiceTree])] {
-        try reflectRecursive(gen, onFinalOutput: finalOutput).map { ($0.value, $0.path) }
+        try reflectRecursive(gen, onFinalOutput: finalOutput, probingPickArm: probingPickArm).map { ($0.value, $0.path) }
     }
 
     private static func reflectTransformOperation(
         kind: TransformKind,
         inner: AnyGenerator,
-        finalOutput: Any
+        finalOutput: Any,
+        probingPickArm: Bool
     ) throws -> [(value: Any, path: [ChoiceTree])] {
         switch kind {
             case let .map(forward, backward, inputType, outputType):
                 if let backward {
                     // Bidirectional map (`mapped(forward:backward:)`): apply the user-contract inverse, reflect the inner generator against the recovered input, then reconstruct the mapped value for upstream matching.
                     let innerValue = try backward(finalOutput)
-                    let reflected = try reflectRecursive(inner, onFinalOutput: innerValue)
+                    let reflected = try reflectRecursive(inner, onFinalOutput: innerValue, probingPickArm: probingPickArm)
                     return try reflected.map { result in
                         try (value: forward(result.value), path: result.path)
                     }
@@ -562,7 +584,7 @@ extension Interpreters {
                         if let roundTrippedBPC = roundTripped as? any BitPatternConvertible,
                            roundTrippedBPC.bitPattern64 == outputValue.bitPattern64
                         {
-                            let reflected = try reflectRecursive(inner, onFinalOutput: inverted)
+                            let reflected = try reflectRecursive(inner, onFinalOutput: inverted, probingPickArm: probingPickArm)
                             return reflected.map { result in
                                 (value: roundTripped, path: result.path)
                             }
@@ -578,7 +600,7 @@ extension Interpreters {
             case let .isomorph(forward, backward, _, _):
                 // Guaranteed invertible by construction (framework-authored pairs only), so no forward-only error path exists here. Reconstruct the outer value for upstream matching after reflecting the recovered inner value.
                 let innerValue = try backward(finalOutput)
-                let reflected = try reflectRecursive(inner, onFinalOutput: innerValue)
+                let reflected = try reflectRecursive(inner, onFinalOutput: innerValue, probingPickArm: probingPickArm)
                 return try reflected.map { result in
                     try (value: forward(result.value), path: result.path)
                 }
@@ -592,13 +614,10 @@ extension Interpreters {
                 // Xia et al.'s comap at bind sites: extract the inner value from the final output.
                 let innerValue = try backward(finalOutput)
                 // Reflect the inner generator against the extracted value. A permissive inner operation such as `just` may return a different value, so each actual reflected candidate is authoritative when reconstructing the dependent generator.
-                let innerResults = try reflectRecursive(inner, onFinalOutput: innerValue)
+                let innerResults = try reflectRecursive(inner, onFinalOutput: innerValue, probingPickArm: probingPickArm)
                 return try innerResults.flatMap { innerResult in
                     let boundGenerator = try forward(innerResult.value)
-                    let boundResults = try reflectRecursive(
-                        boundGenerator,
-                        onFinalOutput: finalOutput
-                    )
+                    let boundResults = try reflectRecursive(boundGenerator, onFinalOutput: finalOutput, probingPickArm: probingPickArm)
                     return boundResults.compactMap { boundResult -> (value: Any, path: [ChoiceTree])? in
                         guard structurallyEqual(boundResult.value, finalOutput) else {
                             return nil
@@ -615,13 +634,28 @@ extension Interpreters {
                         )
                     }
                 }
-            case .metamorphic:
-                guard let components = finalOutput as? [Any], let original = components.first else {
+            case let .metamorphic(transforms, _):
+                // Only the original is reflected; the supplied transformed members are never validated, so a stale tuple still reflects at the top level and replay regenerates its members. The length is checked because an array with any other count cannot be this node's output, and accepting one would let a pick probe select this arm for an array a sibling arm produced.
+                guard let components = finalOutput as? [Any],
+                      components.count == transforms.count + 1,
+                      let original = components.first
+                else {
                     throw ReflectionError.contramapWasWrongType
                 }
-                let reflectedResults = try reflectRecursive(inner, onFinalOutput: original)
-                return reflectedResults.map { result in
-                    (value: components as Any, path: result.path)
+                let reflectedResults = try reflectRecursive(inner, onFinalOutput: original, probingPickArm: probingPickArm)
+                guard probingPickArm else {
+                    return reflectedResults.map { result in
+                        (value: components as Any, path: result.path)
+                    }
+                }
+                // Inside a pick probe the reported value is what this node would produce from the reflected original, so the pick's comparison can tell this arm from a sibling that emits arrays of the same length. That is the one place the transforms run during reflection.
+                return try reflectedResults.map { result in
+                    var produced: [Any] = [result.value]
+                    produced.reserveCapacity(transforms.count + 1)
+                    for transform in transforms {
+                        try produced.append(transform(result.value))
+                    }
+                    return (value: produced as Any, path: result.path)
                 }
         }
     }

@@ -169,6 +169,20 @@ private let combinatorEntries: [ReplayCorpusEntry] = [
     ),
     sampling("resize", .int(in: 0 ... 1000, scaling: .linear).resize(10), integer),
     sampling("lazy", .lazy { .int(in: 0 ... 9) }, integer),
+    sampling(
+        "backtrack.always",
+        .backtrack(
+            always: (1, .just(nil)),
+            (2, .int(in: 0 ... 9).map { $0.isMultiple(of: 2) ? $0 : nil }),
+            (1, .int(in: 100 ... 109).map { Optional($0) })
+        ),
+        integer
+    ),
+    sampling(
+        "backtrack.failable",
+        .backtrack(failable: (1, .int(in: 0 ... 9).map { $0.isMultiple(of: 3) ? $0 : nil })),
+        { $0.map(integer) ?? "null" }
+    ),
 ]
 
 // MARK: - Synthesis

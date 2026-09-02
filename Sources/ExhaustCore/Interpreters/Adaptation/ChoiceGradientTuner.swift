@@ -142,6 +142,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
             case let .impure(operation, continuation):
                 switch operation {
+                    case let .pick(choices, _) where choices[0].isBacktrack:
+                        // Backtrack nodes are opaque to tuning, arms included: rebuilding their tuples would drop the audition flags.
+                        return gen
+
                     case let .pick(choices, _):
                         var baked = ContiguousArray<ReflectiveOperation.PickTuple>()
                         baked.reserveCapacity(choices.count)
@@ -364,6 +368,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
                             continuation: continuation
                         )
 
+                    case let .pick(choices, _) where choices[0].isBacktrack:
+                        // Backtrack nodes are opaque to tuning, arms included: rebuilding their tuples would drop the audition flags.
+                        return gen
+
                     case let .pick(choices, _):
                         var subdivided = ContiguousArray<ReflectiveOperation.PickTuple>()
                         subdivided.reserveCapacity(choices.count)
@@ -403,6 +411,10 @@ package enum ChoiceGradientTuner<FinalOutput> {
 
             case let .impure(operation, continuation):
                 switch operation {
+                    case let .pick(choices, _) where choices[0].isBacktrack:
+                        // Backtrack nodes are opaque to tuning, arms included: rebuilding their tuples would drop the audition flags.
+                        return gen
+
                     case let .pick(choices, _) where choices.count >= 2:
                         if choices.allSatisfy({ subdivisionFingerprints.contains($0.fingerprint) }),
                            let collapsed: Generator<Output> = collapseIfUniform(choices, continuation: continuation)

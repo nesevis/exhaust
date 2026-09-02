@@ -71,7 +71,7 @@ public extension ReflectiveGenerator {
 
     /// Creates a generator that randomly selects from weighted generators.
     ///
-    /// Entries with weight zero are removed before the pick is built: a branch that can never be drawn does not appear in the choice layout. When that removal leaves exactly one entry, its generator is returned directly with no pick node; a list that starts with a single entry keeps its pick. At least one entry must have a nonzero weight.
+    /// Entries with weight zero are removed before the pick is built, so `oneOf` never carries a branch that cannot be drawn. (``backtrack(failable:fileID:line:column:)`` is the one combinator that does: its zero-weight arm records absence.) When that removal leaves exactly one entry, its generator is returned directly with no pick node; a list that starts with a single entry keeps its pick. At least one entry must have a nonzero weight.
     ///
     /// ```swift
     /// let gen = #gen(.oneOf(weighted: (1, .just(0)), (5, .int(in: 1...100))))
@@ -102,7 +102,7 @@ public extension ReflectiveGenerator {
 
     /// Selects from an array of weighted generators.
     ///
-    /// Entries with weight zero are removed before the pick is built: a branch that can never be drawn does not appear in the choice layout. When that removal leaves exactly one entry, its generator is returned directly with no pick node; a list that starts with a single entry keeps its pick. At least one entry must have a nonzero weight.
+    /// Entries with weight zero are removed before the pick is built, so `oneOf` never carries a branch that cannot be drawn. (``backtrack(failable:fileID:line:column:)`` is the one combinator that does: its zero-weight arm records absence.) When that removal leaves exactly one entry, its generator is returned directly with no pick node; a list that starts with a single entry keeps its pick. At least one entry must have a nonzero weight.
     ///
     /// ```swift
     /// let choices: [(Int, ReflectiveGenerator<Int>)] = [(1, .just(0)), (5, .int(in: 1...100))]
@@ -171,14 +171,15 @@ public extension ReflectiveGenerator {
     ///   - gen: The generator to wrap.
     ///   - someWeight: Relative weight for generating a value. Must be at least 1. Defaults to 4.
     ///   - noneWeight: Relative weight for generating `nil`. Must be at least 1. Defaults to 1.
-    static func optional(
-        _ gen: ReflectiveGenerator<Output>,
+    static func optional<Wrapped>(
+        _ gen: ReflectiveGenerator<Wrapped>,
         someWeight: Int = 4,
         noneWeight: Int = 1
-    ) -> ReflectiveGenerator<Output?> {
+    ) -> ReflectiveGenerator<Wrapped?> {
+        // `Wrapped` is a method generic and `Output` stays free so the implicit-member form infers: the chain's result must equal its contextual base, and a result spelled `ReflectiveGenerator<Output?>` could never equal a base of `ReflectiveGenerator<Output>`.
         Gen.pick(choices: [
             (someWeight, gen.gen.liftToOptional()),
-            (noneWeight, Gen.just(.none)),
+            (noneWeight, Gen.just(Wrapped?.none)),
         ]).wrapped(isReflective: gen.isReflective)
     }
 

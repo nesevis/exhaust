@@ -25,6 +25,8 @@ public enum GeneratorError: LocalizedError {
     case invalidExampleCount(Int)
     /// Materializing a single value exceeded ``SharedInterpreterHelpers/perValueGenerationBudgetNanoseconds``.
     case generationDeadlineExceeded(seconds: Double)
+    /// Every arm of a `backtrack(always:)` node produced `nil` in a single audition pass. Distinct from ``sparseValidityCondition`` because an audition never retries: one pass over the arms either finds a value or fails, so the failure says the node was reached in a context none of its arms can produce a value for.
+    case backtrackExhausted
 
     public var errorDescription: String? {
         switch self {
@@ -44,6 +46,8 @@ public enum GeneratorError: LocalizedError {
                 "#example count must be non-negative; got \(count)."
             case let .generationDeadlineExceeded(seconds):
                 "Generating a single value exceeded the \(Int(seconds))-second deadline. The generator is intractably large or expensive to run."
+            case .backtrackExhausted:
+                "Every arm of a backtrack(always:) node produced nil."
         }
     }
 
@@ -65,6 +69,8 @@ public enum GeneratorError: LocalizedError {
                 "Pass zero or a positive count."
             case .generationDeadlineExceeded:
                 "Narrow the sequence length ranges (nested sequences multiply: an array of arrays generates rows times columns elements), or simplify expensive map and filter stages."
+            case .backtrackExhausted:
+                "Add an arm that cannot fail in every context this node is reached from, or use backtrack(failable:) and handle nil in the caller."
         }
     }
 }

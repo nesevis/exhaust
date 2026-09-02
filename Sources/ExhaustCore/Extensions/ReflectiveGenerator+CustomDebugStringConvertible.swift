@@ -68,7 +68,11 @@ extension Generator where Operation == ReflectiveOperation {
             case let .pick(choices, _):
                 let fingerprint = choices.first?.fingerprint ?? 0
                 let fingerprintShort = String(format: "%08X", fingerprint & 0xFFFF_FFFF)
-                let header = "pick(id: \(fingerprintShort), choices: \(choices.count))"
+                var flags = ""
+                if choices.first?.isBacktrack == true {
+                    flags += choices.first?.isFailable == true ? ", backtrack: failable" : ", backtrack: always"
+                }
+                let header = "pick(id: \(fingerprintShort), choices: \(choices.count)\(flags))"
                 if choices.isEmpty {
                     return header
                 }
