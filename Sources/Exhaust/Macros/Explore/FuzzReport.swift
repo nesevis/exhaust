@@ -154,6 +154,15 @@ public struct FuzzReport: Sendable {
     /// Candidate opportunities opened by Phase 3 (the mutation phase), including candidates rejected before property entry.
     public let mutationAttempts: Int
 
+    /// Mutation-phase candidates whose value was reconstructed from a comparison operand the property's code compared against and reflected through the generator. Counted inside ``mutationAttempts``. Zero when the system under test carries no `trace-cmp` instrumentation or the generator is not reflective.
+    public let reflectionInjectionAttempts: Int
+
+    /// Mutation-phase candidates made by grafting a comparison operand into one field of a corpus parent and reflecting the whole value. Counted inside ``mutationAttempts``; zero under the same conditions as ``reflectionInjectionAttempts``.
+    public let graftInjectionAttempts: Int
+
+    /// Mutation-phase candidates made by writing a comparison operand over tag-compatible entries of a corpus parent's choice sequence, the injection path that needs no reflection. Counted inside ``mutationAttempts``; zero when the system under test carries no `trace-cmp` instrumentation.
+    public let comparandSubstitutionAttempts: Int
+
     /// Mutated candidates the materializer could not turn into a value. These attempts contribute to ``mutationAttempts`` but invoke the property zero times.
     public let discardedAttempts: Int
 
@@ -404,6 +413,9 @@ package extension FuzzReport {
         screeningAttempts = result.counts.screeningAttempts
         samplingAttempts = result.counts.samplingAttempts
         mutationAttempts = result.counts.mutationAttempts
+        reflectionInjectionAttempts = result.counts.reflectionInjectionAttempts
+        graftInjectionAttempts = result.counts.graftInjectionAttempts
+        comparandSubstitutionAttempts = result.counts.comparandSubstitutionAttempts
         discardedAttempts = result.counts.discardedAttempts
         discardedEvaluations = result.counts.discardedEvaluations
         screeningRejectedAttempts = result.counts.screeningRejectedAttempts
@@ -460,6 +472,9 @@ package extension FuzzReport {
             screeningAttempts: 0,
             samplingAttempts: 0,
             mutationAttempts: 0,
+            reflectionInjectionAttempts: 0,
+            graftInjectionAttempts: 0,
+            comparandSubstitutionAttempts: 0,
             discardedAttempts: 0,
             discardedEvaluations: 0,
             screeningRejectedAttempts: 0,

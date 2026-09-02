@@ -120,6 +120,10 @@ package struct FuzzRunCounts: Sendable {
     package var evaluatedSearchCases = 0
     /// Candidates evaluated inside campaign probe sessions (counted inside `mutationAttempts` too). Zero whenever the `campaignMutation` knob is off or no parent's stall gate opened.
     package var campaignAttempts = 0
+    /// Candidates produced by the three comparison-operand injection paths (each counted inside `mutationAttempts` too): a harvested operand reconstructed into a whole value and reflected, an operand grafted into one field of a corpus parent and reflected, and an operand written over tag-compatible entries of a parent's flat sequence. A drawn operand that reconstructs, reflects, or finds no slot is not an attempt. All zero on a build without trace-cmp instrumentation, since the pool never fills.
+    package var reflectionInjectionAttempts = 0
+    package var graftInjectionAttempts = 0
+    package var comparandSubstitutionAttempts = 0
     package var pruneInvocations = 0
     package var reductionInvocations = 0
     package var normalizationInvocations = 0

@@ -17,6 +17,7 @@ extension FuzzRunner {
             return false
         }
         let sequence = ChoiceSequence.flatten(tree)
+        counts.reflectionInjectionAttempts += 1
         return evaluateInjected(sequence: sequence, tree: tree, value: value, parent: nil)
     }
 
@@ -61,6 +62,7 @@ extension FuzzRunner {
         }
         // The graft is a child of the parent it scaffolds, so its opportunity opens here like the child loop's, and recordAttempt attributes it to the parent without re-opening.
         openMutationAttempt()
+        counts.graftInjectionAttempts += 1
         return evaluateInjected(sequence: sequence, tree: tree, value: value, parent: (parentIndex, parent))
     }
 
@@ -74,6 +76,7 @@ extension FuzzRunner {
             return false
         }
         openMutationAttempt()
+        counts.comparandSubstitutionAttempts += 1
         evaluateFuzzCandidate(mutated, parent: parent, parentIndex: parentIndex, armsMask: 0)
         return true
     }
