@@ -84,7 +84,7 @@ package struct FuzzRunnerConfiguration {
     package init(
         budgetNanoseconds: UInt64,
         seed: UInt64,
-        screeningBudget: UInt64 = 1000,
+        screeningBudget: UInt64 = FuzzTunables.screeningBudget,
         samplingPlateauWindow: Int = FuzzTunables.samplingPlateauWindow,
         skipScreening: Bool = false,
         skipSampling: Bool = false,

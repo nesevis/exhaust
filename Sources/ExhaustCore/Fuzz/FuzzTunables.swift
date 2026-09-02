@@ -36,6 +36,11 @@ package enum FuzzTunables {
     /// Probability that a mutation candidate is a bind-boundary splice with a random donor instead of a single-parent mutation. AFL's splicing yields roughly 10–15% of paths in extended runs; the starting weight matches.
     package static let spliceProbability = 0.125
 
+    // MARK: - Phase 1 (Screening)
+
+    /// Rows the screening pass may draw from the covering array before sampling begins. The pass has never detected a fault on the Etna register machine, but its boundary rows seed the only fully populated memories the corpus sees, so the number trades a few hundred milliseconds against reach into memory-operation faults; 1,000 keeps most of that reach at a tenth of the original 10,000's cost. `EXHAUST_SCREENING_BUDGET` overrides it for measurement.
+    package static let screeningBudget: UInt64 = ProcessInfo.processInfo.environment["EXHAUST_SCREENING_BUDGET"].flatMap(UInt64.init) ?? 1000
+
     // MARK: - Phase 2 (Random Sampling) Stopping
 
     /// Consecutive samples without a novel edge before random sampling is considered saturated and the mutation phase begins.
