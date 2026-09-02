@@ -19,6 +19,11 @@ package protocol CoverageSource: AnyObject, Sendable {
     /// Visits each edge hit during the attempt bracketed by ``beginAttempt()``, with its saturating 8-bit hit count.
     func forEachHitEdge(_ body: (_ edge: Int, _ hitCount: UInt8) -> Void)
 
+    /// Appends every edge hit during the attempt, with its saturating count, to `buffer` in the order ``forEachHitEdge(_:)`` visits them.
+    ///
+    /// The bulk form the runner calls once per attempt. The default forwards through ``forEachHitEdge(_:)``; a source that holds its hits in contiguous storage copies them in one loop, which spares a closure call, a runtime call, and an exclusivity check on the runner's buffer per edge.
+    func appendHitEdges(to buffer: inout [(edge: Int, hitCount: UInt8)])
+
     /// Whether the source harvests comparison operands from the attempt. When false, the runner skips the capture bracket and ``forEachComparisonRecord(_:)`` entirely, and operand injection has no pool to draw from.
     var wantsComparisons: Bool { get }
 
@@ -30,6 +35,11 @@ package protocol CoverageSource: AnyObject, Sendable {
 
     /// Visits each comparison record — call site and both operands — captured between ``beginComparisonCapture()`` and ``endComparisonCapture()``. Only meaningful when ``wantsComparisons`` is true.
     func forEachComparisonRecord(_ body: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void)
+
+    /// Inserts every captured comparison record into `pool`, both operands under the record's site, in capture order.
+    ///
+    /// The bulk form of ``forEachComparisonRecord(_:)``, which the runner calls once per attempt. The default forwards one record at a time; a source that already holds its records in a contiguous buffer hands the whole buffer to ``ComparisonPool/insert(records:)`` instead, so the per-operand path is one array store rather than a closure call plus an exclusivity check on the runner's pool.
+    func drainComparisonRecords(into pool: inout ComparisonPool)
 
     /// Whether the source reads process-global state (the counter table and the global operand ring), so a second run in the same process would corrupt its attribution. The driver serializes such runs through an exclusion latch and refuses a concurrent one. A `trace-pc-guard` source keeps both its edges and its operands in a per-run context and does not need the latch.
     var requiresExclusiveProcess: Bool { get }
@@ -54,6 +64,12 @@ package extension CoverageSource {
 
     func noteValue(_: Any) {}
 
+    func appendHitEdges(to buffer: inout [(edge: Int, hitCount: UInt8)]) {
+        forEachHitEdge { edge, hitCount in
+            buffer.append((edge, hitCount))
+        }
+    }
+
     var wantsComparisons: Bool {
         false
     }
@@ -64,6 +80,13 @@ package extension CoverageSource {
     func endComparisonCapture() {}
 
     func forEachComparisonRecord(_: (_ site: UInt64, _ arg1: UInt64, _ arg2: UInt64) -> Void) {}
+
+    func drainComparisonRecords(into pool: inout ComparisonPool) {
+        forEachComparisonRecord { site, arg1, arg2 in
+            pool.insert(site: site, value: arg1)
+            pool.insert(site: site, value: arg2)
+        }
+    }
 
     var requiresExclusiveProcess: Bool {
         false
@@ -171,6 +194,15 @@ package final class SancovCoverageSource: CoverageSource, @unchecked Sendable {
             return
         }
         ComparisonRuntime.forEachRecord(body)
+    }
+
+    package func drainComparisonRecords(into pool: inout ComparisonPool) {
+        guard wantsComparisons else {
+            return
+        }
+        ComparisonRuntime.withRecords { records in
+            pool.insert(records: records)
+        }
     }
 
     /// True: the counter table is one per process, and every attempt zeroes all of it.

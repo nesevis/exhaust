@@ -103,6 +103,17 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
         }
     }
 
+    package func drainComparisonRecords(into pool: inout ComparisonPool) {
+        guard wantsComparisons else {
+            return
+        }
+        let count = exhaust_tpg_cmp_record_count(context)
+        guard count > 0, let base = exhaust_tpg_cmp_records(context) else {
+            return
+        }
+        pool.insert(records: UnsafeBufferPointer(start: base, count: count * 3))
+    }
+
     /// Unbinds the thread, so edges fired between brackets take the hook's early return instead of being recorded and then reset. Measured at about 1.1× on a whole-graph build and nothing on a per-target build; kept for attribution hygiene rather than speed.
     package func endAttempt() {
         exhaust_tpg_bind(nil)
@@ -119,6 +130,21 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
         for index in 0 ..< count {
             let edge = covered[index]
             body(Int(edge) - 1, exhaust_tpg_hit_count(context, edge))
+        }
+    }
+
+    package func appendHitEdges(to buffer: inout [(edge: Int, hitCount: UInt8)]) {
+        let count = exhaust_tpg_covered_count(context)
+        guard count > 0,
+              let covered = exhaust_tpg_covered(context),
+              let hits = exhaust_tpg_hits(context)
+        else {
+            return
+        }
+        buffer.reserveCapacity(buffer.count + count)
+        for index in 0 ..< count {
+            let edge = covered[index]
+            buffer.append((Int(edge) - 1, hits[Int(edge)]))
         }
     }
 }

@@ -73,6 +73,34 @@ package struct GenerationContext: ~Copyable {
     /// Per-site classification label sets, keyed by site fingerprint then label string.
     package var classifications: [UInt64: [String: Set<UInt64>]] = [:]
 
+    // MARK: - Flat emission
+
+    /// Flat-emission buffer. When non-nil, ``ValueAndChoiceTreeInterpreter`` appends each node's flattened entries here in exactly `ChoiceSequence.flatten` order and returns placeholder trees, so the caller gets the sequence without a tree being built and torn down. Only `.getSize` leaves survive as real nodes: the bind handler reads them to choose group markers over bind markers. Requires `materializePicks == false`, since flatten emits only the selected branch.
+    package var flatOutput: ChoiceSequence?
+
+    /// Suppresses emission and restores real tree construction for sub-walks whose trees the tree path reads but flatten never contains: a sequence's length walk, whose tree's metadata names the open marker's range, and a metamorphic copy walk.
+    package var flatEmissionSuspended = false
+
+    /// Whether flat emission is active right now.
+    @inline(__always)
+    package var emitsFlat: Bool {
+        flatOutput != nil && flatEmissionSuspended == false
+    }
+
+    /// The index the next emitted entry will occupy. Handlers snapshot it before walking a callee so `runContinuation` can retro-insert the pair-group open marker.
+    @inline(__always)
+    package var flatCount: Int {
+        flatOutput?.count ?? 0
+    }
+
+    /// Appends one entry to the flat buffer when emission is active.
+    @inline(__always)
+    package mutating func emitFlat(_ entry: ChoiceSequenceValue) {
+        if emitsFlat {
+            flatOutput!.append(entry)
+        }
+    }
+
     // MARK: - Jump
 
     /// Returns a new context sharing this context's configuration but with a fresh PRNG seeded from the given value.
@@ -129,6 +157,8 @@ package struct GenerationContext: ~Copyable {
         let uniqueSeenSequences: [UInt64: Set<UInt64>]
         let filterObservations: [UInt64: FilterObservation]
         let classifications: [UInt64: [String: Set<UInt64>]]
+        /// Flat entries emitted before the audition began. A failed arm's entries are removed on restore, since flattening the recorded tree would not contain them either.
+        let flatCount: Int
     }
 
     package func auditionSnapshot() -> AuditionSnapshot {
@@ -136,7 +166,8 @@ package struct GenerationContext: ~Copyable {
             uniqueSeenKeys: uniqueSeenKeys,
             uniqueSeenSequences: uniqueSeenSequences,
             filterObservations: filterObservations,
-            classifications: classifications
+            classifications: classifications,
+            flatCount: flatCount
         )
     }
 
@@ -145,6 +176,9 @@ package struct GenerationContext: ~Copyable {
         uniqueSeenSequences = snapshot.uniqueSeenSequences
         filterObservations = snapshot.filterObservations
         classifications = snapshot.classifications
+        if flatOutput != nil, flatOutput!.count > snapshot.flatCount {
+            flatOutput!.removeSubrange(snapshot.flatCount...)
+        }
     }
 
     // MARK: - Unique decision replay

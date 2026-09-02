@@ -29,4 +29,13 @@ package enum ComparisonRuntime {
             body(base[index * 3], base[index * 3 + 1], base[index * 3 + 2])
         }
     }
+
+    /// Hands the whole record buffer since the last ``reset()`` to `body` in one call: three words per record, site then both operands. Nothing is called for an empty ring.
+    package static func withRecords(_ body: (UnsafeBufferPointer<UInt64>) -> Void) {
+        let count = exhaust_cmp_record_count()
+        guard count > 0, let base = exhaust_cmp_records() else {
+            return
+        }
+        body(UnsafeBufferPointer(start: base, count: count * 3))
+    }
 }

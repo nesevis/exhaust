@@ -24,10 +24,7 @@ extension FuzzRunner {
     ///
     /// The parent scaffolds every field but the grafted one, so a matched prefix from earlier fields survives while the frontier field takes the harvested operand — reflecting the whole value places it in choice space and preserves the rest, the discipline a field cascade needs to climb one comparison at a time. trace-cmp does not report which field a comparison read, so the field index is sprayed; a non-composite generator, an out-of-range field, or a field whose type is not ``OperandReconstructable`` is a cheap miss. Returns false on any miss.
     func reflectionGraftAttempt() -> Bool {
-        let parentStart = monotonicNanoseconds()
-        let picked = corpus.pickParent(random: randomUnit())
-        timing.parentSelectionNanoseconds += monotonicNanoseconds() - parentStart
-        guard let (parentIndex, parent) = picked else {
+        guard let (parentIndex, parent) = corpus.pickParent(random: randomUnit()) else {
             return false
         }
         let parentSequence = ChoiceSequence.flatten(parent.tree)
@@ -71,10 +68,7 @@ extension FuzzRunner {
     ///
     /// This is the trace-cmp path that needs no reflection: the harvest names the operand but not the draw that fed the comparison (either side may be a generated value or the constant it was checked against), so targets are chosen uniformly among value entries whose tag can encode the operand and whose declared range contains the encoding. The slot count is drawn per attempt: a single slot serves the magic-constant gate, while writing the same operand into several slots of one tag group is the agreement move. A property whose precondition demands that many components match (indistinguishability of two independently drawn states, for example) is climbed one comparison at a time by single slots but only satisfied when the matching positions agree at once. Multi-slot writes never mix tags: agreement is the same kind of value in the same kind of place. Overwriting in place preserves the sequence's length and structure, so the candidate rides the normal guided-materialization path; a value that fed a later structural decision diverges into its fallback handling like any other mutation. Integer tags only: strings, dates, and floating-point choices have no positional correspondence with a 64-bit operand word.
     func comparandSubstitutionAttempt() -> Bool {
-        let parentStart = monotonicNanoseconds()
-        let picked = corpus.pickParent(random: randomUnit())
-        timing.parentSelectionNanoseconds += monotonicNanoseconds() - parentStart
-        guard let (parentIndex, parent) = picked,
+        guard let (parentIndex, parent) = corpus.pickParent(random: randomUnit()),
               let mutated = comparandSubstitutionCandidate(parent: parent)
         else {
             return false
@@ -92,8 +86,16 @@ extension FuzzRunner {
         }
         let sequence = parent.sequence
         var candidateIndices: [(index: Int, pattern: UInt64)] = []
-        for (index, element) in sequence.enumerated() {
-            guard case let .value(entry) = element,
+        // The layout already lists every value position in ascending order; rescanning the whole sequence per attempt was 0.7% of a run. A parent without a layout (a test-built entry) falls back to the scan.
+        let valueIndices = parent.mutationLayout?.valueIndices
+            ?? sequence.indices.filter { index in
+                if case .value = sequence[index] {
+                    return true
+                }
+                return false
+            }
+        for index in valueIndices {
+            guard case let .value(entry) = sequence[index],
                   let pattern = entry.choice.tag.operandBitPattern(fromWord: word)
             else {
                 continue

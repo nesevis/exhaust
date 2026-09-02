@@ -58,10 +58,14 @@ package struct MutationBandit: Sendable {
     /// The arms this bandit draws from, in the order `probabilities` indexes them. Knob-gated inventories are not always a raw-value prefix (the `pairMutation` arms can be enabled without the `graphMutation` arms), so the bandit holds the arm list rather than a count.
     private let arms: [MutationArm]
 
+    /// The distribution over `weights`, recomputed only when a reward moves them. Picks happen once per candidate and rewards once per admission, so computing the distribution per pick allocated an array on every candidate for a value that changes a few times a second at most.
+    private var cachedProbabilities: [Double]
+
     /// Creates a bandit over the given arm inventory. The default covers the legacy inventory.
     package init(arms: [MutationArm] = MutationArm.legacyArms) {
         self.arms = arms
         weights = Array(repeating: 1.0, count: arms.count)
+        cachedProbabilities = Self.probabilities(over: weights)
     }
 
     /// Creates a bandit over the first `armCount` arms in ``MutationArm``'s raw-value order.
@@ -71,10 +75,14 @@ package struct MutationBandit: Sendable {
 
     /// The current selection probability of each arm: the exploration-smoothed, weight-proportional EXP3 distribution.
     package var probabilities: [Double] {
+        cachedProbabilities
+    }
+
+    private static func probabilities(over weights: [Double]) -> [Double] {
         let totalWeight = weights.reduce(0, +)
         return weights.map { weight in
-            (1 - Self.explorationRate) * weight / totalWeight
-                + Self.explorationRate / Double(weights.count)
+            (1 - explorationRate) * weight / totalWeight
+                + explorationRate / Double(weights.count)
         }
     }
 
@@ -107,5 +115,6 @@ package struct MutationBandit: Sendable {
                 weights[index] /= totalWeight
             }
         }
+        cachedProbabilities = Self.probabilities(over: weights)
     }
 }

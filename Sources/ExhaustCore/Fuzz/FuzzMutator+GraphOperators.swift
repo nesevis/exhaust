@@ -20,6 +20,9 @@ package struct MutationTargets: Sendable {
     /// Position ranges of twin spans under a common zip, grouped by twin key: siblings the generator drew from the same site, in position order within each group.
     let twinSpanGroups: [[ClosedRange<Int>]]
 
+    /// The graph's self-similarity fingerprints in ascending order, so typed crossover's per-draw walk is a fixed order without sorting dictionary keys on every call.
+    let sortedFingerprints: [UInt64]
+
     /// Builds the targeting tables for one entry's tree.
     ///
     /// Relation scopes are convergence-gated and always empty on a fresh graph, so they are not cached. Construction consumes no PRNG draws, so seeded replay streams are unchanged.
@@ -35,6 +38,7 @@ package struct MutationTargets: Sendable {
         self.tandem = tandem
         permutationScopes = PermutationQuery.build(graph: graph)
         twinSpanGroups = FuzzMutator.twinSpanGroups(graph: graph)
+        sortedFingerprints = graph.selfSimilarityGroups.keys.sorted()
     }
 }
 
@@ -268,7 +272,7 @@ extension FuzzMutator {
         // Fingerprint order is explicit rather than dictionary order so seeded runs replay identically across processes.
         var eligible: [(fingerprint: UInt64, recipients: [Int])] = []
         var totalWeight: UInt64 = 0
-        for fingerprint in targets.graph.selfSimilarityGroups.keys.sorted() {
+        for fingerprint in targets.sortedFingerprints {
             guard let recipients = targets.graph.selfSimilarityGroups[fingerprint],
                   recipients.isEmpty == false,
                   let donors = corpus.donorSpansByFingerprint[fingerprint],
