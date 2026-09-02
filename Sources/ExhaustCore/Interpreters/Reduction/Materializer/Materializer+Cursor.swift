@@ -30,7 +30,7 @@ extension Materializer {
             Cursor(from: ChoiceSequence())
         }
 
-        /// Whether the cursor can never produce another entry: already marked exhausted or positioned past the final entry. Spent is monotonic; the position never decreases and popping a scope cannot revive entries behind it. Zip scoping consults this to skip span computation whose only effect would be limiting reads that fail regardless.
+        /// Whether the cursor can never produce another entry: already marked exhausted or positioned past the final entry. Spent is monotonic within a walk; the position never decreases except through ``rewind(to:)``, which a backtrack audition uses to hand every arm the same prefix, and popping a scope cannot revive entries behind it. Zip scoping consults this to skip span computation whose only effect would be limiting reads that fail regardless.
         var isSpent: Bool {
             exhausted || position >= entries.count
         }
@@ -38,6 +38,17 @@ extension Materializer {
         init(from sequence: consuming ChoiceSequence) {
             entries = sequence
             effectiveEnd = entries.count
+        }
+
+        // MARK: - Checkpoints
+
+        var checkpoint: CursorCheckpoint {
+            CursorCheckpoint(position: position, exhausted: exhausted)
+        }
+
+        mutating func rewind(to checkpoint: CursorCheckpoint) {
+            position = checkpoint.position
+            exhausted = checkpoint.exhausted
         }
 
         // MARK: - Scope management
@@ -269,5 +280,15 @@ extension Materializer {
             }
             return nil
         }
+    }
+}
+
+// MARK: - Cursor Checkpoint
+
+extension Materializer {
+    /// The cursor read state a backtrack audition restores after a failed arm. Scope limits are not captured: an arm pushes and pops its own scopes symmetrically, so the scope stack is where it was by the time the arm's result is known.
+    struct CursorCheckpoint {
+        let position: Int
+        let exhausted: Bool
     }
 }

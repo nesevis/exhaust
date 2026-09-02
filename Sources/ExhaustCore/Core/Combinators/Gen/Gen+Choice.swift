@@ -13,7 +13,7 @@
 package extension Gen {
     /// Selects from multiple weighted generator options by random draw.
     ///
-    /// Weights are relative frequencies — they do not need to sum to any particular value. During reduction, earlier choices in the array and lower-weighted branches are tried first.
+    /// Weights are relative frequencies and do not need to sum to any particular value. Reduction orders branches by position alone: earlier choices in the array are tried first, and weights play no part.
     ///
     /// - Parameter choices: An array of (weight, generator) pairs. Must not be empty.
     /// - Returns: A generator that produces values from one of the provided generators.

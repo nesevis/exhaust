@@ -116,6 +116,34 @@ package struct GenerationContext: ~Copyable {
         (runIndex % 100) + 1
     }
 
+    // MARK: - Backtrack audition rollback
+
+    /// The value-side state a failed backtrack arm must not leave behind.
+    ///
+    /// The PRNG is deliberately absent: the draws a failed arm consumed are what make the next attempt independent of it. The unique decision trace is absent for the opposite reason: failure reproduction re-walks the run with the same seed, so the failed arm runs again and consumes its own decisions in order. Rolling those back would leave reproduction reading the winning arm's decision at the failed arm's site and diverging.
+    package struct AuditionSnapshot {
+        let uniqueSeenKeys: [UInt64: Set<AnyHashable>]
+        let uniqueSeenSequences: [UInt64: Set<UInt64>]
+        let filterObservations: [UInt64: FilterObservation]
+        let classifications: [UInt64: [String: Set<UInt64>]]
+    }
+
+    package func auditionSnapshot() -> AuditionSnapshot {
+        AuditionSnapshot(
+            uniqueSeenKeys: uniqueSeenKeys,
+            uniqueSeenSequences: uniqueSeenSequences,
+            filterObservations: filterObservations,
+            classifications: classifications
+        )
+    }
+
+    package mutating func restore(_ snapshot: AuditionSnapshot) {
+        uniqueSeenKeys = snapshot.uniqueSeenKeys
+        uniqueSeenSequences = snapshot.uniqueSeenSequences
+        filterObservations = snapshot.filterObservations
+        classifications = snapshot.classifications
+    }
+
     // MARK: - Unique decision replay
 
     /// Starts recording the accepted uniqueness decisions for a new generation run.

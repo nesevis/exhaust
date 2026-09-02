@@ -171,6 +171,30 @@ package enum CGSDerivativeInterpreter {
         rng: inout Xoshiro256,
         size: UInt64
     ) throws -> Output? {
+        if choices[0].isBacktrack {
+            // Backtrack nodes are opaque to CGS, so the whole node runs through the plain value interpreter on a context borrowed around this sampler's PRNG. The allocation this sampler exists to avoid is paid only at audition nodes.
+            var context = GenerationContext(maxRuns: 1, baseSeed: rng.seed, isFixed: true, size: size, prng: Xoshiro256(seed: 0))
+            swap(&rng, &context.prng)
+            let node: AnyGenerator = .impure(
+                operation: .pick(choices: choices, totalWeight: totalWeight),
+                continuation: { .pure($0) }
+            )
+            let value: Any?
+            do {
+                value = try ValueInterpreter<Any>.generateRecursiveAny(node, context: &context)
+            } catch {
+                swap(&rng, &context.prng)
+                throw error
+            }
+            swap(&rng, &context.prng)
+            guard let value else {
+                return nil
+            }
+            return try runContinuation(
+                value, continuation,
+                inputValue: inputValue, rng: &rng, size: size
+            )
+        }
         guard let selected = WeightedPickSelection.draw(from: choices, totalWeight: totalWeight, using: &rng) else {
             return nil
         }

@@ -246,6 +246,19 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
         }
     }
 
+    /// One arm of a backtrack recipe. The arm withdraws (produces nil) when `predicate` rejects the inner value, so a recipe can force auditions to fail and retry without a forward-only map in the way of reflection.
+    package struct BacktrackArm: Equatable, Hashable, Sendable, Codable {
+        package let weight: UInt64
+        package let recipe: GenRecipe
+        package let predicate: KnownPredicate
+
+        package init(weight: UInt64, recipe: GenRecipe, predicate: KnownPredicate) {
+            self.weight = weight
+            self.recipe = recipe
+            self.predicate = predicate
+        }
+    }
+
     /// Defunctionalized `SizeScaling` for scaled sequence recipes.
     package enum RecipeScaling: String, Equatable, Hashable, CaseIterable, Sendable, Codable {
         case constant
@@ -287,6 +300,7 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
         case unfolded(depthRange: ClosedRange<Int>)
         case getSized
         case isomorphed(GenRecipe, InvertibleTransform)
+        case backtrack([BacktrackArm], failable: Bool)
 
         package var description: String {
             switch self {
@@ -302,6 +316,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                     "oneOf(\(recipes.map(\.description).joined(separator: ", ")))"
                 case let .weightedOneOf(branches):
                     "weightedOneOf(\(branches.map { "\($0.weight): \($0.recipe)" }.joined(separator: ", ")))"
+                case let .backtrack(arms, failable):
+                    "backtrack(\(failable ? "failable" : "always"): \(arms.map { "\($0.weight): \($0.recipe) if \($0.predicate)" }.joined(separator: ", ")))"
                 case let .filtered(inner, predicate):
                     "\(inner).filter(\(predicate))"
                 case let .resized(inner, size: size):
@@ -366,6 +382,8 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                         return 1 + recipes.reduce(0) { $0 + $1.nodeCount }
                     case let .weightedOneOf(branches):
                         return 1 + branches.reduce(0) { $0 + $1.recipe.nodeCount }
+                    case let .backtrack(arms, _):
+                        return 1 + arms.reduce(0) { $0 + $1.recipe.nodeCount }
                     case let .filtered(inner, _):
                         return 1 + inner.nodeCount
                     case let .resized(inner, size: _):
@@ -427,6 +445,9 @@ package indirect enum GenRecipe: Equatable, Hashable, CustomStringConvertible, S
                         return recipes[0].outputType
                     case let .weightedOneOf(branches):
                         return branches[0].recipe.outputType
+                    case let .backtrack(arms, _):
+                        // The failable form boxes the value in an optional exactly as `.optional` does, which reports the inner type too.
+                        return arms[0].recipe.outputType
                     case let .filtered(inner, _):
                         return inner.outputType
                     case let .resized(inner, size: _):

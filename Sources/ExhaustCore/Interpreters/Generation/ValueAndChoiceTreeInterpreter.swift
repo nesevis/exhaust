@@ -124,6 +124,15 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 ]
             )
             return nil
+        } catch GeneratorError.backtrackExhausted {
+            ExhaustLog.warning(
+                category: .generation,
+                event: "backtrack_exhausted",
+                metadata: [
+                    "run": "\(context.runs)",
+                ]
+            )
+            return nil
         }
     }
 
@@ -169,6 +178,13 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             ExhaustLog.warning(
                 category: .generation,
                 event: "sparse_validity_condition",
+                metadata: ["run": "\(context.runs)"]
+            )
+            return nil
+        } catch GeneratorError.backtrackExhausted {
+            ExhaustLog.warning(
+                category: .generation,
+                event: "backtrack_exhausted",
                 metadata: ["run": "\(context.runs)"]
             )
             return nil
@@ -393,6 +409,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         totalWeight: UInt64,
         continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
     ) throws -> (Any, ChoiceTree)? {
+        if choices[0].isBacktrack {
+            return try handleBacktrack(choices, continuation: continuation, context: &context)
+        }
         let branchCount = UInt64(choices.count)
         guard let selectedChoice = WeightedPickSelection.draw(
             from: choices, totalWeight: totalWeight,
@@ -458,29 +477,14 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                     )
                 }
             } else {
-                var branchContext = context.jump(seed: jumpSeed)
-                do {
-                    if let result = try generateRecursiveAny(
-                        choice.generator, context: &branchContext
-                    ),
-                        let final = try runContinuation(
-                            result: result.0,
-                            calleeChoiceTree: result.1,
-                            continuation: continuation, context: &branchContext
-                        )
-                    {
-                        value = final.0
-                        branch = ChoiceTree.branch(
-                            fingerprint: fingerprint,
-                            weight: choice.weight,
-                            id: choice.id,
-                            branchCount: branchCount,
-                            choice: final.1
-                        )
-                    }
-                } catch GeneratorError.sparseValidityCondition, GeneratorError.uniqueBudgetExhausted {
-                    // Unselected-branch materialization is best-effort: a branch whose filter cannot be satisfied or whose unique budget is exhausted is skipped, exactly like a branch that produces nil. Only the selected branch's failures abort the run; without this catch, an unsatisfiable filter on an untaken branch kills runs that the value-only interpreter completes, breaking VI/VACTI parity.
-                }
+                branch = try materializeUnselectedBranch(
+                    choice,
+                    fingerprint: fingerprint,
+                    branchCount: branchCount,
+                    jumpSeed: jumpSeed,
+                    continuation: continuation,
+                    context: &context
+                )
             }
 
             if isSelected, let branch {
@@ -496,6 +500,112 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
         }
 
         return (value, .group(branches))
+    }
+
+    /// Materializes an unselected pick branch on a context jumped from `jumpSeed`, or returns nil when the branch cannot produce a value.
+    ///
+    /// Best-effort: a branch whose filter cannot be satisfied, whose unique budget is exhausted, or whose backtrack node has no producing arm is skipped, exactly like a branch that produces nil. Only the selected branch's failures abort the run; without the catch, an unsatisfiable filter on an untaken branch kills runs that the value-only interpreter completes, breaking VI/VACTI parity.
+    @inline(__always)
+    private static func materializeUnselectedBranch(
+        _ choice: ReflectiveOperation.PickTuple,
+        fingerprint: UInt64,
+        branchCount: UInt64,
+        jumpSeed: UInt64,
+        continuation: (Any) throws -> AnyGenerator,
+        context: inout GenerationContext
+    ) throws -> ChoiceTree? {
+        var branchContext = context.jump(seed: jumpSeed)
+        do {
+            if let result = try generateRecursiveAny(
+                choice.generator, context: &branchContext
+            ),
+                let final = try runContinuation(
+                    result: result.0,
+                    calleeChoiceTree: result.1,
+                    continuation: continuation, context: &branchContext
+                )
+            {
+                return ChoiceTree.branch(
+                    fingerprint: fingerprint,
+                    weight: choice.weight,
+                    id: choice.id,
+                    branchCount: branchCount,
+                    choice: final.1
+                )
+            }
+        } catch GeneratorError.sparseValidityCondition, GeneratorError.uniqueBudgetExhausted, GeneratorError.backtrackExhausted {}
+        return nil
+    }
+
+    /// Auditions the arms of a backtrack pick without replacement and records only the winner.
+    ///
+    /// The recorded node is an ordinary selected `.branch` carrying the winning arm's id and subtree, so every downstream pass reads it as a committed pick. A failed arm's draws stay consumed and its subtree is discarded; its value-side traces are rolled back because the value never reached the output. Under `materializePicks` the unselected arms are recorded on jumped contexts exactly as for a committed pick, seeded from the winning draw.
+    @inline(__always)
+    private static func handleBacktrack(
+        _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        continuation: (Any) throws -> AnyGenerator, context: inout GenerationContext
+    ) throws -> (Any, ChoiceTree)? {
+        let branchCount = UInt64(choices.count)
+        let fingerprint = choices[0].fingerprint
+        var audition = BacktrackAudition(choices)
+        var lastJumpSeed: UInt64 = 0
+        var winner: (arm: ReflectiveOperation.PickTuple, result: (Any, ChoiceTree))?
+        while winner == nil, let (arm, jumpSeed) = audition.drawNext(using: &context.prng) {
+            lastJumpSeed = jumpSeed
+            let snapshot = context.auditionSnapshot()
+            guard let result = try generateRecursiveAny(arm.generator, context: &context) else {
+                throw GeneratorError.choiceTreeConstructionFailed
+            }
+            if isNilOptional(result.0) {
+                context.restore(snapshot)
+            } else {
+                winner = (arm, result)
+            }
+        }
+        if winner == nil {
+            let absent = try BacktrackAudition.resolveExhaustion(of: choices, reportingDiagnostic: true)
+            guard let result = try generateRecursiveAny(absent.generator, context: &context) else {
+                throw GeneratorError.choiceTreeConstructionFailed
+            }
+            winner = (absent, result)
+        }
+        let (arm, result) = winner!
+        guard let final = try runContinuation(
+            result: result.0,
+            calleeChoiceTree: result.1,
+            continuation: continuation,
+            context: &context
+        ) else {
+            throw GeneratorError.choiceTreeConstructionFailed
+        }
+        let selectedBranch = ChoiceTree.branch(
+            fingerprint: fingerprint,
+            weight: arm.weight,
+            id: arm.id,
+            branchCount: branchCount,
+            choice: final.1,
+            isSelected: true
+        )
+        if context.materializePicks == false {
+            return (final.0, .group([selectedBranch]))
+        }
+        var branches = [ChoiceTree]()
+        branches.reserveCapacity(choices.count)
+        for choice in choices {
+            if choice.id == arm.id {
+                branches.append(selectedBranch)
+            } else if let branch = try materializeUnselectedBranch(
+                choice,
+                fingerprint: fingerprint,
+                branchCount: branchCount,
+                jumpSeed: lastJumpSeed,
+                continuation: continuation,
+                context: &context
+            ) {
+                branches.append(branch)
+            }
+        }
+        return (final.0, .group(branches))
     }
 
     @inline(__always)

@@ -42,7 +42,9 @@ extension Optional: _OptionalProtocol {
 }
 
 /// Returns whether the value is a boxed `Optional` in its `.none` case.
-private func isNilOptional(_ value: Any) -> Bool {
+///
+/// Only the outermost layer is inspected: a boxed `.some(nil)` is not nil. Backtrack auditions rely on that distinction, since an arm of type `Output?` where `Output` is itself optional legitimately produces `.some(nil)`.
+package func isNilOptional(_ value: Any) -> Bool {
     guard let optional = value as? _OptionalProtocol else {
         return false
     }
@@ -50,7 +52,7 @@ private func isNilOptional(_ value: Any) -> Bool {
 }
 
 /// Unwraps an `Any` value that may contain a boxed `Optional`, returning the inner value or the original if it is not optional.
-private func unwrapOptional(_ value: Any) -> Any {
+package func unwrapOptional(_ value: Any) -> Any {
     guard let optional = value as? _OptionalProtocol,
           let inner = optional._unwrapped
     else {

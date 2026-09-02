@@ -144,6 +144,18 @@ package let metaFuzzOperationFixtures: [MetaFuzzOperationFixture] = [
         )
     ),
     .init(
+        name: "pick with audition (backtrack always)",
+        recipe: .combinator(.backtrack([
+            .init(weight: 1, recipe: .leaf(.int(-10 ... 10)), predicate: .isEven),
+            .init(weight: 1, recipe: .leaf(.justInt(3)), predicate: .always),
+        ], failable: false)),
+        publicConstruction: .direct(entryPoint: "ReflectiveGenerator.backtrack(always:)"),
+        interpreterCapabilities: .init(
+            backward: .partial,
+            screening: .supported
+        )
+    ),
+    .init(
         name: "sequence",
         recipe: .combinator(.array(.leaf(.int(-10 ... 10)), lengthRange: 1 ... 2)),
         publicConstruction: .direct(entryPoint: "ReflectiveGenerator.array(length:)"),

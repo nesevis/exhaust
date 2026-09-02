@@ -33,6 +33,7 @@ package func recipeGenerator(producing type: RecipeType, maxDepth: Int) -> Gener
         (1, uniqueGenerator(producing: type, maxDepth: maxDepth)),
         (1, classifiedGenerator(producing: type, maxDepth: maxDepth)),
         (1, reifiedBindGenerator(producing: type, maxDepth: maxDepth)),
+        (1, backtrackGenerator(producing: type, maxDepth: maxDepth)),
     ]
     if type == .int {
         choices.append((1, boundRangeGenerator(maxDepth: maxDepth)))
@@ -307,6 +308,29 @@ private func weightedOneOfGenerator(producing type: RecipeType, maxDepth: Int) -
         }
         return Gen.arrayOf(branchGen, exactly: UInt64(count)).map { branches in
             GenRecipe.combinator(.weightedOneOf(branches))
+        }
+    }
+}
+
+/// Two or three arms, each gated by a known predicate so auditions withdraw and retry. An `always:` recipe gets an unconditional last arm, because exhaustion there ends the generation run rather than producing a value the oracles can inspect.
+private func backtrackGenerator(producing type: RecipeType, maxDepth: Int) -> Generator<GenRecipe> {
+    let predicates = KnownPredicate.applicable(to: type)
+    let armGen = Gen.choose(in: 1 ... 5 as ClosedRange<UInt64>).bind { weight in
+        Gen.choose(from: predicates).bind { predicate in
+            recipeGenerator(producing: type, maxDepth: maxDepth - 1).map { recipe in
+                GenRecipe.BacktrackArm(weight: weight, recipe: recipe, predicate: predicate)
+            }
+        }
+    }
+    return Gen.choose(in: 2 ... 3 as ClosedRange<Int>).bind { count in
+        Gen.arrayOf(armGen, exactly: UInt64(count)).bind { arms in
+            Gen.choose(from: [true, false]).map { failable in
+                var arms = arms
+                if failable == false, let last = arms.last {
+                    arms[arms.count - 1] = GenRecipe.BacktrackArm(weight: last.weight, recipe: last.recipe, predicate: .always)
+                }
+                return GenRecipe.combinator(.backtrack(arms, failable: failable))
+            }
         }
     }
 }

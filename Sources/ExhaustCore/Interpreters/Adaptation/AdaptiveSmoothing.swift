@@ -69,6 +69,10 @@ package enum AdaptiveSmoothing {
         maxTemperature: Double
     ) -> ReflectiveOperation {
         switch op {
+            case let .pick(choices, _) where choices[0].isBacktrack:
+                // Backtrack nodes are opaque to tuning, arms included: rebuilding their tuples would drop the audition flags.
+                return op
+
             case let .pick(choices, totalWeight):
                 // Compute Shannon entropy to measure how uniform the weight distribution is
                 let entropy: Double

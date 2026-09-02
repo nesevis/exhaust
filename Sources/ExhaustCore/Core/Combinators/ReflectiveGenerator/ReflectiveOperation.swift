@@ -78,17 +78,49 @@ package enum ReflectiveOperation {
         /// Type-erased because Swift enums cannot vary generic parameters across cases. The pick interpreter casts the continuation result back to the expected type at each branch boundary.
         package let generator: AnyGenerator
 
+        /// Marks a `backtrack` node. Generation interpreters audition the branches without replacement instead of committing to one draw; every other pass reads the node as a plain pick, which is what keeps the recorded artifact identical to a committed pick's. Uniform across a node's tuples and read from the first, like `fingerprint`. Tuning passes must return a node carrying this flag unchanged: rebuilding its tuples with the public initializer drops the flag and turns the node into a committed pick over nil-producing branches.
+        public let isBacktrack: Bool
+
+        /// Marks a `backtrack(failable:)` node, whose last tuple is a framework-built zero-weight `.just(nil)` branch with `id == choices.count - 1`. Exhaustion records that branch as the winner instead of throwing, so absence is an ordinary branch id that reduction, mutation, and reflection handle with no special case. Zero weight keeps it out of the audition draw while leaving it reachable for reflection and index flips.
+        public let isFailable: Bool
+
+        /// Fires before a `backtrack(always:)` node throws on exhaustion, so the diagnostic can point at the call site rather than the macro. Only the generation interpreters call it; materializer failures are silent candidate rejections.
+        package let onBacktrackExhausted: (() -> Void)?
+
         /// Creates a pick tuple with the given fingerprint, identifier, weight, and generator.
         public init(
             fingerprint: UInt64,
             id: UInt64,
             weight: UInt64,
-            generator: AnyGenerator
+            generator: AnyGenerator,
+            isBacktrack: Bool = false,
+            isFailable: Bool = false
         ) {
             self.fingerprint = fingerprint
             self.id = id
             self.weight = weight
             self.generator = generator
+            self.isBacktrack = isBacktrack
+            self.isFailable = isFailable
+            onBacktrackExhausted = nil
+        }
+
+        package init(
+            fingerprint: UInt64,
+            id: UInt64,
+            weight: UInt64,
+            generator: AnyGenerator,
+            isBacktrack: Bool,
+            isFailable: Bool,
+            onBacktrackExhausted: (() -> Void)?
+        ) {
+            self.fingerprint = fingerprint
+            self.id = id
+            self.weight = weight
+            self.generator = generator
+            self.isBacktrack = isBacktrack
+            self.isFailable = isFailable
+            self.onBacktrackExhausted = onBacktrackExhausted
         }
     }
 

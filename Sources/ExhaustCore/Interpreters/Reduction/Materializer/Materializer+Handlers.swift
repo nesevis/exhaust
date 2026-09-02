@@ -308,30 +308,16 @@ extension Materializer {
                         id: choice.id, branchCount: branchCount, choice: contTree,
                         isSelected: true
                     ))
-                } else {
-                    // Non-selected branch: minimize to produce the shortlex-simplest content. Values use reductionTarget (semantic zero when in range), nested picks select the first branch, and sequence lengths minimize.
-                    // The PRNG is only a fallback for operations without minimize-specific handling (filters, recursive unfolds).
-                    var branchContext = Context(
-                        cursor: Cursor.empty,
-                        prng: Xoshiro256(seed: jumpSeed),
-                        mode: .minimize,
-                        size: context.size
-                    )
-                    if let (result, branchTree) = try generateRecursive(
-                        choice.generator, with: inputValue, context: &branchContext,
-                        fallbackTree: nil
-                    ),
-                        let (_, contTree) = try runContinuation(
-                            result: result, calleeChoiceTree: branchTree, calleeStart: 0,
-                            continuation: continuation, inputValue: inputValue,
-                            context: &branchContext, continuationFallback: nil
-                        )
-                    {
-                        branches.append(.branch(
-                            fingerprint: fingerprint, weight: choice.weight,
-                            id: choice.id, branchCount: branchCount, choice: contTree
-                        ))
-                    }
+                } else if let branch = try materializeUnselectedBranch(
+                    choice,
+                    fingerprint: fingerprint,
+                    branchCount: branchCount,
+                    jumpSeed: jumpSeed,
+                    continuation: continuation,
+                    inputValue: inputValue,
+                    size: context.size
+                ) {
+                    branches.append(branch)
                 }
                 choiceIdx += 1
             }
@@ -360,6 +346,197 @@ extension Materializer {
 
         guard let value = finalValue else { return nil }
         return (value, .group(branches))
+    }
+
+    /// Materializes an unselected pick branch in minimize mode, or returns nil when the branch cannot produce a value.
+    ///
+    /// Minimizing produces the shortlex-simplest content: values use their reduction target (semantic zero when in range), nested picks select the first branch, and sequence lengths minimize, so pivot candidates start from a minimal baseline. The PRNG is only a fallback for operations without minimize-specific handling (filters, recursive unfolds).
+    @inline(__always)
+    private static func materializeUnselectedBranch(
+        _ choice: ReflectiveOperation.PickTuple,
+        fingerprint: UInt64,
+        branchCount: UInt64,
+        jumpSeed: UInt64,
+        continuation: (Any) throws -> AnyGenerator,
+        inputValue: Any,
+        size: UInt64
+    ) throws -> ChoiceTree? {
+        var branchContext = Context(
+            cursor: Cursor.empty,
+            prng: Xoshiro256(seed: jumpSeed),
+            mode: .minimize,
+            size: size
+        )
+        guard let (result, branchTree) = try generateRecursive(
+            choice.generator, with: inputValue, context: &branchContext,
+            fallbackTree: nil
+        ),
+            let (_, contTree) = try runContinuation(
+                result: result, calleeChoiceTree: branchTree, calleeStart: 0,
+                continuation: continuation, inputValue: inputValue,
+                context: &branchContext, continuationFallback: nil
+            )
+        else {
+            return nil
+        }
+        return .branch(
+            fingerprint: fingerprint, weight: choice.weight,
+            id: choice.id, branchCount: branchCount, choice: contTree
+        )
+    }
+
+    // MARK: - backtrack
+
+    /// Materializes a backtrack pick, auditioning its arms in the manner each mode allows.
+    ///
+    /// The first arm comes from the prefix or fallback where the mode reads them, exactly as for a committed pick. What differs is a nil arm result: `.exact` rejects the candidate, because the recorded arm no longer reproduces; `.guided` and `.generate` roll the arm's reads and emissions back and draw again among the arms not yet tried; `.minimize` tries the arms in declaration order so the node minimizes to its lowest producing arm. Exhaustion resolves to the absent arm on a failable node and to a throw on an always node, which the caller reports as a failed candidate. Flat emission writes the branch marker before the arm runs, so the rollback truncates the buffer rather than leaving a marker for an arm that lost.
+    @inline(__always)
+    static func handleBacktrack(
+        _ choices: ContiguousArray<ReflectiveOperation.PickTuple>,
+        continuation: (Any) throws -> AnyGenerator,
+        inputValue: Any,
+        context: inout Context,
+        calleeFallback: ChoiceTree? = nil,
+        continuationFallback: ChoiceTree? = nil
+    ) throws -> (Any, ChoiceTree)? {
+        let branchCount = UInt64(choices.count)
+        let fingerprint = choices[0].fingerprint
+        // Always consume a jump seed from the PRNG stream (VACTI pattern).
+        let jumpSeed = context.prng.next()
+
+        // Extract fallback branch info. For Gen.recursive, the pick site is wrapped in a bind, so unwrap to reach the group with branch alternatives.
+        let fbBranchId: UInt64?
+        let branchChoiceTree: ChoiceTree?
+        let effectiveFallback: ChoiceTree? = switch calleeFallback {
+            case let .bind(_, _, bound): bound
+            default: calleeFallback
+        }
+        if let effectiveFallback,
+           case let .group(children, _, _) = effectiveFallback,
+           case let .branch(b) = children.first(where: \.isSelected), b.isSelected
+        {
+            fbBranchId = b.id
+            branchChoiceTree = b.choice
+        } else {
+            fbBranchId = nil
+            branchChoiceTree = nil
+        }
+        let (branchBodyFallback, branchContFallback) = decomposeNonGroupFallback(branchChoiceTree)
+
+        var audition = BacktrackAudition(choices)
+        var pendingArm: ReflectiveOperation.PickTuple?
+        switch context.mode {
+            case .exact:
+                guard let prefixBranch = context.cursor.tryConsumeBranch() else {
+                    throw RejectionError()
+                }
+                let exactIndex = Int(prefixBranch.id)
+                guard exactIndex < choices.count else { return nil }
+                pendingArm = choices[exactIndex]
+
+            case .guided:
+                if let prefixBranch = context.cursor.tryConsumeBranch() {
+                    let guidedIndex = Int(prefixBranch.id)
+                    guard guidedIndex < choices.count else { return nil }
+                    pendingArm = choices[guidedIndex]
+                } else if let fbBranchId {
+                    let fallbackIndex = Int(fbBranchId)
+                    guard fallbackIndex < choices.count else { return nil }
+                    pendingArm = choices[fallbackIndex]
+                }
+
+            case .generate, .minimize:
+                break
+        }
+        if let pendingArm {
+            audition.exclude(id: pendingArm.id)
+        }
+
+        var selection: (arm: ReflectiveOperation.PickTuple, value: Any, tree: ChoiceTree, bodyStart: Int)?
+        while selection == nil {
+            let arm: ReflectiveOperation.PickTuple
+            if let pending = pendingArm {
+                arm = pending
+                pendingArm = nil
+            } else {
+                switch context.mode {
+                    case .exact:
+                        throw RejectionError()
+                    case .minimize:
+                        arm = try audition.nextInOrder()
+                            ?? BacktrackAudition.resolveExhaustion(of: choices, reportingDiagnostic: false)
+                    case .guided, .generate:
+                        arm = try audition.drawNext(using: &context.prng)?.arm
+                            ?? BacktrackAudition.resolveExhaustion(of: choices, reportingDiagnostic: false)
+                }
+            }
+            let snapshot = context.auditionSnapshot()
+            if context.skipTree {
+                // Flat emission mirrors flatten's selected-branch group: group open, branch marker, branch body plus continuation (pair-grouped by runContinuation when the continuation is non-pure), group close.
+                context.emitFlat(.group(true))
+                context.emitFlat(.branch(.init(
+                    id: arm.id,
+                    branchCount: branchCount,
+                    fingerprint: fingerprint
+                )))
+            }
+            let bodyStart = context.flatCount
+            guard let (value, tree) = try generateRecursive(
+                arm.generator, with: inputValue, context: &context,
+                fallbackTree: branchBodyFallback
+            ) else { return nil }
+            if isNilOptional(value), BacktrackAudition.isAbsentArm(arm, in: choices) == false {
+                context.restore(snapshot)
+                continue
+            }
+            selection = (arm, value, tree, bodyStart)
+        }
+        let (arm, value, tree, bodyStart) = selection!
+
+        if context.skipTree {
+            guard let continued = try runContinuation(
+                result: value, calleeChoiceTree: .just, calleeStart: bodyStart,
+                continuation: continuation, inputValue: inputValue,
+                context: &context,
+                continuationFallback: branchContFallback ?? continuationFallback
+            ) else { return nil }
+            context.emitFlat(.group(false))
+            return continued
+        }
+
+        guard let (contValue, contTree) = try runContinuation(
+            result: value, calleeChoiceTree: tree, calleeStart: bodyStart,
+            continuation: continuation, inputValue: inputValue,
+            context: &context,
+            continuationFallback: branchContFallback ?? continuationFallback
+        ) else { return nil }
+        let selectedBranch = ChoiceTree.branch(
+            fingerprint: fingerprint, weight: arm.weight,
+            id: arm.id, branchCount: branchCount, choice: contTree,
+            isSelected: true
+        )
+        guard context.materializePicks else {
+            return (contValue, .group([selectedBranch]))
+        }
+
+        var branches = [ChoiceTree]()
+        branches.reserveCapacity(choices.count)
+        for choice in choices {
+            if choice.id == arm.id {
+                branches.append(selectedBranch)
+            } else if let branch = try materializeUnselectedBranch(
+                choice,
+                fingerprint: fingerprint,
+                branchCount: branchCount,
+                jumpSeed: jumpSeed,
+                continuation: continuation,
+                inputValue: inputValue,
+                size: context.size
+            ) {
+                branches.append(branch)
+            }
+        }
+        return (contValue, .group(branches))
     }
 
     // MARK: - sequence
