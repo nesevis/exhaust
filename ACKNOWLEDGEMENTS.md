@@ -1,6 +1,6 @@
 # Acknowledgements
 
-Work on what would become Exhaust started in [early 2025](https://hachyderm.io/@nesevis/113789286635356164) after I came across Harrison Goldstein’s PhD dissertation [Property-Based Testing for the People](https://repository.upenn.edu/server/api/core/bitstreams/8abd65a8-7b3c-43c4-b004-fb756f3bc466/content). I’ve had a longstanding interest in PBT and testing more generally, and have been fascinated by the ergonomics and integrated test case reduction in [Hypothesis](https://hypothesis.works/), the industry leader in PBT.
+Work on what would become Exhaust started in [early 2025](https://hachyderm.io/@nesevis/113789286635356164) after I came across Harrison Goldstein's PhD dissertation [Property-Based Testing for the People](https://repository.upenn.edu/server/api/core/bitstreams/8abd65a8-7b3c-43c4-b004-fb756f3bc466/content). I've had a longstanding interest in PBT and testing more generally, and have been fascinated by the ergonomics and integrated test case reduction in [Hypothesis](https://hypothesis.works/), the industry leader in PBT.
 
 I wanted a similarly powerful and ergonomic PBT library for Swift. Exhaust is my attempt at creating that.
 
@@ -41,11 +41,43 @@ Links:
 1. [Test Case Reduction via Test Case Generation: Insights from the Hypothesis Reducer](https://www.semanticscholar.org/paper/Test-Case-Reduction-via-Test-Case-Generation%3A-from-MacIver-Donaldson/6d72e1bd7743f12b48e20f7d234407e37b67e009) (2020)
 2. [Improving Binary Search by Guessing](https://notebook.drmaciver.com/posts/2019-04-30-13:03.html)
 
+## Alperen Keles and Etna
+
+Alperen Keles' PhD thesis and academic project in part revolves around creating a shared empirical understanding of the PBT landscape.
+
+His project Etna is a language agnostic evaluation harness for property-based testing libraries, and Exhaust has leaned on it to guide the development and continual refinement of the coverage-guided fuzzing feature. It has also been very helpful as a yardstick for generation and reduction performance more generally.
+
+Links:
+1. [Designing Effective Property-Based Testing Frameworks](https://alperenkeles.com/documents/thesis.pdf) (2026)
+2. [Etna: An Evaluation Platform for Property-Based Testing](https://arxiv.org/abs/2603.27002) (2026, with Shi, Kamath, Liu, Mert, Goldstein, Pierce, Lampropoulos)
+3. [Evaluating Shrinking (Experience Report)](https://dl.acm.org/doi/10.1145/3830439.3831271) (2026, with Miao, Lampropoulos)
+4. [Programmable Property-Based Testing](https://dl.acm.org/doi/10.1145/3828685) (2026, with Frank, Mert, Goldstein, Lampropoulos)
+
 ## Other influences
+
+### Fuzzing
+
+Exhaust's approach to fuzzing is best described as coverage-guided PBT, built on the same machinery as the PBT search loop. It also borrows liberally from approaches across the spectrum:
+
+- Hit count buckets and (edge, hit count bucket) pair novelty from AFL
+- Comparison operands from REDQUEEN via AFL++
+- Fallback to fresh generation, and corpus admission of discarded values from FuzzChick
+- Activated swarm testing to skew the branch selections of mutated candidates, to preference varying non-uniform directions
+- STADS' species discovery estimate as an opt-in stopping condition
+
+_It is still marked as an experimental feature_
+
+Links:
+1. [Coverage Guided, Property Based Testing](https://dl.acm.org/doi/10.1145/3360607) (2019, Lampropoulos, Hicks, Pierce)
+2. [Semantic Fuzzing with Zest](https://dl.acm.org/doi/10.1145/3293882.3330576) (2019, Padhye, Lemieux, Sen, Papadakis, Le Traon)
+3. [STADS: Software Testing as Species Discovery](https://dl.acm.org/doi/10.1145/3210309) (2018, Böhme)
+4. [REDQUEEN: Fuzzing with Input-to-State Correspondence](https://www.ndss-symposium.org/ndss-paper/redqueen-fuzzing-with-input-to-state-correspondence/) (2019, Aschermann, Schumilo, Blazytko, Gawlik, Holz)
+5. [Swarm Testing](https://dl.acm.org/doi/10.1145/2338965.2336763) (2012, Groce, Zhang, Eide, Chen, Regehr)
+6. [Activated Swarm Testing](https://tybug.dev/activated-swarm-testing/) (2026, blog post, Liam DeVoe)
 
 ### Hillel Wayne
 
-Hillel’s primary area of focus is formal methods, but he has written extensively about testing and PBT in particular for a long time.
+Hillel's primary area of focus is formal methods, but he has written extensively about testing and PBT in particular for a long time.
 
 1. [Blog](https://www.hillelwayne.com)
 2. [Logic for Programmers](https://leanpub.com/logic/c/wobsite-HexyEt7TTTe3)
@@ -59,7 +91,7 @@ Stevan's writing about the PBT ecosystem and parallel stateful testing has been 
 
 ### Johannes Link
 
-jqwik maintainer Johannes Link’s [Shrinking Challenge](https://github.com/jlink/shrinking-challenge) repository was a perfect test bed for refining Exhaust’s test case reducer.
+jqwik maintainer Johannes Link's [Shrinking Challenge](https://github.com/jlink/shrinking-challenge) repository was a perfect test bed for refining Exhaust's test case reducer.
 
 ### Alfredo Sepúlveda-Jiménez
 
@@ -114,15 +146,15 @@ Exhaust leans on 3 of PF's focused libraries:
 
 ### Swift Testing
 
-Exhaust’s macros were modelled on those in Swift Testing, including naming conventions and its closure analysis code.
+Exhaust's macros were modelled on those in Swift Testing, including naming conventions and its closure analysis code.
 
 ### Hedgehog
 
-Hedgehog’s size cycling and scaling API was a big inspiration for how Exhaust manages complexity scaling during random generation. [Github](https://github.com/jkachmar/haskell-hedgehog/)
+Hedgehog's size cycling and scaling API was a big inspiration for how Exhaust manages complexity scaling during random generation. [Github](https://github.com/jkachmar/haskell-hedgehog/)
 
 ### Fast-check, jqwik, and CsCheck
 
-I used tests from these libraries to help verify Exhaust’s reduction code
+I used tests from these libraries to help verify Exhaust's reduction code
 
 - [Fast-check](https://fast-check.dev/) JS/TS
 - [jqwik](https://jqwik.net/) Java/Kotlin
