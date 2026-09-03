@@ -392,8 +392,8 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
         // swiftlint:disable:next force_cast
         let length = lengthValue as! UInt64
         let count = try SharedInterpreterHelpers.sequenceElementCount(length)
+        // Reserved inside each element loop: the batch path returns without appending, and reserving allocates.
         var elements: [Any] = []
-        elements.reserveCapacity(count)
         // Unwrap a contramap layer before matching: forward generation ignores the backward transform, so contramap-wrapped elements (for example character generators) can take the fused loop below as long as the outer continuation is applied to each element.
         var fusedElementGen = elementGen
         var contramapContinuation: ((Any) throws -> AnyGenerator)?
@@ -432,6 +432,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 return try generateRecursiveAny(nextGen, context: &context)
             }
 
+            elements.reserveCapacity(count)
             for elementIndex in 0 ..< count {
                 try SharedInterpreterHelpers.checkGenerationDeadline(context.deadlineNanoseconds, elementIndex: elementIndex)
                 let rawBits = context.prng.next(in: effectiveRange)
@@ -466,6 +467,7 @@ package struct ValueInterpreter<Element>: ~Copyable, ExhaustIterator {
                 elements.append(element)
             }
         } else {
+            elements.reserveCapacity(count)
             for elementIndex in 0 ..< count {
                 try SharedInterpreterHelpers.checkGenerationDeadline(context.deadlineNanoseconds, elementIndex: elementIndex)
                 guard let element = try generateRecursiveAny(
