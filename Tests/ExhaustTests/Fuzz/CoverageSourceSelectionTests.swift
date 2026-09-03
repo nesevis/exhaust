@@ -3,7 +3,7 @@ import ExhaustCore
 import Foundation
 import Testing
 
-#if DEBUG
+#if DEBUG && !EXHAUST_BINARY_CORE
     /// Which recorder a production run picks, driven by what the registries hold. Registers into both process-global registries, so it lives under the serialized registry umbrella.
     extension CoverageRegistryTests {
         @Suite("Coverage source selection")

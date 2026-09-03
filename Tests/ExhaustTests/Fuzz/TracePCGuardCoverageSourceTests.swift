@@ -3,8 +3,8 @@ import ExhaustCore
 import Foundation
 import Testing
 
-// The suite drives the guard registry through `resetRegistryForTesting()`, which exists in debug builds only, so the whole suite is absent from a release test build rather than failing to compile it.
-#if DEBUG
+// The suite drives the guard registry through `resetRegistryForTesting()`, which ExhaustCore compiles into debug builds only. A test target always compiles in debug, so `#if DEBUG` alone does not detect the release xcframework; EXHAUST_BINARY_CORE does, and drops the suite rather than failing to compile it.
+#if DEBUG && !EXHAUST_BINARY_CORE
     /// The guard registry and the thread binding are process-global, so these tests serialize and reset the registry around each use. The test binary is uninstrumented; every guard here is synthetic.
     extension CoverageRegistryTests {
         @Suite("TracePCGuardCoverageSource", .serialized)

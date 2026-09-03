@@ -125,10 +125,13 @@ let package = Package(
             swiftSettings: strictConcurrencySettings,
             plugins: swiftLintPlugins
         ),
+        // EXHAUST_BINARY_CORE marks the build where ExhaustCore is the release xcframework rather than a source target. Tests that reach for ExhaustCore's `#if DEBUG` helpers must check it: the test target always compiles in debug, so its own `#if DEBUG` says nothing about how ExhaustCore was built.
         .testTarget(
             name: "ExhaustTests",
             dependencies: ["Exhaust", "ExhaustCore", "ExhaustTestSupport"],
-            swiftSettings: strictConcurrencySettings,
+            swiftSettings: strictConcurrencySettings + (usePrecompiled
+                ? [.define("EXHAUST_BINARY_CORE")]
+                : []),
             plugins: swiftLintPlugins
         ),
         // Calibration probe for the meta-test node budget; see MetaGeneratorPropertyTests.metaRecipeNodeBudget.

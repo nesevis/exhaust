@@ -445,7 +445,7 @@ private func bucketedSource() -> SyntheticCoverageSource<Int> {
     })
 }
 
-#if DEBUG
+#if DEBUG && !EXHAUST_BINARY_CORE
     /// The trace-pc-guard registry is process-global, so this runs serialized with the other registry suites and resets it around use.
     extension CoverageRegistryTests {
         @Suite("FuzzRunner lane ownership under trace-pc-guard", .serialized)
