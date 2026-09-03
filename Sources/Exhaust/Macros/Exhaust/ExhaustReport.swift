@@ -71,6 +71,9 @@ public struct ExhaustReport: Sendable {
     /// Advisory message for a run that skipped nearly every invocation, stashed so the `#expect` wrappers can re-report it outside their known-issue scope.
     package var skipRateWarning: String?
 
+    /// Failure message for a run whose suppression scope absorbed an assertion failure the detection closure never saw. Stashed so the `#expect` wrappers can re-report it outside their scope, where the assertion's own issue was swallowed.
+    package var unobservedAssertionFailure: String?
+
     /// Records one source-located diagnostic rerun after the pipeline has produced its report.
     package mutating func recordDiagnosticInvocation() {
         diagnosticInvocations += 1
