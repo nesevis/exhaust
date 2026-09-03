@@ -3,6 +3,12 @@
 //  Exhaust
 //
 
+// Shared by every `.lazy` node: the unit inner generator and the backward map that recovers the unit, neither of which depends on the node.
+private let lazyUnitInner = Gen.just(()).erase()
+private func lazyUnitBackward(_: Any) throws -> Any {
+    ()
+}
+
 public extension ReflectiveGenerator {
     /// Creates a generator that always produces the same constant value.
     ///
@@ -13,9 +19,9 @@ public extension ReflectiveGenerator {
         Gen.just(value).wrapped(isReflective: true)
     }
 
-    /// Defers construction of a generator until generation actually reaches it.
+    /// Defers construction of a generator until generation first reaches it, then keeps the result.
     ///
-    /// Use this for recursive generators, or for expensive branches of `.oneOf`, where building the subgenerator eagerly would rebuild the whole recursive tree on every invocation of the enclosing generator. The closure runs each time generation or replay reaches this point, so it must be pure: given no input, it must always return a structurally identical generator, or replay and reduction lose determinism.
+    /// Use this for recursive generators, or for expensive branches of `.oneOf`, where building the subgenerator eagerly would rebuild the whole recursive tree on every invocation of the enclosing generator. The closure runs once, the first time generation, replay, or reflection reaches this point, and the generator it returns serves every later pass; it must be pure: given no input, it must always return a structurally identical generator, or replay and reduction lose determinism. Without the retained result, every draw through a recursive generator rebuilds its sub-generators, which on a type-directed grammar costs more than interpreting them.
     ///
     /// ```swift
     /// .oneOf(
@@ -25,21 +31,30 @@ public extension ReflectiveGenerator {
     /// ```
     ///
     /// - Note: Implemented as a unit `bound`, so reflection passes through into the constructed generator: the backward direction trivially recovers the unit input and delegates to `make()`'s generator. The wrapper reports reflective regardless of the inner generator; a non-reflective inner surfaces at runtime through `#examine` or a failing `reflecting:`, the same exposure every `bound` continuation has.
-    /// - Parameter make: A pure function that constructs the deferred generator. It runs on every generation, replay, and reflection pass, so it must always return a structurally identical generator.
-    /// - Returns: A generator that builds and runs `make()`'s result on demand.
+    /// - Note: The built generator is retained by this one for as long as this one lives. A generator that refers back to itself through `.lazy` therefore forms a reference cycle; that is harmless for generators held in globals or statics, which is where recursive generators live, and leaks a handful of nodes per construction otherwise.
+    /// - Parameter make: A pure function that constructs the deferred generator. It runs once per constructed `.lazy` generator, so it must return a structurally identical generator whenever it runs.
+    /// - Returns: A generator that builds `make()`'s result on first use and runs it thereafter.
     static func lazy(
         _ make: @Sendable @escaping () -> ReflectiveGenerator<Output>,
         fileID: StaticString = #fileID,
         line: UInt = #line,
         column: UInt = #column
     ) -> ReflectiveGenerator<Output> {
-        ReflectiveGenerator<Void>.just(()).bound(
-            forward: { _ in make() },
-            backward: { _ in () },
-            fileID: fileID,
-            line: line,
-            column: column
-        )
+        // The same node `bound(forward:backward:)` builds, constructed here so the slot can hold the erased generator: going through `bound` would erase the cached typed generator on every draw, which is the copy the slot exists to avoid.
+        let built = BuiltGeneratorSlot()
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
+        return Gen.liftF(.transform(
+            kind: .bind(
+                fingerprint: fingerprint,
+                forward: { _ in
+                    built.generator { make().gen.erase() }
+                },
+                backward: lazyUnitBackward,
+                inputType: Void.self,
+                outputType: Output.self
+            ),
+            inner: lazyUnitInner
+        )).wrapped(isReflective: true)
     }
 
     /// Generates arbitrary `Bool` values. Reduces toward `false`.

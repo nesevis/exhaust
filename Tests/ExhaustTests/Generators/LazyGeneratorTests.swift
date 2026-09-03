@@ -4,6 +4,7 @@
 //
 
 import Exhaust
+import Foundation
 import Testing
 
 @Suite("lazy generator")
@@ -23,6 +24,36 @@ struct LazyGeneratorTests {
         }
 
         #expect(!counter.isEmpty)
+    }
+
+    @Test("Construction runs once and later draws reuse the built generator")
+    func constructionRunsOnceAndLaterDrawsReuseTheBuiltGenerator() {
+        let counter = ConstructionCounter()
+        let generator: ReflectiveGenerator<Int> = .lazy {
+            counter.increment()
+            return .int(in: 0 ... 9)
+        }
+
+        #exhaust(#gen(generator), .budget(.custom(screening: 0, sampling: 200))) { value in
+            (0 ... 9).contains(value)
+        }
+
+        #expect(counter.count == 1)
+    }
+
+    @Test("Construction runs once under parallel lanes")
+    func constructionRunsOnceUnderParallelLanes() {
+        let counter = ConstructionCounter()
+        let generator: ReflectiveGenerator<Int> = .lazy {
+            counter.increment()
+            return .int(in: 0 ... 9)
+        }
+
+        #exhaust(#gen(generator), .budget(.custom(screening: 0, sampling: 2000)), .parallelize(lanes: .four)) { value in
+            (0 ... 9).contains(value)
+        }
+
+        #expect(counter.count == 1)
     }
 
     @Test("Produces the wrapped generator's values")
@@ -117,10 +148,19 @@ struct LazyGeneratorTests {
 // MARK: - Helpers
 
 private final class ConstructionCounter: @unchecked Sendable {
-    private(set) var count = 0
+    private let lock = NSLock()
+    private var storage = 0
+
+    var count: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage
+    }
 
     func increment() {
-        count += 1
+        lock.lock()
+        defer { lock.unlock() }
+        storage += 1
     }
 
     var isEmpty: Bool {
