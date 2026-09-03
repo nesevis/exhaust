@@ -235,7 +235,7 @@ public extension __ExhaustRuntime {
 
     /// Runs a coverage-guided `time:` fuzz run with a Void/#expect/#require closure.
     ///
-    /// The detection closure (the property with `#expect` rewritten to `#require`) records an issue on every failing attempt, and a fuzz run deliberately keeps failing past the first failure, so the whole run executes inside `withRoutedExpectedIssue(isIntermittent:_:)`. The fault inventory is reported afterwards, outside that scope, so it surfaces as a real failure.
+    /// The detection closure (the property with `#expect` rewritten to `#require`) records an issue on every failing attempt, and a fuzz run deliberately keeps failing past the first failure, so the whole run executes inside ``withAbsorbedIssues(into:isIntermittent:framework:_:)``. The fault inventory is reported afterwards, outside that scope, so it surfaces as a real failure.
     @discardableResult
     package static func __exploreTimeExpect<Output>(
         _ refGen: ReflectiveGenerator<Output>,
@@ -258,7 +258,8 @@ public extension __ExhaustRuntime {
             column: column,
             runCore: { persistence in
                 nonisolated(unsafe) var pipelineReport: FuzzReport?
-                withRoutedExpectedIssue(isIntermittent: true) {
+                // No ledger: a fuzz run reports its failures from the fault inventory afterwards, so it acts on nothing the scope absorbs.
+                withAbsorbedIssues {
                     pipelineReport = runExploreTimeCore(
                         gen: refGen.gen,
                         generatorIsReflective: refGen.isReflective,
@@ -345,9 +346,9 @@ public extension __ExhaustRuntime {
             column: column,
             runCore: { persistence in
                 nonisolated(unsafe) var pipelineReport: FuzzReport?
-                // withExpectedIssue cannot be used on a GCD thread because Test.current is nil, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
+                // The framework is named rather than resolved: this runs on a GCD thread, where Test.current is nil and resolution reports XCTest for a Swift Testing run. The async path is always in a Swift Testing context.
                 #if canImport(Testing)
-                    withKnownIssue(isIntermittent: true) {
+                    withAbsorbedIssues(framework: .swiftTesting) {
                         pipelineReport = runExploreTimeCore(
                             gen: refGen.gen,
                             generatorIsReflective: refGen.isReflective,

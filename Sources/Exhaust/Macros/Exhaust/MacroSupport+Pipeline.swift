@@ -32,6 +32,11 @@ package extension __ExhaustRuntime {
         let statsAccumulator: OpenPBTStatsAccumulator?
         let skipCounter: SkipCounter?
 
+        /// The run's absorbed-issue ledger when the caller runs under a suppression scope, or nil for a `Bool` property, which runs without one.
+        ///
+        /// Present only to reach the sampling lanes: a lane runs on a `concurrentPerform` worker, which inherits neither the scope nor the issue sink bound around the run.
+        let absorbedIssues: AbsorbedIssues?
+
         /// The skip count accumulated so far, for phase-delta accounting. Skips land on the shared counter from any lane, so a delta taken outside a concurrent section is exact.
         var skipCount: Int {
             skipCounter?.count ?? 0
@@ -454,6 +459,25 @@ package extension __ExhaustRuntime {
 
     // MARK: - Sampling Phase
 
+    /// Runs one sampling lane under its own suppression scope, so a worker thread absorbs and records what the run's own scope cannot reach.
+    ///
+    /// A known-issue scope and the issue sink are both task-local, and a `concurrentPerform` worker inherits neither: without this an assertion the detection rewrite never saw would record against no test at all, and Exhaust's own reports from the lane would misroute the way they do on any GCD worker. The lane's sink is collected rather than replayed here, because replaying it belongs on the thread that started the lanes.
+    ///
+    /// Runs `body` directly when the caller has no ledger. A `Bool` property runs without a suppression scope, and adding one here would swallow issues that currently surface.
+    private static func withLaneSuppression<Result>(
+        _ ledger: AbsorbedIssues?,
+        collectingSinksInto sinks: SendableBox<[DeferredIssueSink]>,
+        _ body: () -> Result
+    ) -> Result {
+        guard let ledger else { return body() }
+
+        let sink = DeferredIssueSink()
+        sinks.withValue { $0.append(sink) }
+        return DeferredIssueSink.$current.withValue(sink) {
+            ledger.absorbing(body)
+        }
+    }
+
     /// Runs the random sampling phase after screening completes.
     ///
     /// When `context.parallelLanes` is greater than one, splits the budget across multiple GCD threads (one per lane). Otherwise runs sequentially.
@@ -510,20 +534,29 @@ package extension __ExhaustRuntime {
             let resultStorage = SendableBox<[BatchResult<Output>?]>(
                 Array(repeating: nil, count: laneCount)
             )
+            let laneSinks = SendableBox<[DeferredIssueSink]>([])
             DispatchQueue.concurrentPerform(iterations: laneCount) { laneIndex in
                 let startIndex = UInt64(laneIndex) * baseIterationsPerLane
                 let iterationsForLane = baseIterationsPerLane + (laneIndex == laneCount - 1 ? remainder : 0)
-                nonisolated(unsafe) let batchResult = runSamplingBatch(
-                    gen: unsafeContext.gen,
-                    property: unsafeContext.property,
-                    baseSeed: baseSeed,
-                    startIndex: startIndex,
-                    count: iterationsForLane,
-                    lane: laneIndex,
-                    statsPropertyName: statsPropertyName,
-                    canceled: canceled
-                )
+                nonisolated(unsafe) let batchResult = withLaneSuppression(
+                    context.absorbedIssues,
+                    collectingSinksInto: laneSinks
+                ) {
+                    runSamplingBatch(
+                        gen: unsafeContext.gen,
+                        property: unsafeContext.property,
+                        baseSeed: baseSeed,
+                        startIndex: startIndex,
+                        count: iterationsForLane,
+                        lane: laneIndex,
+                        statsPropertyName: statsPropertyName,
+                        canceled: canceled
+                    )
+                }
                 resultStorage.withValue { $0[laneIndex] = batchResult }
+            }
+            for sink in laneSinks.value {
+                sink.replay()
             }
             batchResults = resultStorage.value.compactMap(\.self)
         }

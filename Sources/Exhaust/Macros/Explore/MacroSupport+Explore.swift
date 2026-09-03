@@ -331,7 +331,8 @@ public extension __ExhaustRuntime {
             let boolProperty = wrapDetectionProperty(detection)
 
             nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
-            withRoutedExpectedIssue(isIntermittent: true) {
+            // No ledger: a directed run reports its own failures from the report it returns, so it acts on nothing the scope absorbs.
+            withAbsorbedIssues {
                 pipelineResult = __explore(
                     refGen,
                     settings: settings + [.suppress(.issueReporting)],
@@ -380,7 +381,7 @@ public extension __ExhaustRuntime {
                     )
                 }
             } else {
-                // The pipeline ran with issue reporting suppressed inside withRoutedExpectedIssue, so its coverage issues never surfaced. Re-report them here with the caller's own suppression setting.
+                // The pipeline ran with issue reporting suppressed inside the absorption scope, so its coverage issues never surfaced. Re-report them here with the caller's own suppression setting.
                 reportExploreCoverageIssues(
                     report: report,
                     suppressIssueReporting: suppressIssueReporting,
@@ -458,10 +459,10 @@ public extension __ExhaustRuntime {
 
         var report = await dispatchToGCD(reserving: LaneReservation.single) { () -> ExploreReport<Output> in
             nonisolated(unsafe) var pipelineResult: ExploreReport<Output>?
-            // withExpectedIssue cannot be used on a GCD thread because Test.current is nil, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
+            // The framework is named rather than resolved: this runs on a GCD thread, where Test.current is nil and resolution reports XCTest for a Swift Testing run. The async path is always in a Swift Testing context.
             #if canImport(Testing)
                 ExhaustTraitConfiguration.$current.withValue(traitConfig) {
-                    withKnownIssue(isIntermittent: true) {
+                    withAbsorbedIssues(framework: .swiftTesting) {
                         pipelineResult = __explore(
                             refGen,
                             settings: settings + [.suppress(.issueReporting)],

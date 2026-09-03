@@ -244,6 +244,7 @@ public extension __ExhaustRuntime {
         settings: [PropertySettings],
         reflecting: Output?,
         skipCounter: SkipCounter? = nil,
+        absorbedIssues: AbsorbedIssues? = nil,
         fileID: StaticString,
         filePath: StaticString,
         line: UInt,
@@ -404,7 +405,8 @@ public extension __ExhaustRuntime {
                 line: line,
                 column: column,
                 statsAccumulator: statsAccumulator,
-                skipCounter: skipCounter
+                skipCounter: skipCounter,
+                absorbedIssues: absorbedIssues
             )
 
             if let reflecting {
@@ -617,11 +619,34 @@ public extension __ExhaustRuntime {
         }
     }
 
+    /// Fails a run whose suppression scope absorbed an assertion failure the detection closure never saw.
+    ///
+    /// `#expect` and `#require` become throwing detection calls only where they appear directly in the property closure. One reached through a function call, a stored closure, or a nested closure still records its own issue, the suppression scope absorbs it, and the pipeline reads that invocation as a pass, so the run ends with no counterexample and the failure disappears. A nondeterministic property reaches the same state from the other direction, when a failure recorded once no longer reproduces.
+    ///
+    /// Like the pointless-run error, this is deliberately not gated on `.suppress(.issueReporting)`: it signals a test that cannot report its own failures, not the property failure that suppression targets.
+    private static func reportUnobservedAssertions(
+        _ absorbed: AbsorbedIssues,
+        report: inout ExhaustReport,
+        fileID: StaticString,
+        filePath: StaticString,
+        line: UInt,
+        column: UInt
+    ) {
+        let failures = absorbed.expectationFailures
+        guard failures.isEmpty == false else { return }
+
+        let plural = failures.count == 1 ? "" : "s"
+        let origin = failures.compactMap(\.location).first.map { " The first is at \($0)." } ?? ""
+        let message = "\(failures.count) assertion\(plural) failed inside the property, but the run found no counterexample.\(origin) #expect and #require take part in reduction only where they appear directly in the property closure: one reached through a function call, a stored closure, or a nested closure records its failure where Exhaust cannot see it. Move the assertion into the closure body, or return a Bool."
+        report.unobservedAssertionFailure = message
+        reportError(message, fileID: fileID, filePath: filePath, line: line, column: column)
+    }
+
     // MARK: - Void Property (Swift Testing #expect / #require)
 
     /// Runs a property test with a `Void`-returning property that uses `#expect`/`#require` for assertions.
     ///
-    /// Wraps the property into a `Bool`-returning form via `withRoutedExpectedIssue`, delegates to the existing pipeline, then re-runs the property one final time without suppression so `#expect` failures record with reduced values.
+    /// Wraps the property into a `Bool`-returning form inside ``withPipelineSuppression(into:_:)``, delegates to the existing pipeline, then re-runs the property one final time without suppression so `#expect` failures record with reduced values. An assertion the detection rewrite never saw is absorbed by that scope rather than failing the pipeline, so a run that finds no counterexample reports what the scope absorbed.
     @discardableResult
     static func __exhaustExpect<Output>( // swiftlint:disable:this function_parameter_count
         _ refGen: ReflectiveGenerator<Output>,
@@ -664,7 +689,8 @@ public extension __ExhaustRuntime {
                 // Suppress assertion issues during screening/sampling/reduction.
                 // The final re-run (outside this scope) produces the user-facing assertion output.
                 let diagnostics = CapturedDiagnostics<Output>()
-                withRoutedExpectedIssue(isIntermittent: true) {
+                let absorbed = AbsorbedIssues()
+                withPipelineSuppression(into: absorbed) {
                     #if canImport(Testing)
                         if let regression = replayRegressionSeeds(
                             gen: gen,
@@ -695,6 +721,7 @@ public extension __ExhaustRuntime {
                         settings: augmentedSettings,
                         reflecting: reflecting,
                         skipCounter: skipCounter,
+                        absorbedIssues: absorbed,
                         fileID: fileID,
                         filePath: filePath,
                         line: line,
@@ -712,7 +739,15 @@ public extension __ExhaustRuntime {
                 }
 
                 guard let counterexample = diagnostics.pipelineResult else {
-                    // The pipeline's own issues fired inside withRoutedExpectedIssue, where they are swallowed as known issues. Re-report them here so a run that asserted nothing fails the test.
+                    reportUnobservedAssertions(
+                        absorbed,
+                        report: &diagnostics.report,
+                        fileID: fileID,
+                        filePath: filePath,
+                        line: line,
+                        column: column
+                    )
+                    // The pipeline's own issues fired inside the suppression scope, where they are swallowed as known issues. Re-report them here so a run that asserted nothing fails the test.
                     diagnostics.reportPassDiagnostics(
                         suppressIssueReporting: suppressIssueReporting,
                         fileID: fileID,
@@ -918,12 +953,13 @@ public extension __ExhaustRuntime {
             #endif
 
             let diagnostics = CapturedDiagnostics<Output>()
+            // Resolved here rather than on the GCD worker: Test.current is task-local, so a worker resolves a Swift Testing run as XCTest. dispatchToGCD already binds the DeferredIssueSink this scope's sync counterpart binds for itself.
+            let absorbed = AbsorbedIssues()
 
             await dispatchToGCD(reserving: LaneReservation.property(parallelLanes: parallelLaneCount(in: settings))) {
-                // withExpectedIssue cannot be used inside dispatchToGCD because Test.current is nil on the GCD thread, causing TestContext to misdetect as .xcTest. Use withKnownIssue directly since the async path is always in a Swift Testing context.
                 #if canImport(Testing)
                     ExhaustTraitConfiguration.$current.withValue(traitConfig) {
-                        withKnownIssue(isIntermittent: true) {
+                        absorbed.absorbing {
                             if let regression = replayRegressionSeeds(
                                 gen: gen,
                                 settings: reportDelivery.pipelineSettings,
@@ -950,6 +986,7 @@ public extension __ExhaustRuntime {
                                 settings: augmentedSettings,
                                 reflecting: reflecting,
                                 skipCounter: skipCounter,
+                                absorbedIssues: absorbed,
                                 fileID: fileID,
                                 filePath: filePath,
                                 line: line,
@@ -984,7 +1021,15 @@ public extension __ExhaustRuntime {
             }
 
             guard let counterexample = diagnostics.pipelineResult else {
-                // The pipeline's own issues fired inside withKnownIssue, where they are swallowed as known issues. Re-report them here so a run that asserted nothing fails the test.
+                reportUnobservedAssertions(
+                    absorbed,
+                    report: &diagnostics.report,
+                    fileID: fileID,
+                    filePath: filePath,
+                    line: line,
+                    column: column
+                )
+                // The pipeline's own issues fired inside the suppression scope, where they are swallowed as known issues. Re-report them here so a run that asserted nothing fails the test.
                 diagnostics.reportPassDiagnostics(
                     suppressIssueReporting: suppressIssueReporting,
                     fileID: fileID,
@@ -1025,7 +1070,7 @@ public extension __ExhaustRuntime {
 extension __ExhaustRuntime {
     /// Collects the diagnostics an `#expect` wrapper must re-report after its known-issue scope ends.
     ///
-    /// The wrappers run the Bool pipeline with issue reporting suppressed inside `withRoutedExpectedIssue`/`withKnownIssue`, where anything the pipeline records is swallowed. The pipeline's report is captured through an appended `.onReport` closure calling ``capture(from:)``, and ``reportPassDiagnostics(suppressIssueReporting:fileID:filePath:line:column:)`` re-reports outside the scope.
+    /// The wrappers run the Bool pipeline with issue reporting suppressed inside ``withAbsorbedIssues(into:isIntermittent:framework:_:)``, where anything the pipeline records is swallowed. The pipeline's report is captured through an appended `.onReport` closure calling ``capture(from:)``, and ``reportPassDiagnostics(suppressIssueReporting:fileID:filePath:line:column:)`` re-reports outside the scope.
     ///
     /// Marked `@unchecked Sendable` for the same reason the `nonisolated(unsafe)` locals it replaces were safe: the pipeline mutates the fields on the GCD worker inside `dispatchToGCD`, and the wrapper reads them only after the hop's continuation resumes, so no access is ever concurrent.
     final class CapturedDiagnostics<Output>: @unchecked Sendable {
