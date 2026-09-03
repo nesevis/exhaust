@@ -70,6 +70,42 @@ public struct ReflectiveGenerator<Output>: @unchecked Sendable {
         )).wrapped(isReflective: false)
     }
 
+    /// Chains this generator with a dependent generator, building the dependent generator once per distinct value.
+    ///
+    /// Use this instead of ``bind(_:fileID:line:column:)`` when `transform` is expensive and the values it can receive form a small set, such as a type-directed generator that builds the term generator for each drawn type. A plain `bind` runs `transform` on every generation, so a recursive generator rebuilds its whole family of sub-generators per draw; here each distinct value builds its sub-generator once and every later draw reuses it. The draw sequence is identical to `bind`, so replay seeds recorded under one are valid under the other.
+    ///
+    /// The cache is keyed on the value and unbounded, so do not use this when the values are numerous (an integer length, a string): every distinct value retains a generator for the lifetime of this one. `transform` must be pure: for equal values it must return structurally identical generators, or replay and reduction lose determinism.
+    ///
+    /// ```swift
+    /// let terms = typeGen.bind(caching: { type in termGen(of: type) })
+    /// ```
+    ///
+    /// - Parameter transform: A pure function that takes the generated value and returns the dependent generator; called once per distinct value.
+    /// - Returns: A generator that sequences the two computations.
+    public func bind<NewOutput>(
+        caching transform: @Sendable @escaping (Output) throws -> ReflectiveGenerator<NewOutput>,
+        fileID: StaticString = #fileID,
+        line: UInt = #line,
+        column: UInt = #column
+    ) rethrows -> ReflectiveGenerator<NewOutput> where Output: Hashable {
+        // The same node `bind(_:fileID:line:column:)` builds, constructed here so the table can hold erased generators: going through `bind` would erase the cached typed generator on every draw.
+        let built = BuiltGeneratorTable<Output>()
+        let fingerprint = Gen.sourceFingerprint(fileID: fileID, line: line, column: column)
+        return Gen.liftF(.transform(
+            kind: .bind(
+                fingerprint: fingerprint,
+                forward: { input in
+                    let value = input as! Output
+                    return try built.generator(for: value) { try transform(value).gen.erase() }
+                },
+                backward: nil,
+                inputType: Output.self,
+                outputType: NewOutput.self
+            ),
+            inner: gen.erase()
+        )).wrapped(isReflective: false)
+    }
+
     /// Applies a forward-only transform to the generated value.
     ///
     /// Reduction is unaffected because the reducer operates on the choice sequence, not the transformed output. `#exhaust(…, reflecting:)` cannot pass through this transform. For reflection support, use ``mapped(forward:backward:)`` or ``#gen`` with a trailing closure.

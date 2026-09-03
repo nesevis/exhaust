@@ -625,8 +625,8 @@ extension Materializer {
         let calleeStart = context.flatCount
         context.emitFlat(.sequence(true, validRange: lengthMeta.validRange, isLengthExplicit: lengthMeta.isRangeExplicit))
 
+        // `results` is reserved inside each element loop: the batch path returns without appending, and reserving allocates.
         var results: [Any] = []
-        results.reserveCapacity(Int(length))
         var elements: [ChoiceTree] = []
         if context.skipTree == false {
             elements.reserveCapacity(Int(length))
@@ -688,6 +688,7 @@ extension Materializer {
             elementContinuation
         ) = fusedElementGen {
             // Fused loop: skips the per-element dispatch through generateRecursive (and the contramap frame when present). Fallback decomposition matches what the dispatch switch performs for a bare chooseBits — handleContramap passes the element fallback through untouched, so decomposing here is equivalent for both shapes.
+            results.reserveCapacity(Int(length))
             while remaining > 0 {
                 let elementFallback: ChoiceTree? = elementFallbacks.flatMap { fallbacks in
                     elementIndex < fallbacks.count ? fallbacks[elementIndex] : nil
@@ -722,6 +723,7 @@ extension Materializer {
                 remaining -= 1
             }
         } else {
+            results.reserveCapacity(Int(length))
             while remaining > 0 {
                 let elFB: ChoiceTree? = elementFallbacks.flatMap { fbs in
                     elementIndex < fbs.count ? fbs[elementIndex] : nil

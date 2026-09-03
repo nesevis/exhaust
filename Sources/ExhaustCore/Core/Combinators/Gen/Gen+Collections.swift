@@ -146,7 +146,7 @@ package extension Gen {
         _ valueGenerator: Generator<ValueOutput>
     ) -> Generator<[KeyOutput: ValueOutput]> {
         let pairGen = keyArrayGenerator._bound(
-            forward: { keys in
+            forward: { keys -> Generator<([KeyOutput], [ValueOutput])> in
                 // Pairing the bound keys with the generated value array and projecting `pair.1` back out is a framework-authored exact inverse, so it collapses to one `.isomorph` transform node rather than a contramap wrapping a map.
                 Gen.liftF(.transform(
                     kind: .isomorph(
@@ -285,7 +285,7 @@ package extension Gen {
 
         return Gen.chooseDerived(in: Int(0) ... (count - 1))
             ._bound(
-                forward: { startPosition in
+                forward: { startPosition -> Generator<AnyCollection.SubSequence> in
                     let maxLength = count - startPosition
                     return Gen.contramap(
                         { (subset: AnyCollection.SubSequence) -> Int in subset.count },

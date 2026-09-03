@@ -755,7 +755,27 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             let savedSuspension = context.flatEmissionSuspended
             context.flatEmissionSuspended = true
             defer { context.flatEmissionSuspended = savedSuspension }
-            lengthResult = try generateRecursiveAny(lengthGen.erase(), context: &context)
+            // Dispatched here rather than through the erased walk: erase() boxes a fresh impure node per sequence visit. The handlers are the ones the dispatcher would reach, so draws and trees are unchanged. Unusual spines fall back to the erased walk.
+            switch lengthGen {
+                case let .pure(value):
+                    context.emitFlat(.just)
+                    lengthResult = (value, .just)
+                case let .impure(operation: .chooseBits(lengthMin, lengthMax, lengthTag, lengthIsRangeExplicit, lengthScaling, lengthTypeTagPayload), continuation: lengthContinuation):
+                    lengthResult = try handleChooseBits(
+                        min: lengthMin, max: lengthMax, tag: lengthTag,
+                        isRangeExplicit: lengthIsRangeExplicit,
+                        scaling: lengthScaling, typeTagPayload: lengthTypeTagPayload,
+                        continuation: lengthContinuation, context: &context
+                    )
+                case .impure(operation: .getSize, let lengthContinuation):
+                    let size = SharedInterpreterHelpers.currentSize(&context)
+                    lengthResult = try runContinuation(
+                        result: size, calleeChoiceTree: .getSize(size), calleeStart: context.flatCount,
+                        continuation: lengthContinuation, context: &context
+                    )
+                default:
+                    lengthResult = try generateRecursiveAny(lengthGen.erase(), context: &context)
+            }
         }
         guard let (lengthValue, lengthTrees) = lengthResult else {
             return nil
@@ -773,9 +793,9 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
             validRange: lengthMetadata.validRange,
             isLengthExplicit: lengthMetadata.isRangeExplicit
         ))
+        // `results` is reserved inside each element loop: the batch path returns without appending, and reserving allocates.
         var results: [Any] = []
         var elements: [ChoiceTree] = []
-        results.reserveCapacity(count)
         if emitsFlat == false {
             elements.reserveCapacity(count)
         }
@@ -860,6 +880,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 typeTagPayload: typeTagPayload
             )
 
+            results.reserveCapacity(count)
             for elementIndex in 0 ..< count {
                 try SharedInterpreterHelpers.checkGenerationDeadline(context.deadlineNanoseconds, elementIndex: elementIndex)
                 let rawBits = context.prng.next(in: effectiveRange)
@@ -903,6 +924,7 @@ package struct ValueAndChoiceTreeInterpreter<FinalOutput>: ~Copyable, ExhaustIte
                 }
             }
         } else {
+            results.reserveCapacity(count)
             for elementIndex in 0 ..< count {
                 try SharedInterpreterHelpers.checkGenerationDeadline(context.deadlineNanoseconds, elementIndex: elementIndex)
                 guard let (result, element) = try generateRecursiveAny(

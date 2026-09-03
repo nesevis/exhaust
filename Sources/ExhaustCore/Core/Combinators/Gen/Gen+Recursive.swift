@@ -56,22 +56,24 @@ package extension Gen {
         extend: @escaping (@escaping () -> Generator<Output>, UInt64) -> Generator<Output>
     ) -> Generator<Output> {
         // Build all layers eagerly. Layer 0 = base, layer N = extend applied N times.
-        var layers: [Generator<Output>] = [base]
+        // Erased here so the depth binds take the AnyGenerator overload: the typed one re-erases the selected layer on every draw.
+        var layers: [AnyGenerator] = [base.erase()]
         for layer in 0 ..< depthRange.upperBound {
             let availableLayers = layers // capture current set
             // recurse() draws its OWN depth independently
-            let recurseGen = chooseDepth(in: 0 ... UInt64(layer))
+            let recurseGen: Generator<Output> = chooseDepth(in: 0 ... UInt64(layer))
                 ._bound(
                     forward: { depth in availableLayers[Int(depth)] },
                     backward: { _ in UInt64(layer) }
                 )
-            layers.append(extend({ recurseGen }, UInt64(layer + 1)))
+            layers.append(extend({ recurseGen }, UInt64(layer + 1)).erase())
         }
 
-        // Outer depth draw selects the root layer
+        // Outer depth draw selects the root layer. A `let` so the escaping forward reads the array, not a capture box.
+        let rootLayers = layers
         return chooseDepth(in: depthRange)
             ._bound(
-                forward: { depth in layers[Int(depth)] },
+                forward: { depth in rootLayers[Int(depth)] },
                 backward: { _ in depthRange.upperBound }
             )
     }
