@@ -669,7 +669,7 @@ package final class FuzzRunner<Output> {
         }
         let (verdict, hits) = evaluateInBracket(
             value,
-            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent.hash, sequence: candidate)
+            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent.hash, sequence: sequence)
         )
 
         // Phase 2: rebuild the tree only when something downstream reads it. Admission stores the tree as the mutation fallback, and the prune hook consumes it on the same failure-or-would-admit condition it fires on, so both rebuild eagerly here (`wouldAdmit` and offer's admission share one novelty predicate, and mutation-phase offers are never boundary-derived, so a candidate that fails the check can never have its placeholder tree stored). A plain failure consumes the tree only if the failure gate dispatches a reduction — a small minority once a fault's clusters are known — so the failure path defers the rebuild to that dispatch instead of paying a second materialization for every failing candidate. Coverage from a rebuild cannot pollute the next attempt: rebuilds, like reduction probes, run outside any bracket, and the next bracket begins with beginAttempt(), which clears attribution state.
@@ -761,6 +761,24 @@ package final class FuzzRunner<Output> {
         counts.mutationAttempts += 1
     }
 
+    /// Opens the phase's attempt tally for a candidate opportunity no producer opened.
+    ///
+    /// A rejection returns before ``recordAttempt(value:tree:sequence:sequenceHash:deferredTreeRebuild:verdict:hits:convergence:generation:phase:isBoundaryDerived:parentIndex:)``, so without this it lands in `duplicateCandidatesSkipped` or `discardedAttempts` and in no phase tally: `totalAttempts` stops covering the rejections and an attempt-limited run runs past its limit.
+    ///
+    /// Screening opens none, since its tally is reconciled to the covering array's row count once the phase ends. A mutation candidate with a parent opened its opportunity in the producer, before materialization.
+    func openPhaseAttempt(_ phase: FuzzPhase, parentIndex: Int?) {
+        switch phase {
+            case .screening:
+                break
+            case .sampling:
+                counts.samplingAttempts += 1
+            case .mutation:
+                if parentIndex == nil {
+                    openMutationAttempt()
+                }
+        }
+    }
+
     /// The outcome of one fresh interpreter sample, shared by Phase 2 and the mutation phase's empty-tier fallback.
     private enum FreshSampleOutcome {
         case evaluated(CorpusAdmission)
@@ -787,6 +805,7 @@ package final class FuzzRunner<Output> {
         }
         let sequenceHash = ZobristHash.hash(of: sequence)
         if isRecentDuplicate(hash: sequenceHash) {
+            openPhaseAttempt(phase, parentIndex: nil)
             counts.duplicateCandidatesSkipped += 1
             return .evaluated(.rejectedDuplicate)
         }
@@ -798,6 +817,7 @@ package final class FuzzRunner<Output> {
         var tree = ChoiceTree.just
         if verdict.isFailure || corpus.wouldAdmit(hits: hits) {
             guard let rebuilt = rebuildFreshTree(interpreter: &interpreter, expecting: sequence) else {
+                openPhaseAttempt(phase, parentIndex: nil)
                 counts.discardedAttempts += 1
                 return .evaluated(.rejectedNotNovel)
             }
@@ -959,16 +979,7 @@ package final class FuzzRunner<Output> {
         parentIndex: Int? = nil
     ) -> CorpusAdmission {
         configuration.onAttempt?(phase, hits)
-        switch phase {
-            case .screening:
-                break
-            case .sampling:
-                counts.samplingAttempts += 1
-            case .mutation:
-                if parentIndex == nil {
-                    openMutationAttempt()
-                }
-        }
+        openPhaseAttempt(phase, parentIndex: parentIndex)
         counts.evaluatedSearchCases += 1
         if verdict.isDiscard {
             counts.discardedEvaluations += 1
@@ -1163,7 +1174,9 @@ package final class FuzzRunner<Output> {
 
     /// Dispatches one failing input through the backpressure gate: attributed as a duplicate, held unreduced, or reduced and classified.
     ///
-    /// - Parameter attemptIndex: The attempt the failure was observed at. Search paths pass the running count; recovery passes zero, because a restored entry's failure belongs to no attempt of this run.
+    /// - Parameters:
+    ///   - attemptIndex: The attempt the failure was observed at. Search paths pass the running count; recovery passes nil, because a restored entry's failure belongs to no attempt of this run.
+    ///   - countsAsInstance: Whether the failure adds a member to the cluster it lands in. False for a restored entry the predecessor already recorded as failing: that entry landing back in the cluster it was restored into is the same evidence twice, and counting it inflates the carried-over instance and reduction counts on every resume. A restored entry that passed for the predecessor and fails now is evidence this build produced, so it counts.
     func handleFailure(
         value: Output,
         tree: ChoiceTree,
@@ -1173,7 +1186,8 @@ package final class FuzzRunner<Output> {
         parentIndex: Int?,
         phase: FuzzPhase,
         coverageNovel: Bool,
-        attemptIndex: Int
+        attemptIndex: Int?,
+        countsAsInstance: Bool = true
     ) {
         let hash = ZobristHash.hash(of: sequence)
         // The boost is applied per gate arm rather than up front: a `.duplicate` is a failure the run already accounted for, and boosting on it would credit the same evidence twice while invalidating the tier's prefix sums for a score that does not move.
@@ -1187,7 +1201,8 @@ package final class FuzzRunner<Output> {
                 inventory.recordUnreduced(
                     symptom: symptom,
                     timestampNanoseconds: monotonicNanoseconds(),
-                    attemptIndex: attemptIndex
+                    attemptIndex: attemptIndex,
+                    countsAsInstance: countsAsInstance
                 )
             case let .reduce(isEscape):
                 if let parentIndex {
@@ -1200,7 +1215,8 @@ package final class FuzzRunner<Output> {
                         inventory.recordUnreduced(
                             symptom: symptom,
                             timestampNanoseconds: monotonicNanoseconds(),
-                            attemptIndex: attemptIndex
+                            attemptIndex: attemptIndex,
+                            countsAsInstance: countsAsInstance
                         )
                         return
                     }
@@ -1215,7 +1231,8 @@ package final class FuzzRunner<Output> {
                     parentIndex: parentIndex,
                     phase: phase,
                     attemptIndex: attemptIndex,
-                    wasEscape: isEscape
+                    wasEscape: isEscape,
+                    countsAsInstance: countsAsInstance
                 )
         }
     }
@@ -1229,8 +1246,9 @@ package final class FuzzRunner<Output> {
         symptom: FailureSymptom,
         parentIndex: Int?,
         phase: FuzzPhase,
-        attemptIndex: Int,
-        wasEscape: Bool
+        attemptIndex: Int?,
+        wasEscape: Bool,
+        countsAsInstance: Bool
     ) {
         let reductionStart = monotonicNanoseconds()
         let reduction = reduceStrategy(tree, value, symptom, Self.reductionProbeBracket(breadcrumb))
@@ -1243,13 +1261,19 @@ package final class FuzzRunner<Output> {
         // Cluster identity is a cheap structural key over the reduced tree flattened with bind-inners skipped; the reflective description render is deferred to recordReduced and runs only when a new cluster is created. It is computed once here and recomputed only where normalization actually replaced the tree.
         var reducedKey = ChoiceSequence.flatten(reducedTree, skipBindInners: true).clusterKey
         var unnormalizedResidual = false
-        if configuration.experiments.normalization {
+
+        // Any probe here can be the invocation whose async work escapes its bound. That work is still running and still recording coverage, so a later invocation would measure it rather than the input. The flag is read at each point that would drive the property again, never snapshotted, because normalization can be what sets it.
+        if configuration.experiments.normalization, forcedTermination() == nil {
             if inventory.containsKey(reducedKey) == false,
                let normalized: FuzzNormalizer.NormalizedForm<Output> = FuzzNormalizer.normalize(
                    reducedSequence: reducedSequence,
                    erasedGen: erasedGen,
                    symptom: symptom,
                    property: { [self] value, candidate in
+                       // A non-failing verdict makes the normalizer reject the variation, so a pass whose probe escaped ends on the reduced form it already has.
+                       guard forcedTermination() == nil else {
+                           return .pass
+                       }
                        counts.normalizationInvocations += 1
                        return withBreadcrumb(
                            candidateHash: ZobristHash.hash(of: candidate),
@@ -1270,8 +1294,10 @@ package final class FuzzRunner<Output> {
             }
         }
 
-        // Post-reduction classification: one clean-bracket evaluation yields the post-hoc signature. Cluster identity keys on the reduced form; the signature collects within the cluster, where a second distinct one raises the ~paths marker.
-        let signature = attributedSignature(of: reducedValue, sequence: reducedSequence)
+        // Post-reduction classification: one clean-bracket evaluation yields the post-hoc signature. Cluster identity keys on the reduced form; the signature collects within the cluster, where a second distinct one raises the ~paths marker. A cluster classified after an escape carries no signature rather than one measured against uncontained work.
+        let signature: BitSet? = forcedTermination() == nil
+            ? attributedSignature(of: reducedValue, sequence: reducedSequence)
+            : nil
 
         let classification = inventory.recordReduced(
             reducedSequence: reducedSequence,
@@ -1284,7 +1310,8 @@ package final class FuzzRunner<Output> {
             phase: phase,
             timestampNanoseconds: monotonicNanoseconds(),
             attemptIndex: attemptIndex,
-            unnormalizedResidual: unnormalizedResidual
+            unnormalizedResidual: unnormalizedResidual,
+            countsAsInstance: countsAsInstance
         )
         timing.reductionNanoseconds += monotonicNanoseconds() - reductionStart
 

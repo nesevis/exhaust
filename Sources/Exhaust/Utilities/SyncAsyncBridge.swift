@@ -75,11 +75,7 @@ package extension __ExhaustRuntime {
         if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
             return _blockingAwaitDrainLoopBounded(idleTimeoutMilliseconds: idleTimeoutMilliseconds, work)
         }
-        // The semaphore path has no lane to cancel through: a timed-out task keeps running on the cooperative pool, which is exactly `escaped`.
-        guard let value = _blockingAwaitSemaphore(timeoutMilliseconds: idleTimeoutMilliseconds, work) else {
-            return .escaped
-        }
-        return .completed(value)
+        return _blockingAwaitSemaphoreBounded(timeoutMilliseconds: idleTimeoutMilliseconds, work)
     }
 
     /// The bounded drain loop: retains its task so a timeout can cancel it, then drains again briefly to see whether the cancellation took.
@@ -146,6 +142,34 @@ package extension __ExhaustRuntime {
             return nil
         }
         return box.value
+    }
+
+    /// The bounded semaphore fallback: retains its task so a timeout can cancel it, then waits briefly to see whether the cancellation took.
+    ///
+    /// The cooperative pool gives this path no lane to drain, so the second wait is the only way to tell work that stopped from work that is still running. Without it a timed-out task keeps mutating the system under test after the caller moves on, and later attempts record its coverage as their own.
+    private static func _blockingAwaitSemaphoreBounded<Result>(
+        timeoutMilliseconds: Int,
+        _ work: @Sendable @escaping () async -> Result
+    ) -> BoundedAwaitOutcome<Result> {
+        let box = UnsafeSendableBox<Result?>(nil)
+        let semaphore = DispatchSemaphore(value: 0)
+        let task = Task { @Sendable in
+            box.value = await work()
+            semaphore.signal()
+        }
+        if semaphore.wait(timeout: .now() + .milliseconds(timeoutMilliseconds)) == .success,
+           let value = box.value
+        {
+            return .completed(value)
+        }
+
+        // Ask the work to stop, then wait the window the drain-loop path gives cancellation: a task that honours it returns at its next suspension point.
+        task.cancel()
+        guard semaphore.wait(timeout: .now() + .milliseconds(boundedAwaitCancellationDrainMilliseconds)) == .success
+        else {
+            return .escaped
+        }
+        return .quiesced
     }
 
     /// Creates a cooperative-pool task and sleeps the calling thread until it completes. Returns `nil` when `timeoutMilliseconds` is non-nil and the work does not complete within it.

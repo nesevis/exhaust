@@ -152,6 +152,7 @@ extension FuzzRunner {
     ) -> Bool {
         let sequenceHash = ZobristHash.hash(of: sequence)
         if isRecentDuplicate(hash: sequenceHash) {
+            openPhaseAttempt(.mutation, parentIndex: parent?.index)
             counts.duplicateCandidatesSkipped += 1
             if let parent {
                 corpus.noteChild(forParentAt: parent.index, admitted: false)

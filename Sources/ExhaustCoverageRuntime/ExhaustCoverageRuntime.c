@@ -14,7 +14,7 @@
 //
 // The exclusion is a spin lock over a four-store critical section rather than a platform mutex: `atomic_flag` is C11 and needs no per-platform header, and the hold time is a handful of stores with no calls in it. Swap it for a real mutex if contention ever shows on a comparison-heavy target.
 //
-// The enabled flag is read before the lock, so a build harvesting nothing pays one relaxed load per comparison and never touches the lock. That is also what confines the lock to the counter model: under trace-pc-guard the global ring's flag is never set, so the off-lane threads whose records nothing would harvest bail at the load.
+// The enabled flag is read before the lock, so a build harvesting nothing pays one relaxed load per comparison and never touches the lock. That is also what confines the lock to the counter model: under trace-pc-guard the global ring's flag is never set, so the off-lane threads whose records nothing would harvest bail at the load. That pre-lock load only filters. The writer rechecks the flag under the lock and the lane clears it under the same lock, because a thread that passed the load can stall and land its record in a later attempt than the one it belongs to.
 
 #define EXHAUST_CMP_CAPACITY 4096
 
@@ -78,15 +78,20 @@ static inline void exhaust_cmp_record(uint64_t site, uint64_t arg1, uint64_t arg
         return;
     }
     exhaust_cmp_global_acquire();
-    exhaust_cmp_ring_store(&exhaust_cmp_global, site, arg1, arg2);
+    // Rechecked under the lock: a thread that passed the load above can arrive here after the lane disabled harvesting, snapshotted, and reset, and its record would read as the next attempt's.
+    if (atomic_load_explicit(&exhaust_cmp_global_enabled, memory_order_relaxed)) {
+        exhaust_cmp_ring_store(&exhaust_cmp_global, site, arg1, arg2);
+    }
     exhaust_cmp_global_release();
 }
 
 // MARK: - Harvest Control
 
 void exhaust_cmp_set_enabled(int enabled) {
-    // Release ordering: a hook that observes the flag set also observes this run's reset of the cursor.
+    // Under the lock, so this store and the hooks' recheck order against each other: a hook holding the lock finishes its store first, and one arriving after sees the new value. Release ordering gives a hook that observes the flag set this run's reset of the cursor.
+    exhaust_cmp_global_acquire();
     atomic_store_explicit(&exhaust_cmp_global_enabled, enabled, memory_order_release);
+    exhaust_cmp_global_release();
 }
 
 void exhaust_cmp_reset(void) {
@@ -173,8 +178,11 @@ void __sanitizer_cov_trace_switch(uint64_t value, uint64_t *cases) {
     }
     // One acquisition for the whole case table rather than one per case: every pair belongs to the same comparison site.
     exhaust_cmp_global_acquire();
-    for (uint64_t index = 0; index < count; index += 1) {
-        exhaust_cmp_ring_store(&exhaust_cmp_global, site, value, cases[2 + index]);
+    // Rechecked under the lock for the same reason the comparison hooks recheck: see `exhaust_cmp_record`.
+    if (atomic_load_explicit(&exhaust_cmp_global_enabled, memory_order_relaxed)) {
+        for (uint64_t index = 0; index < count; index += 1) {
+            exhaust_cmp_ring_store(&exhaust_cmp_global, site, value, cases[2 + index]);
+        }
     }
     exhaust_cmp_global_release();
 }

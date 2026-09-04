@@ -304,9 +304,9 @@ public struct FuzzReport: Sendable {
         screeningAttempts + samplingAttempts + mutationAttempts
     }
 
-    /// Search attempts rejected before property entry.
+    /// Search attempts rejected before property entry: a screening row the covering array could not materialize, a candidate the materializer discarded, and a candidate skipped as a recent duplicate.
     public var rejectedSearchAttempts: Int {
-        screeningRejectedAttempts + discardedAttempts
+        screeningRejectedAttempts + discardedAttempts + duplicateCandidatesSkipped
     }
 
     /// Property invocations across search, pruning, reduction, normalization, classification, recovery, and final diagnostic replay.

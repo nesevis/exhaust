@@ -109,6 +109,10 @@ extension FuzzRunner {
 
         var restoredClusters: [FaultCluster] = []
         for record in document.clusters {
+            // A re-judge can be the invocation whose async work escapes its bound, and that work keeps running and keeps recording coverage. What is already restored stands; nothing further is judged against a process the escaped work is still writing to.
+            guard forcedTermination() == nil else {
+                break
+            }
             guard let sequence = ChoiceSequenceCodec.decode(record.reducedSequence),
                   let phase = FuzzPhase(rawValue: record.discoveringPhase)
             else {
@@ -145,6 +149,9 @@ extension FuzzRunner {
         inventory.restore(clusters: restoredClusters)
 
         for record in document.snapshot {
+            guard forcedTermination() == nil else {
+                break
+            }
             guard let sequence = ChoiceSequenceCodec.decode(record.sequence),
                   let phase = FuzzPhase(rawValue: record.phase)
             else {
@@ -173,8 +180,10 @@ extension FuzzRunner {
                     parentIndex: nil,
                     phase: phase,
                     coverageNovel: admission.isAdmitted,
-                    // A restored entry's failure belongs to no attempt of this run.
-                    attemptIndex: 0
+                    // A restored entry's failure belongs to no attempt of this run, so it never lowers a cluster's carried-over discovery index.
+                    attemptIndex: nil,
+                    // An entry the predecessor recorded as failing is already in the restored counts, and reducing it back into its cluster would tally it twice. One that passed for the predecessor and fails now is this build's own evidence and counts.
+                    countsAsInstance: record.propertyFailed == false
                 )
             }
         }

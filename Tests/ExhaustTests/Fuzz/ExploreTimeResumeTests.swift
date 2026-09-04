@@ -20,7 +20,7 @@ struct ExploreTimeResumeTests {
         let helperCorpus = FuzzCorpus(edgeCount: 32)
         var sequences: [ChoiceSequence] = []
         var values: [Int] = []
-        // Six: five for the snapshot, and a sixth the snapshot does not hold, so the planted cluster's own failure is not also a restored entry's. A restored entry's failure is recorded at attempt index zero (it belongs to no attempt of this run), and the minimum would then overwrite the cluster's carried-over discovery index.
+        // Six, and the snapshot holds all of them: the last is both the planted cluster's reduced form and a restored entry, so re-judging the snapshot walks straight back into the cluster the record restored.
         while sequences.count < 6, let (value, tree) = try interpreter.next() {
             let sequence = ChoiceSequence.flatten(tree)
             let admission = helperCorpus.offer(
@@ -36,7 +36,7 @@ struct ExploreTimeResumeTests {
                 values.append(value)
             }
         }
-        let entryRecords = helperCorpus.entries.dropLast().map(FuzzProgressDocument.CorpusEntryRecord.init(entry:))
+        let entryRecords = helperCorpus.entries.map(FuzzProgressDocument.CorpusEntryRecord.init(entry:))
         let plantedValue = values[5]
 
         let clusterRecord = FuzzProgressDocument.ClusterRecord(
@@ -216,6 +216,26 @@ struct ExploreTimeResumeTests {
         #expect(context.survivor == nil)
     }
 
+    @Test("A restored entry the predecessor already recorded as failing does not recount its cluster")
+    func restoredFailureDoesNotRecountItsCluster() throws {
+        let report = try resumeWithOverlappingSnapshotEntry(predecessorRecordedFailure: true)
+        let restored = try #require(report.clusters.first { $0.symptoms == ["PlantedFault"] })
+        // The record's numbers, unchanged: the predecessor counted this failure already, so re-judging it must not tally the same evidence again.
+        #expect(restored.instanceCount == 3)
+        #expect(restored.reducedCount == 1)
+        #expect(restored.firstSeenAttempt == 1)
+    }
+
+    @Test("A restored entry that passed for the predecessor and fails now counts as this run's evidence")
+    func restoredEntryThatStartedFailingCounts() throws {
+        let report = try resumeWithOverlappingSnapshotEntry(predecessorRecordedFailure: false)
+        let restored = try #require(report.clusters.first { $0.symptoms == ["PlantedFault"] })
+        // A build that starts failing an input the predecessor passed produces evidence nothing has counted, so the cluster gains a member and a reduction. The discovery index still comes from the record, because the failure belongs to no attempt of this run.
+        #expect(restored.instanceCount == 4)
+        #expect(restored.reducedCount == 2)
+        #expect(restored.firstSeenAttempt == 1)
+    }
+
     @Test("A resume whose predecessor consumed the whole budget reports the restored inventory, not the pointless-run error")
     func resumeWithConsumedBudget() throws {
         let directory = scratchDirectory()
@@ -304,6 +324,75 @@ private func scratchDirectory() -> URL {
     FileManager.default.temporaryDirectory
         .appendingPathComponent("exhaust-resume-tests")
         .appendingPathComponent(UUID().uuidString)
+}
+
+/// Resumes against a progress log whose planted cluster and sole snapshot entry are the same input, so re-judging the entry walks straight back into the cluster the record restored.
+///
+/// The predecessor's budget is fully consumed, so restore is the only thing that runs: no attempt of this run can reach the fault and move the counts on its own. `predecessorRecordedFailure` is the verdict the predecessor persisted for the entry, which is what decides whether the re-judged failure is evidence already counted or evidence this build produced.
+private func resumeWithOverlappingSnapshotEntry(predecessorRecordedFailure: Bool) throws -> FuzzReport {
+    let store = FuzzProgressStore(directory: scratchDirectory())
+    defer {
+        store.removeAll()
+    }
+    let gen = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)
+
+    var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1, maxRuns: UInt64.max)
+    let (plantedValue, tree) = try #require(try interpreter.next())
+    let sequence = ChoiceSequence.flatten(tree)
+
+    let helperCorpus = FuzzCorpus(edgeCount: 32)
+    _ = helperCorpus.offer(
+        sequence: sequence,
+        tree: tree,
+        hits: [(edge: abs(plantedValue) % 10, hitCount: 1)],
+        convergence: 1.0,
+        generation: 0,
+        phase: .sampling,
+        propertyFailed: predecessorRecordedFailure
+    )
+
+    let clusterRecord = FuzzProgressDocument.ClusterRecord(
+        cluster: FaultCluster(
+            restoredID: 0,
+            reducedSequence: sequence,
+            reducedDescription: "planted-restored-cluster",
+            reducedKey: "planted-restored-cluster",
+            signatures: [],
+            symptoms: [.returnedFalse],
+            instanceCount: 3,
+            reducedCount: 1,
+            firstSeenNanoseconds: 1_000_000,
+            lastSeenNanoseconds: 2_000_000,
+            firstSeenAttempt: 1,
+            unnormalizedMemberCount: 0,
+            discoveringPhase: .mutation
+        ),
+        epochNanoseconds: 0
+    )
+    try store.write(FuzzProgressDocument(
+        metadata: FuzzProgressDocument.Metadata(
+            seed: 9,
+            budgetNanoseconds: 60_000_000_000,
+            consumedNanoseconds: 60_000_000_000,
+            lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
+            pcTableHash: 0,
+            edgeCount: 32
+        ),
+        clusters: [clusterRecord],
+        snapshot: helperCorpus.entries.map(FuzzProgressDocument.CorpusEntryRecord.init(entry:))
+    ))
+
+    let report = __ExhaustRuntime.runExploreTimeCore(
+        gen: gen,
+        time: .seconds(60),
+        settings: [.replay(9), .suppress(.all)],
+        source: .injected(resumeSource()),
+        configure: nil,
+        persistence: FuzzPersistenceContext(store: store, resumeEnabled: true),
+        property: { $0 == plantedValue ? .fail(FailureSymptom(kind: "PlantedFault")) : .pass }
+    )
+    #expect(report.evaluatedSearchCases == 0)
+    return report
 }
 
 private func resumeSource() -> SyntheticCoverageSource<Int> {

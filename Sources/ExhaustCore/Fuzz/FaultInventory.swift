@@ -73,7 +73,7 @@ package struct FaultCluster: Sendable {
         symptom: FailureSymptom,
         phase: FuzzPhase,
         timestampNanoseconds: UInt64,
-        attemptIndex: Int,
+        attemptIndex: Int?,
         unnormalizedResidual: Bool
     ) {
         self.id = id
@@ -86,7 +86,7 @@ package struct FaultCluster: Sendable {
         reducedCount = 1
         firstSeenNanoseconds = timestampNanoseconds
         lastSeenNanoseconds = timestampNanoseconds
-        firstSeenAttempt = attemptIndex
+        firstSeenAttempt = attemptIndex ?? 0
         unnormalizedMemberCount = unnormalizedResidual ? 1 : 0
         discoveringPhase = phase
     }
@@ -126,17 +126,23 @@ package struct FaultCluster: Sendable {
         signature: BitSet?,
         symptom: FailureSymptom,
         timestampNanoseconds: UInt64,
-        attemptIndex: Int,
-        unnormalizedResidual: Bool
+        attemptIndex: Int?,
+        unnormalizedResidual: Bool,
+        countsAsInstance: Bool
     ) {
         if let signature, signatures.contains(signature) == false {
             signatures.append(signature)
         }
         symptoms.insert(symptom)
+        lastSeenNanoseconds = max(lastSeenNanoseconds, timestampNanoseconds)
+        if let attemptIndex {
+            firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
+        }
+        guard countsAsInstance else {
+            return
+        }
         instanceCount += 1
         reducedCount += 1
-        lastSeenNanoseconds = max(lastSeenNanoseconds, timestampNanoseconds)
-        firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
         if unnormalizedResidual {
             unnormalizedMemberCount += 1
         }
@@ -158,12 +164,18 @@ package struct FaultCluster: Sendable {
     fileprivate mutating func absorbUnreduced(
         symptom: FailureSymptom,
         timestampNanoseconds: UInt64,
-        attemptIndex: Int
+        attemptIndex: Int?,
+        countsAsInstance: Bool
     ) {
         symptoms.insert(symptom)
-        instanceCount += 1
         lastSeenNanoseconds = max(lastSeenNanoseconds, timestampNanoseconds)
-        firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
+        if let attemptIndex {
+            firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
+        }
+        guard countsAsInstance else {
+            return
+        }
+        instanceCount += 1
     }
 }
 
@@ -216,8 +228,9 @@ package final class FaultInventory: @unchecked Sendable {
     ///   - symptom: The failure's cheap symptom.
     ///   - phase: The phase that discovered the failing input.
     ///   - timestampNanoseconds: Monotonic time of the discovery, supplied by the caller so tests stay deterministic.
-    ///   - attemptIndex: The 1-based attempt index at which the failing input was observed — the discovery moment, not the classification moment, so out-of-order reduction completion cannot distort attempt-indexed metrics.
+    ///   - attemptIndex: The 1-based attempt index at which the failing input was observed: the discovery moment, not the classification moment, so out-of-order reduction completion cannot distort attempt-indexed metrics. Nil for a failure that belongs to no attempt of this run, which leaves an existing cluster's index alone and reads as zero on a cluster this call creates.
     ///   - unnormalizedResidual: Whether this member's own reduced form differed from `reducedKey` and joined only through the normalization pass.
+    ///   - countsAsInstance: Whether this reduction adds a member to the cluster it joins. False for a failure the predecessor already counted, so that a resume does not tally the same evidence again. The signature, symptom, and last-seen time still land, since those describe the fault as the current build sees it. A cluster this reduction creates is unaffected: nothing carried that fault over, so it is a discovery of this run.
     package func recordReduced(
         reducedSequence: ChoiceSequence,
         reducedKey: String,
@@ -226,8 +239,9 @@ package final class FaultInventory: @unchecked Sendable {
         symptom: FailureSymptom,
         phase: FuzzPhase,
         timestampNanoseconds: UInt64,
-        attemptIndex: Int,
-        unnormalizedResidual: Bool = false
+        attemptIndex: Int?,
+        unnormalizedResidual: Bool = false,
+        countsAsInstance: Bool = true
     ) -> ClusterClassification {
         lock.withLocking {
             if let index = clusterIndexByKey[reducedKey] {
@@ -236,7 +250,8 @@ package final class FaultInventory: @unchecked Sendable {
                     symptom: symptom,
                     timestampNanoseconds: timestampNanoseconds,
                     attemptIndex: attemptIndex,
-                    unnormalizedResidual: unnormalizedResidual
+                    unnormalizedResidual: unnormalizedResidual,
+                    countsAsInstance: countsAsInstance
                 )
                 refreshAttribution(forClusterAt: index)
                 return ClusterClassification(
@@ -271,13 +286,21 @@ package final class FaultInventory: @unchecked Sendable {
     }
 
     /// Records a failure the backpressure gate declined to reduce, attributing it by symptom to the most recently seen matching cluster, or holding it unmatched.
-    package func recordUnreduced(symptom: FailureSymptom, timestampNanoseconds: UInt64, attemptIndex: Int) {
+    ///
+    /// - Parameter countsAsInstance: Whether the failure adds a member to the cluster it attributes to. False for a failure the predecessor already counted, for the reason ``recordReduced(reducedSequence:reducedKey:renderDescription:signature:symptom:phase:timestampNanoseconds:attemptIndex:unnormalizedResidual:countsAsInstance:)`` gives. An unmatched symptom is tallied either way, since nothing historical exists for it to distort.
+    package func recordUnreduced(
+        symptom: FailureSymptom,
+        timestampNanoseconds: UInt64,
+        attemptIndex: Int?,
+        countsAsInstance: Bool = true
+    ) {
         lock.withLocking {
             if let index = attributionBySymptom[symptom] {
                 clusters[index].absorbUnreduced(
                     symptom: symptom,
                     timestampNanoseconds: timestampNanoseconds,
-                    attemptIndex: attemptIndex
+                    attemptIndex: attemptIndex,
+                    countsAsInstance: countsAsInstance
                 )
                 refreshAttribution(forClusterAt: index)
             } else {
