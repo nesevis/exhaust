@@ -199,9 +199,9 @@ struct ExploreSpecTimeRuntimeTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("Cooperative adapter counts a stalled drain as a pass")
-    func tasksAdapterStallCountsAsPass() throws {
-        // Pins the timeout-accounting ruling (2026-07-13): a timed-out drain is inconclusive, not a counterexample, so it must not enter the fault inventory. The short idle timeout keeps the stall evaluation fast.
+    @Test("Cooperative adapter does not turn a stalled drain into a counterexample")
+    func tasksAdapterStallIsNotACounterexample() throws {
+        // Pins the timeout-accounting ruling (2026-07-13): a timed-out drain is inconclusive, not a counterexample, so it must not enter the fault inventory. What "inconclusive" means to the corpus and the run is pinned separately in `InconclusiveAttemptTests`. The short idle timeout keeps the stall evaluation fast.
         let adapter = try #require(__ExhaustRuntime.buildTasksSpecAdapter(
             StallingSpec.self,
             concurrencyLevel: 2,

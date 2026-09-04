@@ -123,15 +123,20 @@ private struct AsyncPreemptiveChecker<Spec: AsyncStateMachineSpec>: PreemptiveBa
         guard let idleTimeoutMilliseconds else {
             return __ExhaustRuntime.blockingAwait(work)
         }
-        let result = __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: idleTimeoutMilliseconds * timeoutMultiplier, work)
-        if result == nil {
+        let outcome = __ExhaustRuntime.blockingAwait(
+            idleTimeoutMilliseconds: idleTimeoutMilliseconds * timeoutMultiplier,
+            work
+        )
+        if case .completed = outcome {
+        } else {
             ExhaustLog.notice(
                 category: .propertyTest,
                 event: "async_preemptive_drain_timeout",
-                label
+                // Whether the work stopped when cancelled or is still running: the second keeps executing the system under test after this probe returns.
+                "\(label) disposition=\(outcome.disposition)"
             )
         }
-        return result
+        return outcome.value
     }
 
     /// Executes a tagged command sequence with real GCD concurrency and checks the oracle.

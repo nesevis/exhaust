@@ -29,16 +29,36 @@ struct IdleTimeoutConcurrentTests {
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
-    @Test("blockingAwait bails with nil when the awaited work never returns to the drain lane")
+    @Test("blockingAwait bails when the awaited work never returns to the drain lane, and says whether cancellation took")
     func blockingAwaitBailsWhenWorkSuspendsOffTheDrainLane() async {
-        // The work suspends far longer than the idle bound and its continuation does not feed the single drain lane, so without the bound the loop would spin a core forever. `blockingAwait` must return nil instead. The test completing (rather than hanging) is itself the regression guard.
-        let result: Bool? = await __ExhaustRuntime.dispatchToGCD {
+        // The work suspends far longer than the idle bound and its continuation does not feed the single drain lane, so without the bound the loop would spin a core forever. The test completing (rather than hanging) is itself the regression guard.
+        let outcome = await __ExhaustRuntime.dispatchToGCD {
             __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: 20) {
                 try? await Task.sleep(for: .milliseconds(500))
                 return true
             }
         }
-        #expect(result == nil)
+        #expect(outcome.value == nil)
+        // `Task.sleep` honours cancellation, so the cancellation drain reaches it and nothing is left running.
+        #expect(outcome.disposition == .timedOutQuiesced)
+    }
+
+    @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
+    @Test("Work that ignores cancellation is reported as still running")
+    func blockingAwaitReportsUncancellableWorkAsEscaped() async {
+        // A synchronous sleep inside the task body has no suspension point for cancellation to land on, so the cancellation drain finds nothing and the work is still executing when this returns. That is the case a caller must be able to tell from a clean bail.
+        let outcome = await __ExhaustRuntime.dispatchToGCD {
+            __ExhaustRuntime.blockingAwait(idleTimeoutMilliseconds: 20) {
+                await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                    DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(400)) {
+                        continuation.resume()
+                    }
+                }
+                return true
+            }
+        }
+        #expect(outcome.value == nil)
+        #expect(outcome.disposition == .timedOutEscaped)
     }
 
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
