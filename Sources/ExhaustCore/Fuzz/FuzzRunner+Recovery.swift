@@ -178,6 +178,9 @@ extension FuzzRunner {
                 )
             }
         }
+
+        // A resumed run is a new search seeded with the predecessor's findings, not a continuation of it: the PRNG position, the reduction gate, and the bandit weights are not persisted. The re-offers above bumped the incidence counts without running an attempt, so the estimators start from this run's own evidence rather than a mixture of two.
+        corpus.resetIncidenceStatistics()
     }
 
     /// Materializes one persisted sequence and evaluates it once against the current build.
@@ -194,7 +197,7 @@ extension FuzzRunner {
         }
         let (verdict, hits) = attribute(value) { value in
             counts.recoveryInvocations += 1
-            return withBreadcrumb(candidateHash: ZobristHash.hash(of: sequence), kind: .recovery) {
+            return withBreadcrumb(candidateHash: ZobristHash.hash(of: sequence), kind: .recovery, sequence: sequence) {
                 property(value)
             }
         }

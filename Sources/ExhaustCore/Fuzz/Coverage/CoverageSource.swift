@@ -18,7 +18,7 @@ package protocol CoverageSource: AnyObject, Sendable {
 
     /// Visits each edge hit during the attempt bracketed by ``beginAttempt()``, with its 8-bit hit count.
     ///
-    /// The count's overflow behavior is the recorder's, not the protocol's. ``TracePCGuardCoverageSource`` stops storing at 128, so its counts saturate at the top AFL bucket. The inline-8bit-counter path reports whatever the compiler's unsaturated increment left in the byte, so a hot edge can wrap to a low count and land in a low bucket. Consumers bucket through ``HitCountBucket`` and are not sensitive to the difference; anything that reads the raw count is.
+    /// The count's overflow behavior is the recorder's, not the protocol's. ``TracePCGuardCoverageSource`` stops storing at 128, so its counts saturate at the top AFL bucket. The inline-8bit-counter path wraps: the compiler emits a load, an add of one, and a byte store, with no clamp, so an edge entered 256 times reads as never entered. Consumers bucket through ``HitCountBucket`` and are not sensitive to the difference; anything that reads the raw count is.
     func forEachHitEdge(_ body: (_ edge: Int, _ hitCount: UInt8) -> Void)
 
     /// Appends every edge hit during the attempt, with its hit count, to `buffer` in the order ``forEachHitEdge(_:)`` visits them. The count carries the same per-recorder overflow behavior ``forEachHitEdge(_:)`` describes.
@@ -217,7 +217,7 @@ package final class SancovCoverageSource: CoverageSource, @unchecked Sendable {
         true
     }
 
-    /// Reports every nonzero counter. Counts are the compiler's unsaturated increments, so a hot edge can wrap past 255.
+    /// Reports every nonzero counter. The compiler increments each byte without clamping, so a count wraps at 256 rather than saturating.
     package func forEachHitEdge(_ body: (_ edge: Int, _ hitCount: UInt8) -> Void) {
         scanHitEdges(body)
     }

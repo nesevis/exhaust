@@ -664,7 +664,7 @@ package final class FuzzRunner<Output> {
         let sequenceHash = ZobristHash.hash(of: sequence)
         let (verdict, hits) = evaluateInBracket(
             value,
-            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent.hash)
+            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent.hash, sequence: candidate)
         )
 
         // Phase 2: rebuild the tree only when something downstream reads it. Admission stores the tree as the mutation fallback, and the prune hook consumes it on the same failure-or-would-admit condition it fires on, so both rebuild eagerly here (`wouldAdmit` and offer's admission share one novelty predicate, and mutation-phase offers are never boundary-derived, so a candidate that fails the check can never have its placeholder tree stored). A plain failure consumes the tree only if the failure gate dispatches a reduction — a small minority once a fault's clusters are known — so the failure path defers the rebuild to that dispatch instead of paying a second materialization for every failing candidate. Coverage from a rebuild cannot pollute the next attempt: rebuilds, like reduction probes, run outside any bracket, and the next bracket begins with beginAttempt(), which clears attribution state.
@@ -783,7 +783,7 @@ package final class FuzzRunner<Output> {
         let sequenceHash = ZobristHash.hash(of: sequence)
         let (verdict, hits) = evaluateInBracket(
             value,
-            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: 0)
+            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: 0, sequence: sequence)
         )
 
         var tree = ChoiceTree.just
@@ -858,12 +858,19 @@ package final class FuzzRunner<Output> {
         candidateHash: UInt64,
         parentHash: UInt64 = 0,
         kind: FuzzProbeKind,
+        sequence: ChoiceSequence? = nil,
         _ evaluate: () -> Result
     ) -> Result {
         guard let breadcrumb else {
             return evaluate()
         }
-        return breadcrumb.marking(candidateHash: candidateHash, parentHash: parentHash, kind: kind, evaluate)
+        return breadcrumb.marking(
+            candidateHash: candidateHash,
+            parentHash: parentHash,
+            kind: kind,
+            sequence: sequence,
+            evaluate
+        )
     }
 
     /// The bracket the reducer runs each probe's property invocation inside, marking the probe's own candidate.
@@ -874,14 +881,19 @@ package final class FuzzRunner<Output> {
             return { _, evaluate in evaluate() }
         }
         return { candidate, evaluate in
-            breadcrumb.marking(candidateHash: ZobristHash.hash(of: candidate), kind: .reduction, evaluate)
+            breadcrumb.marking(
+                candidateHash: ZobristHash.hash(of: candidate),
+                kind: .reduction,
+                sequence: candidate,
+                evaluate
+            )
         }
     }
 
     /// One search attempt's evaluation: runs the property inside the attribution bracket with the breadcrumb slot, comparison capture, and property timing around it, and notes whether the run has seen an edge yet.
     func evaluateInBracket(
         _ value: Output,
-        recordingBreadcrumb slot: (candidateHash: UInt64, parentHash: UInt64)?
+        recordingBreadcrumb slot: (candidateHash: UInt64, parentHash: UInt64, sequence: ChoiceSequence)?
     ) -> (verdict: FuzzVerdict, hits: [(edge: Int, hitCount: UInt8)]) {
         let capturesComparisons = source.wantsComparisons
         let (verdict, hits) = attribute(value) { value in
@@ -892,7 +904,8 @@ package final class FuzzRunner<Output> {
             let verdict = withBreadcrumb(
                 candidateHash: slot?.candidateHash ?? 0,
                 parentHash: slot?.parentHash ?? 0,
-                kind: .search
+                kind: .search,
+                sequence: slot?.sequence
             ) {
                 property(value)
             }
@@ -1060,7 +1073,8 @@ package final class FuzzRunner<Output> {
             pruned.value,
             recordingBreadcrumb: (
                 candidateHash: prunedSequenceHash,
-                parentHash: parentHash
+                parentHash: parentHash,
+                sequence: prunedSequence
             )
         )
         counts.pruneInvocations += 1
@@ -1210,7 +1224,8 @@ package final class FuzzRunner<Output> {
                        counts.normalizationInvocations += 1
                        return withBreadcrumb(
                            candidateHash: ZobristHash.hash(of: candidate),
-                           kind: .normalization
+                           kind: .normalization,
+                           sequence: candidate
                        ) {
                            property(value)
                        }
@@ -1272,7 +1287,8 @@ package final class FuzzRunner<Output> {
             counts.classificationInvocations += 1
             return withBreadcrumb(
                 candidateHash: ZobristHash.hash(of: sequence),
-                kind: .classification
+                kind: .classification,
+                sequence: sequence
             ) {
                 property(value)
             }

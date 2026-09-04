@@ -12,8 +12,8 @@ package struct FuzzPersistenceContext {
     /// A fresh document from a predecessor that died before completing, or nil for a clean start (none present, stale, unparseable, or resume opted out).
     package let resumeDocument: FuzzProgressDocument?
 
-    /// The breadcrumb a crashed predecessor left: the probe under evaluation at death, its mutation parent, and which kind of probe it was. Nil when no crash is being resumed or the slot was clear.
-    package let survivor: (candidateHash: UInt64, parentHash: UInt64, kind: FuzzProbeKind)?
+    /// The breadcrumb a crashed predecessor left: the probe under evaluation at death, its mutation parent, which kind of probe it was, and the candidate itself when it fit the slot. Nil when no crash is being resumed or the slot was clear.
+    package let survivor: Survivor?
 
     /// Creates the context, reading any recoverable predecessor state.
     ///
@@ -28,9 +28,10 @@ package struct FuzzPersistenceContext {
             return
         }
         resumeDocument = store.load(maxAgeSeconds: FuzzTunables.progressLogStalenessSeconds)
-        survivor = resumeDocument == nil
-            ? nil
-            : FuzzBreadcrumb.readSurvivor(fileURL: store.breadcrumbFileURL)
+        // Only read the breadcrumb when a document is being resumed: a slot left by a run whose log has already aged out names a candidate nothing can look up.
+        survivor = resumeDocument.flatMap { _ in
+            FuzzBreadcrumb.readSurvivor(fileURL: store.breadcrumbFileURL)
+        }
     }
 
     /// Looks up the survivor's parent sequence in the resumed snapshot, for the trap report. Nil when the parent hash is 0 (the trap hit a phase-1/2 candidate with no corpus parent) or the parent predates the last checkpoint.

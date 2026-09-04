@@ -214,6 +214,24 @@ public extension __ExhaustRuntime {
         __exploreTime(refGen, time: time, settings: settings, coverage: .production, fileID: fileID, filePath: filePath, line: line, column: column, property: property)
     }
 
+    /// Refuses a `Void`-returning function reference, so the call site gets a sentence rather than a type mismatch.
+    ///
+    /// A trailing closure that returns `Void` is supported: the macro reads its body, checks that it has some way to fail, and routes it to the `#expect`-aware runtime. A bare function reference is a name, and the macro cannot see through it to do either. Overload resolution picks this declaration for such a call, and its unavailability is the diagnostic.
+    @available(*, unavailable, message: "Pass a closure rather than a function reference when the property returns Void. #explore needs to see the body to route Void properties to the #expect-aware runtime, and a bare name does not expose one. Wrap it: { try myProperty($0) }.")
+    @discardableResult
+    static func __exploreTime<Output>(
+        _: ReflectiveGenerator<Output>,
+        time _: TimeSpan,
+        settings _: [PropertyFuzzSettings],
+        fileID _: StaticString = #fileID,
+        filePath _: StaticString = #filePath,
+        line _: UInt = #line,
+        column _: UInt = #column,
+        property _: @escaping @Sendable (Output) throws -> Void
+    ) -> FuzzReport {
+        fatalError("unavailable")
+    }
+
     /// Runs a coverage-guided `time:` fuzz run with a Void/#expect/#require closure. Runtime target of `#explore(time:)`.
     @discardableResult
     static func __exploreTimeExpect<Output>(
@@ -711,6 +729,21 @@ public extension __ExhaustRuntime {
         guard context.resumeDocument != nil, let survivor = context.survivor else {
             return
         }
+        // The sidecar holds the candidate itself when it fit the slot, so the reader gets the input rather than a number they can do nothing with.
+        let candidateText: String
+        if let sequence = survivor.candidateSequence {
+            candidateText = "candidate \(sequence.shortString)"
+        } else {
+            candidateText = "candidate 0x\(String(survivor.candidateHash, radix: 16)) (too large to record, or written by an older build)"
+        }
+        // Which probe was running decides where to look: a reduction or normalization probe drives inputs the search never produced.
+        let probeText = switch survivor.kind {
+            case .search: "a search attempt"
+            case .reduction: "reduction of an earlier failure"
+            case .normalization: "normalization of a reduced form"
+            case .classification: "post-reduction classification"
+            case .recovery: "the re-judgement of a restored input"
+        }
         let parentText: String
         if let parentSequence = context.survivorParentSequence() {
             parentText = "a mutation of corpus parent \(parentSequence.shortString) (hash 0x\(String(survivor.parentHash, radix: 16)))"
@@ -720,7 +753,7 @@ public extension __ExhaustRuntime {
             parentText = "a mutation of a parent not present in the last checkpoint"
         }
         reportError(
-            "A previous run of this test terminated abnormally while candidate 0x\(String(survivor.candidateHash, radix: 16)) was in flight — \(parentText). A trap in the property is one cause; a kill signal, an out-of-memory kill, or a crash elsewhere in the process leave the same marker. The run resumes for the remaining budget with the crash region quarantined; establish what ended the predecessor before extending the budget.",
+            "A previous run of this test terminated abnormally while \(candidateText) was in flight, during \(probeText), \(parentText). A trap in the property is one cause; a kill signal, an out-of-memory kill, or a crash elsewhere in the process leave the same marker. The run resumes for the remaining budget with the crash region quarantined; establish what ended the predecessor before extending the budget.",
             fileID: fileID,
             filePath: filePath,
             line: line,

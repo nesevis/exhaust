@@ -269,6 +269,16 @@ package final class FuzzCorpus {
     /// Clears the admission-novelty baseline while keeping every entry, statistic, and report tally.
     ///
     /// Called once at the screening-to-sampling handover. Screening's covering-array rows are an analysis pass, and letting their coverage bind search admission can spend the entire novelty gradient before search begins: on a sparse precondition the boundary rows light most of the map, no search-phase candidate is ever coverage-novel, and the run plateaus having admitted nothing, which is the corpus-capture failure mode. After the reset the search phases start with the fresh map a screening-free run has, while screening's admitted entries keep competing as mutation parents and ``coveredEdgeCount`` keeps reporting the whole run.
+    /// Zeroes the per-edge incidence counts and their total, without touching entries, coverage, or admission masks.
+    ///
+    /// Called once at the end of a crash restore. Restoring re-offers every persisted entry, and each re-offer bumps these counts, so a resumed run would otherwise begin with incidence from re-offers that were never attempts of this run. The STADS estimators read these counts, so the saturation stop and the reported chance that the next attempt covers a new edge would both describe a mixture of two runs. Zeroing makes them describe post-resume attempts, which is what the report already tells the reader on a resumed run.
+    package func resetIncidenceStatistics() {
+        for index in edgeIncidenceCounts.indices {
+            edgeIncidenceCounts[index] = 0
+        }
+        incidenceTotalCount = 0
+    }
+
     package func resetNoveltyBaseline() {
         for index in seenBucketMasks.indices {
             seenBucketMasks[index] = 0

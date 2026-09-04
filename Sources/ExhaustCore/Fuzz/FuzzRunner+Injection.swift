@@ -153,7 +153,7 @@ extension FuzzRunner {
         let sequenceHash = ZobristHash.hash(of: sequence)
         let (verdict, hits) = evaluateInBracket(
             value,
-            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent?.entry.hash ?? 0)
+            recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent?.entry.hash ?? 0, sequence: sequence)
         )
         let admission = recordAttempt(
             value: value,

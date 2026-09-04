@@ -27,6 +27,13 @@ package enum ChoiceSequenceCodec {
 
     /// Encodes a sequence to a base64 string.
     package static func encode(_ sequence: ChoiceSequence) -> String {
+        Data(encodeBytes(sequence)).base64EncodedString()
+    }
+
+    /// Encodes a sequence to its raw bytes, the same stream ``encode(_:)`` base64s.
+    ///
+    /// The crash sidecar writes these straight into a mapped page on every property invocation, where base64 would cost a second buffer and a third of the bytes again for nothing: nothing reads that page as text.
+    package static func encodeBytes(_ sequence: ChoiceSequence) -> [UInt8] {
         var bytes: [UInt8] = [formatVersion]
         bytes.reserveCapacity(1 + sequence.count * 12)
         for entry in sequence {
@@ -62,7 +69,7 @@ package enum ChoiceSequenceCodec {
                     bytes.append(value.isRangeExplicit ? 1 : 0)
             }
         }
-        return Data(bytes).base64EncodedString()
+        return bytes
     }
 
     // MARK: - Decoding
@@ -72,7 +79,11 @@ package enum ChoiceSequenceCodec {
         guard let data = Data(base64Encoded: encoded) else {
             return nil
         }
-        let bytes = [UInt8](data)
+        return decodeBytes([UInt8](data))
+    }
+
+    /// Decodes a sequence from the raw byte stream ``encodeBytes(_:)`` produces, or nil when it is malformed or from a different format version.
+    package static func decodeBytes(_ bytes: [UInt8]) -> ChoiceSequence? {
         var cursor = 0
         guard readUInt8(bytes, &cursor) == formatVersion else {
             return nil

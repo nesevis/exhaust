@@ -41,9 +41,9 @@ struct CoverageGuidedRecoveryReviewTests {
             )
             try store.write(document)
             let breadcrumb = try #require(FuzzBreadcrumb(fileURL: store.breadcrumbFileURL))
-            breadcrumb.record(candidateHash: 0xAAAA, parentHash: 0xBBBB, kind: .search)
+            breadcrumb.record(candidateHash: 0xAAAA, parentHash: 0xBBBB, kind: .search, sequence: nil)
             let persistence = FuzzPersistenceContext(store: store, resumeEnabled: true)
-            let survivorObservedByProperty = SendableBox<(candidateHash: UInt64, parentHash: UInt64, kind: FuzzProbeKind)?>(nil)
+            let survivorObservedByProperty = SendableBox<Survivor?>(nil)
             let runner = FuzzRunner(
                 gen: generator,
                 property: { _ in

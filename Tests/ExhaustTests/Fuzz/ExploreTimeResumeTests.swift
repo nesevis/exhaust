@@ -71,12 +71,15 @@ struct ExploreTimeResumeTests {
         )
         try store.write(document)
 
-        // The predecessor died evaluating a mutation of the first snapshot entry.
+        // The predecessor died evaluating a mutation of the first snapshot entry. Written through the real breadcrumb so the slot layout, checksum, and commit marker are the ones a live run produces.
         let parentHash = ZobristHash.hash(of: sequences[0])
-        var breadcrumbBytes = Data()
-        withUnsafeBytes(of: UInt64(0xABCD).littleEndian) { breadcrumbBytes.append(contentsOf: $0) }
-        withUnsafeBytes(of: parentHash.littleEndian) { breadcrumbBytes.append(contentsOf: $0) }
-        try breadcrumbBytes.write(to: store.breadcrumbFileURL)
+        let predecessorBreadcrumb = try #require(FuzzBreadcrumb(fileURL: store.breadcrumbFileURL))
+        predecessorBreadcrumb.record(
+            candidateHash: 0xABCD,
+            parentHash: parentHash,
+            kind: .search,
+            sequence: sequences[0]
+        )
 
         let context = FuzzPersistenceContext(store: store, resumeEnabled: true)
         #expect(context.resumeDocument != nil)
