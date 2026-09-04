@@ -6,11 +6,20 @@
 //
 // Past the capacity within one attempt, new records overwrite the oldest: last-N-wins. The alternative, dropping the tail, is the wrong bias for exactly the cascades the pool exists to solve: deep comparisons fire late in a comparison-heavy attempt, so a first-N policy would discard the frontier operands and keep the shallow decoys.
 //
-// There are two rings. A trace-pc-guard run owns one inside its context, so two trace-pc-guard runs in one process harvest independently, the same isolation the edge recorder gives them. The process-global ring serves the inline-8bit-counter model, which has no context and already requires the process to itself. The hooks write to the bound context when there is one and to the global ring otherwise.
+// There are two rings, and they have different thread models.
 //
-// The cursor and writes are deliberately non-atomic, matching the inline-8bit-counter model: an instrumented SUT may run comparisons on more than one thread, and a lost or torn record is harmless.
+// A trace-pc-guard run owns one inside its context, so two trace-pc-guard runs in one process harvest independently, the same isolation the edge recorder gives them. Only the bound lane reaches it, because `exhaust_cmp_bound_ring` returns NULL on every other thread, so its cursor and writes are single-threaded by construction and stay non-atomic.
+//
+// The process-global ring serves the inline-8bit-counter model, which has no context and already requires the process to itself. Every thread of an instrumented SUT can still reach it, concurrently with the lane that drains it, so it is mutually excluded. "A torn record is harmless" is a claim about the value; concurrent non-atomic access is undefined behaviour, which is a claim about the program, and only the second one binds the optimiser.
+//
+// The exclusion is a spin lock over a four-store critical section rather than a platform mutex: `atomic_flag` is C11 and needs no per-platform header, and the hold time is a handful of stores with no calls in it. Swap it for a real mutex if contention ever shows on a comparison-heavy target.
+//
+// The enabled flag is read before the lock, so a build harvesting nothing pays one relaxed load per comparison and never touches the lock. That is also what confines the lock to the counter model: under trace-pc-guard the global ring's flag is never set, so the off-lane threads whose records nothing would harvest bail at the load.
 
 #define EXHAUST_CMP_CAPACITY 4096
+
+#include <stdatomic.h>
+#include <string.h>
 
 struct exhaust_cmp_ring {
     uint64_t buffer[EXHAUST_CMP_CAPACITY * 3]; // three words per record: call-site pc, arg1, arg2
@@ -19,16 +28,36 @@ struct exhaust_cmp_ring {
 };
 
 static struct exhaust_cmp_ring exhaust_cmp_global;
+static _Atomic int exhaust_cmp_global_enabled = 0;
+static atomic_flag exhaust_cmp_global_lock = ATOMIC_FLAG_INIT;
 
-static inline void exhaust_cmp_ring_record(struct exhaust_cmp_ring *ring, uint64_t site, uint64_t arg1, uint64_t arg2) {
-    if (!ring->enabled) {
-        return;
+// The drain's own copy. Written and read only by the lane that drains, so it needs no exclusion of its own, and handing Swift a pointer into it means no reader ever walks storage a hook can still be writing.
+static uint64_t exhaust_cmp_snapshot_buffer[EXHAUST_CMP_CAPACITY * 3];
+static size_t exhaust_cmp_snapshot_count = 0;
+
+static inline void exhaust_cmp_global_acquire(void) {
+    while (atomic_flag_test_and_set_explicit(&exhaust_cmp_global_lock, memory_order_acquire)) {
     }
+}
+
+static inline void exhaust_cmp_global_release(void) {
+    atomic_flag_clear_explicit(&exhaust_cmp_global_lock, memory_order_release);
+}
+
+static inline void exhaust_cmp_ring_store(struct exhaust_cmp_ring *ring, uint64_t site, uint64_t arg1, uint64_t arg2) {
     size_t slot = (ring->cursor % EXHAUST_CMP_CAPACITY) * 3;
     ring->buffer[slot] = site;
     ring->buffer[slot + 1] = arg1;
     ring->buffer[slot + 2] = arg2;
     ring->cursor += 1;
+}
+
+// The per-context ring: single-threaded, so the enabled check and the store need no exclusion.
+static inline void exhaust_cmp_ring_record(struct exhaust_cmp_ring *ring, uint64_t site, uint64_t arg1, uint64_t arg2) {
+    if (!ring->enabled) {
+        return;
+    }
+    exhaust_cmp_ring_store(ring, site, arg1, arg2);
 }
 
 static inline size_t exhaust_cmp_ring_count(const struct exhaust_cmp_ring *ring) {
@@ -40,26 +69,48 @@ struct exhaust_tpg_context;
 static struct exhaust_cmp_ring *exhaust_cmp_bound_ring(void);
 
 static inline void exhaust_cmp_record(uint64_t site, uint64_t arg1, uint64_t arg2) {
-    struct exhaust_cmp_ring *ring = exhaust_cmp_bound_ring();
-    exhaust_cmp_ring_record(ring ? ring : &exhaust_cmp_global, site, arg1, arg2);
+    struct exhaust_cmp_ring *bound = exhaust_cmp_bound_ring();
+    if (bound != NULL) {
+        exhaust_cmp_ring_record(bound, site, arg1, arg2);
+        return;
+    }
+    if (!atomic_load_explicit(&exhaust_cmp_global_enabled, memory_order_relaxed)) {
+        return;
+    }
+    exhaust_cmp_global_acquire();
+    exhaust_cmp_ring_store(&exhaust_cmp_global, site, arg1, arg2);
+    exhaust_cmp_global_release();
 }
 
 // MARK: - Harvest Control
 
 void exhaust_cmp_set_enabled(int enabled) {
-    exhaust_cmp_global.enabled = enabled;
+    // Release ordering: a hook that observes the flag set also observes this run's reset of the cursor.
+    atomic_store_explicit(&exhaust_cmp_global_enabled, enabled, memory_order_release);
 }
 
 void exhaust_cmp_reset(void) {
+    exhaust_cmp_global_acquire();
     exhaust_cmp_global.cursor = 0;
+    exhaust_cmp_global_release();
+}
+
+size_t exhaust_cmp_snapshot(void) {
+    // Taking the lock is what makes clearing the enabled flag sufficient: a hook that passed the load before the lane cleared it is still inside the critical section, and this copy waits for it.
+    exhaust_cmp_global_acquire();
+    size_t count = exhaust_cmp_ring_count(&exhaust_cmp_global);
+    memcpy(exhaust_cmp_snapshot_buffer, exhaust_cmp_global.buffer, count * 3 * sizeof(uint64_t));
+    exhaust_cmp_global_release();
+    exhaust_cmp_snapshot_count = count;
+    return count;
 }
 
 size_t exhaust_cmp_record_count(void) {
-    return exhaust_cmp_ring_count(&exhaust_cmp_global);
+    return exhaust_cmp_snapshot_count;
 }
 
 const uint64_t *exhaust_cmp_records(void) {
-    return exhaust_cmp_global.buffer;
+    return exhaust_cmp_snapshot_buffer;
 }
 
 // MARK: - SanitizerCoverage Hooks
@@ -109,12 +160,23 @@ void __sanitizer_cov_trace_switch(uint64_t value, uint64_t *cases) {
         return;
     }
     struct exhaust_cmp_ring *bound = exhaust_cmp_bound_ring();
-    struct exhaust_cmp_ring *ring = bound == NULL ? &exhaust_cmp_global : bound;
     uint64_t site = (uint64_t)__builtin_return_address(0);
     uint64_t count = cases[0];
-    for (uint64_t index = 0; index < count; index += 1) {
-        exhaust_cmp_ring_record(ring, site, value, cases[2 + index]);
+    if (bound != NULL) {
+        for (uint64_t index = 0; index < count; index += 1) {
+            exhaust_cmp_ring_record(bound, site, value, cases[2 + index]);
+        }
+        return;
     }
+    if (!atomic_load_explicit(&exhaust_cmp_global_enabled, memory_order_relaxed)) {
+        return;
+    }
+    // One acquisition for the whole case table rather than one per case: every pair belongs to the same comparison site.
+    exhaust_cmp_global_acquire();
+    for (uint64_t index = 0; index < count; index += 1) {
+        exhaust_cmp_ring_store(&exhaust_cmp_global, site, value, cases[2 + index]);
+    }
+    exhaust_cmp_global_release();
 }
 
 // MARK: - Trace-PC-Guard Edge Recording
@@ -125,9 +187,7 @@ void __sanitizer_cov_trace_switch(uint64_t value, uint64_t *cases) {
 //
 // Sparsity: the hook appends each edge to a covered list on its first hit, so reset and read are both O(edges the attempt lit) rather than O(edges the binary contains). The counter model has no record of which counters moved, so it must clear and rescan the whole table every attempt: 17.7 µs on an 89,832-edge build against 0.46 µs for the clear alone.
 
-#include <stdatomic.h>
 #include <stdlib.h>
-#include <string.h>
 
 struct exhaust_tpg_context {
     uint8_t *hits;              // saturating per-edge count, indexed by guard id
