@@ -585,7 +585,11 @@ public extension __ExhaustRuntime {
         if let persistence {
             configuration.persistence = persistence
             if let document = persistence.resumeDocument {
-                // A resumed run continues the logical run: the remaining slice of the declared budget, straight into the mutation phase — the restored corpus already carries the screening and sampling phases' work.
+                // A resumed run continues the logical run: the remaining slice of the declared budget, straight into the mutation phase.
+                //
+                // Both phases are skipped for any resume document, including one whose predecessor died partway through screening. Nothing records how far screening got, so the only two options are to skip all of it or to redo all of it, and skipping is the better of the two: the restored corpus already holds the admissions from the rows that ran, and redoing would spend the remaining slice re-deriving them before the mutation phase starts. The cost is that rows after the crash point go untested in this run.
+                //
+                // A run resumes because something ended the predecessor abnormally, which is a defect the user is expected to fix rather than a state to search from repeatedly, so the untested tail is accepted rather than engineered around. Persisting a screening cursor and restarting at it is the fix if that assumption stops holding.
                 let consumed = document.metadata.consumedNanoseconds
                 configuration.budgetNanoseconds = budgetNanoseconds > consumed ? budgetNanoseconds - consumed : 0
                 configuration.skipScreening = true
