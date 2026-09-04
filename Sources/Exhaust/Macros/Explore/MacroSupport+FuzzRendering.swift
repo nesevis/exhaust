@@ -510,6 +510,26 @@ extension __ExhaustRuntime {
         """
     }
 
+    /// The hard-failure diagnostic for an async sequential spec searched on a `trace-pc-guard` build below macOS 15.
+    ///
+    /// Calling `async` code from the synchronous search needs a bridge. Above the floor the bridge runs the spec's continuations on the lane that bound the coverage context; below it the only bridge available hands them to the cooperative pool and puts that lane to sleep, so a thread-bound recorder sees none of the work. Counter-based coverage is process-global and has no such lane, which is why it is the way out rather than raising the deployment target.
+    package static var asyncSequentialNeedsCountersMessage: String {
+        """
+        #explore(Spec.self, time:) cannot search an async sequential spec on this build: the target is below macOS 15 (iOS 18, tvOS 18, watchOS 11, visionOS 2) and its only coverage instrumentation is `trace-pc-guard`.
+
+        Below that version the bridge from the search to your `async` commands runs them on the cooperative pool, while `trace-pc-guard` records only on the thread the run bound its context to. Every edge your spec reaches would fire on the wrong thread and be dropped, so the search would have no signal and the run would report no coverage at all.
+
+        Instrument with counters instead, which record wherever the work runs:
+
+        .unsafeFlags(["-sanitize=undefined",
+                      "-sanitize-coverage=inline-8bit-counters,pc-table"])
+
+        Replace the `trace-pc-guard` flags rather than adding to them; a build carrying both recorders is refused. Counter-based coverage is process-global, so give the run the process to itself: `swift test --no-parallel`, or filter down to the single fuzz test.
+
+        A synchronous spec is unaffected, and so is any spec on macOS 15 or later.
+        """
+    }
+
     /// The hard-failure diagnostic for a build without coverage instrumentation, with the flags ready to copy-paste.
     package static var missingInstrumentationMessage: String {
         """

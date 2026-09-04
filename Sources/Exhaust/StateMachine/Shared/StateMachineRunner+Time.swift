@@ -171,6 +171,16 @@ public extension __ExhaustRuntime {
 
         switch mode {
             case .sequential:
+                // The bridge to the spec's async commands only keeps them on the lane that bound the coverage context from macOS 15; below that a thread-bound recorder would see none of the run, so say so rather than search blind for the whole budget.
+                if #unavailable(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2),
+                   case .production = coverage,
+                   FuzzInstrumentationCheck.registeredRecorders.isTraceGuardsOnly
+                {
+                    return .empty(
+                        termination: .invalidConfiguration(asyncSequentialNeedsCountersMessage),
+                        seed: 0
+                    )
+                }
                 return await runSpecFuzz(
                     makeAdapter: { buildAsyncSequentialSpecAdapter(specType, commandLimit: commandLimit) },
                     time: time,

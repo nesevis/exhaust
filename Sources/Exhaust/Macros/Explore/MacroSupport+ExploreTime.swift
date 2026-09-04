@@ -74,6 +74,28 @@ package enum FuzzInstrumentationCheck {
         }
     }
 
+    /// What the loader registered, without creating a source.
+    package struct RegisteredRecorders {
+        /// Whether any image registered `trace-pc-guard` regions.
+        package let hasTraceGuards: Bool
+
+        /// Edges across every registered inline-8bit-counter region; zero when none registered.
+        package let counterEdges: Int
+
+        /// Whether the only coverage this build can report comes through the thread-bound `trace-pc-guard` context, which records nothing for work that runs off the lane that bound it.
+        package var isTraceGuardsOnly: Bool {
+            hasTraceGuards && counterEdges == 0
+        }
+    }
+
+    /// What the registries hold. Allocates nothing, so a dispatch can ask before deciding whether it can run at all.
+    package static var registeredRecorders: RegisteredRecorders {
+        RegisteredRecorders(
+            hasTraceGuards: TracePCGuardCoverageSource.isInstrumented,
+            counterEdges: SancovRuntime.currentCounterRegions().reduce(0) { $0 + $1.count }
+        )
+    }
+
     /// Which coverage source this build supports, or why it supports none.
     ///
     /// A `trace-pc-guard` build gets the isolated source: its edges route through a thread-bound context, so the run neither shares a table with another run nor pays an O(instrumented edges) clear-and-rescan per attempt. A counter build gets the process-global source, which the driver serializes through ``FuzzRunExclusion``.
@@ -82,9 +104,9 @@ package enum FuzzInstrumentationCheck {
     ///
     /// - Parameter harvestsComparisons: Requests comparison-operand harvesting; the driver passes true only when injection can place the operands.
     package static func productionSource(harvestsComparisons: Bool) -> Selection {
-        let counterEdges = SancovRuntime.currentCounterRegions().reduce(0) { $0 + $1.count }
-        let hasGuards = TracePCGuardCoverageSource.isInstrumented
-        switch (hasGuards, counterEdges > 0) {
+        let registered = registeredRecorders
+        let counterEdges = registered.counterEdges
+        switch (registered.hasTraceGuards, counterEdges > 0) {
             case (true, true):
                 return .conflict(guardEdges: TracePCGuardCoverageSource.edgeTotal, counterEdges: counterEdges)
             case (false, true):
