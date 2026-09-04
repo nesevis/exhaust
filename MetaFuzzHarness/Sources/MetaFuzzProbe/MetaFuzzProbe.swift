@@ -95,8 +95,9 @@ struct MetaFuzzProbe: ParsableCommand {
                 + "termination \(describe(report.termination))"
         )
 
-        // The same inventory a failing test would print, suspect lines included. A passing run emits it too: what the budget bought is the question either way. Every relaunch after a trap prints its own, so the log accumulates the whole campaign's inventory rather than one slice's.
+        // The same summary a failing test would print, followed by the inventory the attachment carries: coverage counts, the estimators, and per-cluster suspect lines. A passing run emits both too: what the budget bought is the question either way. Every relaunch after a trap prints its own, so the log accumulates the whole campaign's inventory rather than one slice's. The workflow cuts the inventory out of this log by its header, so keep it last.
         print(report.renderedSummary())
+        print(report.renderedAttachmentSummary())
 
         if report.clusters.isEmpty {
             print("metafuzz: no findings in \(budgetSeconds)s")
