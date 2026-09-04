@@ -151,6 +151,13 @@ extension FuzzRunner {
         parent: (index: Int, entry: CorpusEntry)?
     ) -> Bool {
         let sequenceHash = ZobristHash.hash(of: sequence)
+        if isRecentDuplicate(hash: sequenceHash) {
+            counts.duplicateCandidatesSkipped += 1
+            if let parent {
+                corpus.noteChild(forParentAt: parent.index, admitted: false)
+            }
+            return true
+        }
         let (verdict, hits) = evaluateInBracket(
             value,
             recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent?.entry.hash ?? 0, sequence: sequence)

@@ -160,6 +160,14 @@ package final class FuzzCorpus {
 
     private var seenHashes: Set<UInt64> = []
 
+    /// Hashes of recently evaluated sequences, so a candidate the property has already judged is skipped before it runs again.
+    private var recentHashes = RecentHashTable(capacityExponent: 16)
+
+    /// Records that a candidate with this hash is about to reach the property, and reports whether one already did within the recent window.
+    package func markEvaluated(hash: UInt64) -> Bool {
+        recentHashes.insertReportingPresence(hash)
+    }
+
     /// Experiment knobs; the corpus reads `championArchive`.
     private let experiments: FuzzExperiments
 
@@ -834,5 +842,28 @@ package final class FuzzCorpus {
         }
         let lastIndex = mutableTierIndices[mutableTierIndices.count - 1]
         return (lastIndex, entries[lastIndex])
+    }
+}
+
+// MARK: - Recent Hash Table
+
+/// A direct-mapped table of recently seen hashes.
+///
+/// Fixed size, because a `Set` would grow with the attempt count. A newer hash evicts whatever held its bucket, so a duplicate can go unreported after eviction; the error re-evaluates, it never skips something unseen. Zero marks an empty bucket, so a zero hash is never reported present.
+package struct RecentHashTable {
+    private var slots: [UInt64]
+    private let mask: Int
+
+    package init(capacityExponent: Int) {
+        slots = Array(repeating: 0, count: 1 << capacityExponent)
+        mask = slots.count - 1
+    }
+
+    /// Records `hash` and returns whether it already held its bucket. The index comes from the high bits so that a low-bit collision is not also an index collision.
+    package mutating func insertReportingPresence(_ hash: UInt64) -> Bool {
+        let index = Int(truncatingIfNeeded: hash >> 24) & mask
+        let wasPresent = slots[index] == hash && hash != 0
+        slots[index] = hash
+        return wasPresent
     }
 }

@@ -52,8 +52,12 @@ extension __ExhaustRuntime {
         let evaluationDetail = report.rejectedSearchAttempts > 0
             ? ", \(report.evaluatedSearchCases) evaluated"
             : ""
+        // The rate counts property invocations, so without the skip count beside it a run that skipped half its candidates reads as half as fast.
+        let skipDetail = report.duplicateCandidatesSkipped > 0
+            ? "; \(report.duplicateCandidatesSkipped) duplicate candidates skipped before evaluation"
+            : ""
         lines.append(
-            "#explore(time:) cataloged \(report.clusters.count) \(clusterWord) in \(report.totalAttempts) attempts\(evaluationDetail) (\(Int(report.attemptsPerSecond.rounded())) evaluated/s; \(overheadPercent)% Exhaust testing overhead)."
+            "#explore(time:) cataloged \(report.clusters.count) \(clusterWord) in \(report.totalAttempts) attempts\(evaluationDetail) (\(Int(report.attemptsPerSecond.rounded())) evaluated/s; \(overheadPercent)% Exhaust testing overhead\(skipDetail))."
         )
 
         // Gap-framed: the uncovered count is the honest number; a percentage against module size would measure the module, not the search.

@@ -197,6 +197,12 @@ public struct FuzzReport: Sendable {
     /// Property invocations made while restoring coverage for persisted corpus entries whose saved signatures no longer match the build.
     public let recoveryInvocations: Int
 
+    /// Search candidates skipped before the property ran because the run had recently evaluated the same choice sequence. Counted in the phase attempt tallies, not in ``evaluatedSearchCases``.
+    public let duplicateCandidatesSkipped: Int
+
+    /// Spec-path pruning passes that removed no command, so the original evaluation stood in for the re-evaluation.
+    public let pruneIdentitySkips: Int
+
     /// Final source-located property invocations used to report assertion-closure failures.
     public private(set) var diagnosticInvocations: Int
 
@@ -430,6 +436,8 @@ package extension FuzzReport {
         normalizationInvocations = result.counts.normalizationInvocations
         classificationInvocations = result.counts.classificationInvocations
         recoveryInvocations = result.counts.recoveryInvocations
+        duplicateCandidatesSkipped = result.counts.duplicateCandidatesSkipped
+        pruneIdentitySkips = result.counts.pruneIdentitySkips
         diagnosticInvocations = 0
         corpusEntryCount = result.corpusEntryCount
         mutableTierCount = result.mutableTierCount
@@ -489,6 +497,8 @@ package extension FuzzReport {
             normalizationInvocations: 0,
             classificationInvocations: 0,
             recoveryInvocations: 0,
+            duplicateCandidatesSkipped: 0,
+            pruneIdentitySkips: 0,
             diagnosticInvocations: 0,
             corpusEntryCount: 0,
             mutableTierCount: 0,

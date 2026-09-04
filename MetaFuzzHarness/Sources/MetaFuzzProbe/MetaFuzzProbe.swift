@@ -130,5 +130,7 @@ private func describe(_ termination: FuzzReport.Termination) -> String {
             "first fault found"
         case .coverageUnreachable:
             "coverage unreachable"
+        case .uncontainedAsyncWork:
+            "uncontained async work outlived cancellation"
     }
 }

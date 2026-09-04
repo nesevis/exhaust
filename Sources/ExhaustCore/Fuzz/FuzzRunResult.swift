@@ -142,6 +142,10 @@ package struct FuzzRunCounts: Sendable {
     package var recoveryInvocations = 0
     /// Attempts whose evaluation reached no verdict (a `.tasks` probe that stalled and was cancelled). Counted inside `evaluatedSearchCases`, since the property ran; excluded from the corpus, since nothing was learned about the input.
     package var inconclusiveAttempts = 0
+    /// Search candidates skipped before property entry because the run had recently evaluated the same choice sequence. Counted in the phase's attempt tally, not in `evaluatedSearchCases`.
+    package var duplicateCandidatesSkipped = 0
+    /// Pruning passes that removed nothing, so the original evaluation stood in for a re-evaluation of the identical sequence.
+    package var pruneIdentitySkips = 0
 
     /// Counts candidate opportunities opened across all search phases, including candidates rejected before property entry.
     package var totalAttempts: Int {

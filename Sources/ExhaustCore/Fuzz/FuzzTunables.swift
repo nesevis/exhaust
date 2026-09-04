@@ -187,6 +187,9 @@ package struct FuzzExperiments: Sendable, Equatable {
     /// Post-reduction cluster normalization: re-drive each value of a would-be-new cluster's reduced form toward its minimal still-failing bit pattern before minting the cluster. Default-on; the knob stays one release for A/B.
     package var normalization = true
 
+    /// Skip a search candidate whose choice sequence was among the last 2^16 evaluated, before the property runs. Mutation of a small alphabet or a heavily boosted parent repeats sequences often, and each repeat is a property invocation that cannot learn anything.
+    package var candidateDedup = true
+
     /// Adaptive reduction-gate escape interval: coverage-novel failures escape immediately; periodic escapes that land in an existing cluster widen the interval geometrically, and new-cluster escapes reset it. Default-on; the knob stays one release for A/B.
     package var escapeBackoff = true
 
@@ -251,6 +254,7 @@ package struct FuzzExperiments: Sendable, Equatable {
     package static var knobs: [(name: String, keyPath: WritableKeyPath<FuzzExperiments, Bool>)] {
         [
             ("normalization", \.normalization),
+            ("candidateDedup", \.candidateDedup),
             ("escapeBackoff", \.escapeBackoff),
             ("stackedMutation", \.stackedMutation),
             ("banditBands", \.banditBands),

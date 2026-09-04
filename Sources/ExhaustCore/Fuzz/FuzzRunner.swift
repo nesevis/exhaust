@@ -662,6 +662,11 @@ package final class FuzzRunner<Output> {
         // swiftlint:disable:next force_cast
         let value = anyValue as! Output
         let sequenceHash = ZobristHash.hash(of: sequence)
+        if isRecentDuplicate(hash: sequenceHash) {
+            counts.duplicateCandidatesSkipped += 1
+            corpus.noteChild(forParentAt: parentIndex, admitted: false)
+            return CandidateFeedback(materialized: true, discarded: false, admitted: false)
+        }
         let (verdict, hits) = evaluateInBracket(
             value,
             recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent.hash, sequence: candidate)
@@ -781,6 +786,10 @@ package final class FuzzRunner<Output> {
             return .exhausted
         }
         let sequenceHash = ZobristHash.hash(of: sequence)
+        if isRecentDuplicate(hash: sequenceHash) {
+            counts.duplicateCandidatesSkipped += 1
+            return .evaluated(.rejectedDuplicate)
+        }
         let (verdict, hits) = evaluateInBracket(
             value,
             recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: 0, sequence: sequence)
@@ -888,6 +897,16 @@ package final class FuzzRunner<Output> {
                 evaluate
             )
         }
+    }
+
+    /// Whether the run recently evaluated this sequence, recording it either way. Always false with the `candidateDedup` knob off.
+    ///
+    /// A skipped candidate counts toward the phase's attempts and the parent's quiet-child tally, never toward `evaluatedSearchCases` or the corpus. The check assumes the property is a function of the sequence, as replay already does.
+    func isRecentDuplicate(hash: UInt64) -> Bool {
+        guard configuration.experiments.candidateDedup else {
+            return false
+        }
+        return corpus.markEvaluated(hash: hash)
     }
 
     /// One search attempt's evaluation: runs the property inside the attribution bracket with the breadcrumb slot, comparison capture, and property timing around it, and notes whether the run has seen an edge yet.
@@ -1068,6 +1087,16 @@ package final class FuzzRunner<Output> {
         let pruned = prune(original.value, original.tree)
         let prunedSequence = ChoiceSequence.flatten(pruned.tree)
         let prunedSequenceHash = ZobristHash.hash(of: prunedSequence)
+        // A hook that removed nothing hands back the sequence just evaluated, and re-running the property on it cannot answer differently.
+        if prunedSequenceHash == original.sequenceHash, prunedSequence == original.sequence {
+            counts.pruneIdentitySkips += 1
+            return PrunedCandidateSelection(
+                corpus: original,
+                failure: original.verdict.isFailure ? original : nil,
+                independentFailureCoverageNovel: nil
+            )
+        }
+        _ = isRecentDuplicate(hash: prunedSequenceHash)
         let parentHash = parentIndex.map { corpus.entries[$0].hash } ?? 0
         let (prunedVerdict, prunedHits) = evaluateInBracket(
             pruned.value,
