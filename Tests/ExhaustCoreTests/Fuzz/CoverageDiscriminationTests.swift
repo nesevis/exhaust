@@ -26,7 +26,7 @@ struct CoverageDiscriminationTests {
 
         let ranked = CoverageDiscrimination.rankedEdges(
             failingSignatures: failing,
-            passingSignatures: passing
+            passing: PassingSample(signatures: passing, edgeCount: 32)
         )
         #expect(ranked.first?.edge == 5)
         #expect(ranked.first?.failureHitFraction == 1.0)
@@ -48,7 +48,7 @@ struct CoverageDiscriminationTests {
         let passing = [bits([20])]
         let ranked = CoverageDiscrimination.rankedEdges(
             failingSignatures: failing,
-            passingSignatures: passing
+            passing: PassingSample(signatures: passing, edgeCount: 32)
         )
         #expect(ranked.count == FuzzTunables.discriminatingEdgeLimit)
     }
@@ -57,7 +57,7 @@ struct CoverageDiscriminationTests {
     func rankingEmpty() {
         let ranked = CoverageDiscrimination.rankedEdges(
             failingSignatures: [],
-            passingSignatures: [bits([1, 2])]
+            passing: PassingSample(signatures: [bits([1, 2])], edgeCount: 32)
         )
         #expect(ranked.isEmpty)
     }
@@ -96,7 +96,7 @@ struct CoverageDiscriminationTests {
         let discrimination = CoverageDiscrimination.discriminate(
             clusterID: 7,
             failingSignatures: failing,
-            passingSignatures: passing,
+            passing: PassingSample(signatures: passing, edgeCount: 16),
             edgeCount: 16
         )
         #expect(discrimination.clusterID == 7)

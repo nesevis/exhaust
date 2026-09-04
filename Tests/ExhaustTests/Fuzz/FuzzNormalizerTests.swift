@@ -17,7 +17,7 @@ struct FuzzNormalizerTests {
             reducedSequence: singleValueSequence(171),
             erasedGen: Gen.choose(in: 0 ... 255 as ClosedRange<Int>).erase(),
             symptom: .returnedFalse,
-            property: Self.maskProperty,
+            property: { value, _ in Self.maskProperty(value) },
             cache: cache
         )
         #expect(normalized?.value == 3)
@@ -37,7 +37,7 @@ struct FuzzNormalizerTests {
             reducedSequence: singleValueSequence(171),
             erasedGen: erased,
             symptom: .returnedFalse,
-            property: countingProperty,
+            property: { value, _ in countingProperty(value) },
             cache: cache
         )
         let probesForFirst = evaluationCount.withValue { $0 }
@@ -48,7 +48,7 @@ struct FuzzNormalizerTests {
             reducedSequence: singleValueSequence(171),
             erasedGen: erased,
             symptom: .returnedFalse,
-            property: countingProperty,
+            property: { value, _ in countingProperty(value) },
             cache: cache
         )
         #expect(second?.value == 3)
@@ -66,7 +66,7 @@ struct FuzzNormalizerTests {
             reducedSequence: singleValueSequence(171),
             erasedGen: erased,
             symptom: .returnedFalse,
-            property: equalityProperty,
+            property: { value, _ in equalityProperty(value) },
             cache: cache
         )
         #expect(outcome == nil)
@@ -92,7 +92,7 @@ struct FuzzNormalizerTests {
             reducedSequence: singleValueSequence(171),
             erasedGen: Gen.choose(in: 0 ... 255 as ClosedRange<Int>).erase(),
             symptom: FailureSymptom(kind: "A"),
-            property: slippingProperty,
+            property: { value, _ in slippingProperty(value) },
             cache: cache
         )
         #expect(outcome == nil)

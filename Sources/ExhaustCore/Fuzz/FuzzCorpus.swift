@@ -9,6 +9,8 @@ package struct CorpusEntry: Sendable {
     package let mutationLayout: FuzzMutator.Layout?
 
     /// The choice tree behind `sequence`, kept as the guided-materialization fallback for mutations of this entry.
+    ///
+    /// `ChoiceSequence.flatten(tree)` equals `sequence` for every admitted entry: the admission paths either construct `sequence` that way or assert the equality before offering. Read `sequence` rather than re-flattening.
     package let tree: ChoiceTree
 
     /// The graph and scope caches the graph-targeted mutation operators resolve their positions through.
@@ -19,7 +21,7 @@ package struct CorpusEntry: Sendable {
     /// The edges hit during this entry's property evaluation.
     package let signature: BitSet
 
-    /// The raw (edge, saturating count) pairs behind `signature`, retained so a progress-log restore can re-offer the entry with its original bucket information.
+    /// The raw (edge, saturating count) pairs behind `signature`, retained so a checkpoint can record what the entry covered when it was admitted.
     package let hits: [(edge: Int, hitCount: UInt8)]
 
     /// Whether the entry was admitted on boundary-derived credit rather than coverage novelty. Retained for faithful re-offer on restore.
@@ -44,7 +46,12 @@ package struct CorpusEntry: Sendable {
     package let hash: UInt64
 
     /// The edges this entry was first to cover, corpus-wide. The novelty bonus is rarity over these edges, so it decays automatically as other entries accumulate hits on them.
+    ///
+    /// Derived from the admission masks, which ``FuzzCorpus/resetNoveltyBaseline()`` clears at the screening handover, so an edge screening already reached can appear here again. That is deliberate for the search signal and wrong for a discovery clock; ``coveredRunFirstEdge`` is the clock's input.
     let introducedEdges: [Int]
+
+    /// Whether this entry reached an edge no attempt in the run had covered before, from the cumulative record rather than the admission masks. Unlike `introducedEdges` this survives the novelty-baseline reset, so rediscovery after the screening handover does not restart the run's time-to-last-discovery.
+    let coveredRunFirstEdge: Bool
 
     /// Multiplier on the entry's parent-selection score from failures among its children. 1 when no child failed; see ``FuzzTunables`` for the provisional and cluster-aware values.
     var failureBoost: Double = 1.0
@@ -77,6 +84,8 @@ package enum CorpusAdmission: Equatable {
     case rejectedDuplicate
     /// The candidate covers nothing the corpus has not already seen (no new edge, no new hit-count bucket) and carries no boundary-derived credit.
     case rejectedNotNovel
+    /// The evaluation reached no verdict, so the candidate was never offered. Its coverage describes a stalled execution rather than the input.
+    case rejectedInconclusive
 
     /// Whether the candidate was accepted, in either tier. Admission is the loop's coverage-novelty signal: it resets plateau windows and marks failures as coverage-novel for the reduction gate.
     package var isAdmitted: Bool {
@@ -85,6 +94,20 @@ package enum CorpusAdmission: Equatable {
         }
         return false
     }
+}
+
+/// The edge tallies the STADS estimators consume, counted together.
+package struct EdgeIncidenceProfile: Sendable {
+    /// Edges any corpus entry has covered.
+    package let covered: Int
+    /// Edges hit by exactly one non-duplicate attempt (Q1).
+    package let singletons: Int
+    /// Edges hit by exactly two non-duplicate attempts (Q2).
+    package let doubletons: Int
+    /// Edges hit by exactly three non-duplicate attempts (Q3).
+    package let tripletons: Int
+    /// Edges hit by exactly four non-duplicate attempts (Q4).
+    package let quadrupletons: Int
 }
 
 /// Accumulates coverage-interesting inputs and answers "which parent should the mutation phase mutate next?"
@@ -192,6 +215,41 @@ package final class FuzzCorpus {
         edgeIncidenceCounts.count(where: { $0 == 4 })
     }
 
+    /// The covered-edge tally and the Q1 through Q4 incidence classes, from one pass over the edge domain.
+    ///
+    /// The individual properties each walk the whole domain, and the saturation check reads all five: at the instrumented edge counts a real build carries, five passes is five times the work for one answer.
+    package var edgeIncidenceProfile: EdgeIncidenceProfile {
+        var covered = 0
+        var singletons = 0
+        var doubletons = 0
+        var tripletons = 0
+        var quadrupletons = 0
+        for edge in 0 ..< edgeCount {
+            if everCoveredEdges[edge] {
+                covered += 1
+            }
+            switch edgeIncidenceCounts[edge] {
+                case 1:
+                    singletons += 1
+                case 2:
+                    doubletons += 1
+                case 3:
+                    tripletons += 1
+                case 4:
+                    quadrupletons += 1
+                default:
+                    break
+            }
+        }
+        return EdgeIncidenceProfile(
+            covered: covered,
+            singletons: singletons,
+            doubletons: doubletons,
+            tripletons: tripletons,
+            quadrupletons: quadrupletons
+        )
+    }
+
     /// Sum of all entries in the incidence matrix (`V`), the discovery-probability denominator.
     package var incidenceTotal: Int {
         incidenceTotalCount
@@ -256,6 +314,16 @@ package final class FuzzCorpus {
         return entries[index].introducedEdges.isEmpty == false
     }
 
+    /// Whether the entry admitted at this index reached an edge no attempt had covered before.
+    ///
+    /// ``introducedNewEdges(at:)`` answers the same question against the admission masks, which ``resetNoveltyBaseline()`` clears, so after the screening handover it counts rediscovery as discovery. Use this one for anything that reports or decides on how long the run has gone without finding new code.
+    package func coveredRunFirstEdge(at index: Int) -> Bool {
+        guard index >= 0, index < entries.count else {
+            return false
+        }
+        return entries[index].coveredRunFirstEdge
+    }
+
     package func offer(
         sequence: ChoiceSequence,
         tree: ChoiceTree,
@@ -296,13 +364,17 @@ package final class FuzzCorpus {
         }
 
         var signature = BitSet(capacity: edgeCount)
+        var coveredRunFirstEdge = false
         for (edge, hitCount) in hits {
             guard edge >= 0, edge < edgeCount else {
                 continue
             }
             signature.insert(edge)
             seenBucketMasks[edge] |= HitCountBucket.bucketMask(for: hitCount)
-            everCoveredEdges[edge] = true
+            if everCoveredEdges[edge] == false {
+                coveredRunFirstEdge = true
+                everCoveredEdges[edge] = true
+            }
         }
 
         let tier: CorpusTier = convergence >= FuzzTunables.mutableTierConvergenceThreshold
@@ -326,7 +398,8 @@ package final class FuzzCorpus {
             propertyFailed: propertyFailed,
             propertyDiscarded: propertyDiscarded,
             hash: hash,
-            introducedEdges: introducedEdges
+            introducedEdges: introducedEdges,
+            coveredRunFirstEdge: coveredRunFirstEdge
         )
         entries.append(entry)
         cachedScores.append(nil)
@@ -586,7 +659,7 @@ package final class FuzzCorpus {
     }
 
     private func setFailureBoost(_ boost: Double, at index: Int) {
-        guard entries.indices.contains(index) else {
+        guard entries.indices.contains(index), entries[index].failureBoost != boost else {
             return
         }
         entries[index].failureBoost = boost

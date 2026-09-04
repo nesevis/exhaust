@@ -15,9 +15,25 @@ protocol ProbeSessionState {
     var graph: ChoiceGraph { get set }
     var gen: AnyGenerator { get }
     var property: (Any) -> Bool { get }
+    var probeBracket: FuzzProbeBracket? { get }
     var rejectCache: Set<UInt64> { get set }
     var collectStats: Bool { get }
     var isInstrumented: Bool { get }
+}
+
+extension ProbeSessionState {
+    /// The property with the host's bracket around it, carrying the candidate the probe is testing.
+    ///
+    /// Built per decode rather than once, because the sequence it reports is the one being decoded. Returns `property` unchanged when there is no bracket, so a host that does not need one allocates no closure.
+    func bracketedProperty(for candidate: ChoiceSequence) -> (Any) -> Bool {
+        guard let probeBracket else {
+            return property
+        }
+        let hostProperty = property
+        return { output in
+            probeBracket(candidate) { hostProperty(output) }
+        }
+    }
 }
 
 // MARK: - Probe Session
@@ -159,7 +175,7 @@ struct ProbeSession {
             gen: state.gen,
             tree: state.tree,
             originalSequence: state.sequence,
-            property: state.property,
+            property: state.bracketedProperty(for: candidateBuffer),
             filterObservations: &filterObservations,
             precomputedHash: pendingProbeHash
         )

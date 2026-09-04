@@ -47,7 +47,7 @@ struct CoverageGuidedReviewTests {
             prune: { _, _ in
                 (value: 0, tree: zeroTree)
             },
-            reduceStrategy: { tree, value, _ in
+            reduceStrategy: { tree, value, _, _ in
                 FuzzReductionResult(
                     sequence: ChoiceSequence.flatten(tree),
                     tree: tree,
@@ -94,7 +94,7 @@ struct CoverageGuidedReviewTests {
             prune: { _, _ in
                 (value: 0, tree: zeroTree)
             },
-            reduceStrategy: { tree, value, _ in
+            reduceStrategy: { tree, value, _, _ in
                 FuzzReductionResult(
                     sequence: ChoiceSequence.flatten(tree),
                     tree: tree,

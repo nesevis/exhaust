@@ -24,7 +24,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
 
     /// Run parameters and checkpoint bookkeeping.
     package struct Metadata: Codable, Sendable {
-        /// The root seed, so a resumed run replays the same search decisions.
+        /// The writing run's root seed. Provenance only, and it cannot become a continuation: the PRNG position is not persisted, so reusing the seed restarts the stream at zero and replays a prefix that was already consumed, against a corpus that stream never drew on. A resumed run takes its own seed and says so in the report.
         package var seed: UInt64
 
         /// The full wall-clock budget of the original run in nanoseconds.
@@ -76,7 +76,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
         package var firstSeenAttempt: Int?
         /// Members that joined this cluster only through normalization. Optional for the same pre-existing-log reason as ``firstSeenAttempt``.
         package var unnormalizedMemberCount: Int?
-        /// Signature edge indices, one array per distinct signature. Dropped on PC-hash mismatch.
+        /// Signature edge indices, one array per distinct signature. Provenance only: restore regenerates signatures from its own re-evaluation, because edge coverage moves with any behaviour change the PC-table hash does not fingerprint.
         package var signatureIndices: [[Int]]
 
         package init(cluster: FaultCluster, epochNanoseconds: UInt64) {
@@ -103,7 +103,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
     /// One corpus entry, serialized so restore can re-offer it in original admission order.
     package struct CorpusEntryRecord: Codable, Sendable {
         package var sequence: String
-        /// Hit edges and their saturating counts, parallel arrays — the exact offer input, so restore rebuilds bucket masks and rarity identically.
+        /// Hit edges and their saturating counts, parallel arrays — the offer input as the predecessor observed it. Provenance only: restore re-attributes every entry and offers the live hits, since a persisted signature describes paths the current build may no longer take.
         package var hitEdges: [Int]
         package var hitCounts: [UInt8]
         package var convergence: Double
@@ -111,7 +111,7 @@ package struct FuzzProgressDocument: Codable, Sendable {
         package var phase: String
         package var isBoundaryDerived: Bool
         package var propertyFailed: Bool
-        /// Whether the property discarded this entry. Optional so logs written before the field existed (version 2) still decode; restore treats a missing value as false.
+        /// Whether the property discarded this entry. Optional so logs written before the field existed (version 2) still decode. Provenance only, like ``propertyFailed``: restore takes both from its own evaluation.
         package var propertyDiscarded: Bool?
 
         package init(entry: CorpusEntry) {

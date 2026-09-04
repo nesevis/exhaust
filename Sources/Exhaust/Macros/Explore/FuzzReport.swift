@@ -137,6 +137,11 @@ public struct FuzzReport: Sendable {
 
         /// The first fault clustered and the run stopped there, as `.failFast` requested. The remaining budget was returned rather than spent searching for further faults.
         case firstFaultFound
+
+        /// An attempt's asynchronous work outlived cancellation and was abandoned while still running, so the run stopped rather than measuring later attempts against it.
+        ///
+        /// Reachable only from `.tasks` spec runs. The abandoned work keeps executing the system under test and keeps recording coverage, so every attempt after it carries some of the escaped attempt's behaviour in its signature. Raise `.idleTimeout`, reduce `.parallelize`, or find the command that does not return under cancellation.
+        case uncontainedAsyncWork
     }
 
     /// The distinct fault clusters discovered, in discovery order. Empty when every attempt passed.
@@ -537,6 +542,8 @@ package extension FuzzReport.Termination {
                 .coverageUnreachable
             case let .generationError(message):
                 .generationFailed(message)
+            case .uncontainedAsyncWork:
+                .uncontainedAsyncWork
         }
     }
 }

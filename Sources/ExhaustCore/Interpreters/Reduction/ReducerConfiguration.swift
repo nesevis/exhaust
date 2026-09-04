@@ -1,5 +1,10 @@
 // MARK: - Reducer Configuration
 
+/// Wraps one reduction probe's property invocation, carrying the candidate sequence that probe is testing.
+///
+/// A reduction probe drives the property at inputs the search never produced, so a caller that marks work in flight (the fuzz loop's crash breadcrumb) needs the probe's own sequence; without it the mark names whichever search candidate ran last, and the next run quarantines that one.
+package typealias FuzzProbeBracket = @Sendable (ChoiceSequence, () -> Bool) -> Bool
+
 package extension Interpreters {
     /// Controls the ChoiceGraph reducer's pass pipeline: stall budget, scope scheduling, and visualization.
     struct ReducerConfiguration: Sendable {
@@ -18,17 +23,24 @@ package extension Interpreters {
         /// Tuning constants for the scheduler's internal heuristics.
         package let tuning: SchedulerTuning
 
+        /// Wraps every probe's property invocation, receiving the candidate sequence that probe is testing.
+        ///
+        /// Nil for every caller that does not need it, which is all of them but the fuzz loop. The loop uses it to mark which input is in flight for crash recovery: a reduction probe drives the property at candidates the search never produced, and without the sequence the marker would name whichever search candidate ran last, which the next run then reports as the trap and quarantines.
+        package var probeBracket: FuzzProbeBracket?
+
         /// Creates a configuration with the given stall budget and optional wall-clock deadline.
         package init(
             maxStalls: Int,
             wallClockDeadlineNanoseconds: UInt64 = 0,
             enabledEncoders: Set<EncoderName>? = nil,
-            tuning: SchedulerTuning = .init()
+            tuning: SchedulerTuning = .init(),
+            probeBracket: FuzzProbeBracket? = nil
         ) {
             self.maxStalls = maxStalls
             self.wallClockDeadlineNanoseconds = wallClockDeadlineNanoseconds
             self.enabledEncoders = enabledEncoders
             self.tuning = tuning
+            self.probeBracket = probeBracket
         }
     }
 }

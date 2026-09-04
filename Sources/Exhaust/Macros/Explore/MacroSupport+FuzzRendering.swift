@@ -38,7 +38,7 @@ extension __ExhaustRuntime {
             let percent = Int((Double(report.discardedEvaluations) / Double(max(report.evaluatedSearchCases, 1)) * 100).rounded())
             lines.append("\(percent)% of inputs were skipped by the property (precondition not met); the search used them to find inputs that meet it.")
         }
-        lines.append("Reproduce: .replay(\(report.seed))")
+        lines.append(reproduceLine(report))
         lines.append("Coverage, throughput, and full suspect lists are in the explore-time-summary.txt attachment.")
         return lines.joined(separator: "\n")
     }
@@ -103,8 +103,18 @@ extension __ExhaustRuntime {
         if report.clusters.isEmpty == false {
             lines.append("Full per-cluster detail is in the explore-time-cluster attachments.")
         }
-        lines.append("Reproduce: .replay(\(report.seed))")
+        lines.append(reproduceLine(report))
         return lines.joined(separator: "\n")
+    }
+
+    /// The seed line, hedged on a resume.
+    ///
+    /// A resumed run draws its own seed and starts its PRNG at position zero against a corpus a different stream built, so the seed reproduces this run's search and nothing the predecessor did. Presenting it unqualified is worse than presenting no seed, because it looks actionable.
+    private static func reproduceLine(_ report: FuzzReport) -> String {
+        guard report.resumedFromCrash else {
+            return "Reproduce: .replay(\(report.seed))"
+        }
+        return "This run continued a predecessor's findings under a new seed, so it is not reproducible as a whole. Replaying .replay(\(report.seed)) repeats this run's search from an empty corpus."
     }
 
     /// Answers "should I run longer?" from the termination reason and the run's own discovery estimate, without naming the saturation rule or the estimators. Nil when the run ended for a reason that says nothing about the search (an attempt limit, unreachable coverage, a failed generator) or never covered an edge.
@@ -131,6 +141,8 @@ extension __ExhaustRuntime {
                     return "Used the whole budget and was still reaching new code \(renderDuration(idle)) before the end; a longer run may find more."
                 }
                 return "Used the whole budget; the last new code was reached \(renderDuration(idle)) before the end, so a longer run is unlikely to find more."
+            case .uncontainedAsyncWork:
+                return "Stopped when an attempt's asynchronous work escaped cancellation; what ran after that point would have been measured against it."
             case .attemptLimitReached, .coverageUnreachable, .instrumentationMissing, .invalidConfiguration, .generationFailed:
                 return nil
         }
@@ -468,12 +480,33 @@ extension __ExhaustRuntime {
 
         1. An optimized build inlined the code under test into a module that has no coverage flags. In release configuration the compiler copies small functions into their callers, and a copy compiled as part of an uninstrumented module records nothing. Add the coverage flags to the module that calls the code under test (usually the test target) as well as to the library, and keep `-assert-config Debug` alongside them so `assert` oracles survive.
 
-        2. The property's work runs on an executor the run did not bind: a `@MainActor` function, an actor with a custom executor, or a detached task. `trace-pc-guard` records only on the run's own thread. Add counter-based instrumentation, which records regardless of executor; when both recorders are present the counters are used:
+        2. The property's work runs on an executor the run did not bind: a `@MainActor` function, an actor with a custom executor, or a detached task. `trace-pc-guard` records only on the run's own thread. Switch to counter-based instrumentation, which records regardless of executor:
 
         .unsafeFlags(["-sanitize=undefined",
-                      "-sanitize-coverage=edge,trace-pc-guard,inline-8bit-counters,pc-table"])
+                      "-sanitize-coverage=inline-8bit-counters,pc-table"])
 
-        Counter-based coverage is process-global, so give the run the process to itself: `swift test --no-parallel`, or filter down to the single fuzz test.
+        Replace the `trace-pc-guard` flags rather than adding to them: a build carrying both recorders is refused, because the two number their edges independently and nothing says which one a run should read. Counter-based coverage is process-global, so give the run the process to itself: `swift test --no-parallel`, or filter down to the single fuzz test.
+        """
+    }
+
+    /// The hard-failure diagnostic for a build that compiled in both coverage recorders.
+    ///
+    /// The two number their edges independently, so a signature taken against one carries no information about the other, and a run attributes coverage against exactly one. Nothing in the build says which, and picking silently gives the run a coverage map of part of the binary under a report that describes all of it.
+    package static func mixedRecorderMessage(guardEdges: Int, counterEdges: Int) -> String {
+        """
+        #explore(time:) found both coverage recorders compiled into this process: trace-pc-guard over \(guardEdges) edges and inline-8bit-counters over \(counterEdges) edges.
+
+        A run reads one recorder. The two number their edges independently, so coverage measured against one says nothing about the other, and nothing in the build says which one you meant. Compile with one set of coverage flags:
+
+        .unsafeFlags(["-sanitize=undefined",
+                      "-sanitize-coverage=edge,trace-pc-guard,pc-table"])
+
+        or, when the property's work runs on an executor the run does not bind (a `@MainActor` function, an actor with a custom executor, a detached task):
+
+        .unsafeFlags(["-sanitize=undefined",
+                      "-sanitize-coverage=inline-8bit-counters,pc-table"])
+
+        Counter-based coverage is process-global, so a run using it needs the process to itself: `swift test --no-parallel`, or filter down to the single fuzz test. Check every target in the dependency graph, not only the one under test: flags on a library and different flags on the test target put both recorders in the same process.
         """
     }
 

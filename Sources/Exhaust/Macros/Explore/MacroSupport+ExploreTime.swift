@@ -48,14 +48,58 @@ enum FuzzRunExclusion {
 
 /// Chooses the coverage source for a production run from the registries the loader populated before `main`.
 package enum FuzzInstrumentationCheck {
-    /// The coverage source for this build, or nil when no instrumented image registered a region (the run then fails with the missing-instrumentation diagnostic).
+    /// What the registries say about this build's instrumentation.
+    package enum Selection {
+        /// Exactly one recorder registered, and this reads it.
+        case source(any CoverageSource)
+        /// No instrumented image registered a region, or the only registered recorder could not allocate its context. The two are one case because the caller's remedy is the same diagnostic and a failed allocation has no better one to offer.
+        case notInstrumented
+        /// Both recorders registered, with their respective edge counts.
+        case conflict(guardEdges: Int, counterEdges: Int)
+
+        /// The resolved source, or nil when this build supports none.
+        package var source: (any CoverageSource)? {
+            guard case let .source(source) = self else {
+                return nil
+            }
+            return source
+        }
+
+        /// The two edge counts when both recorders registered, or nil otherwise.
+        package var conflictingEdgeCounts: (guardEdges: Int, counterEdges: Int)? {
+            guard case let .conflict(guardEdges, counterEdges) = self else {
+                return nil
+            }
+            return (guardEdges, counterEdges)
+        }
+    }
+
+    /// Which coverage source this build supports, or why it supports none.
     ///
-    /// Both initializers return nil on an empty registry, so presence needs no separate check. A `trace-pc-guard` build gets the isolated source: its edges route through a thread-bound context, so the run neither shares a table with another run nor pays an O(instrumented edges) clear-and-rescan per attempt. A counter build gets the process-global source, which the driver serializes through ``FuzzRunExclusion``. When both recorders are compiled in, the counters win: the only reason to add `inline-8bit-counters` beside `trace-pc-guard` is that the guard context cannot see the property's work, and a build carrying both would otherwise get the `trace-pc-guard` source and the same diagnostic again.
+    /// A `trace-pc-guard` build gets the isolated source: its edges route through a thread-bound context, so the run neither shares a table with another run nor pays an O(instrumented edges) clear-and-rescan per attempt. A counter build gets the process-global source, which the driver serializes through ``FuzzRunExclusion``.
+    ///
+    /// Both together is a conflict rather than a precedence question. The two recorders number their edges independently, so a signature taken against one says nothing about the other, and a run can attribute coverage against exactly one of them; nothing in the build says which. Silently preferring either produces a run whose coverage describes half the binary while the report describes all of it.
     ///
     /// - Parameter harvestsComparisons: Requests comparison-operand harvesting; the driver passes true only when injection can place the operands.
-    package static func productionSource(harvestsComparisons: Bool) -> (any CoverageSource)? {
-        SancovCoverageSource(harvestsComparisons: harvestsComparisons)
-            ?? TracePCGuardCoverageSource(harvestsComparisons: harvestsComparisons)
+    package static func productionSource(harvestsComparisons: Bool) -> Selection {
+        let counterEdges = SancovRuntime.currentCounterRegions().reduce(0) { $0 + $1.count }
+        let hasGuards = TracePCGuardCoverageSource.isInstrumented
+        switch (hasGuards, counterEdges > 0) {
+            case (true, true):
+                return .conflict(guardEdges: TracePCGuardCoverageSource.edgeTotal, counterEdges: counterEdges)
+            case (false, true):
+                guard let source = SancovCoverageSource(harvestsComparisons: harvestsComparisons) else {
+                    return .notInstrumented
+                }
+                return .source(source)
+            case (true, false):
+                guard let source = TracePCGuardCoverageSource(harvestsComparisons: harvestsComparisons) else {
+                    return .notInstrumented
+                }
+                return .source(source)
+            case (false, false):
+                return .notInstrumented
+        }
     }
 }
 
@@ -491,13 +535,26 @@ public extension __ExhaustRuntime {
         // Injection activates on the presence of trace-cmp instrumentation, not a knob: comparand substitution places operands directly into a parent's flat sequence and needs no reflection, so every run can use a harvested operand, and a build without trace-cmp never fills the pool, so the injection arms stay free. There is no init-time way to detect the flag — its presence shows up as a non-empty pool once a comparison fires. The reflective paths (whole-value through the reconstructor, composites through the field graft) additionally require a reflective generator, gated by their own capability flags.
 
         // A live source always enables comparison-operand harvesting: the drain is a no-op without trace-cmp instrumentation, and comparand substitution can place operands on any generator.
-        let resolvedSource: (any CoverageSource)? = switch coverage {
+        let resolvedSource: (any CoverageSource)?
+        switch coverage {
             case .production:
-                FuzzInstrumentationCheck.productionSource(harvestsComparisons: true)
+                switch FuzzInstrumentationCheck.productionSource(harvestsComparisons: true) {
+                    case let .source(source):
+                        resolvedSource = source
+                    case .notInstrumented:
+                        resolvedSource = nil
+                    case let .conflict(guardEdges, counterEdges):
+                        return .empty(
+                            termination: .invalidConfiguration(
+                                mixedRecorderMessage(guardEdges: guardEdges, counterEdges: counterEdges)
+                            ),
+                            seed: seed
+                        )
+                }
             case .none:
-                nil
+                resolvedSource = nil
             case let .injected(injected):
-                injected
+                resolvedSource = injected
         }
         guard let source = resolvedSource else {
             return .empty(termination: .instrumentationMissing, seed: seed)
@@ -637,7 +694,7 @@ public extension __ExhaustRuntime {
             parentText = "a mutation of a parent not present in the last checkpoint"
         }
         reportError(
-            "A previous run of this test was killed by a Swift trap while evaluating candidate 0x\(String(survivor.candidateHash, radix: 16)) — \(parentText). The run resumes for the remaining budget with the crash region quarantined; fix the trap before extending the budget.",
+            "A previous run of this test terminated abnormally while candidate 0x\(String(survivor.candidateHash, radix: 16)) was in flight — \(parentText). A trap in the property is one cause; a kill signal, an out-of-memory kill, or a crash elsewhere in the process leave the same marker. The run resumes for the remaining budget with the crash region quarantined; establish what ended the predecessor before extending the budget.",
             fileID: fileID,
             filePath: filePath,
             line: line,
@@ -684,6 +741,12 @@ public extension __ExhaustRuntime {
                 if report.evaluatedSearchCases == 0 {
                     return
                 }
+            case .uncontainedAsyncWork:
+                // The attempts before the escape are real findings and report below; the run stopped because everything after it would have been measured against work that was still running.
+                reportError(
+                    "An attempt's asynchronous work did not return under cancellation and was abandoned while still running, so the run stopped: the escaped work keeps executing the system under test and keeps recording coverage, and every later attempt would carry some of it in its own signature. Raise .idleTimeout, reduce .parallelize, or find the command that does not return when its task is cancelled.",
+                    fileID: fileID, filePath: filePath, line: line, column: column
+                )
             case .budgetExhausted, .coveragePlateau, .attemptLimitReached, .firstFaultFound:
                 break
         }
@@ -692,7 +755,7 @@ public extension __ExhaustRuntime {
             if report.resumedFromCrash {
                 // A resumed run can arrive with its declared budget already consumed by crashed predecessors. The pointless-run error below would misdirect the reader toward the generator and budget, both fine, so the resume gets its own message and the restored inventory still reports.
                 reportError(
-                    "The declared time budget was already consumed by crashed predecessors, so this run evaluated no new candidates. The restored fault inventory is reported as-is; fix the trap before extending the budget.",
+                    "The declared time budget was already consumed by predecessors that terminated abnormally, so this run evaluated no new candidates. The restored fault inventory is reported as-is; establish what ended the predecessors before extending the budget.",
                     fileID: fileID, filePath: filePath, line: line, column: column
                 )
             } else {

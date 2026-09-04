@@ -5,6 +5,10 @@ extension FuzzRunner {
 
     /// The run-wide stop conditions every phase checks: wall clock and the testing attempt limit.
     func terminationDue() -> FuzzTermination? {
+        // First: a property that reported uncontained work has made every later attempt unmeasurable, which no limit check can discover.
+        if let forced = forcedTermination() {
+            return forced
+        }
         if configuration.stopOnFirstFault, inventory.clusterCount > 0 {
             return .firstFaultFound
         }

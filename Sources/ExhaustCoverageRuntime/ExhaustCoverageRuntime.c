@@ -108,10 +108,12 @@ void __sanitizer_cov_trace_switch(uint64_t value, uint64_t *cases) {
     if (cases == NULL) {
         return;
     }
+    struct exhaust_cmp_ring *bound = exhaust_cmp_bound_ring();
+    struct exhaust_cmp_ring *ring = bound == NULL ? &exhaust_cmp_global : bound;
     uint64_t site = (uint64_t)__builtin_return_address(0);
     uint64_t count = cases[0];
     for (uint64_t index = 0; index < count; index += 1) {
-        exhaust_cmp_record(site, value, cases[2 + index]);
+        exhaust_cmp_ring_record(ring, site, value, cases[2 + index]);
     }
 }
 
@@ -135,15 +137,16 @@ struct exhaust_tpg_context {
     struct exhaust_cmp_ring *comparisons; // this run's operand ring; the hooks write here while the context is bound
 };
 
-static size_t exhaust_tpg_edge_count = 0;
+// Atomic: `__sanitizer_cov_trace_pc_guard_init` runs once per image, and a concurrent `dlopen` would otherwise race the reservation against a reader.
+static _Atomic size_t exhaust_tpg_edge_count = 0;
 // Edges fire before any run binds a context (module constructors, test-framework startup). A null binding drops them, which is the correct attribution: they belong to no attempt.
 static _Thread_local struct exhaust_tpg_context *exhaust_tpg_current = NULL;
 // Set while a thread hosts a run: the run's own lane is deliberately unbound between brackets, and edges it fires there (generation, reduction probes) are excluded by design, not lost. Edges fired on a thread that hosts no run are the loss the caller cannot see: property work that escaped to another executor, or another test exercising the instrumented code concurrently. Those are counted below while at least one context exists. The flag is cleared when the hosting thread destroys its context, so a recycled GCD lane starts clean; it is not exact while a lane hosts one run's bracket and, at the same time, another run's escaped work, which a per-context owner-thread check would close.
 static _Thread_local int exhaust_tpg_thread_owned = 0;
 // Atomic: contexts are created and destroyed on different lanes, and a lost update here would either over-count drops after the last run or, worse, read zero while contexts exist and silence the diagnostic for the rest of the process.
 static _Atomic size_t exhaust_tpg_live_contexts = 0;
-// Non-atomic like the hit counts: a torn or lost increment costs one unit of a diagnostic count.
-static size_t exhaust_tpg_dropped_hits = 0;
+// Atomic: every off-lane thread that fires an edge while a context is live increments this, so a plain counter would be a data race even though a lost update only costs one unit of a diagnostic count.
+static _Atomic size_t exhaust_tpg_dropped_hits = 0;
 
 static struct exhaust_cmp_ring *exhaust_cmp_bound_ring(void) {
     struct exhaust_tpg_context *context = exhaust_tpg_current;
@@ -154,8 +157,12 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start, uint32_t *stop) {
     if (start == stop || *start) {
         return;
     }
+    // Reserve the whole range in one step: incrementing per guard would let a concurrently loading image interleave ids into this one's span.
+    size_t span = (size_t)(stop - start);
+    size_t base = atomic_fetch_add_explicit(&exhaust_tpg_edge_count, span, memory_order_relaxed);
+    uint32_t next = (uint32_t)(base + 1);
     for (uint32_t *guard = start; guard < stop; guard++) {
-        *guard = (uint32_t)(++exhaust_tpg_edge_count);
+        *guard = next++;
     }
 }
 
@@ -163,7 +170,7 @@ void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
     struct exhaust_tpg_context *context = exhaust_tpg_current;
     if (context == NULL) {
         if (!exhaust_tpg_thread_owned && atomic_load_explicit(&exhaust_tpg_live_contexts, memory_order_relaxed) != 0) {
-            exhaust_tpg_dropped_hits += 1;
+            atomic_fetch_add_explicit(&exhaust_tpg_dropped_hits, 1, memory_order_relaxed);
         }
         return;
     }
@@ -185,18 +192,20 @@ void __sanitizer_cov_trace_pc_guard(uint32_t *guard) {
 }
 
 size_t exhaust_tpg_edge_total(void) {
-    return exhaust_tpg_edge_count;
+    return atomic_load_explicit(&exhaust_tpg_edge_count, memory_order_relaxed);
 }
 
 struct exhaust_tpg_context *exhaust_tpg_create(void) {
-    if (exhaust_tpg_edge_count == 0) {
+    size_t edge_count = atomic_load_explicit(&exhaust_tpg_edge_count, memory_order_relaxed);
+    if (edge_count == 0) {
         return NULL;
     }
     struct exhaust_tpg_context *context = calloc(1, sizeof(struct exhaust_tpg_context));
     if (context == NULL) {
         return NULL;
     }
-    context->capacity = exhaust_tpg_edge_count + 1;
+    // Capacity is a snapshot: an image loaded after this point extends the global edge count, and its edges fall past `capacity` and are dropped by the hook. Growing the arrays mid-run would invalidate the hit indices an attempt is already accumulating.
+    context->capacity = edge_count + 1;
     context->hits = calloc(context->capacity, sizeof(uint8_t));
     context->covered = calloc(context->capacity, sizeof(uint32_t));
     context->comparisons = calloc(1, sizeof(struct exhaust_cmp_ring));
@@ -240,7 +249,7 @@ void exhaust_tpg_bind(struct exhaust_tpg_context *context) {
 }
 
 size_t exhaust_tpg_dropped_hit_count(void) {
-    return exhaust_tpg_dropped_hits;
+    return atomic_load_explicit(&exhaust_tpg_dropped_hits, memory_order_relaxed);
 }
 
 void exhaust_tpg_reset(struct exhaust_tpg_context *context) {
@@ -300,9 +309,9 @@ const uint64_t *exhaust_tpg_cmp_records(struct exhaust_tpg_context *context) {
 
 #ifdef DEBUG
 void exhaust_tpg_reset_registry_for_testing(void) {
-    exhaust_tpg_edge_count = 0;
+    atomic_store_explicit(&exhaust_tpg_edge_count, 0, memory_order_relaxed);
     exhaust_tpg_current = NULL;
     exhaust_tpg_thread_owned = 0;
-    exhaust_tpg_dropped_hits = 0;
+    atomic_store_explicit(&exhaust_tpg_dropped_hits, 0, memory_order_relaxed);
 }
 #endif

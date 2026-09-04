@@ -12,8 +12,8 @@ package struct FuzzPersistenceContext {
     /// A fresh document from a predecessor that died before completing, or nil for a clean start (none present, stale, unparseable, or resume opted out).
     package let resumeDocument: FuzzProgressDocument?
 
-    /// The breadcrumb a crashed predecessor left: the candidate under evaluation at death and its mutation parent. Nil when no crash is being resumed or the slot was clear.
-    package let survivor: (candidateHash: UInt64, parentHash: UInt64)?
+    /// The breadcrumb a crashed predecessor left: the probe under evaluation at death, its mutation parent, and which kind of probe it was. Nil when no crash is being resumed or the slot was clear.
+    package let survivor: (candidateHash: UInt64, parentHash: UInt64, kind: FuzzProbeKind)?
 
     /// Creates the context, reading any recoverable predecessor state.
     ///

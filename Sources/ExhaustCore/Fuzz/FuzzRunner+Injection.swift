@@ -28,20 +28,19 @@ extension FuzzRunner {
         guard let (parentIndex, parent) = corpus.pickParent(random: randomUnit()) else {
             return false
         }
-        let parentSequence = ChoiceSequence.flatten(parent.tree)
+        guard let word = comparisonPool.drawValue(sitePick: randomUnit(), valuePick: randomUnit()) else {
+            return false
+        }
+        let fieldIndex = Int(prng.next(upperBound: UInt64(FuzzTunables.reflectionGraftPositionSpan)))
         guard case let .success(anyParent, _, _) = Materializer.materializeAny(
             erasedGen,
-            prefix: parentSequence,
+            prefix: parent.sequence,
             mode: .exact
         ),
             let parentValue = anyParent as? Output
         else {
             return false
         }
-        guard let word = comparisonPool.drawValue(sitePick: randomUnit(), valuePick: randomUnit()) else {
-            return false
-        }
-        let fieldIndex = Int(prng.next(upperBound: UInt64(FuzzTunables.reflectionGraftPositionSpan)))
         guard let tree = try? Interpreters.reflectGraftingOperand(
             into: gen,
             parent: parentValue,
@@ -156,7 +155,7 @@ extension FuzzRunner {
             value,
             recordingBreadcrumb: (candidateHash: sequenceHash, parentHash: parent?.entry.hash ?? 0)
         )
-        recordAttempt(
+        let admission = recordAttempt(
             value: value,
             tree: tree,
             sequence: sequence,
@@ -168,6 +167,10 @@ extension FuzzRunner {
             phase: .mutation,
             parentIndex: parent?.index
         )
+        // A grafted child is a child: without this the parent's quiet-child counter never advances, and the campaign stall gate reads a parent that keeps producing as one that has gone silent.
+        if let parent {
+            corpus.noteChild(forParentAt: parent.index, admitted: admission.isAdmitted)
+        }
         return true
     }
 }

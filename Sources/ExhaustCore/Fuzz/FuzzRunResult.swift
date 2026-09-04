@@ -8,14 +8,23 @@ package enum FuzzVerdict: Sendable {
     case fail(FailureSymptom)
     /// The property declined to judge the input (a skip error): the precondition was not met. Not a failure and not evidence of passing; the corpus keeps coverage-novel discards as low-energy mutation parents, because a mutation of a near-miss is the likeliest route to a valid input on a sparse precondition.
     case discard
+    /// The evaluation did not reach a verdict, so nothing was learned about the input. Distinct from ``discard``, which is a judgement the property made: an inconclusive attempt produced coverage that describes a stalled execution rather than the input's behaviour, so it is counted and then dropped. Offering it would seed the corpus with the shape of a timeout.
+    case inconclusive
 
     package var isFailure: Bool {
         switch self {
-            case .pass, .discard:
+            case .pass, .discard, .inconclusive:
                 false
             case .fail:
                 true
         }
+    }
+
+    package var isInconclusive: Bool {
+        if case .inconclusive = self {
+            return true
+        }
+        return false
     }
 
     package var isDiscard: Bool {
@@ -40,6 +49,8 @@ package enum FuzzTermination: Equatable, Sendable {
     case coverageUnreachable
     /// Generation failed irrecoverably.
     case generationError(String)
+    /// An attempt's asynchronous work outlived its cancellation drain and was abandoned while still running. The run stops because that work keeps executing the system under test and keeps recording coverage against later attempts, so every attempt after it is measuring something other than its own input.
+    case uncontainedAsyncWork
 }
 
 /// Configuration for one `time:` run. Package-visible controls beyond the public settings exist for the validation harness (phase skipping, attempt limits).
@@ -129,6 +140,8 @@ package struct FuzzRunCounts: Sendable {
     package var normalizationInvocations = 0
     package var classificationInvocations = 0
     package var recoveryInvocations = 0
+    /// Attempts whose evaluation reached no verdict (a `.tasks` probe that stalled and was cancelled). Counted inside `evaluatedSearchCases`, since the property ran; excluded from the corpus, since nothing was learned about the input.
+    package var inconclusiveAttempts = 0
 
     /// Counts candidate opportunities opened across all search phases, including candidates rejected before property entry.
     package var totalAttempts: Int {

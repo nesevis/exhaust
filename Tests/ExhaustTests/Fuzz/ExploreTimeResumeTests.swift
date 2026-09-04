@@ -19,7 +19,9 @@ struct ExploreTimeResumeTests {
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1, maxRuns: UInt64.max)
         let helperCorpus = FuzzCorpus(edgeCount: 32)
         var sequences: [ChoiceSequence] = []
-        while sequences.count < 5, let (value, tree) = try interpreter.next() {
+        var values: [Int] = []
+        // Six: five for the snapshot, and a sixth the snapshot does not hold, so the planted cluster's own failure is not also a restored entry's. A restored entry's failure is recorded at attempt index zero (it belongs to no attempt of this run), and the minimum would then overwrite the cluster's carried-over discovery index.
+        while sequences.count < 6, let (value, tree) = try interpreter.next() {
             let sequence = ChoiceSequence.flatten(tree)
             let admission = helperCorpus.offer(
                 sequence: sequence,
@@ -31,14 +33,16 @@ struct ExploreTimeResumeTests {
             )
             if case .admitted = admission {
                 sequences.append(sequence)
+                values.append(value)
             }
         }
-        let entryRecords = helperCorpus.entries.map(FuzzProgressDocument.CorpusEntryRecord.init(entry:))
+        let entryRecords = helperCorpus.entries.dropLast().map(FuzzProgressDocument.CorpusEntryRecord.init(entry:))
+        let plantedValue = values[5]
 
         let clusterRecord = FuzzProgressDocument.ClusterRecord(
             cluster: FaultCluster(
                 restoredID: 0,
-                reducedSequence: sequences[0],
+                reducedSequence: sequences[5],
                 reducedDescription: "planted-restored-cluster",
                 reducedKey: "planted-restored-cluster",
                 signatures: [],
@@ -63,7 +67,7 @@ struct ExploreTimeResumeTests {
                 edgeCount: 32
             ),
             clusters: [clusterRecord],
-            snapshot: entryRecords
+            snapshot: Array(entryRecords)
         )
         try store.write(document)
 
@@ -99,12 +103,17 @@ struct ExploreTimeResumeTests {
                 configuration.attemptLimit = 300
             },
             persistence: context,
-            property: { _ in .pass }
+            // Restore re-judges every restored cluster and entry against the current build, so the planted fault has to still be a fault for the inventory to carry it over. A symptom of its own identifies the cluster without depending on how the reduced value renders.
+            property: { $0 == plantedValue ? .fail(FailureSymptom(kind: "PlantedFault")) : .pass }
         )
 
-        // Restored state: the cluster is present verbatim, the corpus carries the snapshot, and both inherited phases were skipped.
-        #expect(report.clusters.contains { $0.reducedDescription == "planted-restored-cluster" && $0.instanceCount == 3 })
-        #expect(report.corpusEntryCount >= sequences.count)
+        // Restored state: the cluster carried over, the corpus carries the snapshot, and both inherited phases were skipped.
+        // Symptom and description both come from restore's own evaluation, not from the record: the predecessor wrote `returnedFalse` and "planted-restored-cluster". What pins this as the carried-over cluster rather than one this run minted is the discovery attempt index, which only the record supplies.
+        let restored = try #require(report.clusters.first { $0.symptoms == ["PlantedFault"] })
+        #expect(restored.firstSeenAttempt == 1)
+        #expect(restored.instanceCount >= 3)
+        #expect(restored.reducedDescription != "planted-restored-cluster")
+        #expect(report.corpusEntryCount >= entryRecords.count)
         #expect(report.screeningAttempts == 0)
         #expect(report.samplingAttempts == 0)
         #expect(report.mutationAttempts > 0)
@@ -148,7 +157,7 @@ struct ExploreTimeResumeTests {
                 edgeCount: 16
             ),
             clusters: [],
-            snapshot: entryRecords
+            snapshot: Array(entryRecords)
         )
         try store.write(document)
 
@@ -214,7 +223,7 @@ struct ExploreTimeResumeTests {
         let gen = Gen.choose(in: 0 ... 100 as ClosedRange<Int>)
 
         var interpreter = ValueAndChoiceTreeInterpreter(gen, materializePicks: false, seed: 1, maxRuns: UInt64.max)
-        let (_, tree) = try #require(try interpreter.next())
+        let (plantedValue, tree) = try #require(try interpreter.next())
         let sequence = ChoiceSequence.flatten(tree)
         let clusterRecord = FuzzProgressDocument.ClusterRecord(
             cluster: FaultCluster(
@@ -257,11 +266,13 @@ struct ExploreTimeResumeTests {
             source: .injected(resumeSource()),
             configure: nil,
             persistence: context,
-            property: { _ in .pass }
+            // Restore re-judges every cluster against the current build and drops the ones that now pass, so the fault has to still be a fault for the inventory to carry over.
+            property: { $0 == plantedValue ? .fail(FailureSymptom(kind: "PlantedFault")) : .pass }
         )
         #expect(report.evaluatedSearchCases == 0)
         #expect(report.resumedFromCrash)
-        #expect(report.clusters.contains { $0.reducedDescription == "planted-restored-cluster" })
+        // Symptom and description are re-derived from the live evaluation, not carried from the record: a predecessor's prose can describe a fault that no longer presents that way.
+        #expect(report.clusters.contains { $0.symptoms == ["PlantedFault"] })
 
         // The recorded issues are the consumed-budget explanation and the restored inventory. The "asserts nothing" pointless-run error must not fire: the generator and budget are both fine, and blaming them would send the reader in the wrong direction.
         nonisolated(unsafe) var sawConsumedBudgetMessage = false
@@ -275,7 +286,7 @@ struct ExploreTimeResumeTests {
                 column: #column
             )
         } matching: { issue in
-            if issue.description.contains("already consumed by crashed predecessors") {
+            if issue.description.contains("already consumed by predecessors that terminated abnormally") {
                 sawConsumedBudgetMessage = true
             }
             return issue.description.contains("asserts nothing") == false

@@ -28,11 +28,20 @@ extension FuzzRunner {
         return (candidate, armsMask)
     }
 
+    /// Draws one splice donor uniformly from the mutable tier.
+    ///
+    /// The tier is the rule: a discovery-tier entry is one whose materialisation mostly fell through to the PRNG, so its bind regions are the weakest donor material in the corpus, and it is also the only donor with no cached layout to splice through. Requires two entries so a donor other than the recipient can exist; consumes one draw either way, so the stream shape does not depend on the tier's size.
+    private func drawSpliceDonor() -> CorpusEntry? {
+        let tier = corpus.mutableTierIndices
+        guard tier.count > 1 else {
+            return nil
+        }
+        return corpus.entries[tier[Int(prng.next(upperBound: UInt64(tier.count)))]]
+    }
+
     /// The original single-operator mutation path, kept verbatim so knob-off runs replay identically under a pinned seed: usually an intensity-band mutation, occasionally a bind-boundary splice with a random donor.
     private func legacyCandidate(from parent: CorpusEntry) -> (candidate: ChoiceSequence, armsMask: UInt32) {
-        if randomUnit() < FuzzTunables.spliceProbability, corpus.entries.count > 1 {
-            let donorIndex = Int(prng.next(upperBound: UInt64(corpus.entries.count)))
-            let donor = corpus.entries[donorIndex]
+        if randomUnit() < FuzzTunables.spliceProbability, let donor = drawSpliceDonor() {
             if donor.hash != parent.hash,
                let spliced = FuzzMutator.splice(
                    recipient: parent.sequence,
@@ -91,11 +100,9 @@ extension FuzzRunner {
                     // Unreachable from the bandit draw and the fixed distribution (campaigns dispatch at parent level), kept for switch exhaustiveness.
                     continue
                 case .splice:
-                    guard corpus.entries.count > 1 else {
+                    guard let donor = drawSpliceDonor() else {
                         continue
                     }
-                    let donorIndex = Int(prng.next(upperBound: UInt64(corpus.entries.count)))
-                    let donor = corpus.entries[donorIndex]
                     // Skip self-splices against the current candidate, not the parent as the legacy path does: mid-stack the candidate has already drifted, so a parent-donor splice is genuine recombination.
                     if donor.sequence != candidate,
                        let spliced = FuzzMutator.splice(

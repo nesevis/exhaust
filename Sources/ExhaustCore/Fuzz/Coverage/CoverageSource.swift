@@ -16,10 +16,12 @@ package protocol CoverageSource: AnyObject, Sendable {
     /// Records the value about to be evaluated. Called between ``beginAttempt()`` and the evaluation, and only when ``wantsValues`` is true.
     func noteValue(_ value: Any)
 
-    /// Visits each edge hit during the attempt bracketed by ``beginAttempt()``, with its saturating 8-bit hit count.
+    /// Visits each edge hit during the attempt bracketed by ``beginAttempt()``, with its 8-bit hit count.
+    ///
+    /// The count's overflow behavior is the recorder's, not the protocol's. ``TracePCGuardCoverageSource`` stops storing at 128, so its counts saturate at the top AFL bucket. The inline-8bit-counter path reports whatever the compiler's unsaturated increment left in the byte, so a hot edge can wrap to a low count and land in a low bucket. Consumers bucket through ``HitCountBucket`` and are not sensitive to the difference; anything that reads the raw count is.
     func forEachHitEdge(_ body: (_ edge: Int, _ hitCount: UInt8) -> Void)
 
-    /// Appends every edge hit during the attempt, with its saturating count, to `buffer` in the order ``forEachHitEdge(_:)`` visits them.
+    /// Appends every edge hit during the attempt, with its hit count, to `buffer` in the order ``forEachHitEdge(_:)`` visits them. The count carries the same per-recorder overflow behavior ``forEachHitEdge(_:)`` describes.
     ///
     /// The bulk form the runner calls once per attempt. The default forwards through ``forEachHitEdge(_:)``; a source that holds its hits in contiguous storage copies them in one loop, which spares a closure call, a runtime call, and an exclusivity check on the runner's buffer per edge.
     func appendHitEdges(to buffer: inout [(edge: Int, hitCount: UInt8)])
@@ -215,10 +217,23 @@ package final class SancovCoverageSource: CoverageSource, @unchecked Sendable {
         true
     }
 
-    /// Reports every nonzero counter, scanning eight bytes at a time.
+    /// Reports every nonzero counter. Counts are the compiler's unsaturated increments, so a hot edge can wrap past 255.
+    package func forEachHitEdge(_ body: (_ edge: Int, _ hitCount: UInt8) -> Void) {
+        scanHitEdges(body)
+    }
+
+    /// Appends directly instead of inheriting the protocol default, which reaches the scan through the existential: the runner's buffer then takes a dynamic exclusivity check and the append cannot inline, once per hit edge.
+    package func appendHitEdges(to buffer: inout [(edge: Int, hitCount: UInt8)]) {
+        scanHitEdges { edge, hitCount in
+            buffer.append((edge, hitCount))
+        }
+    }
+
+    /// The one counter scan, inlined into each caller so the per-edge closure disappears.
     ///
     /// A typical attempt lights a low single-digit percentage of the instrumented edges, so almost every eight-byte window is entirely zero and can be rejected with one load and one compare instead of eight. The byte loop survives for the unaligned head and tail, so the reported edges are identical either way.
-    package func forEachHitEdge(_ body: (_ edge: Int, _ hitCount: UInt8) -> Void) {
+    @inline(__always)
+    private func scanHitEdges(_ body: (_ edge: Int, _ hitCount: UInt8) -> Void) {
         for region in regions {
             var index = 0
             // Head: bytes before the first eight-byte boundary.

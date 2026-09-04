@@ -30,6 +30,41 @@ package struct ClusterDiscrimination: Sendable {
     package let nearMissDistinguishingEdges: BitSet
 }
 
+/// The corpus's passing entries: the P(hit | pass) denominator, counted once, beside the signatures the near-miss search walks.
+///
+/// The sample is a property of the corpus, not of the cluster being ranked. Holding the signatures and their per-edge counts as one value keeps ranking linear in the corpus — counting per cluster made the report O(clusters x corpus) — and, because the two travel together, a caller cannot pass counts that describe a different set of signatures than the ones being searched.
+package struct PassingSample: Sendable {
+    /// The signatures themselves, for the near-miss differential's similarity search.
+    package let signatures: [BitSet]
+
+    /// How many signatures hit each edge, indexed by edge. Edges at or beyond `edgeCount` are not represented.
+    private let counts: [Int]
+
+    /// Counts one passing sample over an edge domain of `edgeCount`.
+    package init(signatures: [BitSet], edgeCount: Int) {
+        var counts = [Int](repeating: 0, count: max(0, edgeCount))
+        for signature in signatures {
+            signature.forEachIndex { edge in
+                if edge >= 0, edge < counts.count {
+                    counts[edge] += 1
+                }
+            }
+        }
+        self.signatures = signatures
+        self.counts = counts
+    }
+
+    /// The number of signatures in the sample — the ranking's denominator.
+    package var sampleSize: Int {
+        signatures.count
+    }
+
+    /// Signatures hitting `edge`, or zero for an edge outside the counted domain.
+    package subscript(edge: Int) -> Int {
+        counts.indices.contains(edge) ? counts[edge] : 0
+    }
+}
+
 /// Pure functions computing edge discrimination over accumulated signatures. Runs once at report time; the live loop only stores BitSets.
 ///
 /// The failing sample is the cluster's post-reduction signatures rather than raw failing attempts: reduction strips incidental coverage (setup, logging, branches taken by coincidence), so the reduced signature has much higher signal density. The passing sample is the corpus's passing entries — a coverage-novelty-biased sample, which is fine for ranking: bias toward diverse passing paths widens the denominator's coverage rather than distorting which edges only failures hit.
@@ -39,23 +74,20 @@ package enum CoverageDiscrimination {
     /// - Parameters:
     ///   - clusterID: The cluster's stable identifier, carried through to the result.
     ///   - failingSignatures: The cluster's reduced signatures. Empty yields empty results.
-    ///   - passingSignatures: Signatures of passing corpus entries.
+    ///   - passing: The passing corpus entries. Build it once and pass the same value to every cluster.
     ///   - edgeCount: The signature capacity (instrumented edge count).
     /// - Returns: Necessary edges, ranked discriminating edges, and the near-miss differential.
     package static func discriminate(
         clusterID: Int,
         failingSignatures: [BitSet],
-        passingSignatures: [BitSet],
+        passing: PassingSample,
         edgeCount: Int
     ) -> ClusterDiscrimination {
         let necessary = necessaryEdges(of: failingSignatures, edgeCount: edgeCount)
-        let ranked = rankedEdges(
-            failingSignatures: failingSignatures,
-            passingSignatures: passingSignatures
-        )
+        let ranked = rankedEdges(failingSignatures: failingSignatures, passing: passing)
         let nearMiss = nearMissDifferential(
             necessaryEdges: necessary,
-            passingSignatures: passingSignatures,
+            passingSignatures: passing.signatures,
             edgeCount: edgeCount
         )
         return ClusterDiscrimination(
@@ -82,7 +114,7 @@ package enum CoverageDiscrimination {
     /// Edges hit by every signature on both sides are common code (function entry, setup) and are excluded by the power cutoff, not by special-casing.
     package static func rankedEdges(
         failingSignatures: [BitSet],
-        passingSignatures: [BitSet]
+        passing: PassingSample
     ) -> [EdgeDiscrimination] {
         guard failingSignatures.isEmpty == false else {
             return []
@@ -93,22 +125,16 @@ package enum CoverageDiscrimination {
                 failCounts[edge, default: 0] += 1
             }
         }
-        var passCounts: [Int: Int] = [:]
-        for signature in passingSignatures {
-            signature.forEachIndex { edge in
-                passCounts[edge, default: 0] += 1
-            }
-        }
 
         let failTotal = Double(failingSignatures.count)
-        let passTotal = Double(max(1, passingSignatures.count))
+        let passTotal = Double(max(1, passing.sampleSize))
         // Floor the pass fraction at "less than one passing run" so never-passing edges rank highest with a finite power instead of dividing by zero.
         let passFloor = 1.0 / (passTotal + 1.0)
 
         var statistics: [EdgeDiscrimination] = []
         for (edge, failCount) in failCounts {
             let failFraction = Double(failCount) / failTotal
-            let passFraction = Double(passCounts[edge] ?? 0) / passTotal
+            let passFraction = Double(passing[edge]) / passTotal
             let power = failFraction / max(passFraction, passFloor)
             guard power > 1.0 else {
                 continue

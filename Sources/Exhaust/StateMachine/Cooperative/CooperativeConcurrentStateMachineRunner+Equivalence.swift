@@ -121,8 +121,9 @@ private func judgeEquivalence<Spec: AsyncStateMachineSpec>(
         executor: executor,
         idleTimeoutMilliseconds: idleTimeoutMilliseconds
     ) == .completed else {
+        // No cancellation drain runs here, so the judgement replay's task is still executing when this returns.
         var inconclusive = drained
-        inconclusive.timedOut = true
+        inconclusive.disposition = .timedOutEscaped
         return inconclusive
     }
 

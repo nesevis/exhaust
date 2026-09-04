@@ -78,7 +78,7 @@ func warnIfTimeoutFractionHigh(
 
 /// Emits a runtime warning when interleaving searches ended without reaching a verdict, whether they ran out of replay budget or stalled.
 ///
-/// Either way the search passes its probe, because an unfinished search must never be reported as a counterexample. That makes it silent by construction: a run whose searches all ended this way reports success while having judged nothing. The count is what distinguishes "no race here" from "the search never finished looking", so it is surfaced rather than logged.
+/// Neither reaches a counterexample, because an unfinished search must never be reported as one: an abandoned search passes its probe, and under `time:` mode a stalled one is dropped as inconclusive. That makes both silent by construction: a run whose searches all ended this way reports success while having judged nothing. The count is what distinguishes "no race here" from "the search never finished looking", so it is surfaced rather than logged.
 ///
 /// Reported as counts rather than as a fraction of probes. A search runs during reduction and final confirmation as well as during discovery, and only discovery increments the run's probe tally, so a denominator drawn from that tally could be smaller than the numerator.
 func warnIfSearchesWentUnjudged(
@@ -102,7 +102,7 @@ func warnIfSearchesWentUnjudged(
     reportWarning(
         """
         \(abandonedSearches + stalledSearches) interleaving searches ended without a verdict (\(causes.joined(separator: ", "))). \
-        Such a search passes its probe, so a race in those sequences went undetected. \
+        Neither outcome can report a counterexample, so a race in those sequences went undetected. \
         Reduce .commandLimit or .parallelize to bring the search back within budget, and raise .idleTimeout if commands are stalling.
         """,
         fileID: fileID,

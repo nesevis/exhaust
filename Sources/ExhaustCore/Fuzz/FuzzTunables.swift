@@ -227,20 +227,29 @@ package struct FuzzExperiments: Sendable, Equatable {
     /// The swarm generation mode. Defaults to ``SwarmMode/activated`` — the diversity gain over no swarm is robust (~1.7x more distinct fault shapes) at no measurable throughput cost. Set `swarmMode=off` to disable swarm generation, or `swarmMode=binary` for the legacy per-epoch mask. See ADR 0006.
     package var swarmMode: SwarmMode = .activated
 
-    /// Creates the default knob set: mechanisms whose gates passed default on (`normalization`, `escapeBackoff`, `championArchive`, and the activated swarm mode); the rest stay off until theirs do.
+    /// Creates the default knob set, which is ``shipped``.
     package init() {}
 
-    /// A parse failure with the offending fragment, rendered into the run's configuration error. Silent typos would invalidate benchmark arms, so unknown knobs are a hard error rather than a warning.
-    package struct ParseError: Error, CustomStringConvertible {
-        package let description: String
-    }
-
-    /// Parses an `EXHAUST_FUZZ_EXPERIMENT` value like `stackedMutation=on,banditBands=off` on top of the defaults.
+    /// The configuration a release actually runs: mechanisms whose gates passed are on, the rest are off.
     ///
-    /// - Throws: ``ParseError`` on an unknown knob name or a value other than `on`/`off`.
-    package static func parse(environmentValue: String) throws -> FuzzExperiments {
+    /// The knobs are independent, so the type describes far more configurations than anyone runs, and a doc comment saying a cost is "deferred" or "never on the hot path" is true only of some of them. Name the configuration a claim is about and point at this: it is the one the defaults produce and the one an unqualified statement means. ``parse(environmentValue:)`` reads as a delta from here.
+    package static let shipped = FuzzExperiments()
+
+    /// Every gated mechanism off — the baseline a benchmark arm measures a mechanism against.
+    ///
+    /// Written through ``knobs`` rather than field by field, so a knob added to one and forgotten in the other is not possible.
+    package static let legacy: FuzzExperiments = {
         var experiments = FuzzExperiments()
-        let assignments: [(String, WritableKeyPath<FuzzExperiments, Bool>)] = [
+        for (_, keyPath) in knobs {
+            experiments[keyPath: keyPath] = false
+        }
+        experiments.swarmMode = .off
+        return experiments
+    }()
+
+    /// The on/off knobs by their `EXHAUST_FUZZ_EXPERIMENT` name. ``swarmMode`` is absent: it is the one multi-state knob and parses off its enum.
+    package static var knobs: [(name: String, keyPath: WritableKeyPath<FuzzExperiments, Bool>)] {
+        [
             ("normalization", \.normalization),
             ("escapeBackoff", \.escapeBackoff),
             ("stackedMutation", \.stackedMutation),
@@ -252,6 +261,19 @@ package struct FuzzExperiments: Sendable, Equatable {
             ("reseedBurst", \.reseedBurst),
             ("championArchive", \.championArchive),
         ]
+    }
+
+    /// A parse failure with the offending fragment, rendered into the run's configuration error. Silent typos would invalidate benchmark arms, so unknown knobs are a hard error rather than a warning.
+    package struct ParseError: Error, CustomStringConvertible {
+        package let description: String
+    }
+
+    /// Parses an `EXHAUST_FUZZ_EXPERIMENT` value like `stackedMutation=on,banditBands=off` as a delta from ``shipped``.
+    ///
+    /// - Throws: ``ParseError`` on an unknown knob name or a value other than `on`/`off`.
+    package static func parse(environmentValue: String) throws -> FuzzExperiments {
+        var experiments = FuzzExperiments.shipped
+        let assignments = knobs
         for fragment in environmentValue.split(separator: ",") {
             let parts = fragment.split(separator: "=", maxSplits: 1).map { $0.trimmingCharacters(in: .whitespaces) }
             guard parts.count == 2 else {

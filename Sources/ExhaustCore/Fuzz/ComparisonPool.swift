@@ -75,10 +75,8 @@ package struct ComparisonPool: Sendable {
             return nil
         }
         let ring = Swift.min(Int(sitePick * Double(siteCount)), siteCount - 1)
+        // A ring below `siteCount` exists only because `record` created it immediately before its own first insert, so its count is never zero.
         let count = Int(counts[ring])
-        guard count > 0 else {
-            return nil
-        }
         return values[ring * perSiteCapacity + Swift.min(Int(valuePick * Double(count)), count - 1)]
     }
 

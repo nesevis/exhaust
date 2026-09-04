@@ -33,13 +33,13 @@ package enum FuzzNormalizer {
     ///   - reducedSequence: The reduced counterexample's flattened choice sequence.
     ///   - erasedGen: The run's generator, already erased.
     ///   - symptom: The original failure's symptom; a probe counts only when it fails with this same symptom, keeping cross-fault slippage out of the pass.
-    ///   - property: The property under test. Probes run unattributed — no coverage bracket.
+    ///   - property: The property under test, called with each probe's value and the candidate sequence that produced it. Probes run unattributed — no coverage bracket; the sequence is what lets a caller mark which probe is in flight for crash recovery.
     ///   - cache: Zobrist-keyed normalization results shared across the run's reduction tasks. The stored value is the normalized sequence, or nil when normalization found nothing better.
     package static func normalize<Output>(
         reducedSequence: ChoiceSequence,
         erasedGen: AnyGenerator,
         symptom: FailureSymptom,
-        property: (Output) -> FuzzVerdict,
+        property: (Output, ChoiceSequence) -> FuzzVerdict,
         cache: SendableBox<[UInt64: ChoiceSequence?]>
     ) -> NormalizedForm<Output>? {
         let sequenceHash = ZobristHash.hash(of: reducedSequence)
@@ -85,7 +85,7 @@ package enum FuzzNormalizer {
                 guard let form: NormalizedForm<Output> = materializeForm(candidate, erasedGen: erasedGen) else {
                     return nil
                 }
-                guard case let .fail(probeSymptom) = property(form.value), probeSymptom == symptom else {
+                guard case let .fail(probeSymptom) = property(form.value, form.sequence), probeSymptom == symptom else {
                     return nil
                 }
                 return form

@@ -41,7 +41,12 @@ package final class TracePCGuardCoverageSource: CoverageSource, @unchecked Senda
 
     /// Whether any instrumented image registered trace-pc-guard regions. False means the build lacks `trace-pc-guard`.
     package static var isInstrumented: Bool {
-        exhaust_tpg_edge_total() > 0
+        edgeTotal > 0
+    }
+
+    /// Edges the loaded images registered guards for, before any context caps a run at its own snapshot.
+    package static var edgeTotal: Int {
+        Int(exhaust_tpg_edge_total())
     }
 
     /// Creates a source over the registered trace-pc-guard regions, or returns nil when the build lacks `trace-pc-guard` instrumentation or the allocation fails.

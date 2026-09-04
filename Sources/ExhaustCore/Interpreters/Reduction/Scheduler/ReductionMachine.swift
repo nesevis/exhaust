@@ -98,6 +98,7 @@ package struct ReductionMachine: ProbeSessionState {
     var rejectCache: Set<UInt64> = []
     let gen: AnyGenerator
     let property: (Any) -> Bool
+    let probeBracket: FuzzProbeBracket?
     let tuning: SchedulerTuning
     let enabledEncoders: Set<EncoderName>?
     let collectStats: Bool
@@ -226,6 +227,7 @@ package struct ReductionMachine: ProbeSessionState {
         self.graph = graph
         self.gen = erasedGen
         self.property = wrappedProperty
+        probeBracket = config.probeBracket
         tuning = config.tuning
         enabledEncoders = config.enabledEncoders
         self.collectStats = collectStats

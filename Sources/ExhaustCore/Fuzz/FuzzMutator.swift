@@ -38,8 +38,23 @@ package enum FuzzMutator {
 
     /// Indexes the mutation sites in a sequence for reuse by corpus-parent mutations.
     ///
-    /// The tree supplies the `TypeTagPayload` for each choice site — flattened sequence entries do not carry it. Without the payload, character and date catalogs degrade to the `[min, max]` fallback and boundary substitution loses the interesting in-set values the covering array injects during screening. Pass the tree whenever one is available; nil is for callers that only need the structural indices, such as ``splice(recipient:donor:recipientLayout:donorLayout:prng:)``.
+    /// The tree supplies the `TypeTagPayload` for each choice site — flattened sequence entries do not carry it. Without the payload, character and date catalogs degrade to the `[min, max]` fallback and boundary substitution loses the interesting in-set values the covering array injects during screening. Pass the tree whenever one is available. Callers that read only the structural indices want ``structuralLayout(of:)`` instead.
     package static func layout(of sequence: ChoiceSequence, tree: ChoiceTree? = nil) -> Layout {
+        layout(of: sequence, tree: tree, includingBoundaryCatalog: true)
+    }
+
+    /// Indexes only the structural sites, leaving ``Layout/problematicValues`` empty.
+    ///
+    /// ``splice(recipient:donor:recipientLayout:donorLayout:prng:)`` reads `bindRegions` alone, and the boundary catalogue it would otherwise build allocates and sorts a `Set<UInt64>` per distinct `(min, max, tag)` key before discarding every one of them.
+    package static func structuralLayout(of sequence: ChoiceSequence) -> Layout {
+        layout(of: sequence, tree: nil, includingBoundaryCatalog: false)
+    }
+
+    private static func layout(
+        of sequence: ChoiceSequence,
+        tree: ChoiceTree?,
+        includingBoundaryCatalog: Bool
+    ) -> Layout {
         var payloads: [CatalogKey: TypeTagPayload] = [:]
         if let tree {
             harvestPayloads(tree, into: &payloads)
@@ -58,6 +73,9 @@ package enum FuzzMutator {
             switch sequence[index] {
                 case let .value(entry):
                     valueIndices.append(index)
+                    guard includingBoundaryCatalog else {
+                        break
+                    }
                     let tag = entry.choice.tag
                     let range = entry.validRange ?? tag.bitPatternRange
                     let key = CatalogKey(min: range.lowerBound, max: range.upperBound, tag: tag)
@@ -346,8 +364,8 @@ package enum FuzzMutator {
         donorLayout: Layout? = nil,
         prng: inout Xoshiro256
     ) -> ChoiceSequence? {
-        let recipientRegions = recipientLayout?.bindRegions ?? layout(of: recipient).bindRegions
-        let donorRegions = donorLayout?.bindRegions ?? layout(of: donor).bindRegions
+        let recipientRegions = recipientLayout?.bindRegions ?? structuralLayout(of: recipient).bindRegions
+        let donorRegions = donorLayout?.bindRegions ?? structuralLayout(of: donor).bindRegions
         guard let recipientBind = randomBindRegion(in: recipientRegions, prng: &prng),
               let donorBind = randomBindRegion(in: donorRegions, prng: &prng)
         else {
