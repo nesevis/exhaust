@@ -89,7 +89,8 @@ extension FuzzRunner {
                 candidate,
                 parent: parent,
                 parentIndex: parentIndex,
-                armsMask: 1 << UInt32(MutationArm.valueWalk.rawValue)
+                armsMask: 1 << UInt32(MutationArm.valueWalk.rawValue),
+                origin: .campaign
             )
             produced = true
             let accepted = feedback.admitted
@@ -147,7 +148,8 @@ extension FuzzRunner {
                 candidate,
                 parent: parent,
                 parentIndex: parentIndex,
-                armsMask: 1 << UInt32(MutationArm.regionSweep.rawValue)
+                armsMask: 1 << UInt32(MutationArm.regionSweep.rawValue),
+                origin: .campaign
             )
             produced = true
         }

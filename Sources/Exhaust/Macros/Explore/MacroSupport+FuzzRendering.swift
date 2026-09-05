@@ -66,6 +66,14 @@ extension __ExhaustRuntime {
             "Coverage: \(report.coveredEdgeCount) of \(report.instrumentedEdgeCount) instrumented edges hit; \(uncovered) never hit (module-wide count, includes code the property never calls)."
         )
         lines.append(contentsOf: renderEstimatorLines(report))
+        if report.duplicateCandidatesSkipped > 0 {
+            lines.append(renderDuplicateSkipLine(report.duplicateSkips))
+        }
+        if report.operandEnergySeatings > 0 {
+            lines.append(
+                "Comparand energy: \(report.operandEnergyRetirements) sources retired; \(report.operandEnergyEvictions) of \(report.operandEnergySeatings) seatings evicted a live key (a high share means the energy table is undersized for this run)."
+            )
+        }
         if report.discardedEvaluations > 0 {
             lines.append(
                 "Discarded: \(report.discardedEvaluations) of \(report.evaluatedSearchCases) evaluated cases threw a skip error; coverage-novel discards stay in the corpus as mutation parents at \(Int((FuzzTunables.discardParentEnergy * 100).rounded()))% weight."
@@ -172,6 +180,22 @@ extension __ExhaustRuntime {
     /// Renders the estimator lines: the price of one more edge and the completeness fraction against the run's own reachable set. The reachable-set scoping is stated inline so the fraction cannot be read as module coverage.
     ///
     /// The estimator is denominated in incidences, because one attempt covers many edges. Readers think in attempts, so the rate is converted back by the mean edges an attempt covers before it reaches the page.
+    /// One line naming each arm's duplicate skips, omitting arms that skipped nothing.
+    private static func renderDuplicateSkipLine(_ skips: FuzzReport.DuplicateSkips) -> String {
+        let arms: [(name: String, skipped: Int)] = [
+            ("fresh draws", skips.freshDraw),
+            ("mutation children", skips.mutationChild),
+            ("campaigns", skips.campaign),
+            ("reflection injection", skips.reflectionInjection),
+            ("graft injection", skips.graftInjection),
+            ("comparand substitution", skips.comparandSubstitution),
+        ]
+        let parts = arms
+            .filter { $0.skipped > 0 }
+            .map { "\($0.skipped) \($0.name)" }
+        return "Duplicate skips by arm: \(parts.joined(separator: ", "))."
+    }
+
     private static func renderEstimatorLines(_ report: FuzzReport) -> [String] {
         guard report.evaluatedSearchCases > 0, report.coveredEdgeCount > 0 else {
             return []

@@ -200,6 +200,46 @@ public struct FuzzReport: Sendable {
     /// Search candidates skipped before the property ran because the run had recently evaluated the same choice sequence. Counted in the phase attempt tallies, not in ``evaluatedSearchCases``.
     public let duplicateCandidatesSkipped: Int
 
+    /// The same skips split by the arm that produced the candidate, so a duplicate rate can be read per arm.
+    ///
+    /// The arms rebuild already-evaluated inputs at very different rates, and an aggregate cannot say which one is spending its attempts on work the run has already done. Divide an arm's count by its attempt tally for the rate: the injection arms have their own tallies, sampling has ``samplingAttempts``, and ordinary mutation children are ``mutationAttempts`` less the campaign and injection tallies.
+    public let duplicateSkips: DuplicateSkips
+
+    /// Duplicate skips attributed to the producer that built the candidate. Sums to ``duplicateCandidatesSkipped``.
+    public struct DuplicateSkips: Sendable {
+        /// Fresh interpreter draws. Counted in whichever phase drew them, so mutation-phase fresh draws land here too, not only the sampling phase's.
+        public let freshDraw: Int
+        /// Ordinary mutations of a corpus parent.
+        public let mutationChild: Int
+        /// Candidates from campaign probe sessions.
+        public let campaign: Int
+        /// Harvested operands reconstructed into a whole value.
+        public let reflectionInjection: Int
+        /// Harvested operands grafted into one field of a corpus parent.
+        public let graftInjection: Int
+        /// Harvested operands written over tag-compatible entries of a parent's flat sequence.
+        public let comparandSubstitution: Int
+
+        /// The breakdown for a run that skipped nothing.
+        public static let zero = DuplicateSkips(
+            freshDraw: 0,
+            mutationChild: 0,
+            campaign: 0,
+            reflectionInjection: 0,
+            graftInjection: 0,
+            comparandSubstitution: 0
+        )
+    }
+
+    /// Comparand-substitution energy keys seated over another key because their whole probe window was occupied. A high ratio to ``operandEnergySeatings`` means the retirement table is undersized for the run, so a retired operand is resurrected by collision rather than by yielding.
+    public let operandEnergyEvictions: Int
+
+    /// Comparand-substitution energy keys seated into a slot, whether it was empty or held another key. The denominator for ``operandEnergyEvictions``.
+    public let operandEnergySeatings: Int
+
+    /// Comparand-substitution sources moved into the retired set after exhausting their allowance.
+    public let operandEnergyRetirements: Int
+
     /// Spec-path pruning passes that removed no command, so the original evaluation stood in for the re-evaluation.
     public let pruneIdentitySkips: Int
 
@@ -437,6 +477,17 @@ package extension FuzzReport {
         classificationInvocations = result.counts.classificationInvocations
         recoveryInvocations = result.counts.recoveryInvocations
         duplicateCandidatesSkipped = result.counts.duplicateCandidatesSkipped
+        duplicateSkips = DuplicateSkips(
+            freshDraw: result.counts[duplicateSkipsFor: .freshSample],
+            mutationChild: result.counts[duplicateSkipsFor: .mutationChild],
+            campaign: result.counts[duplicateSkipsFor: .campaign],
+            reflectionInjection: result.counts[duplicateSkipsFor: .reflectionInjection],
+            graftInjection: result.counts[duplicateSkipsFor: .graftInjection],
+            comparandSubstitution: result.counts[duplicateSkipsFor: .comparandSubstitution]
+        )
+        operandEnergyEvictions = result.counts.operandEnergyEvictions
+        operandEnergySeatings = result.counts.operandEnergySeatings
+        operandEnergyRetirements = result.counts.operandEnergyRetirements
         pruneIdentitySkips = result.counts.pruneIdentitySkips
         diagnosticInvocations = 0
         corpusEntryCount = result.corpusEntryCount
@@ -498,6 +549,10 @@ package extension FuzzReport {
             classificationInvocations: 0,
             recoveryInvocations: 0,
             duplicateCandidatesSkipped: 0,
+            duplicateSkips: .zero,
+            operandEnergyEvictions: 0,
+            operandEnergySeatings: 0,
+            operandEnergyRetirements: 0,
             pruneIdentitySkips: 0,
             diagnosticInvocations: 0,
             corpusEntryCount: 0,

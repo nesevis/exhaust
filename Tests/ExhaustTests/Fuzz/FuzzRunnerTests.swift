@@ -297,6 +297,35 @@ struct FuzzRunnerTests {
         }
     }
 
+    @Test("Duplicate skips are charged to the arms that produced them and the report sums them")
+    func duplicateSkipAttribution() {
+        // A tiny domain makes rebuilding an already evaluated sequence the common case in every arm, so the aggregate is nonzero and every skip has an owner.
+        let runner = FuzzRunner(
+            gen: Gen.choose(in: 0 ... 3 as ClosedRange<Int>),
+            property: { _ in .pass },
+            source: bucketedSource(),
+            configuration: FuzzRunnerConfiguration(
+                budgetNanoseconds: 60_000_000_000,
+                seed: 7,
+                attemptLimit: 2000
+            )
+        )
+        let result = runner.run()
+        #expect(result.counts.duplicateCandidatesSkipped > 0)
+
+        let skips = FuzzReport(result: result).duplicateSkips
+        let sum = skips.freshDraw
+            + skips.mutationChild
+            + skips.campaign
+            + skips.reflectionInjection
+            + skips.graftInjection
+            + skips.comparandSubstitution
+        #expect(sum == result.counts.duplicateCandidatesSkipped)
+        for origin in CandidateOrigin.allCases {
+            #expect(result.counts[duplicateSkipsFor: origin] >= 0)
+        }
+    }
+
     @Test("Comparand substitution finds a magic-number gate that random search cannot")
     func comparandSubstitutionFindsMagicGate() {
         // The property fails on exactly one value in a million. Random search inside the attempt limit essentially never finds it; the harvested comparison operand names it outright, and the substitution operator writes it into the one integer leaf. The generator is a bare Gen with no reflection support, so the reflective injection paths cannot be the ones finding it.

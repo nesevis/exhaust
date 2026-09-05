@@ -119,6 +119,24 @@ package struct FuzzRunnerConfiguration {
     }
 }
 
+/// Which producer a candidate came from, so a duplicate skip can be charged to the arm that made it.
+///
+/// The mutation phase runs several producers over the same corpus, and they differ sharply in how often they rebuild something already evaluated. Without this the run reports one aggregate rate, which cannot say whether an arm is worth its attempts.
+package enum CandidateOrigin: Int, CaseIterable, Sendable {
+    /// A fresh interpreter draw: the sampling phase, and the mutation phase's empty-tier fallback.
+    case freshSample
+    /// An ordinary mutation of a corpus parent.
+    case mutationChild
+    /// A candidate from a campaign probe session.
+    case campaign
+    /// A harvested comparison operand reconstructed into a whole value.
+    case reflectionInjection
+    /// A harvested operand grafted into one field of a corpus parent.
+    case graftInjection
+    /// A harvested operand written over tag-compatible entries of a parent's flat sequence.
+    case comparandSubstitution
+}
+
 /// Groups lifecycle accounting for a `time:` run separately from its resulting corpus, coverage, and timing statistics.
 package struct FuzzRunCounts: Sendable {
     package var screeningAttempts = 0
@@ -142,8 +160,31 @@ package struct FuzzRunCounts: Sendable {
     package var recoveryInvocations = 0
     /// Attempts whose evaluation reached no verdict (a `.tasks` probe that stalled and was cancelled). Counted inside `evaluatedSearchCases`, since the property ran; excluded from the corpus, since nothing was learned about the input.
     package var inconclusiveAttempts = 0
+    /// Duplicate skips by the arm that produced the candidate, indexed by ``CandidateOrigin`` raw value, so a duplicate rate can be read per arm rather than only in aggregate. Each is counted in its phase's attempt tally, never in `evaluatedSearchCases`.
+    ///
+    /// The arms divide the same way the attempt counters do, so a rate is the arm's skips over its attempts. Ordinary mutation children have no attempt counter of their own: theirs is `mutationAttempts` less the campaign and injection tallies.
+    package var duplicateSkips = [Int](repeating: 0, count: CandidateOrigin.allCases.count)
+
     /// Search candidates skipped before property entry because the run had recently evaluated the same choice sequence. Counted in the phase's attempt tally, not in `evaluatedSearchCases`.
-    package var duplicateCandidatesSkipped = 0
+    package var duplicateCandidatesSkipped: Int {
+        duplicateSkips.reduce(0, +)
+    }
+
+    /// Reads one arm's duplicate skips.
+    package subscript(duplicateSkipsFor origin: CandidateOrigin) -> Int {
+        get {
+            duplicateSkips[origin.rawValue]
+        }
+        set {
+            duplicateSkips[origin.rawValue] = newValue
+        }
+    }
+
+    /// Comparand-substitution energy keys seated into a slot another key held, and seatings overall. A high ratio means the energy table is undersized for the run and retirement is being undone by collision.
+    package var operandEnergyEvictions = 0
+    package var operandEnergySeatings = 0
+    package var operandEnergyRetirements = 0
+
     /// Pruning passes that removed nothing, so the original evaluation stood in for a re-evaluation of the identical sequence.
     package var pruneIdentitySkips = 0
 
