@@ -105,6 +105,24 @@ struct FuzzMutatorTests {
         #expect(catalogEntry.value == expected)
     }
 
+    @Test("Layout tags are the distinct tags at its value positions in first-seen order", arguments: [1, 9, 23, 101] as [UInt64])
+    func layoutTagsMatchValuePositions(seed: UInt64) throws {
+        let (_, tree, sequence) = try generateMixedTagExample(seed: seed)
+        let layout = FuzzMutator.layout(of: sequence, tree: tree)
+        var expected: [TypeTag] = []
+        for index in layout.valueIndices {
+            guard case let .value(entry) = sequence[index] else {
+                Issue.record("value index \(index) does not address a value entry")
+                return
+            }
+            if expected.contains(entry.choice.tag) == false {
+                expected.append(entry.choice.tag)
+            }
+        }
+        #expect(layout.tags == expected)
+        #expect(FuzzMutator.structuralLayout(of: sequence).tags == expected)
+    }
+
     // MARK: - Materialization Round Trips
 
     @Test("Every intensity band produces a sequence the materializer accepts", arguments: [7, 99, 1234] as [UInt64])
@@ -282,6 +300,20 @@ private func nestedBindSequence(depth: Int) -> ChoiceSequence {
         sequence.append(.bind(false))
     }
     return sequence
+}
+
+/// Generates one example whose leaves carry several integer tags, so a layout has more than one tag group to list.
+private func generateMixedTagExample(seed: UInt64) throws -> ((Int, UInt64, UInt8), ChoiceTree, ChoiceSequence) {
+    let generator = Gen.zip(
+        Gen.choose(in: 0 ... 100 as ClosedRange<Int>),
+        Gen.choose(in: UInt64(0) ... 100),
+        Gen.choose(in: 0 ... 9 as ClosedRange<UInt8>)
+    )
+    var interpreter = ValueAndChoiceTreeInterpreter(generator, materializePicks: false, seed: seed, maxRuns: 1)
+    guard let (value, tree) = try interpreter.next() else {
+        throw MutatorTestError.generationFailed
+    }
+    return (value, tree, ChoiceSequence.flatten(tree))
 }
 
 /// Generates one ([Int], tree, flattened sequence) example from the bind generator.

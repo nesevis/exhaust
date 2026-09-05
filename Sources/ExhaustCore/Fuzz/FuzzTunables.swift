@@ -75,6 +75,9 @@ package enum FuzzTunables {
     /// Maximum slots one comparand-substitution candidate may overwrite with the drawn operand. The count is drawn uniformly in 1...min(span, compatible slots): 1 preserves the single-slot magic-gate move, larger counts perform the agreement move for preconditions that require many positions to match at once. Kept small: each extra slot halves the chance that every overwritten position was one the comparison actually constrained.
     package static let comparandSubstitutionSlotSpan = 8
 
+    /// Barren draws a comparand-substitution key gets before it is retired, and the allowance a yielding draw restores it to. A yield is a corpus admission or a failure: the arm can be worth its attempts through faults that light no new edge, so admission alone would retire it too early.
+    package static let comparandOperandEnergy: UInt8 = 16
+
     /// Probability that parent selection picks a uniformly random mutable-tier entry instead of a score-weighted one, guaranteeing every basin a floor escape probability no score distribution can squeeze out. Experimental, read once from `EXHAUST_PARENT_EPSILON`; 0 (the default) disables the floor. See the basin-escape survey in ExhaustDocs.
     package static let parentSelectionEpsilon: Double = ProcessInfo.processInfo.environment["EXHAUST_PARENT_EPSILON"].flatMap(Double.init) ?? 0
 

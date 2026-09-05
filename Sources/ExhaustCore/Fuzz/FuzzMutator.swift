@@ -25,6 +25,9 @@ package enum FuzzMutator {
     package struct Layout: Sendable {
         /// Positions of every `.value` entry, ascending. Package-visible so comparand substitution can walk the leaves without rescanning the sequence.
         package let valueIndices: [Int]
+
+        /// The distinct tags occurring at those positions, in first-seen order. Comparand substitution reads it to choose a tag group before walking any position, so a retired operand costs a handful of encoding checks instead of a pass over the whole sequence.
+        package let tags: [TypeTag]
         fileprivate let branchIndices: [Int]
         fileprivate let bindRegions: [BindRegion]
         package let problematicValues: [CatalogKey: [UInt64]]
@@ -61,6 +64,7 @@ package enum FuzzMutator {
         }
 
         var valueIndices: [Int] = []
+        var tags: [TypeTag] = []
         var branchIndices: [Int] = []
         var bindOpenIndices: [Int] = []
         var problematicValues: [CatalogKey: [UInt64]] = [:]
@@ -73,6 +77,10 @@ package enum FuzzMutator {
             switch sequence[index] {
                 case let .value(entry):
                     valueIndices.append(index)
+                    // Linear membership: a sequence carries a handful of distinct tags, so a set would cost more to build than the scan saves.
+                    if tags.contains(entry.choice.tag) == false {
+                        tags.append(entry.choice.tag)
+                    }
                     guard includingBoundaryCatalog else {
                         break
                     }
@@ -123,6 +131,7 @@ package enum FuzzMutator {
         }
         return Layout(
             valueIndices: valueIndices,
+            tags: tags,
             branchIndices: branchIndices,
             bindRegions: bindRegions,
             problematicValues: problematicValues
