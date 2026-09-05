@@ -245,6 +245,7 @@ private func document(consumedNanoseconds: UInt64, clusterCount: Int) -> FuzzPro
             seed: 9,
             budgetNanoseconds: 60_000_000_000,
             consumedNanoseconds: consumedNanoseconds,
+            attemptsConsumed: 0,
             lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
             pcTableHash: 0,
             edgeCount: 8

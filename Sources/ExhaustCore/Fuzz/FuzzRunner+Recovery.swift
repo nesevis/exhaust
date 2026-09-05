@@ -21,6 +21,7 @@ extension FuzzRunner {
 
         if let document = persistence.resumeDocument {
             priorConsumedNanoseconds = document.metadata.consumedNanoseconds
+            priorAttempts = document.metadata.attemptsConsumed
             restore(from: document)
             ExhaustLog.notice(
                 category: .propertyTest,
@@ -84,6 +85,7 @@ extension FuzzRunner {
             seed: configuration.seed,
             budgetNanoseconds: priorConsumedNanoseconds + configuration.budgetNanoseconds,
             consumedNanoseconds: priorConsumedNanoseconds + (now - startNanoseconds),
+            attemptsConsumed: attemptTimelineIndex,
             lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
             pcTableHash: pcTableHashAtStart,
             edgeCount: source.edgeCount
@@ -144,8 +146,8 @@ extension FuzzRunner {
                 reducedCount: record.reducedCount,
                 firstSeenNanoseconds: reportEpochNanoseconds + record.firstSeenNanoseconds,
                 lastSeenNanoseconds: reportEpochNanoseconds + record.lastSeenNanoseconds,
-                firstSeenAttempt: record.firstSeenAttempt ?? 0,
-                unnormalizedMemberCount: record.unnormalizedMemberCount ?? 0,
+                firstSeenAttempt: record.firstSeenAttempt,
+                unnormalizedMemberCount: record.unnormalizedMemberCount,
                 discoveringPhase: phase
             ))
         }
@@ -183,8 +185,8 @@ extension FuzzRunner {
                     parentIndex: nil,
                     phase: phase,
                     coverageNovel: admission.isAdmitted,
-                    // A restored entry's failure belongs to no attempt of this run, so it never lowers a cluster's carried-over discovery index.
-                    attemptIndex: nil,
+                    // The predecessors' attempt total: after every index they recorded, so a carried-over cluster keeps its discovery index, and before this run's first attempt.
+                    attemptIndex: attemptTimelineIndex,
                     // An entry the predecessor recorded as failing is already in the restored counts, and reducing it back into its cluster would tally it twice. One that passed for the predecessor and fails now is this build's own evidence and counts.
                     countsAsInstance: record.propertyFailed == false
                 )

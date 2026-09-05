@@ -152,7 +152,14 @@ package final class FuzzRunner<Output> {
     var isRestoring = false
     /// Run time consumed by crashed predecessors, so checkpoint accounting and report timestamps continue one logical timeline across resumes.
     var priorConsumedNanoseconds: UInt64 = 0
+    /// Attempts crashed predecessors opened, so cluster discovery indices continue one logical timeline across resumes the way timestamps do. Not folded into `counts`: the attempt limit and the report's attempt tallies describe this process's own search.
+    var priorAttempts = 0
     var pcTableHashAtStart: UInt64 = 0
+
+    /// The attempt index a failure observed now belongs to on the logical run's timeline: this process's opened attempts after the predecessors'. A failure restore observes lands at the predecessors' total, which is after every index they recorded and before this run's first attempt.
+    var attemptTimelineIndex: Int {
+        priorAttempts + counts.totalAttempts
+    }
 
     /// The monotonic origin of the logical run: `startNanoseconds` backdated by predecessor time, so cluster timestamps from before and after a resume land on one timeline.
     var reportEpochNanoseconds: UInt64 {
@@ -1037,7 +1044,7 @@ package final class FuzzRunner<Output> {
                     parentIndex: parentIndex,
                     phase: phase,
                     coverageNovel: admission.isAdmitted,
-                    attemptIndex: counts.totalAttempts
+                    attemptIndex: attemptTimelineIndex
                 )
             }
             return admission
@@ -1083,7 +1090,7 @@ package final class FuzzRunner<Output> {
                 phase: phase,
                 coverageNovel: candidates.independentFailureCoverageNovel
                     ?? admission.isAdmitted,
-                attemptIndex: counts.totalAttempts
+                attemptIndex: attemptTimelineIndex
             )
         }
         return admission
@@ -1197,7 +1204,7 @@ package final class FuzzRunner<Output> {
     /// Dispatches one failing input through the backpressure gate: attributed as a duplicate, held unreduced, or reduced and classified.
     ///
     /// - Parameters:
-    ///   - attemptIndex: The attempt the failure was observed at. Search paths pass the running count; recovery passes nil, because a restored entry's failure belongs to no attempt of this run.
+    ///   - attemptIndex: The attempt the failure was observed at, on the logical run's timeline (``attemptTimelineIndex``). Recovery passes the predecessors' total, so a restored entry's failure never lowers a carried-over cluster's discovery index.
     ///   - countsAsInstance: Whether the failure adds a member to the cluster it lands in. False for a restored entry the predecessor already recorded as failing: that entry landing back in the cluster it was restored into is the same evidence twice, and counting it inflates the carried-over instance and reduction counts on every resume. A restored entry that passed for the predecessor and fails now is evidence this build produced, so it counts.
     func handleFailure(
         value: Output,
@@ -1208,7 +1215,7 @@ package final class FuzzRunner<Output> {
         parentIndex: Int?,
         phase: FuzzPhase,
         coverageNovel: Bool,
-        attemptIndex: Int?,
+        attemptIndex: Int,
         countsAsInstance: Bool = true
     ) {
         let hash = ZobristHash.hash(of: sequence)
@@ -1268,7 +1275,7 @@ package final class FuzzRunner<Output> {
         symptom: FailureSymptom,
         parentIndex: Int?,
         phase: FuzzPhase,
-        attemptIndex: Int?,
+        attemptIndex: Int,
         wasEscape: Bool,
         countsAsInstance: Bool
     ) {

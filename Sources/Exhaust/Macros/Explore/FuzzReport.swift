@@ -45,7 +45,7 @@ public struct FuzzReport: Sendable {
 
         /// The attempt index (1-based, counted across all phases) of the first failure attributed to this cluster.
         ///
-        /// Use this rather than ``firstSeen`` when comparing discovery speed across runs or machines: wall-clock timing moves with machine load, while the attempt index depends only on the search's decisions under its seed. Zero for clusters restored from a progress log written before the index was recorded.
+        /// Use this rather than ``firstSeen`` when comparing discovery speed across runs or machines: wall-clock timing moves with machine load, while the attempt index depends only on the search's decisions under its seed. Counted across resumes, so a cluster carried over from a crashed predecessor keeps the index it was discovered at.
         public let firstSeenAttempt: Int
 
         /// Elapsed run time at the most recent failure attributed to this cluster.

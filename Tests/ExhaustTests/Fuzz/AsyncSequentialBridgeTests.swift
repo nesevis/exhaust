@@ -3,6 +3,10 @@ import Foundation
 import Testing
 @testable import Exhaust
 
+#if canImport(Glibc)
+    import Glibc
+#endif
+
 /// Where an async sequential spec's commands actually execute.
 ///
 /// `trace-pc-guard` writes to a context bound to one thread — the run's own lane — and drops every edge that fires anywhere else. So a bridge that hands the spec's `async` work to the cooperative pool and puts the lane to sleep produces a run that records no coverage at all and terminates `coverageUnreachable`. Asserting on the thread is the direct test; a coverage assertion would need an instrumented system under test and would only observe the same fact indirectly.
@@ -11,9 +15,7 @@ struct AsyncSequentialBridgeTests {
     @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
     @Test("The spec's commands run on the thread that invoked the property, not the cooperative pool")
     func commandsRunOnTheInvokingThread() async throws {
-        let adapter = try #require(
-            __ExhaustRuntime.buildAsyncSequentialSpecAdapter(ThreadRecordingSpec.self, commandLimit: 3)
-        )
+        let adapter = __ExhaustRuntime.buildAsyncSequentialSpecAdapter(ThreadRecordingSpec.self, commandLimit: 3)
         var interpreter = ValueAndChoiceTreeInterpreter(
             adapter.generator,
             materializePicks: false,
@@ -40,15 +42,19 @@ struct AsyncSequentialBridgeTests {
 // MARK: - Helpers
 
 private func threadIdentifier() -> UInt64 {
-    var identifier: UInt64 = 0
-    pthread_threadid_np(nil, &identifier)
-    return identifier
+    #if canImport(Darwin)
+        var identifier: UInt64 = 0
+        pthread_threadid_np(nil, &identifier)
+        return identifier
+    #else
+        return UInt64(pthread_self())
+    #endif
 }
 
 @StateMachine
 final class ThreadRecordingSpec {
     /// The thread the last command body ran on. A static because the spec is reconstructed per candidate.
-    nonisolated(unsafe) static let observedThread = UnsafeSendableBox<UInt64?>(nil)
+    static let observedThread = UnsafeSendableBox<UInt64?>(nil)
 
     var expected: Int = 0
     @SystemUnderTest var counter: PassingCounter = .init()

@@ -414,8 +414,6 @@ extension __ExhaustRuntime {
 
 @available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *)
 extension __ExhaustRuntime {
-    /// Builds the generator and property hooks for a `.tasks` spec under `time:` mode.
-    ///
     /// What a `.tasks` run's probes observe and cannot return.
     ///
     /// A verdict or reduction probe reaches the runner only through its return value, so the counts a stall produces and the termination an escape forces travel on one reference the closures capture. One object rather than a box each: the next counter is a field, not another parameter threaded through the adapter.
@@ -434,6 +432,8 @@ extension __ExhaustRuntime {
         init() {}
     }
 
+    /// Builds the generator and property hooks for a `.tasks` spec under `time:` mode.
+    ///
     /// Unlike the sequential adapters, the generator draws a lane-assigning schedule marker as a choice ahead of each command (``zipScheduleMarker(onto:concurrencyLevel:)``), so the interleaving is searchable input: the byte mutators that move commands between lanes and reorder the schedule are the same ones that mutate command arguments, and reduction minimizes markers toward the sequential prefix. The property drains each sequence through the cooperative scheduler at the marker-directed interleaving.
     ///
     /// A timed-out drain is inconclusive, not a counterexample, and how it is inconclusive matters. A probe whose cancellation drain completed left nothing running: the attempt is counted and dropped, and the corpus never sees it, because its coverage describes the stall rather than the input. A probe whose work escaped cancellation is still executing the system under test and still recording coverage, so it forces the run to terminate — everything after it would measure some of the escaped attempt. Reduction aborts on either, so a counterexample never reduces toward a hang.

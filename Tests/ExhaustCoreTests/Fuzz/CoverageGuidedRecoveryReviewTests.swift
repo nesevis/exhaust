@@ -32,6 +32,7 @@ struct CoverageGuidedRecoveryReviewTests {
                     seed: 1,
                     budgetNanoseconds: 60_000_000_000,
                     consumedNanoseconds: 1,
+                    attemptsConsumed: 1000,
                     lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
                     pcTableHash: 0,
                     edgeCount: 1

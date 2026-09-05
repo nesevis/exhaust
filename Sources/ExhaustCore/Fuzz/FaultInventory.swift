@@ -73,7 +73,7 @@ package struct FaultCluster: Sendable {
         symptom: FailureSymptom,
         phase: FuzzPhase,
         timestampNanoseconds: UInt64,
-        attemptIndex: Int?,
+        attemptIndex: Int,
         unnormalizedResidual: Bool
     ) {
         self.id = id
@@ -86,7 +86,7 @@ package struct FaultCluster: Sendable {
         reducedCount = 1
         firstSeenNanoseconds = timestampNanoseconds
         lastSeenNanoseconds = timestampNanoseconds
-        firstSeenAttempt = attemptIndex ?? 0
+        firstSeenAttempt = attemptIndex
         unnormalizedMemberCount = unnormalizedResidual ? 1 : 0
         discoveringPhase = phase
     }
@@ -126,7 +126,7 @@ package struct FaultCluster: Sendable {
         signature: BitSet?,
         symptom: FailureSymptom,
         timestampNanoseconds: UInt64,
-        attemptIndex: Int?,
+        attemptIndex: Int,
         unnormalizedResidual: Bool,
         countsAsInstance: Bool
     ) {
@@ -135,9 +135,7 @@ package struct FaultCluster: Sendable {
         }
         symptoms.insert(symptom)
         lastSeenNanoseconds = max(lastSeenNanoseconds, timestampNanoseconds)
-        if let attemptIndex {
-            firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
-        }
+        firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
         guard countsAsInstance else {
             return
         }
@@ -164,14 +162,12 @@ package struct FaultCluster: Sendable {
     fileprivate mutating func absorbUnreduced(
         symptom: FailureSymptom,
         timestampNanoseconds: UInt64,
-        attemptIndex: Int?,
+        attemptIndex: Int,
         countsAsInstance: Bool
     ) {
         symptoms.insert(symptom)
         lastSeenNanoseconds = max(lastSeenNanoseconds, timestampNanoseconds)
-        if let attemptIndex {
-            firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
-        }
+        firstSeenAttempt = min(firstSeenAttempt, attemptIndex)
         guard countsAsInstance else {
             return
         }
@@ -228,7 +224,7 @@ package final class FaultInventory: @unchecked Sendable {
     ///   - symptom: The failure's cheap symptom.
     ///   - phase: The phase that discovered the failing input.
     ///   - timestampNanoseconds: Monotonic time of the discovery, supplied by the caller so tests stay deterministic.
-    ///   - attemptIndex: The 1-based attempt index at which the failing input was observed: the discovery moment, not the classification moment, so out-of-order reduction completion cannot distort attempt-indexed metrics. Nil for a failure that belongs to no attempt of this run, which leaves an existing cluster's index alone and reads as zero on a cluster this call creates.
+    ///   - attemptIndex: The 1-based attempt index at which the failing input was observed: the discovery moment, not the classification moment, so out-of-order reduction completion cannot distort attempt-indexed metrics. Counted on the logical run's timeline, so a failure a resumed run observes while restoring carries the predecessor's attempt count rather than zero, and never precedes a cluster the predecessor recorded.
     ///   - unnormalizedResidual: Whether this member's own reduced form differed from `reducedKey` and joined only through the normalization pass.
     ///   - countsAsInstance: Whether this reduction adds a member to the cluster it joins. False for a failure the predecessor already counted, so that a resume does not tally the same evidence again. The signature, symptom, and last-seen time still land, since those describe the fault as the current build sees it. A cluster this reduction creates is unaffected: nothing carried that fault over, so it is a discovery of this run.
     package func recordReduced(
@@ -239,7 +235,7 @@ package final class FaultInventory: @unchecked Sendable {
         symptom: FailureSymptom,
         phase: FuzzPhase,
         timestampNanoseconds: UInt64,
-        attemptIndex: Int?,
+        attemptIndex: Int,
         unnormalizedResidual: Bool = false,
         countsAsInstance: Bool = true
     ) -> ClusterClassification {
@@ -291,7 +287,7 @@ package final class FaultInventory: @unchecked Sendable {
     package func recordUnreduced(
         symptom: FailureSymptom,
         timestampNanoseconds: UInt64,
-        attemptIndex: Int?,
+        attemptIndex: Int,
         countsAsInstance: Bool = true
     ) {
         lock.withLocking {

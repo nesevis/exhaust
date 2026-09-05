@@ -177,9 +177,6 @@ extension __ExhaustRuntime {
             + clusters.filter { isFrontier($0) == false }
     }
 
-    /// Renders the estimator lines: the price of one more edge and the completeness fraction against the run's own reachable set. The reachable-set scoping is stated inline so the fraction cannot be read as module coverage.
-    ///
-    /// The estimator is denominated in incidences, because one attempt covers many edges. Readers think in attempts, so the rate is converted back by the mean edges an attempt covers before it reaches the page.
     /// One line naming each arm's duplicate skips, omitting arms that skipped nothing.
     private static func renderDuplicateSkipLine(_ skips: FuzzReport.DuplicateSkips) -> String {
         let arms: [(name: String, skipped: Int)] = [
@@ -196,6 +193,9 @@ extension __ExhaustRuntime {
         return "Duplicate skips by arm: \(parts.joined(separator: ", "))."
     }
 
+    /// Renders the estimator lines: the price of one more edge and the completeness fraction against the run's own reachable set. The reachable-set scoping is stated inline so the fraction cannot be read as module coverage.
+    ///
+    /// The estimator is denominated in incidences, because one attempt covers many edges. Readers think in attempts, so the rate is converted back by the mean edges an attempt covers before it reaches the page.
     private static func renderEstimatorLines(_ report: FuzzReport) -> [String] {
         guard report.evaluatedSearchCases > 0, report.coveredEdgeCount > 0 else {
             return []

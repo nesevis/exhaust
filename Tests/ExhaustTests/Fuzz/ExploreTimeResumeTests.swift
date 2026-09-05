@@ -62,6 +62,7 @@ struct ExploreTimeResumeTests {
                 seed: 9,
                 budgetNanoseconds: 60_000_000_000,
                 consumedNanoseconds: 55_000_000_000,
+                attemptsConsumed: 1000,
                 lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
                 pcTableHash: 0,
                 edgeCount: 32
@@ -155,6 +156,7 @@ struct ExploreTimeResumeTests {
                 seed: 9,
                 budgetNanoseconds: 60_000_000_000,
                 consumedNanoseconds: 55_000_000_000,
+                attemptsConsumed: 1000,
                 lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
                 pcTableHash: 0xDEAD,
                 edgeCount: 16
@@ -204,6 +206,7 @@ struct ExploreTimeResumeTests {
                 seed: 1,
                 budgetNanoseconds: 1,
                 consumedNanoseconds: 0,
+                attemptsConsumed: 1000,
                 lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
                 pcTableHash: 0,
                 edgeCount: 8
@@ -272,6 +275,7 @@ struct ExploreTimeResumeTests {
                 seed: 9,
                 budgetNanoseconds: 60_000_000_000,
                 consumedNanoseconds: 60_000_000_000,
+                attemptsConsumed: 1000,
                 lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
                 pcTableHash: 0,
                 edgeCount: 32
@@ -374,6 +378,7 @@ private func resumeWithOverlappingSnapshotEntry(predecessorRecordedFailure: Bool
             seed: 9,
             budgetNanoseconds: 60_000_000_000,
             consumedNanoseconds: 60_000_000_000,
+            attemptsConsumed: 1000,
             lastCheckpointEpochSeconds: Date().timeIntervalSince1970,
             pcTableHash: 0,
             edgeCount: 32

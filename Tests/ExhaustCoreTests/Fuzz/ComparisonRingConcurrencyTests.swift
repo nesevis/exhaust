@@ -4,11 +4,16 @@ import Testing
 
 /// The process-global comparison ring under the concurrent access it is built for: the inline-8bit-counter model has no per-run context, so every thread of an instrumented system under test writes to one ring while the run's lane drains it.
 ///
+/// Not a `.threads` spec: that mode replays every candidate ordering on a fresh instance of the system under test, and the ring is a process singleton with no fresh instance to give it. The property is stated directly instead, over `concurrentPerform`, which returns only when every writer and the drainer have finished, so the outcome is decided before anything is asserted and no wall clock is involved.
+///
 /// Run under ThreadSanitizer (`swift test --sanitize=thread`) to check the exclusion itself; without it these still pin the observable contract, which is that a drain returns whole records and never a mix of two.
 @Suite("Comparison ring under concurrent writers", .serialized)
 struct ComparisonRingConcurrencyTests {
-    @Test("A drain concurrent with several writers returns only whole records")
-    func concurrentWritersYieldWholeRecords() {
+    @Test(
+        "A drain concurrent with several writers returns only whole records",
+        arguments: [(writers: 1, recordsPerWriter: 50), (writers: 4, recordsPerWriter: 500), (writers: 8, recordsPerWriter: 2000)]
+    )
+    func concurrentWritersYieldWholeRecords(writers: Int, recordsPerWriter: Int) {
         ComparisonRuntime.reset()
         ComparisonRuntime.setEnabled(true)
         defer {
@@ -16,33 +21,29 @@ struct ComparisonRingConcurrencyTests {
             ComparisonRuntime.reset()
         }
 
-        // Each writer pairs a value with itself, so any record whose two operands disagree is a torn one.
-        let writerCount = 4
-        let group = DispatchGroup()
-        for writer in 1 ... writerCount {
-            DispatchQueue.global().async(group: group) {
-                for _ in 0 ..< 2000 {
-                    TracePCGuardCoverageSource.fireComparisonForTesting(UInt64(writer), UInt64(writer))
-                }
+        // Each writer pairs a value with itself, so any record whose two operands disagree is a torn one. The drainer keeps draining while any writer is still going and once more after the last one finishes, so every run drains at least once and the final count is the whole ring.
+        let writersRemaining = SendableBox(writers)
+        let torn = SendableBox(0)
+        DispatchQueue.concurrentPerform(iterations: writers + 1) { iteration in
+            guard iteration > 0 else {
+                repeat {
+                    ComparisonRuntime.forEachRecord { _, first, second in
+                        if first != second {
+                            torn.withValue { $0 += 1 }
+                        }
+                    }
+                } while writersRemaining.value > 0
+                return
             }
+            for _ in 0 ..< recordsPerWriter {
+                TracePCGuardCoverageSource.fireComparisonForTesting(UInt64(iteration), UInt64(iteration))
+            }
+            writersRemaining.withValue { $0 -= 1 }
         }
 
-        var drains = 0
-        var torn = 0
-        while group.wait(timeout: .now()) == .timedOut {
-            drains += 1
-            ComparisonRuntime.forEachRecord { _, first, second in
-                if first != second {
-                    torn += 1
-                }
-            }
-        }
-        group.wait()
-
-        #expect(torn == 0)
-        #expect(drains > 0, "the writers finished before a single drain ran, so nothing was exercised concurrently")
-        // Without this the assertions above hold vacuously on a ring that recorded nothing.
-        #expect(ComparisonRuntime.recordCount() > 0)
+        #expect(torn.value == 0)
+        // The drainer's last pass ran after every writer finished, so the ring holds every record up to its capacity; anything less means a store was lost.
+        #expect(ComparisonRuntime.recordCount() == min(writers * recordsPerWriter, 4096))
     }
 
     @Test("Disabling stops recording, and a drain after it sees a settled ring")

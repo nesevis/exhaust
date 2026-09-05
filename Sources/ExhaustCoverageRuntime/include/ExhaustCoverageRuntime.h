@@ -18,11 +18,10 @@ void exhaust_cmp_set_enabled(int enabled);
 // Clears the operand buffer, dropping every pair recorded so far. Called at the start of each attempt bracket.
 void exhaust_cmp_reset(void);
 
-// The number of live comparison records in the buffer, saturating at its capacity. Recording past the capacity wraps around and overwrites the oldest records (last-N-wins), so the count stays at the capacity while the contents keep advancing.
 // Copies the live ring into the drain's own buffer under the ring's lock and returns the record count. Call this before exhaust_cmp_record_count() or exhaust_cmp_records(), which both read the copy: the live ring is reachable by every thread of an instrumented SUT, and only the copy is safe to walk.
 size_t exhaust_cmp_snapshot(void);
 
-// The record count from the last exhaust_cmp_snapshot().
+// The record count from the last exhaust_cmp_snapshot(), saturating at the ring's capacity. Recording past the capacity wraps around and overwrites the oldest records (last-N-wins), so the count stays at the capacity while the contents keep advancing.
 size_t exhaust_cmp_record_count(void);
 
 // The snapshot buffer base. Record i occupies words 3i (call-site pc), 3i+1 (arg1), and 3i+2 (arg2). Valid for exhaust_cmp_record_count() records until the next exhaust_cmp_snapshot(). Once the ring has wrapped, index order is no longer chronological; the pool groups by site and does not depend on record order.
