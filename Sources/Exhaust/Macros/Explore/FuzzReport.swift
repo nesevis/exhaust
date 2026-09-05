@@ -232,13 +232,13 @@ public struct FuzzReport: Sendable {
     }
 
     /// Comparand-substitution energy keys seated over another key because their whole probe window was occupied. A high ratio to ``operandEnergySeatings`` means the retirement table is undersized for the run, so a retired operand is resurrected by collision rather than by yielding.
-    public let operandEnergyEvictions: Int
+    package let operandEnergyEvictions: Int
 
     /// Comparand-substitution energy keys seated into a slot, whether it was empty or held another key. The denominator for ``operandEnergyEvictions``.
-    public let operandEnergySeatings: Int
+    package let operandEnergySeatings: Int
 
     /// Comparand-substitution sources moved into the retired set after exhausting their allowance.
-    public let operandEnergyRetirements: Int
+    package let operandEnergyRetirements: Int
 
     /// Spec-path pruning passes that removed no command, so the original evaluation stood in for the re-evaluation.
     public let pruneIdentitySkips: Int

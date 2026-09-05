@@ -4,7 +4,7 @@ import Foundation
 /// How long a timed-out bounded await drains for after cancelling, before calling the work escaped. Matches the cooperative runner's own cancellation drain: a task that honours cancellation returns on its next suspension point, which is immediate on this lane.
 private let boundedAwaitCancellationDrainMilliseconds = 5
 
-package extension __ExhaustRuntime {
+extension __ExhaustRuntime {
     /// Blocks the calling thread until an async closure completes and returns its result.
     ///
     /// On macOS 15+ / iOS 18+, the async work runs directly on the calling thread via a ``TaskExecutor``-based drain loop. This avoids the cooperative thread pool entirely, preventing starvation when many tests run in parallel on machines with few cores.
@@ -20,7 +20,7 @@ package extension __ExhaustRuntime {
     ///     return spec.value
     /// }
     /// ```
-    static func blockingAwait<Result>(
+    package static func blockingAwait<Result>(
         _ work: @Sendable @escaping () async -> Result
     ) -> Result {
         if #available(macOS 15, iOS 18, tvOS 18, watchOS 11, visionOS 2, *) {
@@ -44,7 +44,7 @@ package extension __ExhaustRuntime {
         case escaped
 
         /// The outcome as the disposition the concurrent runners speak in.
-        package var disposition: ExecutionDisposition {
+        var disposition: ExecutionDisposition {
             switch self {
                 case .completed:
                     .completed
@@ -56,7 +56,7 @@ package extension __ExhaustRuntime {
         }
 
         /// The value when the work finished within the bound, and nil for either timeout. For callers whose degraded path is the same either way.
-        package var value: Success? {
+        var value: Success? {
             guard case let .completed(value) = self else {
                 return nil
             }
@@ -169,7 +169,7 @@ package extension __ExhaustRuntime {
     }
 
     /// Creates a cooperative-pool task and sleeps the calling thread until it completes. The unbounded form; ``_blockingAwaitSemaphoreBounded(timeoutMilliseconds:_:)`` is the one that can give up.
-    static func _blockingAwaitSemaphore<Result>(
+    package static func _blockingAwaitSemaphore<Result>(
         _ work: @Sendable @escaping () async -> Result
     ) -> Result {
         let box = UnsafeSendableBox<Result?>(nil)
@@ -189,7 +189,7 @@ package extension __ExhaustRuntime {
     /// The `nonisolated(unsafe)` annotations bridge non-Sendable generic values across the GCD boundary. Safety relies on the closure and its result being created and consumed by the same logical unit of work — no concurrent access is possible because the continuation resumes only after `work` returns.
     ///
     /// Every hop binds a ``DeferredIssueSink`` around `work` and replays it after the continuation resumes: issue recording resolves the current test from task-locals the GCD worker does not carry, so a report recorded inside `work` would misroute as a runtime warning. Deferring at the hop makes reporting placement inside dispatched bodies a non-decision for entry points.
-    internal static func dispatchToGCD<Result>(
+    static func dispatchToGCD<Result>(
         _ work: @escaping () -> Result
     ) async -> Result {
         let issueSink = DeferredIssueSink()
@@ -210,7 +210,7 @@ package extension __ExhaustRuntime {
     /// Acquires `lanes` from the process-global ``LaneGate``, performs the GCD hop, and releases on the way out.
     ///
     /// The reservation is held for the whole run: the entire discovery pipeline (regression replay, screening, sampling, reduction) runs synchronously inside `work`, so it never re-enters the gate. Excess runs suspend at the gate as parked continuations holding no thread, bounding aggregate GCD lane demand to ``LaneGate/limit`` regardless of how many test functions Swift Testing runs at once. Use ``LaneReservation`` for the lane count.
-    internal static func dispatchToGCD<Result>(
+    static func dispatchToGCD<Result>(
         reserving lanes: Int,
         _ work: @escaping () -> Result
     ) async -> Result {
